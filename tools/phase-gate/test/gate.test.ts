@@ -399,5 +399,8 @@ describe('phase 1 definition', () => {
     expect(issues?.kind === 'issues' && issues.milestone).toBe('P1 Lifecycle Slice');
     const audit = PHASE_1.criteria.find((c) => c.id === 'forward-audit');
     expect(audit?.kind === 'audit' && audit.nextEpic).toBe(3);
+    // Naming the phase is what stops an older dated note on the successor epic from
+    // satisfying the criterion.
+    expect(audit?.kind === 'audit' && audit.marker).toBe('Phase 2 audit');
   });
 });

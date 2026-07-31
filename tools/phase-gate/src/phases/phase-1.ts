@@ -193,6 +193,11 @@ export const PHASE_1: PhaseDefinition = {
       promise:
         'The next phase was audited against what this phase learned, so it does not rest on disproved assumptions.',
       nextEpic: 3,
+      // Named for the phase being audited, not the generic word. Epic #3 already carried a
+      // dated "Reality check" section written before Phase 1 existed, and the default
+      // marker matched it: the criterion passed on a section that was not a forward audit
+      // at all. A marker naming the phase cannot be satisfied by an older note.
+      marker: 'Phase 2 audit',
     },
 
     // Documentation is part of the phase, not a follow-up.
