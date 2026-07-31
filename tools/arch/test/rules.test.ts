@@ -2,7 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { checkAll, checkManifests, checkPackage, formatViolations } from '../src/check.js';
+import {
+  checkAll,
+  checkBareErrors,
+  checkManifests,
+  checkPackage,
+  formatViolations,
+} from '../src/check.js';
 import { ALLOWED_WORKSPACE_EDGES, PACKAGES } from '../src/rules.js';
 import { collectImports } from '../src/scan.js';
 
@@ -139,6 +145,28 @@ describe('import scanning', () => {
     writeFileSync(join(dir, 'x.ts'), "const a = 1;\nconst b = 2;\nimport 'hono';\n", 'utf8');
     const records = collectImports(dir, root);
     expect(records[0]?.line).toBe(3);
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('bare error rule', () => {
+  it('the real repository throws no bare Error in user-facing packages', () => {
+    expect(formatViolations(checkBareErrors(REPO_ROOT))).toBe('');
+  });
+
+  it('detects a bare throw', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-bare-'));
+    const dir = join(root, 'packages', 'core', 'src');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'bad.ts'),
+      'export function f() {\n  throw new Error("nope");\n}\n',
+      'utf8',
+    );
+    const violations = checkBareErrors(root);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(2);
+    expect(violations[0]?.rule).toContain('LoreError');
     rmSync(root, { recursive: true, force: true });
   });
 });

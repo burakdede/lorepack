@@ -1,12 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import {
   ALLOWED_WORKSPACE_EDGES,
   FORBIDDEN_EXTERNAL,
+  NO_BARE_ERROR_PACKAGES,
   PACKAGES,
   type PackageName,
 } from './rules.js';
-import { collectImports, workspaceDependency } from './scan.js';
+import { collectImports, listSourceFiles, workspaceDependency } from './scan.js';
 
 export interface Violation {
   readonly file: string;
@@ -89,4 +90,36 @@ export function formatViolations(violations: readonly Violation[]): string {
   return violations
     .map((v) => `  ${v.file}:${v.line}\n    imports "${v.specifier}"\n    ${v.rule}`)
     .join('\n\n');
+}
+
+/**
+ * `throw new Error(...)` gives a user a stack trace and no next step. The engine guard is
+ * the one exception: it runs before the error module can safely be imported.
+ */
+export function checkBareErrors(repoRoot: string): Violation[] {
+  const violations: Violation[] = [];
+  const pattern = /\bthrow\s+new\s+(Error|TypeError|RangeError)\s*\(/g;
+  for (const name of NO_BARE_ERROR_PACKAGES) {
+    const dir = join(repoRoot, 'packages', name, 'src');
+    if (!existsSync(dir)) continue;
+    for (const file of listSourceFiles(dir)) {
+      const source = readFileSync(file, 'utf8');
+      pattern.lastIndex = 0;
+      let match: RegExpExecArray | null = pattern.exec(source);
+      while (match !== null) {
+        const line = source.slice(0, match.index).split('\n').length;
+        violations.push({
+          file: file
+            .slice(repoRoot.length + 1)
+            .split(sep)
+            .join('/'),
+          line,
+          specifier: match[0],
+          rule: `@lorepack/${name} must throw LoreError with a stable code, not a bare ${match[1]}. See AGENTS.md and architecture section 6.9.`,
+        });
+        match = pattern.exec(source);
+      }
+    }
+  }
+  return violations;
 }

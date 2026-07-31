@@ -62,3 +62,14 @@ export const FORBIDDEN_EXTERNAL: Readonly<Record<string, readonly (string | RegE
   'deploy-cloudflare': ['node:sqlite', /^react/],
   sdk: ['node:sqlite', /^hono/, /^react/, /^@modelcontextprotocol\//],
 };
+
+/**
+ * Packages whose sources must not throw a bare Error. Every user-facing failure needs a
+ * stable code, a remediation, and an exit code, which only LoreError carries.
+ */
+export const NO_BARE_ERROR_PACKAGES: readonly PackageName[] = [
+  'core',
+  'compiler',
+  'runtime',
+  'cli',
+];
