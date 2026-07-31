@@ -30,5 +30,4 @@ consequences as anyone else.
 
 ## Scope
 
-This applies in all project spaces — issues, pull requests, discussions and commits —
-and when representing the project publicly.
+This applies in all project spaces (issues, pull requests, discussions and commits) and when representing the project publicly.

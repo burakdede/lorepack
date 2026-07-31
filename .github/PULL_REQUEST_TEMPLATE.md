@@ -11,7 +11,7 @@ Closes #
 ## Checklist
 
 - [ ] I read the issue's full comment history before starting
-- [ ] Every acceptance criterion on the issue is satisfied — not most
+- [ ] Every acceptance criterion on the issue is satisfied (not most)
 - [ ] Tests added at every applicable level (unit / integration / e2e / contract / determinism / cross-platform / security / manual)
 - [ ] Documentation updated in this PR; README still accurate
 - [ ] `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test` pass locally
