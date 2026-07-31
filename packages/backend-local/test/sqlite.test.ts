@@ -216,6 +216,15 @@ describe('authorizer', () => {
       expect(() => db.exec(sql)).toThrow();
     });
   });
+
+  it('permits data_version alone, which FTS5 reads internally', async () => {
+    // Denying it makes MATCH fail outright. It exposes a change counter and nothing else,
+    // and the surrounding cases prove every other pragma is still refused.
+    await withRestricted((db) => {
+      expect(() => db.prepare('PRAGMA data_version').get()).not.toThrow();
+      expect(() => db.prepare('PRAGMA database_list').all()).toThrow();
+    });
+  });
 });
 
 describe('integrity check', () => {

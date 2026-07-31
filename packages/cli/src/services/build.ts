@@ -47,7 +47,7 @@ import {
   writeFileAtomic,
 } from '@lorepack/core';
 import { parserFor } from '@lorepack/parsers';
-import { MIGRATIONS_DIRECTORY } from './migrations-path.js';
+import { BUILD_MIGRATIONS, STATE_MIGRATIONS } from './migrations-path.js';
 import { type CachedParse, ParseCache } from './parse-cache.js';
 import { readBuildCatalog } from './project.js';
 import { lockInputs } from './versions.js';
@@ -60,6 +60,9 @@ import { lockInputs } from './versions.js';
  * candidate lives under `.lore/tmp/` until it has passed, so an interrupted or failed
  * build cannot leave something in `builds/` that a later run would treat as real.
  */
+
+/** The `applied_at` recorded inside every build database. See `runMigrations` below. */
+const SEALED_AT = '1980-01-01T00:00:00.000Z';
 
 export interface BuildOptions {
   readonly config: LoadedConfig;
@@ -101,7 +104,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       ),
   });
   return lock.withLock(async () => {
-    const state = LocalStateStore.open(loreDirectory, MIGRATIONS_DIRECTORY);
+    const state = LocalStateStore.open(loreDirectory, STATE_MIGRATIONS);
     const objects = new FileObjectStore(join(loreDirectory, 'objects'));
 
     try {
@@ -138,6 +141,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         if (parser === null) continue;
 
         const key = cacheKey({
+          artifactId: discovered.artifactId,
           contentHash: discovered.contentHash,
           parserId: parser.id,
           parserVersion: parser.version,
@@ -237,7 +241,10 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         progress.start('indexing', 'Indexing');
         const db = openWritable(join(candidate.path, 'context.sqlite'));
         try {
-          runMigrations(db, loadMigrations(MIGRATIONS_DIRECTORY));
+          // A fixed timestamp, not the wall clock: a sealed build must carry no
+          // operational time. Otherwise two builds of identical content differ in bytes,
+          // and `.lorepack` stops being reproducible.
+          runMigrations(db, loadMigrations(BUILD_MIGRATIONS), () => SEALED_AT);
           const counts = writeCatalog({
             db,
             artifacts: parsed,

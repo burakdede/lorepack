@@ -13,7 +13,8 @@ import {
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { integrityCheck, openWritable } from '../src/sqlite.js';
 
-const MIGRATIONS = join(import.meta.dirname, '..', '..', '..', 'migrations', 'local');
+const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const BUILD_MIGRATIONS = join(ROOT, 'build');
 
 function artifact(id: string, title: string, status = 'active'): Artifact {
   return {
@@ -78,7 +79,7 @@ async function withCatalog(
   await withTempProject({}, (project) => {
     const db = openWritable(project.path('context.sqlite'));
     try {
-      runMigrations(db, loadMigrations(MIGRATIONS));
+      runMigrations(db, loadMigrations(BUILD_MIGRATIONS));
       writeCatalog({ db, artifacts: entries });
       run(db);
     } finally {
@@ -131,7 +132,7 @@ describe('writing', () => {
     await withTempProject({}, (project) => {
       const db = openWritable(project.path('context.sqlite'));
       try {
-        runMigrations(db, loadMigrations(MIGRATIONS));
+        runMigrations(db, loadMigrations(BUILD_MIGRATIONS));
         const good = entry('src:a.md', 'A', ['one']);
         // Two artifacts with the same id violate the primary key on the second insert.
         expect(() => writeCatalog({ db, artifacts: [good, good] })).toThrow();

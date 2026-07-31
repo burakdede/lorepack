@@ -60,6 +60,20 @@ export class LocalStateStore {
       );
   }
 
+  /**
+   * Removes a build record. Only retention calls this, and never for the active build:
+   * the pointer must always name a build that exists.
+   */
+  forgetBuild(buildId: BuildId): void {
+    if (this.current()?.buildId === buildId) {
+      throw new LoreError('LORE_E_INVALID_ARGUMENT', 'The active build cannot be removed.', {
+        remediation: 'Activate another build first.',
+        subject: buildId,
+      });
+    }
+    this.#db.prepare('DELETE FROM builds WHERE build_id = ?').run(buildId);
+  }
+
   listBuilds(): BuildSummary[] {
     const rows = this.#db
       .prepare('SELECT * FROM builds ORDER BY created_at DESC, build_id DESC')

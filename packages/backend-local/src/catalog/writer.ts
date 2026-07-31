@@ -196,46 +196,102 @@ export interface CatalogSearchHit {
   readonly chunkId: string;
   readonly artifactId: string;
   readonly relativePath: string;
+  readonly displayPath: string;
   readonly headingPath: readonly string[];
   readonly text: string;
+  /** The match in context, with the matched terms bracketed by FTS5 itself. */
+  readonly excerpt: string;
+  readonly lineStart: number | null;
+  readonly lineEnd: number | null;
   readonly status: string;
   readonly authority: number;
   readonly bm25: number;
 }
 
+export interface CatalogSearchOptions {
+  readonly limit?: number;
+  /**
+   * SQLite GLOB pattern over the relative path (`*` and `?`). GLOB rather than a full
+   * glob library because it is parameterized SQL: a filter can never become an injection,
+   * and there is no dependency to keep current.
+   */
+  readonly pathGlob?: string;
+  /** File extension without the dot. */
+  readonly extension?: string;
+}
+
+/** The tables a search connection may read. Includes the FTS5 shadow tables, which the
+ *  MATCH implementation reads directly. */
+export const SEARCH_TABLES: readonly string[] = [
+  'chunks',
+  'artifacts',
+  'chunks_fts',
+  'chunks_fts_data',
+  'chunks_fts_idx',
+  'chunks_fts_content',
+  'chunks_fts_docsize',
+  'chunks_fts_config',
+];
+
 /**
  * Raw lexical candidates. The ranking pipeline in Phase 2 layers boosts on top; this is
  * deliberately just BM25 plus the columns needed to apply them.
  */
-export function searchCatalog(db: DatabaseSync, query: string, limit = 10): CatalogSearchHit[] {
+export function searchCatalog(
+  db: DatabaseSync,
+  query: string,
+  options: number | CatalogSearchOptions = {},
+): CatalogSearchHit[] {
+  const settings: CatalogSearchOptions = typeof options === 'number' ? { limit: options } : options;
+  const limit = settings.limit ?? 10;
   const match = escapeFtsQuery(query);
   if (match === '') return [];
 
+  const conditions: string[] = ['chunks_fts MATCH ?'];
+  const parameters: (string | number)[] = [match];
+  if (settings.pathGlob !== undefined) {
+    conditions.push('c.relative_path GLOB ?');
+    parameters.push(settings.pathGlob);
+  }
+  if (settings.extension !== undefined) {
+    conditions.push('c.relative_path LIKE ?');
+    parameters.push(`%.${settings.extension.replace(/^\./, '')}`);
+  }
+  parameters.push(limit);
+
   const rows = db
     .prepare(
-      `SELECT c.id           AS chunkId,
-              c.artifact_id  AS artifactId,
+      `SELECT c.id            AS chunkId,
+              c.artifact_id   AS artifactId,
               c.relative_path AS relativePath,
-              c.heading_path AS headingPath,
-              c.text         AS text,
-              a.status       AS status,
-              a.authority    AS authority,
+              a.display_path  AS displayPath,
+              c.heading_path  AS headingPath,
+              c.text          AS text,
+              c.line_start    AS lineStart,
+              c.line_end      AS lineEnd,
+              a.status        AS status,
+              a.authority     AS authority,
+              snippet(chunks_fts, 7, '[', ']', ' ... ', 20) AS excerpt,
               bm25(chunks_fts, 0.0, 0.0, 0.0, 0.0, 4.0, 6.0, 3.0, 1.0) AS bm25
          FROM chunks_fts
          JOIN chunks    c ON c.id = chunks_fts.chunk_id
          JOIN artifacts a ON a.id = c.artifact_id
-        WHERE chunks_fts MATCH ?
+        WHERE ${conditions.join(' AND ')}
         ORDER BY bm25
         LIMIT ?`,
     )
-    .all(match, limit) as Array<Record<string, string | number>>;
+    .all(...parameters) as Array<Record<string, string | number | null>>;
 
   return rows.map((row) => ({
     chunkId: String(row.chunkId),
     artifactId: String(row.artifactId),
     relativePath: String(row.relativePath),
+    displayPath: String(row.displayPath),
     headingPath: JSON.parse(String(row.headingPath)) as string[],
     text: String(row.text),
+    excerpt: String(row.excerpt),
+    lineStart: row.lineStart === null ? null : Number(row.lineStart),
+    lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     status: String(row.status),
     authority: Number(row.authority),
     bm25: Number(row.bm25),

@@ -128,6 +128,13 @@ export function compareFingerprints(
  * inputs are named explicitly rather than derived from a whole config object.
  */
 export interface CacheKeyInputs {
+  /**
+   * The artifact's identity, which carries its normalized path. Section 18.2 makes the
+   * path part of the reuse condition, and it has to be: two files with identical content
+   * at different paths are different artifacts, and a key that ignored the path would
+   * hand one of them the other's record.
+   */
+  readonly artifactId: string;
   readonly contentHash: string;
   readonly parserId: string;
   readonly parserVersion: string;
@@ -139,6 +146,7 @@ export interface CacheKeyInputs {
 export function cacheKey(inputs: CacheKeyInputs): string {
   return sha256Hex(
     hashCanonical({
+      artifactId: inputs.artifactId,
       contentHash: inputs.contentHash,
       parserId: inputs.parserId,
       parserVersion: inputs.parserVersion,

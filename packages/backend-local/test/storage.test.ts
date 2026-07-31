@@ -13,7 +13,8 @@ import { FileObjectStore } from '../src/object-store.js';
 import { openWritable } from '../src/sqlite.js';
 import { LocalActiveBuildProvider, LocalStateStore } from '../src/state-store.js';
 
-const MIGRATIONS = join(import.meta.dirname, '..', '..', '..', 'migrations', 'local');
+const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const STATE_MIGRATIONS = join(ROOT, 'state');
 
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;
 const BUILD_A = buildId('a');
@@ -211,7 +212,7 @@ describe('LocalStateStore', () => {
   async function withState(run: (state: LocalStateStore, lore: string) => void): Promise<void> {
     await withTempProject({}, (project) => {
       const lore = project.path('.lore');
-      const state = LocalStateStore.open(lore, MIGRATIONS);
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
       try {
         run(state, lore);
       } finally {
@@ -283,12 +284,12 @@ describe('LocalStateStore', () => {
   it('survives reopening, so the pointer is durable', async () => {
     await withTempProject({}, (project) => {
       const lore = project.path('.lore');
-      const first = LocalStateStore.open(lore, MIGRATIONS);
+      const first = LocalStateStore.open(lore, STATE_MIGRATIONS);
       first.recordBuild(summary(BUILD_A));
       first.activate(BUILD_A);
       first.close();
 
-      const second = LocalStateStore.open(lore, MIGRATIONS);
+      const second = LocalStateStore.open(lore, STATE_MIGRATIONS);
       expect(second.current()).toEqual({ buildId: BUILD_A, generation: 1 });
       second.close();
     });
@@ -306,7 +307,7 @@ describe('LocalActiveBuildProvider', () => {
     await withTempProject({}, async (project) => {
       const lore = project.path('.lore');
       const builds = join(lore, 'builds');
-      const state = LocalStateStore.open(lore, MIGRATIONS);
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
       const provider = new LocalActiveBuildProvider(state, builds);
       try {
         await run(provider, state, builds);

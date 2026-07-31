@@ -29,7 +29,8 @@ import { LocalActiveBuildProvider, LocalStateStore } from '../src/state-store.js
  * compiler: parsing, chunking and indexing arrive in Phase 1.
  */
 
-const MIGRATIONS = join(import.meta.dirname, '..', '..', '..', 'migrations', 'local');
+const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const STATE_MIGRATIONS = join(ROOT, 'state');
 
 const SOURCES: Record<string, string> = {
   'docs/strategy.md': '# Strategy\n\nShip the lifecycle first.\n',
@@ -107,7 +108,7 @@ describe('Phase 0 exit criterion', () => {
     await withTempProject({ files: SOURCES }, async (project) => {
       const lore = project.path('.lore');
       const objects = new FileObjectStore(join(lore, 'objects'));
-      const state = LocalStateStore.open(lore, MIGRATIONS);
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
       const provider = new LocalActiveBuildProvider(state, join(lore, 'builds'));
 
       try {
@@ -171,7 +172,7 @@ describe('Phase 0 exit criterion', () => {
     await withTempProject({ files: SOURCES }, async (project) => {
       const lore = project.path('.lore');
       const objects = new FileObjectStore(join(lore, 'objects'));
-      const state = LocalStateStore.open(lore, MIGRATIONS);
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
 
       try {
         const build = await compile(project.root, objects, Object.keys(SOURCES));
@@ -190,7 +191,7 @@ describe('Phase 0 exit criterion', () => {
         for (const relativePath of Object.keys(SOURCES)) {
           writeFileSync(project.path(relativePath), '');
         }
-        const reopened = LocalStateStore.open(lore, MIGRATIONS);
+        const reopened = LocalStateStore.open(lore, STATE_MIGRATIONS);
         expect(reopened.activate(build.buildId)).toBe(2);
         expect(reopened.current()?.buildId).toBe(build.buildId);
         reopened.close();

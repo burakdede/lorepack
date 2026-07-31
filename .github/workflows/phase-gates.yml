@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       phase:
-        description: Phase number to verify
-        default: '0'
+        description: Single phase number to verify. Leave empty to verify every defined phase.
+        required: false
 
 concurrency:
   group: phase-gates-${{ github.ref }}
@@ -18,8 +18,14 @@ concurrency:
 
 jobs:
   verify-phase:
-    name: phase ${{ github.event.inputs.phase || '0' }}
+    name: phase ${{ matrix.phase }}
     runs-on: ubuntu-latest
+    strategy:
+      # Every defined phase is verified on each push. A phase that closed months ago is
+      # exactly the one whose guarantees quietly rot, so re-running it is the point.
+      fail-fast: false
+      matrix:
+        phase: ${{ github.event.inputs.phase && fromJSON(format('[{0}]', github.event.inputs.phase)) || fromJSON('[0, 1]') }}
     permissions:
       contents: read
       issues: read
@@ -36,7 +42,7 @@ jobs:
       - name: Verify the phase against its executable criteria
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pnpm phase:check ${{ github.event.inputs.phase || '0' }}
+        run: pnpm phase:check ${{ matrix.phase }}
 
       - name: Publish the report
         if: always()
@@ -44,9 +50,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo '### Phase gate'
+            echo '### Phase gate ${{ matrix.phase }}'
             echo
             echo '```'
-            pnpm phase:check ${{ github.event.inputs.phase || '0' }} || true
+            pnpm phase:check ${{ matrix.phase }} || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
