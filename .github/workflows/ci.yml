@@ -79,3 +79,34 @@ jobs:
             **/vitest-report.json
           if-no-files-found: ignore
           retention-days: 7
+
+  benchmarks:
+    name: benchmarks (reported, not enforced)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      # Reported for trend tracking, never a gate. A shared CI runner is not the reference
+      # machine (backlog #101), so failing a build on its timings would only produce noise.
+      - name: Measure build, incremental rebuild and warm search
+        run: node scripts/bench.mjs --out benchmarks/ci-${{ github.run_id }}.json
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks
+          path: benchmarks/ci-*.json
+          if-no-files-found: error
+          retention-days: 30

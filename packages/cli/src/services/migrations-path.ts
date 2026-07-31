@@ -12,12 +12,12 @@ import { LoreError } from '@lorepack/core';
  * rather than `URL.pathname`: the latter yields `/C:/...` on Windows, which no filesystem
  * call accepts.
  */
-function locate(): string {
+function locate(kind: 'state' | 'build'): string {
   let directory = dirname(fileURLToPath(import.meta.url));
   const root = parse(directory).root;
 
   for (;;) {
-    const candidate = join(directory, 'migrations', 'local');
+    const candidate = join(directory, 'migrations', kind);
     if (existsSync(candidate)) return candidate;
     if (directory === root) break;
     directory = dirname(directory);
@@ -28,4 +28,12 @@ function locate(): string {
   });
 }
 
-export const MIGRATIONS_DIRECTORY: string = locate();
+/**
+ * The two sets are separate on purpose. State migrations create the mutable project
+ * database; build migrations create the catalog inside a sealed build. Running both into
+ * one database would put empty `builds` and `active_build` tables inside every build,
+ * which is exactly the confusion between operational state and canonical content that
+ * invariant 1 exists to prevent.
+ */
+export const STATE_MIGRATIONS: string = locate('state');
+export const BUILD_MIGRATIONS: string = locate('build');

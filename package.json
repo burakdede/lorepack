@@ -28,7 +28,8 @@
     "probe:fts5": "node scripts/probe-fts5.mjs",
     "phase:check": "pnpm build && node scripts/phase-check.mjs",
     "test:unit": "vitest run",
-    "check:sources-tracked": "node scripts/check-sources-tracked.mjs"
+    "check:sources-tracked": "node scripts/check-sources-tracked.mjs",
+    "bench": "pnpm build && node scripts/bench.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

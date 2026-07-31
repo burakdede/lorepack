@@ -73,3 +73,38 @@ expected warnings, and a canonical hash.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
    write down why in the test.
+
+## The Milestone 0 acceptance suite
+
+`packages/cli/test/milestone-0.e2e.test.ts` is the automated proof of the exit criterion in
+architecture section 21: editing one file creates a new immutable version, shows a correct
+diff, and rolls back without re-indexing.
+
+It drives the built binary as a subprocess, so it validates the contract a user meets,
+including exit codes and printed output, rather than the internal functions that happen to
+implement it today. Three choices in it are load-bearing:
+
+- **The edit step writes a sibling file and renames over the original**, which is how real
+  editors save. On Windows that is the case that breaks naive file handling, so simulating
+  it is the difference between a suite that passes and a suite that is honest.
+- **Rollback is proved by emptying every source file first.** Counting parse work can be
+  satisfied by an accidental cache hit; an empty source tree cannot. If rollback re-indexed
+  at all, the restored build would be empty, and the suite asserts it still answers.
+- **Determinism runs the three conditions one machine can check** (twice in place, from a
+  second absolute path, with enumeration shuffled) through `checkDeterminism`. The Windows
+  against POSIX condition comes from the CI matrix, not from the test.
+
+The suite also asserts that two workspaces on one machine produce byte-identical archives.
+Across machines only the manifest and canonical roots must agree: `context.sqlite` page
+layout is explicitly not part of build identity (section 11.3).
+
+## Benchmarks
+
+`pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
+machine metadata alongside the numbers. CI runs the same script and uploads the JSON as an
+artifact.
+
+Benchmarks are **reported, never enforced**. The reference machine and the gates are
+backlog issue #101 in Phase 7; a shared CI runner is not that machine, so failing a build on
+its timings would produce noise rather than signal. Every recorded result carries
+`provisional: true` and the machine that produced it.

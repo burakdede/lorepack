@@ -59,16 +59,18 @@ mid-write.
 ## Measured performance
 
 Provisional, on the development machine. The reference machine is backlog issue #101, and
-the gate applies there, not here.
+the gates in architecture section 5.5 apply there, not here. Nothing below is advertised.
 
-| Measurement | Result |
-|---|---|
-| Cold build, 40 documents of 10 pages (400 chunks) | 520 ms |
-| Incremental rebuild after editing one document | 102 ms |
-| Section 5.5 gate for the incremental case | 2000 ms |
+| Measurement | Result | Reference gate |
+|---|---|---|
+| Full build, 60 documents of 10 pages (600 chunks) | 836 ms | not gated |
+| Incremental rebuild after editing one document | 139 ms | 2000 ms |
+| Warm search, p50 | 2.55 ms | not gated |
+| Warm search, p95 | 2.61 ms | 300 ms |
 
-Reproduce with `node scripts/bench-incremental.mjs` after `pnpm build`. The script prints
-the CPU, core count, memory and Node version alongside the numbers, because a performance
-figure without its machine is not a measurement.
+Reproduce with `pnpm bench`, or `node scripts/bench.mjs --out <file>` after `pnpm build`.
+The script records the CPU, core count, memory and Node version alongside the numbers,
+because a performance figure without its machine is not a measurement.
 
-Recorded 2026-08-01 on AMD Ryzen 9 3900X, 24 cores, 31 GB, Node 24.18.1, Linux x64.
+Recorded 2026-08-01 on AMD Ryzen 9 3900X, 24 cores, 31 GB, Node 24.18.1, Linux x64. The
+committed run is `benchmarks/phase-1-dev-machine.json`.

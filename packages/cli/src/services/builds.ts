@@ -9,7 +9,7 @@ import {
   buildManifestSchema,
   LoreError,
 } from '@lorepack/core';
-import { MIGRATIONS_DIRECTORY } from './migrations-path.js';
+import { STATE_MIGRATIONS } from './migrations-path.js';
 
 /**
  * Reading sealed builds: history, resolution of a short id, and the snapshot the diff
@@ -26,7 +26,7 @@ export function openStateStore(loreDirectory: string): LocalStateStore {
       remediation: 'Run `lore build` to create the first one.',
     });
   }
-  return LocalStateStore.open(loreDirectory, MIGRATIONS_DIRECTORY);
+  return LocalStateStore.open(loreDirectory, STATE_MIGRATIONS);
 }
 
 /**
