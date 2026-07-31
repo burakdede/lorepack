@@ -34,7 +34,9 @@ export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly Pack
   'connect-clients': ['core'],
   'deploy-cloudflare': ['core'],
   sdk: [],
-  cli: ['core', 'compiler', 'runtime', 'mcp', 'connect-clients', 'deploy-cloudflare'],
+  // parsers is reachable through compiler, but the CLI names parser versions in the
+  // lockfile, so the edge is explicit rather than transitive.
+  cli: ['core', 'compiler', 'parsers', 'runtime', 'mcp', 'connect-clients', 'deploy-cloudflare'],
 };
 
 /**

@@ -54,6 +54,9 @@ importers:
       '@lorepack/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@lorepack/parsers':
+        specifier: workspace:*
+        version: link:../parsers
       '@lorepack/runtime':
         specifier: workspace:*
         version: link:../runtime
@@ -76,6 +79,9 @@ importers:
       picomatch:
         specifier: 4.0.5
         version: 4.0.5
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*

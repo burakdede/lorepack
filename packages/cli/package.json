@@ -29,7 +29,8 @@
     "@lorepack/deploy-cloudflare": "workspace:*",
     "@lorepack/mcp": "workspace:*",
     "@lorepack/runtime": "workspace:*",
-    "commander": "15.0.0"
+    "commander": "15.0.0",
+    "@lorepack/parsers": "workspace:*"
   },
   "repository": {
     "type": "git",

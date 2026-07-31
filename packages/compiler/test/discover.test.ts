@@ -29,11 +29,11 @@ describe('walking sources', () => {
     await withProject(
       { 'a.md': '# A', 'docs/b.md': '# B', 'docs/deep/c.txt': 'C', 'src/d.ts': 'export {};' },
       (root) => {
+        // lore.yaml is excluded by default: it is tooling metadata, not context.
         expect(paths(discoverIn(root))).toEqual([
           'a.md',
           'docs/b.md',
           'docs/deep/c.txt',
-          'lore.yaml',
           'src/d.ts',
         ]);
       },
@@ -82,7 +82,7 @@ describe('exclusions', () => {
         'key.pem': 'x',
       },
       (root) => {
-        expect(paths(discoverIn(root))).toEqual(['a.md', 'lore.yaml']);
+        expect(paths(discoverIn(root))).toEqual(['a.md']);
       },
     );
   });
@@ -91,7 +91,7 @@ describe('exclusions', () => {
     await withProject(
       { 'a.md': '#', 'drafts/b.md': '#', 'notes.md': '#', '.loreignore': 'drafts/\nnotes.md\n' },
       (root) => {
-        expect(paths(discoverIn(root))).toEqual(['a.md', 'lore.yaml']);
+        expect(paths(discoverIn(root))).toEqual(['a.md']);
       },
     );
   });
@@ -114,7 +114,7 @@ describe('exclusions', () => {
     await withProject(
       { 'a.md': '#', 'x/tmp.md': '#', 'y/z/tmp.md': '#', '.loreignore': 'tmp.md\n' },
       (root) => {
-        expect(paths(discoverIn(root))).toEqual(['a.md', 'lore.yaml']);
+        expect(paths(discoverIn(root))).toEqual(['a.md']);
       },
     );
   });
@@ -204,7 +204,7 @@ describe('case collisions', () => {
 
 describe('scale envelope', () => {
   it('refuses a project above the file limit without an explicit override', async () => {
-    await withProject({ 'a.md': '#' }, (root) => {
+    await withProject({ 'a.md': '#', 'b.md': '#' }, (root) => {
       const config = loadConfig({ cwd: root });
       const tiny = {
         ...config,

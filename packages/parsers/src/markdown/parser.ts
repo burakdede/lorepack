@@ -70,7 +70,7 @@ export const markdownParser: ArtifactParser = {
       if (child.type === 'yaml') continue;
 
       if (child.type === 'heading') {
-        pushHeading(child, builder, stack, raw, warnings);
+        pushHeading(child, builder, stack, warnings);
         continue;
       }
 
@@ -106,7 +106,6 @@ function pushHeading(
   heading: Heading,
   builder: NodeBuilder,
   stack: Frame[],
-  raw: string,
   warnings: ParserWarning[],
 ): void {
   const title = inlineText(heading).trim();

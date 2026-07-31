@@ -41,6 +41,14 @@ export interface ProductDefaults {
  * guardrail against indexing credentials, not a claim to be a secret scanner.
  */
 export const ALWAYS_EXCLUDE: readonly string[] = [
+  // Lorepack's own project files. Indexing them would make editing configuration show up
+  // as a content change, and they are tooling metadata rather than context.
+  'lore.yaml',
+  'lore.lock',
+  '.loreignore',
+  // Version control metadata, for the same reason.
+  '.gitignore',
+  '.gitattributes',
   '.git/**',
   'node_modules/**',
   '.lore/**',
