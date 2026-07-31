@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readdirSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
@@ -133,6 +133,29 @@ describe('opening databases', () => {
       expect((error as LoreError).code).toBe('LORE_E_SQLITE_UNAVAILABLE');
       expect((error as LoreError).remediation).toContain('lore doctor');
     }
+  });
+
+  it('leaves a single file behind, so a read never writes and a build packs as one file', async () => {
+    // A WAL database grows `-wal` and `-shm` siblings, and a read-only connection creates
+    // them without being able to remove them. That would make `lore status` write to disk.
+    await withTempProject({}, (project) => {
+      const path = project.path('build.sqlite');
+      const writable = openWritable(path);
+      writable.exec('CREATE TABLE t (a TEXT) STRICT');
+      writable.exec("INSERT INTO t VALUES ('x')");
+      expect(
+        (writable.prepare('PRAGMA journal_mode').get() as { journal_mode: string }).journal_mode,
+      ).toBe('delete');
+      writable.close();
+
+      const readonly = openReadOnly(path);
+      readonly.prepare('SELECT a FROM t').all();
+      readonly.close();
+
+      expect(readdirSync(project.root).filter((name) => name.startsWith('build.sqlite'))).toEqual([
+        'build.sqlite',
+      ]);
+    });
   });
 
   it('reports the SQLite version', async () => {

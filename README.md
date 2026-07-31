@@ -61,6 +61,7 @@ what happens if yours does not.
 | Full architecture specification | [`Lorepack_Local_First_MVP_Architecture_Final.md`](Lorepack_Local_First_MVP_Architecture_Final.md) |
 | How to contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | Reporting a vulnerability | [`SECURITY.md`](SECURITY.md) |
+| How a build is produced, and why the stage order matters | [`docs/architecture/build-orchestration.md`](docs/architecture/build-orchestration.md) |
 
 Deeper documentation lands under `docs/` as the implementation progresses.
 

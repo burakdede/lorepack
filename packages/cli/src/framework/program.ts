@@ -42,6 +42,11 @@ export interface RunOptions {
   readonly exitProcess?: boolean;
   /** Overrides the registered command list. Tests inject fixtures through this. */
   readonly commands?: readonly CommandDefinition[];
+  /**
+   * Cancellation for long-running commands. `runCli` installs SIGINT and SIGTERM handlers
+   * when it owns the process; tests pass their own signal and skip the handlers.
+   */
+  readonly signal?: AbortSignal;
 }
 
 function defaultStreams(): Streams {
@@ -106,7 +111,7 @@ export function buildProgram(
         options.env ?? process.env,
         streams.isTty,
       );
-      const context = createContext(globalOptions, streams);
+      const context = createContext(globalOptions, streams, options.signal);
       hooks.onContext(context);
       const result = await definition.handler(
         positional,
@@ -131,13 +136,31 @@ export async function runCli(argv: readonly string[], options: RunOptions = {}):
   const streams = options.streams ?? defaultStreams();
   const exitProcess = options.exitProcess ?? true;
   let code = 0;
+
+  // One interrupt asks the current command to stop at its next checkpoint, which is what
+  // lets a build discard its candidate and leave the active pointer alone. A second one
+  // means the user is no longer asking, so the process ends immediately.
+  const controller = new AbortController();
+  const signal = options.signal ?? controller.signal;
+  const interrupt = (): void => {
+    if (controller.signal.aborted) {
+      process.exit(EXIT_CODES.USER);
+    }
+    controller.abort();
+    streams.stderr.write('\nInterrupted. Finishing the current step and rolling back.\n');
+  };
+  const installHandlers = exitProcess && options.signal === undefined;
+  if (installHandlers) {
+    process.on('SIGINT', interrupt);
+    process.on('SIGTERM', interrupt);
+  }
   // A holder rather than a plain `let`: the assignment happens inside a callback, and
   // control-flow analysis would otherwise narrow the variable to null at the catch site.
   const state: { context: CommandContext | null } = { context: null };
 
   const program = buildProgram(
     options.commands ?? registerCommands(),
-    { ...options, streams },
+    { ...options, streams, signal },
     {
       onContext: (context) => {
         state.context = context;
@@ -162,6 +185,11 @@ export async function runCli(argv: readonly string[], options: RunOptions = {}):
     // a user who asked for --json should get JSON even when the argument itself was wrong.
     const jsonRequested = state.context?.options.json === true || argv.includes('--json');
     code = handleFailure(error, streams, state.context, jsonRequested);
+  }
+
+  if (installHandlers) {
+    process.off('SIGINT', interrupt);
+    process.off('SIGTERM', interrupt);
   }
 
   if (exitProcess) process.exit(code);

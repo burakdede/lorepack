@@ -36,7 +36,19 @@ export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly Pack
   sdk: [],
   // parsers is reachable through compiler, but the CLI names parser versions in the
   // lockfile, so the edge is explicit rather than transitive.
-  cli: ['core', 'compiler', 'parsers', 'runtime', 'mcp', 'connect-clients', 'deploy-cloudflare'],
+  // backend-local is reachable because the CLI owns the build orchestration: it opens the
+  // state store, the object store and the candidate database. The runtime reaches storage
+  // through ports; the compiler never does.
+  cli: [
+    'core',
+    'compiler',
+    'parsers',
+    'backend-local',
+    'runtime',
+    'mcp',
+    'connect-clients',
+    'deploy-cloudflare',
+  ],
 };
 
 /**

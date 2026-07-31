@@ -22,6 +22,11 @@ export interface CommandContext {
   readonly options: GlobalOptions;
   readonly streams: Streams;
   readonly progress: ProgressBus;
+  /**
+   * Aborted when the user interrupts. Long-running commands check it between stages; a
+   * command that ignores it simply is not cancellable, which is correct for short ones.
+   */
+  readonly signal?: AbortSignal;
   /** Structured result for `--json`. Human output goes through `write`. */
   readonly write: (text: string) => void;
   readonly warn: (text: string) => void;
@@ -48,7 +53,11 @@ export function resolveGlobalOptions(
  * warnings move to stderr. That is what makes `lore plan --json | jq` work, and it is the
  * same discipline `lore mcp` will need for protocol purity in Phase 2.
  */
-export function createContext(options: GlobalOptions, streams: Streams): CommandContext {
+export function createContext(
+  options: GlobalOptions,
+  streams: Streams,
+  signal?: AbortSignal,
+): CommandContext {
   const progress = new ProgressBus();
   const humanTarget = options.json ? streams.stderr : streams.stdout;
 
@@ -66,6 +75,7 @@ export function createContext(options: GlobalOptions, streams: Streams): Command
     options,
     streams,
     progress,
+    ...(signal === undefined ? {} : { signal }),
     write: (text) => humanTarget.write(text),
     warn: (text) => streams.stderr.write(text),
   };

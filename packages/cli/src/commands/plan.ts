@@ -1,26 +1,8 @@
-import { buildLockfile, createPlan, readLockfile, renderPlan } from '@lorepack/compiler';
+import { createPlan, readLockfile, renderPlan } from '@lorepack/compiler';
 import { loadConfig } from '@lorepack/core';
-import { markdownParser, textParser } from '@lorepack/parsers';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { readPreviousBuild } from '../services/project.js';
-
-export const COMPILER_VERSION = '0.1.0' as const;
-export const SCHEMA_VERSION = 1 as const;
-
-export function lockInputs(): {
-  compilerVersion: string;
-  schemaVersion: number;
-  parserVersions: Record<string, string>;
-} {
-  return {
-    compilerVersion: COMPILER_VERSION,
-    schemaVersion: SCHEMA_VERSION,
-    parserVersions: {
-      [markdownParser.id]: markdownParser.version,
-      [textParser.id]: textParser.version,
-    },
-  };
-}
+import { lockInputs } from '../services/versions.js';
 
 export function planCommand(): CommandDefinition {
   return {
@@ -61,5 +43,3 @@ export function planCommand(): CommandDefinition {
     },
   };
 }
-
-export { buildLockfile };
