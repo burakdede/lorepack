@@ -65,7 +65,9 @@
       "kind": "paragraph",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy"],
+        "headingPath": [
+          "Product Strategy"
+        ],
         "lineEnd": 9,
         "lineStart": 9,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -82,7 +84,9 @@
       "kind": "section",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy"],
+        "headingPath": [
+          "Product Strategy"
+        ],
         "lineEnd": 11,
         "lineStart": 11,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -101,7 +105,10 @@
       "kind": "paragraph",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Positioning"],
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
         "lineEnd": 13,
         "lineStart": 13,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -118,7 +125,10 @@
       "kind": "list",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Positioning"],
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
         "lineEnd": 17,
         "lineStart": 15,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -138,7 +148,10 @@
       "kind": "section",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Positioning"],
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
         "lineEnd": 19,
         "lineStart": 19,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -157,7 +170,11 @@
       "kind": "paragraph",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Positioning", "Non-goals"],
+        "headingPath": [
+          "Product Strategy",
+          "Positioning",
+          "Non-goals"
+        ],
         "lineEnd": 21,
         "lineStart": 21,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -174,7 +191,9 @@
       "kind": "section",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy"],
+        "headingPath": [
+          "Product Strategy"
+        ],
         "lineEnd": 23,
         "lineStart": 23,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -193,7 +212,10 @@
       "kind": "code",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Implementation"],
+        "headingPath": [
+          "Product Strategy",
+          "Implementation"
+        ],
         "lineEnd": 29,
         "lineStart": 25,
         "relativePath": "documents/markdown/product-strategy.md"
@@ -212,7 +234,10 @@
       "kind": "table",
       "locator": {
         "artifactId": "fixtures:documents/markdown/product-strategy.md",
-        "headingPath": ["Product Strategy", "Implementation"],
+        "headingPath": [
+          "Product Strategy",
+          "Implementation"
+        ],
         "lineEnd": 34,
         "lineStart": 31,
         "relativePath": "documents/markdown/product-strategy.md"
