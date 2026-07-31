@@ -4,7 +4,7 @@
 
 Lorepack compiles a directory of documents, spreadsheets and project artifacts into an
 **immutable, content-addressed build** that can be inspected, diffed, deployed, activated
-and rolled back — then read by chat models and coding agents over MCP, HTTP, or a bounded
+and rolled back, then read by chat models and coding agents over MCP, HTTP, or a bounded
 export.
 
 Think *Git and Terraform for AI context*. It is not another local RAG server: retrieval is
@@ -17,7 +17,7 @@ source artifacts → plan → deterministic build → immutable version
 
 ## Status
 
-**Pre-v0.1 — under active construction. Not yet installable.**
+**Pre-v0.1. Under active construction, not yet installable.**
 
 The architecture is complete and the work is fully planned. Nothing here is released yet;
 `lore` does not exist as a published package. Follow along in the

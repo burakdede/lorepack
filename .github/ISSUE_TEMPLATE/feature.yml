@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Before proposing: Lorepack is a **versioned context build system**, not a RAG server.
-        Every v0.1 feature must improve one of four promises — build, inspect, connect, or
+        Every v0.1 feature must improve one of four promises: build, inspect, connect, or
         deploy durable context. See `AGENTS.md` for what is deliberately out of scope.
   - type: textarea
     id: problem

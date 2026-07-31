@@ -24,18 +24,18 @@ unless they prefer otherwise.
 
 Areas most relevant to security reports, so you know what is in scope:
 
-- **Parsers** — Lorepack reads untrusted documents (PDF, DOCX, XLSX, CSV, HTML). Crashes,
+- **Parsers**: Lorepack reads untrusted documents (PDF, DOCX, XLSX, CSV, HTML). Crashes,
   unbounded memory, or escapes from parsing are in scope.
-- **The read-only SQL surface** — model-facing table queries are constrained to a single
+- **The read-only SQL surface**: model-facing table queries are constrained to a single
   `SELECT`, enforced by an AST allowlist, a SQLite authorizer, and a worker-thread
   deadline. Any bypass is in scope.
-- **Filesystem boundaries** — path traversal or symlink escape outside a configured source
+- **Filesystem boundaries**: path traversal or symlink escape outside a configured source
   root.
-- **Model-facing tools** — every MCP tool is read-only by design. A tool that can write,
+- **Model-facing tools**: every MCP tool is read-only by design. A tool that can write,
   build, deploy, edit sources or execute a command is a vulnerability.
-- **Secret handling** — secrets must never reach a build manifest, log, error message or
+- **Secret handling**: secrets must never reach a build manifest, log, error message or
   protocol response.
-- **Remote deployments** — authentication bypass, or candidate build data being reachable
+- **Remote deployments**: authentication bypass, or candidate build data being reachable
   before activation.
 
 ## What is not a vulnerability
