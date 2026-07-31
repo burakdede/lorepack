@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./engine": {
+      "types": "./dist/runtime/engine.d.ts",
+      "default": "./dist/runtime/engine.js"
     }
   },
   "main": "./dist/index.js",
@@ -31,6 +35,7 @@
     "@lorepack/test-support": "workspace:*"
   },
   "dependencies": {
+    "yaml": "2.9.0",
     "zod": "4.4.3"
   }
 }

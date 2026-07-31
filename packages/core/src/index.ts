@@ -1,3 +1,4 @@
+export * from './config/index.js';
 export {
   causeChain,
   ERROR_CODES,

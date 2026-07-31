@@ -23,12 +23,13 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@lorepack/core": "workspace:*",
     "@lorepack/compiler": "workspace:*",
-    "@lorepack/runtime": "workspace:*",
-    "@lorepack/mcp": "workspace:*",
     "@lorepack/connect-clients": "workspace:*",
-    "@lorepack/deploy-cloudflare": "workspace:*"
+    "@lorepack/core": "workspace:*",
+    "@lorepack/deploy-cloudflare": "workspace:*",
+    "@lorepack/mcp": "workspace:*",
+    "@lorepack/runtime": "workspace:*",
+    "commander": "15.0.0"
   },
   "repository": {
     "type": "git",
@@ -37,5 +38,8 @@
   },
   "bin": {
     "lore": "./dist/bin/lore.js"
+  },
+  "devDependencies": {
+    "@lorepack/test-support": "workspace:*"
   }
 }
