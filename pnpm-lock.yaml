@@ -73,6 +73,16 @@ importers:
       '@lorepack/parsers':
         specifier: workspace:*
         version: link:../parsers
+      picomatch:
+        specifier: 4.0.5
+        version: 4.0.5
+    devDependencies:
+      '@lorepack/test-support':
+        specifier: workspace:*
+        version: link:../../tools/test-support
+      '@types/picomatch':
+        specifier: 4.0.2
+        version: 4.0.2
 
   packages/connect-clients:
     dependencies:
@@ -415,6 +425,9 @@ packages:
 
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
+  '@types/picomatch@4.0.2':
+    resolution: {integrity: sha512-qHHxQ+P9PysNEGbALT8f8YOSHW0KJu6l2xU8DYY0fu/EmGxXdVnuTLvFUvBgPJMSqXq29SYHveejeAha+4AYgA==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -1444,6 +1457,8 @@ snapshots:
   '@types/node@24.13.3':
     dependencies:
       undici-types: 7.18.2
+
+  '@types/picomatch@4.0.2': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
