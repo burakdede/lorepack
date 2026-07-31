@@ -19,6 +19,7 @@ export {
   secretsFromEnv,
   stripAbsolutePaths,
 } from './errors/index.js';
+export * from './fs/index.js';
 export {
   assertBuildId,
   BUILD_ID_INPUT_FIELDS,

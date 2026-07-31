@@ -1,4 +1,5 @@
 export { registerCommands } from './commands/index.js';
+export { initCommand } from './commands/init.js';
 export {
   type CommandContext,
   createContext,
@@ -15,3 +16,15 @@ export {
   type RunOptions,
   runCli,
 } from './framework/program.js';
+export {
+  enclosingProject,
+  findSecretShaped,
+  type InitOptions,
+  type InitPlan,
+  type InitResult,
+  planInit,
+  projectNameFrom,
+  renderConfig,
+  renderIgnore,
+  runInit,
+} from './services/init.js';

@@ -2,9 +2,7 @@ export {
   type CandidateDirectory,
   createCandidateDirectory,
   discardCandidateDirectory,
-  fsyncDirectory,
   sealCandidateDirectory,
-  writeFileAtomic,
 } from './atomic.js';
 export { assertFts5Available, type Fts5ProbeResult, probeFts5 } from './fts5.js';
 export { type LockOptions, ProjectLock } from './lock.js';
