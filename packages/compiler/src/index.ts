@@ -43,3 +43,10 @@ export {
   WHITESPACE_POLICY,
   type WhitespacePolicy,
 } from './normalize/normalize.js';
+export {
+  type ValidationCheckName,
+  type ValidationFailure,
+  type ValidationInput,
+  type ValidationReport,
+  validateCandidate,
+} from './seal/validate.js';
