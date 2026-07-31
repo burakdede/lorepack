@@ -1,0 +1,27 @@
+name: AI client support
+description: A problem with lore connect, MCP, or a specific client
+labels: ["area:connect"]
+body:
+  - type: input
+    id: client
+    attributes:
+      label: Client and version
+      placeholder: Claude Code 2.1.203 / Codex CLI / VS Code 1.99
+    validations: {required: true}
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options: [MCP stdio, MCP Streamable HTTP, REST, Export, Not sure]
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include `lore connect <client> --dry-run` output and the client's own MCP status output.
+    validations: {required: true}
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and Node version
+    validations: {required: true}

@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a capability
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before proposing: Lorepack is a **versioned context build system**, not a RAG server.
+        Every v0.1 feature must improve one of four promises — build, inspect, connect, or
+        deploy durable context. See `AGENTS.md` for what is deliberately out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are unable to do today. Describe the situation, not the solution.
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What Lorepack would do instead, including the command or API surface.
+    validations: {required: true}
+  - type: dropdown
+    id: promise
+    attributes:
+      label: Which promise does this strengthen?
+      options: [Build, Inspect, Connect, Deploy]
+    validations: {required: true}
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

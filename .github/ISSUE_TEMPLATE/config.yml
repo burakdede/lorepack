@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/burakdede/lorepack/security/advisories/new
+    about: Report privately. Do not open a public issue.
+  - name: Working agreement (read before contributing)
+    url: https://github.com/burakdede/lorepack/blob/main/AGENTS.md
+    about: Design invariants, scope boundaries, testing bar and commit conventions.
