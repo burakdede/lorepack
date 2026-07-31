@@ -327,6 +327,7 @@ describe('phase 0 definition', () => {
       'sqlite-adapter',
       'fts5-available',
       'object-store',
+      'atomic-writes',
       'active-pointer',
       'error-taxonomy',
       'progress-reporting',
