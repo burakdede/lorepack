@@ -1,0 +1,33 @@
+name: Parser / format support
+description: Request or report a problem with a document format
+labels: ["area:parsers"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        v0.1 supports Markdown, plain text and code, HTML, text-based PDF, DOCX, CSV and XLSX.
+        OCR, screenshots, images and PPTX are explicitly out of scope for v0.1.
+  - type: input
+    id: format
+    attributes:
+      label: Format
+      placeholder: .xlsx produced by LibreOffice 24.8
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected structure
+      description: What nodes, tables, headings or locators should have been produced.
+    validations: {required: true}
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Include `lore inspect <path>` output and any parser warnings.
+    validations: {required: true}
+  - type: checkboxes
+    id: fixture
+    attributes:
+      label: Fixture
+      options:
+        - label: I can share a small file that reproduces this (required for a fix)
