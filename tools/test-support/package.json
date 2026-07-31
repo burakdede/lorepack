@@ -1,0 +1,17 @@
+{
+  "name": "@lorepack/test-support",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fixture conventions, golden snapshots, and determinism helpers for Lorepack tests.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15 <25"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}
