@@ -173,7 +173,7 @@ describe('entry point', () => {
   it('checks the Node version before importing anything heavy', () => {
     // The guard is only useful if it runs first. An eager import of the compiler or the
     // storage layer would fail on an unsupported runtime before the guard could speak.
-    const source = readFileSync(join(import.meta.dirname, '..', 'src', 'bin', 'lore.ts'), 'utf8');
+    const source = readFileSync(join(import.meta.dirname, '..', 'src', 'entry.ts'), 'utf8');
     const guardImport = source.indexOf('@lorepack/core/engine');
     const guardCall = source.indexOf('assertSupportedNode()');
     const dynamicImport = source.indexOf('await import(');

@@ -5,7 +5,7 @@ exit codes and output modes belong to the shell so no command reinvents them.
 
 ## Entry point
 
-`packages/cli/src/bin/lore.ts` does one thing before anything else:
+`packages/cli/src/entry.ts` does one thing before anything else:
 
 ```ts
 import { assertSupportedNode } from '@lorepack/core/engine';
@@ -18,6 +18,12 @@ transitive imports beyond node builtins, so on an unsupported runtime the user g
 actionable line rather than a module-load failure from inside a dependency. Everything
 else loads dynamically, after the check. A test asserts that the only static import in
 that file is the guard.
+
+The file is deliberately **not** in a directory called `bin`. Ignoring `bin/` is a common
+entry in a personal global gitignore, and it silently kept this file out of its first
+commit until CI failed on a missing source. `pnpm check:sources-tracked` now catches that
+whole class: a source file that exists locally but is untracked fails the build with the
+`git check-ignore` command that explains why.
 
 ## Writing a command
 

@@ -60,6 +60,9 @@ jobs:
 
       - run: pnpm check:no-em-dash
 
+      - name: Every source file is tracked by git
+        run: pnpm check:sources-tracked
+
       - name: Public schemas match their Zod definitions
         run: pnpm schemas:check
 

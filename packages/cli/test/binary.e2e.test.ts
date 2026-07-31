@@ -13,7 +13,7 @@ const run = promisify(execFile);
  * internal APIs. Everything here would still pass if the in-process tests were lying about
  * how the program behaves when Node actually starts it.
  */
-const BIN = join(import.meta.dirname, '..', 'dist', 'bin', 'lore.js');
+const BIN = join(import.meta.dirname, '..', 'dist', 'entry.js');
 
 interface Executed {
   readonly code: number;
