@@ -26,5 +26,8 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/core"
+  },
+  "devDependencies": {
+    "@lorepack/test-support": "workspace:*"
   }
 }

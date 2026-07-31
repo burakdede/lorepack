@@ -21,6 +21,9 @@ export const PACKAGES = [
 export type PackageName = (typeof PACKAGES)[number];
 
 /** Workspace packages each package may import from. */
+/** Test-only workspace packages, permitted as devDependencies anywhere. */
+export const TEST_ONLY_PACKAGES: readonly string[] = ['test-support'];
+
 export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly PackageName[]>> = {
   core: [],
   parsers: ['core'],
