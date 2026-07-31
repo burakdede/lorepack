@@ -29,5 +29,8 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/backend-local"
+  },
+  "devDependencies": {
+    "@lorepack/test-support": "workspace:*"
   }
 }

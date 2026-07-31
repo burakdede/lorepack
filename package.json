@@ -24,12 +24,13 @@
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm schemas:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
-    "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check"
+    "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
+    "probe:fts5": "node scripts/probe-fts5.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@changesets/cli": "2.31.1",
-    "@types/node": "24.10.1",
+    "@types/node": "24.13.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
     "zod": "4.4.3"
