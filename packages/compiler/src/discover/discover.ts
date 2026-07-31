@@ -79,7 +79,7 @@ export function discover(options: DiscoverOptions): DiscoveryResult {
   options.progress?.start('discovering', 'Discovering');
 
   for (const source of config.sources) {
-    walkSource(source, config, matcher, artifacts, warnings, options, () => {
+    walkSource(source, config, matcher, artifacts, warnings, () => {
       totalBytes = artifacts.reduce((sum, artifact) => sum + artifact.byteSize, 0);
       options.progress?.progress('discovering', artifacts.length, { unit: 'files' });
     });
@@ -103,7 +103,6 @@ function walkSource(
   matcher: ReturnType<typeof createMatcher>,
   artifacts: DiscoveredArtifact[],
   warnings: DiscoveryWarning[],
-  options: DiscoverOptions,
   onProgress: () => void,
 ): void {
   const limits = config.effective.limits;
