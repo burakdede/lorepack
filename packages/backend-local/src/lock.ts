@@ -21,6 +21,14 @@ export interface LockOptions {
   readonly isProcessAlive?: (pid: number) => boolean;
   /** Identity written into the lock record. Injectable so tests can act as another process. */
   readonly ownerPid?: number;
+  /**
+   * Called once when the lock is not free and this process begins waiting.
+   *
+   * A build that appears to hang is indistinguishable from a broken one, so the caller
+   * gets the chance to say who it is waiting for. The lock itself writes to no stream:
+   * the CLI reports through its progress bus, and a server would log it.
+   */
+  readonly onWait?: (owner: { pid: number | null }) => void;
 }
 
 interface LockRecord {
@@ -62,6 +70,7 @@ export class ProjectLock {
       now: options.now ?? Date.now,
       isProcessAlive: options.isProcessAlive ?? defaultIsProcessAlive,
       ownerPid: options.ownerPid ?? process.pid,
+      onWait: options.onWait ?? (() => {}),
     };
   }
 
@@ -116,8 +125,14 @@ export class ProjectLock {
     // Wall time, deliberately not the injected clock: `now` exists so staleness can be
     // tested with a frozen clock, and a frozen clock must never make this loop unbounded.
     const deadline = Date.now() + this.#options.waitMs;
+    let announced = false;
     for (;;) {
       if (this.#tryAcquire()) return;
+
+      if (!announced) {
+        announced = true;
+        this.#options.onWait({ pid: this.#readOwner()?.pid ?? null });
+      }
 
       if (this.#isStale()) {
         const owner = this.#readOwner();

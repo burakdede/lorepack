@@ -39,6 +39,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@lorepack/backend-local':
+        specifier: workspace:*
+        version: link:../backend-local
       '@lorepack/compiler':
         specifier: workspace:*
         version: link:../compiler

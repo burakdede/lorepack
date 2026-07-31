@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Artifact, LoreNode } from '@lorepack/core';
+import type { Artifact, LoreNode, SourceLocator } from '@lorepack/core';
 
 /**
  * Writes a sealed build's catalog.
@@ -16,7 +16,9 @@ export interface CatalogChunk {
   readonly headingPath: readonly string[];
   readonly text: string;
   readonly estimatedTokens: number;
-  readonly locator: { relativePath: string; lineStart?: number; lineEnd?: number };
+  // Reuses the canonical locator rather than redeclaring its shape, so the two cannot
+  // drift and a chunk from the compiler is accepted without a cast.
+  readonly locator: SourceLocator;
   readonly revisionHash: string;
 }
 

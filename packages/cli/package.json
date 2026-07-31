@@ -30,7 +30,8 @@
     "@lorepack/mcp": "workspace:*",
     "@lorepack/runtime": "workspace:*",
     "commander": "15.0.0",
-    "@lorepack/parsers": "workspace:*"
+    "@lorepack/parsers": "workspace:*",
+    "@lorepack/backend-local": "workspace:*"
   },
   "repository": {
     "type": "git",

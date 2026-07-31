@@ -19,6 +19,7 @@ export const ERROR_CODES = {
   LORE_E_ENVELOPE_EXCEEDED: 'The project exceeds a supported scale limit.',
   LORE_E_BUILD_NOT_FOUND: 'No build matches the requested identifier.',
   LORE_E_INVALID_ARGUMENT: 'A command argument was missing or invalid.',
+  LORE_E_CANCELLED: 'The operation was cancelled before it completed.',
 
   // Build integrity (exit 2)
   LORE_E_PARSE_FAILED: 'A supported, included file could not be parsed.',
@@ -68,6 +69,7 @@ const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_ENVELOPE_EXCEEDED: EXIT_CODES.USER,
   LORE_E_BUILD_NOT_FOUND: EXIT_CODES.USER,
   LORE_E_INVALID_ARGUMENT: EXIT_CODES.USER,
+  LORE_E_CANCELLED: EXIT_CODES.USER,
   LORE_E_PARSE_FAILED: EXIT_CODES.BUILD,
   LORE_E_BUILD_VALIDATION: EXIT_CODES.BUILD,
   LORE_E_OBJECT_CORRUPT: EXIT_CODES.BUILD,

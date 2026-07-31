@@ -125,6 +125,7 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
   // Defensive mode is the default from Node 24.14, but stating it means a future default
   // change cannot silently weaken a read-only build handle.
   api(db).enableDefensive(true);
+  db.exec('PRAGMA busy_timeout = 5000');
   applyLimits(db, options.limits ?? SAFE_QUERY_LIMITS);
   return db;
 }
@@ -140,8 +141,14 @@ export function openWritable(path: string): DatabaseSync {
     });
     assertSqliteApiSurface(db);
     api(db).enableDefensive(true);
-    db.exec('PRAGMA journal_mode = WAL');
-    db.exec('PRAGMA synchronous = NORMAL');
+    // Deliberately not WAL. A WAL database leaves `-wal` and `-shm` beside it, and a
+    // read-only connection creates them without being able to clean them up, which would
+    // make `lore status` write to disk and a sealed build three files instead of one.
+    // Writers are already serialized by the project lock, so WAL's concurrency buys
+    // nothing here; `busy_timeout` covers the reader that arrives mid-write.
+    db.exec('PRAGMA journal_mode = DELETE');
+    db.exec('PRAGMA synchronous = FULL');
+    db.exec('PRAGMA busy_timeout = 5000');
     return db;
   } catch (cause) {
     throw new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${path} for writing.`, {

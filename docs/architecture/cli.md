@@ -49,6 +49,18 @@ Commands are registered explicitly in `commands/index.ts`. No dynamic discovery:
 architecture section 4.8 applies here too, and an explicit list is what makes `lore --help`
 reviewable in a pull request.
 
+## Cancellation
+
+`runCli` installs SIGINT and SIGTERM handlers and passes an `AbortSignal` on the context.
+One interrupt asks the running command to stop at its next checkpoint; a second exits
+immediately, because at that point the user is no longer asking.
+
+A command that ignores the signal is simply not cancellable, which is correct for short
+ones. `lore build` checks it between stages, and the guarantee it makes is not that
+temporary files are tidy: it is that **`builds/` and the active pointer are unchanged**.
+A leftover candidate directory under `.lore/tmp/` is untidy. A mutated `builds/` would be
+a broken promise, so that is what the tests assert.
+
 ## Global options
 
 | Flag | Effect |

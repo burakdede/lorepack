@@ -14,6 +14,7 @@ import {
   tableQueryResultSchema,
   taskContextRequestSchema,
 } from './runtime.js';
+import { statusSchema } from './status.js';
 
 /**
  * Every schema published under schemas/. The generator walks this registry, so adding a
@@ -26,6 +27,7 @@ export const PUBLIC_SCHEMAS = {
   'build-manifest': buildManifestSchema,
   'build-receipt': buildReceiptSchema,
   plan: planSchema,
+  status: statusSchema,
   'deployment-receipt': deploymentReceiptSchema,
   'search-request': searchRequestSchema,
   'search-result': searchResultSchema,

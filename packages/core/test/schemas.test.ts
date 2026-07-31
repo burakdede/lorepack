@@ -344,6 +344,7 @@ describe('public registry', () => {
         'search-result',
         'source-read-request',
         'source-read-result',
+        'status',
         'table-description',
         'table-query-request',
         'table-query-result',
