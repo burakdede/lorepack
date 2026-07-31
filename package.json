@@ -17,16 +17,18 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "test": "vitest run",
+    "test": "pnpm build && vitest run",
     "test:watch": "vitest",
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm schemas:check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:sources-tracked && pnpm schemas:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
     "probe:fts5": "node scripts/probe-fts5.mjs",
-    "phase:check": "pnpm build && node scripts/phase-check.mjs"
+    "phase:check": "pnpm build && node scripts/phase-check.mjs",
+    "test:unit": "vitest run",
+    "check:sources-tracked": "node scripts/check-sources-tracked.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
