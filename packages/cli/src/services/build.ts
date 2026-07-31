@@ -138,6 +138,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         if (parser === null) continue;
 
         const key = cacheKey({
+          artifactId: discovered.artifactId,
           contentHash: discovered.contentHash,
           parserId: parser.id,
           parserVersion: parser.version,

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
@@ -124,6 +124,33 @@ describe('lore build', () => {
         expect(second.reusedArtifacts).toBe(2);
       },
     );
+  });
+
+  it('keeps two identical files at different paths as two artifacts', async () => {
+    // The parse cache is keyed on the artifact id as well as the content. Without the
+    // path, identical content at two paths shared one cache entry and the second file
+    // inherited the first one's record.
+    await project({ 'a.md': '# Same\n\nText.', 'copy/a.md': '# Same\n\nText.' }, async (root) => {
+      const result = await build(root);
+      expect(result.counts.artifacts).toBe(2);
+
+      const paths = readFileSync(
+        join(root, '.lore', 'builds', result.buildId, 'manifest.json'),
+        'utf8',
+      );
+      expect(JSON.parse(paths).counts.artifacts).toBe(2);
+    });
+  });
+
+  it('produces a different build when a file is renamed but not edited', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const first = await build(root);
+      renameSync(join(root, 'a.md'), join(root, 'renamed.md'));
+      const second = await build(root);
+
+      expect(second.created).toBe(true);
+      expect(second.buildId).not.toBe(first.buildId);
+    });
   });
 
   it('leaves the active pointer alone with --no-activate', async () => {

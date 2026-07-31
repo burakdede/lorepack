@@ -1,7 +1,10 @@
 import type { CommandDefinition } from '../framework/program.js';
+import { activateCommand, buildsCommand, rollbackCommand } from './activate.js';
 import { buildCommand } from './build.js';
+import { diffCommand } from './diff.js';
 import { initCommand } from './init.js';
 import { planCommand } from './plan.js';
+import { pruneCommand } from './prune.js';
 import { statusCommand } from './status.js';
 
 /**
@@ -10,5 +13,15 @@ import { statusCommand } from './status.js';
  * `lore --help` reviewable in a pull request.
  */
 export function registerCommands(): CommandDefinition[] {
-  return [initCommand(), planCommand(), buildCommand(), statusCommand()];
+  return [
+    initCommand(),
+    planCommand(),
+    buildCommand(),
+    statusCommand(),
+    diffCommand(),
+    buildsCommand(),
+    activateCommand(),
+    rollbackCommand(),
+    pruneCommand(),
+  ];
 }

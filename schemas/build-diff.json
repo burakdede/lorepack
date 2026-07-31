@@ -1,0 +1,314 @@
+{
+  "$id": "https://lorepack.dev/schemas/build-diff.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifacts": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "change": {
+                "enum": [
+                  "added",
+                  "changed",
+                  "removed"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sameContentAs": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "change"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "added",
+        "changed",
+        "removed",
+        "changes"
+      ],
+      "type": "object"
+    },
+    "canonicalRoots": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          },
+          "from": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "to": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "from",
+          "to",
+          "changed"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "capability": {
+            "enum": [
+              "lexical-search",
+              "structured-context",
+              "table-query",
+              "semantic-search"
+            ],
+            "type": "string"
+          },
+          "change": {
+            "enum": [
+              "same",
+              "added",
+              "removed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "change"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "chunks": {
+      "additionalProperties": false,
+      "properties": {
+        "added": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "removed": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "added",
+        "changed",
+        "removed"
+      ],
+      "type": "object"
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "from": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identical": {
+      "type": "boolean"
+    },
+    "incompatibilities": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "rules": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "enum": [
+              "status",
+              "authority",
+              "supersedes"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "description": "POSIX-style path relative to a source root",
+            "minLength": 1,
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "field",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "columnsAdded": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "columnsRemoved": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "rowsAfter": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rowsBefore": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tableId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "tableId",
+          "name",
+          "rowsBefore",
+          "rowsAfter",
+          "columnsAdded",
+          "columnsRemoved"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "to": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "from",
+    "to",
+    "identical",
+    "incompatibilities",
+    "artifacts",
+    "rules",
+    "chunks",
+    "tables",
+    "capabilities",
+    "canonicalRoots"
+  ],
+  "title": "build-diff",
+  "type": "object"
+}
