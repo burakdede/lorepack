@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# Lorepack workspace state (never committed; see docs/package-format)
+.lore/
+*.lorepack
+
+# test and coverage output
+coverage/
+*.log
+
+# local agent/editor state
+CLAUDE.local.md
+.claude/settings.local.json
+.vscode/*
+!.vscode/mcp.json
+.idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
