@@ -1,0 +1,2 @@
+// @lorepack/cli
+export {};
