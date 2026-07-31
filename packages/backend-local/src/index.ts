@@ -1,0 +1,2 @@
+// @lorepack/backend-local
+export {};

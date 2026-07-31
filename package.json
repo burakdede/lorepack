@@ -1,0 +1,33 @@
+{
+  "name": "lorepack",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Versioned context build system for AI",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15 <25"
+  },
+  "packageManager": "pnpm@11.18.0",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:no-native": "node scripts/check-no-native.mjs",
+    "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "@changesets/cli": "2.31.1",
+    "@types/node": "24.10.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

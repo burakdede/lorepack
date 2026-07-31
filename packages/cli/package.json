@@ -1,0 +1,41 @@
+{
+  "name": "@lorepack/cli",
+  "version": "0.0.0",
+  "description": "The lore command line interface.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15 <25"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@lorepack/core": "workspace:*",
+    "@lorepack/compiler": "workspace:*",
+    "@lorepack/runtime": "workspace:*",
+    "@lorepack/mcp": "workspace:*",
+    "@lorepack/connect-clients": "workspace:*",
+    "@lorepack/deploy-cloudflare": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/burakdede/lorepack.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "lore": "./dist/bin/lore.js"
+  }
+}
