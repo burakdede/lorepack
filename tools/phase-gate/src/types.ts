@@ -7,7 +7,7 @@
  * rather than as a broken assertion.
  */
 
-export type CriterionKind = 'command' | 'exports' | 'path' | 'issues';
+export type CriterionKind = 'command' | 'exports' | 'path' | 'issues' | 'audit';
 
 interface BaseCriterion {
   /** Stable identifier, referenced by the report and by CI output. */
@@ -43,7 +43,25 @@ export interface IssuesCriterion extends BaseCriterion {
   readonly allowOpen?: readonly number[];
 }
 
-export type Criterion = CommandCriterion | ExportsCriterion | PathCriterion | IssuesCriterion;
+/**
+ * Verifies that the next phase was audited against what this phase learned, per the
+ * working agreement. It checks that an audit happened and is dated, not what it says:
+ * judging content is a human job, noticing its absence is not.
+ */
+export interface AuditCriterion extends BaseCriterion {
+  readonly kind: 'audit';
+  /** Epic issue of the phase that follows this one. Null for the final phase. */
+  readonly nextEpic: number | null;
+  /** Marker the audit section must contain, matched case-insensitively. */
+  readonly marker?: string;
+}
+
+export type Criterion =
+  | CommandCriterion
+  | ExportsCriterion
+  | PathCriterion
+  | IssuesCriterion
+  | AuditCriterion;
 
 export interface PhaseDefinition {
   readonly phase: number;

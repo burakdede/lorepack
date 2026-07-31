@@ -223,6 +223,15 @@ export const PHASE_0: PhaseDefinition = {
       args: ['check:no-native'],
     },
 
+    // The working agreement requires the next phase to be audited before this one closes.
+    {
+      id: 'forward-audit',
+      kind: 'audit',
+      promise:
+        'The next phase was audited against what this phase learned, so it does not rest on disproved assumptions.',
+      nextEpic: 2,
+    },
+
     // Documentation is part of the phase, not a follow-up.
     {
       id: 'documentation',
