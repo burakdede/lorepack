@@ -20,11 +20,22 @@
             "type": "boolean"
           },
           "type": {
-            "enum": ["text", "integer", "real", "boolean", "date", "unknown"],
+            "enum": [
+              "text",
+              "integer",
+              "real",
+              "boolean",
+              "date",
+              "unknown"
+            ],
             "type": "string"
           }
         },
-        "required": ["name", "type", "nullable"],
+        "required": [
+          "name",
+          "type",
+          "nullable"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -70,7 +81,10 @@
           "type": "string"
         }
       },
-      "required": ["artifactId", "relativePath"],
+      "required": [
+        "artifactId",
+        "relativePath"
+      ],
       "type": "object"
     },
     "name": {
@@ -96,7 +110,11 @@
       "type": "string"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "tableId": {

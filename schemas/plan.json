@@ -33,7 +33,12 @@
             "additionalProperties": false,
             "properties": {
               "change": {
-                "enum": ["added", "changed", "removed", "reused"],
+                "enum": [
+                  "added",
+                  "changed",
+                  "removed",
+                  "reused"
+                ],
                 "type": "string"
               },
               "path": {
@@ -42,7 +47,10 @@
                 "type": "string"
               }
             },
-            "required": ["path", "change"],
+            "required": [
+              "path",
+              "change"
+            ],
             "type": "object"
           },
           "type": "array"
@@ -58,7 +66,13 @@
           "type": "integer"
         }
       },
-      "required": ["added", "changed", "removed", "reused", "changes"],
+      "required": [
+        "added",
+        "changed",
+        "removed",
+        "reused",
+        "changes"
+      ],
       "type": "object"
     },
     "capabilities": {
@@ -66,20 +80,33 @@
       "properties": {
         "current": {
           "items": {
-            "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+            "enum": [
+              "lexical-search",
+              "structured-context",
+              "table-query",
+              "semantic-search"
+            ],
             "type": "string"
           },
           "type": "array"
         },
         "next": {
           "items": {
-            "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+            "enum": [
+              "lexical-search",
+              "structured-context",
+              "table-query",
+              "semantic-search"
+            ],
             "type": "string"
           },
           "type": "array"
         }
       },
-      "required": ["current", "next"],
+      "required": [
+        "current",
+        "next"
+      ],
       "type": "object"
     },
     "expectedWork": {
@@ -101,7 +128,11 @@
           "type": "integer"
         }
       },
-      "required": ["parseArtifacts", "reuseArtifacts", "rebuildChunks"],
+      "required": [
+        "parseArtifacts",
+        "reuseArtifacts",
+        "rebuildChunks"
+      ],
       "type": "object"
     },
     "formatVersion": {
@@ -147,13 +178,20 @@
                 ]
               }
             },
-            "required": ["key", "from", "to"],
+            "required": [
+              "key",
+              "from",
+              "to"
+            ],
             "type": "object"
           },
           "type": "array"
         }
       },
-      "required": ["changed", "changes"],
+      "required": [
+        "changed",
+        "changes"
+      ],
       "type": "object"
     },
     "projectName": {
@@ -165,7 +203,11 @@
         "additionalProperties": false,
         "properties": {
           "field": {
-            "enum": ["status", "authority", "supersedes"],
+            "enum": [
+              "status",
+              "authority",
+              "supersedes"
+            ],
             "type": "string"
           },
           "from": {
@@ -194,13 +236,22 @@
             ]
           }
         },
-        "required": ["path", "field", "from", "to"],
+        "required": [
+          "path",
+          "field",
+          "from",
+          "to"
+        ],
         "type": "object"
       },
       "type": "array"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "tables": {
@@ -275,7 +326,10 @@
             "type": "string"
           }
         },
-        "required": ["code", "message"],
+        "required": [
+          "code",
+          "message"
+        ],
         "type": "object"
       },
       "type": "array"

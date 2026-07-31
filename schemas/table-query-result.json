@@ -55,7 +55,10 @@
           "type": "string"
         }
       },
-      "required": ["artifactId", "relativePath"],
+      "required": [
+        "artifactId",
+        "relativePath"
+      ],
       "type": "object"
     },
     "rowCount": {
@@ -74,14 +77,26 @@
       "type": "array"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "truncated": {
       "type": "boolean"
     }
   },
-  "required": ["buildId", "sourceState", "columns", "rows", "rowCount", "truncated", "locator"],
+  "required": [
+    "buildId",
+    "sourceState",
+    "columns",
+    "rows",
+    "rowCount",
+    "truncated",
+    "locator"
+  ],
   "title": "table-query-result",
   "type": "object"
 }

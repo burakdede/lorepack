@@ -7,7 +7,12 @@
       "additionalProperties": false,
       "properties": {
         "defaultProfile": {
-          "enum": ["agent", "coding", "chat", "deep"],
+          "enum": [
+            "agent",
+            "coding",
+            "chat",
+            "deep"
+          ],
           "type": "string"
         }
       },
@@ -49,7 +54,11 @@
             "type": "boolean"
           },
           "status": {
-            "enum": ["active", "draft", "archived"],
+            "enum": [
+              "active",
+              "draft",
+              "archived"
+            ],
             "type": "string"
           },
           "supersedes": {
@@ -60,7 +69,9 @@
             "type": "array"
           }
         },
-        "required": ["match"],
+        "required": [
+          "match"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -82,7 +93,11 @@
       "type": "number"
     }
   },
-  "required": ["version", "name", "sources"],
+  "required": [
+    "version",
+    "name",
+    "sources"
+  ],
   "title": "lore-config",
   "type": "object"
 }

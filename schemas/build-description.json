@@ -10,7 +10,12 @@
     },
     "capabilities": {
       "items": {
-        "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
         "type": "string"
       },
       "type": "array"
@@ -48,7 +53,13 @@
           "type": "integer"
         }
       },
-      "required": ["artifacts", "nodes", "chunks", "tables", "tableRows"],
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "tableRows"
+      ],
       "type": "object"
     },
     "projectName": {
@@ -65,7 +76,11 @@
       "type": "string"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "warningCount": {

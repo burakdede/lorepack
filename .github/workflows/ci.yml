@@ -60,6 +60,9 @@ jobs:
 
       - run: pnpm check:no-em-dash
 
+      - name: Public schemas match their Zod definitions
+        run: pnpm schemas:check
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

@@ -22,7 +22,10 @@
           "type": "integer"
         }
       },
-      "required": ["reusedArtifacts", "rebuiltArtifacts"],
+      "required": [
+        "reusedArtifacts",
+        "rebuiltArtifacts"
+      ],
       "type": "object"
     },
     "completedAt": {

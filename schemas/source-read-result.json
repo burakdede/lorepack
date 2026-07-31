@@ -49,11 +49,18 @@
           "type": "string"
         }
       },
-      "required": ["artifactId", "relativePath"],
+      "required": [
+        "artifactId",
+        "relativePath"
+      ],
       "type": "object"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "text": {
@@ -64,7 +71,13 @@
       "type": "boolean"
     }
   },
-  "required": ["buildId", "sourceState", "text", "truncated", "locator"],
+  "required": [
+    "buildId",
+    "sourceState",
+    "text",
+    "truncated",
+    "locator"
+  ],
   "title": "source-read-result",
   "type": "object"
 }

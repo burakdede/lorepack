@@ -30,13 +30,19 @@
     },
     "status": {
       "items": {
-        "enum": ["active", "draft", "archived"],
+        "enum": [
+          "active",
+          "draft",
+          "archived"
+        ],
         "type": "string"
       },
       "type": "array"
     }
   },
-  "required": ["query"],
+  "required": [
+    "query"
+  ],
   "title": "search-request",
   "type": "object"
 }

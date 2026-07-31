@@ -31,7 +31,11 @@
           },
           "labels": {
             "items": {
-              "enum": ["draft", "archived", "superseded"],
+              "enum": [
+                "draft",
+                "archived",
+                "superseded"
+              ],
               "type": "string"
             },
             "type": "array"
@@ -77,7 +81,10 @@
                 "type": "string"
               }
             },
-            "required": ["artifactId", "relativePath"],
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
             "type": "object"
           },
           "score": {
@@ -93,7 +100,11 @@
             "type": "object"
           },
           "status": {
-            "enum": ["active", "draft", "archived"],
+            "enum": [
+              "active",
+              "draft",
+              "archived"
+            ],
             "type": "string"
           }
         },
@@ -112,7 +123,11 @@
       "type": "array"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "totalIndexedChunks": {
@@ -121,7 +136,12 @@
       "type": "integer"
     }
   },
-  "required": ["buildId", "sourceState", "hits", "totalIndexedChunks"],
+  "required": [
+    "buildId",
+    "sourceState",
+    "hits",
+    "totalIndexedChunks"
+  ],
   "title": "search-result",
   "type": "object"
 }

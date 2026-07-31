@@ -32,12 +32,23 @@
           "type": "string"
         }
       },
-      "required": ["artifacts", "nodes", "chunks", "tables", "objects"],
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "objects"
+      ],
       "type": "object"
     },
     "capabilities": {
       "items": {
-        "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
         "type": "string"
       },
       "minItems": 1,
@@ -80,7 +91,13 @@
           "type": "integer"
         }
       },
-      "required": ["artifacts", "nodes", "chunks", "tables", "tableRows"],
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "tableRows"
+      ],
       "type": "object"
     },
     "embeddingProfile": {
@@ -100,7 +117,10 @@
           "type": "boolean"
         },
         "pooling": {
-          "enum": ["mean", "cls"],
+          "enum": [
+            "mean",
+            "cls"
+          ],
           "type": "string"
         },
         "revision": {
@@ -149,7 +169,13 @@
         "additionalProperties": false,
         "properties": {
           "class": {
-            "enum": ["unsupported-file", "parser", "envelope", "rule", "security"],
+            "enum": [
+              "unsupported-file",
+              "parser",
+              "envelope",
+              "rule",
+              "security"
+            ],
             "type": "string"
           },
           "code": {
@@ -166,7 +192,11 @@
             "type": "string"
           }
         },
-        "required": ["code", "message", "class"],
+        "required": [
+          "code",
+          "message",
+          "class"
+        ],
         "type": "object"
       },
       "type": "array"

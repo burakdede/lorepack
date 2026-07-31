@@ -13,14 +13,21 @@
         "additionalProperties": false,
         "properties": {
           "kind": {
-            "enum": ["path", "type", "status"],
+            "enum": [
+              "path",
+              "type",
+              "status"
+            ],
             "type": "string"
           },
           "value": {
             "type": "string"
           }
         },
-        "required": ["kind", "value"],
+        "required": [
+          "kind",
+          "value"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -30,7 +37,12 @@
       "type": "boolean"
     },
     "profile": {
-      "enum": ["agent", "coding", "chat", "deep"],
+      "enum": [
+        "agent",
+        "coding",
+        "chat",
+        "deep"
+      ],
       "type": "string"
     },
     "task": {
@@ -39,7 +51,9 @@
       "type": "string"
     }
   },
-  "required": ["task"],
+  "required": [
+    "task"
+  ],
   "title": "task-context-request",
   "type": "object"
 }

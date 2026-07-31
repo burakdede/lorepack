@@ -46,7 +46,10 @@
               "type": "boolean"
             },
             "pooling": {
-              "enum": ["mean", "cls"],
+              "enum": [
+                "mean",
+                "cls"
+              ],
               "type": "string"
             },
             "revision": {
@@ -79,7 +82,13 @@
       ]
     }
   },
-  "required": ["formatVersion", "compiler", "schema", "parsers", "semantic"],
+  "required": [
+    "formatVersion",
+    "compiler",
+    "schema",
+    "parsers",
+    "semantic"
+  ],
   "title": "lore-lock",
   "type": "object"
 }

@@ -10,7 +10,12 @@
     },
     "capabilityLossAccepted": {
       "items": {
-        "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
         "type": "string"
       },
       "type": "array"
@@ -62,7 +67,14 @@
       "type": "string"
     },
     "state": {
-      "enum": ["planned", "projecting", "projected", "verified", "active", "failed"],
+      "enum": [
+        "planned",
+        "projecting",
+        "projected",
+        "verified",
+        "active",
+        "failed"
+      ],
       "type": "string"
     },
     "target": {
@@ -73,19 +85,35 @@
       "additionalProperties": false,
       "properties": {
         "search": {
-          "enum": ["passed", "failed", "skipped"],
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
           "type": "string"
         },
         "sourceRead": {
-          "enum": ["passed", "failed", "skipped"],
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
           "type": "string"
         },
         "tableQuery": {
-          "enum": ["passed", "failed", "skipped"],
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
           "type": "string"
         }
       },
-      "required": ["search", "sourceRead", "tableQuery"],
+      "required": [
+        "search",
+        "sourceRead",
+        "tableQuery"
+      ],
       "type": "object"
     }
   },

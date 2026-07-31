@@ -24,7 +24,11 @@
           },
           "labels": {
             "items": {
-              "enum": ["draft", "archived", "superseded"],
+              "enum": [
+                "draft",
+                "archived",
+                "superseded"
+              ],
               "type": "string"
             },
             "type": "array"
@@ -70,14 +74,24 @@
                 "type": "string"
               }
             },
-            "required": ["artifactId", "relativePath"],
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
             "type": "object"
           },
           "text": {
             "type": "string"
           }
         },
-        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "required": [
+          "chunkId",
+          "text",
+          "estimatedTokens",
+          "headingPath",
+          "labels",
+          "locator"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -134,7 +148,10 @@
             "type": "string"
           }
         },
-        "required": ["artifactId", "relativePath"],
+        "required": [
+          "artifactId",
+          "relativePath"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -199,15 +216,30 @@
                 "type": "string"
               }
             },
-            "required": ["artifactId", "relativePath"],
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
             "type": "object"
           },
           "reason": {
-            "enum": ["budget", "duplicate", "diversity", "superseded", "archived", "filtered"],
+            "enum": [
+              "budget",
+              "duplicate",
+              "diversity",
+              "superseded",
+              "archived",
+              "filtered"
+            ],
             "type": "string"
           }
         },
-        "required": ["chunkId", "reason", "estimatedTokens", "locator"],
+        "required": [
+          "chunkId",
+          "reason",
+          "estimatedTokens",
+          "locator"
+        ],
         "type": "object"
       },
       "type": "array"
@@ -233,7 +265,11 @@
           },
           "labels": {
             "items": {
-              "enum": ["draft", "archived", "superseded"],
+              "enum": [
+                "draft",
+                "archived",
+                "superseded"
+              ],
               "type": "string"
             },
             "type": "array"
@@ -279,20 +315,35 @@
                 "type": "string"
               }
             },
-            "required": ["artifactId", "relativePath"],
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
             "type": "object"
           },
           "text": {
             "type": "string"
           }
         },
-        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "required": [
+          "chunkId",
+          "text",
+          "estimatedTokens",
+          "headingPath",
+          "labels",
+          "locator"
+        ],
         "type": "object"
       },
       "type": "array"
     },
     "profile": {
-      "enum": ["agent", "coding", "chat", "deep"],
+      "enum": [
+        "agent",
+        "coding",
+        "chat",
+        "deep"
+      ],
       "type": "string"
     },
     "reservedTokens": {
@@ -321,7 +372,11 @@
           },
           "labels": {
             "items": {
-              "enum": ["draft", "archived", "superseded"],
+              "enum": [
+                "draft",
+                "archived",
+                "superseded"
+              ],
               "type": "string"
             },
             "type": "array"
@@ -367,20 +422,34 @@
                 "type": "string"
               }
             },
-            "required": ["artifactId", "relativePath"],
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
             "type": "object"
           },
           "text": {
             "type": "string"
           }
         },
-        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "required": [
+          "chunkId",
+          "text",
+          "estimatedTokens",
+          "headingPath",
+          "labels",
+          "locator"
+        ],
         "type": "object"
       },
       "type": "array"
     },
     "sourceState": {
-      "enum": ["clean", "dirty", "unknown"],
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
       "type": "string"
     },
     "tables": {
@@ -394,7 +463,10 @@
             "type": "string"
           }
         },
-        "required": ["tableId", "name"],
+        "required": [
+          "tableId",
+          "name"
+        ],
         "type": "object"
       },
       "type": "array"
