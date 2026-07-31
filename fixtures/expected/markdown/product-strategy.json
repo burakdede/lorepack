@@ -1,0 +1,255 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 531,
+    "contentHash": "aefaee5d1f8a0275a829e992818e8e4fa1c7a8ea2e260a3639730214541e56ca",
+    "displayPath": "documents/markdown/product-strategy.md",
+    "id": "fixtures:documents/markdown/product-strategy.md",
+    "mediaType": "text/markdown",
+    "metadata": {
+      "owner": "platform",
+      "status_note": "this is metadata, not a Lorepack rule",
+      "title": "Product Strategy"
+    },
+    "parserId": "markdown",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/markdown/product-strategy.md",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "Product Strategy"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "lineEnd": 35,
+        "lineStart": 1,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "frontmatter": {
+          "owner": "platform",
+          "status_note": "this is metadata, not a Lorepack rule",
+          "title": "Product Strategy"
+        }
+      },
+      "ordinal": 0,
+      "revisionHash": "712e39a4ee96fb27f63da85559f0e350d9414392e56c394fb8fe1d5f89b23756",
+      "title": "Product Strategy"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "lineEnd": 7,
+        "lineStart": 7,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "depth": 1
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0",
+      "revisionHash": "1d8b2eaa64630c12065388cd7fe04968349ef4bcd708f132eb58b3457cab330e",
+      "title": "Product Strategy"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy"
+        ],
+        "lineEnd": 9,
+        "lineStart": 9,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1",
+      "revisionHash": "50006f591151af0e8c38b89f6a43bb5457afbd7ea57b63dd70d4d611899f5b42",
+      "text": "The wedge is the lifecycle, not retrieval."
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.2",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy"
+        ],
+        "lineEnd": 11,
+        "lineStart": 11,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "depth": 2
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1",
+      "revisionHash": "153a5d9673903ce556e2b364520ff8bf04720f6d7c8cb33ff4623472e837672f",
+      "title": "Positioning"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.2.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
+        "lineEnd": 13,
+        "lineStart": 13,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.2",
+      "revisionHash": "3954592b63efc2909e3b9bc07f433bea07b5f7d6ee2ce897e9953b2deda0735a",
+      "text": "Lorepack is a versioned context build system."
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.2.2",
+      "kind": "list",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
+        "lineEnd": 17,
+        "lineStart": 15,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "items": 3,
+        "ordered": false
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.2",
+      "revisionHash": "4483f189ddedfa4247935f01c82c1807c12d13b60ee196143c67e4ad8a6382c4",
+      "text": "Build once\n\nVersion every change\n\nRoll back instantly"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.2.3",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Positioning"
+        ],
+        "lineEnd": 19,
+        "lineStart": 19,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "depth": 3
+      },
+      "ordinal": 3,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.2",
+      "revisionHash": "69b8ed1034a07202c173aa9faab84fdaac1e571e2349f3cf36806e0d99192c11",
+      "title": "Non-goals"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.2.3.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Positioning",
+          "Non-goals"
+        ],
+        "lineEnd": 21,
+        "lineStart": 21,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.2.3",
+      "revisionHash": "05731d0cdaf9640630d696baf5fc00db5d48a9353a3a51da038bc212e9b632c1",
+      "text": "Not a chatbot. Not a vector database."
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.3",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy"
+        ],
+        "lineEnd": 23,
+        "lineStart": 23,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "depth": 2
+      },
+      "ordinal": 3,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1",
+      "revisionHash": "785adafa17f672bfc01ca7b757feeb125541582a35dd6dc17b227b36c2f61f72",
+      "title": "Implementation"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.3.1",
+      "kind": "code",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Implementation"
+        ],
+        "lineEnd": 29,
+        "lineStart": 25,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "language": "ts"
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.3",
+      "revisionHash": "16921cff338604576b05c9c4fdf303960ae43069b1d7b25182aa14e87666a134",
+      "text": "export function build(project: Project): Build {\n    return seal(compile(project));\n}"
+    },
+    {
+      "artifactId": "fixtures:documents/markdown/product-strategy.md",
+      "id": "fixtures:documents/markdown/product-strategy.md#0.1.3.2",
+      "kind": "table",
+      "locator": {
+        "artifactId": "fixtures:documents/markdown/product-strategy.md",
+        "headingPath": [
+          "Product Strategy",
+          "Implementation"
+        ],
+        "lineEnd": 34,
+        "lineStart": 31,
+        "relativePath": "documents/markdown/product-strategy.md"
+      },
+      "metadata": {
+        "rows": 3
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/markdown/product-strategy.md#0.1.3",
+      "revisionHash": "ccab0065ac7272a83269a050b9780fc1155f416a7df48381fbf7a02a7556c480",
+      "text": "StageOwnercompilecompilerserveruntime"
+    }
+  ],
+  "warnings": []
+}

@@ -43,6 +43,7 @@ export {
   resolveBuildIdPrefix,
   sha256Hex,
 } from './hash/index.js';
+export type * from './model/index.js';
 export {
   artifactId,
   assertNoCaseCollisions,
