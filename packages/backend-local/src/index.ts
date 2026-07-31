@@ -4,6 +4,18 @@ export {
   discardCandidateDirectory,
   sealCandidateDirectory,
 } from './atomic.js';
+export {
+  type CatalogArtifact,
+  type CatalogChunk,
+  type CatalogCounts,
+  type CatalogSearchHit,
+  type CatalogWarning,
+  countRows,
+  escapeFtsQuery,
+  searchCatalog,
+  type WriteCatalogOptions,
+  writeCatalog,
+} from './catalog/writer.js';
 export { assertFts5Available, type Fts5ProbeResult, probeFts5 } from './fts5.js';
 export { type LockOptions, ProjectLock } from './lock.js';
 export {
