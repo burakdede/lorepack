@@ -1,0 +1,86 @@
+# Discovery and fingerprinting
+
+The first two compiler stages: decide what belongs in a build, then decide whether it
+changed.
+
+## One matcher, three callers
+
+Chokidar removed glob support in v4 and has not returned it, so the include and exclude
+logic is ours. That makes one property essential: **the initial scan, the reconciliation
+scan and watch-event filtering must all call the same matcher.** If they disagreed, a file
+would appear or disappear depending on how it was noticed, and the resulting bug would
+reproduce only under timing.
+
+Patterns are gitignore-style, evaluated with picomatch:
+
+- a pattern without a slash matches at any depth;
+- a leading slash anchors it to the source root;
+- a trailing slash restricts it to directories and everything beneath;
+- `!pattern` re-includes, and the last matching rule wins.
+
+The always-on exclusions from architecture section 19.2 are applied first, then
+`.loreignore`.
+
+## Every exclusion is reported
+
+Section 6.9 requires an unsupported file to be excluded "with a visible warning and exact
+path". Silently indexing nothing is indistinguishable from a broken build, so discovery
+never drops a file quietly.
+
+Warnings distinguish a **planned** format from an **unsupported** one. A user with a PDF
+should read "supported in a later release", not "unsupported": those are materially
+different statements, and only one of them is a reason to look for another tool.
+
+## Symlinks
+
+Not followed by default; each one skipped produces a warning naming it.
+
+When following is enabled, escaping is still refused. Discovery resolves the real path and
+checks containment against that. This is the check `toCanonical` deliberately does not
+make: it reasons about path strings, and a symlink pointing outside the project
+canonicalizes perfectly cleanly. Only `realpath` catches it, which needs the filesystem,
+which is why the check lives here.
+
+The root is resolved too, since it may itself sit behind a link. On macOS `/tmp` is
+`/private/tmp`, and comparing an unresolved root against a resolved target would reject
+every file in a temp directory.
+
+## Fingerprinting
+
+**Content decides freshness. Metadata never does.** A file can change without its
+modification time moving, and an mtime can move without the content changing. Size and
+mtime are kept for diagnostics and for coalescing watch events, and that is all.
+
+There is a test for the direction that actually bites: rewriting a file with identical
+content moves its mtime, and the fingerprint must not move.
+
+Hashing runs with bounded concurrency because it is IO bound, and the results are
+reordered afterwards. A test asserts that concurrency 1 and concurrency 8 produce the same
+fingerprint, so the value can never depend on which worker finished first.
+
+## The cache key
+
+Architecture section 12.3 names exactly what invalidates a parse:
+
+```text
+content hash + parser id and version + relevant configuration + rule inputs
+```
+
+Under-including means reusing a stale parse, which produces a wrong build. Over-including
+means rebuilding for no reason, which produces a slow one. Both are defects, so the inputs
+are an explicit type rather than a whole config object hashed for convenience: a field
+cannot be added by accident, and each one has a test proving it invalidates.
+
+## Scale envelope
+
+From architecture section 5.4, enforced here rather than discovered later:
+
+| Limit | Behaviour |
+|---|---|
+| 2,500 files | Refuses without `--allow-large-project` |
+| 1 GB total | Warns, naming the largest artifacts |
+| Per-artifact cap | Excludes that file with a warning |
+
+The file-count refusal is a hard stop because it is the one users hit by accident, usually
+by pointing Lorepack at a directory containing a dependency tree. The message says the
+envelope is untested beyond that point rather than unsupported, which is the honest framing.
