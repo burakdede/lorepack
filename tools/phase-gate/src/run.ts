@@ -170,6 +170,70 @@ async function checkIssues(
   };
 }
 
+/**
+ * Reads the next phase's epic and requires a dated audit section. Like the issues kind it
+ * needs network and GitHub authentication, so it degrades to `unverified` rather than
+ * claiming a pass it could not earn.
+ */
+async function checkAudit(
+  criterion: Extract<Criterion, { kind: 'audit' }>,
+  options: RunOptions,
+): Promise<CriterionResult> {
+  const base = {
+    id: criterion.id,
+    promise: criterion.promise,
+    evidence:
+      criterion.nextEpic === null
+        ? 'no successor phase'
+        : `audit section on epic #${criterion.nextEpic}`,
+  };
+
+  // The final phase has nothing to audit forward into.
+  if (criterion.nextEpic === null) return { ...base, outcome: 'passed' };
+
+  const execute = options.execute ?? defaultExecute;
+  const result = await execute(
+    'gh',
+    [
+      'issue',
+      'view',
+      String(criterion.nextEpic),
+      '--repo',
+      'burakdede/lorepack',
+      '--json',
+      'body',
+      '--jq',
+      '.body',
+    ],
+    60_000,
+    options.repoRoot,
+  );
+
+  if (result.code !== 0) {
+    return {
+      ...base,
+      outcome: 'unverified',
+      detail: `gh unavailable or unauthenticated, so the next phase's epic could not be read: ${
+        (result.stderr || 'no output').trim().split('\n')[0]
+      }`,
+    };
+  }
+
+  const marker = (criterion.marker ?? 'audit').toLowerCase();
+  const body = result.stdout.toLowerCase();
+  const hasMarker = body.includes(marker);
+  const hasDate = /\b20\d{2}-\d{2}-\d{2}\b/.test(result.stdout);
+
+  if (hasMarker && hasDate) return { ...base, outcome: 'passed' };
+  return {
+    ...base,
+    outcome: 'failed',
+    detail: hasMarker
+      ? `epic #${criterion.nextEpic} has an audit section but no date. Date it so a reader knows which phase it followed.`
+      : `epic #${criterion.nextEpic} carries no audit. Before closing this phase, review the next phase's tickets against what this one learned and record it there. See AGENTS.md section 4.`,
+  };
+}
+
 export async function checkCriterion(
   criterion: Criterion,
   options: RunOptions,
@@ -183,6 +247,8 @@ export async function checkCriterion(
       return checkPath(criterion, options);
     case 'issues':
       return checkIssues(criterion, options);
+    case 'audit':
+      return checkAudit(criterion, options);
   }
 }
 

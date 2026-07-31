@@ -170,6 +170,69 @@ describe('issues criterion', () => {
   });
 });
 
+describe('audit criterion', () => {
+  const criterion: Criterion = {
+    id: 'a',
+    kind: 'audit',
+    promise: 'The next phase was audited.',
+    nextEpic: 2,
+  };
+
+  const epicBody = (body: string) => async () => ({ code: 0, stdout: body, stderr: '' });
+
+  it('passes when the next epic carries a dated audit', async () => {
+    const result = await checkCriterion(
+      criterion,
+      options({ execute: epicBody('## Phase 1 audit, 2026-07-31, using what Phase 0 taught us') }),
+    );
+    expect(result.outcome).toBe('passed');
+  });
+
+  it('fails when the next epic has no audit, and says what to do', async () => {
+    const result = await checkCriterion(
+      criterion,
+      options({ execute: epicBody('# Epic. Theme: something. Exit criteria: things.') }),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.detail).toContain('carries no audit');
+    expect(result.detail).toContain('AGENTS.md');
+  });
+
+  it('fails an undated audit, since a reader cannot tell which phase it followed', async () => {
+    const result = await checkCriterion(
+      criterion,
+      options({ execute: epicBody('## Audit of the next phase') }),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.detail).toContain('no date');
+  });
+
+  it('reports unverified, never passed, when gh is unavailable', async () => {
+    const result = await checkCriterion(
+      criterion,
+      options({ execute: async () => ({ code: 127, stdout: '', stderr: 'gh: not found' }) }),
+    );
+    expect(result.outcome).toBe('unverified');
+    expect(result.outcome).not.toBe('passed');
+  });
+
+  it('passes for a final phase with no successor, without calling gh', async () => {
+    let called = false;
+    const result = await checkCriterion(
+      { ...criterion, nextEpic: null } as Criterion,
+      options({
+        execute: async () => {
+          called = true;
+          return { code: 1, stdout: '', stderr: '' };
+        },
+      }),
+    );
+    expect(result.outcome).toBe('passed');
+    expect(called).toBe(false);
+    expect(result.evidence).toContain('no successor');
+  });
+});
+
 describe('phase outcome', () => {
   const base = { phase: 9, title: 'Test', epic: 999 };
 
@@ -267,6 +330,7 @@ describe('phase 0 definition', () => {
       'error-taxonomy',
       'progress-reporting',
       'install-guarantees',
+      'forward-audit',
       'documentation',
     ]) {
       expect(ids, `missing criterion: ${required}`).toContain(required);

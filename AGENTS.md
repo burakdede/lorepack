@@ -78,6 +78,30 @@ Use `gh` for all backlog communication; never leave the board stale.
 - **Blocked or abandoned** → move back to **Todo**, post a handoff explaining what blocks it, and open the blocking issue if it does not exist.
 - Never mark Done what is merely written. Done means verified.
 
+### Closing a phase: audit the next one first
+
+A phase is not done when its tickets are closed. It is done when the **next** phase no
+longer rests on assumptions this one disproved.
+
+Before closing a phase epic, review the next phase's tickets and record the audit as an
+amendment on that epic. Look for four things:
+
+1. **Assumptions the finished work invalidated.** A ticket that referred to something now
+   deferred, renamed, or proven unnecessary.
+2. **Tasks that turn out to be missing.** Work the finished phase revealed a need for, or
+   that every later ticket silently assumed someone else owned.
+3. **Criteria that cannot be met as written.** Most often a gate that depends on an
+   artifact from a much later phase.
+4. **Primitives now built that later tickets describe in prose.** This is the common one.
+   Tickets written before a phase existed describe its output as instructions rather than
+   as dependencies, and the result is two implementations of one invariant.
+
+Amend the tickets in place with the reasoning, do not rewrite them silently, and open new
+issues for the gaps. The Phase 1 audit on epic #2 is the reference example.
+
+`pnpm phase:check <n>` enforces this: a phase whose successor carries no dated audit fails
+its own gate.
+
 ```bash
 ISSUE=42
 REPO=burakdede/lorepack

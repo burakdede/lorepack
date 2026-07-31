@@ -34,10 +34,28 @@ Deliberately few. Adding a kind should be rare and considered.
 | `exports` | A built package still exports named symbols | A symbol is gone, or the module cannot be imported |
 | `path` | Files or directories exist | Any is missing, and it is named |
 | `issues` | Every issue in a milestone is closed | An unexpected issue is open, and it is named |
+| `audit` | The next phase's epic carries a dated audit | No audit section, or one without a date |
+
+## The forward audit
+
+`AGENTS.md` section 4 requires that before a phase closes, the next phase's tickets are
+audited against what this phase learned, recorded as a dated amendment on that epic.
+
+The `audit` criterion enforces it. It checks that an audit **happened and is dated**, not
+what it says: judging content is a human job, noticing its absence is not. A phase whose
+successor carries no audit fails its own gate.
+
+Phase 0 is the reason this exists. Its tickets were written before any code existed, so
+Phase 1 described `writeFileAtomic`, `ProjectLock`, `ProgressBus` and a dozen other shipped
+functions as instructions rather than as dependencies. Nothing in the process would have
+caught that; the audit did, and it only happened because it was asked for.
+
+The final phase sets `nextEpic: null` and passes without calling `gh`, since it has no
+successor to audit forward into.
 
 ## Unverified is not a pass
 
-The `issues` kind needs network access and GitHub authentication. When either is missing it
+The `issues` and `audit` kinds need network access and GitHub authentication. When either is missing it
 reports **`unverified`**, never `passed`, and says why.
 
 This is the point of the design. A gate that succeeds because it could not check is worse
