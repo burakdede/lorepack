@@ -1,4 +1,12 @@
 export {
+  CHARACTERS_PER_TOKEN,
+  type Chunk,
+  type ChunkOptions,
+  chunkArtifact,
+  estimateTokens,
+  renderHeadingPrefix,
+} from './chunk/chunk.js';
+export {
   type DiscoveredArtifact,
   type DiscoverOptions,
   type DiscoveryResult,
@@ -25,3 +33,13 @@ export {
   fingerprintSources,
   type SourceFingerprint,
 } from './fingerprint/fingerprint.js';
+export {
+  NORMALIZATION_VERSION,
+  type NormalizedArtifact,
+  type NormalizeOptions,
+  normalizeArtifact,
+  normalizeText,
+  renderBody,
+  WHITESPACE_POLICY,
+  type WhitespacePolicy,
+} from './normalize/normalize.js';
