@@ -34,6 +34,17 @@ export {
   type SourceFingerprint,
 } from './fingerprint/fingerprint.js';
 export {
+  assertNoDrift,
+  buildLockfile,
+  compareLockfiles,
+  type LockChange,
+  type LockDrift,
+  type LockfileInputs,
+  readLockfile,
+  renderLockfile,
+  writeLockfile,
+} from './lock/lockfile.js';
+export {
   NORMALIZATION_VERSION,
   type NormalizedArtifact,
   type NormalizeOptions,
@@ -43,6 +54,13 @@ export {
   WHITESPACE_POLICY,
   type WhitespacePolicy,
 } from './normalize/normalize.js';
+export {
+  createPlan,
+  type PlanOptions,
+  type PlanResult,
+  type PreviousBuild,
+  renderPlan,
+} from './plan/plan.js';
 export {
   type ValidationCheckName,
   type ValidationFailure,

@@ -1,5 +1,6 @@
 import type { CommandDefinition } from '../framework/program.js';
 import { initCommand } from './init.js';
+import { planCommand } from './plan.js';
 
 /**
  * Commands are registered explicitly. No dynamic discovery: architecture section 4.8
@@ -7,5 +8,5 @@ import { initCommand } from './init.js';
  * `lore --help` reviewable in a pull request.
  */
 export function registerCommands(): CommandDefinition[] {
-  return [initCommand()];
+  return [initCommand(), planCommand()];
 }

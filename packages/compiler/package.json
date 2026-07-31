@@ -25,7 +25,8 @@
   "dependencies": {
     "@lorepack/core": "workspace:*",
     "@lorepack/parsers": "workspace:*",
-    "picomatch": "4.0.5"
+    "picomatch": "4.0.5",
+    "yaml": "2.9.0"
   },
   "repository": {
     "type": "git",

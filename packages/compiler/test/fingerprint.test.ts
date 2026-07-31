@@ -28,7 +28,8 @@ describe('hashing', () => {
       { files: { 'lore.yaml': CONFIG, 'a.md': '# A', 'b.txt': 'B' } },
       async (project) => {
         const result = await fingerprintOf(project.root);
-        expect(result.artifacts).toHaveLength(3);
+        // lore.yaml is excluded by default, so only the two content files are hashed.
+        expect(result.artifacts).toHaveLength(2);
         const a = result.artifacts.find((artifact) => artifact.relativePath === 'a.md');
         expect(a?.contentHash).toBe(hashBytes('# A'));
       },
@@ -40,7 +41,7 @@ describe('hashing', () => {
       { files: { 'lore.yaml': CONFIG, 'a.md': 'x'.repeat(100) } },
       async (project) => {
         const result = await fingerprintOf(project.root);
-        expect(result.totalBytes).toBeGreaterThan(100);
+        expect(result.totalBytes).toBeGreaterThanOrEqual(100);
         expect(result.durationMs).toBeGreaterThanOrEqual(0);
       },
     );
