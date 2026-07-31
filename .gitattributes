@@ -1,0 +1,22 @@
+# Line endings are LF in the working tree on every platform. Windows checkouts would
+# otherwise arrive as CRLF and fail formatting, and the compiler normalizes to LF
+# internally anyway (architecture section 12.5), so source should match.
+* text=auto eol=lf
+
+# Binary files must never be normalized.
+*.docx  binary
+*.xlsx  binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.zip   binary
+*.lorepack binary
+*.woff  binary
+*.woff2 binary
+
+# Generated files: keep diffs readable but do not treat them as reviewable prose.
+pnpm-lock.yaml linguist-generated=true -diff
