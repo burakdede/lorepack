@@ -3,8 +3,10 @@ import { activateCommand, buildsCommand, rollbackCommand } from './activate.js';
 import { buildCommand } from './build.js';
 import { diffCommand } from './diff.js';
 import { initCommand } from './init.js';
+import { inspectCommand } from './inspect.js';
 import { planCommand } from './plan.js';
 import { pruneCommand } from './prune.js';
+import { searchCommand } from './search.js';
 import { statusCommand } from './status.js';
 
 /**
@@ -19,6 +21,8 @@ export function registerCommands(): CommandDefinition[] {
     buildCommand(),
     statusCommand(),
     diffCommand(),
+    searchCommand(),
+    inspectCommand(),
     buildsCommand(),
     activateCommand(),
     rollbackCommand(),

@@ -191,6 +191,7 @@ export const buildDescriptionSchema = z
 
 export type SearchRequest = z.infer<typeof searchRequestSchema>;
 export type SearchResult = z.infer<typeof searchResultSchema>;
+export type SourceState = z.infer<typeof sourceStateSchema>;
 export type TaskContextRequest = z.infer<typeof taskContextRequestSchema>;
 export type ContextBundle = z.infer<typeof contextBundleSchema>;
 export type SourceReadRequest = z.infer<typeof sourceReadRequestSchema>;

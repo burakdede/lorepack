@@ -169,6 +169,11 @@ export function restrictToTables(db: DatabaseSync, allowedTables: readonly strin
       case constants.SQLITE_SELECT:
       case constants.SQLITE_FUNCTION:
         return constants.SQLITE_OK;
+      case constants.SQLITE_PRAGMA:
+        // FTS5 reads `data_version` internally to notice that the table changed under it,
+        // so denying it would make MATCH fail outright. It exposes a change counter and
+        // nothing else, and no other pragma is permitted.
+        return arg1 === 'data_version' ? constants.SQLITE_OK : constants.SQLITE_DENY;
       case constants.SQLITE_READ:
         return arg1 !== null && allowed.has(arg1) ? constants.SQLITE_OK : constants.SQLITE_DENY;
       default:
