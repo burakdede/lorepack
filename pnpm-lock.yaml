@@ -117,6 +117,8 @@ importers:
 
   tools/arch: {}
 
+  tools/phase-gate: {}
+
   tools/test-support: {}
 
 packages:

@@ -25,7 +25,8 @@
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
-    "probe:fts5": "node scripts/probe-fts5.mjs"
+    "probe:fts5": "node scripts/probe-fts5.mjs",
+    "phase:check": "pnpm build && node scripts/phase-check.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
