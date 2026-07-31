@@ -3,7 +3,9 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const EM_DASH = '—';
+// Built from its codepoint so this file does not contain the character it bans,
+// which keeps the check absolute: zero occurrences repo-wide, no exception list.
+const EM_DASH = String.fromCharCode(0x2014);
 const BINARY = /\.(docx|png|jpg|jpeg|gif|webp|ico|pdf|xlsx|zip|lorepack|woff2?)$/i;
 
 const files = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
