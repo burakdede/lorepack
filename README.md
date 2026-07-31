@@ -33,6 +33,17 @@ lore diff && lore rollback     # compare versions, revert instantly
 lore deploy cloudflare         # project the same build to a remote runtime
 ```
 
+## Requirements
+
+Node.js `>=24.15 <25`, and that is the whole list. No Python, Docker, compiler toolchain,
+native add-on, model download, API key or account.
+
+The floor is 24.15 because that is the first release where `node:sqlite` exposes the
+authorizer and per-connection limits the read-only SQL surface depends on. Lorepack also
+needs SQLite compiled with FTS5, which every official Node build has; see
+[SQLite FTS5 availability](docs/compatibility/sqlite-fts5.md) for the verified matrix and
+what happens if yours does not.
+
 ## Design commitments
 
 - **The build is the source of truth.** Every runtime is a projection of an immutable build.

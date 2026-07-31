@@ -62,6 +62,7 @@ export {
   toPosix,
   UNICODE_NORMALIZATION_FORM,
 } from './paths/index.js';
+export type * from './ports/index.js';
 export {
   type DiagnosticEvent,
   ProgressBus,
@@ -84,5 +85,4 @@ export {
   parseNodeVersion,
   SUPPORTED_NODE_RANGE,
 } from './runtime/engine.js';
-
 export * from './schemas/index.js';
