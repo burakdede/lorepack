@@ -1,0 +1,90 @@
+{
+  "$id": "https://lorepack.dev/schemas/build-description.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "capabilities": {
+      "items": {
+        "enum": ["lexical-search", "structured-context", "table-query", "semantic-search"],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "compilerVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "counts": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "chunks": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tableRows": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tables": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": ["artifacts", "nodes", "chunks", "tables", "tableRows"],
+      "type": "object"
+    },
+    "projectName": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "shortBuildId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sourceState": {
+      "enum": ["clean", "dirty", "unknown"],
+      "type": "string"
+    },
+    "warningCount": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "buildId",
+    "sourceState",
+    "projectName",
+    "shortBuildId",
+    "capabilities",
+    "counts",
+    "warningCount",
+    "schemaVersion",
+    "compilerVersion"
+  ],
+  "title": "build-description",
+  "type": "object"
+}

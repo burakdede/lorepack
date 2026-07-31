@@ -1,0 +1,87 @@
+{
+  "$id": "https://lorepack.dev/schemas/table-query-result.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "columns": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "locator": {
+      "additionalProperties": false,
+      "description": "Exact location of content within a source artifact",
+      "properties": {
+        "artifactId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "cellRange": {
+          "type": "string"
+        },
+        "headingPath": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "lineEnd": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "lineStart": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "page": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "relativePath": {
+          "description": "POSIX-style path relative to a source root",
+          "minLength": 1,
+          "type": "string"
+        },
+        "sheet": {
+          "type": "string"
+        }
+      },
+      "required": ["artifactId", "relativePath"],
+      "type": "object"
+    },
+    "rowCount": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "rows": {
+      "items": {
+        "additionalProperties": {},
+        "propertyNames": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sourceState": {
+      "enum": ["clean", "dirty", "unknown"],
+      "type": "string"
+    },
+    "truncated": {
+      "type": "boolean"
+    }
+  },
+  "required": ["buildId", "sourceState", "columns", "rows", "rowCount", "truncated", "locator"],
+  "title": "table-query-result",
+  "type": "object"
+}

@@ -1,0 +1,85 @@
+{
+  "$id": "https://lorepack.dev/schemas/lore-lock.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "compiler": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "parsers": {
+      "additionalProperties": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "propertyNames": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "schema": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "semantic": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "description": "Complete embedding identity. Matching dimensions alone is not compatibility",
+          "properties": {
+            "dimensions": {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "modelId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "normalized": {
+              "type": "boolean"
+            },
+            "pooling": {
+              "enum": ["mean", "cls"],
+              "type": "string"
+            },
+            "revision": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "tokenizer": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "valueType": {
+              "const": "float32",
+              "type": "string"
+            }
+          },
+          "required": [
+            "modelId",
+            "revision",
+            "tokenizer",
+            "pooling",
+            "normalized",
+            "dimensions",
+            "valueType"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": ["formatVersion", "compiler", "schema", "parsers", "semantic"],
+  "title": "lore-lock",
+  "type": "object"
+}

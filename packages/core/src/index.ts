@@ -84,3 +84,5 @@ export {
   parseNodeVersion,
   SUPPORTED_NODE_RANGE,
 } from './runtime/engine.js';
+
+export * from './schemas/index.js';

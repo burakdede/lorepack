@@ -1,0 +1,423 @@
+{
+  "$id": "https://lorepack.dev/schemas/context-bundle.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "alternatives": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "chunkId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "headingPath": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "items": {
+              "enum": ["draft", "archived", "superseded"],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "description": "Exact location of content within a source artifact",
+            "properties": {
+              "artifactId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "cellRange": {
+                "type": "string"
+              },
+              "headingPath": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "lineEnd": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lineStart": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "page": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "relativePath": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheet": {
+                "type": "string"
+              }
+            },
+            "required": ["artifactId", "relativePath"],
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "budget": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "citations": {
+      "items": {
+        "additionalProperties": false,
+        "description": "Exact location of content within a source artifact",
+        "properties": {
+          "artifactId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "cellRange": {
+            "type": "string"
+          },
+          "headingPath": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "lineEnd": {
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "lineStart": {
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "page": {
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "relativePath": {
+            "description": "POSIX-style path relative to a source root",
+            "minLength": 1,
+            "type": "string"
+          },
+          "sheet": {
+            "type": "string"
+          }
+        },
+        "required": ["artifactId", "relativePath"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "estimatedTokens": {
+      "description": "Conservative estimate, never an exact count",
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "omitted": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "chunkId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "description": "Exact location of content within a source artifact",
+            "properties": {
+              "artifactId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "cellRange": {
+                "type": "string"
+              },
+              "headingPath": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "lineEnd": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lineStart": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "page": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "relativePath": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheet": {
+                "type": "string"
+              }
+            },
+            "required": ["artifactId", "relativePath"],
+            "type": "object"
+          },
+          "reason": {
+            "enum": ["budget", "duplicate", "diversity", "superseded", "archived", "filtered"],
+            "type": "string"
+          }
+        },
+        "required": ["chunkId", "reason", "estimatedTokens", "locator"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "overview": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "chunkId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "headingPath": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "items": {
+              "enum": ["draft", "archived", "superseded"],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "description": "Exact location of content within a source artifact",
+            "properties": {
+              "artifactId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "cellRange": {
+                "type": "string"
+              },
+              "headingPath": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "lineEnd": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lineStart": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "page": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "relativePath": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheet": {
+                "type": "string"
+              }
+            },
+            "required": ["artifactId", "relativePath"],
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "profile": {
+      "enum": ["agent", "coding", "chat", "deep"],
+      "type": "string"
+    },
+    "reservedTokens": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "selected": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "chunkId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "estimatedTokens": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "headingPath": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "labels": {
+            "items": {
+              "enum": ["draft", "archived", "superseded"],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "description": "Exact location of content within a source artifact",
+            "properties": {
+              "artifactId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "cellRange": {
+                "type": "string"
+              },
+              "headingPath": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "lineEnd": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lineStart": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "page": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "relativePath": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheet": {
+                "type": "string"
+              }
+            },
+            "required": ["artifactId", "relativePath"],
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": ["chunkId", "text", "estimatedTokens", "headingPath", "labels", "locator"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sourceState": {
+      "enum": ["clean", "dirty", "unknown"],
+      "type": "string"
+    },
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tableId": {
+            "type": "string"
+          }
+        },
+        "required": ["tableId", "name"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "task": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "buildId",
+    "sourceState",
+    "task",
+    "profile",
+    "budget",
+    "estimatedTokens",
+    "reservedTokens",
+    "overview",
+    "selected",
+    "tables",
+    "alternatives",
+    "omitted",
+    "citations"
+  ],
+  "title": "context-bundle",
+  "type": "object"
+}

@@ -1,0 +1,25 @@
+{
+  "$id": "https://lorepack.dev/schemas/table-query-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "exclusiveMinimum": 0,
+      "maximum": 10000,
+      "type": "integer"
+    },
+    "sql": {
+      "description": "Exactly one SELECT or WITH ... SELECT",
+      "maxLength": 100000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "tableId": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": ["tableId", "sql"],
+  "title": "table-query-request",
+  "type": "object"
+}
