@@ -1,0 +1,21 @@
+{
+  "name": "@lorepack/phase-gate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Executable acceptance criteria for delivery phases.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15 <25"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -b"
+  }
+}

@@ -1,15 +1,38 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/core" },
-    { "path": "packages/parsers" },
-    { "path": "packages/compiler" },
-    { "path": "packages/backend-local" },
-    { "path": "packages/runtime" },
-    { "path": "packages/mcp" },
-    { "path": "packages/connect-clients" },
-    { "path": "packages/deploy-cloudflare" },
-    { "path": "packages/sdk" },
-    { "path": "packages/cli" }
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/parsers"
+    },
+    {
+      "path": "packages/compiler"
+    },
+    {
+      "path": "packages/backend-local"
+    },
+    {
+      "path": "packages/runtime"
+    },
+    {
+      "path": "packages/mcp"
+    },
+    {
+      "path": "packages/connect-clients"
+    },
+    {
+      "path": "packages/deploy-cloudflare"
+    },
+    {
+      "path": "packages/sdk"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "tools/phase-gate"
+    }
   ]
 }
