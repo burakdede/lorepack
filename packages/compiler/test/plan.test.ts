@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type BuildId, LOCKFILE_NAME, LoreError, loadConfig, planSchema } from '@lorepack/core';
+import { type BuildId, LoreError, loadConfig, planSchema } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import {
