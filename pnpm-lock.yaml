@@ -102,6 +102,8 @@ importers:
 
   tools/arch: {}
 
+  tools/test-support: {}
+
 packages:
 
   '@babel/runtime@7.29.7':

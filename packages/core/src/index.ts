@@ -19,6 +19,27 @@ export {
   stripAbsolutePaths,
 } from './errors/index.js';
 export {
+  artifactId,
+  assertNoCaseCollisions,
+  type CaseCollision,
+  chunkId,
+  compareCanonical,
+  findCaseCollisions,
+  hasWindowsDriveLetter,
+  isInsideRoot,
+  NORMALIZATION_VERSION,
+  nodeId,
+  normalizeSourceId,
+  normalizeUnicode,
+  type ParsedArtifactId,
+  parseArtifactId,
+  sortCanonical,
+  toCanonical,
+  toDisplay,
+  toPosix,
+  UNICODE_NORMALIZATION_FORM,
+} from './paths/index.js';
+export {
   type DiagnosticEvent,
   ProgressBus,
   type ProgressEvent,
