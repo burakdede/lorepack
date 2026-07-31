@@ -1,10 +1,13 @@
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PHASE_0 } from '../src/phases/phase-0.js';
 import { PHASES, phaseDefinition } from '../src/registry.js';
 import { checkCriterion, checkPhase, formatReport, type RunOptions } from '../src/run.js';
 import { type Criterion, EXIT } from '../src/types.js';
 
-const REPO_ROOT = new URL('../../../', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the latter yields "/C:/..." with a leading
+// slash, which is not a valid path. Caught by the Windows CI job.
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 function options(overrides: Partial<RunOptions> = {}): RunOptions {
   return { repoRoot: REPO_ROOT, ...overrides };
