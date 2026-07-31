@@ -60,3 +60,33 @@ boundary rather than deep inside a pipeline:
 - readers encountering an unknown `formatVersion` must refuse rather than guess.
 
 Schemas are part of the public contract, so a change needs a changeset.
+
+## The `.lorepack` archive
+
+A `.lorepack` file is a standard ZIP. No encryption, no proprietary framing: `unzip -l`
+lists it and any tool can extract it. That is the anti-lock-in promise in architecture
+section 22.3, and it only means something if it is literally true, so a test extracts an
+archive with the system `unzip` where one exists.
+
+Members appear in a fixed order:
+
+1. `manifest.json`, so a reader knows what the archive is without extracting the rest
+2. `checksums.json`, the SHA-256 of every other member
+3. `context.sqlite`
+4. `reports/*`, sorted
+5. `objects/sha256/xx/yy/rest`, sorted by hash
+6. `originals/*`, only when `package.includeOriginals: true`
+
+Every entry carries a normalized timestamp (1980-01-01T00:00:00Z) and a fixed mode. Packing
+the same build twice therefore produces byte-identical output.
+
+**Member checksums detect corruption. They are not the identity of the build.** Two machines
+can produce different `context.sqlite` bytes for the same build, because SQLite page layout
+is not part of what a build means. Identity comes from the canonical logical content
+recorded in the manifest, which is why `lore diff` across machines compares manifests and
+canonical roots rather than archive bytes.
+
+`lore pack --verify <file>` reads every member back, compares it against the index, and
+names the first member that is missing, mismatched or unlisted. A member present in the
+archive but absent from the index fails too: content nothing vouched for is as suspicious
+as content that changed.

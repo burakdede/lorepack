@@ -1,4 +1,19 @@
 export {
+  type ArchiveMember,
+  archivePath,
+  CHECKSUM_MEMBER,
+  type ChecksumIndex,
+  checksumIndex,
+  collectBuildMembers,
+  collectObjects,
+  collectOriginals,
+  readArchive,
+  type VerificationFailure,
+  type VerificationResult,
+  verifyArchive,
+  writeArchive,
+} from './archive.js';
+export {
   type CandidateDirectory,
   createCandidateDirectory,
   discardCandidateDirectory,
