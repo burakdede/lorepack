@@ -69,7 +69,8 @@ export const PHASE_0: PhaseDefinition = {
         'packages/deploy-cloudflare',
         'packages/sdk',
         'schemas',
-        'migrations/local',
+        'migrations/state',
+        'migrations/build',
         'fixtures',
         'benchmarks',
         'examples',
@@ -163,6 +164,10 @@ export const PHASE_0: PhaseDefinition = {
 
     // Capability: object store and atomic build directories.
     {
+      // `writeFileAtomic` moved to core during Phase 0, when the architecture rules refused
+      // a cli -> backend-local edge for a primitive the compiler and CLI both need. The
+      // promise is unchanged; the module that exports it is not, and the criterion below
+      // asserts it where it now lives.
       id: 'object-store',
       kind: 'exports',
       promise:
@@ -170,7 +175,6 @@ export const PHASE_0: PhaseDefinition = {
       module: 'packages/backend-local/dist/index.js',
       symbols: [
         'FileObjectStore',
-        'writeFileAtomic',
         'createCandidateDirectory',
         'sealCandidateDirectory',
         'discardCandidateDirectory',
@@ -221,6 +225,14 @@ export const PHASE_0: PhaseDefinition = {
       promise: 'No native add-on and no install script can enter the dependency graph.',
       command: 'pnpm',
       args: ['check:no-native'],
+    },
+
+    {
+      id: 'atomic-writes',
+      kind: 'exports',
+      promise: 'A file is written atomically or not at all, so a crash cannot leave a torn file.',
+      module: 'packages/core/dist/index.js',
+      symbols: ['writeFileAtomic', 'fsyncDirectory'],
     },
 
     // The working agreement requires the next phase to be audited before this one closes.
