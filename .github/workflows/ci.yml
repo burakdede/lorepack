@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.18.1'
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Fail if the resolved Node leaves the supported range
+        shell: bash
+        run: |
+          version="$(node -p 'process.versions.node')"
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          if [ "$major" -ne 24 ] || [ "$minor" -lt 15 ]; then
+            echo "::error::Node $version is outside the supported range >=24.15 <25"
+            exit 1
+          fi
+          echo "Node $version is inside the supported range"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm format:check
+
+      - run: pnpm typecheck
+
+      - name: Architecture rules
+        run: pnpm test:arch
+
+      - run: pnpm test
+
+      - run: pnpm check:no-native
+
+      - run: pnpm check:no-em-dash
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            coverage/
+            **/vitest-report.json
+          if-no-files-found: ignore
+          retention-days: 7

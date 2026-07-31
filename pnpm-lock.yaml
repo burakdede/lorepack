@@ -100,6 +100,8 @@ importers:
 
   packages/sdk: {}
 
+  tools/arch: {}
+
 packages:
 
   '@babel/runtime@7.29.7':
