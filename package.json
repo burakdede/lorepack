@@ -21,14 +21,17 @@
     "test:watch": "vitest",
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash",
-    "test:arch": "vitest run --project arch"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm schemas:check",
+    "test:arch": "vitest run --project arch",
+    "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
+    "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@changesets/cli": "2.31.1",
     "@types/node": "24.10.1",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "zod": "4.4.3"
   }
 }

@@ -1,0 +1,59 @@
+{
+  "$id": "https://lorepack.dev/schemas/task-context-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "budget": {
+      "maximum": 200000,
+      "minimum": 1000,
+      "type": "integer"
+    },
+    "filters": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "path",
+              "type",
+              "status"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "includeArchived": {
+      "default": false,
+      "type": "boolean"
+    },
+    "profile": {
+      "enum": [
+        "agent",
+        "coding",
+        "chat",
+        "deep"
+      ],
+      "type": "string"
+    },
+    "task": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "task"
+  ],
+  "title": "task-context-request",
+  "type": "object"
+}

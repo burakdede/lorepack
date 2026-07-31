@@ -23,6 +23,9 @@ importers:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@types/node@24.10.1)(vite@8.2.0(@types/node@24.10.1))
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/backend-local:
     dependencies:
@@ -67,6 +70,10 @@ importers:
         version: link:../core
 
   packages/core:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*
@@ -1093,6 +1100,9 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
 
   '@babel/runtime@7.29.7': {}
@@ -1948,3 +1958,5 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  zod@4.4.3: {}

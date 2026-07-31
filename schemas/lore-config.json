@@ -1,0 +1,103 @@
+{
+  "$id": "https://lorepack.dev/schemas/lore-config.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "context": {
+      "additionalProperties": false,
+      "properties": {
+        "defaultProfile": {
+          "enum": [
+            "agent",
+            "coding",
+            "chat",
+            "deep"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9 ._-]*$",
+      "type": "string"
+    },
+    "package": {
+      "additionalProperties": false,
+      "properties": {
+        "includeOriginals": {
+          "description": "Include original binary sources in the build. Off by default",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "rules": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "description": "User-declared ranking hint. Not a measure of truth",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "match": {
+            "description": "Glob matched against canonical artifact paths",
+            "minLength": 1,
+            "type": "string"
+          },
+          "replace": {
+            "description": "Replace inherited supersedes entries instead of merging them",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "draft",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "supersedes": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "match"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "strictRules": {
+      "description": "Fail the build when a rule matches no artifact",
+      "type": "boolean"
+    },
+    "version": {
+      "const": 1,
+      "type": "number"
+    }
+  },
+  "required": [
+    "version",
+    "name",
+    "sources"
+  ],
+  "title": "lore-config",
+  "type": "object"
+}

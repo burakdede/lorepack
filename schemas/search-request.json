@@ -1,0 +1,48 @@
+{
+  "$id": "https://lorepack.dev/schemas/search-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "debug": {
+      "default": false,
+      "type": "boolean"
+    },
+    "fileType": {
+      "type": "string"
+    },
+    "includeArchived": {
+      "default": false,
+      "type": "boolean"
+    },
+    "limit": {
+      "default": 10,
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "integer"
+    },
+    "pathGlob": {
+      "type": "string"
+    },
+    "query": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "status": {
+      "items": {
+        "enum": [
+          "active",
+          "draft",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "title": "search-request",
+  "type": "object"
+}

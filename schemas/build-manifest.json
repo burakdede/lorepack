@@ -1,0 +1,220 @@
+{
+  "$id": "https://lorepack.dev/schemas/build-manifest.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "canonicalRoots": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "chunks": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "nodes": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "objects": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "tables": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "objects"
+      ],
+      "type": "object"
+    },
+    "capabilities": {
+      "items": {
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "compilerVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "configurationHash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "counts": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "chunks": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tableRows": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tables": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "tableRows"
+      ],
+      "type": "object"
+    },
+    "embeddingProfile": {
+      "additionalProperties": false,
+      "description": "Complete embedding identity. Matching dimensions alone is not compatibility",
+      "properties": {
+        "dimensions": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "modelId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "normalized": {
+          "type": "boolean"
+        },
+        "pooling": {
+          "enum": [
+            "mean",
+            "cls"
+          ],
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tokenizer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "valueType": {
+          "const": "float32",
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelId",
+        "revision",
+        "tokenizer",
+        "pooling",
+        "normalized",
+        "dimensions",
+        "valueType"
+      ],
+      "type": "object"
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "projectName": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schemaVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "sourceFingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "class": {
+            "enum": [
+              "unsupported-file",
+              "parser",
+              "envelope",
+              "rule",
+              "security"
+            ],
+            "type": "string"
+          },
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "path": {
+            "description": "POSIX-style path relative to a source root",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "class"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "buildId",
+    "projectName",
+    "compilerVersion",
+    "schemaVersion",
+    "configurationHash",
+    "sourceFingerprint",
+    "canonicalRoots",
+    "capabilities",
+    "counts",
+    "warnings"
+  ],
+  "title": "build-manifest",
+  "type": "object"
+}

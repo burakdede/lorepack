@@ -1,0 +1,136 @@
+{
+  "$id": "https://lorepack.dev/schemas/deployment-receipt.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "capabilityLossAccepted": {
+      "items": {
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "completedSteps": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "deployedAt": {
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+      "type": "string"
+    },
+    "endpoint": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "previousBuildId": {
+      "anyOf": [
+        {
+          "description": "Content-derived build identifier",
+          "pattern": "^lore_[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "project": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "receiptId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "projecting",
+        "projected",
+        "verified",
+        "active",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "target": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "verification": {
+      "additionalProperties": false,
+      "properties": {
+        "search": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
+          "type": "string"
+        },
+        "sourceRead": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
+          "type": "string"
+        },
+        "tableQuery": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "search",
+        "sourceRead",
+        "tableQuery"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "receiptId",
+    "target",
+    "project",
+    "buildId",
+    "previousBuildId",
+    "state",
+    "deployedAt",
+    "endpoint",
+    "capabilityLossAccepted",
+    "completedSteps",
+    "verification"
+  ],
+  "title": "deployment-receipt",
+  "type": "object"
+}

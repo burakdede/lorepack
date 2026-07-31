@@ -29,5 +29,8 @@
   },
   "devDependencies": {
     "@lorepack/test-support": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
   }
 }

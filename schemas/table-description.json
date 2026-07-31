@@ -1,0 +1,137 @@
+{
+  "$id": "https://lorepack.dev/schemas/table-description.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "columns": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "nullable": {
+            "type": "boolean"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "integer",
+              "real",
+              "boolean",
+              "date",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "nullable"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "locator": {
+      "additionalProperties": false,
+      "description": "Exact location of content within a source artifact",
+      "properties": {
+        "artifactId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "cellRange": {
+          "type": "string"
+        },
+        "headingPath": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "lineEnd": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "lineStart": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "page": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "relativePath": {
+          "description": "POSIX-style path relative to a source root",
+          "minLength": 1,
+          "type": "string"
+        },
+        "sheet": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactId",
+        "relativePath"
+      ],
+      "type": "object"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "rowCount": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sample": {
+      "items": {
+        "additionalProperties": {},
+        "propertyNames": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "sheet": {
+      "type": "string"
+    },
+    "sourceState": {
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "tableId": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "buildId",
+    "sourceState",
+    "tableId",
+    "name",
+    "columns",
+    "rowCount",
+    "sample",
+    "locator"
+  ],
+  "title": "table-description",
+  "type": "object"
+}

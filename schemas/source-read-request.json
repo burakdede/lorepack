@@ -1,0 +1,39 @@
+{
+  "$id": "https://lorepack.dev/schemas/source-read-request.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifactId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "headingPath": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lineEnd": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "lineStart": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "page": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "path": {
+      "description": "POSIX-style path relative to a source root",
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "title": "source-read-request",
+  "type": "object"
+}
