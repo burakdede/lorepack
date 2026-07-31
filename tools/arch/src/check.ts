@@ -6,6 +6,7 @@ import {
   NO_BARE_ERROR_PACKAGES,
   PACKAGES,
   type PackageName,
+  TEST_ONLY_PACKAGES,
 } from './rules.js';
 import { collectImports, listSourceFiles, workspaceDependency } from './scan.js';
 
@@ -73,6 +74,7 @@ export function checkManifests(repoRoot: string): Violation[] {
     for (const dep of declared) {
       const workspace = workspaceDependency(dep);
       if (workspace === null) continue;
+      if (TEST_ONLY_PACKAGES.includes(workspace)) continue;
       if (!ALLOWED_WORKSPACE_EDGES[name].includes(workspace as PackageName)) {
         violations.push({
           file: `packages/${name}/package.json`,
