@@ -80,8 +80,14 @@ describe('parse cache', () => {
   it('survives an unwritable cache directory without throwing', async () => {
     // A read-only volume or a full disk must degrade to "no caching", not to a failed
     // build that was otherwise complete.
-    const cache = new ParseCache('/nonexistent-root/lorepack-cache');
-    expect(() => cache.put(KEY, ENTRY)).not.toThrow();
-    expect(cache.get(KEY)).toBeNull();
+    //
+    // The cache is pointed at a regular file, so creating a directory beneath it fails on
+    // every platform. An absolute path under a nonexistent root does not: on Windows it
+    // resolves against the current drive and the write succeeds.
+    await withTempProject({ files: { blocker: 'not a directory' } }, (project) => {
+      const cache = new ParseCache(project.path('blocker'));
+      expect(() => cache.put(KEY, ENTRY)).not.toThrow();
+      expect(cache.get(KEY)).toBeNull();
+    });
   });
 });
