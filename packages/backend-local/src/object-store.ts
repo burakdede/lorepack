@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { hashBytes, LoreError, type ObjectStore, objectKey } from '@lorepack/core';
-import { writeFileAtomic } from './atomic.js';
+import { hashBytes, LoreError, type ObjectStore, objectKey, writeFileAtomic } from '@lorepack/core';
 
 /**
  * Content-addressed objects on the filesystem, two levels of fan-out so no directory

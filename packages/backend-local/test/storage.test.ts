@@ -1,13 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type BuildId, LoreError } from '@lorepack/core';
+import { type BuildId, LoreError, writeFileAtomic } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import {
   createCandidateDirectory,
   discardCandidateDirectory,
   sealCandidateDirectory,
-  writeFileAtomic,
 } from '../src/atomic.js';
 import { ProjectLock } from '../src/lock.js';
 import { FileObjectStore } from '../src/object-store.js';
