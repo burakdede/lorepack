@@ -96,3 +96,24 @@ satisfied.
 It does not replace the epic issue, the handoff comments, or the tests. It composes
 existing checks and asserts the public surface still exists. A criterion that needs new
 test coverage should get a test; the gate then runs it.
+
+## Phase 1
+
+`pnpm phase:check 1` mirrors epic #2: its three exit criteria, its deliverable, and each
+capability it claims. Twenty-one criteria, written **while** the phase was being built
+rather than after it closed. Phase 0 did it the other way, found its verification had been
+uneven, and paid for the gap in #128.
+
+Two criteria are worth calling out because they catch what prose cannot:
+
+- `commands-registered` runs the real `lore --help` and asserts every Phase 1 command is
+  listed. A command that quietly stops being registered still compiles and still passes the
+  tests for its internals; only a user notices. Verified by drill on 2026-08-01: removing
+  `packCommand()` from the registry made `pnpm check:command-set` fail naming `pack`, and
+  restoring it returned the check to green.
+- `rollback-without-reindex` runs the acceptance test that empties every source file before
+  rolling back. Counting parse work can be satisfied by an accidental cache hit; an empty
+  source tree cannot.
+
+The workflow now verifies every defined phase on each push to `main`, not only the newest.
+A phase that closed months ago is exactly the one whose guarantees rot unnoticed.

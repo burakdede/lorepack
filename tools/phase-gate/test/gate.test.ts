@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PHASE_0 } from '../src/phases/phase-0.js';
+import { PHASE_1 } from '../src/phases/phase-1.js';
 import { PHASES, phaseDefinition } from '../src/registry.js';
 import { checkCriterion, checkPhase, formatReport, type RunOptions } from '../src/run.js';
 import { type Criterion, EXIT } from '../src/types.js';
@@ -344,5 +345,59 @@ describe('phase 0 definition', () => {
       expect(criterion.promise.length, criterion.id).toBeGreaterThan(20);
       expect(criterion.promise.endsWith('.'), criterion.id).toBe(true);
     }
+  });
+});
+
+describe('phase 1 definition', () => {
+  it('is registered and retrievable by number', () => {
+    expect(phaseDefinition(1)).toBe(PHASE_1);
+    expect(PHASES).toContain(PHASE_1);
+  });
+
+  it('covers every promise in the epic: exit criteria, deliverable, and capabilities', () => {
+    // A promise that disappears from this list disappears silently, which is the failure
+    // mode this test exists to prevent.
+    const ids = PHASE_1.criteria.map((criterion) => criterion.id);
+    for (const required of [
+      'issues-closed',
+      'milestone-0',
+      'determinism',
+      'rollback-without-reindex',
+      'command-set',
+      'commands-registered',
+      'parsers',
+      'discovery',
+      'fingerprint-cache',
+      'normalize-chunk',
+      'fts5-available',
+      'validate-and-seal',
+      'build-orchestration',
+      'lockfile',
+      'diff-engine',
+      'search-provenance',
+      'archive',
+      'public-schemas',
+      'benchmarks',
+      'forward-audit',
+      'documentation',
+    ]) {
+      expect(ids, `missing criterion: ${required}`).toContain(required);
+    }
+  });
+
+  it('gives every criterion a unique id and a promise written as a guarantee', () => {
+    const ids = PHASE_1.criteria.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const criterion of PHASE_1.criteria) {
+      expect(criterion.promise.length, criterion.id).toBeGreaterThan(20);
+      expect(criterion.promise.endsWith('.'), criterion.id).toBe(true);
+    }
+  });
+
+  it('targets the Phase 1 milestone and audits the Phase 2 epic', () => {
+    const issues = PHASE_1.criteria.find((c) => c.id === 'issues-closed');
+    expect(issues?.kind === 'issues' && issues.milestone).toBe('P1 Lifecycle Slice');
+    const audit = PHASE_1.criteria.find((c) => c.id === 'forward-audit');
+    expect(audit?.kind === 'audit' && audit.nextEpic).toBe(3);
   });
 });
