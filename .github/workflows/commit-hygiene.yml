@@ -1,0 +1,38 @@
+name: Commit hygiene
+
+on:
+  pull_request:
+
+jobs:
+  no-ai-attribution:
+    name: no AI attribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Reject attribution trailers and footers
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Matches attribution patterns only. A literal mention of the file CLAUDE.md is
+          # legitimate and must not fail the build, so the bare product name is not matched.
+          pattern='Co-Authored-By:|Co-authored-by:|Generated with|generated with \[|🤖'
+          if git log --format='%B' "$BASE..$HEAD" | grep -Ei "$pattern"; then
+            echo "::error::Commit messages must carry no AI attribution. See AGENTS.md section 5."
+            exit 1
+          fi
+          echo "No attribution found in $(git rev-list --count "$BASE..$HEAD") commit(s)."
+
+      - name: Reject an em dash in commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git log --format='%B' "$BASE..$HEAD" | grep -P '\x{2014}'; then
+            echo "::error::Commit messages must not contain an em dash (U+2014). See AGENTS.md section 8."
+            exit 1
+          fi
+          echo "No em dash in commit messages."
