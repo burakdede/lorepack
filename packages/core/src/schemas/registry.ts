@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import { buildManifestSchema, buildReceiptSchema, lockfileSchema } from './build.js';
 import { configSchema } from './config.js';
+import { buildDiffSchema } from './diff.js';
 import { deploymentReceiptSchema, planSchema } from './plan.js';
 import {
   buildDescriptionSchema,
@@ -26,6 +27,7 @@ export const PUBLIC_SCHEMAS = {
   'lore-lock': lockfileSchema,
   'build-manifest': buildManifestSchema,
   'build-receipt': buildReceiptSchema,
+  'build-diff': buildDiffSchema,
   plan: planSchema,
   status: statusSchema,
   'deployment-receipt': deploymentReceiptSchema,

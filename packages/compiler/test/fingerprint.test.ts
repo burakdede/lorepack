@@ -197,6 +197,7 @@ describe('dirtiness', () => {
 
 describe('cache key', () => {
   const inputs = {
+    artifactId: 'p:a.md',
     contentHash: 'a'.repeat(64),
     parserId: 'markdown',
     parserVersion: '0.1.0',
@@ -210,6 +211,7 @@ describe('cache key', () => {
   });
 
   it.each([
+    ['artifactId', { artifactId: 'p:moved.md' }],
     ['contentHash', { contentHash: 'b'.repeat(64) }],
     ['parserId', { parserId: 'text' }],
     ['parserVersion', { parserVersion: '0.2.0' }],

@@ -333,6 +333,7 @@ describe('public registry', () => {
     expect(Object.keys(PUBLIC_SCHEMAS).sort()).toEqual(
       [
         'build-description',
+        'build-diff',
         'build-manifest',
         'build-receipt',
         'context-bundle',

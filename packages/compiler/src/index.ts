@@ -7,6 +7,14 @@ export {
   renderHeadingPrefix,
 } from './chunk/chunk.js';
 export {
+  type BuildSnapshot,
+  diffBuilds,
+  renderDiff,
+  type SnapshotArtifact,
+  type SnapshotChunk,
+  type SnapshotTable,
+} from './diff/diff.js';
+export {
   type DiscoveredArtifact,
   type DiscoverOptions,
   type DiscoveryResult,
