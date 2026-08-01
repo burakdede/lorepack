@@ -4,8 +4,7 @@ import { LoreError, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
-import { degradedFreshness, readFreshness } from '../src/services/status.js';
-import { run } from './helpers.js';
+import { degradedFreshness, readFreshness, readStatus } from '../src/services/status.js';
 
 /**
  * The regression tests for #147.
@@ -70,17 +69,34 @@ describe('readFreshness', () => {
   it('never applies the file envelope, because that guard is about building', async () => {
     // #147: `lore search` refused to answer on a project above the envelope, even though
     // the build it would have read was already sealed on disk.
-    const many = Object.fromEntries(
-      Array.from({ length: 2501 }, (_, index) => [`docs/doc-${index}.md`, `# Doc ${index}\n`]),
-    );
-
-    await withTempProject({ files: { 'lore.yaml': CONFIG, ...many } }, async (project) => {
+    //
+    // The limit is lowered rather than the corpus raised. Materialising 2,501 real files
+    // took over two minutes on a Windows runner and timed the suite out, and it was
+    // measuring the filesystem rather than the behaviour. The end-to-end proof at real
+    // scale lives in `scale/a-build-that-exists-can-always-be-queried`, which is what the
+    // acceptance suite is for.
+    await withTempProject({ files: SOURCES }, async (project) => {
       const config = loadConfig({ cwd: project.root });
-      await runBuild({ config, progress: new ProgressBus(), allowLargeProject: true });
+      await runBuild({ config, progress: new ProgressBus() });
 
-      const freshness = await readFreshness({ config });
-      expect(freshness.sourceState).toBe('clean');
-      expect(freshness.reason).toBeNull();
+      const tiny = {
+        ...config,
+        effective: {
+          ...config.effective,
+          limits: { ...config.effective.limits, maxSourceFiles: 1 },
+        },
+      };
+
+      // The guard is real: status, which is about the sources, still refuses.
+      await expect(readStatus({ config: tiny })).rejects.toMatchObject({
+        code: 'LORE_E_ENVELOPE_EXCEEDED',
+      });
+
+      // Freshness for a read-only command does not consult it.
+      expect(await readFreshness({ config: tiny })).toEqual({
+        sourceState: 'clean',
+        reason: null,
+      });
     });
   });
 });
@@ -107,34 +123,5 @@ describe('degradedFreshness', () => {
 
   it('refuses to swallow an error that is not ours at all', () => {
     expect(degradedFreshness(new TypeError('undefined is not a function'))).toBeNull();
-  });
-});
-
-describe('lore search above the envelope', () => {
-  it('answers from the build instead of refusing', async () => {
-    const many = Object.fromEntries(
-      Array.from({ length: 2501 }, (_, index) => [
-        `docs/doc-${index}.md`,
-        `# Doc ${index}\n\nRollback restores the previous release.\n`,
-      ]),
-    );
-
-    await withTempProject({ files: { 'lore.yaml': CONFIG, ...many } }, async (project) => {
-      await runBuild({
-        config: loadConfig({ cwd: project.root }),
-        progress: new ProgressBus(),
-        allowLargeProject: true,
-      });
-
-      const result = await run(['--cwd', project.root, '--json', 'search', 'rollback']);
-      expect(result.code, result.stderr).toBe(0);
-
-      const parsed = JSON.parse(result.stdout) as {
-        sourceState: string;
-        hits: Array<{ locator: { relativePath: string } }>;
-      };
-      expect(parsed.sourceState).toBe('clean');
-      expect(parsed.hits[0]?.locator.relativePath).toMatch(/^docs\/doc-\d+\.md$/);
-    });
   });
 });
