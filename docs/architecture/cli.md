@@ -121,6 +121,30 @@ The flush is bounded by a two second timeout, because a pipe whose reader has go
 (`| head -1`, an everyday case) never drains, and a CLI that hung forever waiting to say
 goodbye would be a worse defect than the one this fixes.
 
+## Freshness on a read-only command
+
+Section 4.10 says freshness travels with the result, and it is tempting to read that as
+"establish it or fail". That reading cost `lore search` its usefulness on any project above
+the file envelope: the build was sealed, complete and perfectly queryable, and the query was
+refused because a guard about the cost of *building* had been consulted first (#147).
+
+`readFreshness` is the rule for every read-only command: freshness is an annotation on the
+answer, never a precondition for producing one.
+
+- **The file envelope does not apply.** It bounds what Lorepack promises about build
+  performance, not what it will answer from a build it already made.
+- **Only source-side failures degrade.** `LORE_E_ENVELOPE_EXCEEDED`, `LORE_E_PATH_ESCAPE`
+  and `LORE_E_CASE_COLLISION` become `sourceState: "unknown"` with a reason on stderr.
+  Anything else is raised, because a corrupt state database reported as "freshness unknown"
+  is a cheerful lie that hides a real defect.
+- **`unknown` means unknown.** Invariant 6 applies to the degraded case: it never means
+  clean.
+
+Phase 2 inherits this. `lore mcp` and `lore serve` answer many queries per session against
+one build, and #112 revisits how often freshness should be re-established for a long-lived
+session. Whatever cadence it picks, the rule that a read is never failed by the source tree
+is fixed here.
+
 ## Errors and exit codes
 
 Every failure funnels through one handler. A `LoreError` renders with its remediation and

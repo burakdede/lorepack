@@ -1,7 +1,7 @@
 import { LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { renderSearch, runSearch } from '../services/search.js';
-import { readStatus } from '../services/status.js';
+import { readFreshness } from '../services/status.js';
 
 export function searchCommand(): CommandDefinition {
   return {
@@ -18,17 +18,25 @@ export function searchCommand(): CommandDefinition {
       const query = args[0] ?? '';
 
       // Freshness travels with the answer (section 4.10): a result from a stale build is
-      // still a result, but the reader has to be told which build it came from.
-      const status = await readStatus({ config });
+      // still a result, but the reader has to be told which build it came from. It is an
+      // annotation, never a precondition, so failing to establish it degrades the label
+      // rather than the query. See `readFreshness`.
+      const freshness = await readFreshness({ config });
 
       const result = await runSearch({
         config,
         query,
-        sourceState: status.sourceState === 'unbuilt' ? 'unknown' : status.sourceState,
+        sourceState: freshness.sourceState,
         limit: parseLimit(flags.limit),
         ...(typeof flags.path === 'string' ? { pathGlob: flags.path } : {}),
         ...(typeof flags.type === 'string' ? { type: flags.type } : {}),
       });
+
+      // On stderr, so `--json` stdout stays the structured result alone. A consumer reading
+      // JSON sees `sourceState: "unknown"`, which is what the contract's third state means.
+      if (freshness.reason !== null) {
+        context.warn(`Freshness unknown: ${freshness.reason}\n`);
+      }
 
       return { human: renderSearch(result, query), json: result };
     },

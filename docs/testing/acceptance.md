@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-31 automated, 3 checked by hand.
+32 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -491,6 +491,27 @@ Starting point: a generated corpus of 2501 documents with 1 sections each, alrea
    Expect: it exits 1, the error is `LORE_E_ENVELOPE_EXCEEDED`, stderr mentions "--allow-large-project", "untested rather than unsupported".
 2. Run `lore build --allow-large-project` with `--json`.
    Expect: it succeeds, `counts.artifacts` is 2501.
+
+### `scale/a-build-that-exists-can-always-be-queried`
+
+**Every read-only command works on a project above the envelope**
+
+Proves: Invariant 1: a runtime is a projection of a build, not of the source tree.
+
+Locks down the defect in #147.
+
+Starting point: a generated corpus of 2501 documents with 1 sections each, already set up with `lore init` and `lore build --allow-large-project`.
+
+1. Run `lore search rollback` with `--json`.
+   Expect: it succeeds, `hits[0].locator.relativePath` is present, `sourceState` is "clean".
+2. Run `lore inspect sources`.
+   Expect: it succeeds, stdout mentions "2501 artifacts".
+3. Run `lore builds` with `--json`.
+   Expect: it succeeds.
+4. Run `lore pack` with `--json`.
+   Expect: it succeeds.
+5. And a diff against the only build reports no second build to compare
+   Expect: it exits 1, the error is `LORE_E_BUILD_NOT_FOUND`.
 
 ### `scale/progress-repeats-so-work-is-not-a-hang`
 
