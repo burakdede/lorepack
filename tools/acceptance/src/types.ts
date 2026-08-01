@@ -164,7 +164,18 @@ export interface InterruptStep extends StepBase {
   readonly action: 'interrupt';
   readonly args: readonly string[];
   readonly signal: 'SIGINT' | 'SIGTERM';
-  /** Delay before the signal, chosen to land inside the stage under test. */
+  /**
+   * Waits for this pattern in the output before signalling, so the interrupt lands in the
+   * stage under test rather than wherever a fixed delay happens to fall.
+   *
+   * A delay cannot do this job. On a fast runner 250 ms arrives before the process has
+   * finished starting, and the signal kills a program that has not installed its handler
+   * yet: the scenario then fails claiming cancellation is broken when nothing was ever
+   * cancelled. Waiting for the stage to announce itself is the only version that means the
+   * same thing on every machine.
+   */
+  readonly afterOutput?: string;
+  /** Settling delay after the pattern appears, or the whole delay when there is no pattern. */
   readonly afterMs: number;
   /** Sends the signal twice, to check the documented "second interrupt exits now". */
   readonly repeat?: number;

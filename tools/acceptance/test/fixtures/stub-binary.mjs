@@ -33,6 +33,10 @@ switch (verb) {
     break;
 
   case 'busy': {
+    // Silent at first, so a scenario that signals before the process has announced itself
+    // kills it outright instead of exercising its handler. That is the failure mode
+    // `afterOutput` exists to remove, and this delay is what makes it observable.
+    setTimeout(() => process.stderr.write('ready\n'), 200);
     // Handles the signal rather than dying from it, which is what the real binary does and
     // what makes "the signal arrived" a meaningful assertion.
     let interrupts = 0;
