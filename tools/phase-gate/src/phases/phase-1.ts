@@ -21,13 +21,16 @@ export const PHASE_1: PhaseDefinition = {
       allowOpen: [],
     },
     {
+      // Cites the acceptance catalogue rather than a test name. A `-t` pattern is satisfied
+      // by anything that happens to be called that, and stops matching when someone renames
+      // a describe block; a scenario id is the thing the checklist and the report both name.
       id: 'milestone-0',
       kind: 'command',
       promise:
         'Editing one file creates a new immutable version, shows a correct diff, and rolls back without re-indexing.',
       command: 'pnpm',
-      args: ['vitest', 'run', '--project', 'cli', '-t', 'Milestone 0'],
-      timeoutMs: 300_000,
+      args: ['acceptance'],
+      timeoutMs: 900_000,
     },
 
     // Exit criterion 2: section 20.3. The Windows against POSIX half comes from CI.
@@ -37,7 +40,7 @@ export const PHASE_1: PhaseDefinition = {
       promise:
         'The same project builds to the identical build id twice, from different absolute paths, and in any enumeration order.',
       command: 'pnpm',
-      args: ['vitest', 'run', '--project', 'cli', '-t', 'determinism condition'],
+      args: ['acceptance', '-t', 'determinism/'],
       timeoutMs: 300_000,
     },
 
@@ -47,7 +50,7 @@ export const PHASE_1: PhaseDefinition = {
       kind: 'command',
       promise: 'Rollback performs zero parse or index work, even with every source emptied.',
       command: 'pnpm',
-      args: ['vitest', 'run', '--project', 'cli', '-t', 'sources emptied'],
+      args: ['acceptance', '-t', 'rollback-without-reindexing'],
       timeoutMs: 300_000,
     },
 
@@ -157,7 +160,7 @@ export const PHASE_1: PhaseDefinition = {
       kind: 'command',
       promise: 'Every search result carries a complete source locator.',
       command: 'pnpm',
-      args: ['vitest', 'run', '--project', 'cli', '-t', 'complete source locator'],
+      args: ['acceptance', '-t', 'search-carries-provenance'],
       timeoutMs: 300_000,
     },
 
@@ -168,6 +171,24 @@ export const PHASE_1: PhaseDefinition = {
       promise: 'A build packs into a standard, verifiable ZIP that any tool can open.',
       module: './packages/backend-local/dist/index.js',
       symbols: ['writeArchive', 'readArchive', 'verifyArchive', 'checksumIndex'],
+    },
+
+    // The scenarios themselves. A suite that stops running, or a checklist that drifts
+    // from it, is exactly the gap that let four defects through the first Phase 1 gate.
+    {
+      id: 'acceptance-catalogue',
+      kind: 'command',
+      promise:
+        'The scenarios a person runs are executed on every commit, and the checklist is generated from them.',
+      command: 'pnpm',
+      args: ['acceptance:docs:check'],
+      timeoutMs: 300_000,
+    },
+    {
+      id: 'acceptance-checklist',
+      kind: 'path',
+      promise: 'The manual checklist the working agreement requires exists and is generated.',
+      paths: ['docs/testing/acceptance.md', 'tools/acceptance/src/catalogue.ts'],
     },
 
     // Public contracts the phase adds.
