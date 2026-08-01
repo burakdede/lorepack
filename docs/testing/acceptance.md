@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-33 automated, 3 checked by hand.
+34 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -185,6 +185,21 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `total` is 0.
 4. Run `lore inspect build` with `--json`.
    Expect: it succeeds, `canonicalRoots.artifacts` matches `/^[0-9a-f]{64}$/`, `compilerVersion` is present.
+
+### `lifecycle/inspect-shows-the-real-structure`
+
+**The node tree a reader sees is the structure the build holds**
+
+Proves: Invariant 8: structure before models. Hierarchy is preserved, and shown.
+
+Locks down the defect in #149.
+
+Starting point: 1 source file, already set up with `lore init` and `lore build`.
+
+1. Run `lore inspect guide.md`.
+   Expect: it succeeds, stdout matches `/\n      section  Onboarding  line 1\n        paragraph    line 3\n        section  Access  line 5\n          paragraph    line 7\n          section  Portal  line 9/`.
+2. The JSON carries the same order, so a consumer sees the tree too
+   Expect: it succeeds, `nodes[0].id` matches `/#0$/`, `nodes[4].id` matches `/#0\.1\.2\.1$/`.
 
 ### `lifecycle/earlier-builds-stay-readable`
 
