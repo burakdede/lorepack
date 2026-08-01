@@ -81,6 +81,22 @@ and it is the same discipline `lore mcp` needs in Phase 2, where stdout carries 
 frames. The renderer's write target is injected rather than assumed, so the MCP server
 passes stderr without any other change.
 
+### Exiting without losing the answer
+
+Every exit goes through `exitAfterFlush` in `framework/exit.ts`, which drains stdout and
+stderr first.
+
+`process.exit` terminates "as soon as possible", and on a pipe that is sooner than the
+writes have drained: `process.stdout` is asynchronous when it is a pipe and synchronous when
+it is a file or a TTY. So `lore --json inspect sources` returned exactly 65536 bytes through
+`| jq` and the full 521709 to a redirect, at exit code 0, with no error either side (#154).
+The consumer received a plausible prefix of a real answer, which is worse than receiving
+nothing.
+
+The flush is bounded by a two second timeout, because a pipe whose reader has gone away
+(`| head -1`, an everyday case) never drains, and a CLI that hung forever waiting to say
+goodbye would be a worse defect than the one this fixes.
+
 ## Errors and exit codes
 
 Every failure funnels through one handler. A `LoreError` renders with its remediation and

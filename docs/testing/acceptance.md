@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-27 automated, 3 checked by hand.
+28 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -380,6 +380,19 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, stdout parses as JSON on its own.
 3. Run `lore plan` with `--json`.
    Expect: it succeeds, stdout parses as JSON on its own.
+
+### `output/a-large-result-survives-a-pipe`
+
+**A result far larger than a pipe buffer arrives whole**
+
+Proves: Section 4.7: `lore <command> --json | jq` is true at every size, not only small ones.
+
+Locks down the defect in #154.
+
+Starting point: a generated corpus of 2501 documents with 1 sections each, already set up with `lore init` and `lore build --allow-large-project`.
+
+1. Run `lore inspect sources` with `--json`.
+   Expect: it succeeds, stdout parses as JSON on its own, `artifacts[2500].displayPath` is present, `artifacts[0].displayPath` is present.
 
 ### `output/errors-are-typed-and-machine-readable`
 

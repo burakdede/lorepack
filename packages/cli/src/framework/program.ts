@@ -7,6 +7,7 @@ import {
   resolveGlobalOptions,
   type Streams,
 } from './context.js';
+import { exitAfterFlush } from './exit.js';
 
 export const CLI_NAME = 'lore' as const;
 
@@ -144,7 +145,10 @@ export async function runCli(argv: readonly string[], options: RunOptions = {}):
   const signal = options.signal ?? controller.signal;
   const interrupt = (): void => {
     if (controller.signal.aborted) {
-      process.exit(EXIT_CODES.USER);
+      // Still through the flush: the message explaining why the process is ending is the
+      // one most likely to be lost, because nothing follows it to push the pipe along.
+      void exitAfterFlush(EXIT_CODES.USER, streams);
+      return;
     }
     controller.abort();
     streams.stderr.write('\nInterrupted. Finishing the current step and rolling back.\n');
@@ -192,7 +196,7 @@ export async function runCli(argv: readonly string[], options: RunOptions = {}):
     process.off('SIGTERM', interrupt);
   }
 
-  if (exitProcess) process.exit(code);
+  if (exitProcess) await exitAfterFlush(code, streams);
   return code;
 }
 
