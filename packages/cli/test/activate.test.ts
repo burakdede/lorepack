@@ -232,6 +232,36 @@ describe('lore prune', () => {
     });
   });
 
+  it('never claims a removal it did not make', async () => {
+    // #150. `prune --yes` closed with "Removed." unconditionally, and the dry run offered
+    // `--yes` even when there was nothing for it to do. Both statements were false, which
+    // for a destructive command is the worst kind of copy defect.
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      await build(root);
+
+      const dryRun = await lore(['prune']);
+      expect(dryRun.stdout).toContain('Nothing to remove');
+      expect(dryRun.stdout).not.toContain('Re-run with --yes');
+
+      const applied = await lore(['prune', '--yes']);
+      expect(applied.code).toBe(0);
+      expect(applied.stdout).toContain('Nothing to remove');
+      expect(applied.stdout).not.toContain('Removed');
+    });
+  });
+
+  it('says what it removed, in numbers that agree with themselves', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      await manyBuilds(root, 2);
+      const result = await lore(['prune', '--keep', '0', '--yes']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Removing 1 build, keeping 1');
+      expect(result.stdout).toMatch(/Removed 1 build and \d+ objects?\./);
+      expect(result.stdout).not.toContain('1 builds');
+    });
+  });
+
   it('keeps the active build and the previous five', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const ids = await manyBuilds(root, 8);

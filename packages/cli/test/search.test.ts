@@ -38,13 +38,12 @@ async function builtProject<T>(
 }
 
 describe('lore search', () => {
-  it('returns located results with an excerpt and a score', async () => {
+  it('returns located results with a highlighted excerpt', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['search', 'rollback']);
 
       expect(result.code).toBe(0);
       expect(result.stdout).toContain('guides/deployment.md');
-      expect(result.stdout).toContain('score');
       expect(result.stdout).toContain('[Rollback]');
     });
   });
@@ -172,6 +171,44 @@ describe('lore search', () => {
       } finally {
         db.close();
       }
+    });
+  });
+});
+
+describe('what a search result shows a reader', () => {
+  // #150. Raw BM25 is negative and near zero on a small corpus, so every hit printed
+  // `(score -0.00)`: a number that discriminated nothing and read as an error to anyone
+  // who does not know FTS5. A comparable relevance figure is #42's job.
+  it('leads with the rank and the location, not an unusable number', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['search', 'rollback']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).not.toContain('score');
+      expect(result.stdout).not.toContain('-0.00');
+      expect(result.stdout).toMatch(/ 1\. \S+\.md:\d+/);
+    });
+  });
+
+  it('still shows the raw lexical score under --verbose, for debugging ranking', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['--verbose', 'search', 'rollback']);
+      expect(result.stdout).toMatch(/lexical -?\d\.\d\de[+-]\d/);
+    });
+  });
+
+  it('keeps the raw score in JSON, which is the committed contract', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['--json', 'search', 'rollback']);
+      const parsed = JSON.parse(result.stdout) as { hits: Array<{ score: number }> };
+      expect(typeof parsed.hits[0]?.score).toBe('number');
+    });
+  });
+
+  it('counts chunks in agreement with itself', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['search', 'rollback']);
+      expect(result.stdout).not.toMatch(/\b1 chunks\b/);
     });
   });
 });

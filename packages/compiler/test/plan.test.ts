@@ -307,7 +307,21 @@ describe('rendering', () => {
         expect(text).toMatch(/- \d+ removed/);
         expect(text).toMatch(/= \d+ reused/);
         expect(text).toContain('Expected work');
-        expect(text).toContain('parse 2 artifacts');
+        // #150: one total split two ways, so it agrees with the `2/2` the build's parsing
+        // stage prints. "parse 2" beside "Parsing 2/2" described the same work twice.
+        expect(text).toContain('2 artifacts to process: 2 parsed, 0 reused from cache');
+      },
+    );
+  });
+
+  it('agrees in number with itself, whatever the count', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'only.md': '# Only\n\nOne artifact.\n' } },
+      async (project) => {
+        const { plan } = await planIn(project.root);
+        const text = renderPlan(plan);
+        expect(text).toContain('1 artifact to process');
+        expect(text).not.toContain('1 artifacts');
       },
     );
   });
@@ -315,7 +329,8 @@ describe('rendering', () => {
   it('labels the chunk figure as an estimate, since an exact count needs a parse', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG, 'a.md': '# A' } }, async (project) => {
       const { plan } = await planIn(project.root);
-      expect(renderPlan(plan)).toContain('rebuild about');
+      expect(renderPlan(plan)).toContain('about');
+      expect(renderPlan(plan)).toMatch(/about \d+ chunks? rebuilt/);
     });
   });
 

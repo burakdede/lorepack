@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { openReadOnly } from '@lorepack/backend-local';
 import { compareFingerprints, discover, fingerprintSources } from '@lorepack/compiler';
 import {
+  count,
   LORE_DIRECTORY,
   type LoadedConfig,
   LoreError,
@@ -196,7 +197,7 @@ export function renderStatus(status: Status, verbose: boolean): string {
   if (status.activeBuildId === null) {
     lines.push('');
     lines.push('No build yet.');
-    lines.push(`  ${status.artifacts.total} source files found`);
+    lines.push(`  ${count(status.artifacts.total, 'source file')} found`);
     lines.push('');
     lines.push('Run `lore build` to compile and activate the first build.');
     return lines.join('\n');
@@ -208,7 +209,7 @@ export function renderStatus(status: Status, verbose: boolean): string {
   lines.push('');
   lines.push(
     status.sourceState === 'clean'
-      ? `Sources are clean. ${status.artifacts.total} artifacts, decided by content hash.`
+      ? `Sources are clean. ${count(status.artifacts.total, 'artifact')}, decided by content hash.`
       : `Sources are dirty: ${status.artifacts.added} added, ${status.artifacts.changed} changed, ${status.artifacts.removed} removed.`,
   );
 
@@ -222,7 +223,9 @@ export function renderStatus(status: Status, verbose: boolean): string {
     }
   }
 
-  if (status.warnings > 0) lines.push(`${status.warnings} warnings in the active build.`);
+  if (status.warnings > 0) {
+    lines.push(`${count(status.warnings, 'warning')} in the active build.`);
+  }
 
   if (status.remediation !== null) {
     lines.push('');

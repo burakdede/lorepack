@@ -1,4 +1,4 @@
-import { loadConfig } from '@lorepack/core';
+import { count, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { type BuildResult, runBuild } from '../services/build.js';
 
@@ -39,11 +39,12 @@ function render(result: BuildResult): string {
 
   lines.push(`Build ${result.buildId}`);
   lines.push('');
-  lines.push(`  ${result.counts.artifacts} artifacts`);
-  lines.push(`  ${result.counts.nodes} nodes`);
-  lines.push(`  ${result.counts.chunks} chunks`);
-  if (result.reusedArtifacts > 0) lines.push(`  ${result.reusedArtifacts} artifacts reused`);
-  if (result.warnings > 0) lines.push(`  ${result.warnings} warnings`);
+  lines.push(`  ${count(result.counts.artifacts, 'artifact')}`);
+  lines.push(`  ${count(result.counts.nodes, 'node')}`);
+  lines.push(`  ${count(result.counts.chunks, 'chunk')}`);
+  if (result.reusedArtifacts > 0)
+    lines.push(`  ${count(result.reusedArtifacts, 'artifact')} reused`);
+  if (result.warnings > 0) lines.push(`  ${count(result.warnings, 'warning')}`);
   lines.push('');
   lines.push(
     result.activated

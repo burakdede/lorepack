@@ -38,7 +38,7 @@ export function searchCommand(): CommandDefinition {
         context.warn(`Freshness unknown: ${freshness.reason}\n`);
       }
 
-      return { human: renderSearch(result, query), json: result };
+      return { human: renderSearch(result, query, context.options.verbose), json: result };
     },
   };
 }

@@ -8,6 +8,7 @@ import {
   searchCatalog,
 } from '@lorepack/backend-local';
 import {
+  count,
   LORE_DIRECTORY,
   type LoadedConfig,
   LoreError,
@@ -102,9 +103,9 @@ function labelsFor(status: string): SearchResult['hits'][number]['labels'] {
   return status === 'draft' || status === 'archived' || status === 'superseded' ? [status] : [];
 }
 
-export function renderSearch(result: SearchResult, query: string): string {
+export function renderSearch(result: SearchResult, query: string, verbose = false): string {
   const lines = [
-    `Build ${result.buildId.slice(0, 17)} (sources ${result.sourceState}), ${result.totalIndexedChunks} chunks indexed`,
+    `Build ${result.buildId.slice(0, 17)} (sources ${result.sourceState}), ${count(result.totalIndexedChunks, 'chunk')} indexed`,
     '',
   ];
 
@@ -114,7 +115,7 @@ export function renderSearch(result: SearchResult, query: string): string {
     lines.push(
       result.totalIndexedChunks === 0
         ? 'This build indexed nothing. Run `lore inspect warnings` to see what was skipped.'
-        : `Searched ${result.totalIndexedChunks} chunks. Try fewer or more general terms.`,
+        : `Searched ${count(result.totalIndexedChunks, 'chunk')}. Try fewer or more general terms.`,
     );
     return lines.join('\n');
   }
@@ -126,7 +127,14 @@ export function renderSearch(result: SearchResult, query: string): string {
       hit.locator.lineStart === undefined
         ? hit.locator.relativePath
         : `${hit.locator.relativePath}:${hit.locator.lineStart}`;
-    lines.push(`${String(rank).padStart(2)}. ${where}  (score ${hit.score.toFixed(2)})`);
+    // The rank is the claim. The raw BM25 behind it is negative, near zero on a small
+    // corpus, and rounded to two places it printed `-0.00` for every hit: a number that
+    // discriminated nothing and read as an error to anyone who does not know FTS5.
+    // A comparable relevance figure is #42's job, and inventing one here would be
+    // inventing truth, so the raw value moves behind --verbose rather than being dressed up.
+    lines.push(
+      `${String(rank).padStart(2)}. ${where}${verbose ? `  (lexical ${hit.score.toExponential(2)})` : ''}`,
+    );
     if (hit.headingPath.length > 0) lines.push(`    ${hit.headingPath.join(' > ')}`);
     if (hit.labels.length > 0) lines.push(`    [${hit.labels.join(', ')}]`);
     lines.push(`    ${hit.excerpt.replace(/\s+/g, ' ').trim()}`);

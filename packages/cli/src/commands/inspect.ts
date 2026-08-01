@@ -4,6 +4,7 @@ import { openReadOnly } from '@lorepack/backend-local';
 import {
   type BuildId,
   buildManifestSchema,
+  count,
   LORE_DIRECTORY,
   LoreError,
   loadConfig,
@@ -128,7 +129,7 @@ function inspectWarnings(loreDirectory: string, buildId: BuildId): CommandResult
   if (warnings.length === 0) {
     lines.push('No warnings. Everything discovered was indexed.');
   } else {
-    lines.push(`${warnings.length} warnings in ${buildId.slice(0, 17)}`, '');
+    lines.push(`${count(warnings.length, 'warning')} in ${buildId.slice(0, 17)}`, '');
     // Sorted by class name explicitly: the default comparator stringifies each pair, and
     // node:sqlite hands back null-prototype rows that have no `toString` to call.
     for (const [className, group] of [...byClass].sort(([a], [b]) => (a < b ? -1 : 1))) {
@@ -251,7 +252,7 @@ function inspectArtifact(loreDirectory: string, buildId: BuildId, path: string):
       `  content hash   ${artifact.content_hash}`,
       `  chunks         ${chunks.n}`,
       '',
-      `  structure (${nodes.length} nodes)`,
+      `  structure (${count(nodes.length, 'node')})`,
     ];
     for (const node of nodes) {
       // Depth from the tree, not from how many headings are above the node. A paragraph
