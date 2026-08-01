@@ -87,6 +87,23 @@ describe('exclusions', () => {
     );
   });
 
+  it('never discovers the archives lore pack writes into the project', async () => {
+    // #148. The archive lands in the project root by default, so without this the tool
+    // finds its own output on the next run and warns about a file it created a second ago.
+    await withProject(
+      {
+        'a.md': '#',
+        'demo-lore_abc123.lorepack': 'PK-not-really-a-zip',
+        'archives/older.lorepack': 'PK-not-really-a-zip',
+      },
+      (root) => {
+        const discovery = discoverIn(root);
+        expect(paths(discovery)).toEqual(['a.md']);
+        expect(discovery.warnings).toEqual([]);
+      },
+    );
+  });
+
   it('honours .loreignore patterns', async () => {
     await withProject(
       { 'a.md': '#', 'drafts/b.md': '#', 'notes.md': '#', '.loreignore': 'drafts/\nnotes.md\n' },
