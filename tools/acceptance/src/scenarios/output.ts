@@ -45,6 +45,37 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'output/a-large-result-survives-a-pipe',
+    title: 'A result far larger than a pipe buffer arrives whole',
+    proves: 'Section 4.7: `lore <command> --json | jq` is true at every size, not only small ones.',
+    mode: 'auto',
+    regression: 154,
+    fixture: {
+      // Above one pipe buffer by a wide margin: this result is around half a megabyte,
+      // where the truncation cut it at exactly 65536 bytes.
+      generated: { documents: 2501, sectionsPerDocument: 1 },
+      setup: ['init', 'build-large'],
+    },
+    steps: [
+      {
+        // The runner reads through a pipe, which is the whole point: to a file or a TTY
+        // `process.stdout` is synchronous and the defect is invisible.
+        action: 'run',
+        args: ['inspect', 'sources'],
+        json: true,
+        expect: {
+          exitCode: 0,
+          stdoutIsJson: true,
+          json: [
+            { path: 'artifacts[2500].displayPath', exists: true },
+            { path: 'artifacts[0].displayPath', exists: true },
+          ],
+        },
+      },
+    ],
+  },
+
+  {
     id: 'output/errors-are-typed-and-machine-readable',
     title: 'A failure carries a code and a remediation in both renderings',
     proves: 'Section 4.4 and the exit-code table: CI can tell the kind of failure apart.',
