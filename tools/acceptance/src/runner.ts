@@ -271,6 +271,7 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
         step.afterMs,
         step.repeat ?? 1,
         context,
+        step.afterOutput,
       );
       return check(result, step.expect, context).map(
         (problem) => `${context.where} interrupted \`lore ${step.args.join(' ')}\`: ${problem}`,
@@ -358,10 +359,17 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
 }
 
 /**
- * Starts the binary, waits, and sends a real signal to the real process.
+ * Starts the binary, waits for the stage under test, and sends a real signal to the real
+ * process.
  *
  * `child.kill()` rather than an injected `AbortSignal`, because the delivery path is the
  * part that was broken in #146 and an injected signal proves nothing about it.
+ *
+ * The wait is on output, not on a clock, whenever the caller gives a pattern. A fixed delay
+ * has to be long enough for the slowest runner to have started and short enough that the
+ * fastest one has not finished, and no number satisfies both: on a fast machine 250 ms
+ * arrived before the CLI had installed its handler, so the signal killed a program that was
+ * still loading and the scenario reported cancellation as broken.
  */
 async function interrupt(
   args: readonly string[],
@@ -369,6 +377,7 @@ async function interrupt(
   afterMs: number,
   repeat: number,
   context: StepContext,
+  afterOutput?: string,
 ): Promise<Executed> {
   return await new Promise<Executed>((resolve) => {
     const child = spawn(process.execPath, [context.binary, '--cwd', context.project, ...args], {
@@ -376,24 +385,41 @@ async function interrupt(
     });
     let stdout = '';
     let stderr = '';
+    let signalled = false;
+    const timers: NodeJS.Timeout[] = [];
+
+    const send = (): void => {
+      if (signalled) return;
+      signalled = true;
+      for (let index = 0; index < repeat; index += 1) {
+        timers.push(setTimeout(() => child.kill(signal), index * 750));
+      }
+    };
+
+    const pattern = afterOutput === undefined ? null : new RegExp(afterOutput);
+    const considerSignalling = (): void => {
+      if (pattern === null || signalled) return;
+      if (pattern.test(stdout) || pattern.test(stderr)) {
+        // A settling delay after the stage announces itself, so the signal lands inside the
+        // work rather than in the instant between two stages.
+        timers.push(setTimeout(send, afterMs));
+      }
+    };
+
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
+      considerSignalling();
     });
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
+      considerSignalling();
     });
 
-    const timers: NodeJS.Timeout[] = [];
-    for (let index = 0; index < repeat; index += 1) {
-      timers.push(
-        setTimeout(
-          () => {
-            child.kill(signal);
-          },
-          afterMs + index * 750,
-        ),
-      );
-    }
+    if (pattern === null) timers.push(setTimeout(send, afterMs));
+    // If the stage never announces itself the scenario must fail loudly rather than hang,
+    // and it must fail saying the signal was never sent rather than blaming cancellation.
+    else timers.push(setTimeout(send, 120_000));
+
     // A build that ignores the signal must fail the scenario rather than hang the suite.
     const guard = setTimeout(() => child.kill('SIGKILL'), afterMs + 300_000);
 

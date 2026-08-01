@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-28 automated, 3 checked by hand.
+31 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -361,6 +361,63 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `activeBuildId` is the active build.
 8. And it still answers, so pruning removed data nothing referenced
    Expect: it succeeds, `hits[0].locator.relativePath` is present.
+
+## Cancelling a build
+
+What an interrupt must not do to a project.
+
+### `cancellation/interrupt-during-parsing-changes-nothing`
+
+**Ctrl-C while parsing stops the build and leaves the project exactly as it was**
+
+Proves: Section 4.3 and invariant 4: an interrupt stops at the next checkpoint.
+
+Locks down the defect in #146.
+
+Not run on win32: Windows has no POSIX signal delivery, so kill() terminates rather than notifies. Covered by manual/ctrl-c-is-honoured-by-a-person.
+
+Starting point: a generated corpus of 500 documents with 60 sections each, already set up with `lore init`.
+
+1. Note which builds exist and which one is active.
+2. Start `lore build`, wait for `/Parsing\s+[1-9][\d,]*//` in its output, then send SIGINT 250 ms later.
+   Expect: it exits 1, the error is `LORE_E_CANCELLED`, stderr mentions "Interrupted".
+3. No build directory appeared, and the active pointer did not move
+4. Nothing was activated by a build the user cancelled
+   Expect: it succeeds, `activeBuildId` is null.
+
+### `cancellation/second-interrupt-does-not-resurrect-the-build`
+
+**Interrupting twice ends the process without leaving a build behind**
+
+Proves: Section 4.3: a second interrupt means the user is no longer asking.
+
+Locks down the defect in #146.
+
+Not run on win32: Windows has no POSIX signal delivery, so kill() terminates rather than notifies. Covered by manual/ctrl-c-is-honoured-by-a-person.
+
+Starting point: a generated corpus of 500 documents with 60 sections each, already set up with `lore init`.
+
+1. Note which builds exist and which one is active.
+2. Start `lore build`, wait for `/Parsing\s+[1-9][\d,]*//` in its output, then send SIGINT 250 ms later, 2 times.
+   Expect: it exits 1.
+3. Confirm `builds/` and the active pointer are exactly as they were.
+
+### `cancellation/interrupt-during-fingerprinting-changes-nothing`
+
+**An interrupt in the first stage is honoured too, not only in the long one**
+
+Proves: Section 4.3: every stage checks, so cancellation does not depend on timing.
+
+Locks down the defect in #146.
+
+Not run on win32: Windows has no POSIX signal delivery, so kill() terminates rather than notifies. Covered by manual/ctrl-c-is-honoured-by-a-person.
+
+Starting point: a generated corpus of 2400 documents with 1 sections each, already set up with `lore init`.
+
+1. Note which builds exist and which one is active.
+2. Start `lore build`, wait for `/Fingerprinting/` in its output, then send SIGINT 50 ms later.
+   Expect: it exits 1, the error is `LORE_E_CANCELLED`.
+3. Confirm `builds/` and the active pointer are exactly as they were.
 
 ## The output contract
 

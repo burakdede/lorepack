@@ -373,6 +373,7 @@ describe('phase 1 definition', () => {
       'fts5-available',
       'validate-and-seal',
       'build-orchestration',
+      'cancellation',
       'lockfile',
       'diff-engine',
       'search-provenance',

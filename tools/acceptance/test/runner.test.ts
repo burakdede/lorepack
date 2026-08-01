@@ -175,6 +175,31 @@ describe('the runner', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
+    'waits for the process to say it has started before signalling',
+    async () => {
+      // The property that makes an interrupt scenario mean the same thing on a fast runner
+      // and a slow one. Without it, a fixed delay killed a program that had not finished
+      // loading, and the scenario reported cancellation as broken when nothing had been
+      // cancelled. The stub prints nothing for 200 ms, so a signal sent before its first
+      // output would kill it outright and leave `exitCode` at null rather than 17.
+      const report = await runScenario(
+        scenario([
+          {
+            action: 'interrupt',
+            args: ['busy'],
+            signal: 'SIGINT',
+            afterOutput: 'ready',
+            afterMs: 10,
+            expect: { exitCode: 17, stderr: { contains: ['stub interrupted'] } },
+          },
+        ]),
+        { binary: STUB },
+      );
+      expect(report.failures).toEqual([]);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
     'delivers SIGTERM as well, since a supervisor sends that one',
     async () => {
       const report = await runScenario(

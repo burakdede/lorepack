@@ -140,7 +140,9 @@ export function describeStep(step: Step): string {
     case 'external':
       return `Run \`${step.command} ${step.args.join(' ')}\`${step.whenMissing === 'skip' ? ', where that tool exists' : ''}.`;
     case 'interrupt':
-      return `Start \`lore ${step.args.join(' ')}\` and send ${step.signal} after ${step.afterMs} ms${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`;
+      return step.afterOutput === undefined
+        ? `Start \`lore ${step.args.join(' ')}\` and send ${step.signal} after ${step.afterMs} ms${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`
+        : `Start \`lore ${step.args.join(' ')}\`, wait for \`/${step.afterOutput}/\` in its output, then send ${step.signal} ${step.afterMs} ms later${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`;
     case 'concurrent':
       return `Start \`lore ${step.background.join(' ')}\`, then run \`lore ${step.foreground.join(' ')}\` ${step.afterMs} ms later.`;
     case 'identical':
