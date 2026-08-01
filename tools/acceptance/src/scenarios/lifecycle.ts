@@ -265,6 +265,50 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'lifecycle/inspect-shows-the-real-structure',
+    title: 'The node tree a reader sees is the structure the build holds',
+    proves: 'Invariant 8: structure before models. Hierarchy is preserved, and shown.',
+    mode: 'auto',
+    regression: 149,
+    fixture: {
+      files: {
+        'guide.md':
+          '# Onboarding\n\nIntro paragraph.\n\n## Access\n\nRequest access.\n\n### Portal\n\nUse the portal.\n\n## Buddy\n\nEveryone gets a buddy.\n',
+      },
+      setup: ['init', 'build'],
+    },
+    steps: [
+      {
+        action: 'run',
+        args: ['inspect', 'guide.md'],
+        expect: {
+          exitCode: 0,
+          stdout: {
+            // Indentation is the assertion: a paragraph belonging to "Access" has to sit
+            // under it, and a document with three heading levels has to read as three.
+            matches: [
+              '\\n      section  Onboarding  line 1\\n        paragraph    line 3\\n        section  Access  line 5\\n          paragraph    line 7\\n          section  Portal  line 9',
+            ],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'guide.md'],
+        json: true,
+        describe: 'The JSON carries the same order, so a consumer sees the tree too',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'nodes[0].id', matches: '#0$' },
+            { path: 'nodes[4].id', matches: '#0\\.1\\.2\\.1$' },
+          ],
+        },
+      },
+    ],
+  },
+
+  {
     id: 'lifecycle/earlier-builds-stay-readable',
     title: 'Rolling back leaves the newer build on disk and inspectable',
     proves: 'Invariant 4: rollback moves a pointer. It never destroys what it moved away from.',

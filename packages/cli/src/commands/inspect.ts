@@ -220,12 +220,21 @@ function inspectSources(loreDirectory: string, buildId: BuildId): CommandResult 
 function inspectArtifact(loreDirectory: string, buildId: BuildId, path: string): CommandResult {
   return withDatabase(loreDirectory, buildId, (db) => {
     const artifact = findArtifact(db, path);
-    const nodes = db
-      .prepare(
-        `SELECT id, kind, title, heading_path AS headingPath, line_start AS lineStart
-           FROM nodes WHERE artifact_id = ? ORDER BY ordinal`,
-      )
-      .all(artifact.id) as Array<Record<string, string | number | null>>;
+    // Ordered by the ordinal path in the node id, not by `ordinal`.
+    //
+    // `ordinal` is a node's position among its siblings, which is exactly what it says it
+    // is and exactly what node ids need. It is not a document position, so ordering by it
+    // across different parents sorted a document's paragraphs ahead of the sections they
+    // belong to and left ties for SQLite to break (#149). The id carries the whole path,
+    // `demo:a.md#0.1.2.1`, so it orders and nests the tree by itself.
+    const nodes = orderByTree(
+      db
+        .prepare(
+          `SELECT id, kind, title, heading_path AS headingPath, line_start AS lineStart
+             FROM nodes WHERE artifact_id = ?`,
+        )
+        .all(artifact.id) as Array<Record<string, string | number | null>>,
+    );
     const chunks = db
       .prepare('SELECT count(*) AS n FROM chunks WHERE artifact_id = ?')
       .get(artifact.id) as { n: number };
@@ -245,7 +254,10 @@ function inspectArtifact(loreDirectory: string, buildId: BuildId, path: string):
       `  structure (${nodes.length} nodes)`,
     ];
     for (const node of nodes) {
-      const depth = (JSON.parse(String(node.headingPath ?? '[]')) as string[]).length;
+      // Depth from the tree, not from how many headings are above the node. A paragraph
+      // inside "Access" has two entries in its heading path while the "Access" section
+      // itself has one, so heading depth rendered a leaf deeper than its own parent.
+      const depth = Math.max(0, ordinalPath(String(node.id)).length - 1);
       const where = node.lineStart === null ? '' : `  line ${node.lineStart}`;
       lines.push(`    ${'  '.repeat(depth)}${node.kind}  ${node.title ?? ''}${where}`.trimEnd());
     }
@@ -254,6 +266,37 @@ function inspectArtifact(loreDirectory: string, buildId: BuildId, path: string):
       human: lines.join('\n'),
       json: { buildId, artifact, chunkCount: chunks.n, nodes },
     };
+  });
+}
+
+/**
+ * The ordinal path a node id ends with, as numbers.
+ *
+ * `demo:docs/a.md#0.1.2` is `[0, 1, 2]`. Numbers rather than the string, because a
+ * lexicographic sort puts the tenth sibling before the second.
+ */
+export function ordinalPath(id: string): number[] {
+  const suffix = id.slice(id.lastIndexOf('#') + 1);
+  if (suffix === '' || suffix === id) return [];
+  return suffix.split('.').map((segment) => {
+    const value = Number(segment);
+    return Number.isFinite(value) ? value : 0;
+  });
+}
+
+/** A row from the `nodes` table, as `node:sqlite` hands it back. */
+type NodeRow = Record<string, string | number | null>;
+
+/** Document order: every node after its parent, siblings in the order they were written. */
+export function orderByTree(nodes: readonly NodeRow[]): NodeRow[] {
+  return [...nodes].sort((left, right) => {
+    const a = ordinalPath(String(left.id));
+    const b = ordinalPath(String(right.id));
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+      const difference = (a[index] ?? -1) - (b[index] ?? -1);
+      if (difference !== 0) return difference;
+    }
+    return 0;
   });
 }
 
