@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-32 automated, 3 checked by hand.
+33 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -340,6 +340,28 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
 4. Flip every bit of one byte inside the archive
 5. Run `lore pack --verify {{archive}}`.
    Expect: it exits 2, the error is `LORE_E_OBJECT_CORRUPT`, stderr mentions "cannot be trusted".
+
+### `immutability/packing-does-not-disturb-the-project`
+
+**An archive written into the project is not then discovered as a source**
+
+Proves: Invariant 3: the tool running does not change what the next build sees.
+
+Locks down the defect in #148.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Run `lore builds` with `--json`.
+2. Run `lore pack`.
+   Expect: it succeeds.
+3. Run `lore pack --out second.lorepack`.
+   Expect: it succeeds.
+4. The sources are still clean, so packing did not dirty the project
+   Expect: it succeeds, `sourceState` is "clean".
+5. And nothing warns about the archives the tool just wrote
+   Expect: it succeeds, stdout never mentions ".lorepack".
+6. A rebuild produces the same build, so identity did not move either
+   Expect: it succeeds, `buildId` is the before build, `created` is false.
 
 ### `immutability/prune-never-deletes-by-default`
 

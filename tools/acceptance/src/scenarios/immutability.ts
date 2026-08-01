@@ -157,6 +157,46 @@ export const IMMUTABILITY_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'immutability/packing-does-not-disturb-the-project',
+    title: 'An archive written into the project is not then discovered as a source',
+    proves: 'Invariant 3: the tool running does not change what the next build sees.',
+    mode: 'auto',
+    regression: 148,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      { action: 'run', args: ['builds'], json: true, capture: { before: 'activeBuildId' } },
+      { action: 'run', args: ['pack'], expect: { exitCode: 0 } },
+      { action: 'run', args: ['pack', '--out', 'second.lorepack'], expect: { exitCode: 0 } },
+      {
+        action: 'run',
+        args: ['status'],
+        json: true,
+        describe: 'The sources are still clean, so packing did not dirty the project',
+        expect: { exitCode: 0, json: [{ path: 'sourceState', equals: 'clean' }] },
+      },
+      {
+        action: 'run',
+        args: ['plan'],
+        describe: 'And nothing warns about the archives the tool just wrote',
+        expect: { exitCode: 0, stdout: { excludes: ['.lorepack'] } },
+      },
+      {
+        action: 'run',
+        args: ['build'],
+        json: true,
+        describe: 'A rebuild produces the same build, so identity did not move either',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'buildId', equalsCapture: 'before' },
+            { path: 'created', equals: false },
+          ],
+        },
+      },
+    ],
+  },
+
+  {
     id: 'immutability/prune-never-deletes-by-default',
     title: '`lore prune` prints its plan and removes nothing without --yes',
     proves: 'Section 4.6: destructive work is opt-in, and never touches the active build.',
