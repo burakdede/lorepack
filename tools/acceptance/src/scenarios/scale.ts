@@ -39,6 +39,50 @@ export const SCALE_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'scale/a-build-that-exists-can-always-be-queried',
+    title: 'Every read-only command works on a project above the envelope',
+    proves: 'Invariant 1: a runtime is a projection of a build, not of the source tree.',
+    mode: 'auto',
+    regression: 147,
+    fixture: {
+      generated: { documents: 2501, sectionsPerDocument: 1 },
+      setup: ['init', 'build-large'],
+    },
+    steps: [
+      {
+        // The defect: `search` established freshness by walking the sources, so a guard
+        // about the cost of building refused to answer from a build already made.
+        action: 'run',
+        args: ['search', 'rollback'],
+        json: true,
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'hits[0].locator.relativePath', exists: true },
+            { path: 'sourceState', equals: 'clean' },
+          ],
+        },
+      },
+      {
+        // Human rendering rather than `--json`, because a result this large is truncated
+        // on a pipe today (#154). That is a separate defect with its own scenario; asserting
+        // it here would make this one fail for a reason that has nothing to do with #147.
+        action: 'run',
+        args: ['inspect', 'sources'],
+        expect: { exitCode: 0, stdout: { contains: ['2501 artifacts'] } },
+      },
+      { action: 'run', args: ['builds'], json: true, expect: { exitCode: 0 } },
+      { action: 'run', args: ['pack'], json: true, expect: { exitCode: 0 } },
+      {
+        action: 'run',
+        args: ['diff'],
+        describe: 'And a diff against the only build reports no second build to compare',
+        expect: { exitCode: 1, errorCode: 'LORE_E_BUILD_NOT_FOUND' },
+      },
+    ],
+  },
+
+  {
     id: 'scale/progress-repeats-so-work-is-not-a-hang',
     title: 'A long build reports measurable progress more than once',
     proves: 'Section 4.3: no command appears to hang. Section 5.5 makes it a release gate.',

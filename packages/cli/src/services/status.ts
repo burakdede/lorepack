@@ -2,7 +2,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { openReadOnly } from '@lorepack/backend-local';
 import { compareFingerprints, discover, fingerprintSources } from '@lorepack/compiler';
-import { LORE_DIRECTORY, type LoadedConfig, type ProgressBus, type Status } from '@lorepack/core';
+import {
+  LORE_DIRECTORY,
+  type LoadedConfig,
+  LoreError,
+  type ProgressBus,
+  type SourceState,
+  type Status,
+} from '@lorepack/core';
 import { readActiveBuild, readBuildCatalog } from './project.js';
 
 /**
@@ -84,6 +91,67 @@ export async function readStatus(options: StatusOptions): Promise<Status> {
     warnings: countBuildWarnings(loreDirectory, active.buildId) ?? discovery.warnings.length,
     remediation: dirty.clean ? null : 'lore build',
   };
+}
+
+export interface Freshness {
+  readonly sourceState: SourceState;
+  /** Why freshness could not be established, for the human rendering. Null when it was. */
+  readonly reason: string | null;
+}
+
+/**
+ * Freshness for a read-only command: an annotation on the answer, never a precondition
+ * for it.
+ *
+ * Section 4.10 says freshness travels with the result, and it is tempting to read that as
+ * "establish it or fail". That reading cost `lore search` its usefulness on any project
+ * above the file envelope: the build existed and was perfectly queryable, and the query was
+ * refused because a guard about the cost of *building* had been consulted first (#147). A
+ * read of a sealed build is not entitled to have an opinion about the source tree.
+ *
+ * So two things differ from `readStatus`:
+ *
+ * - **The envelope does not apply.** It bounds what Lorepack promises about build
+ *   performance, not what it will answer from a build it already made.
+ * - **Nothing here can fail the command.** A source tree that is enormous, unreadable or
+ *   gone leaves freshness `unknown`, which is precisely what the contract's third state
+ *   means, and the caller still gets the build's answer.
+ *
+ * Invariant 6 applies to the degraded case too: `unknown` says Lorepack does not know, and
+ * never that the sources are clean.
+ */
+export async function readFreshness(options: StatusOptions): Promise<Freshness> {
+  try {
+    const status = await readStatus({ ...options, allowLargeProject: true });
+    return {
+      sourceState: status.sourceState === 'unbuilt' ? 'unknown' : status.sourceState,
+      reason: null,
+    };
+  } catch (error) {
+    const degraded = degradedFreshness(error);
+    if (degraded === null) throw error;
+    return degraded;
+  }
+}
+
+/**
+ * Which failures are allowed to become `unknown`, and which must still be raised.
+ *
+ * An allowlist rather than a bare `catch`. Swallowing everything would turn a corrupt
+ * state database into the cheerful and false statement "freshness unknown", which is the
+ * kind of helpfulness that hides a real defect for a phase or two. These three all mean
+ * "something about the source tree stopped us looking", and none of them says anything
+ * about whether the build being read is sound.
+ */
+export function degradedFreshness(error: unknown): Freshness | null {
+  if (!(error instanceof LoreError)) return null;
+  const degradable = new Set([
+    'LORE_E_ENVELOPE_EXCEEDED',
+    'LORE_E_PATH_ESCAPE',
+    'LORE_E_CASE_COLLISION',
+  ]);
+  if (!degradable.has(error.code)) return null;
+  return { sourceState: 'unknown', reason: error.message };
 }
 
 function pathResolver(
