@@ -29,8 +29,9 @@ pnpm install
 pnpm lint          # Biome
 pnpm format:check
 pnpm typecheck
-pnpm test          # Vitest
+pnpm test          # Vitest, the fast suite
 pnpm build
+pnpm acceptance    # the scenarios a person runs, against the real binary
 ```
 
 *(The toolchain lands with the monorepo scaffold; until then these commands are the target,
@@ -45,8 +46,14 @@ not the current state.)*
    branch names.
 4. Include tests. A change without tests is unverified. See the testing section of
    `AGENTS.md` for which levels apply.
-5. Update documentation in the same PR.
-6. Open a PR linking its issue, stating what you verified. Rebase again before pushing.
+5. **Add an acceptance scenario when your change alters what a person sees**: a new command
+   or flag, different output, a new failure mode, or a guarantee stated in prose. Add a row
+   to `tools/acceptance/src/scenarios/`, run `pnpm acceptance:docs`, and commit the
+   regenerated `docs/testing/acceptance.md`. Internal refactors do not need one. If a
+   scenario cannot be automated honestly, add it with `mode: 'manual'` rather than leaving
+   it out; the checklist is the only place it can be seen.
+6. Update documentation in the same PR.
+7. Open a PR linking its issue, stating what you verified. Rebase again before pushing.
 
 ## Reporting bugs
 

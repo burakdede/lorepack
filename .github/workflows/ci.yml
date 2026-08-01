@@ -69,6 +69,9 @@ jobs:
       - name: SQLite has FTS5
         run: pnpm probe:fts5
 
+      - name: The acceptance checklist matches the scenario catalogue
+        run: pnpm acceptance:docs:check
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +82,31 @@ jobs:
             **/vitest-report.json
           if-no-files-found: ignore
           retention-days: 7
+
+  acceptance:
+    # A separate job, not a step in `verify`, for two reasons: it is minutes rather than
+    # seconds, and when it fails the question is "which scenario" rather than "which test".
+    # Mixing it into the unit run buries that answer.
+    name: acceptance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Every acceptance scenario, against the real binary
+        run: pnpm acceptance
 
   benchmarks:
     name: benchmarks (reported, not enforced)

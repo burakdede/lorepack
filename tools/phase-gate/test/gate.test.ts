@@ -377,6 +377,8 @@ describe('phase 1 definition', () => {
       'diff-engine',
       'search-provenance',
       'archive',
+      'acceptance-catalogue',
+      'acceptance-checklist',
       'public-schemas',
       'benchmarks',
       'forward-audit',

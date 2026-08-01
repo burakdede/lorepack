@@ -33,6 +33,9 @@
     },
     {
       "path": "tools/phase-gate"
+    },
+    {
+      "path": "tools/acceptance"
     }
   ]
 }

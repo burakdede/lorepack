@@ -74,29 +74,51 @@ expected warnings, and a canonical hash.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
    write down why in the test.
 
-## The Milestone 0 acceptance suite
+## The acceptance suite
 
-`packages/cli/test/milestone-0.e2e.test.ts` is the automated proof of the exit criterion in
-architecture section 21: editing one file creates a new immutable version, shows a correct
-diff, and rolls back without re-indexing.
+`tools/acceptance` holds every scenario a person runs, as data, and executes it against the
+built binary. It is the automated proof of the exit criterion in architecture section 21:
+editing one file creates a new immutable version, shows a correct diff, and rolls back
+without re-indexing. See [`docs/testing/acceptance.md`](../testing/acceptance.md) for the
+generated catalogue, which is also the manual checklist.
 
-It drives the built binary as a subprocess, so it validates the contract a user meets,
-including exit codes and printed output, rather than the internal functions that happen to
-implement it today. Three choices in it are load-bearing:
+```bash
+pnpm acceptance                 # the whole suite
+pnpm acceptance -t lifecycle    # one area
+pnpm acceptance:docs            # regenerate the checklist after adding a scenario
+```
 
+It is deliberately outside `pnpm test`. It spawns the binary dozens of times and builds
+corpora of thousands of documents, so it runs as its own CI job on the same three-OS matrix.
+
+Four choices in it are load-bearing:
+
+- **Scenarios are data, not test files.** A closed set of actions has one execution and one
+  human sentence each, which is what lets the same list drive the suite and the checklist.
+  A checklist maintained beside the suite drifts, and `acceptance:docs:check` fails when it
+  does, for the same reason `schemas:check` exists.
+- **The runner spawns and signals a real process.** Cancellation was broken for the whole of
+  Phase 1 (#146) because the tests injected an `AbortSignal`, which proves the checkpoints
+  honour an aborted signal and proves nothing about the signal arriving.
 - **The edit step writes a sibling file and renames over the original**, which is how real
   editors save. On Windows that is the case that breaks naive file handling, so simulating
   it is the difference between a suite that passes and a suite that is honest.
 - **Rollback is proved by emptying every source file first.** Counting parse work can be
   satisfied by an accidental cache hit; an empty source tree cannot. If rollback re-indexed
-  at all, the restored build would be empty, and the suite asserts it still answers.
-- **Determinism runs the three conditions one machine can check** (twice in place, from a
-  second absolute path, with enumeration shuffled) through `checkDeterminism`. The Windows
-  against POSIX condition comes from the CI matrix, not from the test.
+  at all, the restored build would be empty, and the scenario asserts it still answers.
 
-The suite also asserts that two workspaces on one machine produce byte-identical archives.
-Across machines only the manifest and canonical roots must agree: `context.sqlite` page
-layout is explicitly not part of build identity (section 11.3).
+Scenarios no machine here can run, such as progress on a real TTY, live in the catalogue
+flagged `manual` and render into the checklist. A scenario left out is not manual, it is
+invisible.
+
+Determinism runs the conditions one machine can check: twice in place, and from a second
+absolute path, comparing the build id, the whole manifest, and the packed archive byte for
+byte. Windows against POSIX comes from the CI matrix. Across machines only the manifest and
+canonical roots must agree, because `context.sqlite` page layout is explicitly not part of
+build identity (section 11.3).
+
+`checkDeterminism` in `tools/test-support` remains the helper for unit-level determinism,
+where the value under test is a hash rather than a command.
 
 ## Benchmarks
 

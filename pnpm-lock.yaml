@@ -184,6 +184,8 @@ importers:
 
   packages/sdk: {}
 
+  tools/acceptance: {}
+
   tools/arch: {}
 
   tools/phase-gate: {}
