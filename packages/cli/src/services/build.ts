@@ -47,6 +47,7 @@ import {
   writeFileAtomic,
 } from '@lorepack/core';
 import { parserFor } from '@lorepack/parsers';
+import { checkpoint } from './cancellation.js';
 import { BUILD_MIGRATIONS, STATE_MIGRATIONS } from './migrations-path.js';
 import { type CachedParse, ParseCache } from './parse-cache.js';
 import { readBuildCatalog } from './project.js';
@@ -125,7 +126,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           ? {}
           : { allowLargeProject: options.allowLargeProject }),
       });
-      throwIfAborted(options.signal);
+      await checkpoint(options.signal);
 
       const cache = new ParseCache(join(loreDirectory, 'cache', 'parse'));
       progress.start('parsing', 'Parsing', fingerprint.artifacts.length);
@@ -133,7 +134,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       let handled = 0;
 
       for (const discovered of fingerprint.artifacts) {
-        throwIfAborted(options.signal);
+        await checkpoint(options.signal);
         const parser = parserFor({
           mediaType: discovered.mediaType,
           relativePath: discovered.relativePath,
@@ -237,7 +238,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       const candidate = createCandidateDirectory(loreDirectory);
       let sealed = false;
       try {
-        throwIfAborted(options.signal);
+        await checkpoint(options.signal);
         progress.start('indexing', 'Indexing');
         const db = openWritable(join(candidate.path, 'context.sqlite'));
         try {
@@ -334,7 +335,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           db.close();
         }
 
-        throwIfAborted(options.signal);
+        await checkpoint(options.signal);
         progress.start('sealing', 'Sealing');
         sealCandidateDirectory(candidate, join(loreDirectory, 'builds', buildId));
         sealed = true;
@@ -407,11 +408,4 @@ function countsOf(
     tables: 0,
     tableRows: 0,
   };
-}
-
-function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted !== true) return;
-  throw new LoreError('LORE_E_CANCELLED', 'The build was cancelled.', {
-    remediation: 'Nothing was changed. The previously active build is still serving.',
-  });
 }

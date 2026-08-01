@@ -1,3 +1,4 @@
+import { CANCELLATION_SCENARIOS } from './scenarios/cancellation.js';
 import { DETERMINISM_SCENARIOS } from './scenarios/determinism.js';
 import { IMMUTABILITY_SCENARIOS } from './scenarios/immutability.js';
 import { INIT_SCENARIOS } from './scenarios/init.js';
@@ -46,6 +47,12 @@ export const AREAS: readonly Area[] = [
     title: 'Immutability and safety',
     summary: 'Attempts to disturb the active build, and the portable archive.',
     scenarios: IMMUTABILITY_SCENARIOS,
+  },
+  {
+    id: 'cancellation',
+    title: 'Cancelling a build',
+    summary: 'What an interrupt must not do to a project.',
+    scenarios: CANCELLATION_SCENARIOS,
   },
   {
     id: 'output',

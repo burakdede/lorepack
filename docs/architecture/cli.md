@@ -56,10 +56,34 @@ One interrupt asks the running command to stop at its next checkpoint; a second 
 immediately, because at that point the user is no longer asking.
 
 A command that ignores the signal is simply not cancellable, which is correct for short
-ones. `lore build` checks it between stages, and the guarantee it makes is not that
-temporary files are tidy: it is that **`builds/` and the active pointer are unchanged**.
-A leftover candidate directory under `.lore/tmp/` is untidy. A mutated `builds/` would be
-a broken promise, so that is what the tests assert.
+ones. `lore build` checks it between stages and once per artifact, and the guarantee it
+makes is not that temporary files are tidy: it is that **`builds/` and the active pointer
+are unchanged**. A leftover candidate directory under `.lore/tmp/` is untidy. A mutated
+`builds/` would be a broken promise, so that is what the scenarios assert.
+
+### Checking the flag is not enough
+
+Every checkpoint goes through `checkpoint()` in `services/cancellation.ts`, which **yields
+to the event loop before reading the signal**. That yield is not a precaution; without it
+cancellation does not work at all.
+
+Node delivers signals from the event loop, and `await` only suspends until a promise
+settles. Every promise awaited in the parse loop is settled already, because
+`FileObjectStore` is asynchronous in signature and synchronous inside. The stage therefore
+ran as one unbroken chain of microtasks: the loop was never reached, the SIGINT handler
+never ran, and `signal.aborted` was never true however often it was read. Ctrl-C during a
+long build did nothing, and the build activated (#146).
+
+Two consequences worth keeping in mind:
+
+- **A test that aborts its own controller proves nothing about cancellation.** It proves
+  the checkpoints read the flag, which was never the doubtful part. The regression tests
+  assert the yield directly, and the acceptance scenarios send a real signal to a real
+  process.
+- **Cancellation is granular to the checkpoints, not to the instant.** A signal arriving
+  inside one long synchronous call, such as writing the catalog, is honoured at the next
+  checkpoint. That is enough for the guarantee, because there is a checkpoint before every
+  write that could be observed.
 
 ## Global options
 

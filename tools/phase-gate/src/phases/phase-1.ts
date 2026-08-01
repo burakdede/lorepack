@@ -134,6 +134,19 @@ export const PHASE_1: PhaseDefinition = {
       args: ['vitest', 'run', '--project', 'cli', '-t', 'lore build'],
       timeoutMs: 300_000,
     },
+    {
+      // Separated from `build-orchestration` because it passed for a year while the promise
+      // was false. Those tests abort a controller they own, which proves the checkpoints
+      // read the flag and never proves a signal can reach them (#146). This criterion runs
+      // the scenarios that send a real signal to a real process.
+      id: 'cancellation',
+      kind: 'command',
+      promise:
+        'A real interrupt stops a build and leaves builds/ and the active pointer unchanged.',
+      command: 'pnpm',
+      args: ['acceptance', '-t', 'cancellation/'],
+      timeoutMs: 600_000,
+    },
 
     // Capability: the lockfile.
     {
