@@ -1,6 +1,6 @@
 name: Bug report
 description: Something behaves incorrectly
-labels: ["type:feature"]
+labels: ["bug"]
 body:
   - type: markdown
     attributes:
@@ -36,7 +36,10 @@ body:
     id: doctor
     attributes:
       label: lore doctor --json
-      description: Paste the output. It reports SQLite/FTS5 status, which explains most build failures.
+      description: >-
+        Paste the output if you have it. `lore doctor` arrives in Phase 3 (#56); until then
+        leave this empty and `node --version` above is enough. It reports SQLite/FTS5
+        status, which explains most build failures.
       render: json
   - type: textarea
     id: build

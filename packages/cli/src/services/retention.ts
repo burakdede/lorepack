@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openReadOnly } from '@lorepack/backend-local';
-import type { BuildId, BuildSummary } from '@lorepack/core';
+import { type BuildId, type BuildSummary, count } from '@lorepack/core';
 import { buildDirectory } from './builds.js';
 
 /**
@@ -80,11 +80,14 @@ export function applyRetention(loreDirectory: string, plan: RetentionPlan): void
 
 export function renderRetentionPlan(plan: RetentionPlan): string {
   if (plan.remove.length === 0) {
-    return `Nothing to remove. ${plan.keep.length} builds retained.`;
+    return `Nothing to remove. ${count(plan.keep.length, 'build')} retained.`;
   }
-  const lines = [`Removing ${plan.remove.length} builds, keeping ${plan.keep.length}:`, ''];
+  const lines = [
+    `Removing ${count(plan.remove.length, 'build')}, keeping ${plan.keep.length}:`,
+    '',
+  ];
   for (const id of plan.remove) lines.push(`  - ${id}`);
-  lines.push('', `  ${plan.objectsToRemove.length} unreferenced objects`);
+  lines.push('', `  ${count(plan.objectsToRemove.length, 'unreferenced object')}`);
   lines.push(`  about ${Math.round(plan.bytesFreed / 1024)} KB freed`);
   return lines.join('\n');
 }

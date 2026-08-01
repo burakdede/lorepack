@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import { LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
+import { count, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { openStateStore } from '../services/builds.js';
 import {
@@ -38,8 +38,12 @@ export function pruneCommand(): CommandDefinition {
         // Deletion is never the default. A plan that prints and stops is recoverable; one
         // that deletes because it was run is not.
         if (flags.yes !== true) {
+          // Only offer `--yes` when it would do something. Telling a user to re-run a
+          // command that has nothing to remove is an instruction to no purpose.
+          const next =
+            plan.remove.length === 0 ? '' : '\n\nNothing was removed. Re-run with --yes to apply.';
           return {
-            human: `${renderRetentionPlan(plan)}\n\nNothing was removed. Re-run with --yes to apply.`,
+            human: `${renderRetentionPlan(plan)}${next}`,
             json: { ...plan, applied: false },
           };
         }
@@ -50,8 +54,13 @@ export function pruneCommand(): CommandDefinition {
           applyRetention(loreDirectory, plan);
         });
 
+        // "Removed." after "Nothing to remove." claimed a deletion that never happened.
+        const outcome =
+          plan.remove.length === 0
+            ? ''
+            : `\n\nRemoved ${count(plan.remove.length, 'build')} and ${count(plan.objectsToRemove.length, 'object')}.`;
         return {
-          human: `${renderRetentionPlan(plan)}\n\nRemoved.`,
+          human: `${renderRetentionPlan(plan)}${outcome}`,
           json: { ...plan, applied: true },
         };
       } finally {

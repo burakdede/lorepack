@@ -321,7 +321,10 @@ describe('lore build command', () => {
       const result = await lore(['build']);
       expect(result.code).toBe(0);
       expect(result.stdout).toMatch(/Build lore_[0-9a-f]{64}/);
-      expect(result.stdout).toContain('1 artifacts');
+      expect(result.stdout).toContain('1 artifact');
+      expect(result.stdout, 'counted nouns must agree in number (#150)').not.toContain(
+        '1 artifacts',
+      );
       expect(result.stdout).toContain('Activated');
     });
   });

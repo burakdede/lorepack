@@ -1,4 +1,11 @@
-import type { BuildId, LoadedConfig, Lockfile, Plan, ProgressBus } from '@lorepack/core';
+import {
+  type BuildId,
+  count,
+  type LoadedConfig,
+  type Lockfile,
+  type Plan,
+  type ProgressBus,
+} from '@lorepack/core';
 import { type DiscoveryResult, discover } from '../discover/discover.js';
 import {
   compareFingerprints,
@@ -155,10 +162,15 @@ export function renderPlan(plan: Plan): string {
     }
   }
 
+  // Phrased as one total split two ways, because the build's parsing stage visits every
+  // artifact and reports `3/3`. Saying "parse 1" here and showing "3/3" there described the
+  // same work with two different numbers, and left the reader to guess which was true.
+  const visited = plan.expectedWork.parseArtifacts + plan.expectedWork.reuseArtifacts;
   lines.push('', 'Expected work');
-  lines.push(`  parse ${plan.expectedWork.parseArtifacts} artifacts`);
-  lines.push(`  reuse ${plan.expectedWork.reuseArtifacts} artifacts`);
-  lines.push(`  rebuild about ${plan.expectedWork.rebuildChunks} chunks`);
+  lines.push(
+    `  ${count(visited, 'artifact')} to process: ${plan.expectedWork.parseArtifacts} parsed, ${plan.expectedWork.reuseArtifacts} reused from cache`,
+  );
+  lines.push(`  about ${count(plan.expectedWork.rebuildChunks, 'chunk')} rebuilt`);
 
   if (plan.warnings.length > 0) {
     lines.push('', `Warnings (${plan.warnings.length})`);

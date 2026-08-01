@@ -19,6 +19,7 @@ export {
   secretsFromEnv,
   stripAbsolutePaths,
 } from './errors/index.js';
+export { count, noun } from './format/count.js';
 export * from './fs/index.js';
 export {
   assertBuildId,
