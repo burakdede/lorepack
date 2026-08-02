@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-42 automated, 3 checked by hand.
+43 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -695,6 +695,21 @@ Proves: Section 13.3 and 10.8: a bundle is bounded, cited, and carries its build
 Starting point: 3 source files, already set up with `lore init` and `lore build`.
 
 1. Ask for context the way an agent does, over the protocol
+
+### `mcp/export-is-one-file-a-person-can-paste`
+
+**`lore export` writes a bounded, cited file for a chat product**
+
+Proves: Section 14.6: the compatibility bridge for clients that cannot speak MCP.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Export to stdout, which is what a redirect captures
+   Expect: it succeeds, stdout mentions "# Context for: how do I roll back a release", "Profile **chat**", "## Citations", "## What was left out", "no claim about which document is correct".
+2. And as the serialized bundle, for a program
+   Expect: it succeeds, `citations[0].relativePath` is present.
+3. An export without a task says so
+   Expect: it exits 1, the error is `LORE_E_INVALID_ARGUMENT`, stderr mentions "--task".
 
 ## The product as installed
 

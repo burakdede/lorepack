@@ -64,7 +64,13 @@ beforeEach(() => {
 afterEach(async () => {
   await client?.close();
   client = null;
-  rmSync(project, { recursive: true, force: true, maxRetries: 3 });
+  try {
+    // Windows holds the build database open a moment after the child exits, and a leaked
+    // temporary directory must never fail a run that already passed its assertions.
+    rmSync(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // Nothing to do: the operating system will clean its own temp directory.
+  }
 });
 
 describe('a client launching the server', () => {

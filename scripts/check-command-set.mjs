@@ -36,6 +36,8 @@ const EXPECTED = [
   'inspect',
   'pack',
   'mcp',
+  'serve',
+  'export',
 ];
 
 if (!existsSync(binary)) {

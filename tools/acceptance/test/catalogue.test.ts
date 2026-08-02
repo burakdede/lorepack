@@ -30,6 +30,7 @@ const PHASE_1_COMMANDS = [
   'rollback',
   'prune',
   'mcp',
+  'export',
 ];
 
 function commandsUsedBy(step: Step): string[] {

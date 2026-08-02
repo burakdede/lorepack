@@ -12,6 +12,7 @@ import { createRuntime } from '@lorepack/runtime';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
+import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 import { readFreshness, readStatus } from '../services/status.js';
 
 /**
@@ -36,6 +37,11 @@ export function mcpCommand(): CommandDefinition {
       { flags: '--allow-stale', description: 'serve the existing build even when sources changed' },
       { flags: '--active-only', description: 'skip source checks entirely, for pinned or CI use' },
       { flags: '--project <path>', description: 'the project to serve' },
+      {
+        flags: '--revalidate-interval <ms>',
+        description:
+          'how often to recheck the sources while serving (default 5000, 0 every request, off never)',
+      },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
@@ -44,9 +50,18 @@ export function mcpCommand(): CommandDefinition {
       const mode = resolveMode(flags);
       const sourceState = await reconcile({ config, mode, warn: context.warn });
 
+      // Freshness while serving, not only at startup. An open connection is not a session
+      // (2026-07-28), so a process can run for an hour and would otherwise report the state
+      // it saw in its first second for all of it (#112).
+      const revalidator = createRevalidator({
+        config,
+        intervalMs: parseInterval(flags.revalidateInterval),
+        frozen: mode !== 'ensure-current',
+      });
       const backend = createLocalRuntimeBackend({
         projectRoot: config.projectRoot,
-        freshness: async () => sourceState,
+        freshness:
+          mode === 'ensure-current' ? () => revalidator.freshness() : async () => sourceState,
       });
 
       if ((await backend.provider.current()) === null) {
@@ -86,6 +101,24 @@ export function mcpCommand(): CommandDefinition {
 }
 
 type Mode = 'ensure-current' | 'allow-stale' | 'active-only';
+
+/**
+ * How often to recheck while serving. `off` is the startup-only behaviour, kept because a
+ * pinned deployment may want it, and named rather than implied.
+ */
+function parseInterval(raw: unknown): number {
+  if (raw === undefined) return DEFAULT_REVALIDATE_INTERVAL_MS;
+  if (raw === 'off') return Number.POSITIVE_INFINITY;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      `--revalidate-interval must be milliseconds, 0, or off, got ${raw}.`,
+      { remediation: 'Pass a number of milliseconds, 0 to check every request, or off.' },
+    );
+  }
+  return value;
+}
 
 function resolveMode(flags: Record<string, unknown>): Mode {
   const stale = flags.allowStale === true;

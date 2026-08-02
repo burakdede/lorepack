@@ -54,4 +54,48 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'mcp/export-is-one-file-a-person-can-paste',
+    title: '`lore export` writes a bounded, cited file for a chat product',
+    proves: 'Section 14.6: the compatibility bridge for clients that cannot speak MCP.',
+    mode: 'auto',
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['export', '--task', 'how do I roll back a release'],
+        describe: 'Export to stdout, which is what a redirect captures',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            contains: [
+              '# Context for: how do I roll back a release',
+              'Profile **chat**',
+              '## Citations',
+              '## What was left out',
+              'no claim about which document is correct',
+            ],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rollback', '--format', 'json'],
+        json: true,
+        describe: 'And as the serialized bundle, for a program',
+        expect: { exitCode: 0, json: [{ path: 'citations[0].relativePath', exists: true }] },
+      },
+      {
+        action: 'run',
+        args: ['export'],
+        describe: 'An export without a task says so',
+        expect: {
+          exitCode: 1,
+          errorCode: 'LORE_E_INVALID_ARGUMENT',
+          stderr: { contains: ['--task'] },
+        },
+      },
+    ],
+  },
 ];

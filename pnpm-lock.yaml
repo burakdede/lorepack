@@ -51,6 +51,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@hono/node-server':
+        specifier: 2.0.12
+        version: 2.0.12(hono@4.12.33)
       '@lorepack/backend-local':
         specifier: workspace:*
         version: link:../backend-local
@@ -81,6 +84,9 @@ importers:
       commander:
         specifier: 15.0.0
         version: 15.0.0
+      hono:
+        specifier: 4.12.33
+        version: 4.12.33
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*
@@ -228,7 +234,11 @@ importers:
 
   tools/phase-gate: {}
 
-  tools/test-support: {}
+  tools/test-support:
+    devDependencies:
+      '@lorepack/core':
+        specifier: workspace:*
+        version: link:../../packages/core
 
 packages:
 
@@ -360,6 +370,12 @@ packages:
   '@hono/node-server@1.19.17':
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
     engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: ^4
+
+  '@hono/node-server@2.0.12':
+    resolution: {integrity: sha512-eWpQYr67tqJLeaSUl0Q+TquuYfUdTibpOJlUMV2FfUP7+KqCC5TufnwnlXL6mobZBJbGAYRd7ZvEBDCbLInjhg==}
+    engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
 
@@ -1725,6 +1741,10 @@ snapshots:
     optional: true
 
   '@hono/node-server@1.19.17(hono@4.12.33)':
+    dependencies:
+      hono: 4.12.33
+
+  '@hono/node-server@2.0.12(hono@4.12.33)':
     dependencies:
       hono: 4.12.33
 

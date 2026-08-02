@@ -13,5 +13,8 @@
   },
   "scripts": {
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "@lorepack/core": "workspace:*"
   }
 }
