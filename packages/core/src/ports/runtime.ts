@@ -41,6 +41,10 @@ export interface CatalogChunk {
   /** The user-declared ranking hint, never a claim about correctness (invariant 6). */
   readonly authority: number;
   readonly estimatedTokens: number;
+  /** The chunk body. Ranking needs it for near-duplicate detection, assembly for packing. */
+  readonly text: string;
+  /** The artifact's title, where the format has one. Ranking boosts an exact match on it. */
+  readonly title: string | null;
 }
 
 export interface CatalogSearchHit extends CatalogChunk {
@@ -67,6 +71,13 @@ export interface CatalogStore {
   countChunks(): Promise<number>;
   countWarnings(): Promise<number>;
   search(query: string, criteria: CatalogSearchCriteria): Promise<readonly CatalogSearchHit[]>;
+  /**
+   * Artifacts this build records as superseded by some other artifact.
+   *
+   * A set rather than the pairs, because ranking only asks "is this one superseded". The
+   * pairs matter to `lore diff` and to the Phase 5 rule resolver, which read them directly.
+   */
+  supersededArtifacts(): Promise<ReadonlySet<string>>;
 }
 
 /**

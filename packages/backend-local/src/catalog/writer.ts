@@ -1,5 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Artifact, LoreNode, SourceLocator } from '@lorepack/core';
+import {
+  type Artifact,
+  bm25ColumnWeights,
+  type LoreNode,
+  type SourceLocator,
+} from '@lorepack/core';
 
 /**
  * Writes a sealed build's catalog.
@@ -206,6 +211,7 @@ export interface CatalogSearchHit {
   readonly status: string;
   readonly authority: number;
   readonly estimatedTokens: number;
+  readonly title: string | null;
   readonly bm25: number;
 }
 
@@ -296,8 +302,9 @@ export function searchCatalog(
               a.status        AS status,
               a.authority     AS authority,
               c.estimated_tokens AS estimatedTokens,
+              a.title         AS title,
               snippet(chunks_fts, 7, '[', ']', ' ... ', 20) AS excerpt,
-              bm25(chunks_fts, 0.0, 0.0, 0.0, 0.0, 4.0, 6.0, 3.0, 1.0) AS bm25
+              bm25(chunks_fts, ${bm25ColumnWeights().join(', ')}) AS bm25
          FROM chunks_fts
          JOIN chunks    c ON c.id = chunks_fts.chunk_id
          JOIN artifacts a ON a.id = c.artifact_id
@@ -320,6 +327,7 @@ export function searchCatalog(
     status: String(row.status),
     authority: Number(row.authority),
     estimatedTokens: Number(row.estimatedTokens),
+    title: row.title === null ? null : String(row.title),
     bm25: Number(row.bm25),
   }));
 }

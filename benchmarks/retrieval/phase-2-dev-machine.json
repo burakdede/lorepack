@@ -1,0 +1,32 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. The reference machine and the gates are backlog issue #101.",
+  "rankingWeightsVersion": 1,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 3900X 12-Core Processor",
+    "cores": 24,
+    "memoryGb": 31,
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "documents": 400,
+    "sectionsEach": 8,
+    "artifacts": 400,
+    "chunks": 3200,
+    "topics": 15
+  },
+  "measurements": {
+    "coldSearchMs": 11.57,
+    "warmSearchP50Ms": 7.67,
+    "warmSearchP95Ms": 8.64,
+    "warmSearchP99Ms": 8.82,
+    "debugSearchP95Ms": 9.13,
+    "iterations": 60,
+    "queries": 5
+  },
+  "referenceGates": {
+    "warmSearchP95Ms": 250
+  }
+}

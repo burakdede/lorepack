@@ -190,6 +190,7 @@ export const buildDescriptionSchema = z
   .strict();
 
 export type SearchRequest = z.infer<typeof searchRequestSchema>;
+export type SearchHit = z.infer<typeof searchHitSchema>;
 export type SearchResult = z.infer<typeof searchResultSchema>;
 export type SourceState = z.infer<typeof sourceStateSchema>;
 export type TaskContextRequest = z.infer<typeof taskContextRequestSchema>;

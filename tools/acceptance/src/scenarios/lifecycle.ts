@@ -466,4 +466,61 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'lifecycle/search-explains-its-ranking',
+    title: '`lore search --debug` says why each result ranked where it did',
+    proves: 'Section 13.2 and 4.9: a page is explainable, and a score is never presented as truth.',
+    mode: 'auto',
+    regression: 42,
+    fixture: {
+      files: {
+        'guides/rollback.md':
+          '# Rollback\n\nActivate the previous build. Rollback never recompiles.\n',
+        'guides/deployment.md':
+          '# Deployment\n\n## Rollback\n\nWhen a release misbehaves, roll back to the previous build.\n',
+        'notes/standup.txt': 'Standup: we discussed the rollback procedure.\n',
+      },
+      setup: ['init', 'build'],
+    },
+    steps: [
+      {
+        action: 'run',
+        args: ['search', 'rollback'],
+        describe: 'The document named for the query comes first',
+        expect: { exitCode: 0, stdout: { matches: ['1\\. guides/rollback\\.md'] } },
+      },
+      {
+        action: 'run',
+        args: ['search', 'rollback', '--debug'],
+        describe: 'And --debug names every component, with the caveat a reader needs',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            contains: ['why:', 'lexical', 'total', 'not a confidence'],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['search', 'rollback', '--debug'],
+        json: true,
+        describe: 'The same components are in the structured result',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'hits[0].scoreComponents.total', exists: true },
+            { path: 'hits[0].locator.relativePath', equals: 'guides/rollback.md' },
+          ],
+        },
+      },
+      {
+        action: 'run',
+        args: ['search', 'rollback'],
+        json: true,
+        describe: 'Without --debug the components are absent, so the default result stays small',
+        expect: { exitCode: 0, json: [{ path: 'hits[0].scoreComponents', exists: false }] },
+      },
+    ],
+  },
 ];

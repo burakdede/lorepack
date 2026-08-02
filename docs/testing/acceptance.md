@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-39 automated, 3 checked by hand.
+40 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -303,6 +303,25 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `from` is the first build, `to` is the second build, `identical` is false.
 6. And says nothing untrue about how many builds there are
    Expect: it succeeds, stdout never mentions "only one build".
+
+### `lifecycle/search-explains-its-ranking`
+
+**`lore search --debug` says why each result ranked where it did**
+
+Proves: Section 13.2 and 4.9: a page is explainable, and a score is never presented as truth.
+
+Locks down the defect in #42.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. The document named for the query comes first
+   Expect: it succeeds, stdout matches `/1\. guides/rollback\.md/`.
+2. And --debug names every component, with the caveat a reader needs
+   Expect: it succeeds, stdout mentions "why:", "lexical", "total", "not a confidence".
+3. The same components are in the structured result
+   Expect: it succeeds, `hits[0].scoreComponents.total` is present, `hits[0].locator.relativePath` is "guides/rollback.md".
+4. Without --debug the components are absent, so the default result stays small
+   Expect: it succeeds, `hits[0].scoreComponents` is absent.
 
 ## Determinism
 

@@ -3,6 +3,7 @@ import {
   type BuildHandle,
   type BuildScope,
   type ContextBundle,
+  candidateCount,
   LoreError,
   type LoreRuntime,
   type RuntimeDeps,
@@ -16,6 +17,7 @@ import {
   type TableQueryResult,
   type TaskContextRequest,
 } from '@lorepack/core';
+import { rankCandidates } from './ranking/rank.js';
 
 /**
  * The runtime: one implementation of architecture 13.1 over ports, for every consumer.
@@ -75,26 +77,38 @@ class PortedRuntime implements LoreRuntime {
 
   async search(request: SearchRequest): Promise<SearchResult> {
     return this.#withBuild(async ({ scope, envelope }) => {
-      const hits = await scope.catalog.search(request.query, {
-        limit: request.limit,
+      // Ranking can only reorder what it was given, so the index is asked for more than
+      // the page: a page of ten taken straight from BM25 would make every boost decorative.
+      const candidates = await scope.catalog.search(request.query, {
+        limit: candidateCount(request.limit),
         pathGlob: request.pathGlob,
         extension: request.fileType,
         statuses: request.status,
       });
 
+      const ranked = rankCandidates(candidates, {
+        query: request.query,
+        limit: request.limit,
+        includeArchived: request.includeArchived,
+        superseded: await scope.catalog.supersededArtifacts(),
+      });
+
       return {
         ...envelope,
         totalIndexedChunks: await scope.catalog.countChunks(),
-        hits: hits.map((hit) => ({
+        hits: ranked.map(({ hit, score, components, labels }) => ({
           chunkId: hit.chunkId,
           artifactId: hit.artifactId,
-          // Raw BM25, reported as produced. A comparable relevance figure is #42's job,
-          // and manufacturing one here would be inventing truth (invariant 6).
-          score: hit.bm25,
+          /**
+           * The composed relevance score, higher being better. It is a heuristic about
+           * how well this chunk matches the words asked for, and it is not a confidence
+           * and not evidence the content is correct (architecture 13.2).
+           */
+          score,
           excerpt: hit.excerpt,
           headingPath: [...hit.headingPath],
           status: hit.status,
-          labels: labelsFor(hit.status),
+          labels,
           // Provenance is mandatory (architecture 10.8). The locator is built from the
           // same row as the hit, so a result cannot exist without one.
           locator: {
@@ -104,6 +118,7 @@ class PortedRuntime implements LoreRuntime {
             ...(hit.lineStart === null || hit.lineStart <= 0 ? {} : { lineStart: hit.lineStart }),
             ...(hit.lineEnd === null || hit.lineEnd <= 0 ? {} : { lineEnd: hit.lineEnd }),
           },
+          ...(request.debug ? { scoreComponents: components } : {}),
         })),
       };
     });
@@ -189,10 +204,6 @@ class PortedRuntime implements LoreRuntime {
       return 'unknown';
     }
   }
-}
-
-function labelsFor(status: string): SearchResult['hits'][number]['labels'] {
-  return status === 'draft' || status === 'archived' || status === 'superseded' ? [status] : [];
 }
 
 /**

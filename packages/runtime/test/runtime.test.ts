@@ -60,6 +60,8 @@ function hitIn(buildId: BuildId): CatalogSearchHit {
     status: 'active',
     authority: 50,
     estimatedTokens: 12,
+    text: 'a match, and some words around it to give the chunk a body',
+    title: 'A guide',
     bm25: -0.5,
     excerpt: 'a [match]',
   };
@@ -75,6 +77,9 @@ class FakeCatalog implements CatalogStore {
   }
   async countWarnings(): Promise<number> {
     return 0;
+  }
+  async supersededArtifacts(): Promise<ReadonlySet<string>> {
+    return new Set();
   }
   async search(
     _query: string,

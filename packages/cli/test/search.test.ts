@@ -190,10 +190,25 @@ describe('what a search result shows a reader', () => {
     });
   });
 
-  it('still shows the raw lexical score under --verbose, for debugging ranking', async () => {
+  it('shows the relevance score under --verbose, on a scale a reader can compare', async () => {
+    // #42 replaced the raw BM25 with a bounded relevance score. The raw value is still
+    // reachable, as `lexicalRaw` in the debug components, for anyone comparing engines.
     await builtProject(async (_root, lore) => {
       const result = await lore(['--verbose', 'search', 'rollback']);
-      expect(result.stdout).toMatch(/lexical -?\d\.\d\de[+-]\d/);
+      expect(result.stdout).toMatch(/relevance \d\.\d\d/);
+    });
+  });
+
+  it('explains a page only when asked, and says what the number is not', async () => {
+    await builtProject(async (_root, lore) => {
+      const plain = await lore(['search', 'rollback']);
+      const debug = await lore(['search', 'rollback', '--debug']);
+
+      expect(plain.stdout).not.toContain('why:');
+      expect(debug.stdout).toContain('why:');
+      expect(debug.stdout).toContain('lexical');
+      // Architecture 13.2: never imply a lexical score is a confidence or a truth score.
+      expect(debug.stdout).toContain('not a confidence');
     });
   });
 

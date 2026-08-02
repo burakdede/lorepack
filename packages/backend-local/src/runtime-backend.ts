@@ -60,6 +60,13 @@ class LocalCatalogStore implements CatalogStore {
     return countRows(this.#db, 'build_warnings');
   }
 
+  async supersededArtifacts(): Promise<ReadonlySet<string>> {
+    const rows = this.#db
+      .prepare('SELECT superseded_id AS supersededId FROM supersessions')
+      .all() as Array<{ supersededId: string }>;
+    return new Set(rows.map((row) => row.supersededId));
+  }
+
   async search(
     query: string,
     criteria: CatalogSearchCriteria,

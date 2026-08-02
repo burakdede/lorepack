@@ -89,6 +89,12 @@ export {
   shouldUseColor,
 } from './progress/index.js';
 export {
+  bm25ColumnWeights,
+  candidateCount,
+  RANKING_WEIGHTS,
+  RANKING_WEIGHTS_VERSION,
+} from './ranking/weights.js';
+export {
   assertSupportedNode,
   checkNodeVersion,
   type EngineCheckResult,
