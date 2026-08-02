@@ -131,6 +131,8 @@ export function describeStep(step: Step): string {
         : step.bytes === undefined
           ? `Write \`${step.path}\`.`
           : `Write \`${step.path}\` as raw bytes, which is the only way to make a file that is not text.`;
+    case 'protocol':
+      return `Start \`lore ${step.args.join(' ')}\` and call \`${step.method}\` over stdio.`;
     case 'empty-sources':
       return 'Empty every source file, leaving the paths in place.';
     case 'symlink':

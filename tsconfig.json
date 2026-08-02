@@ -36,6 +36,9 @@
     },
     {
       "path": "tools/acceptance"
+    },
+    {
+      "path": "tools/contract"
     }
   ]
 }

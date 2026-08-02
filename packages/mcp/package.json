@@ -24,11 +24,16 @@
   },
   "dependencies": {
     "@lorepack/core": "workspace:*",
-    "@lorepack/runtime": "workspace:*"
+    "@lorepack/runtime": "workspace:*",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/mcp"
+  },
+  "devDependencies": {
+    "zod": "4.4.3"
   }
 }

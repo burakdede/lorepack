@@ -35,6 +35,7 @@ const EXPECTED = [
   'prune',
   'inspect',
   'pack',
+  'mcp',
 ];
 
 if (!existsSync(binary)) {

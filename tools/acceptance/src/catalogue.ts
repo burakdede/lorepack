@@ -4,6 +4,7 @@ import { IMMUTABILITY_SCENARIOS } from './scenarios/immutability.js';
 import { INIT_SCENARIOS } from './scenarios/init.js';
 import { LIFECYCLE_SCENARIOS } from './scenarios/lifecycle.js';
 import { MANUAL_SCENARIOS } from './scenarios/manual.js';
+import { MCP_SCENARIOS } from './scenarios/mcp.js';
 import { OUTPUT_SCENARIOS } from './scenarios/output.js';
 import { PACKAGING_SCENARIOS } from './scenarios/packaging.js';
 import { SCALE_SCENARIOS } from './scenarios/scale.js';
@@ -66,6 +67,12 @@ export const AREAS: readonly Area[] = [
     title: 'Scale and responsiveness',
     summary: 'Behaviour when there is enough work to watch.',
     scenarios: SCALE_SCENARIOS,
+  },
+  {
+    id: 'mcp',
+    title: 'What an AI client sees',
+    summary: 'The surface a coding agent connects to, over the protocol rather than a terminal.',
+    scenarios: MCP_SCENARIOS,
   },
   {
     id: 'packaging',

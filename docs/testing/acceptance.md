@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-40 automated, 3 checked by hand.
+42 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -671,6 +671,30 @@ Starting point: a generated corpus of 500 documents with 60 sections each, alrea
 
 1. Start a build, then start a second one while the first is still parsing
    Expect: it succeeds, stdout mentions "Waiting for the project lock", "No changes".
+
+## What an AI client sees
+
+The surface a coding agent connects to, over the protocol rather than a terminal.
+
+### `mcp/a-client-connects-and-lists-tools`
+
+**An AI client launches `lore mcp` and finds the tools**
+
+Proves: Section 14.1 and 14.3: the tool surface is served, and stdout carries protocol only.
+
+Starting point: 3 source files, already set up with `lore init`.
+
+1. Launch the server against a project with no build yet, and ask for the tool list
+
+### `mcp/a-task-comes-back-cited`
+
+**A task asked over MCP comes back with citations**
+
+Proves: Section 13.3 and 10.8: a bundle is bounded, cited, and carries its build id.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Ask for context the way an agent does, over the protocol
 
 ## The product as installed
 

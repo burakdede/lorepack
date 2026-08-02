@@ -4,6 +4,7 @@ import { buildCommand } from './build.js';
 import { diffCommand } from './diff.js';
 import { initCommand } from './init.js';
 import { inspectCommand } from './inspect.js';
+import { mcpCommand } from './mcp.js';
 import { packCommand } from './pack.js';
 import { planCommand } from './plan.js';
 import { pruneCommand } from './prune.js';
@@ -29,5 +30,6 @@ export function registerCommands(): CommandDefinition[] {
     activateCommand(),
     rollbackCommand(),
     pruneCommand(),
+    mcpCommand(),
   ];
 }

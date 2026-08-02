@@ -1,0 +1,20 @@
+{
+  "name": "@lorepack/contract-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cross-package contract tests. Not published, and imported by nothing.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@lorepack/core": "workspace:*",
+    "@lorepack/runtime": "workspace:*",
+    "@lorepack/sdk": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@lorepack/mcp": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0"
+  }
+}

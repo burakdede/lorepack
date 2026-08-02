@@ -31,7 +31,8 @@
     "@lorepack/runtime": "workspace:*",
     "commander": "15.0.0",
     "@lorepack/parsers": "workspace:*",
-    "@lorepack/backend-local": "workspace:*"
+    "@lorepack/backend-local": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0"
   },
   "repository": {
     "type": "git",
