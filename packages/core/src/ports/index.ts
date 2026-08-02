@@ -1,4 +1,17 @@
 export type {
+  BuildScope,
+  CatalogArtifact,
+  CatalogChunk,
+  CatalogNode,
+  CatalogSearchCriteria,
+  CatalogSearchHit,
+  CatalogStore,
+  FreshnessProvider,
+  LoreRuntime,
+  RuntimeDeps,
+  TableStore,
+} from './runtime.js';
+export type {
   ActiveBuildProvider,
   BuildHandle,
   BuildStore,

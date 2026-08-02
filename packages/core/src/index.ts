@@ -89,6 +89,12 @@ export {
   shouldUseColor,
 } from './progress/index.js';
 export {
+  bm25ColumnWeights,
+  candidateCount,
+  RANKING_WEIGHTS,
+  RANKING_WEIGHTS_VERSION,
+} from './ranking/weights.js';
+export {
   assertSupportedNode,
   checkNodeVersion,
   type EngineCheckResult,
@@ -97,4 +103,5 @@ export {
   parseNodeVersion,
   SUPPORTED_NODE_RANGE,
 } from './runtime/engine.js';
+export { RUNTIME_LIMITS } from './runtime/limits.js';
 export * from './schemas/index.js';

@@ -34,6 +34,7 @@
     "test:unit": "vitest run",
     "check:sources-tracked": "node scripts/check-sources-tracked.mjs",
     "bench": "pnpm build && node scripts/bench.mjs",
+    "bench:retrieval": "pnpm build && node scripts/bench-retrieval.mjs",
     "check:command-set": "node scripts/check-command-set.mjs"
   },
   "devDependencies": {

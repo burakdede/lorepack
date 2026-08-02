@@ -1,28 +1,20 @@
-import { join } from 'node:path';
-import {
-  type CatalogSearchOptions,
-  countRows,
-  LocalActiveBuildProvider,
-  restrictToTables,
-  SEARCH_TABLES,
-  searchCatalog,
-} from '@lorepack/backend-local';
+import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import {
   count,
-  LORE_DIRECTORY,
   type LoadedConfig,
   LoreError,
   type SearchResult,
   type SourceState,
 } from '@lorepack/core';
-import { openStateStore } from './builds.js';
+import { createRuntime } from '@lorepack/runtime';
 
 /**
  * `lore search` over the active build.
  *
- * The result shape is the committed `search-result` contract, not a CLI-shaped invention.
- * Phase 2 replaces the query internals with `LoreRuntime.search`, and the point of using
- * the published schema now is that the swap changes nothing a caller can see.
+ * The query itself lives in `LoreRuntime.search`, which MCP, REST and Studio also call.
+ * This file is the CLI's adapter to it: build the local ports, ask, render. Keeping a
+ * second search path here would mean two ranking implementations and two response shapes
+ * to hold in step, and the shape is a published contract.
  */
 
 export interface SearchOptions {
@@ -32,75 +24,37 @@ export interface SearchOptions {
   readonly limit?: number;
   readonly pathGlob?: string;
   readonly type?: string;
+  readonly includeArchived?: boolean;
+  /** Returns the score components, so a reader can see why a page is ordered as it is. */
+  readonly debug?: boolean;
 }
 
 export async function runSearch(options: SearchOptions): Promise<SearchResult> {
-  const loreDirectory = join(options.config.projectRoot, LORE_DIRECTORY);
-  const state = openStateStore(loreDirectory);
-  const provider = new LocalActiveBuildProvider(state, join(loreDirectory, 'builds'));
+  const backend = createLocalRuntimeBackend({
+    projectRoot: options.config.projectRoot,
+    // The CLI has already established freshness for its own header, so the runtime is
+    // handed the answer rather than made to work it out again.
+    freshness: async () => options.sourceState,
+  });
 
   try {
-    if (state.current() === null) {
+    if ((await backend.provider.current()) === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build to search.', {
         remediation: 'Run `lore build` first.',
       });
     }
 
-    // A handle, not a path lookup: the generation is read at acquisition and held for the
-    // whole query, so an activation mid-search cannot mix two builds into one answer
-    // (architecture section 15.2).
-    const handle = await provider.acquire();
-    const db = provider.database(handle);
-    try {
-      // Defence in depth: the authorizer refuses everything outside the search tables, so
-      // a future bug in query construction cannot read something it should not. This is
-      // the first code that turns user input into SQL, which is the right place to start.
-      restrictToTables(db, SEARCH_TABLES);
-
-      const criteria: CatalogSearchOptions = {
-        limit: options.limit ?? 10,
-        ...(options.pathGlob === undefined ? {} : { pathGlob: options.pathGlob }),
-        ...(options.type === undefined ? {} : { extension: options.type }),
-      };
-      const hits = searchCatalog(db, options.query, criteria);
-
-      return {
-        buildId: handle.buildId,
-        sourceState: options.sourceState,
-        totalIndexedChunks: countRows(db, 'chunks'),
-        hits: hits.map((hit) => ({
-          chunkId: hit.chunkId,
-          artifactId: hit.artifactId,
-          // BM25 is negative and lower is better. Reported as produced and labelled a raw
-          // lexical score: the comparable number arrives with the Phase 2 ranking
-          // pipeline, and inventing one now would be a figure nobody could act on.
-          score: hit.bm25,
-          excerpt: hit.excerpt,
-          headingPath: [...hit.headingPath],
-          status: hit.status as SearchResult['hits'][number]['status'],
-          labels: labelsFor(hit.status),
-          // Provenance is mandatory (section 10.8). The locator is built from the same row
-          // as the hit, so a result can never exist without one.
-          locator: {
-            artifactId: hit.artifactId,
-            relativePath: hit.relativePath,
-            ...(hit.headingPath.length === 0 ? {} : { headingPath: [...hit.headingPath] }),
-            ...(hit.lineStart === null || hit.lineStart <= 0 ? {} : { lineStart: hit.lineStart }),
-            ...(hit.lineEnd === null || hit.lineEnd <= 0 ? {} : { lineEnd: hit.lineEnd }),
-          },
-        })),
-      };
-    } finally {
-      handle.release();
-    }
+    return await createRuntime(backend).search({
+      query: options.query,
+      limit: options.limit ?? 10,
+      includeArchived: options.includeArchived ?? false,
+      debug: options.debug ?? false,
+      ...(options.pathGlob === undefined ? {} : { pathGlob: options.pathGlob }),
+      ...(options.type === undefined ? {} : { fileType: options.type }),
+    });
   } finally {
-    provider.closeAll();
-    state.close();
+    backend.close();
   }
-}
-
-function labelsFor(status: string): SearchResult['hits'][number]['labels'] {
-  return status === 'draft' || status === 'archived' || status === 'superseded' ? [status] : [];
 }
 
 export function renderSearch(result: SearchResult, query: string, verbose = false): string {
@@ -127,19 +81,44 @@ export function renderSearch(result: SearchResult, query: string, verbose = fals
       hit.locator.lineStart === undefined
         ? hit.locator.relativePath
         : `${hit.locator.relativePath}:${hit.locator.lineStart}`;
-    // The rank is the claim. The raw BM25 behind it is negative, near zero on a small
-    // corpus, and rounded to two places it printed `-0.00` for every hit: a number that
-    // discriminated nothing and read as an error to anyone who does not know FTS5.
-    // A comparable relevance figure is #42's job, and inventing one here would be
-    // inventing truth, so the raw value moves behind --verbose rather than being dressed up.
+    // The rank is the claim, and the score is shown only when asked for. It is a
+    // relevance heuristic: how well the words match, not how likely the content is to be
+    // right. Printing it beside every result would invite reading it as confidence.
     lines.push(
-      `${String(rank).padStart(2)}. ${where}${verbose ? `  (lexical ${hit.score.toExponential(2)})` : ''}`,
+      `${String(rank).padStart(2)}. ${where}${verbose ? `  (relevance ${hit.score.toFixed(2)})` : ''}`,
     );
     if (hit.headingPath.length > 0) lines.push(`    ${hit.headingPath.join(' > ')}`);
     if (hit.labels.length > 0) lines.push(`    [${hit.labels.join(', ')}]`);
     lines.push(`    ${hit.excerpt.replace(/\s+/g, ' ').trim()}`);
+    if (hit.scoreComponents !== undefined) {
+      lines.push(`    why: ${renderComponents(hit.scoreComponents)}`);
+    }
     lines.push('');
   }
 
+  if (result.hits.some((hit) => hit.scoreComponents !== undefined)) {
+    lines.push('Relevance is a heuristic about matching words. It is not a confidence, and');
+    lines.push('it is not evidence that a document is correct.');
+  }
+
   return lines.join('\n').trimEnd();
+}
+
+/** The components in the order they are applied, so the line reads like the calculation. */
+function renderComponents(components: Readonly<Record<string, number>>): string {
+  const order = [
+    'lexical',
+    'pathExact',
+    'titleExact',
+    'headingExact',
+    'allTerms',
+    'statusFactor',
+    'authorityFactor',
+    'supersededFactor',
+    'total',
+  ];
+  return order
+    .filter((name) => components[name] !== undefined)
+    .map((name) => `${name} ${(components[name] as number).toFixed(2)}`)
+    .join(', ');
 }

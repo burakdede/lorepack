@@ -5,6 +5,7 @@ import {
   canonicalPathSchema,
   capabilitySchema,
   columnTypeSchema,
+  isoTimestampSchema,
   sourceLocatorSchema,
 } from './common.js';
 import { contextProfileSchema } from './config.js';
@@ -186,10 +187,17 @@ export const buildDescriptionSchema = z
     warningCount: z.int().nonnegative(),
     schemaVersion: z.int().positive(),
     compilerVersion: z.string().min(1),
+    /**
+     * When the build was created, where the serving backend records it. Optional because
+     * a sealed build deliberately carries no wall-clock time: identical content must
+     * produce identical bytes, so this is operational state, not build content.
+     */
+    createdAt: isoTimestampSchema.optional(),
   })
   .strict();
 
 export type SearchRequest = z.infer<typeof searchRequestSchema>;
+export type SearchHit = z.infer<typeof searchHitSchema>;
 export type SearchResult = z.infer<typeof searchResultSchema>;
 export type SourceState = z.infer<typeof sourceStateSchema>;
 export type TaskContextRequest = z.infer<typeof taskContextRequestSchema>;

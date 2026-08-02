@@ -12,6 +12,11 @@ export function searchCommand(): CommandDefinition {
       { flags: '--limit <count>', description: 'results to return (default 10)' },
       { flags: '--path <glob>', description: 'restrict to paths matching a glob' },
       { flags: '--type <extension>', description: 'restrict to one file extension' },
+      {
+        flags: '--include-archived',
+        description: 'include archived and superseded sources, which are labelled',
+      },
+      { flags: '--debug', description: 'show why each result ranked where it did' },
     ],
     handler: async (args, flags, context): Promise<CommandResult> => {
       const config = loadConfig({ cwd: context.options.cwd });
@@ -28,6 +33,8 @@ export function searchCommand(): CommandDefinition {
         query,
         sourceState: freshness.sourceState,
         limit: parseLimit(flags.limit),
+        includeArchived: flags.includeArchived === true,
+        debug: flags.debug === true,
         ...(typeof flags.path === 'string' ? { pathGlob: flags.path } : {}),
         ...(typeof flags.type === 'string' ? { type: flags.type } : {}),
       });
@@ -38,7 +45,10 @@ export function searchCommand(): CommandDefinition {
         context.warn(`Freshness unknown: ${freshness.reason}\n`);
       }
 
-      return { human: renderSearch(result, query, context.options.verbose), json: result };
+      return {
+        human: renderSearch(result, query, context.options.verbose || flags.debug === true),
+        json: result,
+      };
     },
   };
 }

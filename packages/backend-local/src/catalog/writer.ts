@@ -1,5 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Artifact, LoreNode, SourceLocator } from '@lorepack/core';
+import {
+  type Artifact,
+  bm25ColumnWeights,
+  type LoreNode,
+  type SourceLocator,
+} from '@lorepack/core';
 
 /**
  * Writes a sealed build's catalog.
@@ -184,12 +189,15 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
  * syntax. Users get literal search and can never produce a syntax error; operator support
  * would be a deliberate feature with its own surface, not an accident of quoting.
  */
-export function escapeFtsQuery(query: string): string {
+export function escapeFtsQuery(query: string, match: 'all' | 'any' = 'all'): string {
   const terms = query
     .split(/\s+/)
     .map((term) => term.replace(/"/g, '""').trim())
     .filter((term) => term !== '' && term !== '""');
-  return terms.map((term) => `"${term}"`).join(' ');
+  // Every term is quoted, so nothing a user types is FTS5 syntax. `all` is implicit AND,
+  // which is what a keyword search wants; `any` is what a sentence wants, because a task
+  // like "how do I roll back a release" shares no chunk with all of its own words.
+  return terms.map((term) => `"${term}"`).join(match === 'any' ? ' OR ' : ' ');
 }
 
 export interface CatalogSearchHit {
@@ -205,11 +213,17 @@ export interface CatalogSearchHit {
   readonly lineEnd: number | null;
   readonly status: string;
   readonly authority: number;
+  readonly estimatedTokens: number;
+  readonly title: string | null;
   readonly bm25: number;
 }
 
 export interface CatalogSearchOptions {
   readonly limit?: number;
+  /** Artifact statuses to include. Omitted means every status the build holds. */
+  readonly statuses?: readonly string[];
+  /** `all` requires every term in one chunk, `any` requires one. Defaults to `all`. */
+  readonly match?: 'all' | 'any';
   /**
    * SQLite GLOB pattern over the relative path (`*` and `?`). GLOB rather than a full
    * glob library because it is parameterized SQL: a filter can never become an injection,
@@ -234,6 +248,21 @@ export const SEARCH_TABLES: readonly string[] = [
 ];
 
 /**
+ * Everything the runtime may read from a sealed build.
+ *
+ * Wider than `SEARCH_TABLES` because `describeBuild` counts warnings and `readSource`
+ * resolves through node records, and narrower than the whole schema on purpose: this is
+ * the allowlist a read-only connection is held to, so a capability that starts reading
+ * something new has to say so here, in a diff, rather than by accident.
+ */
+export const RUNTIME_TABLES: readonly string[] = [
+  ...SEARCH_TABLES,
+  'nodes',
+  'supersessions',
+  'build_warnings',
+];
+
+/**
  * Raw lexical candidates. The ranking pipeline in Phase 2 layers boosts on top; this is
  * deliberately just BM25 plus the columns needed to apply them.
  */
@@ -244,7 +273,7 @@ export function searchCatalog(
 ): CatalogSearchHit[] {
   const settings: CatalogSearchOptions = typeof options === 'number' ? { limit: options } : options;
   const limit = settings.limit ?? 10;
-  const match = escapeFtsQuery(query);
+  const match = escapeFtsQuery(query, settings.match ?? 'all');
   if (match === '') return [];
 
   const conditions: string[] = ['chunks_fts MATCH ?'];
@@ -256,6 +285,12 @@ export function searchCatalog(
   if (settings.extension !== undefined) {
     conditions.push('c.relative_path LIKE ?');
     parameters.push(`%.${settings.extension.replace(/^\./, '')}`);
+  }
+  if (settings.statuses !== undefined && settings.statuses.length > 0) {
+    // One placeholder per value, so a status filter stays parameterized SQL rather than
+    // becoming string concatenation the moment someone adds a status.
+    conditions.push(`a.status IN (${settings.statuses.map(() => '?').join(', ')})`);
+    parameters.push(...settings.statuses);
   }
   parameters.push(limit);
 
@@ -271,8 +306,10 @@ export function searchCatalog(
               c.line_end      AS lineEnd,
               a.status        AS status,
               a.authority     AS authority,
+              c.estimated_tokens AS estimatedTokens,
+              a.title         AS title,
               snippet(chunks_fts, 7, '[', ']', ' ... ', 20) AS excerpt,
-              bm25(chunks_fts, 0.0, 0.0, 0.0, 0.0, 4.0, 6.0, 3.0, 1.0) AS bm25
+              bm25(chunks_fts, ${bm25ColumnWeights().join(', ')}) AS bm25
          FROM chunks_fts
          JOIN chunks    c ON c.id = chunks_fts.chunk_id
          JOIN artifacts a ON a.id = c.artifact_id
@@ -294,6 +331,8 @@ export function searchCatalog(
     lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     status: String(row.status),
     authority: Number(row.authority),
+    estimatedTokens: Number(row.estimatedTokens),
+    title: row.title === null ? null : String(row.title),
     bm25: Number(row.bm25),
   }));
 }
