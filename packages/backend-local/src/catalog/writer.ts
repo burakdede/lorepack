@@ -189,12 +189,15 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
  * syntax. Users get literal search and can never produce a syntax error; operator support
  * would be a deliberate feature with its own surface, not an accident of quoting.
  */
-export function escapeFtsQuery(query: string): string {
+export function escapeFtsQuery(query: string, match: 'all' | 'any' = 'all'): string {
   const terms = query
     .split(/\s+/)
     .map((term) => term.replace(/"/g, '""').trim())
     .filter((term) => term !== '' && term !== '""');
-  return terms.map((term) => `"${term}"`).join(' ');
+  // Every term is quoted, so nothing a user types is FTS5 syntax. `all` is implicit AND,
+  // which is what a keyword search wants; `any` is what a sentence wants, because a task
+  // like "how do I roll back a release" shares no chunk with all of its own words.
+  return terms.map((term) => `"${term}"`).join(match === 'any' ? ' OR ' : ' ');
 }
 
 export interface CatalogSearchHit {
@@ -219,6 +222,8 @@ export interface CatalogSearchOptions {
   readonly limit?: number;
   /** Artifact statuses to include. Omitted means every status the build holds. */
   readonly statuses?: readonly string[];
+  /** `all` requires every term in one chunk, `any` requires one. Defaults to `all`. */
+  readonly match?: 'all' | 'any';
   /**
    * SQLite GLOB pattern over the relative path (`*` and `?`). GLOB rather than a full
    * glob library because it is parameterized SQL: a filter can never become an injection,
@@ -268,7 +273,7 @@ export function searchCatalog(
 ): CatalogSearchHit[] {
   const settings: CatalogSearchOptions = typeof options === 'number' ? { limit: options } : options;
   const limit = settings.limit ?? 10;
-  const match = escapeFtsQuery(query);
+  const match = escapeFtsQuery(query, settings.match ?? 'all');
   if (match === '') return [];
 
   const conditions: string[] = ['chunks_fts MATCH ?'];

@@ -4,7 +4,9 @@ import {
   applyVisibility,
   authorityMultiplier,
   exactMatchBoost,
+  isNearDuplicate,
   limitPerArtifact,
+  overlap,
   rankCandidates,
   removeNearDuplicates,
   saturate,
@@ -330,5 +332,55 @@ describe('the lexical component is bounded', () => {
     const muchBetter = saturate(12);
     const titledButThin = saturate(0.5) + RANKING_WEIGHTS.exactMatch.title;
     expect(titledButThin).toBeLessThan(muchBetter);
+  });
+});
+
+describe('the near-duplicate test agrees with the measure it optimises', () => {
+  /**
+   * `isNearDuplicate` stops as soon as the answer is settled, which is what makes context
+   * assembly affordable. An early exit is only worth having if it is exact, so this
+   * compares it against the plain Jaccard computation over generated sets rather than
+   * trusting the algebra.
+   */
+  const seeded = (seed: number) => {
+    let state = seed;
+    return () => {
+      state = (state * 1103515245 + 12345) % 2147483648;
+      return state / 2147483648;
+    };
+  };
+
+  it('gives the same verdict as the full computation, over many pairs', () => {
+    const random = seeded(4242);
+    const vocabulary = Array.from({ length: 40 }, (_, index) => `w${index}`);
+
+    for (let trial = 0; trial < 500; trial += 1) {
+      const left = new Set<string>();
+      const right = new Set<string>();
+      const size = 3 + Math.floor(random() * 20);
+      for (let index = 0; index < size; index += 1) {
+        left.add(vocabulary[Math.floor(random() * vocabulary.length)] as string);
+      }
+      // Mostly overlapping, sometimes not, so both verdicts occur.
+      for (const value of left) if (random() > 0.2) right.add(value);
+      for (let index = 0; index < Math.floor(random() * 5); index += 1) {
+        right.add(vocabulary[Math.floor(random() * vocabulary.length)] as string);
+      }
+
+      for (const threshold of [0.5, 0.85, 0.95]) {
+        expect(
+          isNearDuplicate(left, right, threshold),
+          `${[...left]} vs ${[...right]} at ${threshold}`,
+        ).toBe(overlap(left, right) >= threshold);
+      }
+    }
+  });
+
+  it('handles the degenerate cases the same way', () => {
+    const empty = new Set<string>();
+    const one = new Set(['a']);
+    expect(isNearDuplicate(empty, one, 0.85)).toBe(false);
+    expect(isNearDuplicate(one, empty, 0.85)).toBe(false);
+    expect(isNearDuplicate(one, one, 0.85)).toBe(true);
   });
 });

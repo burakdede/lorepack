@@ -125,6 +125,7 @@ class LocalCatalogStore implements CatalogStore {
   ): Promise<readonly CatalogSearchHit[]> {
     const hits = searchCatalog(this.#db, query, {
       limit: criteria.limit,
+      ...(criteria.match === undefined ? {} : { match: criteria.match }),
       ...(criteria.pathGlob === undefined ? {} : { pathGlob: criteria.pathGlob }),
       ...(criteria.extension === undefined ? {} : { extension: criteria.extension }),
       ...(criteria.statuses === undefined ? {} : { statuses: criteria.statuses }),

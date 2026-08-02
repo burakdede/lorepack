@@ -38,19 +38,70 @@ export interface RankedHit {
   readonly labels: SearchHit['labels'];
 }
 
+/** Why a candidate did not make the page. The vocabulary the omission report uses. */
+export type DropReason = 'duplicate' | 'diversity' | 'superseded' | 'archived' | 'budget';
+
+export interface RankingReport {
+  readonly kept: readonly RankedHit[];
+  /**
+   * Everything the pipeline removed, and why.
+   *
+   * Search shows a page and does not have to explain what fell off the end. Context
+   * assembly does: "no silent truncation anywhere" means a candidate dropped for being a
+   * near-duplicate has to be nameable, or the omission report is a partial account
+   * dressed as a complete one (#43).
+   */
+  readonly dropped: readonly { readonly ranked: RankedHit; readonly reason: DropReason }[];
+}
+
 /** The whole path, in the order architecture 13.2 lists it. */
 export function rankCandidates(
   candidates: readonly CatalogSearchHit[],
   input: RankingInput,
 ): readonly RankedHit[] {
+  return rankWithReport(candidates, input).kept;
+}
+
+/** The same path, keeping the reasons, for the caller that has to account for every one. */
+export function rankWithReport(
+  candidates: readonly CatalogSearchHit[],
+  input: RankingInput,
+): RankingReport {
   const terms = queryTerms(input.query);
+  const dropped: { ranked: RankedHit; reason: DropReason }[] = [];
 
   const scored = candidates.map((hit) => score(hit, input, terms));
-  const visible = applyVisibility(scored, input);
-  const deduped = removeNearDuplicates(visible);
-  const diversified = limitPerArtifact(deduped);
 
-  return sortDeterministically(diversified).slice(0, input.limit);
+  const visible = applyVisibility(scored, input);
+  const visibleIds = new Set(visible.map((entry) => entry.hit.chunkId));
+  for (const entry of scored) {
+    if (visibleIds.has(entry.hit.chunkId)) continue;
+    dropped.push({
+      ranked: entry,
+      reason: entry.labels.includes('superseded') ? 'superseded' : 'archived',
+    });
+  }
+
+  const deduped = removeNearDuplicates(visible);
+  const dedupedIds = new Set(deduped.map((entry) => entry.hit.chunkId));
+  for (const entry of visible) {
+    if (!dedupedIds.has(entry.hit.chunkId)) dropped.push({ ranked: entry, reason: 'duplicate' });
+  }
+
+  const diversified = limitPerArtifact(deduped);
+  const diversifiedIds = new Set(diversified.map((entry) => entry.hit.chunkId));
+  for (const entry of deduped) {
+    if (!diversifiedIds.has(entry.hit.chunkId))
+      dropped.push({ ranked: entry, reason: 'diversity' });
+  }
+
+  const ordered = sortDeterministically(diversified);
+  const kept = ordered.slice(0, input.limit);
+  for (const entry of ordered.slice(input.limit)) {
+    dropped.push({ ranked: entry, reason: 'budget' });
+  }
+
+  return { kept, dropped };
 }
 
 /**
@@ -172,17 +223,37 @@ export function applyVisibility(
  */
 export function removeNearDuplicates(scored: readonly RankedHit[]): readonly RankedHit[] {
   const ordered = sortDeterministically(scored);
+  const threshold = RANKING_WEIGHTS.diversity.nearDuplicateOverlap;
   const kept: RankedHit[] = [];
-  const signatures: Array<ReadonlySet<string>> = [];
+  /** Kept signatures indexed by size, which is what makes the prefilter below cheap. */
+  const bySize = new Map<number, Array<ReadonlySet<string>>>();
 
   for (const ranked of ordered) {
     const signature = shingles(ranked.hit.text ?? ranked.hit.excerpt);
-    const duplicate = signatures.some(
-      (seen) => overlap(seen, signature) >= RANKING_WEIGHTS.diversity.nearDuplicateOverlap,
-    );
+
+    // An exact prefilter, not an approximation. Jaccard overlap is bounded above by
+    // min(|A|,|B|) / max(|A|,|B|), so two sets whose sizes differ by more than the
+    // threshold cannot possibly reach it and never need comparing. Comparing every pair
+    // is quadratic and dominated context assembly: 41 ms of a 45 ms bundle at 216
+    // candidates, and it grows with the square of the candidate cap.
+    const smallest = Math.ceil(signature.size * threshold);
+    const largest = Math.floor(signature.size / threshold);
+
+    let duplicate = false;
+    for (let size = smallest; size <= largest && !duplicate; size += 1) {
+      for (const seen of bySize.get(size) ?? []) {
+        if (isNearDuplicate(seen, signature, threshold)) {
+          duplicate = true;
+          break;
+        }
+      }
+    }
     if (duplicate) continue;
+
     kept.push(ranked);
-    signatures.push(signature);
+    const bucket = bySize.get(signature.size);
+    if (bucket === undefined) bySize.set(signature.size, [signature]);
+    else bucket.push(signature);
   }
   return kept;
 }
@@ -250,7 +321,41 @@ function shingles(text: string): ReadonlySet<string> {
   return set;
 }
 
-function overlap(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
+/**
+ * Whether two shingle sets overlap by at least `threshold`, stopping as soon as the answer
+ * is settled.
+ *
+ * The exact form is `shared / (|A| + |B| - shared) >= t`, which rearranges to a minimum
+ * number of shared shingles. Once enough elements have missed that the minimum is out of
+ * reach, the answer is no and the rest of the set does not need examining.
+ *
+ * This is the difference between a bundle that costs 37 ms and one that costs 4 ms at 216
+ * candidates, and the gap grows with the square of the candidate cap. Most pairs are not
+ * near-duplicates, and most of those are settled after a handful of misses.
+ */
+export function isNearDuplicate(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+  threshold: number,
+): boolean {
+  if (left.size === 0 || right.size === 0) return false;
+
+  const needed = Math.ceil((threshold * (left.size + right.size)) / (1 + threshold));
+  if (needed > Math.min(left.size, right.size)) return false;
+
+  let shared = 0;
+  let remaining = right.size;
+  for (const value of right) {
+    if (left.has(value)) shared += 1;
+    remaining -= 1;
+    if (shared >= needed) return true;
+    if (shared + remaining < needed) return false;
+  }
+  return shared >= needed;
+}
+
+/** Jaccard overlap, for the tests that assert the measure itself rather than the decision. */
+export function overlap(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
   if (left.size === 0 || right.size === 0) return 0;
   let shared = 0;
   for (const value of right) if (left.has(value)) shared += 1;

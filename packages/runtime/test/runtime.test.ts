@@ -286,9 +286,7 @@ describe('the handle', () => {
     await runtime.listTables();
     await expect(runtime.describeTable('nope')).rejects.toThrow();
     await expect(runtime.queryTable({ tableId: 'nope', sql: 'SELECT 1' })).rejects.toThrow();
-    await expect(
-      runtime.contextForTask({ task: 'anything', includeArchived: false }),
-    ).rejects.toThrow();
+    await runtime.contextForTask({ task: 'anything', includeArchived: false });
     await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 });
 
     expect(provider.acquired).toBe(7);
@@ -385,11 +383,14 @@ describe('activation, architecture section 15.2', () => {
 });
 
 describe('capabilities this phase has not delivered yet', () => {
-  it('contextForTask says which issue delivers it, rather than failing obscurely', async () => {
+  it('assembles a bundle over any port, bounded and cited', async () => {
     const runtime = runtimeOver(new TrackingProvider());
-    await expect(
-      runtime.contextForTask({ task: 'x', includeArchived: false }),
-    ).rejects.toMatchObject({ remediation: expect.stringContaining('#43') });
+    const bundle = await runtime.contextForTask({ task: 'a match', includeArchived: false });
+
+    expect(bundle.buildId).toBe(BUILD_A);
+    expect(bundle.profile).toBe('agent');
+    expect(bundle.estimatedTokens).toBeLessThanOrEqual(bundle.budget);
+    for (const citation of bundle.citations) expect(citation.relativePath).not.toBe('');
   });
 
   it('reports a missing normalized body as corruption, not as an empty document', async () => {

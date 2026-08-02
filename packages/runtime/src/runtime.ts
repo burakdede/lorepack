@@ -2,10 +2,13 @@ import {
   type BuildDescription,
   type BuildHandle,
   type BuildScope,
+  type CatalogSearchCriteria,
+  type CatalogSearchHit,
   type ContextBundle,
   candidateCount,
   LoreError,
   type LoreRuntime,
+  RANKING_WEIGHTS,
   type RuntimeDeps,
   type SearchRequest,
   type SearchResult,
@@ -17,7 +20,8 @@ import {
   type TableQueryResult,
   type TaskContextRequest,
 } from '@lorepack/core';
-import { rankCandidates } from './ranking/rank.js';
+import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
+import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
 
 /**
@@ -81,7 +85,7 @@ class PortedRuntime implements LoreRuntime {
     return this.#withBuild(async ({ scope, envelope }) => {
       // Ranking can only reorder what it was given, so the index is asked for more than
       // the page: a page of ten taken straight from BM25 would make every boost decorative.
-      const candidates = await scope.catalog.search(request.query, {
+      const candidates = await candidatesFor(scope, request.query, {
         limit: candidateCount(request.limit),
         pathGlob: request.pathGlob,
         extension: request.fileType,
@@ -126,9 +130,42 @@ class PortedRuntime implements LoreRuntime {
     });
   }
 
-  async contextForTask(_request: TaskContextRequest): Promise<ContextBundle> {
-    return this.#withBuild(async () => {
-      throw notYet('contextForTask', 43);
+  async contextForTask(request: TaskContextRequest): Promise<ContextBundle> {
+    return this.#withBuild(async ({ scope, envelope }) => {
+      const profile = request.profile ?? DEFAULT_PROFILE;
+      const budget = resolveBudget(profile, request.budget);
+
+      // A bundle is filled from a much deeper candidate list than a page of search
+      // results: the budget, not a page size, is what decides how much fits.
+      const candidates = await candidatesFor(scope, request.task, {
+        limit: RANKING_WEIGHTS.candidates.maximum,
+        ...filtersOf(request),
+      });
+      const superseded = await scope.catalog.supersededArtifacts();
+
+      const report = rankWithReport(candidates, {
+        query: request.task,
+        limit: candidates.length,
+        includeArchived: request.includeArchived,
+        superseded,
+      });
+      // What ranking held back, offered as alternatives with their labels. Suppression is
+      // not silence: anything not offered is still named in the omission report.
+      const suppressed = report.dropped
+        .filter(({ reason }) => reason === 'archived' || reason === 'superseded')
+        .map(({ ranked }) => ranked);
+
+      return {
+        ...envelope,
+        ...assembleBundle({
+          task: request.task,
+          profile,
+          budget,
+          ranked: report.kept,
+          dropped: report.dropped,
+          suppressed,
+        }),
+      };
     });
   }
 
@@ -209,16 +246,45 @@ class PortedRuntime implements LoreRuntime {
   }
 }
 
+/** Request filters, translated into the criteria the catalog understands. */
+function filtersOf(request: TaskContextRequest): {
+  pathGlob?: string;
+  extension?: string;
+  statuses?: readonly ('active' | 'draft' | 'archived')[];
+} {
+  const filters = request.filters ?? [];
+  const path = filters.find((filter) => filter.kind === 'path')?.value;
+  const type = filters.find((filter) => filter.kind === 'type')?.value;
+  const statuses = filters
+    .filter((filter) => filter.kind === 'status')
+    .map((filter) => filter.value as 'active' | 'draft' | 'archived');
+
+  return {
+    ...(path === undefined ? {} : { pathGlob: path }),
+    ...(type === undefined ? {} : { extension: type }),
+    ...(statuses.length === 0 ? {} : { statuses }),
+  };
+}
+
 /**
- * A capability whose ticket lands later in this phase.
+ * Candidates for a query, precise first and broad second.
  *
- * Typed and specific rather than a bare throw: a caller sees which capability is missing
- * and which issue delivers it, and the contract suite in #52 will fail on any of these
- * that survive to the end of the phase.
+ * Every term in one chunk is what a keyword search means, and it is the right default.
+ * It is also the wrong question for a sentence: no chunk in any corpus contains all of
+ * "how do I roll back a release", so a task asked that way returns nothing at all, which
+ * is what the first implementation of `contextForTask` did.
+ *
+ * So: ask for all terms, and if the index has nothing, ask again for any of them and let
+ * ranking decide what is relevant. Two fixed steps, no heuristics, so the same query on
+ * the same build still produces the same candidates (invariant 3).
  */
-function notYet(capability: string, issue: number): LoreError {
-  return new LoreError('LORE_E_INTERNAL', `${capability} is not implemented yet.`, {
-    remediation: `This capability arrives in this phase, in issue #${issue}.`,
-    subject: capability,
-  });
+async function candidatesFor(
+  scope: BuildScope,
+  query: string,
+  criteria: Omit<CatalogSearchCriteria, 'match'>,
+): Promise<readonly CatalogSearchHit[]> {
+  const precise = await scope.catalog.search(query, { ...criteria, match: 'all' });
+  if (precise.length > 0) return precise;
+  if (query.trim().split(/\s+/).length < 2) return precise;
+  return scope.catalog.search(query, { ...criteria, match: 'any' });
 }

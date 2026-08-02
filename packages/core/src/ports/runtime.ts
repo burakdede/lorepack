@@ -55,6 +55,14 @@ export interface CatalogSearchHit extends CatalogChunk {
 
 export interface CatalogSearchCriteria {
   readonly limit: number;
+  /**
+   * Whether a chunk must contain every term or only one. Defaults to every term.
+   *
+   * A keyword search wants precision. A task is a sentence, and no chunk contains all of
+   * "how do I roll back a release", so assembly asks for `any` and lets ranking sort out
+   * what is actually relevant.
+   */
+  readonly match?: 'all' | 'any' | undefined;
   readonly pathGlob?: string | undefined;
   readonly extension?: string | undefined;
   readonly statuses?: readonly ArtifactStatus[] | undefined;

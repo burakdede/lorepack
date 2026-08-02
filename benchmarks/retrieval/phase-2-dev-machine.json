@@ -18,15 +18,18 @@
     "topics": 15
   },
   "measurements": {
-    "coldSearchMs": 11.57,
-    "warmSearchP50Ms": 7.67,
-    "warmSearchP95Ms": 8.64,
-    "warmSearchP99Ms": 8.82,
-    "debugSearchP95Ms": 9.13,
+    "coldSearchMs": 8.4,
+    "warmSearchP50Ms": 5.59,
+    "warmSearchP95Ms": 6.59,
+    "warmSearchP99Ms": 7.49,
+    "debugSearchP95Ms": 6.48,
+    "contextBundleP50Ms": 34.51,
+    "contextBundleP95Ms": 60.4,
     "iterations": 60,
     "queries": 5
   },
   "referenceGates": {
-    "warmSearchP95Ms": 250
+    "warmSearchP95Ms": 250,
+    "contextBundleP95Ms": 1500
   }
 }

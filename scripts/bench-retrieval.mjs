@@ -124,6 +124,7 @@ try {
 
   const samples = [];
   const debugSamples = [];
+  const bundleSamples = [];
   for (let index = 0; index < ITERATIONS; index += 1) {
     const query = QUERIES[index % QUERIES.length];
     const started = performance.now();
@@ -133,6 +134,12 @@ try {
     const debugStarted = performance.now();
     await runtime.search({ query, limit: 10, includeArchived: false, debug: true });
     debugSamples.push(performance.now() - debugStarted);
+
+    // Assembly is the expensive one: it ranks the whole candidate cap rather than a page,
+    // and packs to a budget. Architecture 5.5 gates it at p95 under 1.5 s.
+    const bundleStarted = performance.now();
+    await runtime.contextForTask({ task: `${query} guidance`, includeArchived: false });
+    bundleSamples.push(performance.now() - bundleStarted);
   }
 
   backend.close();
@@ -163,10 +170,12 @@ try {
       warmSearchP95Ms: percentile(samples, 0.95),
       warmSearchP99Ms: percentile(samples, 0.99),
       debugSearchP95Ms: percentile(debugSamples, 0.95),
+      contextBundleP50Ms: percentile(bundleSamples, 0.5),
+      contextBundleP95Ms: percentile(bundleSamples, 0.95),
       iterations: ITERATIONS,
       queries: QUERIES.length,
     },
-    referenceGates: { warmSearchP95Ms: 250 },
+    referenceGates: { warmSearchP95Ms: 250, contextBundleP95Ms: 1500 },
   };
 
   const outIndex = process.argv.indexOf('--out');

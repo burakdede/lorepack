@@ -97,14 +97,41 @@ rules, so every artifact in a Phase 2 build is `active` with authority 50. Rule 
 #78 in Phase 5. The ranking behaviour above is unit-tested against synthetic candidates now,
 and becomes reachable end to end when rules land.
 
+## Assembly: the same path, packed to a budget
+
+`contextForTask` reuses this pipeline and then packs (architecture 13.3). Two differences
+worth knowing:
+
+- **A task is a sentence, not a keyword.** No chunk contains every word of "how do I roll
+  back a release", so an all-terms index query returns nothing at all, which is what the
+  first implementation of assembly did on every task it was given. Candidates are therefore
+  fetched with all terms first and, only if that finds nothing, with any of them. Two fixed
+  steps, so the same query still produces the same candidates.
+- **The omission report has to be complete.** Search shows a page and need not explain what
+  fell off the end; assembly must. `rankWithReport` returns what it dropped and why, so a
+  near-duplicate removed before packing is still nameable. Without it the report would have
+  been a partial account dressed as a complete one.
+
 ## Measured cost
 
 Provisional, on the development machine, since the reference machine is #101:
 
-| Corpus | Warm p95 | Gate |
-|---|---|---|
-| 3,200 chunks | 8.64 ms | 250 ms |
-| 50,000 chunks, the stated envelope | 24.53 ms | 250 ms |
+| Corpus | Warm search p95 | Bundle p95 | Gates |
+|---|---|---|---|
+| 3,200 chunks | 6.59 ms | 60.4 ms | 250 ms, 1,500 ms |
+| 50,000 chunks, the stated envelope | 21.45 ms | 199.96 ms | 250 ms, 1,500 ms |
 
 `pnpm bench:retrieval` reproduces them; the recorded runs are in `benchmarks/retrieval/`.
-Both are reported, never enforced, until #101 defines the machine.
+Reported, never enforced, until #101 defines the machine.
+
+### One optimisation worth knowing about
+
+Near-duplicate detection dominated assembly: 37 ms of a 45 ms bundle at 216 candidates, and
+it grows with the square of the candidate cap. It now stops as soon as the answer is
+settled. Jaccard overlap reaching a threshold implies a minimum number of shared shingles,
+so once enough elements have missed, the rest of the set does not need examining. Most pairs
+are not near-duplicates and most of those settle after a handful of misses.
+
+The early exit is exact, not an approximation, and a property test compares it against the
+plain computation over 1,500 generated pairs at three thresholds rather than trusting the
+algebra. Bundle p95 fell from 194.59 ms to 60.4 ms.
