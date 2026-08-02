@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Artifact, LoreNode, ObjectStore } from '@lorepack/core';
+import { type Artifact, count, type LoreNode, type ObjectStore } from '@lorepack/core';
 import type { Chunk } from '../chunk/chunk.js';
 
 /**
@@ -189,7 +189,7 @@ function checkFtsParity(input: ValidationInput): ValidationFailure[] {
   return [
     {
       check: 'fts-parity',
-      message: `The lexical index holds ${fts} rows for ${chunks} chunks, so some content would be unsearchable.`,
+      message: `The lexical index holds ${count(fts, 'row')} for ${count(chunks, 'chunk')}, so some content would be unsearchable.`,
     },
   ];
 }

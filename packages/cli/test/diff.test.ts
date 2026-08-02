@@ -108,7 +108,11 @@ describe('diff engine', () => {
       }),
     );
     expect(diff.chunks).toEqual({ added: 1, changed: 1, removed: 0 });
-    expect(renderDiff(diff)).toContain('+ 1 chunks');
+    // #167: this asserted `+ 1 chunks`, which is how the defect survived #150. A test can
+    // lock one in as easily as it can catch one.
+    const rendered = renderDiff(diff);
+    expect(rendered).toContain('+ 1 chunk');
+    expect(rendered).not.toContain('1 chunks');
   });
 
   it('reports declared ranking hints moving, without judging them', () => {

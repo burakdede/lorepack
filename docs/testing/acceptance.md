@@ -588,7 +588,7 @@ Starting point: a generated corpus of 2501 documents with 1 sections each, alrea
 1. Run `lore search rollback` with `--json`.
    Expect: it succeeds, `hits[0].locator.relativePath` is present, `sourceState` is "clean".
 2. Run `lore inspect sources`.
-   Expect: it succeeds, stdout mentions "2501 artifacts".
+   Expect: it succeeds, stdout mentions "2,501 artifacts".
 3. Run `lore builds` with `--json`.
    Expect: it succeeds.
 4. Run `lore pack` with `--json`.

@@ -5,6 +5,7 @@ import {
   artifactId,
   assertNoCaseCollisions,
   compareCanonical,
+  count,
   IGNORE_FILENAME,
   type LoadedConfig,
   LoreError,
@@ -282,7 +283,7 @@ function enforceEnvelope(
   if (artifacts.length > limits.maxSourceFiles && options.allowLargeProject !== true) {
     throw new LoreError(
       'LORE_E_ENVELOPE_EXCEEDED',
-      `This project has ${artifacts.length.toLocaleString('en-US')} files, above the supported envelope of ${limits.maxSourceFiles.toLocaleString('en-US')}.`,
+      `This project has ${count(artifacts.length, 'file')}, above the supported envelope of ${limits.maxSourceFiles.toLocaleString('en-US')}.`,
       {
         remediation:
           'Narrow `sources` or add exclusions to .loreignore, or pass --allow-large-project to continue anyway. Beyond the envelope, performance is untested rather than unsupported.',

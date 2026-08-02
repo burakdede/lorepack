@@ -1,4 +1,10 @@
-import type { BuildDiff, BuildId, DiffArtifactChange, DiffRuleChange } from '@lorepack/core';
+import {
+  type BuildDiff,
+  type BuildId,
+  count,
+  type DiffArtifactChange,
+  type DiffRuleChange,
+} from '@lorepack/core';
 
 /**
  * The build diff engine.
@@ -309,9 +315,9 @@ export function renderDiff(diff: BuildDiff): string {
   }
 
   lines.push('', 'Context');
-  lines.push(`  + ${diff.chunks.added} chunks`);
-  lines.push(`  ~ ${diff.chunks.changed} chunks`);
-  lines.push(`  - ${diff.chunks.removed} chunks`);
+  lines.push(`  + ${count(diff.chunks.added, 'chunk')}`);
+  lines.push(`  ~ ${count(diff.chunks.changed, 'chunk')}`);
+  lines.push(`  - ${count(diff.chunks.removed, 'chunk')}`);
 
   lines.push('', 'Tables');
   if (diff.tables.length === 0) lines.push('  none');
