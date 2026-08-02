@@ -31,6 +31,15 @@ export interface Scenario {
   readonly fixture: Fixture;
   readonly steps: readonly Step[];
   /**
+   * Runs against the packages as published rather than as checked out: only the files each
+   * package declares, assembled into a `node_modules` tree outside the repository.
+   *
+   * Worth its own mode because #164 was invisible to every other scenario. A working tree
+   * contains files the package does not ship, so a build asset that is never published still
+   * resolves, and the suite proves the product works in the one layout no user has.
+   */
+  readonly runFrom?: 'installed';
+  /**
    * Section 7 of the working agreement: a test skipped on a platform needs a written
    * reason, so the reason is required by the type rather than by review.
    */

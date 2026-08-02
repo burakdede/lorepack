@@ -29,7 +29,7 @@ import { LocalActiveBuildProvider, LocalStateStore } from '../src/state-store.js
  * compiler: parsing, chunking and indexing arrive in Phase 1.
  */
 
-const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const ROOT = join(import.meta.dirname, '..', 'migrations');
 const STATE_MIGRATIONS = join(ROOT, 'state');
 
 const SOURCES: Record<string, string> = {

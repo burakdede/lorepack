@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-34 automated, 3 checked by hand.
+35 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -572,6 +572,27 @@ Starting point: a generated corpus of 500 documents with 60 sections each, alrea
 1. Start a build, then start a second one while the first is still parsing
    Expect: it succeeds, stdout mentions "Waiting for the project lock", "No changes".
 
+## The product as installed
+
+What a user receives, rather than what a checkout happens to contain.
+
+### `packaging/the-published-files-are-enough`
+
+**The lifecycle works from the published files alone**
+
+Proves: Invariant 7: zero-surprise first run. An install has to be usable, not just a checkout.
+
+Locks down the defect in #164.
+
+Starting point: 3 source files.
+
+1. Initialise using the staged install, which holds only published files
+   Expect: it succeeds, stdout mentions "lore.yaml".
+2. Build, which needs the SQL migrations that #164 never shipped
+   Expect: it succeeds, `counts.artifacts` is 3.
+3. And answer a query with provenance, which needs the catalog schema
+   Expect: it succeeds, `hits[0].locator.relativePath` is present.
+
 ## Checked by a person
 
 Scenarios no machine here can run, kept in the catalogue so they stay visible.
@@ -614,7 +635,7 @@ Proves: Invariant 7: no Python, Docker, toolchain, native add-on, model or accou
 
 Starting point: 3 source files.
 
-- [ ] On a fresh machine or container with only a supported Node runtime installed, install the package and run `lore init && lore build && lore search "rollback"` against a small directory of documents.
+- [ ] On a fresh machine or container with only a supported Node runtime installed, install the package and run `lore init && lore build && lore search "rollback"` against a small directory of documents. The published files alone are now checked on every commit by `packaging/the-published-files-are-enough`, so what is left here is the part a temporary directory cannot claim: a machine with nothing else on it.
       Expect: No compiler is invoked, nothing is downloaded beyond the package itself, no post-install script runs, and no prompt asks for an account or key.
 - [ ] Record the platform, the Node version and the date in the pull request that verified it.
       Expect: Section 8 of the working agreement: an integration claim names the version and date it was checked.

@@ -5,6 +5,7 @@ import { INIT_SCENARIOS } from './scenarios/init.js';
 import { LIFECYCLE_SCENARIOS } from './scenarios/lifecycle.js';
 import { MANUAL_SCENARIOS } from './scenarios/manual.js';
 import { OUTPUT_SCENARIOS } from './scenarios/output.js';
+import { PACKAGING_SCENARIOS } from './scenarios/packaging.js';
 import { SCALE_SCENARIOS } from './scenarios/scale.js';
 import type { Scenario } from './types.js';
 
@@ -65,6 +66,12 @@ export const AREAS: readonly Area[] = [
     title: 'Scale and responsiveness',
     summary: 'Behaviour when there is enough work to watch.',
     scenarios: SCALE_SCENARIOS,
+  },
+  {
+    id: 'packaging',
+    title: 'The product as installed',
+    summary: 'What a user receives, rather than what a checkout happens to contain.',
+    scenarios: PACKAGING_SCENARIOS,
   },
   {
     id: 'manual',
