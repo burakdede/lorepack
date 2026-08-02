@@ -425,4 +425,45 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'lifecycle/diff-works-across-a-rollback',
+    title: 'After a rollback, `lore diff` compares against the build that is still there',
+    proves:
+      'Section 4.4: an error states the real situation. Invariant 4: rollback destroys nothing.',
+    mode: 'auto',
+    regression: 176,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      { action: 'run', args: ['builds'], json: true, capture: { first: 'builds[0].buildId' } },
+      {
+        action: 'write',
+        path: 'guides/onboarding.md',
+        contents: EDITED_ONBOARDING,
+        atomic: true,
+      },
+      { action: 'run', args: ['build'], json: true, capture: { second: 'buildId' } },
+      { action: 'run', args: ['rollback'], expect: { exitCode: 0 } },
+      {
+        action: 'run',
+        args: ['diff'],
+        json: true,
+        describe: 'The bare diff names both builds instead of claiming only one exists',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'from', equalsCapture: 'first' },
+            { path: 'to', equalsCapture: 'second' },
+            { path: 'identical', equals: false },
+          ],
+        },
+      },
+      {
+        action: 'run',
+        args: ['diff'],
+        describe: 'And says nothing untrue about how many builds there are',
+        expect: { exitCode: 0, stdout: { excludes: ['only one build'] } },
+      },
+    ],
+  },
 ];

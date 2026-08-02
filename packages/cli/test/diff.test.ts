@@ -242,4 +242,51 @@ describe('lore diff', () => {
       expect(result.stdout).toContain('same content as');
     });
   });
+
+  it('compares against the newer build after a rollback, instead of claiming there is one', async () => {
+    // #176: the active build is the oldest after a rollback, so there is nothing after it
+    // in history. That was reported as "there is only one build" while `lore builds` listed
+    // two, and the remediation asked the user to make a build that already existed.
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const first = await build(root);
+      writeFileSync(join(root, 'a.md'), '# A\n\nChanged.', 'utf8');
+      const second = await build(root);
+      await lore(['rollback']);
+
+      const result = await lore(['diff']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(first.buildId.slice(0, 17));
+      expect(result.stdout).toContain(second.buildId.slice(0, 17));
+      expect(result.stderr).not.toContain('only one build');
+    });
+  });
+
+  it('still refuses when there really is only one build', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      await build(root);
+      await expect(lore(['diff'])).resolves.toMatchObject({ code: 1 });
+    });
+  });
+
+  it('keeps both explicit directions working across a rollback', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const first = await build(root);
+      writeFileSync(join(root, 'a.md'), '# A\n\nChanged.', 'utf8');
+      const second = await build(root);
+      await lore(['rollback']);
+
+      const forward = JSON.parse(
+        (await lore(['--json', 'diff', first.buildId, second.buildId])).stdout,
+      );
+      const backward = JSON.parse(
+        (await lore(['--json', 'diff', second.buildId, first.buildId])).stdout,
+      );
+
+      expect(forward.identical).toBe(false);
+      expect(backward.identical).toBe(false);
+      expect(forward.from).toBe(first.buildId);
+      expect(backward.from).toBe(second.buildId);
+    });
+  });
 });
