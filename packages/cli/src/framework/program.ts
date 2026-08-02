@@ -51,7 +51,13 @@ export interface RunOptions {
 }
 
 function defaultStreams(): Streams {
-  return { stdout: process.stdout, stderr: process.stderr, isTty: process.stdout.isTTY === true };
+  return {
+    stdout: process.stdout,
+    stderr: process.stderr,
+    isTty: process.stdout.isTTY === true,
+    errorIsTty: process.stderr.isTTY === true,
+    columns: process.stdout.columns ?? process.stderr.columns,
+  };
 }
 
 export interface ProgramHooks {
@@ -111,6 +117,7 @@ export function buildProgram(
         { ...program.opts(), ...flags },
         options.env ?? process.env,
         streams.isTty,
+        streams.errorIsTty ?? streams.isTty,
       );
       const context = createContext(globalOptions, streams, options.signal);
       hooks.onContext(context);
@@ -231,7 +238,7 @@ function handleFailure(
       if (jsonRequested) {
         streams.stdout.write(`${JSON.stringify(renderAsJson(wrapped), null, 2)}\n`);
       } else {
-        streams.stderr.write(`${renderForCli(wrapped)}\n`);
+        streams.stderr.write(`${renderForCli(wrapped, { color: errorColor(context, streams) })}\n`);
       }
       return EXIT_CODES.USER;
     }
@@ -244,8 +251,22 @@ function handleFailure(
     streams.stdout.write(`${JSON.stringify(renderAsJson(loreError), null, 2)}\n`);
   } else {
     streams.stderr.write(
-      `${renderForCli(loreError, { verbose: context?.options.verbose === true })}\n`,
+      `${renderForCli(loreError, {
+        verbose: context?.options.verbose === true,
+        color: errorColor(context, streams),
+      })}\n`,
     );
   }
   return loreError.exitCode;
+}
+
+/**
+ * Colour for an error.
+ *
+ * A failure can happen before the context exists, which is exactly when the message matters
+ * most, so this falls back to the stream rather than giving up on the question.
+ */
+function errorColor(context: CommandContext | null | undefined, streams: Streams): boolean {
+  if (context != null) return context.options.colorStderr;
+  return (streams.errorIsTty ?? streams.isTty) && process.env.NO_COLOR === undefined;
 }

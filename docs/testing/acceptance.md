@@ -653,10 +653,10 @@ Starting point: 3 source files.
 
 - [ ] In a real terminal, build a project large enough to take several seconds, for example the generated corpus used by `scale/progress-repeats-so-work-is-not-a-hang`.
       Expect: Each stage occupies one line that updates in place, roughly once a second, and is replaced by a final `done` line. No stray escape sequences, no line left half-written.
-- [ ] Repeat with `NO_COLOR=1`, then with the output piped into `cat`.
-      Expect: Colour disappears in the first case. In the second, each update is a separate plain line with no carriage returns, safe to read in a CI log.
+- [ ] Repeat with `NO_COLOR=1`, then with the output piped into `cat`. Colour and width are asserted by unit tests against a writer of known width; what a person is checking here is that a real terminal agrees.
+      Expect: The status word of each finished stage is green, and colourless under `NO_COLOR=1`. Piped, each update is a separate plain line with no carriage returns and no escapes, safe to read in a CI log.
 - [ ] Narrow the terminal to about 40 columns and build again.
-      Expect: Lines are truncated rather than wrapped into an unreadable block.
+      Expect: Each update stays on one row: the counts are dropped and the status word kept. Nothing wraps, and no half-written row is left behind.
 
 ### `manual/ctrl-c-is-honoured-by-a-person` (by hand)
 

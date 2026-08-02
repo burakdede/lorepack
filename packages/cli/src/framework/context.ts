@@ -4,7 +4,14 @@ import { ProgressBus, ProgressRenderer, shouldUseColor } from '@lorepack/core';
 export interface GlobalOptions {
   readonly json: boolean;
   readonly verbose: boolean;
+  /** Colour for stdout. */
   readonly color: boolean;
+  /**
+   * Colour for stderr, resolved separately because the two streams are redirected
+   * separately. `lore build > log.txt` on a terminal keeps its errors readable, and
+   * `lore build 2> log.txt` does not put escapes in the file.
+   */
+  readonly colorStderr: boolean;
   readonly cwd: string;
 }
 
@@ -12,6 +19,9 @@ export interface Streams {
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly isTty: boolean;
+  readonly errorIsTty?: boolean;
+  /** Terminal width, when there is a terminal. Progress lines are truncated to it. */
+  readonly columns?: number | undefined;
 }
 
 /**
@@ -36,12 +46,15 @@ export function resolveGlobalOptions(
   raw: Record<string, unknown>,
   env: NodeJS.ProcessEnv,
   isTty: boolean,
+  errorIsTty: boolean = isTty,
 ): GlobalOptions {
+  // commander maps --no-color to color: false.
+  const forbidden = raw.color === false;
   return {
     json: raw.json === true,
     verbose: raw.verbose === true,
-    // commander maps --no-color to color: false.
-    color: raw.color === false ? false : shouldUseColor(env, isTty),
+    color: forbidden ? false : shouldUseColor(env, isTty),
+    colorStderr: forbidden ? false : shouldUseColor(env, errorIsTty),
     cwd: resolve(typeof raw.cwd === 'string' ? raw.cwd : process.cwd()),
   };
 }
@@ -61,10 +74,14 @@ export function createContext(
   const progress = new ProgressBus();
   const humanTarget = options.json ? streams.stderr : streams.stdout;
 
+  // Under --json, progress moves to stderr, so it is stderr's terminal that decides both
+  // whether to rewrite a line in place and whether colour is welcome.
+  const humanIsTty = options.json ? (streams.errorIsTty ?? streams.isTty) : streams.isTty;
   const renderer = new ProgressRenderer({
     write: (text) => humanTarget.write(text),
     isTty: options.json ? false : streams.isTty,
-    color: options.color,
+    color: options.json ? options.colorStderr : options.color,
+    columns: humanIsTty ? streams.columns : undefined,
   });
   progress.subscribe((event) => {
     if (event.type === 'diagnostic' && event.level === 'debug' && !options.verbose) return;

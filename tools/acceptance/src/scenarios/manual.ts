@@ -29,14 +29,15 @@ export const MANUAL_SCENARIOS: readonly Scenario[] = [
       },
       {
         action: 'note',
-        text: 'Repeat with `NO_COLOR=1`, then with the output piped into `cat`.',
+        text: 'Repeat with `NO_COLOR=1`, then with the output piped into `cat`. Colour and width are asserted by unit tests against a writer of known width; what a person is checking here is that a real terminal agrees.',
         expect:
-          'Colour disappears in the first case. In the second, each update is a separate plain line with no carriage returns, safe to read in a CI log.',
+          'The status word of each finished stage is green, and colourless under `NO_COLOR=1`. Piped, each update is a separate plain line with no carriage returns and no escapes, safe to read in a CI log.',
       },
       {
         action: 'note',
         text: 'Narrow the terminal to about 40 columns and build again.',
-        expect: 'Lines are truncated rather than wrapped into an unreadable block.',
+        expect:
+          'Each update stays on one row: the counts are dropped and the status word kept. Nothing wraps, and no half-written row is left behind.',
       },
     ],
   },
