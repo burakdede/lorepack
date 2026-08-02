@@ -25,8 +25,12 @@ const NOUNS = [
   'warnings',
 ];
 
-// `${expression} noun`, which is the construction that cannot agree with its number.
-const OFFENDING = new RegExp(`\\$\\{[^}]+\\}\\s+(${NOUNS.join('|')})\\b`);
+// `${expression} noun`, which is the construction that cannot agree with its number, and
+// `${expression} noun(s)`, which is the same evasion wearing a disguise.
+// The word boundary belongs only to the bare-noun half: `file(s)` ends in a bracket, and a
+// boundary after it never matches, which is how the first version of this check passed over
+// the very line it was written for.
+const OFFENDING = new RegExp(`\\$\\{[^}]+\\}\\s+(?:[a-z]+\\(s\\)|(?:${NOUNS.join('|')})\\b)`);
 
 // Only where output is produced. Tests assert on rendered text and must be able to write
 // the plural form literally; fixtures and documentation are prose.
