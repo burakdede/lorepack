@@ -69,9 +69,34 @@ beforeEach(async () => {
   await lore(['build']);
 });
 
-afterEach(() => {
-  for (const child of running.splice(0)) child.kill('SIGTERM');
-  rmSync(project, { recursive: true, force: true, maxRetries: 3 });
+afterEach(async () => {
+  // Wait for each server to actually exit before removing anything. Windows has no POSIX
+  // signal delivery, so `kill` terminates rather than notifies, and the process still holds
+  // the build database open for a moment afterwards: removing the directory underneath it
+  // fails with EPERM.
+  await Promise.all(
+    running.splice(0).map(
+      (child) =>
+        new Promise<void>((resolve) => {
+          if (child.exitCode !== null || child.signalCode !== null) {
+            resolve();
+            return;
+          }
+          const done = setTimeout(resolve, 10_000);
+          child.once('exit', () => {
+            clearTimeout(done);
+            resolve();
+          });
+          child.kill('SIGTERM');
+        }),
+    ),
+  );
+
+  try {
+    rmSync(project, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // A leaked temporary directory must not fail a run. The assertions already passed.
+  }
 });
 
 describe('one server, both surfaces', () => {
