@@ -5,6 +5,7 @@ import {
   type Canonical,
   HASH_ALGORITHM,
   hashCanonical,
+  LoreError,
   type ProgressBus,
   sha256Hex,
   TextClassifier,
@@ -69,7 +70,7 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
       next += 1;
       if (index >= artifacts.length) return;
       const artifact = artifacts[index] as DiscoveredArtifact;
-      const read = await hashAndClassify(artifact.absolutePath);
+      const read = await hashAndClassify(artifact);
       if (read.undecodable === null) {
         hashed[index] = { ...artifact, contentHash: read.contentHash };
         excluded[index] = null;
@@ -108,22 +109,38 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
 }
 
 /**
- * Hashes and classifies in one read.
+ * Hashes and classifies in one read, and says what happened when the read fails.
  *
  * Fingerprinting already streams every byte of every source, so deciding whether those
  * bytes are readable text costs nothing extra. Doing it in a separate pass would double the
  * IO of the stage the whole build waits on.
+ *
+ * A file that exists and cannot be opened is an ordinary condition of a real filesystem,
+ * usually a permission, and it is a different thing from a file whose bytes are not text.
+ * One is fixed in a second by its owner; the other is a property of the file. So this
+ * throws where the classifier returns a reason. Left to escape, it arrived as
+ * `LORE_E_INTERNAL` carrying a raw errno, an absolute path, and advice to report a bug
+ * (#168): nothing is wrong with Lorepack, and the person can fix it in one command.
  */
 async function hashAndClassify(
-  absolutePath: string,
+  artifact: DiscoveredArtifact,
 ): Promise<{ contentHash: string; undecodable: UndecodableReason | null }> {
   const hash = createHash(HASH_ALGORITHM);
   const classifier = new TextClassifier();
-  const stream = createReadStream(absolutePath);
-  for await (const chunk of stream) {
-    const bytes = chunk as Uint8Array;
-    hash.update(bytes);
-    classifier.update(bytes);
+  try {
+    const stream = createReadStream(artifact.absolutePath);
+    for await (const chunk of stream) {
+      const bytes = chunk as Uint8Array;
+      hash.update(bytes);
+      classifier.update(bytes);
+    }
+  } catch (cause) {
+    throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${artifact.displayPath} could not be read.`, {
+      remediation:
+        'Check the file permissions, or exclude it in .loreignore. The active build is unchanged.',
+      path: artifact.displayPath,
+      cause,
+    });
   }
   return { contentHash: hash.digest('hex'), undecodable: classifier.finish() };
 }

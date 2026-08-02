@@ -139,4 +139,31 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'output/a-failure-names-something-that-exists',
+    title: 'Every failure names a real cause and a next step the binary can perform',
+    proves: 'Section 4.4: an error names the subject and the way forward.',
+    mode: 'auto',
+    regression: 168,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['activate', 'lore_definitelynotabuild'],
+        expect: {
+          exitCode: 1,
+          errorCode: 'LORE_E_BUILD_NOT_FOUND',
+          stderr: { excludes: ['lore doctor'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'nothing-like-this'],
+        describe:
+          'And a subject that does not exist, which used to fall through to the default advice',
+        expect: { exitCode: 1, stderr: { excludes: ['lore doctor'] } },
+      },
+    ],
+  },
 ];

@@ -23,13 +23,21 @@ import { LoreError } from '@lorepack/core';
  * and the active pointer are unchanged, and a checkpoint before every write is enough for
  * that.
  */
-export async function checkpoint(signal: AbortSignal | undefined): Promise<void> {
+export async function checkpoint(
+  signal: AbortSignal | undefined,
+  state: { readonly hasActiveBuild?: boolean } = {},
+): Promise<void> {
   if (signal === undefined) return;
   await new Promise((resolve) => {
     setImmediate(resolve);
   });
   if (!signal.aborted) return;
   throw new LoreError('LORE_E_CANCELLED', 'The build was cancelled.', {
-    remediation: 'Nothing was changed. The previously active build is still serving.',
+    // The first build in a project is the most likely one to be interrupted, and it is
+    // exactly the case where "the previously active build is still serving" is false (#168).
+    remediation:
+      state.hasActiveBuild === true
+        ? 'Nothing was changed. The previously active build is still serving.'
+        : 'Nothing was changed. This project still has no build.',
   });
 }

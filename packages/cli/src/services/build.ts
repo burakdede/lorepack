@@ -149,7 +149,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           ? {}
           : { allowLargeProject: options.allowLargeProject }),
       });
-      await checkpoint(options.signal);
+      await checkpoint(options.signal, { hasActiveBuild: active !== null });
 
       const cache = new ParseCache(join(loreDirectory, 'cache', 'parse'));
       progress.start('parsing', 'Parsing', fingerprint.artifacts.length);
@@ -157,7 +157,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       let handled = 0;
 
       for (const discovered of fingerprint.artifacts) {
-        await checkpoint(options.signal);
+        await checkpoint(options.signal, { hasActiveBuild: active !== null });
         const parser = parserFor({
           mediaType: discovered.mediaType,
           relativePath: discovered.relativePath,
@@ -277,7 +277,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       const candidate = createCandidateDirectory(loreDirectory);
       let sealed = false;
       try {
-        await checkpoint(options.signal);
+        await checkpoint(options.signal, { hasActiveBuild: active !== null });
         progress.start('indexing', 'Indexing');
         const db = openWritable(join(candidate.path, 'context.sqlite'));
         try {
@@ -366,7 +366,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           db.close();
         }
 
-        await checkpoint(options.signal);
+        await checkpoint(options.signal, { hasActiveBuild: active !== null });
         progress.start('sealing', 'Sealing');
         sealCandidateDirectory(candidate, join(loreDirectory, 'builds', buildId));
         sealed = true;

@@ -31,7 +31,7 @@ describe('checkpoint', () => {
 
     await expect(checkpoint(controller.signal)).rejects.toMatchObject({
       code: 'LORE_E_CANCELLED',
-      remediation: 'Nothing was changed. The previously active build is still serving.',
+      remediation: expect.stringContaining('Nothing was changed.'),
     });
   });
 
@@ -55,5 +55,38 @@ describe('checkpoint', () => {
     await checkpoint(undefined);
 
     expect(ranOnTheEventLoop).toBe(false);
+  });
+});
+
+describe('what an interrupted build tells the user', () => {
+  /**
+   * #168: the remediation always said "the previously active build is still serving",
+   * including on the first build in a project, where there is nothing serving at all. That
+   * is the most likely build to be interrupted, and a new user is the least equipped to
+   * know the sentence is false.
+   */
+  const aborted = (): AbortSignal => {
+    const controller = new AbortController();
+    controller.abort();
+    return controller.signal;
+  };
+
+  it('says the previous build is still serving when there is one', async () => {
+    await expect(checkpoint(aborted(), { hasActiveBuild: true })).rejects.toMatchObject({
+      code: 'LORE_E_CANCELLED',
+      remediation: expect.stringContaining('previously active build'),
+    });
+  });
+
+  it('says the project still has no build when it does not', async () => {
+    await expect(checkpoint(aborted(), { hasActiveBuild: false })).rejects.toMatchObject({
+      remediation: expect.stringContaining('no build'),
+    });
+  });
+
+  it('claims nothing about a previous build when the caller did not say', async () => {
+    await expect(checkpoint(aborted())).rejects.toMatchObject({
+      remediation: expect.not.stringContaining('still serving'),
+    });
   });
 });
