@@ -3,6 +3,8 @@ import type {
   BuildId,
   BuildManifest,
   BuildScope,
+  CatalogArtifact,
+  CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
   CatalogStore,
@@ -80,6 +82,34 @@ class FakeCatalog implements CatalogStore {
   }
   async supersededArtifacts(): Promise<ReadonlySet<string>> {
     return new Set();
+  }
+  async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
+    if (idOrPath !== 'guides/a.md') return null;
+    return {
+      artifactId: `${this.buildId.slice(5, 9)}:guides/a.md`,
+      relativePath: 'guides/a.md',
+      displayPath: 'guides/a.md',
+      title: 'A guide',
+      status: 'active',
+      authority: 50,
+      mediaType: 'text/markdown',
+      objectHash: 'f'.repeat(64),
+    };
+  }
+  async nodes(): Promise<readonly CatalogNode[]> {
+    return [
+      {
+        nodeId: 'n0',
+        artifactId: `${this.buildId.slice(5, 9)}:guides/a.md`,
+        kind: 'paragraph',
+        ordinal: 0,
+        title: null,
+        text: 'the body of the only node',
+        headingPath: ['Guides'],
+        lineStart: 3,
+        lineEnd: 4,
+      },
+    ];
   }
   async search(
     _query: string,
@@ -259,7 +289,7 @@ describe('the handle', () => {
     await expect(
       runtime.contextForTask({ task: 'anything', includeArchived: false }),
     ).rejects.toThrow();
-    await expect(runtime.readSource({ path: 'guides/a.md' })).rejects.toThrow();
+    await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 });
 
     expect(provider.acquired).toBe(7);
     expect(provider.leaked).toBe(0);
@@ -355,19 +385,29 @@ describe('activation, architecture section 15.2', () => {
 });
 
 describe('capabilities this phase has not delivered yet', () => {
-  it.each([
-    ['contextForTask', 42],
-    ['readSource', 44],
-  ])('%s says which issue delivers it, rather than failing obscurely', async (name, issue) => {
+  it('contextForTask says which issue delivers it, rather than failing obscurely', async () => {
     const runtime = runtimeOver(new TrackingProvider());
-    const call =
-      name === 'contextForTask'
-        ? runtime.contextForTask({ task: 'x', includeArchived: false })
-        : runtime.readSource({ path: 'guides/a.md' });
+    await expect(
+      runtime.contextForTask({ task: 'x', includeArchived: false }),
+    ).rejects.toMatchObject({ remediation: expect.stringContaining('#43') });
+  });
 
-    await expect(call).rejects.toMatchObject({
-      remediation: expect.stringContaining(`#${issue}`),
+  it('reports a missing normalized body as corruption, not as an empty document', async () => {
+    // The fake object store holds nothing, which is what a pruned or damaged build looks
+    // like. Returning empty text with a citation attached would be the worst answer.
+    const runtime = runtimeOver(new TrackingProvider());
+    await expect(runtime.readSource({ path: 'guides/a.md' })).rejects.toMatchObject({
+      code: 'LORE_E_OBJECT_CORRUPT',
     });
+  });
+
+  it('readSource works over any port, with no filesystem anywhere in sight', async () => {
+    const runtime = runtimeOver(new TrackingProvider());
+    const result = await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 });
+
+    expect(result.text).toBe('the body of the only node');
+    expect(result.locator.lineStart).toBe(3);
+    expect(result.buildId).toBe(BUILD_A);
   });
 
   it('answers table calls as a build without tables, not as a missing method', async () => {

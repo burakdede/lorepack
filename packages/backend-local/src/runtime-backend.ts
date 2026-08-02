@@ -6,6 +6,8 @@ import {
   type BuildManifest,
   type BuildScope,
   buildManifestSchema,
+  type CatalogArtifact,
+  type CatalogNode,
   type CatalogSearchCriteria,
   type CatalogSearchHit,
   type CatalogStore,
@@ -58,6 +60,56 @@ class LocalCatalogStore implements CatalogStore {
 
   async countWarnings(): Promise<number> {
     return countRows(this.#db, 'build_warnings');
+  }
+
+  async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
+    // Two lookups, one statement, both parameterized: an artifact id and a canonical path
+    // are the two things a caller can legitimately name, and neither reaches SQL as text.
+    const row = this.#db
+      .prepare(
+        `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
+                status, authority, media_type AS mediaType, object_hash AS objectHash
+           FROM artifacts
+          WHERE id = ? OR relative_path = ?
+          LIMIT 1`,
+      )
+      .get(idOrPath, idOrPath) as Record<string, string | number | null> | undefined;
+    if (row === undefined) return null;
+
+    return {
+      artifactId: String(row.id),
+      relativePath: String(row.relativePath),
+      displayPath: String(row.displayPath),
+      title: row.title === null ? null : String(row.title),
+      status: String(row.status) as CatalogArtifact['status'],
+      authority: Number(row.authority),
+      mediaType: String(row.mediaType),
+      objectHash: String(row.objectHash),
+    };
+  }
+
+  async nodes(artifactId: string): Promise<readonly CatalogNode[]> {
+    const rows = this.#db
+      .prepare(
+        `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
+                heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd
+           FROM nodes
+          WHERE artifact_id = ?
+          ORDER BY ordinal`,
+      )
+      .all(artifactId) as Array<Record<string, string | number | null>>;
+
+    return rows.map((row) => ({
+      nodeId: String(row.id),
+      artifactId: String(row.artifactId),
+      kind: String(row.kind),
+      ordinal: Number(row.ordinal),
+      title: row.title === null ? null : String(row.title),
+      text: row.text === null ? '' : String(row.text),
+      headingPath: JSON.parse(String(row.headingPath)) as string[],
+      lineStart: row.lineStart === null ? null : Number(row.lineStart),
+      lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
+    }));
   }
 
   async supersededArtifacts(): Promise<ReadonlySet<string>> {
@@ -144,6 +196,11 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       restrictToTables(db, RUNTIME_TABLES);
       return {
         buildId: handle.buildId,
+        // Operational state, held beside the build rather than inside it, because a sealed
+        // build carries no wall-clock time.
+        ...(createdAt(state, handle.buildId) === null
+          ? {}
+          : { createdAt: createdAt(state, handle.buildId) as string }),
         catalog: new LocalCatalogStore(db, join(loreDirectory, 'builds', handle.buildId)),
         tables: new EmptyTableStore(),
         objects,
@@ -154,4 +211,10 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       state.close();
     },
   };
+}
+
+/** When the state store recorded this build, if it still knows. */
+function createdAt(state: LocalStateStore, buildId: string): string | null {
+  const summary = state.listBuilds().find((build) => build.buildId === buildId);
+  return summary?.createdAt ?? null;
 }

@@ -18,6 +18,7 @@ import {
   type TaskContextRequest,
 } from '@lorepack/core';
 import { rankCandidates } from './ranking/rank.js';
+import { readSourceFrom } from './read-source.js';
 
 /**
  * The runtime: one implementation of architecture 13.1 over ports, for every consumer.
@@ -71,6 +72,7 @@ class PortedRuntime implements LoreRuntime {
         warningCount: await scope.catalog.countWarnings(),
         schemaVersion: manifest.schemaVersion,
         compilerVersion: manifest.compilerVersion,
+        ...(scope.createdAt === undefined ? {} : { createdAt: scope.createdAt }),
       };
     });
   }
@@ -126,14 +128,15 @@ class PortedRuntime implements LoreRuntime {
 
   async contextForTask(_request: TaskContextRequest): Promise<ContextBundle> {
     return this.#withBuild(async () => {
-      throw notYet('contextForTask', 42);
+      throw notYet('contextForTask', 43);
     });
   }
 
-  async readSource(_request: SourceReadRequest): Promise<SourceReadResult> {
-    return this.#withBuild(async () => {
-      throw notYet('readSource', 44);
-    });
+  async readSource(request: SourceReadRequest): Promise<SourceReadResult> {
+    return this.#withBuild(async ({ scope, envelope }) => ({
+      ...envelope,
+      ...(await readSourceFrom(scope, request)),
+    }));
   }
 
   async listTables(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {

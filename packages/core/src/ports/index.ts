@@ -1,6 +1,8 @@
 export type {
   BuildScope,
+  CatalogArtifact,
   CatalogChunk,
+  CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
   CatalogStore,

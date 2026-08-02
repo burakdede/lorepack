@@ -78,6 +78,44 @@ export interface CatalogStore {
    * pairs matter to `lore diff` and to the Phase 5 rule resolver, which read them directly.
    */
   supersededArtifacts(): Promise<ReadonlySet<string>>;
+  /** By artifact id or by canonical path. Null when the build has no such artifact. */
+  artifact(idOrPath: string): Promise<CatalogArtifact | null>;
+  /** Every node of one artifact, in document order. */
+  nodes(artifactId: string): Promise<readonly CatalogNode[]>;
+}
+
+/** An artifact as the build recorded it. */
+export interface CatalogArtifact {
+  readonly artifactId: string;
+  readonly relativePath: string;
+  readonly displayPath: string;
+  readonly title: string | null;
+  readonly status: ArtifactStatus;
+  readonly authority: number;
+  readonly mediaType: string;
+  /** Where the normalized body lives in the object store. */
+  readonly objectHash: string;
+}
+
+/**
+ * A node of the parsed document, in source coordinates.
+ *
+ * The line numbers matter more than they look. They address the **source**, and the
+ * normalized body has its own numbering: normalization collapses blank runs, so the two
+ * diverge from the first blank line onward. Slicing the normalized body by a source line
+ * range returns the wrong text, plausibly and silently, which is why a range read resolves
+ * through these records instead (#44).
+ */
+export interface CatalogNode {
+  readonly nodeId: string;
+  readonly artifactId: string;
+  readonly kind: string;
+  readonly ordinal: number;
+  readonly title: string | null;
+  readonly text: string;
+  readonly headingPath: readonly string[];
+  readonly lineStart: number | null;
+  readonly lineEnd: number | null;
 }
 
 /**
@@ -100,6 +138,15 @@ export interface TableStore {
  */
 export interface BuildScope {
   readonly buildId: BuildHandle['buildId'];
+  /**
+   * When this build was created, if the backend keeps that record.
+   *
+   * Not in the manifest, and not for want of asking: a sealed build carries no wall-clock
+   * time, because two builds of identical content must be identical bytes. The creation
+   * time is operational state the backend holds beside the build, so a backend that has
+   * no such record simply omits it.
+   */
+  readonly createdAt?: string | undefined;
   readonly catalog: CatalogStore;
   readonly tables: TableStore;
   readonly objects: ObjectStore;
