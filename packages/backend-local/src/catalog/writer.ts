@@ -205,11 +205,14 @@ export interface CatalogSearchHit {
   readonly lineEnd: number | null;
   readonly status: string;
   readonly authority: number;
+  readonly estimatedTokens: number;
   readonly bm25: number;
 }
 
 export interface CatalogSearchOptions {
   readonly limit?: number;
+  /** Artifact statuses to include. Omitted means every status the build holds. */
+  readonly statuses?: readonly string[];
   /**
    * SQLite GLOB pattern over the relative path (`*` and `?`). GLOB rather than a full
    * glob library because it is parameterized SQL: a filter can never become an injection,
@@ -231,6 +234,21 @@ export const SEARCH_TABLES: readonly string[] = [
   'chunks_fts_content',
   'chunks_fts_docsize',
   'chunks_fts_config',
+];
+
+/**
+ * Everything the runtime may read from a sealed build.
+ *
+ * Wider than `SEARCH_TABLES` because `describeBuild` counts warnings and `readSource`
+ * resolves through node records, and narrower than the whole schema on purpose: this is
+ * the allowlist a read-only connection is held to, so a capability that starts reading
+ * something new has to say so here, in a diff, rather than by accident.
+ */
+export const RUNTIME_TABLES: readonly string[] = [
+  ...SEARCH_TABLES,
+  'nodes',
+  'supersessions',
+  'build_warnings',
 ];
 
 /**
@@ -257,6 +275,12 @@ export function searchCatalog(
     conditions.push('c.relative_path LIKE ?');
     parameters.push(`%.${settings.extension.replace(/^\./, '')}`);
   }
+  if (settings.statuses !== undefined && settings.statuses.length > 0) {
+    // One placeholder per value, so a status filter stays parameterized SQL rather than
+    // becoming string concatenation the moment someone adds a status.
+    conditions.push(`a.status IN (${settings.statuses.map(() => '?').join(', ')})`);
+    parameters.push(...settings.statuses);
+  }
   parameters.push(limit);
 
   const rows = db
@@ -271,6 +295,7 @@ export function searchCatalog(
               c.line_end      AS lineEnd,
               a.status        AS status,
               a.authority     AS authority,
+              c.estimated_tokens AS estimatedTokens,
               snippet(chunks_fts, 7, '[', ']', ' ... ', 20) AS excerpt,
               bm25(chunks_fts, 0.0, 0.0, 0.0, 0.0, 4.0, 6.0, 3.0, 1.0) AS bm25
          FROM chunks_fts
@@ -294,6 +319,7 @@ export function searchCatalog(
     lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     status: String(row.status),
     authority: Number(row.authority),
+    estimatedTokens: Number(row.estimatedTokens),
     bm25: Number(row.bm25),
   }));
 }

@@ -175,12 +175,13 @@ importers:
 
   packages/runtime:
     dependencies:
-      '@lorepack/backend-local':
-        specifier: workspace:*
-        version: link:../backend-local
       '@lorepack/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@lorepack/test-support':
+        specifier: workspace:*
+        version: link:../../tools/test-support
 
   packages/sdk: {}
 

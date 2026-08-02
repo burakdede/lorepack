@@ -23,12 +23,14 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@lorepack/core": "workspace:*",
-    "@lorepack/backend-local": "workspace:*"
+    "@lorepack/core": "workspace:*"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/runtime"
+  },
+  "devDependencies": {
+    "@lorepack/test-support": "workspace:*"
   }
 }

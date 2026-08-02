@@ -1,2 +1,1 @@
-// @lorepack/runtime
-export {};
+export { createRuntime, type RuntimeOptions } from './runtime.js';

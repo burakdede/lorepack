@@ -28,6 +28,7 @@ export {
   type CatalogWarning,
   countRows,
   escapeFtsQuery,
+  RUNTIME_TABLES,
   SEARCH_TABLES,
   searchCatalog,
   type WriteCatalogOptions,
@@ -48,6 +49,11 @@ export {
   stateMigrationsDirectory,
 } from './migrations-path.js';
 export { FileObjectStore } from './object-store.js';
+export {
+  createLocalRuntimeBackend,
+  type LocalRuntimeBackend,
+  type LocalRuntimeOptions,
+} from './runtime-backend.js';
 export {
   assertSqliteApiSurface,
   integrityCheck,

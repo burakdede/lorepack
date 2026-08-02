@@ -29,7 +29,10 @@ describe('the real repository', () => {
     expect(ALLOWED_WORKSPACE_EDGES.core).toEqual([]);
     expect(ALLOWED_WORKSPACE_EDGES.compiler).toEqual(['core', 'parsers']);
     expect(ALLOWED_WORKSPACE_EDGES.cli).toContain('parsers');
-    expect(ALLOWED_WORKSPACE_EDGES.runtime).toEqual(['core', 'backend-local']);
+    // The runtime reaches storage only through the ports in `core`. Phase 6 supplies
+    // different ports over D1 and R2, and an edge to a backend would make that a hope
+    // rather than something the build refuses to break (#41).
+    expect(ALLOWED_WORKSPACE_EDGES.runtime).toEqual(['core']);
     expect(ALLOWED_WORKSPACE_EDGES.mcp).toEqual(['core', 'runtime']);
     expect(ALLOWED_WORKSPACE_EDGES.sdk).toEqual([]);
   });

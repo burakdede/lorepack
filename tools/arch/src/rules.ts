@@ -29,7 +29,10 @@ export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly Pack
   parsers: ['core'],
   compiler: ['core', 'parsers'],
   'backend-local': ['core'],
-  runtime: ['core', 'backend-local'],
+  // Nothing. The runtime reaches storage through the ports in `core`, and the Worker in
+  // Phase 6 supplies different ones. An edge to a backend would make "the same runtime
+  // runs on D1" an intention rather than a fact, so the rule removes the possibility.
+  runtime: ['core'],
   mcp: ['core', 'runtime'],
   'connect-clients': ['core'],
   'deploy-cloudflare': ['core'],
