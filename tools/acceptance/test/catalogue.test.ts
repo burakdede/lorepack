@@ -29,6 +29,7 @@ const PHASE_1_COMMANDS = [
   'activate',
   'rollback',
   'prune',
+  'mcp',
 ];
 
 function commandsUsedBy(step: Step): string[] {

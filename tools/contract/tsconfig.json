@@ -7,8 +7,17 @@
   },
   "include": ["test/**/*"],
   "references": [
-    { "path": "../../packages/core" },
-    { "path": "../../packages/runtime" },
-    { "path": "../../packages/sdk" }
+    {
+      "path": "../../packages/core"
+    },
+    {
+      "path": "../../packages/runtime"
+    },
+    {
+      "path": "../../packages/sdk"
+    },
+    {
+      "path": "../../packages/mcp"
+    }
   ]
 }

@@ -12,6 +12,9 @@
   "devDependencies": {
     "@lorepack/core": "workspace:*",
     "@lorepack/runtime": "workspace:*",
-    "@lorepack/sdk": "workspace:*"
+    "@lorepack/sdk": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@lorepack/mcp": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0"
   }
 }
