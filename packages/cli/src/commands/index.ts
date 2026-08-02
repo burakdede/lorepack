@@ -2,6 +2,7 @@ import type { CommandDefinition } from '../framework/program.js';
 import { activateCommand, buildsCommand, rollbackCommand } from './activate.js';
 import { buildCommand } from './build.js';
 import { diffCommand } from './diff.js';
+import { exportCommand } from './export.js';
 import { initCommand } from './init.js';
 import { inspectCommand } from './inspect.js';
 import { mcpCommand } from './mcp.js';
@@ -9,6 +10,7 @@ import { packCommand } from './pack.js';
 import { planCommand } from './plan.js';
 import { pruneCommand } from './prune.js';
 import { searchCommand } from './search.js';
+import { serveCommand } from './serve.js';
 import { statusCommand } from './status.js';
 
 /**
@@ -31,5 +33,7 @@ export function registerCommands(): CommandDefinition[] {
     rollbackCommand(),
     pruneCommand(),
     mcpCommand(),
+    serveCommand(),
+    exportCommand(),
   ];
 }

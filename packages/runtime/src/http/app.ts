@@ -29,6 +29,14 @@ import type { ZodType } from 'zod';
 export interface ApiOptions {
   readonly runtime: LoreRuntime;
   /**
+   * The MCP Streamable HTTP handler, mounted at `POST /mcp`.
+   *
+   * Injected rather than constructed here because `@lorepack/runtime` may not import the
+   * MCP SDK: protocol churn is isolated in one package (architecture 8.6), and this app has
+   * to keep compiling on a Worker whether or not that package is present.
+   */
+  readonly mcpHandler?: (request: Request) => Promise<Response> | Response;
+  /**
    * The active build, for `/health`. Separate from the runtime because architecture 13.1
    * fixes that interface at seven capabilities and a health probe is not one of them.
    */
@@ -86,6 +94,13 @@ export function createApiApp(options: ApiOptions): Hono {
       sourceState,
     });
   });
+
+  if (options.mcpHandler !== undefined) {
+    const handler = options.mcpHandler;
+    // Every method: the transport answers GET and DELETE itself, including refusing them
+    // where the stateless model has nothing to answer with.
+    app.all('/mcp', async (context) => handler(context.req.raw));
+  }
 
   app.get('/v1/build', (context) => answer(context, () => options.runtime.describeBuild()));
 

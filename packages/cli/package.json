@@ -23,16 +23,18 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@hono/node-server": "2.0.12",
+    "@lorepack/backend-local": "workspace:*",
     "@lorepack/compiler": "workspace:*",
     "@lorepack/connect-clients": "workspace:*",
     "@lorepack/core": "workspace:*",
     "@lorepack/deploy-cloudflare": "workspace:*",
     "@lorepack/mcp": "workspace:*",
-    "@lorepack/runtime": "workspace:*",
-    "commander": "15.0.0",
     "@lorepack/parsers": "workspace:*",
-    "@lorepack/backend-local": "workspace:*",
-    "@modelcontextprotocol/server": "2.0.0"
+    "@lorepack/runtime": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "commander": "15.0.0",
+    "hono": "4.12.33"
   },
   "repository": {
     "type": "git",
