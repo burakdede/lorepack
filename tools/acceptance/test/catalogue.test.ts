@@ -37,6 +37,7 @@ function commandsUsedBy(step: Step): string[] {
     case 'run':
     case 'run-in':
     case 'interrupt':
+    case 'protocol':
       return step.args[0] === undefined ? [] : [step.args[0]];
     case 'concurrent':
       return [step.background[0], step.foreground[0]].filter(
@@ -102,7 +103,13 @@ describe('the catalogue', () => {
     for (const scenario of SCENARIOS) {
       if (scenario.mode !== 'auto') continue;
       const asserts = scenario.steps.some(
-        (step) => ('expect' in step && step.expect !== undefined) || step.action === 'unchanged',
+        (step) =>
+          ('expect' in step && step.expect !== undefined) ||
+          step.action === 'unchanged' ||
+          // A protocol step states its expectations as response and stderr substrings,
+          // because there is no exit code or stdout rendering to assert on.
+          (step.action === 'protocol' &&
+            ((step.expectResult?.length ?? 0) > 0 || (step.expectStderr?.length ?? 0) > 0)),
       );
       expect(asserts, `${scenario.id} runs commands but checks nothing`).toBe(true);
     }

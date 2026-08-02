@@ -361,6 +361,70 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
       return problems.map((problem) => `${context.where}: ${problem}`);
     }
 
+    case 'protocol': {
+      const problems: string[] = [];
+      const child = spawn(
+        process.execPath,
+        [context.binary, '--cwd', context.project, ...step.args],
+        { stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+
+      let out = '';
+      let err = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString('utf8');
+      });
+      child.stderr.on('data', (chunk: Buffer) => {
+        err += chunk.toString('utf8');
+      });
+
+      // Every request carries its own protocol version and client capabilities: the
+      // 2026-07-28 specification has no session to carry them for it.
+      child.stdin.write(
+        `${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: step.method,
+          params: {
+            ...(step.params ?? {}),
+            _meta: {
+              'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+              'io.modelcontextprotocol/clientCapabilities': {},
+            },
+          },
+        })}\n`,
+      );
+
+      const deadline = Date.now() + 120_000;
+      while (!out.includes('"result"') && !out.includes('"error"') && Date.now() < deadline) {
+        await delay(100);
+      }
+      child.kill('SIGTERM');
+
+      // stdout is protocol or it is broken. A progress line in the middle of a frame is a
+      // parse error the client cannot explain to anyone (architecture 14.3).
+      for (const line of out.split('\n').filter((one) => one.trim() !== '')) {
+        try {
+          JSON.parse(line);
+        } catch {
+          problems.push(
+            `${context.where}: stdout carried a line that is not a protocol frame: ${line.slice(0, 80)}`,
+          );
+        }
+      }
+      for (const expected of step.expectResult ?? []) {
+        if (!out.includes(expected)) {
+          problems.push(`${context.where}: the response does not mention ${expected}`);
+        }
+      }
+      for (const expected of step.expectStderr ?? []) {
+        if (!err.includes(expected)) {
+          problems.push(`${context.where}: stderr does not mention ${expected}`);
+        }
+      }
+      return problems;
+    }
+
     case 'note':
       // Manual scenarios are rendered, never executed. Reaching here means a manual step
       // ended up in an automated scenario, which the catalogue test also rejects.

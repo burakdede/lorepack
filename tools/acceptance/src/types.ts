@@ -82,6 +82,7 @@ export type Step =
   | IdenticalStep
   | RecordStep
   | UnchangedStep
+  | ProtocolStep
   | NoteStep;
 
 interface StepBase {
@@ -243,6 +244,26 @@ export interface RecordStep extends StepBase {
 export interface UnchangedStep extends StepBase {
   readonly action: 'unchanged';
   readonly name: string;
+}
+
+/**
+ * Speaks the MCP protocol to the binary over stdio.
+ *
+ * A new step kind rather than a new suite, which is what the Phase 2 audit asked for. What
+ * it proves cannot be reached any other way: that a client's first frame is answered, and
+ * that stdout carried protocol and nothing else while a build was reporting progress.
+ */
+export interface ProtocolStep extends StepBase {
+  readonly action: 'protocol';
+  /** Arguments after `lore`, for example `['mcp', '--ensure-current']`. */
+  readonly args: readonly string[];
+  /** The JSON-RPC method to call once the process is up. */
+  readonly method: string;
+  readonly params?: Readonly<Record<string, unknown>>;
+  /** Substrings the serialized response must contain. */
+  readonly expectResult?: readonly string[];
+  /** Substrings stderr must contain, which is where every diagnostic belongs. */
+  readonly expectStderr?: readonly string[];
 }
 
 /** A human instruction. Only valid in a manual scenario. */
