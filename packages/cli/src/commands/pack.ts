@@ -9,7 +9,7 @@ import {
   verifyArchive,
   writeArchive,
 } from '@lorepack/backend-local';
-import { type BuildId, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
+import { type BuildId, count, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { buildDirectory, openStateStore, resolveBuildId } from '../services/builds.js';
 
@@ -75,7 +75,7 @@ export function packCommand(): CommandDefinition {
         await writeArchive(destination, members);
 
         return {
-          human: `Wrote ${destination}\n  ${members.length + 1} members, including the checksum index.`,
+          human: `Wrote ${destination}\n  ${count(members.length + 1, 'member')}, including the checksum index.`,
           json: {
             buildId,
             archive: destination,
@@ -101,7 +101,7 @@ async function verify(file: string, cwd: string): Promise<CommandResult> {
   const result = await verifyArchive(path);
   if (result.ok) {
     return {
-      human: `${path} is intact. ${result.memberCount} members verified.`,
+      human: `${path} is intact. ${count(result.memberCount, 'member')} verified.`,
       json: { archive: path, ...result },
     };
   }

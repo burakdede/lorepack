@@ -69,7 +69,8 @@ export const SCALE_SCENARIOS: readonly Scenario[] = [
         // it here would make this one fail for a reason that has nothing to do with #147.
         action: 'run',
         args: ['inspect', 'sources'],
-        expect: { exitCode: 0, stdout: { contains: ['2501 artifacts'] } },
+        // Grouped, as every other count in the CLI is: '2,501' beside 'Parsing 2,501/2,501'.
+        expect: { exitCode: 0, stdout: { contains: ['2,501 artifacts'] } },
       },
       { action: 'run', args: ['builds'], json: true, expect: { exitCode: 0 } },
       { action: 'run', args: ['pack'], json: true, expect: { exitCode: 0 } },

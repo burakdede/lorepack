@@ -7,6 +7,7 @@ import {
   type BuildId,
   type BuildSummary,
   buildManifestSchema,
+  count,
   LoreError,
 } from '@lorepack/core';
 
@@ -58,12 +59,16 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
     });
   }
 
-  throw new LoreError('LORE_E_INVALID_ARGUMENT', `${needle} matches ${matches.length} builds.`, {
-    remediation: `Use a longer prefix. Candidates:\n${matches
-      .map((build) => `  ${build.buildId}`)
-      .join('\n')}`,
-    subject: needle,
-  });
+  throw new LoreError(
+    'LORE_E_INVALID_ARGUMENT',
+    `${needle} matches ${count(matches.length, 'build')}.`,
+    {
+      remediation: `Use a longer prefix. Candidates:\n${matches
+        .map((build) => `  ${build.buildId}`)
+        .join('\n')}`,
+      subject: needle,
+    },
+  );
 }
 
 export function buildDirectory(loreDirectory: string, buildId: BuildId): string {

@@ -207,10 +207,10 @@ function inspectSources(loreDirectory: string, buildId: BuildId): CommandResult 
         .all() as Array<Record<string, string | number>>,
   );
 
-  const lines = [`${artifacts.length} artifacts in ${buildId.slice(0, 17)}`, ''];
+  const lines = [`${count(artifacts.length, 'artifact')} in ${buildId.slice(0, 17)}`, ''];
   for (const artifact of artifacts) {
     lines.push(
-      `  ${String(artifact.displayPath)}  ${artifact.chunks} chunks, ${artifact.parserId}, ` +
+      `  ${String(artifact.displayPath)}  ${count(Number(artifact.chunks), 'chunk')}, ${artifact.parserId}, ` +
         `${artifact.status}, authority ${artifact.authority}`,
     );
   }

@@ -112,6 +112,26 @@ describe('lore inspect sources and artifacts', () => {
     });
   });
 
+  it('agrees in number when there is exactly one of something', async () => {
+    // #167: the count of one is the only count that can catch this, and every existing
+    // assertion used a corpus of three.
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'solo.md': '# Solo\n\nOne short document.\n' } },
+      async (temp) => {
+        await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+        const lore = (args: string[]) => run(['--cwd', temp.root, ...args]);
+
+        const sources = (await lore(['inspect', 'sources'])).stdout;
+        expect(sources).toContain('1 artifact in');
+        expect(sources).toContain('1 chunk,');
+        expect(sources).not.toContain('1 artifacts');
+        expect(sources).not.toContain('1 chunks');
+
+        expect((await lore(['inspect', 'chunks', 'solo.md'])).stdout).toContain('1 chunk in');
+      },
+    );
+  });
+
   it('lists the whole build when no path is given, as every other subject does', async () => {
     // #166: the bare subject looked up the empty string as an artifact and failed with
     // "No artifact matches ." plus suggestions for a word nobody typed.
