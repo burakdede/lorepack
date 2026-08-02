@@ -152,9 +152,14 @@ describe('renderers', () => {
     expect(text.trimEnd().split('\n').at(-1)).toMatch(/^next: /);
   });
 
-  it('suggests doctor when no remediation was supplied', () => {
+  it('still ends with a next step when no remediation was supplied, naming nothing that does not exist', () => {
+    // #168: this asserted `lore doctor`, which is Phase 3, so the suite guaranteed that
+    // every unclassified failure sent the user to a command the binary does not have.
     const bare = new LoreError('LORE_E_INTERNAL', 'something broke');
-    expect(renderForCli(bare, { secrets: [] })).toContain('lore doctor');
+    const text = renderForCli(bare, { secrets: [] });
+
+    expect(text).not.toContain('lore doctor');
+    expect(text.trimEnd().split('\n').at(-1)).toContain('LORE_E_INTERNAL');
   });
 
   it('hides details unless verbose', () => {

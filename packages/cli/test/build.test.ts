@@ -1,4 +1,12 @@
-import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
@@ -325,6 +333,39 @@ describe('concurrency', () => {
 
       expect(result.created).toBe(true);
       expect(messages.join('\n')).toMatch(/Waiting for the project lock held by pid \d+/);
+    });
+  });
+});
+
+describe('what the build says when it cannot read a file', () => {
+  // chmod is a POSIX concept. On Windows the equivalent needs an ACL API Node does not
+  // expose, and a test that silently does nothing is worse than one that says why.
+  const posixOnly = process.platform === 'win32';
+
+  it.skipIf(posixOnly)(
+    'names the file and the fix, and does not call it an internal error',
+    async () => {
+      await project({ 'a.md': '# A\n\nText.', 'locked.md': '# Locked\n\nText.' }, async (root) => {
+        chmodSync(join(root, 'locked.md'), 0o000);
+        try {
+          await expect(build(root)).rejects.toMatchObject({
+            code: 'LORE_E_SOURCE_UNREADABLE',
+            path: 'locked.md',
+          });
+        } finally {
+          chmodSync(join(root, 'locked.md'), 0o644);
+        }
+      });
+    },
+  );
+
+  it.skipIf(posixOnly)('builds normally once the permission is fixed', async () => {
+    await project({ 'a.md': '# A\n\nText.', 'locked.md': '# Locked\n\nText.' }, async (root) => {
+      chmodSync(join(root, 'locked.md'), 0o000);
+      await expect(build(root)).rejects.toThrow();
+      chmodSync(join(root, 'locked.md'), 0o644);
+
+      await expect(build(root)).resolves.toMatchObject({ created: true });
     });
   });
 });

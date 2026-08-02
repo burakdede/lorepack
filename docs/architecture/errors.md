@@ -38,6 +38,23 @@ throw new LoreError('LORE_E_PATH_ESCAPE', 'archive/../../etc/passwd escapes the 
 CI can therefore distinguish "your project is wrong" from "this machine is wrong" without
 parsing text.
 
+## Classification is part of the contract
+
+A code says who has a problem, and the exit code is derived from it, so misclassifying is
+not cosmetic: it tells CI the wrong thing and it tells a person to do the wrong thing.
+
+`LORE_E_INTERNAL` means a defect in Lorepack, and its exit code and remediation both invite
+a bug report. An ordinary condition of a real filesystem is not that. A source file that
+cannot be opened is `LORE_E_SOURCE_UNREADABLE`, exit 1, naming the display path and pointing
+at permissions or `.loreignore`. It used to arrive as `LORE_E_INTERNAL` carrying a raw
+`EACCES` and an absolute path (#168).
+
+The `next:` line names only what the binary can do today. Until `lore doctor` ships in
+Phase 3, no message refers to it: `scripts/check-command-set.mjs` reads the real `--help`
+output and fails when a source string names a command that is not registered. A remediation
+that points at a missing command is worse than no remediation, and a unit test had been
+asserting the wrong one, so review alone was demonstrably not enough.
+
 ## Renderers
 
 One error, three audiences:

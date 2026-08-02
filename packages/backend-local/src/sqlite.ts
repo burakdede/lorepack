@@ -117,7 +117,7 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
     });
   } catch (cause) {
     throw new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${path} for reading.`, {
-      remediation: 'Check the build exists and is readable. Run `lore doctor`.',
+      remediation: 'Check that the build exists and is readable, then run `lore builds`.',
       cause,
     });
   }

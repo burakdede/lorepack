@@ -42,7 +42,9 @@ export function renderForCli(error: unknown, options: RenderOptions = {}): strin
   lines.push(
     err.remediation !== undefined
       ? `${style('next:', 'green', color)} ${redact(err.remediation, secrets)}`
-      : `${style('next:', 'green', color)} run \`lore doctor\` for diagnostics, or see the documentation for ${err.code}.`,
+      : // No fallback command is named here. Until #56 ships `lore doctor`, naming it sent
+        // every unclassified failure to a command that does not exist (#168).
+        `${style('next:', 'green', color)} see the documentation for ${err.code}, and include it when reporting this.`,
   );
   return lines.join('\n');
 }

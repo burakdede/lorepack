@@ -131,7 +131,8 @@ describe('opening databases', () => {
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as LoreError).code).toBe('LORE_E_SQLITE_UNAVAILABLE');
-      expect((error as LoreError).remediation).toContain('lore doctor');
+      // #168: this asserted `lore doctor`, a command that does not exist until Phase 3.
+      expect((error as LoreError).remediation).toContain('lore builds');
     }
   });
 

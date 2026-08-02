@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-37 automated, 3 checked by hand.
+38 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -557,6 +557,21 @@ Starting point: an empty directory.
 
 1. Run `lore --help`.
    Expect: it succeeds, stdout mentions "init", "plan", "build", "status", "diff", "search", "inspect", "pack", "builds", "activate", "rollback", "prune".
+
+### `output/a-failure-names-something-that-exists`
+
+**Every failure names a real cause and a next step the binary can perform**
+
+Proves: Section 4.4: an error names the subject and the way forward.
+
+Locks down the defect in #168.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Run `lore activate lore_definitelynotabuild`.
+   Expect: it exits 1, the error is `LORE_E_BUILD_NOT_FOUND`, stderr never mentions "lore doctor".
+2. And a subject that does not exist, which used to fall through to the default advice
+   Expect: it exits 1, stderr never mentions "lore doctor".
 
 ## Scale and responsiveness
 
