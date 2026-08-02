@@ -1,16 +1,27 @@
+import { style } from '../format/ansi.js';
 import { causeChain, LoreError } from './lore-error.js';
 import { redact, redactDeep, secretsFromEnv } from './redact.js';
 
 export interface RenderOptions {
   readonly secrets?: readonly string[];
   readonly verbose?: boolean;
+  /**
+   * Colour, when the caller has decided the stream can take it. Only the two words a reader
+   * scans for are coloured: what went wrong, and what to do about it. `--json` never passes
+   * this, because a machine-readable stream with escapes in it is not machine-readable.
+   */
+  readonly color?: boolean;
 }
 
 /** Human-readable CLI rendering: summary, subject, cause chain, then one next step. */
 export function renderForCli(error: unknown, options: RenderOptions = {}): string {
   const err = LoreError.from(error);
   const secrets = options.secrets ?? secretsFromEnv();
-  const lines: string[] = [`error: ${redact(err.message, secrets)}`, `  code: ${err.code}`];
+  const color = options.color === true;
+  const lines: string[] = [
+    `${style('error:', 'red', color)} ${redact(err.message, secrets)}`,
+    style(`  code: ${err.code}`, 'dim', color),
+  ];
 
   // An empty value is not a subject. Rendering `subject:` with nothing after it tells the
   // reader the error is about something and then refuses to say what (#166).
@@ -30,8 +41,8 @@ export function renderForCli(error: unknown, options: RenderOptions = {}): strin
   lines.push('');
   lines.push(
     err.remediation !== undefined
-      ? `next: ${redact(err.remediation, secrets)}`
-      : `next: run \`lore doctor\` for diagnostics, or see the documentation for ${err.code}.`,
+      ? `${style('next:', 'green', color)} ${redact(err.remediation, secrets)}`
+      : `${style('next:', 'green', color)} run \`lore doctor\` for diagnostics, or see the documentation for ${err.code}.`,
   );
   return lines.join('\n');
 }

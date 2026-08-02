@@ -54,6 +54,26 @@ describe('LoreError', () => {
     expect(renderAsJson(error, { secrets: [] }).error).not.toHaveProperty('subject');
   });
 
+  it('colours only what a reader scans for, and only when asked', () => {
+    // #169: `--no-color`, NO_COLOR and FORCE_COLOR were documented and resolved, and
+    // nothing was ever coloured.
+    const error = new LoreError('LORE_E_BUILD_NOT_FOUND', 'No build matches nope.', {
+      remediation: 'Run `lore builds` to see what exists.',
+    });
+    const esc = String.fromCharCode(27);
+
+    expect(renderForCli(error, { secrets: [], color: true })).toContain(esc);
+    expect(renderForCli(error, { secrets: [], color: false })).not.toContain(esc);
+    expect(renderForCli(error, { secrets: [] })).not.toContain(esc);
+  });
+
+  it('never colours the structured rendering, whatever the caller asks for', () => {
+    // A machine-readable stream with escapes in it is not machine-readable.
+    const error = new LoreError('LORE_E_BUILD_NOT_FOUND', 'No build matches nope.');
+    const json = JSON.stringify(renderAsJson(error, { secrets: [], color: true }));
+    expect(json).not.toContain(String.fromCharCode(27));
+  });
+
   it('wraps unknown thrown values without losing them', () => {
     const wrapped = LoreError.from(new TypeError('boom'));
     expect(wrapped.code).toBe('LORE_E_INTERNAL');

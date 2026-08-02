@@ -35,8 +35,28 @@ ten thousand events becomes a readable line per second.
 | TTY | Rewrites the current line with `\r`, closes it when the stage finishes |
 | Non-TTY | One plain line per update, no escape sequences, safe for CI logs |
 
-Colour follows the ecosystem convention: `NO_COLOR` disables it outright, `FORCE_COLOR=0`
-disables it even on a TTY, `FORCE_COLOR=1` enables it off one.
+### Width
+
+A progress line is truncated to the terminal width, leaving one column free. Without that,
+a line wider than the terminal wraps, and the `\r` that rewrites it returns to the start of
+the last physical row: the earlier row is stranded, and every update strands another. When
+the row is too narrow to hold everything, the counts give way and the status stays, because
+`done` and the elapsed time are what a reader is waiting for.
+
+The width is passed in rather than read from `process`, so the behaviour is testable by
+rendering to a writer with a known width instead of by eye.
+
+### Colour
+
+`NO_COLOR` disables it outright, `FORCE_COLOR=0` disables it even on a TTY, `FORCE_COLOR=1`
+enables it off one, and `--no-color` overrides all three.
+
+Resolved per stream, because the two are redirected separately: `lore build > log.txt` on a
+terminal keeps its errors readable, and `lore build 2> log.txt` puts no escapes in the file.
+
+Only three things are ever coloured: the status word of a finished stage, `error:`, and
+`next:`. Each carries meaning a reader uses. `--json` output never carries an escape, which
+is asserted rather than assumed.
 
 ## stdout discipline
 

@@ -91,7 +91,7 @@ Two consequences worth keeping in mind:
 |---|---|
 | `--json` | The structured result on stdout, nothing else |
 | `--verbose` | Stage detail and debug diagnostics |
-| `--no-color` | Disable colour, as do `NO_COLOR` and `FORCE_COLOR=0` |
+| `--no-color` | Disable colour, as do `NO_COLOR` and `FORCE_COLOR=0`. Colour is resolved per stream |
 | `--cwd <path>` | Run against a project elsewhere, without changing `process.cwd()` |
 
 `--cwd` not mutating the process directory is deliberate: tests run commands in parallel

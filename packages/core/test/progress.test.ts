@@ -44,12 +44,17 @@ describe('ProgressBus', () => {
 });
 
 describe('ProgressRenderer', () => {
-  function setup(isTty: boolean, minUpdateIntervalMs = 1000) {
+  function setup(
+    isTty: boolean,
+    minUpdateIntervalMs = 1000,
+    extra: { color?: boolean; columns?: number } = {},
+  ) {
     const out: string[] = [];
     const renderer = new ProgressRenderer({
       write: (t) => out.push(t),
       isTty,
       minUpdateIntervalMs,
+      ...extra,
     });
     return { out, renderer, text: () => out.join('') };
   }
@@ -185,5 +190,77 @@ describe('shouldUseColor', () => {
     [{ FORCE_COLOR: '0' }, true, false],
   ])('env %o on tty %s gives %s', (env, isTty, expected) => {
     expect(shouldUseColor(env as NodeJS.ProcessEnv, isTty)).toBe(expected);
+  });
+});
+
+describe('colour and terminal width', () => {
+  /**
+   * Both were documented, resolved, threaded into the renderer and then never applied
+   * (#169). A flag nobody can observe is worse than no flag: the manual checklist asked a
+   * person to confirm colour disappeared when there was none to disappear.
+   */
+  function render(options: { color?: boolean; columns?: number }): string {
+    const out: string[] = [];
+    const renderer = new ProgressRenderer({
+      write: (t) => out.push(t),
+      isTty: true,
+      ...options,
+    });
+    renderer.handle({
+      type: 'stage-started',
+      stage: 'parsing',
+      label: 'Parsing',
+      total: 500,
+      at: 0,
+    });
+    renderer.handle({
+      type: 'stage-finished',
+      stage: 'parsing',
+      completed: 500,
+      outcome: 'done',
+      at: 1200,
+    });
+    return out.join('');
+  }
+
+  const visible = (text: string): string[] =>
+    text
+      .replace(new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g'), '')
+      .split(/[\r\n]/)
+      .filter((line) => line !== '');
+
+  it('colours the status word when colour is on', () => {
+    expect(render({ color: true })).toContain(ESC);
+  });
+
+  it('emits nothing but text when colour is off, which is what a log needs', () => {
+    expect(render({ color: false })).not.toContain(ESC);
+    expect(render({})).not.toContain(ESC);
+  });
+
+  it.each([20, 30, 40, 60, 80, 200])(
+    'keeps every update inside %i columns, so one update is one row',
+    (columns) => {
+      for (const line of visible(render({ columns }))) {
+        expect(line.length, line).toBeLessThan(columns);
+      }
+    },
+  );
+
+  it('drops the counts before the status, because the status is what a reader waits for', () => {
+    // Truncating from the right would leave a column of padding and no `done`.
+    expect(visible(render({ columns: 40 })).at(-1)).toContain('done');
+  });
+
+  it('stays exactly as it was when the width is unknown, as in a pipe', () => {
+    const line = visible(render({})).at(-1) ?? '';
+    expect(line).toMatch(/^Parsing +500\/500 +done$/);
+    expect(line).toHaveLength(52);
+  });
+
+  it('does not count escapes toward the width', () => {
+    for (const line of visible(render({ columns: 40, color: true }))) {
+      expect(line.length).toBeLessThan(40);
+    }
   });
 });
