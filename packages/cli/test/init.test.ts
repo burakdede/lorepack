@@ -141,6 +141,39 @@ describe('idempotence', () => {
   });
 });
 
+describe('what the heading claims', () => {
+  /**
+   * #178: `--force` rewrites files and announced "Created:" over a list marked `~`, and a
+   * run with nothing to do said "Created:" over the word "nothing". The markers were right
+   * both times, and only the heading was making things up.
+   */
+  it('says Created on a first run, and nothing else', async () => {
+    await withTempProject({ files: { 'a.md': '# A' } }, async (project) => {
+      const result = await init(project.root);
+      expect(result.stdout).toContain('Created:');
+      expect(result.stdout).not.toContain('Rewrote');
+    });
+  });
+
+  it('says Rewrote under --force, because nothing was created', async () => {
+    await withTempProject({ files: { 'a.md': '# A' } }, async (project) => {
+      await init(project.root);
+      const result = await init(project.root, ['--force']);
+
+      expect(result.stdout).toContain('Rewrote:');
+      expect(result.stdout).not.toContain('Created:');
+      expect(result.stdout).toContain(CONFIG_FILENAME);
+    });
+  });
+
+  it('still describes the future under --dry-run', async () => {
+    await withTempProject({ files: { 'a.md': '# A' } }, async (project) => {
+      const result = await init(project.root, ['--dry-run']);
+      expect(result.stdout).toContain('Would create:');
+    });
+  });
+});
+
 describe('--dry-run', () => {
   it('reports what would change and writes nothing', async () => {
     await withTempProject({ files: { 'a.md': '#' } }, async (project) => {
@@ -156,6 +189,14 @@ describe('--dry-run', () => {
 });
 
 describe('secret-shaped files', () => {
+  it('agrees in number when exactly one file looks like a credential', async () => {
+    // #178: "1 file(s) look like credentials" agreed with nothing.
+    await withTempProject({ files: { 'a.md': '#', '.env': 'SECRET=x' } }, async (project) => {
+      const result = await init(project.root);
+      expect(result.stdout).toContain('1 file looks like credentials');
+    });
+  });
+
   it('warns about credential-looking filenames without reading them', async () => {
     await withTempProject(
       {
@@ -169,6 +210,7 @@ describe('secret-shaped files', () => {
       async (project) => {
         const result = await init(project.root);
         expect(result.stdout).toContain('look like credentials');
+        expect(result.stdout).not.toContain('file(s)');
         expect(result.stdout).toContain('.env');
         expect(result.stdout).toContain('keys/server.pem');
         expect(result.stdout).toContain('nested/id_rsa');

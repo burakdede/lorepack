@@ -36,6 +36,7 @@ import {
   buildManifestSchema,
   CANONICALIZATION_VERSION,
   type Canonical,
+  count,
   deriveBuildId,
   hashCanonical,
   hashRoot,
@@ -327,7 +328,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           if (!report.ok) {
             throw new LoreError(
               'LORE_E_BUILD_VALIDATION',
-              `The candidate build failed ${report.failures.length} check(s):\n${report.failures
+              `The candidate build failed ${count(report.failures.length, 'check')}:\n${report.failures
                 .map(
                   (failure) =>
                     `  ${failure.check}: ${failure.message}${failure.subject === undefined ? '' : ` (${failure.subject})`}`,

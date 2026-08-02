@@ -1,8 +1,25 @@
 import { isAbsolute, resolve } from 'node:path';
-import { CONFIG_FILENAME, LoreError } from '@lorepack/core';
+import { CONFIG_FILENAME, count, LoreError } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { enclosingProject, type InitResult, planInit, runInit } from '../services/init.js';
+
+/**
+ * The verb the run earned, rather than the one the flag implies.
+ *
+ * `--force` rewrites files and used to announce "Created:" over a list marked `~`, and a
+ * run with nothing to do said "Created:" over the word "nothing" (#178). The markers were
+ * right both times; only the heading was making things up.
+ */
+function heading(result: InitResult, dryRun: boolean): string {
+  const created = result.creates.length > 0;
+  const rewritten = result.modifies.length > 0;
+
+  if (!created && !rewritten) return dryRun ? 'Nothing to create.' : 'Nothing to do.';
+  if (created && rewritten) return dryRun ? 'Would create and rewrite:' : 'Created and rewrote:';
+  if (created) return dryRun ? 'Would create:' : 'Created:';
+  return dryRun ? 'Would rewrite:' : 'Rewrote:';
+}
 
 function renderHuman(result: InitResult, dryRun: boolean): string {
   const lines: string[] = [];
@@ -24,16 +41,17 @@ function renderHuman(result: InitResult, dryRun: boolean): string {
       for (const file of result.forceWouldChange) lines.push(`  ~ ${file}`);
     }
   } else {
-    lines.push(dryRun ? 'Would create:' : 'Created:');
+    lines.push(heading(result, dryRun));
     for (const file of result.creates) lines.push(`  + ${file}`);
     for (const file of result.modifies) lines.push(`  ~ ${file}`);
-    if (result.creates.length === 0 && result.modifies.length === 0) lines.push('  nothing');
   }
 
   if (result.secretShaped.length > 0) {
     lines.push('');
     lines.push(
-      `Warning: ${result.secretShaped.length} file(s) look like credentials and will never be indexed:`,
+      `Warning: ${count(result.secretShaped.length, 'file')} ${
+        result.secretShaped.length === 1 ? 'looks' : 'look'
+      } like credentials and will never be indexed:`,
     );
     for (const file of result.secretShaped.slice(0, 10)) lines.push(`  ${file}`);
     if (result.secretShaped.length > 10) {

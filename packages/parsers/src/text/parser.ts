@@ -1,9 +1,10 @@
-import type {
-  ArtifactParser,
-  LoreNode,
-  ParsedArtifact,
-  ParseInput,
-  ParserWarning,
+import {
+  type ArtifactParser,
+  count,
+  type LoreNode,
+  type ParsedArtifact,
+  type ParseInput,
+  type ParserWarning,
 } from '@lorepack/core';
 import { formatFor } from '../registry.js';
 import { buildArtifact, NodeBuilder } from '../shared/builder.js';
@@ -44,7 +45,7 @@ export const textParser: ArtifactParser = {
     if (split > 0) {
       warnings.push({
         code: 'long-line-split',
-        message: `${split} line(s) longer than ${MAX_LINE_CHARACTERS.toLocaleString('en-US')} characters were split, which changes how the text is chunked but not its content.`,
+        message: `${count(split, 'line')} longer than ${MAX_LINE_CHARACTERS.toLocaleString('en-US')} characters ${split === 1 ? 'was' : 'were'} split, which changes how the text is chunked but not its content.`,
       });
     }
 
