@@ -41,6 +41,19 @@ describe('LoreError', () => {
     expect(LoreError.is(error)).toBe(true);
   });
 
+  it('omits an empty subject or path rather than rendering a label with nothing after it', () => {
+    // #166: `subject:` with a blank value told the reader the error was about something
+    // and then refused to say what.
+    const error = new LoreError('LORE_E_BUILD_NOT_FOUND', 'No artifact matches.', {
+      subject: '',
+      path: '',
+    });
+    const rendered = renderForCli(error, { secrets: [] });
+    expect(rendered).not.toContain('subject:');
+    expect(rendered).not.toContain('path:');
+    expect(renderAsJson(error, { secrets: [] }).error).not.toHaveProperty('subject');
+  });
+
   it('wraps unknown thrown values without losing them', () => {
     const wrapped = LoreError.from(new TypeError('boom'));
     expect(wrapped.code).toBe('LORE_E_INTERNAL');

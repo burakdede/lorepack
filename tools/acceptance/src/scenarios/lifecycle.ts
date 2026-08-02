@@ -375,4 +375,54 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'lifecycle/every-inspect-subject-answers',
+    title: 'Every subject `lore inspect` advertises does something useful on its own',
+    proves: 'Section 4.8: what the help lists is what the command does.',
+    mode: 'auto',
+    regression: 166,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['inspect', 'sources'],
+        expect: { exitCode: 0, stdout: { contains: ['guides/deployment.md'] } },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'warnings'],
+        expect: { exitCode: 0 },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'build'],
+        expect: { exitCode: 0, stdout: { contains: ['canonical roots'] } },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'builds'],
+        expect: { exitCode: 0 },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'chunks'],
+        describe:
+          'Including `chunks`, which used to fail with an error about an artifact nobody named',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            matches: ['guides/deployment\\.md:\\d+-\\d+'],
+            excludes: ['No artifact matches'],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'chunks', 'guides/deployment.md'],
+        describe: 'And with a path, which narrows it to one artifact',
+        expect: { exitCode: 0, stdout: { contains: ['guides/deployment.md'] } },
+      },
+    ],
+  },
 ];

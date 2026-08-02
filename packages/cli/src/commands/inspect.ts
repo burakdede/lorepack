@@ -301,29 +301,57 @@ export function orderByTree(nodes: readonly NodeRow[]): NodeRow[] {
   });
 }
 
+/**
+ * How many chunks the bare subject lists before it stops.
+ *
+ * A whole build is tens of thousands of chunks, which is a scroll rather than an answer.
+ * The limit is stated in the output: a listing that silently truncates reads as "that is
+ * all there is", which is a quieter version of the same defect this command had.
+ */
+const CHUNK_LISTING_LIMIT = 50;
+
+/**
+ * With a path, the chunks of one artifact. Without one, the chunks of the build.
+ *
+ * The bare form used to look the empty string up as an artifact and fail with "No artifact
+ * matches ." and a list of suggestions for a word the user never typed (#166). Every other
+ * subject works bare, and the help text has always said this one does too.
+ */
 function inspectChunks(loreDirectory: string, buildId: BuildId, path: string): CommandResult {
   return withDatabase(loreDirectory, buildId, (db) => {
-    const artifact = findArtifact(db, path);
-    const chunks = db
-      .prepare(
-        `SELECT id, heading_path AS headingPath, estimated_tokens AS estimatedTokens,
+    const artifact = path === '' ? null : findArtifact(db, path);
+    const select = `SELECT id, heading_path AS headingPath, estimated_tokens AS estimatedTokens,
                 relative_path AS relativePath, line_start AS lineStart, line_end AS lineEnd
-           FROM chunks WHERE artifact_id = ? ORDER BY id`,
-      )
-      .all(artifact.id) as Array<Record<string, string | number | null>>;
+           FROM chunks`;
+    const chunks = (
+      artifact === null
+        ? db.prepare(`${select} ORDER BY relative_path, id`).all()
+        : db.prepare(`${select} WHERE artifact_id = ? ORDER BY id`).all(artifact.id)
+    ) as Array<Record<string, string | number | null>>;
 
-    const lines = [`${chunks.length} chunks in ${artifact.display_path}`, ''];
-    for (const chunk of chunks) {
+    const where = artifact === null ? buildId.slice(0, 17) : String(artifact.display_path);
+    const shown = artifact === null ? chunks.slice(0, CHUNK_LISTING_LIMIT) : chunks;
+    const lines = [`${count(chunks.length, 'chunk')} in ${where}`, ''];
+    for (const chunk of shown) {
       const heading = (JSON.parse(String(chunk.headingPath ?? '[]')) as string[]).join(' > ');
       const span =
         chunk.lineStart === null
           ? String(chunk.relativePath)
           : `${chunk.relativePath}:${chunk.lineStart}-${chunk.lineEnd}`;
-      lines.push(`  ${span}  about ${chunk.estimatedTokens} tokens`);
+      lines.push(`  ${span}  about ${count(Number(chunk.estimatedTokens), 'token')}`);
       if (heading !== '') lines.push(`    ${heading}`);
     }
+    if (shown.length < chunks.length) {
+      lines.push(
+        '',
+        `Showing the first ${shown.length}. Pass a source path for one artifact's chunks, or use --json for all of them.`,
+      );
+    }
 
-    return { human: lines.join('\n'), json: { buildId, artifactId: artifact.id, chunks } };
+    return {
+      human: lines.join('\n'),
+      json: { buildId, artifactId: artifact === null ? null : artifact.id, chunks },
+    };
   });
 }
 

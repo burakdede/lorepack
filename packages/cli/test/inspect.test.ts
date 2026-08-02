@@ -112,6 +112,31 @@ describe('lore inspect sources and artifacts', () => {
     });
   });
 
+  it('lists the whole build when no path is given, as every other subject does', async () => {
+    // #166: the bare subject looked up the empty string as an artifact and failed with
+    // "No artifact matches ." plus suggestions for a word nobody typed.
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['inspect', 'chunks']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toMatch(/guides\/deployment\.md:\d+-\d+/);
+      expect(result.stdout).toMatch(/notes\/meeting\.txt:\d+-\d+/);
+      expect(result.stderr).not.toContain('No artifact matches');
+    });
+  });
+
+  it('carries every chunk in the JSON, whatever the human listing shows', async () => {
+    await builtProject(async (_root, lore) => {
+      const parsed = JSON.parse((await lore(['--json', 'inspect', 'chunks'])).stdout) as {
+        artifactId: string | null;
+        chunks: unknown[];
+      };
+
+      expect(parsed.artifactId).toBeNull();
+      expect(parsed.chunks.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
   it('suggests near misses for a path that does not exist', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'deployment']);

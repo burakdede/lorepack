@@ -12,8 +12,10 @@ export function renderForCli(error: unknown, options: RenderOptions = {}): strin
   const secrets = options.secrets ?? secretsFromEnv();
   const lines: string[] = [`error: ${redact(err.message, secrets)}`, `  code: ${err.code}`];
 
-  if (err.path !== undefined) lines.push(`  path: ${redact(err.path, secrets)}`);
-  if (err.subject !== undefined) lines.push(`  subject: ${redact(err.subject, secrets)}`);
+  // An empty value is not a subject. Rendering `subject:` with nothing after it tells the
+  // reader the error is about something and then refuses to say what (#166).
+  if (present(err.path)) lines.push(`  path: ${redact(err.path as string, secrets)}`);
+  if (present(err.subject)) lines.push(`  subject: ${redact(err.subject as string, secrets)}`);
 
   const causes = causeChain(err);
   if (causes.length > 0) {
@@ -56,8 +58,8 @@ export function renderAsJson(error: unknown, options: RenderOptions = {}): JsonE
       code: err.code,
       message: redact(err.message, secrets),
       ...(err.remediation !== undefined ? { remediation: redact(err.remediation, secrets) } : {}),
-      ...(err.path !== undefined ? { path: redact(err.path, secrets) } : {}),
-      ...(err.subject !== undefined ? { subject: redact(err.subject, secrets) } : {}),
+      ...(present(err.path) ? { path: redact(err.path as string, secrets) } : {}),
+      ...(present(err.subject) ? { subject: redact(err.subject as string, secrets) } : {}),
       ...(causes.length > 0 ? { causes: causes.map((c) => redact(c, secrets)) } : {}),
       ...(err.details !== undefined ? { details: redactDeep(err.details, secrets) } : {}),
     },
@@ -87,4 +89,9 @@ const ABSOLUTE_PATH = /(?:[A-Za-z]:\\[^\s"']*|\/(?:home|Users|var|tmp|opt|etc|ro
 
 export function stripAbsolutePaths(text: string): string {
   return text.replace(ABSOLUTE_PATH, '<path>');
+}
+
+/** A field worth rendering: set, and not the empty string. */
+function present(value: string | undefined): boolean {
+  return value !== undefined && value !== '';
 }
