@@ -13,7 +13,13 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'tools/arch', 'tools/phase-gate', 'tools/test-support'],
+    projects: [
+      'packages/*',
+      'tools/arch',
+      'tools/contract',
+      'tools/phase-gate',
+      'tools/test-support',
+    ],
     coverage: { provider: 'v8', reporter: ['text', 'json'], reportsDirectory: 'coverage' },
   },
 });

@@ -16,7 +16,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -b",
@@ -26,5 +27,6 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/sdk"
-  }
+  },
+  "devDependencies": {}
 }

@@ -24,6 +24,7 @@ Two constraints bound every choice:
 | cli | `commander` | 15.0.0 | Argument parsing only. Chosen for `exitOverride` and `configureOutput`, which let the shell own every exit code and every byte of error output rather than letting the parser call `process.exit`. |
 | backend-local | `yazl` | 3.3.1 | Writing `.lorepack`. Deterministic archives need explicit control over entry order, timestamps and whether a data descriptor is written; `yazl`'s `addBuffer` gives exactly that. Convenience wrappers hide the metadata that determinism depends on. |
 | backend-local | `yauzl` | 3.4.0 | Reading and verifying `.lorepack`. Same author, same low-level control, and it handles zip64 so a large build does not need a second code path. |
+| runtime | `hono` | 4.12.33 | The HTTP surface. Chosen in architecture 8.5 because the same route handlers run on Node and on a Worker, which is what makes the Phase 6 projection a configuration change rather than a rewrite. Checked 2026-08-03: MIT, zero runtime dependencies, 1.36 MB unpacked, no native code, no post-install script, last release three days earlier. The zero-dependency part matters most: an HTTP framework is the usual place a transitive tree arrives. |
 
 `node:sqlite`, `node:crypto` and `node:zlib` are used directly and are deliberately not
 dependencies. That is the reason the supported Node floor is 24.15: see
