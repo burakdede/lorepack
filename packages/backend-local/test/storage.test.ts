@@ -13,7 +13,7 @@ import { FileObjectStore } from '../src/object-store.js';
 import { openWritable } from '../src/sqlite.js';
 import { LocalActiveBuildProvider, LocalStateStore } from '../src/state-store.js';
 
-const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const ROOT = join(import.meta.dirname, '..', 'migrations');
 const STATE_MIGRATIONS = join(ROOT, 'state');
 
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;

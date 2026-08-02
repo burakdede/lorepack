@@ -13,7 +13,7 @@ import {
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { integrityCheck, openWritable } from '../src/sqlite.js';
 
-const ROOT = join(import.meta.dirname, '..', '..', '..', 'migrations');
+const ROOT = join(import.meta.dirname, '..', 'migrations');
 const BUILD_MIGRATIONS = join(ROOT, 'build');
 
 function artifact(id: string, title: string, status = 'active'): Artifact {

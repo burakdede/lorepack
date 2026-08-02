@@ -41,6 +41,12 @@ export {
   type MigrationResult,
   runMigrations,
 } from './migrations.js';
+export {
+  buildMigrationsDirectory,
+  type MigrationSet,
+  migrationsDirectory,
+  stateMigrationsDirectory,
+} from './migrations-path.js';
 export { FileObjectStore } from './object-store.js';
 export {
   assertSqliteApiSurface,

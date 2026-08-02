@@ -18,6 +18,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
+import { stageInstall } from './install.js';
 import type { Expect, JsonExpect, Scenario, Step, TextExpect } from './types.js';
 
 const execute = promisify(execFile);
@@ -68,13 +69,20 @@ export async function runScenario(
   const captures = new Map<string, string>();
   const snapshots = new Map<string, Snapshot>();
 
+  // An installed scenario drives a staged copy of the published files instead of the
+  // working tree, so the binary under test differs for the whole scenario, setup included.
+  const binary =
+    scenario.runFrom === 'installed'
+      ? stageInstall(repoRootOf(options.binary), join(root, 'installed')).binary
+      : options.binary;
+
   const lore = async (cwd: string, args: readonly string[]): Promise<Executed> => {
     try {
-      const { stdout, stderr } = await execute(
-        process.execPath,
-        [options.binary, '--cwd', cwd, ...args],
-        { timeout: 600_000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, NO_COLOR: '1' } },
-      );
+      const { stdout, stderr } = await execute(process.execPath, [binary, '--cwd', cwd, ...args], {
+        timeout: 600_000,
+        maxBuffer: 64 * 1024 * 1024,
+        env: { ...process.env, NO_COLOR: '1' },
+      });
       return { code: 0, stdout, stderr };
     } catch (error) {
       const failure = error as { code?: number; stdout?: string; stderr?: string };
@@ -134,7 +142,7 @@ export async function runScenario(
         captures,
         snapshots,
         snapshot,
-        binary: options.binary,
+        binary,
         skipped,
       });
       failures.push(...problems);
@@ -473,6 +481,11 @@ function delay(ms: number): Promise<void> {
 /** Scenario paths are project-relative, except captured ones, which are already absolute. */
 function resolveInProject(project: string, path: string): string {
   return isAbsolute(path) ? path : join(project, ...path.split('/'));
+}
+
+/** The repository, from the binary at `<repo>/packages/cli/dist/entry.js`. */
+function repoRootOf(binary: string): string {
+  return dirname(dirname(dirname(dirname(binary))));
 }
 
 async function runExternal(

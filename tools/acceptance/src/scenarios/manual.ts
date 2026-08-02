@@ -72,7 +72,7 @@ export const MANUAL_SCENARIOS: readonly Scenario[] = [
     steps: [
       {
         action: 'note',
-        text: 'On a fresh machine or container with only a supported Node runtime installed, install the package and run `lore init && lore build && lore search "rollback"` against a small directory of documents.',
+        text: 'On a fresh machine or container with only a supported Node runtime installed, install the package and run `lore init && lore build && lore search "rollback"` against a small directory of documents. The published files alone are now checked on every commit by `packaging/the-published-files-are-enough`, so what is left here is the part a temporary directory cannot claim: a machine with nothing else on it.',
         expect:
           'No compiler is invoked, nothing is downloaded beyond the package itself, no post-install script runs, and no prompt asks for an account or key.',
       },

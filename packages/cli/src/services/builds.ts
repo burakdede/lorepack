@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { LocalStateStore, openReadOnly } from '@lorepack/backend-local';
+import { LocalStateStore, openReadOnly, stateMigrationsDirectory } from '@lorepack/backend-local';
 import type { BuildSnapshot } from '@lorepack/compiler';
 import {
   assertBuildId,
@@ -9,7 +9,6 @@ import {
   buildManifestSchema,
   LoreError,
 } from '@lorepack/core';
-import { STATE_MIGRATIONS } from './migrations-path.js';
 
 /**
  * Reading sealed builds: history, resolution of a short id, and the snapshot the diff
@@ -26,7 +25,7 @@ export function openStateStore(loreDirectory: string): LocalStateStore {
       remediation: 'Run `lore build` to create the first one.',
     });
   }
-  return LocalStateStore.open(loreDirectory, STATE_MIGRATIONS);
+  return LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
 }
 
 /**

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  buildMigrationsDirectory,
   countRows,
   createCandidateDirectory,
   discardCandidateDirectory,
@@ -13,6 +14,7 @@ import {
   runMigrations,
   sealCandidateDirectory,
   searchCatalog,
+  stateMigrationsDirectory,
   writeCatalog,
 } from '@lorepack/backend-local';
 import {
@@ -48,7 +50,6 @@ import {
 } from '@lorepack/core';
 import { parserFor } from '@lorepack/parsers';
 import { checkpoint } from './cancellation.js';
-import { BUILD_MIGRATIONS, STATE_MIGRATIONS } from './migrations-path.js';
 import { type CachedParse, ParseCache } from './parse-cache.js';
 import { readBuildCatalog } from './project.js';
 import { lockInputs } from './versions.js';
@@ -105,7 +106,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       ),
   });
   return lock.withLock(async () => {
-    const state = LocalStateStore.open(loreDirectory, STATE_MIGRATIONS);
+    const state = LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
     const objects = new FileObjectStore(join(loreDirectory, 'objects'));
 
     try {
@@ -245,7 +246,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           // A fixed timestamp, not the wall clock: a sealed build must carry no
           // operational time. Otherwise two builds of identical content differ in bytes,
           // and `.lorepack` stops being reproducible.
-          runMigrations(db, loadMigrations(BUILD_MIGRATIONS), () => SEALED_AT);
+          runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => SEALED_AT);
           const counts = writeCatalog({
             db,
             artifacts: parsed,
