@@ -76,7 +76,15 @@ export function mcpCommand(): CommandDefinition {
 
       // The lock and the databases have to be released however the process ends, including
       // on a signal. A client that kills the server should not leave a project locked.
+      //
+      // Idempotent, because every one of these paths can fire: a clean shutdown closes
+      // explicitly and `exit` fires afterwards. A second close used to reach a closed
+      // database and end the process with a stack trace, on the way out of a session that
+      // had worked perfectly.
+      let closed = false;
       const close = (): void => {
+        if (closed) return;
+        closed = true;
         backend.close();
       };
       process.once('SIGINT', close);
@@ -88,9 +96,23 @@ export function mcpCommand(): CommandDefinition {
       );
       await server.connect(transport);
 
-      // Resolves when the transport closes, which is when the client disconnects.
+      // Resolves when the client goes away, by either route it can take.
+      //
+      // The transport's own `onclose` covers a clean protocol shutdown. Standard input
+      // ending covers the ordinary case of a client exiting or a pipe closing, and it has
+      // to be handled explicitly: without it the await never settles, Node notices an empty
+      // event loop with a pending top-level await, and prints a warning into the agent's
+      // log that looks like a defect in Lorepack.
       await new Promise<void>((resolve) => {
-        transport.onclose = resolve;
+        let done = false;
+        const finish = (): void => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        transport.onclose = finish;
+        process.stdin.once('end', finish);
+        process.stdin.once('close', finish);
       });
       close();
 

@@ -242,3 +242,68 @@ describe('stdout carries protocol and nothing else, architecture 14.3', () => {
     expect(err).toMatch(/Building|Parsing|Sources/);
   }, 120_000);
 });
+
+describe('shutting down', () => {
+  /**
+   * Both defects here were found by running the server by hand after every test passed.
+   *
+   * The first: the await on the transport closing never settled when standard input ended,
+   * so Node printed "Detected unsettled top-level await" into the agent's log, which reads
+   * as a defect in Lorepack. The second was hiding behind it: once the process could exit
+   * cleanly, `close()` ran twice and the second call reached a closed database and ended a
+   * working session with a stack trace.
+   */
+  it('exits cleanly when the client closes the pipe, with nothing alarming on stderr', async () => {
+    const child = spawn(process.execPath, [BINARY, '--cwd', project, 'mcp', '--ensure-current'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      err += chunk.toString('utf8');
+    });
+
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+          },
+        },
+      })}\n`,
+    );
+
+    await new Promise<void>((resolve) => {
+      const started = Date.now();
+      const poll = setInterval(() => {
+        if (out.includes('"result"') || Date.now() - started > 90_000) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 100);
+    });
+
+    // The client goes away by closing the pipe, which is what a client actually does.
+    child.stdin.end();
+    const code = await new Promise<number>((resolve) => {
+      const give = setTimeout(() => resolve(-1), 30_000);
+      child.once('exit', (value) => {
+        clearTimeout(give);
+        resolve(value ?? 0);
+      });
+    });
+
+    expect(code).toBe(0);
+    expect(err).not.toMatch(/unsettled top-level await/i);
+    expect(err).not.toMatch(/database is not open|ERR_INVALID_STATE/);
+    expect(err).not.toMatch(/^\s+at .*\(/m);
+  }, 120_000);
+});

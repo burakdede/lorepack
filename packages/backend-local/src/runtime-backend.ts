@@ -184,6 +184,7 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
   const state = LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
   const provider = new LocalActiveBuildProvider(state, join(loreDirectory, 'builds'));
   const objects = new FileObjectStore(join(loreDirectory, 'objects'));
+  let closed = false;
 
   return {
     provider,
@@ -207,7 +208,11 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
         objects,
       };
     },
+    // Idempotent: a process with a signal handler, an exit handler and an explicit
+    // shutdown will call this more than once, and the second call must not be a crash.
     close: (): void => {
+      if (closed) return;
+      closed = true;
       provider.closeAll();
       state.close();
     },
