@@ -135,4 +135,76 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'init/unreadable-bytes-are-excluded-not-fatal',
+    title: 'A file whose bytes are not text is left out, and the build still succeeds',
+    proves:
+      'Section 6.9: an unsupported file is excluded with a visible warning. Only a supported file that fails to parse fails the build.',
+    mode: 'auto',
+    regression: 165,
+    fixture: { files: CORPUS, setup: ['init'] },
+    steps: [
+      {
+        action: 'write',
+        path: 'guides/screenshot.md',
+        contents: '',
+        bytes: [0x00, 0x01, 0x02, 0x66, 0xff],
+        describe:
+          'Write `guides/screenshot.md` containing a NUL byte, so it is binary despite the extension',
+      },
+      {
+        action: 'write',
+        path: 'guides/exported.md',
+        contents: '',
+        bytes: [0xff, 0xfe, 0x68, 0x00],
+        describe: 'And `guides/exported.md` as UTF-16, which is what a Windows export produces',
+      },
+      {
+        action: 'run',
+        args: ['plan'],
+        describe: 'The plan names them before anything is built',
+        expect: {
+          exitCode: 0,
+          stdout: { contains: ['screenshot.md', 'binary', 'exported.md', 'UTF-16'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['build'],
+        json: true,
+        describe: 'The build succeeds, indexing the three readable files and leaving out the two',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'counts.artifacts', equals: 3 },
+            { path: 'warnings', equals: 2 },
+          ],
+        },
+      },
+      {
+        action: 'run',
+        args: ['inspect', 'warnings'],
+        describe: 'Each exclusion is recorded in the build, so it survives the sources',
+        expect: {
+          exitCode: 0,
+          stdout: { contains: ['screenshot.md', 'exported.md', 'not indexed'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['status'],
+        json: true,
+        describe: 'And the project is clean, rather than asking for a build that would do nothing',
+        expect: { exitCode: 0, json: [{ path: 'sourceState', equals: 'clean' }] },
+      },
+      {
+        action: 'run',
+        args: ['search', 'rollback'],
+        json: true,
+        describe: 'What is readable is still searchable',
+        expect: { exitCode: 0, json: [{ path: 'hits[0].locator.relativePath', exists: true }] },
+      },
+    ],
+  },
 ];

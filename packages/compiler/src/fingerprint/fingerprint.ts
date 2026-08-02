@@ -1,12 +1,17 @@
+import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import {
   type Canonical,
+  HASH_ALGORITHM,
   hashCanonical,
-  hashFile,
   type ProgressBus,
   sha256Hex,
+  TextClassifier,
+  type UndecodableReason,
+  undecodableMessage,
 } from '@lorepack/core';
-import type { DiscoveredArtifact } from '../discover/discover.js';
+import type { DiscoveredArtifact, DiscoveryWarning } from '../discover/discover.js';
 
 export interface FingerprintedArtifact extends DiscoveredArtifact {
   readonly contentHash: string;
@@ -16,6 +21,14 @@ export interface SourceFingerprint {
   /** One hash over every artifact identity and content hash. */
   readonly fingerprint: string;
   readonly artifacts: readonly FingerprintedArtifact[];
+  /**
+   * Files excluded because their bytes are not text this project can read.
+   *
+   * They belong here rather than at parse time because this stage decides what a build
+   * contains. An exclusion decided later would leave the file counted as pending forever:
+   * `lore status` would report it dirty and `lore build` would report no changes (#165).
+   */
+  readonly warnings: readonly DiscoveryWarning[];
   readonly totalBytes: number;
   readonly durationMs: number;
 }
@@ -43,7 +56,8 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
   progress?.start('fingerprinting', 'Fingerprinting', artifacts.length);
 
   const concurrency = Math.max(1, options.concurrency ?? Math.min(8, availableParallelism()));
-  const hashed = new Array<FingerprintedArtifact>(artifacts.length);
+  const hashed = new Array<FingerprintedArtifact | null>(artifacts.length);
+  const excluded = new Array<DiscoveryWarning | null>(artifacts.length);
   let next = 0;
   let done = 0;
 
@@ -55,7 +69,21 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
       next += 1;
       if (index >= artifacts.length) return;
       const artifact = artifacts[index] as DiscoveredArtifact;
-      hashed[index] = { ...artifact, contentHash: await hashFile(artifact.absolutePath) };
+      const read = await hashAndClassify(artifact.absolutePath);
+      if (read.undecodable === null) {
+        hashed[index] = { ...artifact, contentHash: read.contentHash };
+        excluded[index] = null;
+      } else {
+        // Dropped from the artifact list, so every stage after this one agrees the build
+        // does not contain it, and named in a warning, so the user is told rather than left
+        // to notice.
+        hashed[index] = null;
+        excluded[index] = {
+          code: 'undecodable-content',
+          path: artifact.displayPath,
+          message: undecodableMessage(artifact.displayPath, read.undecodable),
+        };
+      }
       done += 1;
       if (done % 25 === 0 || done === artifacts.length) {
         progress?.progress('fingerprinting', done, { total: artifacts.length, unit: 'files' });
@@ -64,15 +92,40 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
   });
   await Promise.all(workers);
 
-  const totalBytes = hashed.reduce((sum, artifact) => sum + artifact.byteSize, 0);
-  progress?.finish('fingerprinting', hashed.length);
+  // Index order is preserved, so the result does not depend on which worker finished first.
+  const kept = hashed.filter((artifact): artifact is FingerprintedArtifact => artifact !== null);
+  const warnings = excluded.filter((warning): warning is DiscoveryWarning => warning !== null);
+  const totalBytes = kept.reduce((sum, artifact) => sum + artifact.byteSize, 0);
+  progress?.finish('fingerprinting', kept.length);
 
   return {
-    fingerprint: computeFingerprint(hashed),
-    artifacts: hashed,
+    fingerprint: computeFingerprint(kept),
+    artifacts: kept,
+    warnings,
     totalBytes,
     durationMs: Math.round(now() - startedAt),
   };
+}
+
+/**
+ * Hashes and classifies in one read.
+ *
+ * Fingerprinting already streams every byte of every source, so deciding whether those
+ * bytes are readable text costs nothing extra. Doing it in a separate pass would double the
+ * IO of the stage the whole build waits on.
+ */
+async function hashAndClassify(
+  absolutePath: string,
+): Promise<{ contentHash: string; undecodable: UndecodableReason | null }> {
+  const hash = createHash(HASH_ALGORITHM);
+  const classifier = new TextClassifier();
+  const stream = createReadStream(absolutePath);
+  for await (const chunk of stream) {
+    const bytes = chunk as Uint8Array;
+    hash.update(bytes);
+    classifier.update(bytes);
+  }
+  return { contentHash: hash.digest('hex'), undecodable: classifier.finish() };
 }
 
 /** One value summarising every artifact identity and its content. */

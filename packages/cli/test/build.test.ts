@@ -187,29 +187,43 @@ describe('lore build', () => {
     });
   });
 
-  it('fails the candidate on a parse failure and leaves the active build serving', async () => {
+  it('excludes a file whose bytes are not text, and builds the rest', async () => {
+    // This used to assert LORE_E_PARSE_FAILED. A UTF-16 file is not a supported file that
+    // failed to parse, it is an unsupported file, and section 6.9 says to exclude it with a
+    // warning (#165). The build succeeding is the point: one stray export must not stop a
+    // project from having any context at all.
     await project({ 'a.md': '# A\n\nText.' }, async (root) => {
       const first = await build(root);
 
-      // A UTF-16 file is a supported extension whose bytes the parser must reject.
       writeFileSync(join(root, 'broken.md'), Buffer.from('﻿# Title', 'utf16le'));
-      await expect(build(root)).rejects.toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
+      const second = await build(root);
 
-      expect(buildsIn(root)).toEqual([first.buildId]);
+      expect(second.warnings).toBe(1);
+      expect(second.counts.artifacts).toBe(1);
+      expect(second.buildId).toBe(first.buildId);
+    });
+  });
+
+  it('leaves the project clean after excluding one, rather than asking for a pointless build', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      writeFileSync(join(root, 'broken.md'), Buffer.from('﻿# Title', 'utf16le'));
+      await build(root);
+
       const status = await run(['--cwd', root, '--json', 'status']);
-      expect((JSON.parse(status.stdout) as { activeBuildId: string }).activeBuildId).toBe(
-        first.buildId,
-      );
+      expect((JSON.parse(status.stdout) as { sourceState: string }).sourceState).toBe('clean');
     });
   });
 
   it('leaves no candidate directory behind after a failure', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root) => {
-      writeFileSync(join(root, 'broken.md'), Buffer.from('﻿# Title', 'utf16le'));
-      await expect(build(root)).rejects.toThrow();
+      // Lockfile drift is the failure this phase can trigger on demand. The parse-failure
+      // path stays in place for the parsers that can genuinely fail on decodable input
+      // (PDF, DOCX, XLSX in Phase 5); markdown and text cannot.
+      await expect(build(root, { frozen: true })).rejects.toThrow();
 
       const temporary = join(root, '.lore', 'tmp');
       expect(existsSync(temporary) ? readdirSync(temporary) : []).toEqual([]);
+      expect(buildsIn(root)).toEqual([]);
     });
   });
 });
@@ -354,12 +368,12 @@ describe('lore build command', () => {
     });
   });
 
-  it('exits 2 when a candidate cannot be produced', async () => {
+  it('reports an excluded file as a warning and still exits 0', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       writeFileSync(join(root, 'broken.md'), Buffer.from('﻿# Title', 'utf16le'));
-      const result = await lore(['build']);
-      expect(result.code).toBe(2);
-      expect(result.stderr).toContain('LORE_E_PARSE_FAILED');
+      const result = await lore(['--json', 'build']);
+      expect(result.code).toBe(0);
+      expect((JSON.parse(result.stdout) as { warnings: number }).warnings).toBe(1);
     });
   });
 
