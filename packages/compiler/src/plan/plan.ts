@@ -115,7 +115,9 @@ export async function createPlan(options: PlanOptions): Promise<PlanResult> {
       reuseArtifacts: Math.max(0, fingerprint.artifacts.length - parseCount),
       rebuildChunks: parseCount === 0 ? 0 : estimateChunkWork(parseCount, previous),
     },
-    warnings: discovery.warnings.map((warning) => ({
+    // Both stages that can exclude a file, so the plan names every file the build will
+    // leave out before the build runs, rather than only the ones decided by extension.
+    warnings: [...discovery.warnings, ...fingerprint.warnings].map((warning) => ({
       code: warning.code,
       message: warning.message,
     })),

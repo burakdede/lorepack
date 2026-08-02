@@ -195,12 +195,14 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
     case 'write': {
       const target = resolveInProject(context.project, fill(step.path, context.captures));
       mkdirSync(dirname(target), { recursive: true });
+      const contents =
+        step.bytes === undefined ? Buffer.from(step.contents, 'utf8') : Buffer.from(step.bytes);
       if (step.atomic === true) {
         const temporary = `${target}.editor-tmp`;
-        writeFileSync(temporary, step.contents, 'utf8');
+        writeFileSync(temporary, contents);
         renameSync(temporary, target);
       } else {
-        writeFileSync(target, step.contents, 'utf8');
+        writeFileSync(target, contents);
       }
       return [];
     }

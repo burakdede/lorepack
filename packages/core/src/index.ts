@@ -20,6 +20,14 @@ export {
   stripAbsolutePaths,
 } from './errors/index.js';
 export { count, noun } from './format/count.js';
+export {
+  classifyBytes,
+  looksBinary,
+  looksUtf16,
+  TextClassifier,
+  type UndecodableReason,
+  undecodableMessage,
+} from './format/text-encoding.js';
 export * from './fs/index.js';
 export {
   assertBuildId,

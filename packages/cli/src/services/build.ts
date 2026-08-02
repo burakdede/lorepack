@@ -78,6 +78,28 @@ export interface BuildOptions {
   readonly now?: () => Date;
 }
 
+/**
+ * A file the build left out, and why. Discovery contributes the ones decided by extension,
+ * fingerprinting the ones decided by content; both reach the catalog and the manifest, so
+ * they survive the sources and `lore inspect warnings` can answer after they are gone.
+ */
+interface BuildWarning {
+  readonly code: string;
+  readonly class: BuildManifest['warnings'][number]['class'];
+  readonly path: string;
+  readonly message: string;
+}
+
+/**
+ * The class a reader groups by. Both ways of being unreadable are the same fact to a user
+ * ("this file is not in the build"), so they share a class and differ in code.
+ */
+function warningClass(code: string): BuildWarning['class'] {
+  return code === 'unsupported-format' || code === 'undecodable-content'
+    ? 'unsupported-file'
+    : 'parser';
+}
+
 export interface BuildResult {
   readonly buildId: BuildId;
   readonly created: boolean;
@@ -178,6 +200,10 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         } catch (cause) {
           // A supported, included file that cannot be parsed fails the candidate by
           // default (architecture section 6.9). The previous build stays active.
+          //
+          // A file whose bytes are not readable text does not reach here: fingerprinting
+          // classified it and left it out with a warning, which is the other row of the
+          // same table (#165).
           throw new LoreError('LORE_E_PARSE_FAILED', `Could not parse ${discovered.displayPath}.`, {
             remediation:
               'Fix the file, or exclude it in .loreignore. The active build is unchanged.',
@@ -205,6 +231,18 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       }
       progress.finish('parsing', handled);
 
+      // One list from here on. Discovery decides an extension has no parser; parsing decides
+      // the bytes are not readable text. Both are the same promise to the user, which is
+      // that a file the build left out is named rather than silently missing.
+      const warnings: readonly BuildWarning[] = [...discovery.warnings, ...fingerprint.warnings]
+        .map((warning) => ({
+          code: warning.code,
+          class: warningClass(warning.code),
+          path: warning.path,
+          message: warning.message,
+        }))
+        .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
       // Identity, derived before anything is written so the directory is named correctly.
       const buildId = deriveBuildId({
         formatVersion: 1,
@@ -228,7 +266,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           created: false,
           activated,
           counts: countsOf(parsed),
-          warnings: discovery.warnings.length,
+          warnings: warnings.length,
           reusedArtifacts: cache.hits,
           rebuiltArtifacts: cache.misses,
           durationMs: now().getTime() - startedAt.getTime(),
@@ -250,12 +288,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           const counts = writeCatalog({
             db,
             artifacts: parsed,
-            warnings: discovery.warnings.map((warning) => ({
-              code: warning.code,
-              class: warning.code === 'unsupported-format' ? 'unsupported-file' : 'parser',
-              path: warning.path,
-              message: warning.message,
-            })),
+            warnings,
           });
           progress.finish('indexing', counts.chunks);
 
@@ -270,14 +303,11 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             canonicalRoots: canonicalRoots(parsed),
             capabilities: ['lexical-search', 'structured-context'],
             counts,
-            warnings: discovery.warnings.map((warning) => ({
+            warnings: warnings.map((warning) => ({
               code: warning.code,
               message: warning.message,
               ...(warning.path === '.' ? {} : { path: warning.path }),
-              class:
-                warning.code === 'unsupported-format'
-                  ? ('unsupported-file' as const)
-                  : ('parser' as const),
+              class: warning.class,
             })),
           };
 
@@ -318,7 +348,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'warnings.json'),
-            `${JSON.stringify(discovery.warnings, null, 2)}\n`,
+            `${JSON.stringify(warnings, null, 2)}\n`,
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'canonical-hashes.json'),
@@ -369,7 +399,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         created: true,
         activated,
         counts,
-        warnings: discovery.warnings.length,
+        warnings: warnings.length,
         reusedArtifacts: cache.hits,
         rebuiltArtifacts: cache.misses,
         durationMs: now().getTime() - startedAt.getTime(),

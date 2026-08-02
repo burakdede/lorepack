@@ -229,3 +229,85 @@ describe('cache key', () => {
     expect(same).toBe(cacheKey(inputs));
   });
 });
+
+describe('files whose bytes are not readable text', () => {
+  const CORPUS = {
+    'lore.yaml': CONFIG,
+    'good.md': '# Good\n\nReadable.\n',
+  } as const;
+
+  /** Written as bytes, because these cases cannot be expressed as a string. */
+  const undecodable = {
+    'binary.md': Uint8Array.from([0x00, 0x01, 0x02, 0x66, 0xff]),
+    'utf16.md': Uint8Array.from([0xff, 0xfe, 0x68, 0x00]),
+    'latin1.md': Uint8Array.from([0x63, 0x61, 0x66, 0xe9, 0x0a]),
+  } as const;
+
+  it('excludes them from the artifact list and names each one', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      for (const [name, contents] of Object.entries(undecodable)) {
+        writeFileSync(project.path(name), contents);
+      }
+      const result = await fingerprintOf(project.root);
+
+      expect(result.artifacts.map((artifact) => artifact.relativePath)).toEqual(['good.md']);
+      expect(result.warnings.map((warning) => warning.path).sort()).toEqual([
+        'binary.md',
+        'latin1.md',
+        'utf16.md',
+      ]);
+      expect(result.warnings.every((warning) => warning.code === 'undecodable-content')).toBe(true);
+      // UTF-16 is named as itself: the remedy is a conversion, not an exclusion.
+      const utf16 = result.warnings.find((warning) => warning.path === 'utf16.md');
+      expect(utf16?.message).toContain('UTF-16');
+    });
+  });
+
+  it('leaves the project clean afterwards, which is the whole point of excluding here', async () => {
+    // #165: excluding at parse time instead left the file counted as pending forever, so
+    // `lore status` reported dirty and `lore build` then reported no changes.
+    await withTempProject({ files: CORPUS }, async (project) => {
+      writeFileSync(project.path('binary.md'), undecodable['binary.md']);
+      const built = await fingerprintOf(project.root);
+      const again = await fingerprintOf(project.root);
+
+      expect(compareFingerprints(again.artifacts, hashMap(built.artifacts)).clean).toBe(true);
+    });
+  });
+
+  it('indexes the file once it becomes readable text', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      writeFileSync(project.path('notes.md'), undecodable['latin1.md']);
+      const before = await fingerprintOf(project.root);
+      expect(before.artifacts.map((artifact) => artifact.relativePath)).toEqual(['good.md']);
+
+      writeFileSync(project.path('notes.md'), '# Fixed\n\nNow valid.\n');
+      const after = await fingerprintOf(project.root);
+
+      expect(after.artifacts.map((artifact) => artifact.relativePath).sort()).toEqual([
+        'good.md',
+        'notes.md',
+      ]);
+      expect(after.warnings).toEqual([]);
+      expect(compareFingerprints(after.artifacts, hashMap(before.artifacts)).added).toEqual([
+        'p:notes.md',
+      ]);
+    });
+  });
+
+  it('does not depend on which worker hashed which file', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      for (const [name, contents] of Object.entries(undecodable)) {
+        writeFileSync(project.path(name), contents);
+      }
+      const config = loadConfig({ cwd: project.root });
+      const discovered = discover({ config });
+
+      const one = await fingerprintSources({ artifacts: discovered.artifacts, concurrency: 1 });
+      const many = await fingerprintSources({ artifacts: discovered.artifacts, concurrency: 8 });
+
+      expect(one.fingerprint).toBe(many.fingerprint);
+      expect(one.warnings).toEqual(many.warnings);
+    });
+  });
+});

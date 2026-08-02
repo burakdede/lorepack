@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-36 automated, 3 checked by hand.
+37 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -85,6 +85,29 @@ Starting point: 5 source files.
    Expect: it succeeds, stdout never mentions ".env", "id_rsa".
 4. Run `lore search sk-live-not-a-real-key`.
    Expect: it succeeds, stdout mentions "No matches".
+
+### `init/unreadable-bytes-are-excluded-not-fatal`
+
+**A file whose bytes are not text is left out, and the build still succeeds**
+
+Proves: Section 6.9: an unsupported file is excluded with a visible warning. Only a supported file that fails to parse fails the build.
+
+Locks down the defect in #165.
+
+Starting point: 3 source files, already set up with `lore init`.
+
+1. Write `guides/screenshot.md` containing a NUL byte, so it is binary despite the extension
+2. And `guides/exported.md` as UTF-16, which is what a Windows export produces
+3. The plan names them before anything is built
+   Expect: it succeeds, stdout mentions "screenshot.md", "binary", "exported.md", "UTF-16".
+4. The build succeeds, indexing the three readable files and leaving out the two
+   Expect: it succeeds, `counts.artifacts` is 3, `warnings` is 2.
+5. Each exclusion is recorded in the build, so it survives the sources
+   Expect: it succeeds, stdout mentions "screenshot.md", "exported.md", "not indexed".
+6. And the project is clean, rather than asking for a build that would do nothing
+   Expect: it succeeds, `sourceState` is "clean".
+7. What is readable is still searchable
+   Expect: it succeeds, `hits[0].locator.relativePath` is present.
 
 ## The lifecycle
 

@@ -35,7 +35,13 @@ export type DiscoveryWarningCode =
   | 'symlink-skipped'
   | 'artifact-too-large'
   | 'envelope-bytes'
-  | 'unreadable';
+  | 'unreadable'
+  /**
+   * A supported extension whose bytes are not readable text. Decided while fingerprinting,
+   * because it is the only stage that reads the content, but it is the same kind of verdict
+   * as the others here: a file the build left out, named rather than silently missing.
+   */
+  | 'undecodable-content';
 
 export interface DiscoveryWarning {
   readonly code: DiscoveryWarningCode;

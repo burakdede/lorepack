@@ -113,7 +113,14 @@ export interface RunInStep extends StepBase {
 export interface WriteStep extends StepBase {
   readonly action: 'write';
   readonly path: string;
+  /** Ignored when `bytes` is given. */
   readonly contents: string;
+  /**
+   * Exact bytes, for the files that cannot be written as text: a NUL byte, a UTF-16 byte
+   * order mark, a sequence that is not valid UTF-8. Writing them as a string would encode
+   * them into something valid and test nothing.
+   */
+  readonly bytes?: readonly number[];
   /**
    * Writes a sibling file and renames over the target, which is how editors actually save.
    * On Windows that is the case naive file handling gets wrong, so simulating it is the

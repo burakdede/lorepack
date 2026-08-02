@@ -1,4 +1,4 @@
-import { LoreError } from '@lorepack/core';
+import { LoreError, looksBinary, looksUtf16 } from '@lorepack/core';
 
 /**
  * Decoding is strict on purpose.
@@ -6,31 +6,17 @@ import { LoreError } from '@lorepack/core';
  * Guessing an encoding produces plausible nonsense, and nonsense inside a build is worse
  * than a skipped file with a warning. A file that is not valid UTF-8, or that contains a
  * NUL byte, is treated as binary and excluded.
+ *
+ * The predicates come from `@lorepack/core` because fingerprinting applies the same rule
+ * while hashing, which is what makes the exclusion consistent with freshness (#165). By the
+ * time a parser runs, an undecodable file has normally been excluded already; these throws
+ * remain as the guard for anything that reaches a parser anyway.
  */
 
 /** U+FEFF, built from its codepoint so this file holds no invisible characters. */
 export const BOM = String.fromCharCode(0xfeff);
 
-export function looksBinary(bytes: Uint8Array): boolean {
-  // A NUL byte in the first few kilobytes is the classic binary signal, and it is the one
-  // that matters here: a text file legitimately never contains one.
-  const limit = Math.min(bytes.length, 8192);
-  for (let i = 0; i < limit; i += 1) {
-    if (bytes[i] === 0) return true;
-  }
-  return false;
-}
-
-/**
- * UTF-16 is worth naming specifically. It is common on Windows, it contains NUL bytes so
- * it trips the binary check first, and "appears to be binary" sends the user looking for
- * the wrong problem. The fix is a conversion, so say so.
- */
-export function looksUtf16(bytes: Uint8Array): boolean {
-  if (bytes.length < 2) return false;
-  const [first, second] = [bytes[0], bytes[1]];
-  return (first === 0xff && second === 0xfe) || (first === 0xfe && second === 0xff);
-}
+export { looksBinary, looksUtf16 };
 
 export function decodeUtf8Strict(bytes: Uint8Array, displayPath: string): string {
   if (looksUtf16(bytes)) {

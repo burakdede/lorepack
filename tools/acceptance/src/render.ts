@@ -128,7 +128,9 @@ export function describeStep(step: Step): string {
     case 'write':
       return step.atomic === true
         ? `Save \`${step.path}\` the way an editor does, by writing a sibling file and renaming over it.`
-        : `Write \`${step.path}\`.`;
+        : step.bytes === undefined
+          ? `Write \`${step.path}\`.`
+          : `Write \`${step.path}\` as raw bytes, which is the only way to make a file that is not text.`;
     case 'empty-sources':
       return 'Empty every source file, leaving the paths in place.';
     case 'symlink':

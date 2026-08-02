@@ -31,6 +31,22 @@ Warnings distinguish a **planned** format from an **unsupported** one. A user wi
 should read "supported in a later release", not "unsupported": those are materially
 different statements, and only one of them is a reason to look for another tool.
 
+### Unreadable bytes are decided while fingerprinting, not while parsing
+
+An extension decides whether a parser exists. Only the content decides whether the file is
+text at all, and a file can be binary, UTF-16 or invalid UTF-8 under any extension. That
+verdict is reached in the fingerprinting stage, which already reads every byte to hash it,
+and the file is excluded with an `undecodable-content` warning naming the path and the fix.
+
+The stage matters. Excluding at parse time instead, which is what Lorepack did until #165,
+put the file in the fingerprint but not in the build, so `lore status` reported the project
+dirty forever and `lore build` then reported no changes: a loop of bad advice. Fingerprinting
+is the last stage that can change what a build contains, so it is where the decision belongs.
+
+The consequence is that section 6.9's other row, a supported file that fails to parse, is
+unreachable for the parsers this phase ships: markdown and text cannot fail on decodable
+input. The path stays in place for the formats in Phase 5, which can.
+
 ## Symlinks
 
 Not followed by default; each one skipped produces a warning naming it.
