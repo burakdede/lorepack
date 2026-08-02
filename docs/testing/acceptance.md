@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-35 automated, 3 checked by hand.
+36 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -237,6 +237,29 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, stdout mentions "{{first}}".
 5. Run `lore activate {{first}}`.
    Expect: it exits 1, the error is `LORE_E_BUILD_NOT_FOUND`, stderr mentions "Available builds".
+
+### `lifecycle/every-inspect-subject-answers`
+
+**Every subject `lore inspect` advertises does something useful on its own**
+
+Proves: Section 4.8: what the help lists is what the command does.
+
+Locks down the defect in #166.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Run `lore inspect sources`.
+   Expect: it succeeds, stdout mentions "guides/deployment.md".
+2. Run `lore inspect warnings`.
+   Expect: it succeeds.
+3. Run `lore inspect build`.
+   Expect: it succeeds, stdout mentions "canonical roots".
+4. Run `lore inspect builds`.
+   Expect: it succeeds.
+5. Including `chunks`, which used to fail with an error about an artifact nobody named
+   Expect: it succeeds, stdout never mentions "No artifact matches", stdout matches `/guides/deployment\.md:\d+-\d+/`.
+6. And with a path, which narrows it to one artifact
+   Expect: it succeeds, stdout mentions "guides/deployment.md".
 
 ## Determinism
 
