@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-38 automated, 3 checked by hand.
+39 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -283,6 +283,26 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, stdout never mentions "No artifact matches", stdout matches `/guides/deployment\.md:\d+-\d+/`.
 6. And with a path, which narrows it to one artifact
    Expect: it succeeds, stdout mentions "guides/deployment.md".
+
+### `lifecycle/diff-works-across-a-rollback`
+
+**After a rollback, `lore diff` compares against the build that is still there**
+
+Proves: Section 4.4: an error states the real situation. Invariant 4: rollback destroys nothing.
+
+Locks down the defect in #176.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Run `lore builds` with `--json`.
+2. Save `guides/onboarding.md` the way an editor does, by writing a sibling file and renaming over it.
+3. Run `lore build` with `--json`.
+4. Run `lore rollback`.
+   Expect: it succeeds.
+5. The bare diff names both builds instead of claiming only one exists
+   Expect: it succeeds, `from` is the first build, `to` is the second build, `identical` is false.
+6. And says nothing untrue about how many builds there are
+   Expect: it succeeds, stdout never mentions "only one build".
 
 ## Determinism
 
