@@ -131,4 +131,61 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+  {
+    id: 'dev/the-two-command-flow-end-to-end',
+    title: 'Two commands take a folder to a grounded, cited answer',
+    proves:
+      'Milestone 1 (section 21): build, connect and answer, with provenance on every result and no manual JSON.',
+    mode: 'auto',
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['connect', 'claude-code', '--dry-run'],
+        describe: 'See exactly what would be written to the client, before anything is',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            contains: ['lore mcp --project', '--ensure-current', 'nothing was changed'],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['connect', 'a-client-nobody-verified'],
+        describe: 'An unverified client gets an honest snippet rather than a refusal',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            // Architecture 14.7: never imply that every client can reach a local server.
+            contains: ['mcpServers', 'unverified', 'lore export'],
+          },
+        },
+      },
+      {
+        action: 'protocol',
+        args: ['mcp', '--ensure-current'],
+        method: 'tools/call',
+        params: {
+          name: 'lore_context_for_task',
+          arguments: { task: 'how do I roll back a release' },
+        },
+        describe: 'Ask the question a coding agent would ask, over the protocol',
+        expectResult: ['citations', 'relativePath', 'lore_'],
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'how do I roll back a release', '--format', 'json'],
+        describe: 'The same answer as a file, for a client that cannot speak MCP',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'budget', equals: 24000 },
+            { path: 'citations[0].relativePath', exists: true },
+            { path: 'buildId', matches: '^lore_[0-9a-f]{64}$' },
+          ],
+        },
+      },
+    ],
+  },
 ];

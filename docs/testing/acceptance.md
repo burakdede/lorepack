@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-50 automated, 3 checked by hand.
+51 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -169,6 +169,22 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, stdout mentions "Node version", "SQLite FTS5", "Project configuration", "Everything".
 2. The same report, for a bug report or a pipeline
    Expect: it succeeds, `status` is "pass", `checks[0].id` is present, `counts.fail` is 0.
+
+### `dev/the-two-command-flow-end-to-end`
+
+**Two commands take a folder to a grounded, cited answer**
+
+Proves: Milestone 1 (section 21): build, connect and answer, with provenance on every result and no manual JSON.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. See exactly what would be written to the client, before anything is
+   Expect: it succeeds, stdout mentions "lore mcp --project", "--ensure-current", "nothing was changed".
+2. An unverified client gets an honest snippet rather than a refusal
+   Expect: it succeeds, stdout mentions "mcpServers", "unverified", "lore export".
+3. Ask the question a coding agent would ask, over the protocol
+4. The same answer as a file, for a client that cannot speak MCP
+   Expect: it succeeds, `budget` is 24000, `citations[0].relativePath` is present, `buildId` matches `/^lore_[0-9a-f]{64}$/`.
 
 ## The lifecycle
 
