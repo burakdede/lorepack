@@ -9,6 +9,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/studio-dist",
       "!**/*.tsbuildinfo",
       "!**/coverage",
       "!schemas",

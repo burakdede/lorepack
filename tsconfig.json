@@ -39,6 +39,9 @@
     },
     {
       "path": "tools/contract"
+    },
+    {
+      "path": "apps/studio"
     }
   ]
 }

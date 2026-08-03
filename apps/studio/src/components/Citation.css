@@ -1,0 +1,67 @@
+/* The citation, per docs/architecture/studio-design.md. Path in mono, heading path in sans,
+   range in tabular mono, separators muted. Selectable, with a copy affordance that appears on
+   hover and on keyboard focus so it is not mouse-only. */
+.citation {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--space-1);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  user-select: text;
+}
+
+.citation-path {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.citation-headings {
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+}
+
+.citation-chevron {
+  color: var(--text-muted);
+  padding: 0 var(--space-1);
+}
+
+.citation-range {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.citation-separator {
+  color: var(--text-muted);
+}
+
+.citation-copy {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0 var(--space-1);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 90ms linear;
+}
+
+.citation:hover .citation-copy,
+.citation-copy:focus-visible {
+  opacity: 1;
+}
+
+.citation-copy:hover {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* An affordance that only appears on hover is invisible to anyone who cannot hover. */
+@media (hover: none) {
+  .citation-copy {
+    opacity: 1;
+  }
+}

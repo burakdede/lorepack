@@ -15,6 +15,7 @@ export default defineConfig({
   test: {
     projects: [
       'packages/*',
+      'apps/*',
       'tools/arch',
       'tools/contract',
       'tools/phase-gate',

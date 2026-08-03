@@ -144,19 +144,38 @@ describe('one command on an unconfigured folder', () => {
   }, 120_000);
 
   /**
-   * The amendment on #53. The 6.4 block also shows a Studio URL, which is Phase 4, and a
-   * `Connect now` list, which arrived with #58 and #59 and names only the client that
-   * exists. Advertising either prematurely would be the CLI naming something it does not
-   * have, which is what `check-command-set` exists to prevent.
+   * The 6.4 block names only what exists, which is the whole point of the assertion.
+   *
+   * This asserted `not.toContain('Studio')` from #53 until #64 built it, and the amendment on
+   * #53 said the phase that adds the assets updates this line in the same change. That is
+   * what happened. The `Connect now` list still names only `claude-code`, because Codex and
+   * VS Code are Phase 5 and each arrives with the adapter that makes it true.
    */
-  it('offers only the client it actually has, and no Studio it does not', async () => {
+  it('offers exactly what it has: Studio, and the one client with an adapter', async () => {
     const started = await dev();
 
-    expect(started.stdout).not.toContain('Studio');
+    expect(started.stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
     expect(started.stdout).toContain('lore connect claude-code');
-    // Phase 5 adds these, and each should arrive with the adapter that makes it true.
     expect(started.stdout).not.toContain('lore connect codex');
     expect(started.stdout).not.toContain('lore connect vscode');
+  }, 120_000);
+
+  it('serves Studio at the root without shadowing the API', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+
+    // The app itself, and a hash route, which is any path that is not a file.
+    expect((await fetch(base)).status).toBe(200);
+    expect((await fetch(`${base}/sources`)).status).toBe(200);
+
+    // The failure that mattered while wiring this: a single-page fallback that answers every
+    // unmatched path will happily answer `/v1/nope` with the app shell and a 200, which
+    // silently replaces the typed error contract with an HTML document.
+    const missing = await fetch(`${base}/v1/nope`);
+    expect(missing.status).toBe(404);
+    expect(((await missing.json()) as { error: { code: string } }).error.code).toBe(
+      'LORE_E_INVALID_ARGUMENT',
+    );
   }, 120_000);
 });
 

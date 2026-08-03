@@ -1,0 +1,182 @@
+/* The shell. Values from docs/architecture/studio-design.md. */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The anchor. Everything below is relative to the build named here, so it is always present
+   and never scrolls away. */
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+
+.header-name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text);
+}
+
+.header-build {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The build id is the largest type in the interface, because it is the thing every other
+   number on screen is relative to. */
+.header-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  animation: build-settle 150ms ease-out;
+}
+
+.header-id-pending {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  animation: none;
+}
+
+/* The one animated moment in the product: a rebuild landed and the world changed. */
+@keyframes build-settle {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.header-state {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.header-capabilities {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  position: sticky;
+  top: 53px;
+  z-index: 1;
+  overflow-x: auto;
+}
+
+/* No accent colour. The active section is marked by weight and a rule, which is enough and
+   keeps colour meaning state and only state. */
+.nav-link {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: var(--text-secondary);
+}
+
+.nav-link-active {
+  color: var(--text);
+  font-weight: 500;
+  border-bottom-color: var(--text);
+}
+
+.main {
+  flex: 1;
+  padding: var(--space-6);
+  max-width: 1100px;
+  width: 100%;
+}
+
+.route-title {
+  margin-bottom: var(--space-4);
+}
+
+.section {
+  margin-bottom: var(--space-8);
+}
+
+.section-heading {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Readable at 1280x720 without horizontal scrolling, and at 200% zoom, which is the same
+   requirement expressed twice. */
+@media (max-width: 720px) {
+  .header,
+  .nav,
+  .main {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+  .header-id {
+    font-size: var(--text-lg);
+  }
+}
+
+/* Visible only when focused, which is the whole point: keyboard users get a way past the
+   header and navigation without it being furniture for everyone else. */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: -3rem;
+  z-index: 3;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  text-decoration: none;
+  transition: top 90ms linear;
+}
+
+.skip-link:focus {
+  top: var(--space-2);
+}

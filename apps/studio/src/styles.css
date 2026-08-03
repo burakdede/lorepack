@@ -1,0 +1,194 @@
+/* biome-ignore-all lint/complexity/noImportantStyles: a reduced-motion reset has to beat
+   every animation declaration on the page, including shorthands and anything more specific.
+   This is the canonical implementation of the rule and the one place `!important` is right. */
+/* Vendored, not fetched. Architecture 4.3: Studio works fully offline, so there is no CDN
+ * and no external asset request at runtime.
+ *
+ * Declared here rather than importing fontsource's stylesheets, because those also reference
+ * a `.woff` fallback. No browser in our support range needs it, so importing them shipped
+ * 96 KB of files into the published CLI package that nothing would ever fetch. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
+}
+
+:root {
+  /* Warm neutrals. The blue-grey that ships as a framework default is the clearest tell of
+     an untouched starter, so this ramp is deliberately warm. */
+  --bg: #fcfcfb;
+  --surface: #f6f5f2;
+  --border-subtle: #eae7e1;
+  --border: #d9d5cd;
+  --text-muted: #6e6960;
+  --text-secondary: #4a453d;
+  --text: #1a1815;
+
+  /* The only colours in the interface. Three state scales, nothing else. */
+  --state-ok: #2f6b44;
+  --state-warn: #8a5b14;
+  --state-bad: #a33a2c;
+  --state-idle: var(--text-muted);
+
+  /* Tinted backgrounds for badges, kept close to the surface so they read as a label rather
+     than an alert. */
+  --state-ok-bg: #eaf2ec;
+  --state-warn-bg: #f6efe0;
+  --state-bad-bg: #f7eae7;
+
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius: 3px;
+  --row-height: 30px;
+}
+
+:root[data-theme="dark"] {
+  --bg: #141311;
+  --surface: #1c1b18;
+  --border-subtle: #26241f;
+  --border: #332f29;
+  --text-muted: #918b81;
+  --text-secondary: #b8b2a8;
+  --text: #edeae3;
+
+  --state-ok: #7fc79a;
+  --state-warn: #dba94f;
+  --state-bad: #e89484;
+
+  --state-ok-bg: #1b2a20;
+  --state-warn-bg: #2b2417;
+  --state-bad-bg: #2d1e1a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141311;
+    --surface: #1c1b18;
+    --border-subtle: #26241f;
+    --border: #332f29;
+    --text-muted: #918b81;
+    --text-secondary: #b8b2a8;
+    --text: #edeae3;
+
+    --state-ok: #7fc79a;
+    --state-warn: #dba94f;
+    --state-bad: #e89484;
+
+    --state-ok-bg: #1b2a20;
+    --state-warn-bg: #2b2417;
+    --state-bad-bg: #2d1e1a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  /* Monospace is the primary interface voice, because this product's content is
+     overwhelmingly identifiers. Prose opts into sans, not the other way round. */
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prose opts in. */
+.prose {
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: var(--text-lg);
+}
+
+h2 {
+  font-size: var(--text-base);
+}
+
+a {
+  color: inherit;
+}
+
+/* One visible focus treatment, everywhere. Not removed anywhere. */
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Motion is limited to state and focus changes plus the single build-change transition. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

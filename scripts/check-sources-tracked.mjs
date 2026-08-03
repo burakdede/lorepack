@@ -8,7 +8,9 @@ import { join, relative, sep } from 'node:path';
 
 const ROOTS = ['packages', 'tools', 'scripts'];
 const SOURCE = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
-const SKIP = new Set(['node_modules', 'dist', 'coverage']);
+// `studio-dist` is Vite's output inside the CLI package, which is published but never
+// committed, exactly like `dist`. Without it this check reports the bundle it just built.
+const SKIP = new Set(['node_modules', 'dist', 'studio-dist', 'coverage']);
 
 const tracked = new Set(
   execFileSync('git', ['ls-files'], { encoding: 'utf8' }).split('\n').filter(Boolean),

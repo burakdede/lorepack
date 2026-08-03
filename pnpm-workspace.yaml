@@ -2,3 +2,16 @@ packages:
   - packages/*
   - apps/*
   - tools/*
+
+# Invariant 7: nothing compiles, downloads or runs a script at install time.
+#
+# esbuild ships a postinstall that resolves its platform binary. It is a build-time
+# dependency of Vite and never reaches a user, who installs the CLI with Studio already
+# bundled. Verified 2026-08-03 that esbuild transforms correctly with the script declined,
+# because it also resolves the binary through optionalDependencies, so refusing it costs
+# nothing and keeps `pnpm install --ignore-scripts` a true statement about this workspace.
+#
+# Anything added here must be false. A true would be a native build step reaching a
+# contributor's machine, which is the promise `check:no-native` exists to keep.
+allowBuilds:
+  esbuild: false
