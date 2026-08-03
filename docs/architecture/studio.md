@@ -101,3 +101,32 @@ asking each time are:
 | Date | Verified by | Browser | Result |
 |---|---|---|---|
 | 2026-08-04 | Phase 4 build session | Chromium 151.0.7922.34 | Automated suites green: axe clean on all five routes, keyboard reachable, no horizontal scroll at 1280x720 or 200% zoom, WCAG AA on every documented token pair in both themes. The manual steps above (screen reader announcements, reduced motion) are not yet signed off by a person and are due before v0.1. |
+
+### Design review, 2026-08-04, against the anti-brief
+
+Run before Phase 4 closed, as the epic requires. Each line of the anti-brief in
+[studio-design.md](./studio-design.md), checked against what shipped:
+
+| Anti-brief item | Result |
+|---|---|
+| component-library look, default radii and shadows | No component library. `box-shadow` appears nowhere; the only radius is `--radius: 3px`, plus a 1px inset on the focus ring |
+| Inter, or a violet/indigo accent | IBM Plex Mono and Sans. No accent colour exists: the token set has three state scales and an idle alias, and a test fails if an `accent` token appears |
+| a card grid on any route | No cards. Overview and Diagnostics use aligned key-value blocks; Sources, Versions and the omissions list use tables |
+| stat tiles, delta arrows, trend lines | None. The counts are a `<dl>`, because these are facts about one immutable build and there is no delta to show |
+| donut charts, sparklines, gauges, health scores | None. Asserted: the Playground and Diagnostics tests fail on any `<svg>`, `<meter>`, `<progress>` or percentage |
+| gradients, glassmorphism, `rounded-2xl` | None present |
+| emoji or sparkle characters | None. The interface is text and three state colours |
+| a marketing-style hero on Overview | The first element is the source state, which is the only thing on the route that moves under the reader |
+| skeleton shimmer loaders | None. `Loading` is a line of text with `role="status"` |
+
+Questions asked alongside it:
+
+- **Does any number read as a score?** No. The relevance breakdown is a definition list behind
+  a `<details>`, captioned as a ranking heuristic, and `lexicalRaw` is withheld because raw
+  BM25 is not comparable across corpora.
+- **Is any state carried by colour alone?** No. Every badge shows the word, the diff carries
+  `+ ~ -` markers, and the active build is marked with the word "active".
+- **Does any route claim a conflict was detected?** No, and the Playground test fails on the
+  words "conflict", "outdated" and "incorrect" appearing anywhere on the page.
+- **Would a person reading only the buttons know what happens?** Yes on Versions, where every
+  confirm button reads `Activate lore_4e13844420af` rather than `Confirm`.
