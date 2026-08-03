@@ -145,3 +145,41 @@
   font-size: var(--text-sm);
   padding: var(--space-6) 0;
 }
+
+/* The one button shape in the product. Quiet by default, weighted by contrast when it
+   carries a confirmed action, and never coloured: colour means state here. */
+.action {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px var(--space-2);
+  margin-left: var(--space-1);
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.action:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* The confirmed action, weighted by contrast rather than by colour. Activation and rollback
+   are pointer changes, and a red button would say something false about what they do. */
+.action-primary {
+  color: var(--bg);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.action-primary:hover:not(:disabled) {
+  color: var(--bg);
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}

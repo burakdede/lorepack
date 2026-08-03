@@ -1,0 +1,136 @@
+/* Diagnostics. A list of checks, deliberately. See docs/architecture/studio-design.md. */
+
+.route-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.counts {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-6);
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.check {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.check-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.check-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.check-detail {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* A remediation is something a person runs, so it is set as code, wraps rather than
+   truncates, and can be selected in one gesture. */
+.check-remediation {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface);
+  border-left: 2px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.check-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.check-value {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.check-value dt::after {
+  content: ":";
+}
+
+.check-value dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel {
+  margin-top: var(--space-8);
+}
+
+.clients {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+}
+
+.clients th[scope="col"] {
+  text-align: left;
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 0 var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.clients td,
+.clients th[scope="row"] {
+  text-align: left;
+  font-weight: 400;
+  padding: 0 var(--space-3) 0 0;
+  border-bottom: 1px solid var(--border-subtle);
+  height: var(--row-height);
+  vertical-align: middle;
+  color: var(--text-secondary);
+}
+
+.client-name {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.client-version {
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.client-path {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.clients-hint {
+  margin-top: var(--space-3);
+}

@@ -8,6 +8,7 @@ import { renderBundleMarkdown } from './export.js';
 import { packBuild } from './packing.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
 import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
+import { createDiagnosticsEndpoint } from './studio-diagnostics.js';
 import { createPlanEndpoint, createWarningsEndpoint } from './studio-endpoints.js';
 import {
   createActivateEndpoint,
@@ -58,6 +59,13 @@ export interface ServingOptions {
    * promises should not quietly offer the same surface.
    */
   readonly studio?: boolean;
+  /**
+   * The watcher's live state, when there is a watcher.
+   *
+   * Supplied by `lore dev` for Studio's Diagnostics route. `lore serve` has no watcher and
+   * supplies nothing, and the route says so rather than inventing a state for it.
+   */
+  readonly watchStatus?: () => import('./watch.js').WatchStatus;
 }
 
 export interface RunningServer {
@@ -96,6 +104,11 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
   // One handler for the process, built once: it constructs a fresh server per request
   // internally, which is what the stateless model asks for, and holds the machinery that
   // would otherwise be rebuilt on every call.
+  const startedAt = new Date().toISOString();
+  // Filled in by `listen` below, which is where the port stops being a request and becomes
+  // a fact. Diagnostics reads it through a closure rather than being constructed twice.
+  let boundPort = options.port;
+
   const comparer = createLocalComparer(options.config.projectRoot);
   const mcp = createMcpHttpHandler(runtime, comparer);
   // Absent when the package was installed without built assets, which is a broken install
@@ -150,6 +163,16 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
           // source tree. `lore serve` promises never to rebuild and has no business reading
           // sources, so this belongs to `lore dev` alone.
           plan: createPlanEndpoint(options.config),
+          // Reads the machine rather than the build: SQLite controls, the watcher, the
+          // process serving this request. The port is passed as a function because it is
+          // chosen by binding, which has not happened yet at this line.
+          diagnostics: createDiagnosticsEndpoint({
+            config: options.config,
+            host: options.host,
+            port: () => boundPort,
+            startedAt,
+            ...(options.watchStatus === undefined ? {} : { watchStatus: options.watchStatus }),
+          }),
           // The only writes in this API, and they exist only here. `lore serve` promises to
           // be read-only, so it passes no actions and simply does not have these routes.
           localActions: {
@@ -174,6 +197,7 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
   }
 
   const server = await listen(app.fetch, options.host, options.port, options.warn);
+  boundPort = server.port;
 
   let closed = false;
   return {

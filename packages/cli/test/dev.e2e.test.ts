@@ -365,6 +365,82 @@ describe('changing which build is live, from Studio', () => {
   }, 120_000);
 });
 
+/**
+ * Diagnostics over HTTP, which must agree with the command.
+ *
+ * One check registry, two renderers. The assertion that matters is the comparison against
+ * `lore doctor --json` on the same machine at the same moment: two implementations of "is
+ * this environment healthy" would disagree eventually, and the disagreement would surface as
+ * a user being told two different things by one product.
+ */
+describe('diagnostics, in the browser and in the terminal', () => {
+  it('reports what `lore doctor --json` reports for the same environment', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+
+    const served = (await (await fetch(`${base}/v1/diagnostics`)).json()) as {
+      doctor: { checks: { id: string; status: string }[]; counts: Record<string, number> };
+    };
+
+    const command = await new Promise<string>((resolve) => {
+      // The same port the session is on, so both are answering one question. Without this
+      // the command checks the default port and finds it free while the server checks its
+      // own and finds it occupied, and the two disagree for a reason that is not a defect.
+      const child = spawn(process.execPath, [
+        BINARY,
+        '--cwd',
+        project,
+        'doctor',
+        '--json',
+        '--port',
+        String(started.port),
+      ]);
+      let out = '';
+      child.stdout?.on('data', (chunk: Buffer) => {
+        out += chunk.toString('utf8');
+      });
+      child.on('close', () => resolve(out));
+    });
+    const printed = JSON.parse(command) as {
+      checks: { id: string; status: string }[];
+      counts: Record<string, number>;
+    };
+
+    // Compared by id and status rather than deep-equal, because details carry timings and
+    // absolute paths. What must never differ is which checks exist and what each concluded.
+    const shape = (checks: { id: string; status: string }[]): string[] =>
+      checks.map((check) => `${check.id}=${check.status}`).sort();
+
+    expect(shape(served.doctor.checks)).toEqual(shape(printed.checks));
+    expect(served.doctor.counts).toEqual(printed.counts);
+  }, 180_000);
+
+  it('reports the live session that only a running supervisor knows', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+
+    const report = (await (await fetch(`${base}/v1/diagnostics`)).json()) as {
+      session: {
+        port: number;
+        pid: number;
+        watcher: { watchedPaths: number; state: string } | null;
+      };
+      environment: { node: string; fts5: boolean };
+      clients: { id: string; configured: boolean }[];
+    };
+
+    expect(report.session.port).toBe(started.port);
+    expect(report.session.pid).toBe(started.child.pid);
+    // `lore dev` watches, so this is the case where the watcher block is present. `lore serve`
+    // has no watcher and reports null, which the route renders as a sentence rather than as
+    // an empty state.
+    expect(report.session.watcher?.watchedPaths).toBeGreaterThan(0);
+    expect(report.environment.node).toBe(process.version);
+    expect(report.environment.fts5).toBe(true);
+    expect(report.clients.map((client) => client.id)).toContain('claude-code');
+  }, 120_000);
+});
+
 describe('shutting down', () => {
   it.runIf(CAN_SIGNAL_GRACEFULLY)(
     'stops on a signal and leaves the active build intact',

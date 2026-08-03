@@ -15,6 +15,7 @@ import {
 import type {
   ClientConnector,
   ClientDetection,
+  ClientStatus,
   ConnectInput,
   ConnectionCheck,
   ConnectPlan,
@@ -99,6 +100,23 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
           reason: `The \`claude\` command was not found: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
+    },
+
+    async status(input: ConnectInput): Promise<ClientStatus> {
+      const detected = await this.detect();
+      const path = configPathFor(input.projectRoot, input.scope, shared);
+
+      // Reads the file and nothing else. A status check that spawned the server to be sure
+      // would make opening a diagnostics page a side effect.
+      const document = existsSync(path) ? readJsonConfig(path) : {};
+      const entry = ((document.mcpServers ?? {}) as Record<string, unknown>)[input.serverName];
+
+      return {
+        ...detected,
+        configPath: path,
+        configured: entry !== undefined,
+        ownedByLorepack: entry !== undefined && isOwned(entry, input.projectRoot),
+      };
     },
 
     async plan(input: ConnectInput): Promise<ConnectPlan> {

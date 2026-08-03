@@ -111,6 +111,10 @@ export function devCommand(): CommandDefinition {
         // The hook #112 named. A supervisor that is watching the filesystem already knows
         // whether the sources moved, so the server stops paying for an interval scan.
         freshness: () => watching.freshness(),
+        // The same knowledge, in full, for Studio's Diagnostics route. "Nothing has happened
+        // since you started" and "your edit was seen and the rebuild failed" look identical
+        // from a browser without it.
+        watchStatus: () => watching.status(),
       });
 
       // Written once the port is known and the build is activated, so it never advertises a

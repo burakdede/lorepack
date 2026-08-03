@@ -74,6 +74,30 @@ export interface Watching {
   readonly rebuilds: number;
   /** Times a change turned out to be no change, which is a visible outcome, not a silence. */
   readonly noOps: number;
+  /**
+   * What the watcher is doing right now, for Studio's Diagnostics route.
+   *
+   * Useful precisely when something feels stuck: "the watcher saw your edit four seconds ago
+   * and the last rebuild took 90 ms" and "the watcher has seen nothing since you started"
+   * are different problems, and without this they look identical from the browser.
+   */
+  status(): WatchStatus;
+}
+
+export interface WatchStatus {
+  readonly state: SourceState;
+  /** Files currently watched, as chokidar counts them. */
+  readonly watchedPaths: number;
+  readonly lastEventAt: string | null;
+  readonly lastRebuild: {
+    readonly at: string;
+    readonly durationMs: number;
+    /** False when the rebuild found nothing to change, which is a result, not a failure. */
+    readonly created: boolean;
+    readonly failed: boolean;
+  } | null;
+  readonly rebuilds: number;
+  readonly noOps: number;
 }
 
 export const WATCH_DEFAULTS = {
@@ -111,6 +135,8 @@ export function startWatching(options: WatchOptions): Watching {
   let rebuilds = 0;
   let noOps = 0;
   let closed = false;
+  let lastEventAt: string | null = null;
+  let lastRebuild: WatchStatus['lastRebuild'] = null;
 
   /** Paths seen since the last settle, so the stability wait knows what to watch. */
   let touched = new Set<string>();
@@ -149,6 +175,7 @@ export function startWatching(options: WatchOptions): Watching {
     watcher.on(event, (path: string) => {
       if (closed) return;
       touched.add(path);
+      lastEventAt = new Date().toISOString();
       schedule();
     });
   }
@@ -236,12 +263,28 @@ export function startWatching(options: WatchOptions): Watching {
 
     const controller = new AbortController();
     running = controller;
+    const startedAt = Date.now();
     try {
       options.warn(`${reason}: rebuilding.\n`);
       const result = await options.rebuild(controller.signal);
       if (result.created) rebuilds += 1;
       state = 'clean';
+      lastRebuild = {
+        at: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        created: result.created,
+        failed: false,
+      };
     } catch (error) {
+      // Recorded whether it succeeded or not. A rebuild that keeps failing is the exact
+      // case someone opens Diagnostics to understand, and a status that only ever showed
+      // successes would show nothing at all.
+      lastRebuild = {
+        at: new Date().toISOString(),
+        durationMs: Date.now() - startedAt,
+        created: false,
+        failed: !controller.signal.aborted,
+      };
       if (controller.signal.aborted) {
         // Cancelled by a newer change. `runBuild` removes its own incomplete candidate and
         // leaves activation alone, so there is nothing to clean up and nothing to report.
@@ -276,6 +319,16 @@ export function startWatching(options: WatchOptions): Watching {
     },
     async freshness() {
       return state;
+    },
+    status(): WatchStatus {
+      return {
+        state,
+        watchedPaths: countWatched(watcher.getWatched()),
+        lastEventAt,
+        lastRebuild,
+        rebuilds,
+        noOps,
+      };
     },
     async close() {
       closed = true;
@@ -387,6 +440,18 @@ function excluded(
  * build has already read successfully, so refusing to watch it would be a worse answer than
  * watching it by the name we were given.
  */
+/**
+ * Files under watch, from chokidar's directory-to-entries map.
+ *
+ * Directories are counted too, because they are what a watcher actually holds a handle on,
+ * and a number that excluded them would not match what an operating system limit is about.
+ */
+function countWatched(watched: Record<string, readonly string[]>): number {
+  let total = 0;
+  for (const entries of Object.values(watched)) total += entries.length;
+  return total;
+}
+
 export function resolveRealPath(path: string): string {
   try {
     return realpathSync.native(path);

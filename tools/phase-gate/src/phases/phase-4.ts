@@ -81,6 +81,16 @@ export const PHASE_4: PhaseDefinition = {
       timeoutMs: 300_000,
     },
 
+    {
+      id: 'diagnostics',
+      kind: 'command',
+      promise:
+        'Everything `lore doctor` knows is visible in the browser, with the remediation intact and no aggregate score invented.',
+      command: 'pnpm',
+      args: ['vitest', 'run', '--project', 'studio', 'diagnostics'],
+      timeoutMs: 300_000,
+    },
+
     // What Studio needed from the server, and the boundary it must not cross.
     {
       id: 'export-parity',

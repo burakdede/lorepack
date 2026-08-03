@@ -73,6 +73,54 @@ describe('detection', () => {
   });
 });
 
+/**
+ * Status, which Studio's Diagnostics route asks for on every visit.
+ *
+ * Two properties matter and neither is about correctness of the answer: it must write
+ * nothing, and it must distinguish an entry Lorepack created from one a person wrote by hand
+ * under the same name. The second is the same distinction that keeps `lore disconnect` from
+ * deleting someone else's server.
+ */
+describe('status', () => {
+  it('reports not configured, and creates nothing by asking', async () => {
+    const connector = createClaudeCodeConnector({ runClient: installed });
+    const status = await connector.status(input());
+
+    expect(status.installed).toBe(true);
+    expect(status.configured).toBe(false);
+    expect(status.ownedByLorepack).toBe(false);
+    expect(status.configPath).toBe(join(project, '.claude', 'settings.local.json'));
+    // Opening a diagnostics page must never be a side effect on someone's configuration.
+    expect(existsSync(join(project, '.claude', 'settings.local.json'))).toBe(false);
+  });
+
+  it('reports an entry Lorepack created as its own', async () => {
+    const connector = createClaudeCodeConnector({ runClient: installed });
+    await connector.apply(await connector.plan(input()));
+
+    const status = await connector.status(input());
+    expect(status.configured).toBe(true);
+    expect(status.ownedByLorepack).toBe(true);
+  });
+
+  it('reports an entry someone wrote by hand as theirs', async () => {
+    mkdirSync(join(project, '.claude'), { recursive: true });
+    writeFileSync(
+      join(project, '.claude', 'settings.local.json'),
+      JSON.stringify({ mcpServers: { lorepack: { type: 'stdio', command: 'lore' } } }),
+      'utf8',
+    );
+
+    const connector = createClaudeCodeConnector({ runClient: installed });
+    const status = await connector.status(input());
+
+    expect(status.configured).toBe(true);
+    // Configured, but not by us. Claiming credit here is how `disconnect` later deletes
+    // something it did not create.
+    expect(status.ownedByLorepack).toBe(false);
+  });
+});
+
 describe('planning, before anything is written', () => {
   it('names the file and the exact command, and writes nothing', async () => {
     const connector = createClaudeCodeConnector({ runClient: installed });

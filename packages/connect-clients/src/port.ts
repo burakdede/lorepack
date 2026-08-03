@@ -30,6 +30,19 @@ export interface ClientDetection {
   readonly reason?: string;
 }
 
+/**
+ * Detection plus whether this project is currently wired into that client.
+ *
+ * Read-only and cheap: Studio's Diagnostics route asks for it, and asking must never write a
+ * configuration or spawn a server. `ownedByLorepack` distinguishes an entry this tool created
+ * from one a person wrote by hand under the same name, which is the same distinction that
+ * makes `lore disconnect` safe.
+ */
+export interface ClientStatus extends ClientDetection {
+  readonly configured: boolean;
+  readonly ownedByLorepack: boolean;
+}
+
 export type ConnectScope = 'project' | 'user';
 
 export interface ConnectInput {
@@ -97,6 +110,8 @@ export interface ClientConnector {
   /** Shown in `lore connect --help` and in the plan. */
   readonly title: string;
   detect(): Promise<ClientDetection>;
+  /** Detection plus whether this project is already configured. Writes nothing. */
+  status(input: ConnectInput): Promise<ClientStatus>;
   plan(input: ConnectInput): Promise<ConnectPlan>;
   apply(plan: ConnectPlan): Promise<ConnectReceipt>;
   verify(receipt: ConnectReceipt): Promise<ConnectionCheck>;

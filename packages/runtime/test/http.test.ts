@@ -377,6 +377,22 @@ describe('safety, architecture 19.4 and 20.9', () => {
   });
 });
 
+describe('diagnostics, which read the machine rather than the build', () => {
+  it('is absent unless a host supplies it, because a deployment answers differently', async () => {
+    expect((await appFor().request('/v1/diagnostics')).status).toBe(404);
+  });
+
+  it('answers with whatever the host reports, unmodified', async () => {
+    // Architecture 13.1 fixes the runtime at seven capabilities and a diagnostic is not one
+    // of them, so this arrives as an injected function exactly as `currentBuild` does.
+    const app = appFor({ diagnostics: async () => ({ doctor: { status: 'pass' } }) });
+    const response = await app.request('/v1/diagnostics');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ doctor: { status: 'pass' } });
+  });
+});
+
 /**
  * The one place this API can write, and the two things that keep it local.
  *
