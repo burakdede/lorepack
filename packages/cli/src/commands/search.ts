@@ -39,9 +39,11 @@ export function searchCommand(): CommandDefinition {
         limit: parseLimit(flags.limit),
         includeArchived: flags.includeArchived === true,
         debug: flags.debug === true,
-        ...(typeof flags.path === 'string' ? { pathGlob: flags.path } : {}),
-        ...(typeof flags.type === 'string' ? { type: flags.type } : {}),
-        ...(typeof flags.source === 'string' ? { artifactId: flags.source } : {}),
+        ...(typeof flags.path === 'string' ? { pathGlob: filter('--path', flags.path) } : {}),
+        ...(typeof flags.type === 'string' ? { type: filter('--type', flags.type) } : {}),
+        ...(typeof flags.source === 'string'
+          ? { artifactId: filter('--source', flags.source) }
+          : {}),
       });
 
       // On stderr, so `--json` stdout stays the structured result alone. A consumer reading
@@ -56,6 +58,23 @@ export function searchCommand(): CommandDefinition {
       };
     },
   };
+}
+
+/**
+ * A filter has to filter something.
+ *
+ * An empty value is what an unset shell variable expands to, and passing it through returns
+ * "no matches" for a query that would otherwise have answered. That is a wrong answer
+ * wearing the clothes of a right one, which is worse than an error. The protocol surfaces
+ * already refuse it (`artifactId` is `min(1)`), so refusing here also makes the CLI and the
+ * API agree.
+ */
+function filter(flag: string, value: string): string {
+  if (value.trim() !== '') return value;
+  throw new LoreError('LORE_E_INVALID_ARGUMENT', `${flag} was given an empty value.`, {
+    remediation: `Pass something for ${flag}, or leave the flag off to search everything.`,
+    subject: flag,
+  });
 }
 
 function parseLimit(raw: unknown): number {
