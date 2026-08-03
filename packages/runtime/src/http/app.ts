@@ -95,6 +95,15 @@ export interface ApiOptions {
    * one, so it stays off `LoreRuntime` and its seven capabilities.
    */
   readonly sources?: () => Promise<unknown>;
+  /**
+   * The same Markdown `lore export` writes, for the same inputs.
+   *
+   * Rendered on the server rather than in the browser, because "what you see is what a chat
+   * product gets" is only true if one renderer produces both. A second implementation in
+   * Studio would drift on the first wording change, and the drift would be invisible: both
+   * outputs would look plausible.
+   */
+  readonly exportBundle?: (request: unknown) => Promise<string>;
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
   /**
@@ -232,6 +241,21 @@ export function createApiApp(options: ApiOptions): Hono {
   if (options.sources !== undefined) {
     const sources = options.sources;
     app.get('/v1/sources', (context) => answer(context, () => sources()));
+  }
+  if (options.exportBundle !== undefined) {
+    const exportBundle = options.exportBundle;
+    app.post('/v1/export', async (context) => {
+      try {
+        const parsed = await body(context, taskContextRequestSchema, maxBytes);
+        // Markdown, not JSON: this is the artifact a person pastes, and wrapping it in a
+        // JSON string would make every reader unwrap it before it was useful.
+        return new Response(await exportBundle(parsed), {
+          headers: { 'content-type': 'text/markdown; charset=utf-8' },
+        });
+      } catch (error) {
+        return failure(context, error, statusFor(error));
+      }
+    });
   }
 
   app.post('/v1/search', async (context) =>

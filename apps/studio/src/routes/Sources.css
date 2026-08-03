@@ -13,6 +13,9 @@
    choice rather than like a filter applied to one of them. */
 .view-switch {
   display: inline-flex;
+  margin: 0;
+  padding: 0;
+  min-inline-size: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;

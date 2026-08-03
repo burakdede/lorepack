@@ -107,7 +107,11 @@ export function Sources(): React.JSX.Element {
       {/* Indexed and excluded as peers. Choosing between them is one control, not an
           expansion, so neither is the other's footnote. */}
       <div className="sources-toolbar">
-        <div className="view-switch" role="group" aria-label="Which files to show">
+        {/* A fieldset rather than a div with `role="group"`: the semantic element carries
+            the grouping to assistive technology without an ARIA attribute standing in for
+            it, and a legend names the group properly. */}
+        <fieldset className="view-switch">
+          <legend className="visually-hidden">Which files to show</legend>
           <button
             type="button"
             className={view === 'indexed' ? 'view-option view-option-active' : 'view-option'}
@@ -124,7 +128,7 @@ export function Sources(): React.JSX.Element {
           >
             {`excluded ${excludedCount}`}
           </button>
-        </div>
+        </fieldset>
 
         {view === 'indexed' && (
           <label className="filter">

@@ -4,6 +4,7 @@ import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
+import { renderBundleMarkdown } from './export.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
 import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
 import { createPlanEndpoint, createWarningsEndpoint } from './studio-endpoints.js';
@@ -98,35 +99,50 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
     currentBuild: () => backend.provider.current(),
     freshness,
     mcpHandler: (request) => mcp.fetch(request),
+    // Reads of the **active build**, so any server can answer them: they change nothing and
+    // they touch no source file. `lore serve` offering them is the same promise it already
+    // makes about `/v1/search`.
+    exportBundle: async (request) => {
+      const bundle = await runtime.contextForTask(
+        request as Parameters<typeof runtime.contextForTask>[0],
+      );
+      // The same renderer `lore export` uses, so "copy as export" is byte-identical rather
+      // than merely similar. A parity test asserts it.
+      return renderBundleMarkdown(bundle, {
+        projectName: options.config.config.name,
+        moreCommand: `lore export --task ${JSON.stringify(bundle.task)} --profile deep`,
+        sourceState: bundle.sourceState,
+      });
+    },
+    sources: async () => {
+      const handle = await backend.provider.acquire();
+      try {
+        const scope = await backend.open(handle);
+        return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
+      } finally {
+        handle.release();
+      }
+    },
+    warnings: createWarningsEndpoint(async () => {
+      // Acquired and released like any other read, so a warnings request cannot pin a build
+      // open after it stops being active.
+      const handle = await backend.provider.acquire();
+      try {
+        const scope = await backend.open(handle);
+        const manifest = await scope.catalog.manifest();
+        return { buildId: manifest.buildId, warnings: manifest.warnings };
+      } finally {
+        handle.release();
+      }
+    }),
     ...(serveStudio
       ? {
           assets: createStudioAssets(),
           allowLoopbackOrigin: true,
-          // Only when Studio is mounted. `lore serve` promises to be read-only and never to
-          // rebuild, and a plan walks the source tree, so offering it there would be a
-          // different promise wearing the same command's name.
+          // The one Studio read that is **not** a read of the build: planning walks the
+          // source tree. `lore serve` promises never to rebuild and has no business reading
+          // sources, so this belongs to `lore dev` alone.
           plan: createPlanEndpoint(options.config),
-          sources: async () => {
-            const handle = await backend.provider.acquire();
-            try {
-              const scope = await backend.open(handle);
-              return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
-            } finally {
-              handle.release();
-            }
-          },
-          warnings: createWarningsEndpoint(async () => {
-            // Acquired and released like any other read, so a warnings request cannot pin a
-            // build open after it stops being active.
-            const handle = await backend.provider.acquire();
-            try {
-              const scope = await backend.open(handle);
-              const manifest = await scope.catalog.manifest();
-              return { buildId: manifest.buildId, warnings: manifest.warnings };
-            } finally {
-              handle.release();
-            }
-          }),
         }
       : {}),
   });

@@ -13,16 +13,25 @@ import './Citation.css';
  *     docs/runbook.md · Release runbook › Rolling back · 9-11
  */
 
+/**
+ * Every field is `?: T | undefined` rather than `?: T`.
+ *
+ * With `exactOptionalPropertyTypes` those are different types, and the contract's
+ * `SourceLocator` uses the second form. Writing `?: T` here makes a locator that came
+ * straight from the API unassignable to the component that exists to render it. The Phase 3
+ * audit recorded this exact trap after it split the SDK's hand-written contracts from the
+ * server's inferred ones.
+ */
 export interface Locator {
-  readonly relativePath?: string;
-  readonly artifactId?: string;
-  readonly headingPath?: readonly string[];
-  readonly lineStart?: number;
-  readonly lineEnd?: number;
+  readonly relativePath?: string | undefined;
+  readonly artifactId?: string | undefined;
+  readonly headingPath?: readonly string[] | undefined;
+  readonly lineStart?: number | undefined;
+  readonly lineEnd?: number | undefined;
   /** Phase 5 adds these; rendered when present so the component does not need changing. */
-  readonly page?: number;
-  readonly sheet?: string;
-  readonly cellRange?: string;
+  readonly page?: number | undefined;
+  readonly sheet?: string | undefined;
+  readonly cellRange?: string | undefined;
 }
 
 export function formatCitation(locator: Locator): string {
