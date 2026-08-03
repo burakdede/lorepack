@@ -183,3 +183,10 @@
   background: var(--text-secondary);
   border-color: var(--text-secondary);
 }
+
+/* Wide content scrolls inside its own box. A table that pushes the page sideways takes the
+   navigation with it, which is how a layout that merely looks cramped becomes unusable. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}

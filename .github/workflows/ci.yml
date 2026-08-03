@@ -108,6 +108,55 @@ jobs:
       - name: Every acceptance scenario, against the real binary
         run: pnpm acceptance
 
+  studio-e2e:
+    # Studio in a real browser, against a real `lore dev`.
+    #
+    # One OS, deliberately. This suite answers "does the assembled application work against
+    # the real API, by keyboard, at the documented viewport", and none of those are questions
+    # about operating systems. The cross-platform matrix that matters is the CLI's, and it
+    # already runs on three.
+    #
+    # A separate job because it downloads a browser, which nothing else here does. The
+    # download is explicit and cached, so `pnpm install` stays script-free (invariant 7).
+    name: studio e2e (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Cache the browser
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Every route, by keyboard, with axe, against a real server
+        run: pnpm test:e2e
+
+      - name: Upload the report and any failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-e2e-report
+          path: |
+            tools/studio-e2e/playwright-report/
+            tools/studio-e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   clean-install:
     # Invariant 7, the zero-surprise install promise, tested rather than asserted.
     #

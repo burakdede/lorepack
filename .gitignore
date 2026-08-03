@@ -33,3 +33,7 @@ packages/cli/studio-dist/
 # Browser-driving artifacts: screenshots and page snapshots taken while checking a change.
 .playwright-mcp/
 *.png
+
+# Playwright's own output from the browser suite: traces, screenshots and the HTML report.
+tools/studio-e2e/test-results/
+tools/studio-e2e/playwright-report/

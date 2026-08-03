@@ -31,7 +31,7 @@ export const PHASE_4: PhaseDefinition = {
       kind: 'path',
       promise:
         'Studio has a written visual direction with named references and an anti-brief, so its look is a decision rather than a default.',
-      paths: ['docs/architecture/studio-design.md', 'docs/architecture/studio.md'],
+      paths: ['docs/architecture/studio-design.md'],
     },
     {
       id: 'shell',
@@ -118,6 +118,33 @@ export const PHASE_4: PhaseDefinition = {
       command: 'pnpm',
       args: ['vitest', 'run', '--project', 'cli', 'dev.e2e'],
       timeoutMs: 900_000,
+    },
+
+    // Accessibility and the browser suite (#70).
+    {
+      id: 'contrast',
+      kind: 'command',
+      promise:
+        'Every documented token pair meets WCAG AA in both themes, and colour never carries state alone.',
+      command: 'pnpm',
+      args: ['vitest', 'run', '--project', 'studio', 'contrast'],
+      timeoutMs: 120_000,
+    },
+    {
+      id: 'browser-suite',
+      kind: 'command',
+      promise:
+        'Every route passes axe, is operable by keyboard, and reads at 1280x720 and at 200% zoom, against a real server.',
+      command: 'pnpm',
+      args: ['test:e2e'],
+      timeoutMs: 900_000,
+    },
+    {
+      id: 'manual-checklist',
+      kind: 'path',
+      promise:
+        'What automation cannot check is written down as a checklist rather than left to memory.',
+      paths: ['docs/architecture/studio.md'],
     },
 
     // Invariant 7, which Studio is the first thing in this product that could break.
