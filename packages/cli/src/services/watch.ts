@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { createSourceMatcher } from '@lorepack/compiler';
+import { createSourceMatcher, discover } from '@lorepack/compiler';
 import type { LoadedConfig, SourceState } from '@lorepack/core';
 import { watch as chokidarWatch } from 'chokidar';
 import { readFreshness } from './status.js';
@@ -45,6 +45,18 @@ export interface WatchOptions {
   readonly stabilityMs?: number;
   /** Polling interval for the stability wait. */
   readonly pollMs?: number;
+  /**
+   * How often to reconcile from disk regardless of what the event stream said.
+   *
+   * Architecture 12.3 and #54's design notes: a periodic full reconciliation catches missed
+   * events without polling constantly. It is cheap because it prescreens on sizes and
+   * modification times and only hashes when that moved.
+   *
+   * This is not belt and braces. Windows delivered no usable event for an ordinary append
+   * in CI, and a watcher whose correctness depends on the event stream would simply have
+   * gone on serving the old build. The stream is an accelerator; this is the floor.
+   */
+  readonly reconcileIntervalMs?: number;
 }
 
 export interface Watching {
@@ -64,12 +76,18 @@ export interface Watching {
   readonly noOps: number;
 }
 
-export const WATCH_DEFAULTS = { debounceMs: 150, stabilityMs: 120, pollMs: 40 } as const;
+export const WATCH_DEFAULTS = {
+  debounceMs: 150,
+  stabilityMs: 120,
+  pollMs: 40,
+  reconcileIntervalMs: 2000,
+} as const;
 
 export function startWatching(options: WatchOptions): Watching {
   const debounceMs = options.debounceMs ?? WATCH_DEFAULTS.debounceMs;
   const stabilityMs = options.stabilityMs ?? WATCH_DEFAULTS.stabilityMs;
   const pollMs = options.pollMs ?? WATCH_DEFAULTS.pollMs;
+  const reconcileIntervalMs = options.reconcileIntervalMs ?? WATCH_DEFAULTS.reconcileIntervalMs;
 
   // The same rules discovery uses, so an event and a build cannot disagree about
   // whether a file is a source of this project.
@@ -130,6 +148,29 @@ export function startWatching(options: WatchOptions): Watching {
     chain = chain.then(() => settle('watcher recovery'));
   });
 
+  /**
+   * The floor under the event stream.
+   *
+   * Prescreens on paths, sizes and modification times, which is cheap, and only settles when
+   * that signature moved. A platform that delivers no event still converges within one
+   * interval, and a platform that delivers them promptly pays a directory scan every couple
+   * of seconds and finds nothing.
+   */
+  let signature = '';
+  const sweep = setInterval(() => {
+    if (closed) return;
+    const current = metadataSignature(options.config);
+    if (current === signature) return;
+    const first = signature === '';
+    signature = current;
+    // The first sweep only establishes a baseline: the build that just happened is what it
+    // would otherwise mistake for a change.
+    if (first) return;
+    chain = chain.then(() => settle('sources changed'));
+  }, reconcileIntervalMs);
+  // Never hold the process open on its own account: the supervisor decides when to exit.
+  sweep.unref?.();
+
   function schedule(): void {
     if (timer !== null) clearTimeout(timer);
     // Step 4. One save is many events, and a rename is a delete plus an add. Coalescing is
@@ -148,6 +189,10 @@ export function startWatching(options: WatchOptions): Watching {
     touched = new Set();
     await waitForStability(paths, stabilityMs, pollMs);
     if (closed) return;
+
+    // Whatever the sweep sees next is measured from here, so the rebuild this settle is
+    // about to perform is not mistaken for a further change.
+    signature = metadataSignature(options.config);
 
     // Step 6 and 7. The deciding evidence. A touch, an atomic rename of identical bytes, or
     // a save that changed nothing all land here and stop.
@@ -219,6 +264,7 @@ export function startWatching(options: WatchOptions): Watching {
     },
     async close() {
       closed = true;
+      clearInterval(sweep);
       if (timer !== null) clearTimeout(timer);
       running?.abort();
       await watcher.close();
@@ -251,6 +297,33 @@ async function waitForStability(
     const current = signature(paths);
     stableFor = current === previous ? stableFor + pollMs : 0;
     previous = current;
+  }
+}
+
+/**
+ * A cheap signature of the source tree: path, size and modification time.
+ *
+ * Evidence of nothing on its own, which is the point. A file can change without its mtime
+ * moving, so this only decides whether to go and compute the hashes that do decide.
+ */
+function metadataSignature(config: LoadedConfig): string {
+  try {
+    const discovered = discover({ config, allowLargeProject: true });
+    return discovered.artifacts
+      .map((artifact) => {
+        const path = join(config.projectRoot, artifact.relativePath);
+        try {
+          const stats = statSync(path);
+          return `${artifact.relativePath}:${stats.size}:${stats.mtimeMs}`;
+        } catch {
+          return `${artifact.relativePath}:gone`;
+        }
+      })
+      .join('\n');
+  } catch {
+    // A source tree that cannot be walked is not a reason to fail: returning a stable
+    // marker means the sweep simply finds nothing until it can be read again.
+    return 'unscannable';
   }
 }
 

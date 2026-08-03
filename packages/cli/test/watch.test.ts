@@ -21,8 +21,14 @@ import { startWatching } from '../src/services/watch.js';
 const CONFIG = 'version: 1\nname: watched\nsources:\n  - .\n';
 const CORPUS = { 'lore.yaml': CONFIG, 'a.md': '# A\n\nFirst document.\n' };
 
-/** Short, because these tests wait for them and correctness here is not timing-dependent. */
-const FAST = { debounceMs: 40, stabilityMs: 40, pollMs: 10 } as const;
+/**
+ * Short, because these tests wait for them.
+ *
+ * The reconcile sweep is pushed out of the way deliberately: these tests are about what the
+ * **event stream** does with editor behaviour, and a safety net that fires halfway through
+ * would make "one save is one rebuild" a statement about timing. The sweep has its own test.
+ */
+const FAST = { debounceMs: 40, stabilityMs: 40, pollMs: 10, reconcileIntervalMs: 60_000 } as const;
 
 async function settled(until: () => boolean, budgetMs = 8000): Promise<void> {
   const deadline = Date.now() + budgetMs;
@@ -274,6 +280,52 @@ describe('a failed rebuild', () => {
         module.readStatus({ config, allowLargeProject: true }),
       );
       expect(activeBuildId).toBe(first.buildId);
+    });
+  }, 60_000);
+});
+
+describe('the periodic reconciliation, architecture 12.3', () => {
+  /**
+   * The floor under the event stream, and not a hypothetical one.
+   *
+   * Windows delivered no usable event for an ordinary append in CI, and a watcher whose
+   * correctness depended on the stream went on serving the previous build until the test
+   * timed out. On a platform where events do arrive this converges through whichever
+   * mechanism is quicker, which is exactly the intended behaviour: the stream accelerates,
+   * the sweep guarantees.
+   */
+  it('converges on a change even when nothing is waiting for an event', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      await runBuild({ config, progress: new ProgressBus() });
+
+      let rebuilds = 0;
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        debounceMs: 40,
+        stabilityMs: 40,
+        pollMs: 10,
+        reconcileIntervalMs: 120,
+        rebuild: async () => {
+          rebuilds += 1;
+          await runBuild({ config, progress: new ProgressBus() });
+          return { created: true };
+        },
+      });
+      await watching.ready;
+
+      writeFileSync(join(project.root, 'a.md'), '# A\n\nChanged, quietly.\n', 'utf8');
+
+      await settled(() => rebuilds > 0);
+      await watching.close();
+
+      expect(rebuilds).toBeGreaterThan(0);
+      // And it settles rather than rebuilding on every sweep: the signature is refreshed
+      // when a settle runs, so an unchanged tree is quiet.
+      const after = rebuilds;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(rebuilds).toBe(after);
     });
   }, 60_000);
 });

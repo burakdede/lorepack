@@ -35,6 +35,14 @@ Step 3 is the one that looks redundant and is not. Steps 1 and 2 cannot be made 
 there is always a window, and a file that lands in it would otherwise stay invisible until
 something unrelated touched it.
 
+**Underneath all of it there is a periodic sweep** (architecture 12.3), which prescreens on
+paths, sizes and modification times every couple of seconds and settles only when that
+signature moved. It is not belt and braces. Windows delivered no usable event for an
+ordinary append in CI, and a watcher whose correctness depended on the stream went on
+serving the previous build until the test gave up. The stream accelerates; the sweep
+guarantees. A platform that delivers events promptly pays a directory scan every couple of
+seconds and finds nothing.
+
 Step 7 is visible rather than silent. A save that changes nothing prints `No changes: the
 sources still match the active build`, because a user who saved and saw nothing happen is
 owed the reason.
