@@ -6,6 +6,7 @@ import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
 import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
+import { createPlanEndpoint, createWarningsEndpoint } from './studio-endpoints.js';
 
 /**
  * Serving an active build over HTTP and MCP, in one place, for the two commands that do it.
@@ -97,7 +98,28 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
     currentBuild: () => backend.provider.current(),
     freshness,
     mcpHandler: (request) => mcp.fetch(request),
-    ...(serveStudio ? { assets: createStudioAssets(), allowLoopbackOrigin: true } : {}),
+    ...(serveStudio
+      ? {
+          assets: createStudioAssets(),
+          allowLoopbackOrigin: true,
+          // Only when Studio is mounted. `lore serve` promises to be read-only and never to
+          // rebuild, and a plan walks the source tree, so offering it there would be a
+          // different promise wearing the same command's name.
+          plan: createPlanEndpoint(options.config),
+          warnings: createWarningsEndpoint(async () => {
+            // Acquired and released like any other read, so a warnings request cannot pin a
+            // build open after it stops being active.
+            const handle = await backend.provider.acquire();
+            try {
+              const scope = await backend.open(handle);
+              const manifest = await scope.catalog.manifest();
+              return { buildId: manifest.buildId, warnings: manifest.warnings };
+            } finally {
+              handle.release();
+            }
+          }),
+        }
+      : {}),
   });
 
   if (!isLoopback(options.host)) {
