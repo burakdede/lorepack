@@ -147,6 +147,55 @@ describe('one server, both surfaces', () => {
   });
 });
 
+describe('what Studio copies is what a chat product gets', () => {
+  /**
+   * The parity #67 asks for, asserted byte for byte.
+   *
+   * "Copy as export" is only a true claim if one renderer produces both outputs. A second
+   * implementation in the browser would drift on the first wording change, and the drift
+   * would be invisible: both would look plausible, and only a person comparing them would
+   * ever notice.
+   */
+  it('renders the same bytes over HTTP as `lore export` writes', async () => {
+    const { url } = await serve(['--port', '4680']);
+
+    const response = await fetch(`${url}/v1/export`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'how do I roll back a release', profile: 'agent' }),
+    });
+    expect(response.headers.get('content-type')).toContain('text/markdown');
+    const overHttp = await response.text();
+
+    const fromCli = await lore([
+      'export',
+      '--task',
+      'how do I roll back a release',
+      '--profile',
+      'agent',
+    ]);
+    expect(fromCli.code).toBe(0);
+
+    // The CLI trims its trailing newline on the way to stdout, so the comparison is on the
+    // content rather than on that one byte.
+    expect(overHttp.trimEnd()).toBe(fromCli.stdout.trimEnd());
+    expect(overHttp).toContain('lore_');
+  });
+
+  it('answers reads of the build, and refuses the one that reads the sources', async () => {
+    const { url } = await serve(['--port', '4690']);
+
+    // Reads of the active build change nothing and touch no source file, so a read-only
+    // server answers them exactly as it answers `/v1/search`.
+    expect((await fetch(`${url}/v1/sources`)).status).toBe(200);
+    expect((await fetch(`${url}/v1/warnings`)).status).toBe(200);
+
+    // Planning walks the source tree, and `lore serve` promises never to rebuild and has no
+    // business reading sources. That route belongs to `lore dev`.
+    expect((await fetch(`${url}/v1/plan`)).status).toBe(404);
+  });
+});
+
 describe('activation without a restart', () => {
   it('serves a build made in another process, at the next request', async () => {
     const { url } = await serve(['--port', '4640']);

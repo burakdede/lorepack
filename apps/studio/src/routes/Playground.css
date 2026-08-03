@@ -1,0 +1,169 @@
+/* Playground. Values from docs/architecture/studio-design.md. */
+
+.task-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.task-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.task-field-narrow {
+  flex: 0 0 10rem;
+}
+
+.field-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.task-input,
+.task-select {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+}
+
+.task-input::placeholder {
+  color: var(--text-muted);
+}
+
+.task-input[aria-invalid="true"] {
+  border-color: var(--state-bad);
+}
+
+.field-error {
+  margin: calc(var(--space-4) * -1) 0 var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--state-bad);
+}
+
+.section-with-action {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.section-with-action .section-heading {
+  flex: 1;
+}
+
+.section-note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 72ch;
+}
+
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Bordered on one edge rather than boxed. A list of cards would turn a reading surface into
+   a grid of containers, and the text is the point. */
+.item {
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-4);
+}
+
+.item-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-1);
+}
+
+.item-tokens {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.item-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  max-width: 82ch;
+}
+
+.omitted-reason {
+  color: var(--text-muted);
+}
+
+/* Arithmetic, not a verdict. No bar, no gauge, no percentage: each of those reads as
+   confidence whatever the caption says. */
+.score {
+  margin-top: var(--space-2);
+}
+
+.score-summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.score-summary::-webkit-details-marker {
+  display: none;
+}
+
+.score-summary::before {
+  content: "+ ";
+  color: var(--text-muted);
+}
+
+.score[open] .score-summary::before {
+  content: "- ";
+}
+
+.score-hint {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.score-components {
+  margin: var(--space-2) 0 0;
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: var(--space-4);
+  row-gap: 2px;
+  font-size: var(--text-xs);
+}
+
+.score-row {
+  display: contents;
+}
+
+.score-components dt {
+  color: var(--text-muted);
+}
+
+.score-components dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-secondary);
+}
