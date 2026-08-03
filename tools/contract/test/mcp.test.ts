@@ -13,9 +13,13 @@ import type {
 } from '@lorepack/core';
 import { LoreError, searchResultSchema } from '@lorepack/core';
 import { createMcpServer, RESOURCE_TEMPLATES, RESOURCE_URIS, TOOL_NAMES } from '@lorepack/mcp';
-import { createRuntime } from '@lorepack/runtime';
+import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { Client } from '@modelcontextprotocol/client';
-import { InMemoryTransport } from '@modelcontextprotocol/server';
+import {
+  INTERNAL_ERROR,
+  InMemoryTransport,
+  ResourceNotFoundError,
+} from '@modelcontextprotocol/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -424,6 +428,118 @@ describe('a deployment that holds only the build it serves', () => {
     await expect(
       bare.readResource({ uri: `lore://build/${BUILD}/diff/${SECOND_BUILD}` }),
     ).rejects.toThrow(/cannot compare two/);
+  });
+});
+
+describe('what a resource promises against what it returns', () => {
+  /**
+   * #193. This resource was titled "Indexed sources" and described as "Every document in the
+   * active build, with its path and status", and returned a row of counts. No capability can
+   * enumerate artifacts, so it never could have done otherwise.
+   *
+   * A description is what a model reads to decide what to call, so a false one costs a turn
+   * and teaches the model something untrue about the corpus. The two sides are pinned to each
+   * other here: if a listing ever appears in the body, the description may promise one, and
+   * not before.
+   */
+  it('does not promise a document listing, because it does not return one', async () => {
+    const listed = await client.listResources();
+    const sources = listed.resources.find((resource) => resource.uri === 'lore://project/sources');
+    expect(sources).toBeDefined();
+
+    const read = await client.readResource({ uri: 'lore://project/sources' });
+    const contents = read.contents as Array<{ text: string }>;
+    const body = JSON.parse(contents[0]?.text ?? '{}') as Record<string, unknown>;
+
+    // The body carries no collection of documents, in any field.
+    expect(Object.values(body).some((value) => Array.isArray(value))).toBe(false);
+    // So the description has to say so rather than inviting the client to expect one.
+    expect(`${sources?.title} ${sources?.description}`).not.toMatch(/every document/i);
+    expect(sources?.description).toMatch(/not a document listing/i);
+  });
+});
+
+describe('whose fault a failed resource read was', () => {
+  /**
+   * #191. An uncaught throw becomes `-32603` INTERNAL_ERROR, which tells the client the
+   * server broke. For a URI naming a document that is not in the build that is untrue, and
+   * it is the difference between an agent fixing its URI and an agent giving up.
+   *
+   * The expected codes are read off the SDK's own error classes rather than written as
+   * literals, so a protocol renumbering (2026-07-28 already moved this one from `-32002`)
+   * cannot leave the assertion quietly asserting the old value.
+   */
+  const NOT_FOUND = new ResourceNotFoundError('lore://x').code;
+
+  async function codeFrom(uri: string): Promise<number> {
+    const error = await client.readResource({ uri }).catch((cause: unknown) => cause);
+    expect(error, `reading ${uri} should have failed`).toBeInstanceOf(Error);
+    return (error as { code: number }).code;
+  }
+
+  it('reports a document the build does not contain as a client error', async () => {
+    expect(await codeFrom('lore://source/p%3Anot-a-real-document.md')).toBe(NOT_FOUND);
+  });
+
+  it('reports an unknown build the same way, through the diff template', async () => {
+    expect(await codeFrom(`lore://build/${OTHER_BUILD}/diff/${OTHER_BUILD}`)).toBe(NOT_FOUND);
+  });
+
+  it('still reports a genuine internal failure as one', async () => {
+    // Narrowing INTERNAL_ERROR must not mean deleting it: a runtime that throws something
+    // Lorepack never classified is exactly the case the code exists for.
+    const runtime = createRuntime({
+      provider: {
+        async current() {
+          return { buildId: BUILD, generation: 1 };
+        },
+        async acquire(): Promise<BuildHandle> {
+          return { buildId: BUILD, generation: 1, release() {} };
+        },
+      },
+      open: async () => {
+        throw new TypeError('the storage layer came apart');
+      },
+      freshness: async () => 'clean',
+    });
+    const server = createMcpServer({ runtime });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const broken = new Client({ name: 'contract-tests', version: '0.0.0' });
+    await Promise.all([server.connect(serverTransport), broken.connect(clientTransport)]);
+
+    const error = await broken
+      .readResource({ uri: 'lore://project/build' })
+      .catch((cause: unknown) => cause);
+    expect((error as { code: number }).code).toBe(INTERNAL_ERROR);
+  });
+
+  /**
+   * The assertion that matters most, because the two surfaces drifted apart without anyone
+   * choosing that: REST classified a missing document correctly from the start, and MCP
+   * called the identical condition a server fault.
+   */
+  it('agrees with the REST surface about the same missing document', async () => {
+    const runtime = createRuntime({
+      provider: {
+        async current() {
+          return { buildId: BUILD, generation: 1 };
+        },
+        async acquire(): Promise<BuildHandle> {
+          return { buildId: BUILD, generation: 1, release() {} };
+        },
+      },
+      open: async () => scope,
+      freshness: async () => 'clean',
+    });
+
+    const response = await createApiApp({
+      runtime,
+      currentBuild: async () => ({ buildId: BUILD, generation: 1 }),
+    }).request('/v1/sources/p%3Anot-a-real-document.md');
+    expect(response.status).toBe(404);
+
+    // Both say "you asked for something that is not here", in their own vocabulary.
+    expect(await codeFrom('lore://source/p%3Anot-a-real-document.md')).toBe(NOT_FOUND);
   });
 });
 

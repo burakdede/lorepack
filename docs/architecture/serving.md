@@ -43,6 +43,28 @@ is answered with `Method not found` even though the handler is registered. That 
 how `lore mcp` shipped until #189. Anything that serves this surface over a new transport
 uses an entry.
 
+## One condition, one classification, whichever surface asks
+
+A failure means the same thing on every surface, and each states it in its own vocabulary.
+The Lorepack error code is the contract; the HTTP status and the JSON-RPC code are both
+derived from it, in one place per surface (`statusFor()` in the runtime's HTTP app,
+`classify()` in the MCP resources).
+
+| Condition | Lorepack code | REST | MCP |
+|---|---|---|---|
+| The build has no such document or build | `LORE_E_BUILD_NOT_FOUND` | 404 | `-32602` |
+| The request is malformed | `LORE_E_INVALID_ARGUMENT` | 400 | `-32602` |
+| The server genuinely broke | anything else | 500 | `-32603` |
+
+The two surfaces disagreed until #191: MCP let every failure fall through to `-32603`
+INTERNAL_ERROR, so a client asking for a document that was never in the build was told the
+*server* had broken. That is the difference between an agent correcting its URI and an agent
+giving up, and it is why the mapping is derived from the code rather than written per
+handler.
+
+`-32603` is narrowed by this, not removed. A runtime that throws something Lorepack never
+classified still reports an internal error, because that is what it is.
+
 ## MCP resources
 
 Tools are for what a client wants to ask; resources are for what it wants to browse
