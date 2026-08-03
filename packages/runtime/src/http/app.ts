@@ -73,6 +73,21 @@ export interface ApiOptions {
    * loopback literal produces a loopback origin.
    */
   readonly allowLoopbackOrigin?: boolean;
+  /**
+   * What a rebuild would change, computed on demand.
+   *
+   * An injected host function rather than a runtime capability, for the same reason
+   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at seven capabilities that
+   * read the *active build*, and a plan reads the **source tree**. A deployment that holds
+   * only the build it serves has no sources to plan against and supplies nothing, which is
+   * exactly the distinction a separate port expresses.
+   *
+   * Deliberately never polled. Planning walks and fingerprints the corpus, so Studio asks
+   * for it when a person asks for it.
+   */
+  readonly plan?: () => Promise<unknown>;
+  /** The active build's warnings, with class and path, for the Overview summary. */
+  readonly warnings?: () => Promise<unknown>;
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
   /**
@@ -196,6 +211,17 @@ export function createApiApp(options: ApiOptions): Hono {
   }
 
   app.get('/v1/build', (context) => answer(context, () => options.runtime.describeBuild()));
+
+  // Studio-facing reads that are not runtime capabilities. Absent unless the host supplies
+  // them, so a deployment without sources simply does not have these routes.
+  if (options.plan !== undefined) {
+    const plan = options.plan;
+    app.get('/v1/plan', (context) => answer(context, () => plan()));
+  }
+  if (options.warnings !== undefined) {
+    const warnings = options.warnings;
+    app.get('/v1/warnings', (context) => answer(context, () => warnings()));
+  }
 
   app.post('/v1/search', async (context) =>
     answer(context, async () =>

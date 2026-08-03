@@ -1,0 +1,124 @@
+/* Overview. Values from docs/architecture/studio-design.md. No cards, no tiles, no charts. */
+
+/* Source state gets the weight, because it is the question the route answers. Bordered on
+   one side rather than filled, so it reads as an annotation on the page and not an alert. */
+.state-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-left: 2px solid var(--state-ok);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-8);
+}
+
+.state-banner-dirty {
+  border-left-color: var(--state-warn);
+}
+
+.state-line {
+  margin: 0;
+  flex: 1 1 24ch;
+  color: var(--text-secondary);
+}
+
+.build-id {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.warning-groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.warning-group {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  column-gap: var(--space-3);
+  align-items: baseline;
+}
+
+.warning-count {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--state-warn);
+}
+
+.warning-class {
+  color: var(--text-secondary);
+}
+
+.warning-list {
+  grid-column: 2;
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.warning-path {
+  color: var(--text-secondary);
+  margin-right: var(--space-2);
+}
+
+.warning-message {
+  color: var(--text-muted);
+}
+
+.warning-more {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.plan-idle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.plan-idle p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.plan-refresh {
+  margin-top: var(--space-4);
+}
+
+/* No accent colour, so an action is a bordered control that darkens on hover. The interface
+   has few enough of them that they do not need to shout. */
+.action {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--surface);
+  border-color: var(--text-muted);
+}
+
+.action:disabled {
+  color: var(--text-muted);
+  cursor: default;
+  background: var(--bg);
+  border-color: var(--border-subtle);
+}
