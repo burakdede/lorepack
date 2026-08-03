@@ -243,6 +243,128 @@ describe('watching while it serves', () => {
   }, 120_000);
 });
 
+/**
+ * The lifecycle actions Studio drives, over the same HTTP the browser uses.
+ *
+ * The point of testing them here rather than in the component tests is that everything worth
+ * doubting is outside the browser: whether the pointer actually moved, whether the server
+ * still serving the old build notices, and whether a model asking a question through MCP
+ * sees the same build a person sees in Studio (architecture 15.2).
+ */
+describe('changing which build is live, from Studio', () => {
+  /** Edits a document and waits for the watcher to produce a second build. */
+  async function rebuild(base: string, from: string): Promise<string> {
+    writeFileSync(
+      join(project, 'docs', 'runbook.md'),
+      `${DOCUMENT}\n## Freeze\n\nNo deployments during a change freeze.\n`,
+      'utf8',
+    );
+    const deadline = Date.now() + 60_000;
+    let now = from;
+    while (now === from && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      try {
+        now = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+      } catch {}
+    }
+    return now;
+  }
+
+  it('lists the history, rolls back, and every surface follows', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const first = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    const second = await rebuild(base, first);
+    expect(second, `the edit should have produced a second build.\n${started.log()}`).not.toBe(
+      first,
+    );
+
+    const history = (await (await fetch(`${base}/v1/builds`)).json()) as {
+      activeBuildId: string;
+      builds: { buildId: string; state: string; capabilities: string[] | null }[];
+    };
+    expect(history.activeBuildId).toBe(second);
+    expect(history.builds.map((build) => build.buildId)).toContain(first);
+    expect(history.builds[0]?.capabilities).toContain('lexical-search');
+
+    // The comparison of two real builds, neither of which is being re-read from source.
+    const diff = (await (await fetch(`${base}/v1/builds/${first}/diff/${second}`)).json()) as {
+      identical: boolean;
+    };
+    expect(diff.identical).toBe(false);
+
+    const rolled = await fetch(`${base}/v1/builds/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expect: first }),
+    });
+    expect(rolled.status).toBe(200);
+    expect(((await rolled.json()) as { buildId: string }).buildId).toBe(first);
+
+    // The pointer moved for everyone. Section 15.2: a handle is taken per request, so the
+    // very next call observes the change without the server being restarted.
+    const now = (await (await fetch(`${base}/v1/build`)).json()) as { buildId: string };
+    expect(now.buildId).toBe(first);
+
+    // And through MCP, which is the surface a model asks on. A tool call landing on the old
+    // build after a person rolled back in Studio is the failure this asserts against.
+    const call = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'lore_search', arguments: { query: 'freeze' } },
+      }),
+    });
+    const text = await call.text();
+    expect(text).toContain(first);
+    // The rolled-back build predates the edit, so the term the second build introduced is
+    // gone. This is the assertion that would catch a stale handle being reused.
+    expect(text).not.toContain(second);
+  }, 180_000);
+
+  it('refuses a stale confirmation instead of acting on a different build', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const first = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    await rebuild(base, first);
+
+    const response = await fetch(`${base}/v1/builds/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expect: `lore_${'0'.repeat(64)}` }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string; remediation: string } };
+    expect(body.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+    expect(body.error.remediation).toContain(first);
+  }, 180_000);
+
+  it('refuses these actions to any origin but this machine', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+
+    const refused = await fetch(`${base}/v1/builds/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' },
+      body: JSON.stringify({ build: `lore_${'0'.repeat(64)}` }),
+    });
+    expect(refused.status).toBe(403);
+
+    // The same request from the page Studio actually is.
+    const allowed = await fetch(`${base}/v1/builds`, {
+      headers: { Origin: `http://127.0.0.1:${started.port}` },
+    });
+    expect(allowed.status).toBe(200);
+  }, 120_000);
+});
+
 describe('shutting down', () => {
   it.runIf(CAN_SIGNAL_GRACEFULLY)(
     'stops on a signal and leaves the active build intact',

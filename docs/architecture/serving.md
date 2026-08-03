@@ -104,6 +104,44 @@ a surface a client has to probe.
 Anything else is a `404` in the same typed error shape as every other failure, so a client
 has one error format rather than two.
 
+Four more routes exist only where the host supplied them, because each reads something a
+deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
+`GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
+`lore export` writes. `lore serve` registers all but `/v1/plan`, because planning reads
+sources and `lore serve` promises never to.
+
+### The write surface
+
+The only routes in this API that change anything:
+
+| Route | |
+|---|---|
+| `GET /v1/builds` | every build in the project, with the active one marked |
+| `GET /v1/builds/:from/diff/:to` | section 18.3's comparison of any two builds |
+| `POST /v1/builds/activate` | move the active pointer to a named build |
+| `POST /v1/builds/rollback` | move it back to the previous verified build |
+| `POST /v1/builds/pack` | write a `.lorepack` archive |
+
+They exist only where a host passes `localActions`, which only the local CLI does, and only
+for `lore dev`. Three things keep them local:
+
+1. **A remote deployment cannot register them.** It holds one build and no history, so it has
+   nothing to supply. A route that does not exist cannot be reached by getting past a check.
+2. **They refuse any browser origin that is not a loopback literal**, and `allowedOrigins`
+   cannot widen this. Adding a remote origin so a team can read a deployment is not the same
+   as letting it activate a build.
+3. **No model-facing tool reaches them.** MCP stays read-only (invariant 10). These are
+   Studio's, and Studio is served from loopback.
+
+Each one calls the same code path the equivalent command does, so a build activated in a
+browser and one activated in a terminal are the same operation with the same pre-flight and
+the same lock. Activation checks the target build opens and passes its integrity check
+*before* the pointer moves, so a corrupt build fails with the previous one still serving.
+
+`POST /v1/builds/rollback` accepts an optional `expect`, the build id the caller was shown
+before confirming. If the history moved in between, the request is refused rather than
+applied to a different build than the one that was confirmed.
+
 ### Origin checking
 
 A page on any website can make a request to `127.0.0.1`, and DNS rebinding can make it look
