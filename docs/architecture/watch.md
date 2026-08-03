@@ -47,6 +47,25 @@ Step 7 is visible rather than silent. A save that changes nothing prints `No cha
 sources still match the active build`, because a user who saved and saw nothing happen is
 owed the reason.
 
+## The path handed to the operating system is resolved first
+
+On Windows this is not a formality. A directory reached through an 8.3 short path, which is
+what `%TEMP%` gives under a long user name (`C:\Users\RUNNER~1\AppData\Local\Temp\...`),
+makes libuv abort:
+
+```text
+Assertion failed: !_wcsnicmp(filename, dir, dirlen), file src\win\fs-event.c, line 72
+```
+
+It compares the long name the operating system reports against the short name it was asked
+to watch, they do not match, and the watcher dies. Not quietly: the process takes an
+assertion failure, and nothing recovers, because there is no watcher left to recover. CI
+found this and a local run never would.
+
+So the root is resolved with `realpathSync.native` before chokidar sees it, and the same
+resolved root is what event paths are made relative to. Symlinked project roots have the
+same shape of problem on every platform.
+
 ## One matcher, not two
 
 The watcher decides which events matter using `createSourceMatcher`, which is the same

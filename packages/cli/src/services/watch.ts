@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createSourceMatcher, discover } from '@lorepack/compiler';
 import type { LoadedConfig, SourceState } from '@lorepack/core';
@@ -92,6 +92,21 @@ export function startWatching(options: WatchOptions): Watching {
   // The same rules discovery uses, so an event and a build cannot disagree about
   // whether a file is a source of this project.
   const matcher = createSourceMatcher(options.config);
+
+  /**
+   * The path the operating system will name in its own events.
+   *
+   * On Windows this is not a formality. A directory reached through an 8.3 short path, which
+   * is what `%TEMP%` under a long user name gives you (`C:\Users\RUNNER~1\...`), makes
+   * libuv abort:
+   *
+   *     Assertion failed: !_wcsnicmp(filename, dir, dirlen), file src\win\fs-event.c, line 72
+   *
+   * It compares the long name the OS reports against the short name it was asked to watch,
+   * they do not match, and the watcher dies. Resolving first means both sides are speaking
+   * about the same string. Symlinked roots have the same shape of problem on every platform.
+   */
+  const watchRoot = resolveRealPath(options.config.projectRoot);
   let state: SourceState = 'clean';
   let rebuilds = 0;
   let noOps = 0;
@@ -105,11 +120,11 @@ export function startWatching(options: WatchOptions): Watching {
   let again = false;
   let chain: Promise<void> = Promise.resolve();
 
-  const watcher = chokidarWatch(options.config.projectRoot, {
+  const watcher = chokidarWatch(watchRoot, {
     // Chokidar v4 removed glob support and v5 has not brought it back, so it is given a
     // directory and our own matcher decides. Handing it patterns would be two matchers
     // disagreeing about which files are sources.
-    ignored: (path: string) => excluded(path, options.config, matcher),
+    ignored: (path: string) => excluded(path, watchRoot, matcher),
     // The initial scan already happened: it was the build. Replaying it as events would
     // rebuild an identical build on every startup.
     ignoreInitial: true,
@@ -350,10 +365,10 @@ function signature(paths: readonly string[]): string {
  */
 function excluded(
   path: string,
-  config: LoadedConfig,
+  watchRoot: string,
   matcher: { excludes: (canonicalPath: string, isDirectory?: boolean) => boolean },
 ): boolean {
-  const relativePath = relative(config.projectRoot, path);
+  const relativePath = relative(watchRoot, path);
   if (relativePath === '') return false;
   // Outside the project entirely, which chokidar can ask about for a symlinked parent.
   if (relativePath.startsWith('..')) return true;
@@ -365,7 +380,17 @@ function excluded(
   return matcher.excludes(canonical);
 }
 
-/** Exported for the supervisor, which needs the same rule to report what it is watching. */
-export function watchedRoot(config: LoadedConfig): string {
-  return join(config.projectRoot);
+/**
+ * The canonical path, or the original when it cannot be resolved.
+ *
+ * Falling back rather than throwing: a project that cannot be `realpath`ed is a project the
+ * build has already read successfully, so refusing to watch it would be a worse answer than
+ * watching it by the name we were given.
+ */
+export function resolveRealPath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
 }

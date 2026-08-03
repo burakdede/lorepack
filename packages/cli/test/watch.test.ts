@@ -1,10 +1,11 @@
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
-import { startWatching } from '../src/services/watch.js';
+import { resolveRealPath, startWatching } from '../src/services/watch.js';
 
 /**
  * Watch mode, where the interesting cases are all the ones an editor causes.
@@ -328,4 +329,32 @@ describe('the periodic reconciliation, architecture 12.3', () => {
       expect(rebuilds).toBe(after);
     });
   }, 60_000);
+});
+
+describe('the path handed to the operating system', () => {
+  /**
+   * Windows CI aborted the watcher outright with a libuv assertion:
+   *
+   *     Assertion failed: !_wcsnicmp(filename, dir, dirlen), file src\win\fs-event.c, line 72
+   *
+   * The temporary directory was reached through an 8.3 short path
+   * (`C:\Users\RUNNER~1\AppData\Local\Temp\...`), which is what `%TEMP%` gives under a
+   * long user name. libuv compares the long name the OS reports against the short name it was
+   * asked to watch, they do not match, and it dies. Nothing recovered, because the watcher
+   * was gone rather than merely quiet.
+   */
+  it('is resolved, so a short path or a symlink cannot be a different string', () => {
+    const resolved = resolveRealPath(tmpdir());
+
+    expect(resolved).not.toBe('');
+    // The canonical form of a path is itself canonical, which is the property libuv needs.
+    expect(resolveRealPath(resolved)).toBe(resolved);
+  });
+
+  it('falls back to the path it was given rather than refusing to watch', () => {
+    // A project the build has already read successfully must not become unwatchable because
+    // `realpath` had an opinion about it.
+    const absent = join(tmpdir(), 'lorepack-no-such-directory-8f2a1c');
+    expect(resolveRealPath(absent)).toBe(absent);
+  });
 });
