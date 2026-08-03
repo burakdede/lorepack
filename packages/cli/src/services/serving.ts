@@ -5,9 +5,15 @@ import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
 import { renderBundleMarkdown } from './export.js';
+import { packBuild } from './packing.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
 import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
 import { createPlanEndpoint, createWarningsEndpoint } from './studio-endpoints.js';
+import {
+  createActivateEndpoint,
+  createBuildsEndpoint,
+  createRollbackEndpoint,
+} from './studio-mutations.js';
 
 /**
  * Serving an active build over HTTP and MCP, in one place, for the two commands that do it.
@@ -90,7 +96,8 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
   // One handler for the process, built once: it constructs a fresh server per request
   // internally, which is what the stateless model asks for, and holds the machinery that
   // would otherwise be rebuilt on every call.
-  const mcp = createMcpHttpHandler(runtime, createLocalComparer(options.config.projectRoot));
+  const comparer = createLocalComparer(options.config.projectRoot);
+  const mcp = createMcpHttpHandler(runtime, comparer);
   // Absent when the package was installed without built assets, which is a broken install
   // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
   const serveStudio = options.studio === true && studioIsBuilt();
@@ -143,6 +150,18 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
           // source tree. `lore serve` promises never to rebuild and has no business reading
           // sources, so this belongs to `lore dev` alone.
           plan: createPlanEndpoint(options.config),
+          // The only writes in this API, and they exist only here. `lore serve` promises to
+          // be read-only, so it passes no actions and simply does not have these routes.
+          localActions: {
+            builds: createBuildsEndpoint(options.config),
+            diff: (from, to) => comparer.compare(from, to),
+            activate: createActivateEndpoint(options.config),
+            rollback: createRollbackEndpoint(options.config),
+            pack: async (request) => {
+              const asked = request as { build?: string; out?: string };
+              return packBuild(options.config, { build: asked.build, out: asked.out });
+            },
+          },
         }
       : {}),
   });

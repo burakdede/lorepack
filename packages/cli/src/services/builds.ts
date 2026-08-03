@@ -71,6 +71,28 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
   );
 }
 
+/**
+ * The build a rollback returns to: the newest activatable one that is not already live.
+ *
+ * One definition, used by `lore rollback` and by the Studio endpoint behind the same button,
+ * because two definitions is how a terminal and a browser end up returning to different
+ * builds from the same history.
+ */
+export function previousBuild(builds: readonly BuildSummary[], active: BuildId | null): BuildId {
+  const candidates = builds.filter(
+    (build) => build.buildId !== active && (build.state === 'verified' || build.state === 'active'),
+  );
+  const previous = candidates[0];
+  if (previous === undefined) {
+    throw new LoreError(
+      'LORE_E_BUILD_NOT_FOUND',
+      'There is no earlier verified build to return to.',
+      { remediation: 'Run `lore builds` to see the history.' },
+    );
+  }
+  return previous.buildId;
+}
+
 export function buildDirectory(loreDirectory: string, buildId: BuildId): string {
   return join(loreDirectory, 'builds', buildId);
 }

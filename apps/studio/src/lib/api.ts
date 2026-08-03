@@ -30,6 +30,12 @@ export interface DisplayableError {
  * taxonomy over the wire, so Studio says exactly what the CLI would rather than paraphrasing
  * it into something friendlier and less useful.
  */
+interface Wire {
+  readonly message: string;
+  readonly code?: unknown;
+  readonly remediation?: unknown;
+}
+
 export function toDisplayable(error: unknown): DisplayableError {
   if (error instanceof LoreClientError) {
     return {
@@ -38,6 +44,19 @@ export function toDisplayable(error: unknown): DisplayableError {
       ...(error.remediation === undefined ? {} : { remediation: error.remediation }),
     };
   }
+  // A parsed error body, thrown by a route that fetched directly rather than through the
+  // SDK. The wire shape is `{ error: { code, message, remediation } }`, and the whole point
+  // of the taxonomy is that this reaches the reader intact rather than as "[object Object]".
+  const body = (error as { error?: unknown } | null)?.error;
+  if (typeof body === 'object' && body !== null && typeof (body as Wire).message === 'string') {
+    const wire = body as Wire;
+    return {
+      message: wire.message,
+      ...(typeof wire.code === 'string' ? { code: wire.code } : {}),
+      ...(typeof wire.remediation === 'string' ? { remediation: wire.remediation } : {}),
+    };
+  }
+
   if (error instanceof Error) {
     // The common case here is the dev server having stopped, and saying so is more useful
     // than reporting a fetch failure.

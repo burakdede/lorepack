@@ -11,7 +11,7 @@ import {
 } from '@lorepack/core';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
-import type { ZodType } from 'zod';
+import { type ZodType, z } from 'zod';
 
 /**
  * The REST surface, architecture 14.5.
@@ -21,9 +21,11 @@ import type { ZodType } from 'zod';
  * configuration change rather than a rewrite: the same app object is handed to
  * `@hono/node-server` locally and to a Worker's `fetch` export remotely.
  *
- * Read-only by construction (architecture 19.4). There is no route that builds, deploys,
- * edits a source or runs a command, and there is nowhere to add one without changing this
- * file, which is the point of keeping the whole surface in one place.
+ * Read-only by default, and the exception is bounded. No route builds, deploys, edits a
+ * source or runs a command. The `/v1/builds` routes can move the active pointer, and they
+ * exist only where a host passed `localActions`, which only the local CLI does. Keeping the
+ * whole surface in one file is what makes that boundary checkable: there is nowhere to add a
+ * write without editing these lines.
  */
 
 export interface ApiOptions {
@@ -104,6 +106,19 @@ export interface ApiOptions {
    * outputs would look plausible.
    */
   readonly exportBundle?: (request: unknown) => Promise<string>;
+  /**
+   * The actions that change which build is live, and the history they act on.
+   *
+   * The only writes in this API, and the reason they are one optional bundle rather than five
+   * independent options: a host either can change this project's builds or it cannot, and a
+   * partial set is not a configuration anyone wants. A deployment that supplies nothing here
+   * does not have these routes at all, which is stronger than having them and refusing.
+   *
+   * Model-facing MCP tools never reach them (invariant 10). These belong to Studio, which is
+   * loopback-bound, and the routes below refuse any browser origin that is not a loopback
+   * literal regardless of what `allowedOrigins` permits for reads.
+   */
+  readonly localActions?: LocalActions;
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
   /**
@@ -120,6 +135,19 @@ export interface ApiOptions {
   readonly authorize?: (request: AuthorizationRequest) => AuthorizationDecision;
 }
 
+export interface LocalActions {
+  /** Every build this project has, newest first, with the active one marked. */
+  readonly builds: () => Promise<unknown>;
+  /** Section 18.3's comparison of any two builds, neither of which need be active. */
+  readonly diff: (from: string, to: string) => Promise<unknown>;
+  /** Moves the active pointer. Never recompiles (section 18.4). */
+  readonly activate: (request: unknown) => Promise<unknown>;
+  /** Moves the pointer back to the previous verified build. */
+  readonly rollback: (request: unknown) => Promise<unknown>;
+  /** Writes a `.lorepack` archive and reports where it went. */
+  readonly pack: (request: unknown) => Promise<unknown>;
+}
+
 export interface AuthorizationRequest {
   /** The `Authorization` header verbatim, or undefined when the client sent none. */
   readonly authorization: string | undefined;
@@ -131,6 +159,23 @@ export interface AuthorizationRequest {
 
 /** `true` admits the request. `false` or a reason refuses it. */
 export type AuthorizationDecision = boolean | string | Promise<boolean | string>;
+
+/**
+ * A build is named by its id or by a unique prefix, the same way the CLI accepts one.
+ *
+ * Defined here rather than in `@lorepack/core` because this is not part of the runtime
+ * contract every backend implements. It is the shape of two local requests.
+ */
+const activateRequestSchema = z.object({ build: z.string().min(1) }).strict();
+const packRequestSchema = z
+  .object({ build: z.string().min(1).optional(), out: z.string().min(1).optional() })
+  .strict();
+/**
+ * `expect` is the build the caller was shown before confirming. Optional, because a script
+ * rolling back has nothing to have been shown; supplied by Studio, so a confirmation that
+ * went stale is refused rather than applied to a different build.
+ */
+const rollbackRequestSchema = z.object({ expect: z.string().min(1).optional() }).strict();
 
 /** The one path that runs before authorization, so liveness never needs a credential. */
 export const UNAUTHENTICATED_PATHS: readonly string[] = ['/health'];
@@ -256,6 +301,69 @@ export function createApiApp(options: ApiOptions): Hono {
         return failure(context, error, statusFor(error));
       }
     });
+  }
+
+  /**
+   * The write surface, present only where a host supplied one.
+   *
+   * Two independent things keep these off a remote deployment. A Worker has no build history
+   * to hand over, so it supplies no `localActions` and these routes are never registered.
+   * And where they are registered, they additionally require any browser origin to be a
+   * loopback literal, which `allowedOrigins` cannot widen: a deployment that added a remote
+   * origin for reads has not thereby granted it the ability to activate a build.
+   */
+  if (options.localActions !== undefined) {
+    const actions = options.localActions;
+
+    const loopbackOnly = async (
+      context: Context,
+      next: () => Promise<void>,
+    ): Promise<Response | undefined> => {
+      const origin = context.req.header('Origin');
+      if (origin === undefined || isLoopbackOrigin(origin)) {
+        await next();
+        return undefined;
+      }
+      return failure(
+        context,
+        new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          'Only a page served from this machine may change which build is active.',
+          {
+            remediation:
+              'Open Studio at the address `lore dev` printed. These actions are deliberately unavailable to any other origin.',
+            subject: origin,
+          },
+        ),
+        403,
+      );
+    };
+    // Both patterns: `/v1/builds/*` does not match `/v1/builds` itself, and a guard that
+    // silently covers four routes out of five is worse than none.
+    app.use('/v1/builds', loopbackOnly);
+    app.use('/v1/builds/*', loopbackOnly);
+
+    app.get('/v1/builds', (context) => answer(context, () => actions.builds()));
+
+    app.get('/v1/builds/:from/diff/:to', (context) =>
+      answer(context, () => actions.diff(context.req.param('from'), context.req.param('to'))),
+    );
+
+    app.post('/v1/builds/activate', async (context) =>
+      answer(context, async () =>
+        actions.activate(await body(context, activateRequestSchema, maxBytes)),
+      ),
+    );
+
+    app.post('/v1/builds/rollback', async (context) =>
+      answer(context, async () =>
+        actions.rollback(await body(context, rollbackRequestSchema, maxBytes)),
+      ),
+    );
+
+    app.post('/v1/builds/pack', async (context) =>
+      answer(context, async () => actions.pack(await body(context, packRequestSchema, maxBytes))),
+    );
   }
 
   app.post('/v1/search', async (context) =>

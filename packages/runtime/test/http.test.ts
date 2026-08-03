@@ -377,6 +377,125 @@ describe('safety, architecture 19.4 and 20.9', () => {
   });
 });
 
+/**
+ * The one place this API can write, and the two things that keep it local.
+ *
+ * A remote deployment has no build history to hand over, so it passes no `localActions` and
+ * these routes are never registered. Where they are registered, a browser origin must be a
+ * loopback literal, and `allowedOrigins` cannot widen that: adding a remote origin so a team
+ * can read a deployment is not the same as letting it activate a build.
+ */
+describe('the write surface, architecture 15.6 and 19.4', () => {
+  const WRITES = [
+    ['GET', '/v1/builds', undefined],
+    ['GET', `/v1/builds/${BUILD}/diff/${BUILD}`, undefined],
+    ['POST', '/v1/builds/activate', JSON.stringify({ build: BUILD })],
+    ['POST', '/v1/builds/rollback', '{}'],
+    ['POST', '/v1/builds/pack', '{}'],
+  ] as const;
+
+  function actionsFor(): {
+    calls: string[];
+    actions: NonNullable<Parameters<typeof createApiApp>[0]['localActions']>;
+  } {
+    const calls: string[] = [];
+    return {
+      calls,
+      actions: {
+        builds: async () => {
+          calls.push('builds');
+          return { activeBuildId: BUILD, builds: [] };
+        },
+        diff: async (from, to) => {
+          calls.push(`diff ${from} ${to}`);
+          return { from, to, identical: true };
+        },
+        activate: async (request) => {
+          calls.push('activate');
+          return { ...(request as object), changed: true };
+        },
+        rollback: async () => {
+          calls.push('rollback');
+          return { buildId: BUILD, changed: true };
+        },
+        pack: async () => {
+          calls.push('pack');
+          return { buildId: BUILD, archive: '/tmp/a.lorepack', members: 4 };
+        },
+      },
+    };
+  }
+
+  it.each(WRITES)(
+    'is absent entirely when the host supplies no actions: %s %s',
+    async (method, path, body) => {
+      const response = await appFor().request(path, {
+        method,
+        ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
+      });
+      // 404 rather than 403: a route a remote deployment does not have cannot be reached by
+      // finding a way past a check, because there is no check to get past.
+      expect(response.status).toBe(404);
+    },
+  );
+
+  it.each(WRITES)('answers where a host supplied actions: %s %s', async (method, path, body) => {
+    const { actions } = actionsFor();
+    const response = await appFor({ localActions: actions }).request(path, {
+      method,
+      ...(body === undefined ? {} : { body, headers: { 'Content-Type': 'application/json' } }),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it.each(WRITES)('refuses a non-loopback browser origin: %s %s', async (method, path, body) => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({
+      localActions: actions,
+      // Configured for reads, and deliberately powerless here.
+      allowedOrigins: ['https://team.example'],
+    });
+
+    const response = await app.request(path, {
+      method,
+      headers: {
+        Origin: 'https://team.example',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body }),
+    });
+
+    expect(response.status).toBe(403);
+    // The refusal happens before the action runs, so nothing was half done.
+    expect(calls).toEqual([]);
+  });
+
+  it('accepts a page served from this machine, which is what Studio is', async () => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({ localActions: actions, allowLoopbackOrigin: true });
+
+    const response = await app.request('/v1/builds', {
+      headers: { Origin: 'http://127.0.0.1:4321' },
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(['builds']);
+  });
+
+  it('validates the body before anything is activated', async () => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({ localActions: actions });
+
+    const response = await app.request('/v1/builds/activate', {
+      method: 'POST',
+      body: JSON.stringify({ buildId: BUILD }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    expect(response.status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
 describe('errors', () => {
   it('renders through the taxonomy, with a code and a remediation', async () => {
     const response = await appFor().request('/v1/tables/missing');

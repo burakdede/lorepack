@@ -1,14 +1,13 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import {
-  type BuildId,
-  type BuildSummary,
-  LORE_DIRECTORY,
-  LoreError,
-  loadConfig,
-} from '@lorepack/core';
+import { type BuildId, type BuildSummary, LORE_DIRECTORY, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
-import { assertActivatable, openStateStore, resolveBuildId } from '../services/builds.js';
+import {
+  assertActivatable,
+  openStateStore,
+  previousBuild,
+  resolveBuildId,
+} from '../services/builds.js';
 
 /**
  * Activation and rollback are pointer changes (architecture section 18.4). Neither
@@ -36,9 +35,7 @@ export function rollbackCommand(): CommandDefinition {
       switchTo(
         context.options.cwd,
         (builds, active) =>
-          args[0] === undefined
-            ? previousVerified(builds, active)
-            : resolveBuildId(builds, args[0]),
+          args[0] === undefined ? previousBuild(builds, active) : resolveBuildId(builds, args[0]),
         'Rolled back to',
       ),
   };
@@ -109,23 +106,6 @@ async function switchTo(
   } finally {
     state.close();
   }
-}
-
-function previousVerified(builds: readonly BuildSummary[], active: BuildId | null): BuildId {
-  const candidates = builds.filter(
-    (build) => build.buildId !== active && (build.state === 'verified' || build.state === 'active'),
-  );
-  const previous = candidates[0];
-  if (previous === undefined) {
-    throw new LoreError(
-      'LORE_E_BUILD_NOT_FOUND',
-      'There is no earlier verified build to return to.',
-      {
-        remediation: 'Run `lore builds` to see the history.',
-      },
-    );
-  }
-  return previous.buildId;
 }
 
 interface BuildRow {

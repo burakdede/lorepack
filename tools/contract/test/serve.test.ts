@@ -194,6 +194,27 @@ describe('what Studio copies is what a chat product gets', () => {
     // business reading sources. That route belongs to `lore dev`.
     expect((await fetch(`${url}/v1/plan`)).status).toBe(404);
   });
+
+  it('has no route that could change which build is live', async () => {
+    const { url } = await serve(['--port', '4695']);
+
+    // `lore serve` promises to be read-only. The actions that move the pointer belong to
+    // `lore dev`, which is where Studio is, and a route this server does not register cannot
+    // be reached by any request at all.
+    for (const [method, path] of [
+      ['GET', '/v1/builds'],
+      ['POST', '/v1/builds/activate'],
+      ['POST', '/v1/builds/rollback'],
+      ['POST', '/v1/builds/pack'],
+    ] as const) {
+      const response = await fetch(`${url}${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        ...(method === 'POST' ? { body: '{}' } : {}),
+      });
+      expect(response.status, `${method} ${path}`).toBe(404);
+    }
+  });
 });
 
 describe('activation without a restart', () => {
