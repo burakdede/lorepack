@@ -178,12 +178,14 @@ Proves: Milestone 1 (section 21): build, connect and answer, with provenance on 
 
 Starting point: 3 source files, already set up with `lore init` and `lore build`.
 
-1. See exactly what would be written to the client, before anything is
-   Expect: it succeeds, stdout mentions "lore mcp --project", "--ensure-current", "nothing was changed".
-2. An unverified client gets an honest snippet rather than a refusal
+1. See the exact server command, without depending on which client is installed
+   Expect: it succeeds, stdout mentions "lore", "--project", "--ensure-current", "Nothing was changed".
+2. Plan a real connection, changing nothing whether or not the client is here
+   Expect: it succeeds, stdout matches `/lore mcp --project|not installed/`.
+3. An unverified client gets an honest snippet rather than a refusal
    Expect: it succeeds, stdout mentions "mcpServers", "unverified", "lore export".
-3. Ask the question a coding agent would ask, over the protocol
-4. The same answer as a file, for a client that cannot speak MCP
+4. Ask the question a coding agent would ask, over the protocol
+5. The same answer as a file, for a client that cannot speak MCP
    Expect: it succeeds, `budget` is 24000, `citations[0].relativePath` is present, `buildId` matches `/^lore_[0-9a-f]{64}$/`.
 
 ## The lifecycle

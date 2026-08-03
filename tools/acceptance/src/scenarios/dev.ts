@@ -141,13 +141,28 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
     steps: [
       {
         action: 'run',
-        args: ['connect', 'claude-code', '--dry-run'],
-        describe: 'See exactly what would be written to the client, before anything is',
+        args: ['connect', '--snippet'],
+        // Deliberately not `connect claude-code --dry-run`. That asserts a plan only when
+        // the client is installed, and CI runners have no Claude Code, so it passed locally
+        // and failed there: exactly the "works on my machine" this suite exists to catch.
+        // The snippet path is client-independent and carries the same command.
+        describe: 'See the exact server command, without depending on which client is installed',
         expect: {
           exitCode: 0,
           stdout: {
-            contains: ['lore mcp --project', '--ensure-current', 'nothing was changed'],
+            contains: ['lore', '--project', '--ensure-current', 'Nothing was changed'],
           },
+        },
+      },
+      {
+        action: 'run',
+        args: ['connect', 'claude-code', '--dry-run'],
+        describe: 'Plan a real connection, changing nothing whether or not the client is here',
+        expect: {
+          exitCode: 0,
+          // Either the plan or an honest "not installed" with somewhere to go. Both are
+          // correct; asserting only the first would make the suite depend on the runner.
+          stdout: { matches: ['lore mcp --project|not installed'] },
         },
       },
       {
