@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -19,6 +19,21 @@ const DOCUMENT =
 
 let project: string;
 const running: ChildProcess[] = [];
+
+/**
+ * Whether a parent process can ask this child to stop *gracefully*.
+ *
+ * Windows has no POSIX signals. `child.kill('SIGTERM')` is emulated with `TerminateProcess`,
+ * so the handler never runs, no matter which signal name is passed. A user pressing Ctrl-C
+ * in their own console is unaffected: that path goes through a console control handler and
+ * does reach the process.
+ *
+ * So graceful-shutdown assertions are POSIX-only, and the Windows behaviour is covered by
+ * the case that actually happens there: a hard kill leaves a receipt naming a dead pid, and
+ * the next session clears it. That is the whole reason the receipt is evidence rather than a
+ * lock. #61 owns the general version of this.
+ */
+const CAN_SIGNAL_GRACEFULLY = platform() !== 'win32';
 
 /** Ports well clear of the 4321 default, so a developer's own server cannot collide. */
 let nextPort = 4700;
@@ -176,8 +191,13 @@ describe('watching while it serves', () => {
     const deadline = Date.now() + 60_000;
     let after = before;
     while (after === before && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      after = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      // A poll that races a rebuild can have its connection reset, which is a fact about
+      // hammering a socket rather than anything this test is about. Windows resets more
+      // eagerly than Linux, so ignoring it here is what keeps the assertion about rebuilds.
+      try {
+        after = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+      } catch {}
     }
     expect(after, 'the edit should have produced a new build').not.toBe(before);
 
@@ -196,62 +216,76 @@ describe('watching while it serves', () => {
 });
 
 describe('shutting down', () => {
-  it('stops on a signal and leaves the active build intact', async () => {
-    const started = await dev();
-    const base = `http://127.0.0.1:${started.port}`;
-    const before = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string })
-      .buildId;
+  it.runIf(CAN_SIGNAL_GRACEFULLY)(
+    'stops on a signal and leaves the active build intact',
+    async () => {
+      const started = await dev();
+      const base = `http://127.0.0.1:${started.port}`;
+      const before = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string })
+        .buildId;
 
-    started.child.kill('SIGTERM');
-    const code = await new Promise<number>((resolve) => {
-      const give = setTimeout(() => resolve(-1), 30_000);
-      started.child.once('exit', (value) => {
-        clearTimeout(give);
-        resolve(value ?? 0);
+      started.child.kill('SIGTERM');
+      const code = await new Promise<number>((resolve) => {
+        const give = setTimeout(() => resolve(-1), 30_000);
+        started.child.once('exit', (value) => {
+          clearTimeout(give);
+          resolve(value ?? 0);
+        });
       });
-    });
-    expect(code).toBe(0);
+      expect(code).toBe(0);
 
-    // The pointer survived the shutdown, and no lock was left to block the next command.
-    const after = spawn(process.execPath, [BINARY, '--cwd', project, 'status', '--json'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let out = '';
-    after.stdout.on('data', (chunk: Buffer) => {
-      out += chunk.toString('utf8');
-    });
-    const statusCode = await new Promise<number>((resolve) => {
-      after.once('exit', (value) => resolve(value ?? 0));
-    });
+      // The pointer survived the shutdown, and no lock was left to block the next command.
+      const after = spawn(process.execPath, [BINARY, '--cwd', project, 'status', '--json'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let out = '';
+      after.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString('utf8');
+      });
+      const statusCode = await new Promise<number>((resolve) => {
+        after.once('exit', (value) => resolve(value ?? 0));
+      });
 
-    expect(statusCode).toBe(0);
-    expect((JSON.parse(out) as { activeBuildId: string }).activeBuildId).toBe(before);
-  }, 120_000);
+      expect(statusCode).toBe(0);
+      expect((JSON.parse(out) as { activeBuildId: string }).activeBuildId).toBe(before);
+    },
+    120_000,
+  );
 });
 
 describe('the session receipt', () => {
-  it('records the running session, and removes it on a clean stop', async () => {
+  it('records the running session', async () => {
     const started = await dev();
-    const path = join(project, '.lore', 'dev.json');
-
-    const receipt = JSON.parse(readFileSync(path, 'utf8')) as {
+    const receipt = JSON.parse(readFileSync(join(project, '.lore', 'dev.json'), 'utf8')) as {
       port: number;
       pid: number;
       buildId: string;
       host: string;
     };
+
     expect(receipt.port).toBe(started.port);
     expect(receipt.pid).toBe(started.child.pid);
     expect(receipt.host).toBe('127.0.0.1');
     expect(receipt.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
-
-    started.child.kill('SIGTERM');
-    await new Promise((resolve) => started.child.once('exit', resolve));
-
-    // Left behind, it would make the next `lore dev` refuse to start for a process that no
-    // longer exists.
-    expect(existsSync(path), 'the receipt should be gone after a clean stop').toBe(false);
   }, 120_000);
+
+  it.runIf(CAN_SIGNAL_GRACEFULLY)(
+    'removes the receipt on a clean stop',
+    async () => {
+      const started = await dev();
+      const path = join(project, '.lore', 'dev.json');
+      expect(existsSync(path)).toBe(true);
+
+      started.child.kill('SIGTERM');
+      await new Promise((resolve) => started.child.once('exit', resolve));
+
+      // Left behind, it would make the next `lore dev` refuse to start on behalf of a process
+      // that no longer exists. On Windows a parent cannot ask for a clean stop at all, which
+      // is why the stale-receipt path below is the one that matters there.
+      expect(existsSync(path), 'the receipt should be gone after a clean stop').toBe(false);
+    },
+    120_000,
+  );
 
   it('refuses a second session on the same project, naming the first', async () => {
     const started = await dev();

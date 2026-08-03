@@ -35,8 +35,13 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
         afterOutput: 'MCP stdio',
         afterMs: 250,
         describe: 'Point `lore dev` at a folder that has never been built, then stop it',
+        // No exit code asserted. A parent process on Windows cannot ask a child to stop
+        // gracefully at all: `kill` is emulated with `TerminateProcess`, so the handler
+        // never runs and the supervisor dies non-zero having done everything right. What
+        // this scenario is about is the output above, which is identical on every platform.
+        // The graceful-exit contract is asserted in the POSIX-only end-to-end tests, and
+        // #61 owns the general Windows signal question.
         expect: {
-          exitCode: 0,
           stdout: {
             contains: [
               // It said what it wrote.
@@ -83,9 +88,45 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
           contents: '# Deployment\n\n## Freeze\n\nNo deployments during a change freeze.\n',
         },
         describe: 'Change a document while `lore dev` is running, then stop it',
+        // As above: the subject is the rebuild, not how the process was stopped.
+        expect: {
+          stderr: { contains: ['rebuilding'] },
+        },
+      },
+    ],
+  },
+  {
+    id: 'dev/doctor-explains-the-environment',
+    title: '`lore doctor` reports the environment and says what to do about anything wrong',
+    proves:
+      'Section 6.5 and 6.9: one command names what is wrong and carries a concrete remediation.',
+    mode: 'auto',
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['doctor'],
+        describe: 'Ask whether this machine and project are in a state that works',
         expect: {
           exitCode: 0,
-          stderr: { contains: ['rebuilding'] },
+          stdout: {
+            // The checks a user is sent here to read, and the verdict line.
+            contains: ['Node version', 'SQLite FTS5', 'Project configuration', 'Everything'],
+          },
+        },
+      },
+      {
+        action: 'run',
+        args: ['doctor', '--json'],
+        describe: 'The same report, for a bug report or a pipeline',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'status', equals: 'pass' },
+            // Every check carries an id, which is what a consumer filters and links on.
+            { path: 'checks[0].id', exists: true },
+            { path: 'counts.fail', equals: 0 },
+          ],
         },
       },
     ],
