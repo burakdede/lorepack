@@ -7,6 +7,7 @@ import {
   type BuildScope,
   buildManifestSchema,
   type CatalogArtifact,
+  type CatalogArtifactSummary,
   type CatalogNode,
   type CatalogSearchCriteria,
   type CatalogSearchHit,
@@ -60,6 +61,37 @@ class LocalCatalogStore implements CatalogStore {
 
   async countWarnings(): Promise<number> {
     return countRows(this.#db, 'build_warnings');
+  }
+
+  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+    // One statement for the whole listing rather than one per row: at the 2,500-file
+    // envelope a per-artifact count query is 2,500 round trips to answer one question.
+    const rows = this.#db
+      .prepare(
+        `SELECT a.id, a.relative_path AS relativePath, a.display_path AS displayPath, a.title,
+                a.status, a.authority, a.media_type AS mediaType, a.object_hash AS objectHash,
+                a.byte_size AS byteSize, a.parser_id AS parserId,
+                (SELECT count(*) FROM chunks c WHERE c.artifact_id = a.id) AS chunkCount,
+                (SELECT count(*) FROM nodes n WHERE n.artifact_id = a.id) AS nodeCount
+           FROM artifacts a
+          ORDER BY a.relative_path`,
+      )
+      .all() as Array<Record<string, string | number | null>>;
+
+    return rows.map((row) => ({
+      artifactId: String(row.id),
+      relativePath: String(row.relativePath),
+      displayPath: String(row.displayPath),
+      title: row.title === null ? null : String(row.title),
+      status: String(row.status) as CatalogArtifact['status'],
+      authority: Number(row.authority),
+      mediaType: String(row.mediaType),
+      objectHash: String(row.objectHash),
+      byteSize: Number(row.byteSize),
+      parserId: String(row.parserId),
+      chunkCount: Number(row.chunkCount),
+      nodeCount: Number(row.nodeCount),
+    }));
   }
 
   async artifact(idOrPath: string): Promise<CatalogArtifact | null> {

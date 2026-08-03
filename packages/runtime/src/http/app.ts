@@ -88,6 +88,13 @@ export interface ApiOptions {
   readonly plan?: () => Promise<unknown>;
   /** The active build's warnings, with class and path, for the Overview summary. */
   readonly warnings?: () => Promise<unknown>;
+  /**
+   * Every artifact in the active build, for the Sources tree.
+   *
+   * Reads `CatalogStore.artifacts()`, which is a storage question rather than a retrieval
+   * one, so it stays off `LoreRuntime` and its seven capabilities.
+   */
+  readonly sources?: () => Promise<unknown>;
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
   /**
@@ -221,6 +228,10 @@ export function createApiApp(options: ApiOptions): Hono {
   if (options.warnings !== undefined) {
     const warnings = options.warnings;
     app.get('/v1/warnings', (context) => answer(context, () => warnings()));
+  }
+  if (options.sources !== undefined) {
+    const sources = options.sources;
+    app.get('/v1/sources', (context) => answer(context, () => sources()));
   }
 
   app.post('/v1/search', async (context) =>

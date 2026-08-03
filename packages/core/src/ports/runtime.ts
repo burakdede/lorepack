@@ -91,8 +91,34 @@ export interface CatalogStore {
   supersededArtifacts(): Promise<ReadonlySet<string>>;
   /** By artifact id or by canonical path. Null when the build has no such artifact. */
   artifact(idOrPath: string): Promise<CatalogArtifact | null>;
+  /**
+   * Every artifact in the build, in canonical order.
+   *
+   * This completes a port that could fetch one artifact and its nodes but not say what it
+   * held. `lore inspect sources` answered that question with raw SQL against the build
+   * database, underneath this interface, which meant the capability existed only for the
+   * local backend and could not exist for the Phase 6 Worker at all (#66).
+   *
+   * On `CatalogStore` rather than on `LoreRuntime`: architecture 13.1 fixes the model-facing
+   * interface at seven capabilities, and a file listing is a storage question, not a
+   * retrieval one. Studio reads it through an injected host function, like the plan.
+   */
+  artifacts(): Promise<readonly CatalogArtifactSummary[]>;
   /** Every node of one artifact, in document order. */
   nodes(artifactId: string): Promise<readonly CatalogNode[]>;
+}
+
+/**
+ * An artifact in a listing, with the facts a tree shows without opening anything.
+ *
+ * Wider than `CatalogArtifact` because a listing shows size, parser and chunk count in
+ * columns, and fetching those per row would be one query per file at the 2,500-file envelope.
+ */
+export interface CatalogArtifactSummary extends CatalogArtifact {
+  readonly byteSize: number;
+  readonly parserId: string;
+  readonly chunkCount: number;
+  readonly nodeCount: number;
 }
 
 /** An artifact as the build recorded it. */

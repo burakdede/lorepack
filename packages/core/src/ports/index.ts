@@ -2,6 +2,7 @@ export type {
   BuildComparer,
   BuildScope,
   CatalogArtifact,
+  CatalogArtifactSummary,
   CatalogChunk,
   CatalogNode,
   CatalogSearchCriteria,

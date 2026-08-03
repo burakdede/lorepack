@@ -98,7 +98,9 @@ export function Overview(): React.JSX.Element {
           <Fact label="Build">
             <BuildId full={data.buildId} short={data.shortBuildId} />
           </Fact>
-          <Fact label="Created">{new Date(data.createdAt).toLocaleString()}</Fact>
+          {data.createdAt !== undefined && (
+            <Fact label="Created">{new Date(data.createdAt).toLocaleString()}</Fact>
+          )}
           <Fact label="Artifacts">{data.counts.artifacts.toLocaleString()}</Fact>
           <Fact label="Nodes">{data.counts.nodes.toLocaleString()}</Fact>
           <Fact label="Chunks">{data.counts.chunks.toLocaleString()}</Fact>

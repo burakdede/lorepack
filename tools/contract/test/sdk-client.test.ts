@@ -75,6 +75,9 @@ const catalog: CatalogStore = {
   async supersededArtifacts() {
     return new Set<string>();
   },
+  async artifacts() {
+    return [];
+  },
   async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
     if (idOrPath !== 'p:guides/a.md') return null;
     return {
