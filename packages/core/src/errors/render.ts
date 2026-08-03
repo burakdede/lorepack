@@ -42,9 +42,14 @@ export function renderForCli(error: unknown, options: RenderOptions = {}): strin
   lines.push(
     err.remediation !== undefined
       ? `${style('next:', 'green', color)} ${redact(err.remediation, secrets)}`
-      : // No fallback command is named here. Until #56 ships `lore doctor`, naming it sent
-        // every unclassified failure to a command that does not exist (#168).
-        `${style('next:', 'green', color)} see the documentation for ${err.code}, and include it when reporting this.`,
+      : // `lore doctor` names what is wrong with an environment and how to fix it, which is
+        // the most useful thing to offer when the failure itself carried no remediation.
+        //
+        // The ordering here was the trap: this named `lore doctor` before the command
+        // existed, so every unclassified failure sent the user to something the binary did
+        // not have (#168). It was restored only once #56 registered it, which is what
+        // `scripts/check-command-set.mjs` now enforces on every build.
+        `${style('next:', 'green', color)} run \`lore doctor\` to check this environment, and include ${err.code} when reporting this.`,
   );
   return lines.join('\n');
 }

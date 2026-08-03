@@ -5,6 +5,7 @@ import { LoreError } from '../errors/lore-error.js';
 import { toCanonical, toPosix } from '../paths/canonical.js';
 import { normalizeSourceId } from '../paths/identifiers.js';
 import { configSchema, type LoreConfig } from '../schemas/config.js';
+import { closestMatch } from '../text/closest.js';
 import { PRODUCT_DEFAULTS, type ProductDefaults } from './defaults.js';
 
 export const CONFIG_FILENAME = 'lore.yaml' as const;
@@ -153,38 +154,12 @@ const KNOWN_KEYS = ['version', 'name', 'sources', 'rules', 'context', 'package',
 
 function suggestionFor(code: string | undefined, keyPath: string): string {
   if (code === 'unrecognized_keys') {
-    const closest = closestKey(keyPath.split('.').at(-1) ?? '');
+    const closest = closestMatch(keyPath.split('.').at(-1) ?? '', KNOWN_KEYS);
     return closest === null
       ? `Remove the unknown key. Valid top-level keys: ${KNOWN_KEYS.join(', ')}.`
       : `Did you mean \`${closest}\`? Valid top-level keys: ${KNOWN_KEYS.join(', ')}.`;
   }
   return `See schemas/lore-config.json for the full configuration contract.`;
-}
-
-function closestKey(candidate: string): string | null {
-  let best: { key: string; distance: number } | null = null;
-  for (const key of KNOWN_KEYS) {
-    const distance = editDistance(candidate.toLowerCase(), key.toLowerCase());
-    if (best === null || distance < best.distance) best = { key, distance };
-  }
-  return best !== null && best.distance <= 3 ? best.key : null;
-}
-
-/** Levenshtein distance, used only to suggest the key the user probably meant. */
-function editDistance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i += 1) {
-    const current: number[] = [i];
-    for (let j = 1; j <= b.length; j += 1) {
-      const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
-      const deletion = (previous[j] ?? 0) + 1;
-      const insertion = (current[j - 1] ?? 0) + 1;
-      const substitution = (previous[j - 1] ?? 0) + cost;
-      current.push(Math.min(deletion, insertion, substitution));
-    }
-    previous = current;
-  }
-  return previous[b.length] ?? 0;
 }
 
 function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource[] {

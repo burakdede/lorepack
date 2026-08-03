@@ -1,0 +1,114 @@
+{
+  "$id": "https://lorepack.dev/schemas/doctor-report.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "checks": {
+      "items": {
+        "properties": {
+          "detail": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "remediation": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "counts": {
+      "properties": {
+        "fail": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pass": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "warn": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pass",
+        "warn",
+        "fail"
+      ],
+      "type": "object"
+    },
+    "project": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "project",
+    "checks",
+    "counts"
+  ],
+  "title": "doctor-report",
+  "type": "object"
+}

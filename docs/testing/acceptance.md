@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-47 automated, 3 checked by hand.
+51 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -130,6 +130,63 @@ Starting point: 1 source file, already set up with `lore init`.
    Expect: it succeeds, `counts.artifacts` is 3.
 7. And the index answers, which is what the smoke check exists to prove
    Expect: it succeeds, stdout mentions "notes.txt".
+
+## The two-command path
+
+One command from a bare folder to a running, connected runtime.
+
+### `dev/one-command-turns-a-folder-into-a-runtime`
+
+**`lore dev` configures, builds and serves an unconfigured folder**
+
+Proves: Section 6.2 and 6.4: the zero-config path runs in order, writes only what it names, and prints where to connect.
+
+Starting point: 3 source files.
+
+1. Point `lore dev` at a folder that has never been built, then stop it
+   Expect: stdout mentions "Created:", "lore.yaml", "Build ", "Reused          0 artifacts (first build)", "HTTP            http://127.0.0.1:", "MCP HTTP        http://127.0.0.1:", "MCP stdio       lore mcp --project", "Watching for changes".
+
+### `dev/an-edit-while-it-runs-becomes-the-next-answer`
+
+**`lore dev` rebuilds when a document changes underneath it**
+
+Proves: Section 12.11: a save is noticed, coalesced, hashed and rebuilt, with no restart and no client action.
+
+Starting point: 3 source files.
+
+1. Change a document while `lore dev` is running, then stop it
+   Expect: stderr mentions "rebuilding".
+
+### `dev/doctor-explains-the-environment`
+
+**`lore doctor` reports the environment and says what to do about anything wrong**
+
+Proves: Section 6.5 and 6.9: one command names what is wrong and carries a concrete remediation.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Ask whether this machine and project are in a state that works
+   Expect: it succeeds, stdout mentions "Node version", "SQLite FTS5", "Project configuration", "Everything".
+2. The same report, for a bug report or a pipeline
+   Expect: it succeeds, `status` is "pass", `checks[0].id` is present, `counts.fail` is 0.
+
+### `dev/the-two-command-flow-end-to-end`
+
+**Two commands take a folder to a grounded, cited answer**
+
+Proves: Milestone 1 (section 21): build, connect and answer, with provenance on every result and no manual JSON.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. See the exact server command, without depending on which client is installed
+   Expect: it succeeds, stdout mentions "lore", "--project", "--ensure-current", "Nothing was changed".
+2. Plan a real connection, changing nothing whether or not the client is here
+   Expect: it succeeds, stdout matches `/lore mcp --project|not installed/`.
+3. An unverified client gets an honest snippet rather than a refusal
+   Expect: it succeeds, stdout mentions "mcpServers", "unverified", "lore export".
+4. Ask the question a coding agent would ask, over the protocol
+5. The same answer as a file, for a client that cannot speak MCP
+   Expect: it succeeds, `budget` is 24000, `citations[0].relativePath` is present, `buildId` matches `/^lore_[0-9a-f]{64}$/`.
 
 ## The lifecycle
 

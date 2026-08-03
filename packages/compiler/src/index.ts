@@ -15,6 +15,7 @@ export {
   type SnapshotTable,
 } from './diff/diff.js';
 export {
+  createSourceMatcher,
   type DiscoveredArtifact,
   type DiscoverOptions,
   type DiscoveryResult,

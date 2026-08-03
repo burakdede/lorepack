@@ -65,6 +65,21 @@ export interface DiscoverOptions {
 }
 
 /**
+ * The rules that decide whether a path is a source of this project.
+ *
+ * Exported because discovery is not the only thing that has to answer that question: watch
+ * mode decides which filesystem events matter, and two matchers built from the same
+ * ingredients in two places is how they come to disagree about one file.
+ */
+export function createSourceMatcher(config: LoadedConfig): ReturnType<typeof createMatcher> {
+  const rules: IgnoreRule[] = [
+    ...ALWAYS_EXCLUDE.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+    ...readIgnoreRules(config.projectRoot, IGNORE_FILENAME),
+  ];
+  return createMatcher(rules);
+}
+
+/**
  * Walks the configured sources and decides what belongs in a build.
  *
  * Every exclusion is reported. Architecture section 6.9 is explicit that an unsupported
@@ -73,11 +88,7 @@ export interface DiscoverOptions {
  */
 export function discover(options: DiscoverOptions): DiscoveryResult {
   const { config } = options;
-  const rules: IgnoreRule[] = [
-    ...ALWAYS_EXCLUDE.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
-    ...readIgnoreRules(config.projectRoot, IGNORE_FILENAME),
-  ];
-  const matcher = createMatcher(rules);
+  const matcher = createSourceMatcher(config);
 
   const artifacts: DiscoveredArtifact[] = [];
   const warnings: DiscoveryWarning[] = [];
@@ -101,7 +112,7 @@ export function discover(options: DiscoverOptions): DiscoveryResult {
   enforceEnvelope(artifacts, totalBytes, config, warnings, options);
   options.progress?.finish('discovering', artifacts.length);
 
-  return { artifacts, warnings, totalBytes, rules };
+  return { artifacts, warnings, totalBytes, rules: matcher.rules };
 }
 
 function walkSource(

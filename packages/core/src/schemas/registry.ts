@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import { buildManifestSchema, buildReceiptSchema, lockfileSchema } from './build.js';
 import { configSchema } from './config.js';
 import { buildDiffSchema } from './diff.js';
+import { doctorReportSchema } from './doctor.js';
 import { deploymentReceiptSchema, planSchema } from './plan.js';
 import {
   buildDescriptionSchema,
@@ -30,6 +31,7 @@ export const PUBLIC_SCHEMAS = {
   'build-diff': buildDiffSchema,
   plan: planSchema,
   status: statusSchema,
+  'doctor-report': doctorReportSchema,
   'deployment-receipt': deploymentReceiptSchema,
   'search-request': searchRequestSchema,
   'search-result': searchResultSchema,

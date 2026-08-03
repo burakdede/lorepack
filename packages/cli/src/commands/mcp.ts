@@ -146,7 +146,10 @@ type Mode = 'ensure-current' | 'allow-stale' | 'active-only';
 function parseInterval(raw: unknown): number {
   if (raw === undefined) return DEFAULT_REVALIDATE_INTERVAL_MS;
   if (raw === 'off') return Number.POSITIVE_INFINITY;
-  const value = Number(raw);
+  // `Number('')` is 0, which here means "recheck every request", the most expensive setting
+  // there is. An unset shell variable must not be able to select it (#195).
+  const blank = typeof raw === 'string' && raw.trim() === '';
+  const value = blank ? Number.NaN : Number(raw);
   if (!Number.isFinite(value) || value < 0) {
     throw new LoreError(
       'LORE_E_INVALID_ARGUMENT',

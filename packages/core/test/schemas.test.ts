@@ -338,6 +338,7 @@ describe('public registry', () => {
         'build-receipt',
         'context-bundle',
         'deployment-receipt',
+        'doctor-report',
         'lore-config',
         'lore-lock',
         'plan',

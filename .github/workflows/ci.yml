@@ -108,6 +108,64 @@ jobs:
       - name: Every acceptance scenario, against the real binary
         run: pnpm acceptance
 
+  clean-install:
+    # Invariant 7, the zero-surprise install promise, tested rather than asserted.
+    #
+    # `--ignore-scripts` is the portable proof: if the product installs and runs with every
+    # lifecycle script suppressed, then no install step compiles anything, downloads
+    # anything, or needs a toolchain to exist. Combined with `check:no-native`, which fails
+    # if a native package appears anywhere in the tree, that covers the claim on every
+    # platform rather than only on the one image that happens to lack a compiler.
+    #
+    # A separate job from `verify` because it deliberately installs differently. Folding it
+    # in would mean the normal suite ran under an install nobody ships.
+    name: clean install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install with every lifecycle script suppressed
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: No native add-on and no install hook anywhere in the tree
+        run: pnpm check:no-native
+
+      - run: pnpm build
+
+      - name: The product runs, from an install that ran no scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(mktemp -d)"
+          mkdir -p "$project/docs"
+          printf '# Runbook\n\n## Rollback\n\nRun lore rollback.\n' > "$project/docs/a.md"
+
+          lore() { node packages/cli/dist/entry.js --cwd "$project" "$@"; }
+
+          lore init .
+          lore build
+          lore search rollback --json > "$project/result.json"
+          node -e "
+            const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+            if (!r.hits?.length) { console.error('no hits'); process.exit(1); }
+            if (!r.hits[0].locator?.relativePath) { console.error('no locator'); process.exit(1); }
+            console.log('clean install: built and searched, every hit cited');
+          " "$project/result.json"
+
+      - name: The doctor agrees the environment is usable
+        run: node packages/cli/dist/entry.js doctor --ci
+
   benchmarks:
     name: benchmarks (reported, not enforced)
     runs-on: ubuntu-latest

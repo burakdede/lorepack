@@ -152,13 +152,15 @@ describe('renderers', () => {
     expect(text.trimEnd().split('\n').at(-1)).toMatch(/^next: /);
   });
 
-  it('still ends with a next step when no remediation was supplied, naming nothing that does not exist', () => {
-    // #168: this asserted `lore doctor`, which is Phase 3, so the suite guaranteed that
-    // every unclassified failure sent the user to a command the binary does not have.
+  it('sends an unclassified failure to doctor, and still names the code', () => {
+    // #168 removed `lore doctor` from here because the command did not exist yet, and #56
+    // restored it once it did. `scripts/check-command-set.mjs` is what makes that ordering
+    // enforceable rather than remembered: it fails the build if any string in the source
+    // names a command `lore --help` does not list.
     const bare = new LoreError('LORE_E_INTERNAL', 'something broke');
     const text = renderForCli(bare, { secrets: [] });
 
-    expect(text).not.toContain('lore doctor');
+    expect(text).toContain('lore doctor');
     expect(text.trimEnd().split('\n').at(-1)).toContain('LORE_E_INTERNAL');
   });
 
