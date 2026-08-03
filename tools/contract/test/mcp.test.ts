@@ -21,9 +21,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 /**
  * The MCP surface, driven by the real v2 client over an in-memory transport.
  *
- * A hand-rolled fixture client would agree with whatever the server believed. The SDK's
- * own client speaks the 2026-07-28 protocol, so what is asserted here is conformance
- * rather than self-consistency.
+ * A hand-rolled fixture client would agree with whatever the server believed. The SDK's own
+ * client does not, which is what makes this conformance rather than self-consistency.
+ *
+ * **This file drives the 2025-era handshake, deliberately and unavoidably.** Era negotiation
+ * lives in the transport entries (`serveStdio`, `createMcpHandler`), not in
+ * `server.connect(transport)`, so an in-memory pairing has no era to select and the client
+ * default (`'legacy'`) is the only thing it can be. That was invisible until #189, when this
+ * comment claimed the opposite and nothing checked.
+ *
+ * So the split is: the tool and resource *surface* is asserted here, once, over a real
+ * client; the *revision* is asserted where an entry exists, in `protocol-version.test.ts`
+ * (HTTP) and `mcp-stdio.test.ts` (the real binary).
  */
 
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;

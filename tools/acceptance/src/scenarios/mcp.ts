@@ -35,6 +35,24 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
     ],
   },
   {
+    id: 'mcp/the-server-answers-the-mandatory-version-probe',
+    title: 'A modern client asks `lore mcp` which protocol revisions it supports',
+    proves:
+      'Section 14.3: `server/discover` is a MUST, and the stdio transport negotiates the same revision the HTTP one does.',
+    mode: 'auto',
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'protocol',
+        args: ['mcp', '--active-only'],
+        method: 'server/discover',
+        describe: 'Send the probe a negotiating client sends before anything else',
+        // The revision, and the identity the spec says a result SHOULD carry.
+        expectResult: ['supportedVersions', '2026-07-28', 'lorepack'],
+      },
+    ],
+  },
+  {
     id: 'mcp/a-task-comes-back-cited',
     title: 'A task asked over MCP comes back with citations',
     proves: 'Section 13.3 and 10.8: a bundle is bounded, cited, and carries its build id.',

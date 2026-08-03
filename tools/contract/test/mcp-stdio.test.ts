@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -42,14 +43,28 @@ const DOCUMENT = [
 let project: string;
 let client: Client | null = null;
 
-async function connect(args: readonly string[]): Promise<Client> {
+/**
+ * `mode` is the era this client negotiates, and it has to be said out loud.
+ *
+ * The SDK default is `'legacy'`, so a client written the obvious way drives the server
+ * through the removed `initialize` handshake. Every test below that does not name an era is
+ * therefore asserting the backward-compatibility path, which is worth having and is not
+ * what "2026-07-28 conformance" means (#189).
+ */
+async function connect(
+  args: readonly string[],
+  mode: 'legacy' | 'auto' = 'legacy',
+): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [BINARY, '--cwd', project, 'mcp', ...args],
     // stderr is where every diagnostic goes, and the client must not care what is on it.
     stderr: 'pipe',
   });
-  const connected = new Client({ name: 'stdio-contract-tests', version: '0.0.0' });
+  const connected = new Client(
+    { name: 'stdio-contract-tests', version: '0.0.0' },
+    { versionNegotiation: { mode } },
+  );
   await connected.connect(transport);
   client = connected;
   return connected;
@@ -115,6 +130,59 @@ describe('a client launching the server', () => {
     const read = result.structuredContent as { text: string; locator: { relativePath: string } };
     expect(read.text).toContain('roll back a release');
     expect(read.locator.relativePath).toBe('deployment.md');
+  }, 120_000);
+});
+
+describe('the protocol era, over the transport a connector generates a config for', () => {
+  /**
+   * The regression #189 exists for.
+   *
+   * `lore mcp` hand-wired a `StdioServerTransport`, which never classifies the opening
+   * message, so the connection stayed 2025-era and the mandatory `server/discover` probe
+   * was answered with `Method not found`. Nothing caught it: the HTTP surface reaches the
+   * modern era through `createMcpHandler`, and the raw-stdio tests sent a modern `_meta`
+   * envelope that a legacy-era server simply ignores while answering normally.
+   */
+  it('negotiates the documented revision, and reports it on server/discover', async () => {
+    const connected = await connect(['--ensure-current'], 'auto');
+    const discovered = await connected.discover();
+
+    expect(discovered.supportedVersions).toEqual([MCP_PROTOCOL_VERSION]);
+  }, 120_000);
+
+  it('serves the whole tool surface on the modern era, not only the handshake one', async () => {
+    const connected = await connect(['--ensure-current'], 'auto');
+
+    const listed = await connected.listTools();
+    expect(listed.tools).toHaveLength(7);
+
+    const result = await connected.callTool({
+      name: 'lore_search',
+      arguments: { query: 'rollback' },
+    });
+    const search = result.structuredContent as {
+      hits: Array<{ locator: { relativePath: string } }>;
+    };
+    expect(search.hits[0]?.locator.relativePath).toBe('deployment.md');
+  }, 120_000);
+
+  /**
+   * 2026-07-28 requires a server to keep serving 2025-era clients, and plenty of shipped
+   * clients are exactly that. Losing this while fixing #189 would trade one broken client
+   * population for another.
+   */
+  it('still serves a client that only speaks the removed handshake', async () => {
+    const connected = await connect(['--ensure-current'], 'legacy');
+
+    const listed = await connected.listTools();
+    expect(listed.tools).toHaveLength(7);
+
+    const result = await connected.callTool({
+      name: 'lore_search',
+      arguments: { query: 'rollback' },
+    });
+    const search = result.structuredContent as { hits: unknown[] };
+    expect(search.hits.length).toBeGreaterThan(0);
   }, 120_000);
 });
 
@@ -215,7 +283,7 @@ describe('stdout carries protocol and nothing else, architecture 14.3', () => {
       method: 'tools/list',
       params: {
         _meta: {
-          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
           'io.modelcontextprotocol/clientCapabilities': {},
         },
       },
@@ -274,7 +342,7 @@ describe('shutting down', () => {
         method: 'tools/list',
         params: {
           _meta: {
-            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
             'io.modelcontextprotocol/clientCapabilities': {},
           },
         },

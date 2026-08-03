@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-46 automated, 3 checked by hand.
+47 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -722,6 +722,16 @@ Proves: Section 14.1 and 14.3: the tool surface is served, and stdout carries pr
 Starting point: 3 source files, already set up with `lore init`.
 
 1. Launch the server against a project with no build yet, and ask for the tool list
+
+### `mcp/the-server-answers-the-mandatory-version-probe`
+
+**A modern client asks `lore mcp` which protocol revisions it supports**
+
+Proves: Section 14.3: `server/discover` is a MUST, and the stdio transport negotiates the same revision the HTTP one does.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Send the probe a negotiating client sends before anything else
 
 ### `mcp/a-task-comes-back-cited`
 

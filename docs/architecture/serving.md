@@ -18,6 +18,31 @@ exist in one interface and be missing from another.
 | HTTP | `lore serve` | REST under `/v1`, and MCP at `POST /mcp`, on one port |
 | Process | `lore search`, `lore export` | the same runtime, in-process |
 
+## The protocol revision, and where it is decided
+
+**Verified 2026-08-03** against `@modelcontextprotocol/server` 2.0.0: both MCP surfaces
+negotiate **2026-07-28**, and `server/discover` reports `supportedVersions:
+["2026-07-28"]` on each. A request claiming any other revision is refused with
+`UnsupportedProtocolVersionError` (`-32022`).
+
+Two things about this are easy to get wrong, and both cost a defect (#188, #189).
+
+**The SDK's `LATEST_PROTOCOL_VERSION` is not the revision this server speaks.** It is
+`2025-11-25`, the newest **handshake-era** revision, kept so the SDK can answer a 2025-era
+client through the `initialize` exchange that 2026-07-28 removed. Lorepack keeps that path
+working, because the specification requires it: a client that only speaks the handshake
+still gets the full tool surface. `packages/mcp/src/protocol.ts` is the one place the
+revision is named, and `tools/contract/test/protocol-version.test.ts` fails if any other
+file names a superseded one.
+
+**Era negotiation belongs to the transport entry, not to the server object.** `serveStdio`
+and `createMcpHandler` classify the opening message, choose an era, and pin one instance
+from a factory. The hand-wired shape most SDK examples show, `server.connect(transport)`,
+does none of that: the connection stays 2025-era and the mandatory `server/discover` probe
+is answered with `Method not found` even though the handler is registered. That is exactly
+how `lore mcp` shipped until #189. Anything that serves this surface over a new transport
+uses an entry.
+
 ## MCP resources
 
 Tools are for what a client wants to ask; resources are for what it wants to browse

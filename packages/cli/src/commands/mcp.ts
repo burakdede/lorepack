@@ -9,7 +9,7 @@ import {
 } from '@lorepack/core';
 import { createMcpServer } from '@lorepack/mcp';
 import { createRuntime } from '@lorepack/runtime';
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
 import { createLocalComparer } from '../services/comparer.js';
@@ -72,11 +72,18 @@ export function mcpCommand(): CommandDefinition {
         });
       }
 
-      const server = createMcpServer({
-        runtime: createRuntime(backend),
-        comparer: createLocalComparer(config.projectRoot),
-      });
-      const transport = new StdioServerTransport();
+      // A factory, not a single server, because the opening message decides the protocol
+      // era and `serveStdio` pins one instance from this factory for the connection.
+      //
+      // Hand-wiring a `StdioServerTransport` instead, which is the shape most examples
+      // show, skips that decision entirely: the connection stays in the 2025 era, and
+      // `server/discover` (a MUST in 2026-07-28) is answered with `Method not found` even
+      // though the handler is registered. That is #189, and it was invisible because the
+      // HTTP surface reaches the same decision through `createMcpHandler`.
+      const runtime = createRuntime(backend);
+      const comparer = createLocalComparer(config.projectRoot);
+      const factory = (): ReturnType<typeof createMcpServer> =>
+        createMcpServer({ runtime, comparer });
 
       // The lock and the databases have to be released however the process ends, including
       // on a signal. A client that kills the server should not leave a project locked.
@@ -98,15 +105,19 @@ export function mcpCommand(): CommandDefinition {
       context.warn(
         `Serving ${config.config.name} over MCP on stdio. Sources are ${sourceState}.\n`,
       );
-      await server.connect(transport);
+      const handle = serveStdio(factory, {
+        onerror: (error) => context.warn(`${error.message}\n`),
+      });
 
-      // Resolves when the client goes away, by either route it can take.
+      // Resolves when the client goes away.
       //
-      // The transport's own `onclose` covers a clean protocol shutdown. Standard input
-      // ending covers the ordinary case of a client exiting or a pipe closing, and it has
-      // to be handled explicitly: without it the await never settles, Node notices an empty
-      // event loop with a pending top-level await, and prints a warning into the agent's
-      // log that looks like a defect in Lorepack.
+      // Standard input ending is the ordinary route: a client exits, or the pipe closes.
+      // It has to be handled explicitly, because without it the await never settles, Node
+      // notices an empty event loop with a pending top-level await, and prints a warning
+      // into the agent's log that looks like a defect in Lorepack (#183).
+      //
+      // `serveStdio` owns the transport and overwrites its `onclose`, so this is the one
+      // observation point left, which is fine: it is the route a real client takes.
       await new Promise<void>((resolve) => {
         let done = false;
         const finish = (): void => {
@@ -114,10 +125,10 @@ export function mcpCommand(): CommandDefinition {
           done = true;
           resolve();
         };
-        transport.onclose = finish;
         process.stdin.once('end', finish);
         process.stdin.once('close', finish);
       });
+      await handle.close();
       close();
 
       // Nothing structured on stdout: it carried protocol, and it is now finished.
