@@ -29,6 +29,8 @@ const EXPECTED = [
   'dev',
   'doctor',
   'config',
+  'connect',
+  'disconnect',
   'plan',
   'build',
   'status',

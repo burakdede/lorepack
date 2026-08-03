@@ -226,11 +226,14 @@ interface Rendered {
 /**
  * The first-run block of architecture 6.4, containing every line whose subject exists.
  *
- * Two lines from the specification's example are deliberately absent. **Studio** is Phase 4
- * (#64), and the **`Connect now`** list names `lore connect`, which arrives with #58 and #59.
- * Printing either now would be the CLI advertising something that does not exist, which is
- * invariant 6 and is what `scripts/check-command-set.mjs` fails the build over. Each is added
- * by the phase that builds it, and #53 carries the amendment recording that.
+ * One line from the specification's example is still deliberately absent: **Studio** is
+ * Phase 4 (#64), so there is no asset to serve and no URL to print. Printing it would be the
+ * CLI advertising something that does not exist, which is invariant 6 and what
+ * `scripts/check-command-set.mjs` fails the build over.
+ *
+ * The `Connect now` list arrived with #58 and #59 and names only `claude-code`, because that
+ * is the only connector that exists. Codex and VS Code are Phase 5 (#80, #81) and each adds
+ * its own line. #53 carries the amendment recording all of this.
  */
 function render(rendered: Rendered): string {
   const { built } = rendered;
@@ -252,6 +255,9 @@ function render(rendered: Rendered): string {
   // Quoted, because a project path with a space in it is ordinary on every platform and the
   // line is meant to be pasted (#61 owns the general version of this).
   lines.push(`MCP stdio       lore mcp --project "${rendered.projectRoot}"`);
+  lines.push('');
+  lines.push('Connect now:');
+  lines.push('  lore connect claude-code');
   lines.push('');
   lines.push('Watching for changes. Press Ctrl-C to stop.');
   return lines.join('\n');

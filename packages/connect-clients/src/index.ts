@@ -1,4 +1,11 @@
 export {
+  CLAUDE_CODE_ID,
+  type ClaudeCodeOptions,
+  claudeCodeSnippet,
+  createClaudeCodeConnector,
+  SERVER_NAME,
+} from './claude-code.js';
+export {
   backup,
   isOwned,
   markOwned,

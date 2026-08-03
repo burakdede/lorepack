@@ -144,15 +144,19 @@ describe('one command on an unconfigured folder', () => {
   }, 120_000);
 
   /**
-   * The amendment on #53. The specification's 6.4 block also shows a Studio URL and a
-   * "Connect now" list, and both name things this phase does not have: Studio is #64, and
-   * `lore connect` arrives with #58 and #59. Advertising either would be the CLI naming
-   * something that does not exist, which is what `check-command-set` exists to prevent.
+   * The amendment on #53. The 6.4 block also shows a Studio URL, which is Phase 4, and a
+   * `Connect now` list, which arrived with #58 and #59 and names only the client that
+   * exists. Advertising either prematurely would be the CLI naming something it does not
+   * have, which is what `check-command-set` exists to prevent.
    */
-  it('names nothing it cannot yet do', async () => {
+  it('offers only the client it actually has, and no Studio it does not', async () => {
     const started = await dev();
+
     expect(started.stdout).not.toContain('Studio');
-    expect(started.stdout).not.toContain('lore connect');
+    expect(started.stdout).toContain('lore connect claude-code');
+    // Phase 5 adds these, and each should arrive with the adapter that makes it true.
+    expect(started.stdout).not.toContain('lore connect codex');
+    expect(started.stdout).not.toContain('lore connect vscode');
   }, 120_000);
 });
 
