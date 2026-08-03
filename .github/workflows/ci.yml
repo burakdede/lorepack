@@ -166,6 +166,9 @@ jobs:
       - name: The doctor agrees the environment is usable
         run: node packages/cli/dist/entry.js doctor --ci
 
+      - name: Studio was built and stays within its budget
+        run: pnpm check:studio-bundle
+
   benchmarks:
     name: benchmarks (reported, not enforced)
     runs-on: ubuntu-latest

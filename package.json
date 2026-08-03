@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@11.18.0",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && pnpm build:studio",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b",
     "lint": "biome check .",
@@ -25,7 +25,7 @@
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
     "check:counted-nouns": "node scripts/check-counted-nouns.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:sources-tracked && pnpm schemas:check && pnpm acceptance:docs:check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm schemas:check && pnpm acceptance:docs:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
@@ -35,7 +35,9 @@
     "check:sources-tracked": "node scripts/check-sources-tracked.mjs",
     "bench": "pnpm build && node scripts/bench.mjs",
     "bench:retrieval": "pnpm build && node scripts/bench-retrieval.mjs",
-    "check:command-set": "node scripts/check-command-set.mjs"
+    "check:command-set": "node scripts/check-command-set.mjs",
+    "build:studio": "pnpm --filter @lorepack/studio build",
+    "check:studio-bundle": "node scripts/check-studio-bundle.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

@@ -37,6 +37,17 @@ export interface ApiOptions {
    */
   readonly mcpHandler?: (request: Request) => Promise<Response> | Response;
   /**
+   * Studio's built assets, served at the root.
+   *
+   * Injected for the same reason `mcpHandler` is: reading files from a disk is a Node
+   * concern, and this app also has to compile for a Worker that has no filesystem. It
+   * returns `null` for anything it does not have, so an unknown path still reaches the
+   * typed 404 below rather than being swallowed.
+   *
+   * Registered after every `/v1` route, so an asset can never shadow the API.
+   */
+  readonly assets?: (request: Request) => Promise<Response | null> | Response | null;
+  /**
    * The active build, for `/health`. Separate from the runtime because architecture 13.1
    * fixes that interface at seven capabilities and a health probe is not one of them.
    */
@@ -47,6 +58,21 @@ export interface ApiOptions {
    * cross-origin browser request. Studio adds its own in Phase 4.
    */
   readonly allowedOrigins?: readonly string[];
+  /**
+   * Also accept a browser page served from a loopback address.
+   *
+   * Set when Studio is mounted, because Studio is served by this same app and its own
+   * subresource and API requests carry an `Origin` naming the loopback host it was loaded
+   * from. The port is not known when this app is constructed (it is chosen by trying), so
+   * the rule is expressed as a property of the origin rather than as a literal.
+   *
+   * This does not weaken the DNS rebinding defence, which is the reason the check exists.
+   * Rebinding works by making a hostname the attacker controls resolve to `127.0.0.1`, and
+   * the browser puts that **hostname** in `Origin`, not the resolved address. So an attacker
+   * page is `https://evil.example` and is still refused; only a page genuinely served from a
+   * loopback literal produces a loopback origin.
+   */
+  readonly allowLoopbackOrigin?: boolean;
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
   /**
@@ -97,7 +123,12 @@ export function createApiApp(options: ApiOptions): Hono {
    */
   app.use('*', async (context, next) => {
     const origin = context.req.header('Origin');
-    if (origin !== undefined && !allowed.has(origin) && context.req.path !== '/health') {
+    const permitted =
+      origin === undefined ||
+      allowed.has(origin) ||
+      (options.allowLoopbackOrigin === true && isLoopbackOrigin(origin));
+
+    if (!permitted && context.req.path !== '/health') {
       return failure(
         context,
         new LoreError('LORE_E_INVALID_ARGUMENT', 'This origin may not call the Lorepack API.', {
@@ -215,6 +246,23 @@ export function createApiApp(options: ApiOptions): Hono {
     }),
   );
 
+  // Studio, if the host supplied it. After the API, before the 404.
+  //
+  // API prefixes are excluded rather than relying on route order. Studio is a hash-routed
+  // app, so its handler answers any unmatched path with the entry document, and without this
+  // guard `GET /v1/nope` would return that document with a 200 instead of the typed 404 the
+  // error contract promises. Route order alone does not prevent it, because an unmatched
+  // `/v1` path is exactly what falls through to here.
+  if (options.assets !== undefined) {
+    const assets = options.assets;
+    app.get('*', async (context, next) => {
+      if (isApiPath(context.req.path)) return next();
+      const response = await assets(context.req.raw);
+      if (response === null) return next();
+      return response;
+    });
+  }
+
   // Anything else. A 404 in the same typed shape as every other failure, so a client has
   // one error format to handle rather than two.
   app.all('*', (context) =>
@@ -229,6 +277,31 @@ export function createApiApp(options: ApiOptions): Hono {
   );
 
   return app;
+}
+
+/**
+ * Whether an origin names this machine by a loopback literal.
+ *
+ * Only literals count. A hostname that merely resolves to a loopback address is exactly the
+ * DNS rebinding case, and it arrives in `Origin` as the hostname, so it fails here.
+ */
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      hostname === '127.0.0.1' ||
+      hostname === 'localhost' ||
+      hostname === '[::1]' ||
+      hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Paths the API owns, whose failures must stay typed rather than becoming the Studio shell. */
+function isApiPath(path: string): boolean {
+  return path === '/health' || path === '/mcp' || path.startsWith('/v1/') || path === '/v1';
 }
 
 async function answer(context: Context, body: () => Promise<unknown>): Promise<Response> {

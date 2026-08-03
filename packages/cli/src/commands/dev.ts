@@ -107,6 +107,7 @@ export function devCommand(): CommandDefinition {
         // may want both at once.
         port: flags.port === undefined ? DEV_PORT : parsePort(flags.port),
         warn: context.warn,
+        studio: true,
         // The hook #112 named. A supervisor that is watching the filesystem already knows
         // whether the sources moved, so the server stops paying for an interval scan.
         freshness: () => watching.freshness(),
@@ -124,7 +125,7 @@ export function devCommand(): CommandDefinition {
 
       // Step 6.
       context.write(
-        `${render({ initialized, built, url: server.url, projectRoot: config.projectRoot, name: config.config.name })}\n`,
+        `${render({ initialized, built, url: server.url, studio: server.studio, projectRoot: config.projectRoot, name: config.config.name })}\n`,
       );
 
       await untilInterrupted(context.warn);
@@ -219,6 +220,7 @@ interface Rendered {
   readonly initialized: InitResult | null;
   readonly built: BuildResult;
   readonly url: string;
+  readonly studio: boolean;
   readonly projectRoot: string;
   readonly name: string;
 }
@@ -226,14 +228,13 @@ interface Rendered {
 /**
  * The first-run block of architecture 6.4, containing every line whose subject exists.
  *
- * One line from the specification's example is still deliberately absent: **Studio** is
- * Phase 4 (#64), so there is no asset to serve and no URL to print. Printing it would be the
- * CLI advertising something that does not exist, which is invariant 6 and what
- * `scripts/check-command-set.mjs` fails the build over.
+ * The Studio line arrived with #64 and is printed only when the assets are actually there.
+ * A package installed without them is a broken install rather than a mode, and printing a
+ * URL that answers 404 would be worse than saying nothing.
  *
- * The `Connect now` list arrived with #58 and #59 and names only `claude-code`, because that
- * is the only connector that exists. Codex and VS Code are Phase 5 (#80, #81) and each adds
- * its own line. #53 carries the amendment recording all of this.
+ * The `Connect now` list names only `claude-code`, because that is the only connector that
+ * exists. Codex and VS Code are Phase 5 (#80, #81) and each adds its own line. #53 carries
+ * the amendment recording this.
  */
 function render(rendered: Rendered): string {
   const { built } = rendered;
@@ -250,6 +251,8 @@ function render(rendered: Rendered): string {
     );
   }
 
+  // Studio first, because it is the line a person opens. The order matches 6.4.
+  if (rendered.studio) lines.push(`Studio          ${rendered.url}`);
   lines.push(`HTTP            ${rendered.url}/v1`);
   lines.push(`MCP HTTP        ${rendered.url}/mcp`);
   // Quoted, because a project path with a space in it is ordinary on every platform and the

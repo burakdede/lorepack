@@ -5,6 +5,7 @@ import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
+import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
 
 /**
  * Serving an active build over HTTP and MCP, in one place, for the two commands that do it.
@@ -41,12 +42,22 @@ export interface ServingOptions {
    */
   readonly freshness?: () => Promise<import('@lorepack/core').SourceState>;
   readonly revalidateIntervalMs?: number;
+  /**
+   * Serve Studio at the root.
+   *
+   * `lore dev` does; `lore serve` does not, because Studio can activate and roll back and
+   * `lore serve` promises to be read-only and never to rebuild. Two commands with different
+   * promises should not quietly offer the same surface.
+   */
+  readonly studio?: boolean;
 }
 
 export interface RunningServer {
   readonly url: string;
   readonly port: number;
   readonly buildId: BuildId;
+  /** Whether Studio's assets were found and mounted, so the caller knows what to print. */
+  readonly studio: boolean;
   /** Drains in-flight requests, then releases the databases. Idempotent. */
   readonly close: () => Promise<void>;
 }
@@ -78,11 +89,15 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
   // internally, which is what the stateless model asks for, and holds the machinery that
   // would otherwise be rebuilt on every call.
   const mcp = createMcpHttpHandler(runtime, createLocalComparer(options.config.projectRoot));
+  // Absent when the package was installed without built assets, which is a broken install
+  // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
+  const serveStudio = options.studio === true && studioIsBuilt();
   const app = createApiApp({
     runtime,
     currentBuild: () => backend.provider.current(),
     freshness,
     mcpHandler: (request) => mcp.fetch(request),
+    ...(serveStudio ? { assets: createStudioAssets(), allowLoopbackOrigin: true } : {}),
   });
 
   if (!isLoopback(options.host)) {
@@ -99,6 +114,7 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
     url: `http://${options.host}:${server.port}`,
     port: server.port,
     buildId: active.buildId,
+    studio: serveStudio,
     close: async () => {
       if (closed) return;
       closed = true;
