@@ -77,7 +77,15 @@ export class LoreClient {
     this.#baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.#token = options.token;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.#fetch = options.fetch ?? globalThis.fetch;
+    // Bound, because `fetch` is a method of `Window` in a browser and must be called with
+    // that receiver. Storing it and calling `this.#fetch(...)` makes the client the
+    // receiver, which a browser rejects with "Illegal invocation" before the request is
+    // ever made. Node does not care, which is why every test passed for two phases (#196).
+    //
+    // An injected implementation is bound to `globalThis` too, which is a no-op for an arrow
+    // function or an already-bound function and correct for a plain one.
+    const implementation = options.fetch ?? globalThis.fetch;
+    this.#fetch = implementation.bind(globalThis);
     this.#retries = Math.max(1, options.retries ?? DEFAULT_RETRIES);
   }
 
