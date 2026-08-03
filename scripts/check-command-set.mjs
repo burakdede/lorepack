@@ -28,6 +28,7 @@ const EXPECTED = [
   // rather than a discovery. `doctor`, `config` and `connect` follow with #56, #57 and #58.
   'dev',
   'doctor',
+  'config',
   'plan',
   'build',
   'status',

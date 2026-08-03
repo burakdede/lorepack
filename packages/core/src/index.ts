@@ -105,3 +105,4 @@ export {
 } from './runtime/engine.js';
 export { RUNTIME_LIMITS } from './runtime/limits.js';
 export * from './schemas/index.js';
+export { closestMatch, editDistance } from './text/closest.js';
