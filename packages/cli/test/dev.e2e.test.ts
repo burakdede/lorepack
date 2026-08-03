@@ -41,6 +41,8 @@ let nextPort = 4700;
 interface Started {
   readonly child: ChildProcess;
   readonly stdout: string;
+  /** Live, so an assertion can quote what the supervisor said while it was failing. */
+  readonly log: () => string;
   readonly stderr: string;
   readonly port: number;
 }
@@ -75,7 +77,7 @@ async function dev(): Promise<Started> {
     stdout,
     `lore dev never printed its connection block. stdout:\n${stdout}\nstderr:\n${stderr}`,
   ).toContain('MCP stdio');
-  return { child, stdout, stderr, port };
+  return { child, stdout, stderr, log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`, port };
 }
 
 beforeEach(() => {
@@ -199,7 +201,10 @@ describe('watching while it serves', () => {
         after = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
       } catch {}
     }
-    expect(after, 'the edit should have produced a new build').not.toBe(before);
+    expect(
+      after,
+      `the edit should have produced a new build. The supervisor said:\n${started.log()}`,
+    ).not.toBe(before);
 
     const found = (await (
       await fetch(`${base}/v1/search`, {
