@@ -1,0 +1,175 @@
+/* Sources. Tables and one row height, per docs/architecture/studio-design.md. */
+
+.sources-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+/* Indexed and excluded are peers, so the control that chooses between them looks like a
+   choice rather than like a filter applied to one of them. */
+.view-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.view-option {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 0;
+  border-right: 1px solid var(--border);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.view-option:last-child {
+  border-right: 0;
+}
+
+.view-option:hover {
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+/* Selected by weight and surface, not by colour. Colour means state in this interface. */
+.view-option-active {
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 500;
+}
+
+.filter-input {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  min-width: 18ch;
+}
+
+.filter-input::placeholder {
+  color: var(--text-muted);
+}
+
+.sources-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+@media (min-width: 900px) {
+  .sources-split:has(.artifact-detail) {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+}
+
+.artifacts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.artifacts th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 0 var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.artifacts td {
+  padding: 0 var(--space-3) 0 0;
+  border-bottom: 1px solid var(--border-subtle);
+  height: var(--row-height);
+  vertical-align: middle;
+}
+
+.artifacts .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 1%;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.artifact-row:hover {
+  background: var(--surface);
+}
+
+.artifact-row-selected {
+  background: var(--surface);
+}
+
+.artifact-path {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.artifact-path:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.artifact-detail {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: var(--space-6);
+  align-self: start;
+  position: sticky;
+  top: 110px;
+}
+
+.artifact-detail .section-heading {
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+.artifact-detail .facts {
+  margin-top: var(--space-4);
+  grid-template-columns: minmax(6rem, max-content) 1fr;
+}
+
+.excluded-path {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.excluded-class {
+  display: inline-block;
+  font-size: var(--text-xs);
+  color: var(--state-warn);
+  margin-right: var(--space-2);
+}
+
+.excluded-message {
+  color: var(--text-muted);
+}
+
+@media (max-width: 899px) {
+  .artifact-detail {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+    padding-left: 0;
+    padding-top: var(--space-4);
+    position: static;
+  }
+}

@@ -106,6 +106,15 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
           // rebuild, and a plan walks the source tree, so offering it there would be a
           // different promise wearing the same command's name.
           plan: createPlanEndpoint(options.config),
+          sources: async () => {
+            const handle = await backend.provider.acquire();
+            try {
+              const scope = await backend.open(handle);
+              return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
+            } finally {
+              handle.release();
+            }
+          },
           warnings: createWarningsEndpoint(async () => {
             // Acquired and released like any other read, so a warnings request cannot pin a
             // build open after it stops being active.
