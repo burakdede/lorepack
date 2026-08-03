@@ -3,9 +3,11 @@ import {
   type ClientConnector,
   type ConnectInput,
   type ConnectScope,
-  claudeCodeSnippet,
   createClaudeCodeConnector,
+  renderSnippetAdvice,
+  renderVerifiedSnippet,
   SERVER_NAME,
+  type Snippet,
 } from '@lorepack/connect-clients';
 import { LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
@@ -68,17 +70,13 @@ export function connectCommand(): CommandDefinition {
         scope,
       };
 
-      if (flags.snippet === true) {
-        return {
-          human: [
-            'Add this to your client configuration:',
-            '',
-            claudeCodeSnippet(input),
-            '',
-            'Nothing was changed.',
-          ].join('\n'),
-          json: { snippet: claudeCodeSnippet(input) },
-        };
+      // A client nobody has verified, or an explicit request for something to paste. Both
+      // land here rather than failing: architecture 14.7 asks for a verified snippet, and an
+      // error helps nobody who simply uses a different editor.
+      const unknown = args[0] !== undefined && args[0] !== 'all' && chosen.length === 0;
+      if (flags.snippet === true || unknown) {
+        const snippet = await renderVerifiedSnippet(input);
+        return { human: renderSnippet(snippet, args[0]), json: snippet };
       }
 
       const lines: string[] = [];
@@ -170,14 +168,37 @@ function select(
   const all = connectors(options);
   if (name === undefined || name === 'all') return all;
 
+  // An unknown client is not an error. The caller renders a verified snippet for it, which
+  // is the documented degradation path rather than a dead end (architecture 6.6).
   const found = all.find((connector) => connector.id === name);
-  if (found === undefined) {
-    throw new LoreError('LORE_E_INVALID_ARGUMENT', `No connector for ${name}.`, {
-      remediation: `Supported clients: ${all.map((connector) => connector.id).join(', ')}. Run \`lore connect --snippet\` for anything else.`,
-      subject: name,
-    });
+  return found === undefined ? [] : [found];
+}
+
+/** The snippet, and what can honestly be said about a client nobody has verified. */
+function renderSnippet(snippet: Snippet, client: string | undefined): string {
+  const lines: string[] = [];
+  if (client !== undefined) lines.push(`Lorepack has no verified adapter for ${client}.`, '');
+
+  lines.push('Add this to your MCP client configuration:', '', snippet.json.trimEnd(), '');
+  lines.push('Or, for a client that takes a command:', '');
+  lines.push(`  ${process.platform === 'win32' ? snippet.windowsCommand : snippet.posixCommand}`);
+  lines.push('');
+
+  const check = snippet.verification;
+  if (check !== undefined) {
+    // Verified means the server was started, not that the JSON parses. A snippet naming a
+    // command that does not run is worse than none, because it looks like it should work.
+    lines.push(
+      check.ok
+        ? `Checked: the server started and answered. ${check.detail}`
+        : `Unverified: ${check.detail}`,
+    );
+    lines.push('');
   }
-  return [found];
+
+  lines.push(...renderSnippetAdvice([CLAUDE_CODE_ID]));
+  lines.push('', 'Nothing was changed.');
+  return lines.join('\n');
 }
 
 /**

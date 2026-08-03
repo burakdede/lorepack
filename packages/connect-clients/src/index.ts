@@ -25,4 +25,10 @@ export type {
   ConnectReceipt,
   ConnectScope,
 } from './port.js';
+export {
+  renderSnippet,
+  renderSnippetAdvice,
+  renderVerifiedSnippet,
+  type Snippet,
+} from './snippet.js';
 export { type VerifyOptions, verifyStdioServer } from './verify.js';
