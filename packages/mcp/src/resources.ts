@@ -1,6 +1,11 @@
 import { type BuildComparer, LoreError, type LoreRuntime } from '@lorepack/core';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { ResourceTemplate } from '@modelcontextprotocol/server';
+import {
+  INVALID_PARAMS,
+  ProtocolError,
+  ResourceNotFoundError,
+  ResourceTemplate,
+} from '@modelcontextprotocol/server';
 
 /**
  * MCP resources, architecture 14.2.
@@ -12,6 +17,46 @@ import { ResourceTemplate } from '@modelcontextprotocol/server';
  * does: a client may cache a resource list, and the answer has to say which build it came
  * from rather than relying on the list being fresh.
  */
+
+/**
+ * Whose fault a failed read was, in the code the protocol reserves for it.
+ *
+ * An uncaught throw becomes `-32603` INTERNAL_ERROR, which tells the client the *server*
+ * broke. For a URI naming a document that is not in the build, that is simply untrue, and it
+ * is the difference between an agent fixing its URI and an agent giving up (#191). REST has
+ * always classified this correctly, through `statusFor()` in the runtime's HTTP app; this is
+ * the same judgement, expressed in the other surface's vocabulary.
+ *
+ * Anything unrecognized is rethrown untouched, because `-32603` is the right answer when the
+ * server really did break, and narrowing it must not mean deleting it.
+ */
+function classify(uri: URL, cause: unknown): unknown {
+  const failure = LoreError.from(cause);
+  const remediation = failure.remediation === undefined ? '' : ` ${failure.remediation}`;
+  const message = `${failure.message}${remediation}`;
+
+  switch (failure.code) {
+    // Covers both "no such document" and "no such build", and the deployment that holds one
+    // build and cannot compare two. The protocol has one code for "this server cannot
+    // produce that resource", so the three are told apart by message and remediation rather
+    // than by inventing an implementation-defined code no client would recognize.
+    case 'LORE_E_BUILD_NOT_FOUND':
+      return new ResourceNotFoundError(uri.href, message);
+    case 'LORE_E_INVALID_ARGUMENT':
+      return new ProtocolError(INVALID_PARAMS, message);
+    default:
+      return cause;
+  }
+}
+
+/** Wraps a resource read so every handler classifies failures the same way. */
+async function read<T>(uri: URL, produce: () => Promise<T>): Promise<T> {
+  try {
+    return await produce();
+  } catch (cause) {
+    throw classify(uri, cause);
+  }
+}
 
 export const RESOURCE_URIS = [
   'lore://project/build',
@@ -50,15 +95,16 @@ export function registerResources(
       description: 'What the active build contains, and whether the sources have moved on.',
       mimeType: 'application/json',
     },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: 'application/json',
-          text: JSON.stringify(await runtime.describeBuild(), null, 2),
-        },
-      ],
-    }),
+    async (uri) =>
+      read(uri, async () => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify(await runtime.describeBuild(), null, 2),
+          },
+        ],
+      })),
   );
 
   server.registerResource(
@@ -69,29 +115,30 @@ export function registerResources(
       description: 'Every document in the active build, with its path and status.',
       mimeType: 'application/json',
     },
-    async (uri) => {
-      // Sourced from a search with no terms rather than a new capability: the runtime
-      // interface is fixed at seven capabilities, and a resource is a view of them.
-      const described = await runtime.describeBuild();
-      return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: 'application/json',
-            text: JSON.stringify(
-              {
-                buildId: described.buildId,
-                sourceState: described.sourceState,
-                counts: described.counts,
-                note: 'Use lore_search or lore_read_source to read a document.',
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+    async (uri) =>
+      read(uri, async () => {
+        // Sourced from a search with no terms rather than a new capability: the runtime
+        // interface is fixed at seven capabilities, and a resource is a view of them.
+        const described = await runtime.describeBuild();
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: 'application/json',
+              text: JSON.stringify(
+                {
+                  buildId: described.buildId,
+                  sourceState: described.sourceState,
+                  counts: described.counts,
+                  note: 'Use lore_search or lore_read_source to read a document.',
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }),
   );
 
   server.registerResource(
@@ -102,15 +149,16 @@ export function registerResources(
       description: 'Tables in the active build. Empty for a build compiled from documents alone.',
       mimeType: 'application/json',
     },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          mimeType: 'application/json',
-          text: JSON.stringify({ tables: await runtime.listTables() }, null, 2),
-        },
-      ],
-    }),
+    async (uri) =>
+      read(uri, async () => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify({ tables: await runtime.listTables() }, null, 2),
+          },
+        ],
+      })),
   );
 
   server.registerResource(
@@ -121,15 +169,16 @@ export function registerResources(
       description: 'The normalized text of one document, with its locator.',
       mimeType: 'application/json',
     },
-    async (uri, variables) => {
-      const artifactId = decodeURIComponent(String(variables.artifactId));
-      const result = await runtime.readSource({ artifactId });
-      return {
-        contents: [
-          { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(result, null, 2) },
-        ],
-      };
-    },
+    async (uri, variables) =>
+      read(uri, async () => {
+        const artifactId = decodeURIComponent(String(variables.artifactId));
+        const result = await runtime.readSource({ artifactId });
+        return {
+          contents: [
+            { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      }),
   );
 
   server.registerResource(
@@ -141,27 +190,28 @@ export function registerResources(
         'The difference between two builds: documents added, removed and changed, and whether the change is compatible. Computed from build records alone, so it works after the sources have moved on.',
       mimeType: 'application/json',
     },
-    async (uri, variables) => {
-      const comparer = options.comparer;
-      if (comparer === undefined) {
-        throw new LoreError(
-          'LORE_E_BUILD_NOT_FOUND',
-          'This deployment serves one build and cannot compare two.',
-          {
-            remediation:
-              'Run `lore diff` against the project, or point a client at a server that holds build history.',
-          },
-        );
-      }
+    async (uri, variables) =>
+      read(uri, async () => {
+        const comparer = options.comparer;
+        if (comparer === undefined) {
+          throw new LoreError(
+            'LORE_E_BUILD_NOT_FOUND',
+            'This deployment serves one build and cannot compare two.',
+            {
+              remediation:
+                'Run `lore diff` against the project, or point a client at a server that holds build history.',
+            },
+          );
+        }
 
-      const from = decodeURIComponent(String(variables.buildId));
-      const to = decodeURIComponent(String(variables.otherBuildId));
-      const diff = await comparer.compare(from, to);
-      return {
-        contents: [
-          { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(diff, null, 2) },
-        ],
-      };
-    },
+        const from = decodeURIComponent(String(variables.buildId));
+        const to = decodeURIComponent(String(variables.otherBuildId));
+        const diff = await comparer.compare(from, to);
+        return {
+          contents: [
+            { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(diff, null, 2) },
+          ],
+        };
+      }),
   );
 }
