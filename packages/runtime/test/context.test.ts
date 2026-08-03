@@ -1,4 +1,5 @@
 import type { CatalogSearchHit, ContextProfile } from '@lorepack/core';
+import { LoreError } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
 import {
   assembleBundle,
@@ -7,6 +8,7 @@ import {
   ORIENTATION_SHARE,
   PROFILE_BUDGETS,
   resolveBudget,
+  SUPPORTED_BUDGET,
   targetsOneArtifact,
 } from '../src/context/assemble.js';
 import { rankWithReport, score } from '../src/ranking/rank.js';
@@ -83,9 +85,40 @@ describe('profiles and budgets, architecture 13.5', () => {
     expect(resolveBudget('agent', 5000)).toBe(5000);
   });
 
-  it('refuses a budget outside the supported range, naming it', () => {
-    expect(() => resolveBudget('agent', 10)).toThrow(/1,000 to 200,000/);
-    expect(() => resolveBudget('agent', 500_000)).toThrow(/1,000 to 200,000/);
+  it.each([
+    ['below the floor', 1000],
+    ['above the ceiling', 120_000],
+  ])('refuses a budget %s, naming the range and the way out', (_label, budget) => {
+    expect(() => resolveBudget('agent', budget)).toThrow(/4,000 to 40,000/);
+    // The way out belongs in the remediation, which is where every Lorepack error puts the
+    // next action, so a caller reads one field rather than parsing prose.
+    try {
+      resolveBudget('agent', budget);
+      expect.unreachable('the budget should have been refused');
+    } catch (error) {
+      expect(LoreError.from(error).remediation).toMatch(/--allow-unsupported-budget/);
+    }
+  });
+
+  it('accepts the same budget once the override is passed', () => {
+    // Out of range is a deliberate act, not an impossible one: architecture 5.4.
+    expect(resolveBudget('agent', 1000, true)).toBe(1000);
+    expect(resolveBudget('agent', 120_000, true)).toBe(120_000);
+  });
+
+  it.each([SUPPORTED_BUDGET.minimum, SUPPORTED_BUDGET.maximum])(
+    'accepts the boundary value %i without an override',
+    (budget) => {
+      expect(resolveBudget('agent', budget)).toBe(budget);
+    },
+  );
+
+  it('holds every profile default inside the supported range', () => {
+    // A default that needed an override would be an absurdity, so it is asserted.
+    for (const budget of Object.values(PROFILE_BUDGETS)) {
+      expect(budget).toBeGreaterThanOrEqual(SUPPORTED_BUDGET.minimum);
+      expect(budget).toBeLessThanOrEqual(SUPPORTED_BUDGET.maximum);
+    }
   });
 });
 

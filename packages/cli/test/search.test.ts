@@ -108,6 +108,34 @@ describe('lore search', () => {
     });
   });
 
+  it('restricts to one document with --source, by path and by artifact id', async () => {
+    await builtProject(async (_root, lore) => {
+      const byPath = JSON.parse(
+        (await lore(['--json', 'search', 'rollback', '--source', 'guides/deployment.md'])).stdout,
+      );
+      expect(byPath.hits.length).toBeGreaterThan(0);
+      for (const hit of byPath.hits) {
+        expect(hit.locator.relativePath).toBe('guides/deployment.md');
+      }
+
+      // The id from the answer works as well as the path a person typed, which is what
+      // lets a follow-up question be built from the previous result.
+      const id = byPath.hits[0].locator.artifactId;
+      const byId = JSON.parse(
+        (await lore(['--json', 'search', 'rollback', '--source', id])).stdout,
+      );
+      expect(byId.hits.map((hit: { chunkId: string }) => hit.chunkId)).toEqual(
+        byPath.hits.map((hit: { chunkId: string }) => hit.chunkId),
+      );
+
+      // A document this project does not have is empty, never widened to a near match.
+      const missing = JSON.parse(
+        (await lore(['--json', 'search', 'rollback', '--source', 'guides/'])).stdout,
+      );
+      expect(missing.hits).toEqual([]);
+    });
+  });
+
   it.each([
     ['a bare quote', 'rollback"'],
     ['a wildcard', 'roll*'],

@@ -1,4 +1,4 @@
-import type { LoreRuntime } from '@lorepack/core';
+import type { BuildComparer, LoreRuntime } from '@lorepack/core';
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from './server.js';
 
@@ -15,6 +15,11 @@ import { createMcpServer } from './server.js';
  * uses. Two registrations would be two surfaces, and a client would have to know which
  * transport it was talking to.
  */
-export function createMcpHttpHandler(runtime: LoreRuntime): McpHttpHandler {
-  return createMcpHandler(() => createMcpServer({ runtime }));
+export function createMcpHttpHandler(
+  runtime: LoreRuntime,
+  comparer?: BuildComparer,
+): McpHttpHandler {
+  return createMcpHandler(() =>
+    createMcpServer({ runtime, ...(comparer === undefined ? {} : { comparer }) }),
+  );
 }

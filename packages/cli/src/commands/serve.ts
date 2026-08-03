@@ -4,6 +4,7 @@ import { LoreError, loadConfig } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
+import { createLocalComparer } from '../services/comparer.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 
 /**
@@ -68,7 +69,7 @@ export function serveCommand(): CommandDefinition {
       // One handler for the process, built once: it constructs a fresh server per request
       // internally, which is what the stateless model asks for, and holds the machinery
       // that would otherwise be rebuilt on every call.
-      const mcp = createMcpHttpHandler(runtime);
+      const mcp = createMcpHttpHandler(runtime, createLocalComparer(config.projectRoot));
       const app = createApiApp({
         runtime,
         currentBuild: () => backend.provider.current(),

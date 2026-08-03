@@ -97,6 +97,25 @@ rules, so every artifact in a Phase 2 build is `active` with authority 50. Rule 
 #78 in Phase 5. The ranking behaviour above is unit-tested against synthetic candidates now,
 and becomes reachable end to end when rules land.
 
+## Filters narrow the candidates, never the ranking
+
+Every filter is applied in SQL, before scoring, so a filtered search is a search of a
+smaller corpus rather than a filtered page of results. That matters when a filter is
+narrow: filtering after ranking would return whatever survived the top 10, which for a
+one-document filter is usually nothing.
+
+| Filter | Matches |
+|---|---|
+| `pathGlob` | canonical path against a glob |
+| `fileType` | file extension, without the dot |
+| `status` | one or more declared statuses |
+| `artifactId` | exactly one document, by artifact id **or** by canonical path |
+
+`artifactId` is exact on both forms and never widens to a prefix. A caller holds whichever
+form the previous answer gave it (the locator carries both), and asking for a document that
+does not exist returns nothing rather than the document it nearly names. The CLI spells it
+`lore search "rollback" --source guides/deployment.md`.
+
 ## Assembly: the same path, packed to a budget
 
 `contextForTask` reuses this pipeline and then packs (architecture 13.3). Two differences
@@ -107,6 +126,11 @@ worth knowing:
   first implementation of assembly did on every task it was given. Candidates are therefore
   fetched with all terms first and, only if that finds nothing, with any of them. Two fixed
   steps, so the same query still produces the same candidates.
+- **A budget outside 4,000 to 40,000 has to be asked for twice.** Every profile default
+  sits inside that range. Below the floor a bundle is too small to orient a model and still
+  say anything; above the ceiling it stops being bounded context. Both are permitted, and
+  neither happens by typo: an out-of-range budget is refused unless the caller also passes
+  `allowUnsupportedBudget` (`--allow-unsupported-budget` on `lore export`).
 - **The omission report has to be complete.** Search shows a page and need not explain what
   fell off the end; assembly must. `rankWithReport` returns what it dropped and why, so a
   near-duplicate removed before packing is still nameable. Without it the report would have

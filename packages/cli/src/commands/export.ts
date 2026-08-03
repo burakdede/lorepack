@@ -38,6 +38,10 @@ export function exportCommand(): CommandDefinition {
       { flags: '--format <format>', description: 'markdown or json (default markdown)' },
       { flags: '--output <file>', description: 'write to a file instead of stdout' },
       { flags: '--force', description: 'overwrite an existing output file' },
+      {
+        flags: '--allow-unsupported-budget',
+        description: 'permit a budget outside the supported 4,000 to 40,000 range',
+      },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
       const config = loadConfig({ cwd: context.options.cwd });
@@ -75,6 +79,7 @@ export function exportCommand(): CommandDefinition {
           task,
           profile,
           includeArchived: false,
+          allowUnsupportedBudget: flags.allowUnsupportedBudget === true,
           ...(flags.budget === undefined ? {} : { budget: parseBudget(flags.budget) }),
         });
 

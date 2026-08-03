@@ -78,9 +78,26 @@ describe('the markdown a person pastes', () => {
       expect(result.stdout).toContain('Profile **deep**');
       expect(result.stdout).toContain('40,000');
     });
-    await exported(['export', '--task', 'rollback', '--budget', '3000'], (result) => {
-      expect(result.stdout).toContain('budget 3,000 estimated tokens');
+    await exported(['export', '--task', 'rollback', '--budget', '8000'], (result) => {
+      expect(result.stdout).toContain('budget 8,000 estimated tokens');
     });
+  });
+
+  it('refuses a budget outside the supported range, and names the way past it', async () => {
+    await exported(['export', '--task', 'rollback', '--budget', '500'], (result) => {
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain('4,000 to 40,000');
+      expect(result.stderr).toContain('--allow-unsupported-budget');
+    });
+
+    // Deliberate is allowed. The point of the gate is that it cannot happen by typo.
+    await exported(
+      ['export', '--task', 'rollback', '--budget', '500', '--allow-unsupported-budget'],
+      (result) => {
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('budget 500 estimated tokens');
+      },
+    );
   });
 });
 

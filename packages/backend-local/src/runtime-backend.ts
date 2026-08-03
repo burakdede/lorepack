@@ -129,6 +129,7 @@ class LocalCatalogStore implements CatalogStore {
       ...(criteria.pathGlob === undefined ? {} : { pathGlob: criteria.pathGlob }),
       ...(criteria.extension === undefined ? {} : { extension: criteria.extension }),
       ...(criteria.statuses === undefined ? {} : { statuses: criteria.statuses }),
+      ...(criteria.artifactId === undefined ? {} : { artifactId: criteria.artifactId }),
     });
     return hits.map((hit) => ({
       ...hit,

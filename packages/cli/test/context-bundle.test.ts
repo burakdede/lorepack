@@ -100,7 +100,7 @@ describe('the bundle satisfies its published contract', () => {
 
   it('honours an explicit profile and an explicit budget', async () => {
     expect((await bundleFor('rollback', { profile: 'deep' })).budget).toBe(40_000);
-    expect((await bundleFor('rollback', { budget: 3000 })).budget).toBe(3000);
+    expect((await bundleFor('rollback', { budget: 8000 })).budget).toBe(8000);
   });
 });
 
@@ -123,7 +123,10 @@ describe('nothing is invented and nothing is hidden', () => {
   });
 
   it('lists each chunk in exactly one place', async () => {
-    const bundle = await bundleFor('rollback', { budget: 1200 });
+    const bundle = await bundleFor('rollback', {
+      budget: 1200,
+      allowUnsupportedBudget: true,
+    });
     const everywhere = [
       ...bundle.overview.map((item) => item.chunkId),
       ...bundle.selected.map((item) => item.chunkId),
@@ -151,6 +154,7 @@ describe('nothing is invented and nothing is hidden', () => {
           task: 'rollback guidance',
           includeArchived: false,
           budget: 2000,
+          allowUnsupportedBudget: true,
         });
       } finally {
         backend.close();
@@ -164,7 +168,10 @@ describe('nothing is invented and nothing is hidden', () => {
   });
 
   it('stays inside a small budget and says what it dropped', async () => {
-    const bundle = await bundleFor('rollback deployment onboarding incident', { budget: 1000 });
+    const bundle = await bundleFor('rollback deployment onboarding incident', {
+      budget: 1000,
+      allowUnsupportedBudget: true,
+    });
     expect(bundle.estimatedTokens).toBeLessThanOrEqual(1000);
     expect(bundle.omitted.every((item) => item.locator.relativePath !== '')).toBe(true);
   });

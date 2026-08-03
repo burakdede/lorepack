@@ -152,4 +152,33 @@ describe('filters', () => {
     ).toBe(true);
     expect((await search('rollback', { pathGlob: 'nothing/*' })).hits).toEqual([]);
   });
+
+  it('narrows to one document, which is how a follow-up question stays on topic', async () => {
+    // Addressed by path, as the locator on the previous answer gave it.
+    const byPath = await search('rollback', { artifactId: 'guides/deployment.md' });
+    expect(byPath.hits.length).toBeGreaterThan(0);
+    expect(paths(byPath).every((path) => path === 'guides/deployment.md')).toBe(true);
+
+    // And by artifact id, as the structured result gave it. Both work, because a caller
+    // holds whichever the last answer handed it.
+    const id = byPath.hits[0]?.locator.artifactId as string;
+    const byId = await search('rollback', { artifactId: id });
+    expect(byId.hits.map((hit) => hit.locator.artifactId).every((each) => each === id)).toBe(true);
+    expect(paths(byId)).toEqual(paths(byPath));
+  });
+
+  it('excludes near matches rather than widening to them', async () => {
+    // `guides/rollback.md` exists and outranks everything for this query. Asking for a
+    // prefix of a real id must return nothing, not the document it nearly names.
+    expect((await search('rollback', { artifactId: 'guides/' })).hits).toEqual([]);
+    expect((await search('rollback', { artifactId: 'guides/rollbac' })).hits).toEqual([]);
+  });
+
+  it('combines with the other filters instead of replacing them', async () => {
+    const contradictory = await search('rollback', {
+      artifactId: 'guides/rollback.md',
+      pathGlob: 'notes/*',
+    });
+    expect(contradictory.hits).toEqual([]);
+  });
 });

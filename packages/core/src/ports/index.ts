@@ -1,4 +1,5 @@
 export type {
+  BuildComparer,
   BuildScope,
   CatalogArtifact,
   CatalogChunk,

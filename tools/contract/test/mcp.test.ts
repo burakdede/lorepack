@@ -1,16 +1,18 @@
 import type {
+  BuildDiff,
   BuildHandle,
   BuildId,
   BuildManifest,
   BuildScope,
   CatalogArtifact,
   CatalogNode,
+  CatalogSearchCriteria,
   CatalogSearchHit,
   CatalogStore,
   TableStore,
 } from '@lorepack/core';
 import { LoreError, searchResultSchema } from '@lorepack/core';
-import { createMcpServer, TOOL_NAMES } from '@lorepack/mcp';
+import { createMcpServer, RESOURCE_TEMPLATES, RESOURCE_URIS, TOOL_NAMES } from '@lorepack/mcp';
 import { createRuntime } from '@lorepack/runtime';
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
@@ -71,7 +73,8 @@ const catalog: CatalogStore = {
   async countWarnings() {
     return 0;
   },
-  async search() {
+  async search(_query: string, criteria: CatalogSearchCriteria) {
+    criteriaSeen.push(criteria);
     return [HIT];
   },
   async supersededArtifacts() {
@@ -136,7 +139,27 @@ const scope: BuildScope = {
   },
 };
 
+const SECOND_BUILD = `lore_${'b'.repeat(64)}` as BuildId;
+const OTHER_BUILD = `lore_${'c'.repeat(64)}` as BuildId;
+
+/**
+ * Enough of a diff to prove which pair was compared, since the shape itself is #40's
+ * contract and is asserted there against real builds.
+ */
+const EMPTY_DIFF = {
+  identical: false,
+  artifacts: { added: 0, removed: 0, changed: 0, changes: [] },
+  chunks: { added: 0, removed: 0, changed: 0 },
+  rules: [],
+  tables: { added: 0, removed: 0, changed: 0, changes: [] },
+  capabilities: { added: [], removed: [] },
+  canonicalRoots: { changed: [] },
+  incompatibilities: [],
+} as unknown as BuildDiff;
+
 let client: Client;
+let comparedPairs: Array<[string, string]>;
+const criteriaSeen: CatalogSearchCriteria[] = [];
 
 beforeEach(async () => {
   const runtime = createRuntime({
@@ -152,7 +175,20 @@ beforeEach(async () => {
     freshness: async () => 'clean',
   });
 
-  const server = createMcpServer({ runtime });
+  comparedPairs = [];
+  criteriaSeen.length = 0;
+  const server = createMcpServer({
+    runtime,
+    comparer: {
+      async compare(from, to) {
+        comparedPairs.push([from, to]);
+        if (from === OTHER_BUILD && to === OTHER_BUILD) {
+          throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'No such build.');
+        }
+        return { ...EMPTY_DIFF, from, to } as BuildDiff;
+      },
+    },
+  });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
   client = new Client({ name: 'contract-tests', version: '0.0.0' });
@@ -320,6 +356,92 @@ describe('resources, architecture 14.2', () => {
     const read = await client.readResource({ uri: 'lore://source/p%3Aguides%2Fa.md' });
     const contents = read.contents as Array<{ text: string }>;
     expect(JSON.parse(contents[0]?.text ?? '{}').text).toContain('normalized body');
+  });
+
+  it('offers every resource architecture 14.2 names, fixed and templated', async () => {
+    const listed = (await client.listResources()).resources.map((r) => r.uri);
+    for (const uri of RESOURCE_URIS) expect(listed).toContain(uri);
+
+    const templates = (await client.listResourceTemplates()).resourceTemplates.map(
+      (template) => template.uriTemplate,
+    );
+    for (const template of RESOURCE_TEMPLATES) expect(templates).toContain(template);
+  });
+
+  it('diffs two builds through the template, passing both ids through undecoded', async () => {
+    const read = await client.readResource({
+      uri: `lore://build/${BUILD}/diff/${SECOND_BUILD}`,
+    });
+    const contents = read.contents as Array<{ text: string }>;
+    // The ids reach the comparer exactly as addressed. A template that swapped or mangled
+    // them would return a diff of the wrong pair, which reads as a plausible answer.
+    expect(comparedPairs).toEqual([[BUILD, SECOND_BUILD]]);
+    expect(JSON.parse(contents[0]?.text ?? '{}')).toMatchObject({ from: BUILD, to: SECOND_BUILD });
+  });
+
+  it('reports an unknown build as an error, not as an empty diff', async () => {
+    await expect(
+      client.readResource({ uri: `lore://build/${OTHER_BUILD}/diff/${OTHER_BUILD}` }),
+    ).rejects.toThrow(/No such build/);
+  });
+});
+
+describe('a deployment that holds only the build it serves', () => {
+  it('still lists the diff resource, and says why it cannot answer', async () => {
+    // Registered without a comparer, which is the Phase 6 shape. Vanishing from the listing
+    // would make the surface depend on the deployment; saying so plainly does not.
+    const runtime = createRuntime({
+      provider: {
+        async current() {
+          return { buildId: BUILD, generation: 1 };
+        },
+        async acquire(): Promise<BuildHandle> {
+          return { buildId: BUILD, generation: 1, release() {} };
+        },
+      },
+      open: async () => scope,
+      freshness: async () => 'clean',
+    });
+    const server = createMcpServer({ runtime });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const bare = new Client({ name: 'contract-tests', version: '0.0.0' });
+    await Promise.all([server.connect(serverTransport), bare.connect(clientTransport)]);
+
+    const templates = (await bare.listResourceTemplates()).resourceTemplates.map(
+      (template) => template.uriTemplate,
+    );
+    expect(templates).toContain('lore://build/{buildId}/diff/{otherBuildId}');
+
+    await expect(
+      bare.readResource({ uri: `lore://build/${BUILD}/diff/${SECOND_BUILD}` }),
+    ).rejects.toThrow(/cannot compare two/);
+  });
+});
+
+describe('search filters over the protocol', () => {
+  it('accepts an artifact id and passes it to the store', async () => {
+    criteriaSeen.length = 0;
+    const result = await client.callTool({
+      name: 'lore_search',
+      arguments: { query: 'rollback', artifactId: 'p:guides/a.md' },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(criteriaSeen.at(-1)?.artifactId).toBe('p:guides/a.md');
+  });
+
+  it('declares it in the tool schema, so a client can discover it', async () => {
+    const listed = await client.listTools();
+    const search = listed.tools.find((tool) => tool.name === 'lore_search');
+    const schema = search?.inputSchema as { properties?: Record<string, unknown> } | undefined;
+    expect(schema?.properties).toHaveProperty('artifactId');
+  });
+
+  it('rejects an empty artifact id as a tool error, naming the field', async () => {
+    const result = await client
+      .callTool({ name: 'lore_search', arguments: { query: 'a', artifactId: '' } })
+      .catch((error: unknown) => error as Error);
+    const text = JSON.stringify(result);
+    expect(text).toContain('artifactId');
   });
 });
 

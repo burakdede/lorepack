@@ -90,6 +90,7 @@ class PortedRuntime implements LoreRuntime {
         pathGlob: request.pathGlob,
         extension: request.fileType,
         statuses: request.status,
+        artifactId: request.artifactId,
       });
 
       const ranked = rankCandidates(candidates, {
@@ -133,7 +134,7 @@ class PortedRuntime implements LoreRuntime {
   async contextForTask(request: TaskContextRequest): Promise<ContextBundle> {
     return this.#withBuild(async ({ scope, envelope }) => {
       const profile = request.profile ?? DEFAULT_PROFILE;
-      const budget = resolveBudget(profile, request.budget);
+      const budget = resolveBudget(profile, request.budget, request.allowUnsupportedBudget);
 
       // A bundle is filled from a much deeper candidate list than a page of search
       // results: the budget, not a page size, is what decides how much fits.

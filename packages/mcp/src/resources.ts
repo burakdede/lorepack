@@ -1,4 +1,4 @@
-import type { LoreRuntime } from '@lorepack/core';
+import { type BuildComparer, LoreError, type LoreRuntime } from '@lorepack/core';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { ResourceTemplate } from '@modelcontextprotocol/server';
 
@@ -19,7 +19,29 @@ export const RESOURCE_URIS = [
   'lore://project/tables',
 ] as const;
 
-export function registerResources(server: McpServer, runtime: LoreRuntime): void {
+/** Templates, which take a variable and so cannot be listed as fixed URIs. */
+export const RESOURCE_TEMPLATES = [
+  'lore://source/{artifactId}',
+  'lore://build/{buildId}/diff/{otherBuildId}',
+] as const;
+
+export interface ResourceOptions {
+  /**
+   * Reaches build history, for the diff resource.
+   *
+   * Optional because it is not part of `LoreRuntime`: a diff reads two builds, neither of
+   * which need be active, and a deployment that holds only the build it serves genuinely
+   * cannot answer. The resource is registered either way, and says which case it is in
+   * rather than disappearing from the listing.
+   */
+  readonly comparer?: BuildComparer;
+}
+
+export function registerResources(
+  server: McpServer,
+  runtime: LoreRuntime,
+  options: ResourceOptions = {},
+): void {
   server.registerResource(
     'build',
     'lore://project/build',
@@ -105,6 +127,39 @@ export function registerResources(server: McpServer, runtime: LoreRuntime): void
       return {
         contents: [
           { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    'diff',
+    new ResourceTemplate('lore://build/{buildId}/diff/{otherBuildId}', { list: undefined }),
+    {
+      title: 'What changed between two builds',
+      description:
+        'The difference between two builds: documents added, removed and changed, and whether the change is compatible. Computed from build records alone, so it works after the sources have moved on.',
+      mimeType: 'application/json',
+    },
+    async (uri, variables) => {
+      const comparer = options.comparer;
+      if (comparer === undefined) {
+        throw new LoreError(
+          'LORE_E_BUILD_NOT_FOUND',
+          'This deployment serves one build and cannot compare two.',
+          {
+            remediation:
+              'Run `lore diff` against the project, or point a client at a server that holds build history.',
+          },
+        );
+      }
+
+      const from = decodeURIComponent(String(variables.buildId));
+      const to = decodeURIComponent(String(variables.otherBuildId));
+      const diff = await comparer.compare(from, to);
+      return {
+        contents: [
+          { uri: uri.href, mimeType: 'application/json', text: JSON.stringify(diff, null, 2) },
         ],
       };
     },

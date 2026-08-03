@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-44 automated, 3 checked by hand.
+46 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -325,6 +325,21 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `from` is the first build, `to` is the second build, `identical` is false.
 6. And says nothing untrue about how many builds there are
    Expect: it succeeds, stdout never mentions "only one build".
+
+### `lifecycle/search-can-narrow-to-one-document`
+
+**A follow-up question stays on one document**
+
+Proves: Section 13.2: filters narrow the candidates, and an unknown source returns nothing.
+
+Locks down the defect in #185.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Search inside one document, addressed by the path the locator gave
+   Expect: it succeeds, `hits[0].locator.relativePath` is "guides/deployment.md".
+2. A document that does not exist is empty, never widened to a near match
+   Expect: it succeeds, `hits[0]` is absent.
 
 ### `lifecycle/search-explains-its-ranking`
 
@@ -732,6 +747,23 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `citations[0].relativePath` is present.
 3. An export without a task says so
    Expect: it exits 1, the error is `LORE_E_INVALID_ARGUMENT`, stderr mentions "--task".
+4. A budget far outside the supported range is refused, and says how to mean it
+   Expect: it exits 1, the error is `LORE_E_INVALID_ARGUMENT`, stderr mentions "4,000 to 40,000", "--allow-unsupported-budget".
+5. And is honoured once it is deliberate
+   Expect: it succeeds, stdout mentions "budget 400 estimated tokens".
+
+### `mcp/every-documented-resource-is-served`
+
+**A client browsing resources finds every URI section 14.2 names**
+
+Proves: Section 14.2: the resource surface, including the diff between two builds.
+
+Locks down the defect in #185.
+
+Starting point: 3 source files, already set up with `lore init` and `lore build`.
+
+1. Ask for the fixed resources
+2. And the templated ones, which is where a diff of two builds lives
 
 ## The product as installed
 

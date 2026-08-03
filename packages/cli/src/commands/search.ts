@@ -13,6 +13,10 @@ export function searchCommand(): CommandDefinition {
       { flags: '--path <glob>', description: 'restrict to paths matching a glob' },
       { flags: '--type <extension>', description: 'restrict to one file extension' },
       {
+        flags: '--source <artifact>',
+        description: 'restrict to one document, by path or artifact id',
+      },
+      {
         flags: '--include-archived',
         description: 'include archived and superseded sources, which are labelled',
       },
@@ -37,6 +41,7 @@ export function searchCommand(): CommandDefinition {
         debug: flags.debug === true,
         ...(typeof flags.path === 'string' ? { pathGlob: flags.path } : {}),
         ...(typeof flags.type === 'string' ? { type: flags.type } : {}),
+        ...(typeof flags.source === 'string' ? { artifactId: flags.source } : {}),
       });
 
       // On stderr, so `--json` stdout stays the structured result alone. A consumer reading
