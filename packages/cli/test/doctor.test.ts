@@ -100,6 +100,35 @@ describe('the shape of the report', () => {
   });
 });
 
+describe('the dev port, which is usually occupied by the person asking', () => {
+  it('warns when something else holds it, and does not when this project does', async () => {
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+
+    try {
+      await withTempProject({ files: CORPUS }, async (project) => {
+        const stranger = await runDoctor({ cwd: project.root, port });
+        expect(stranger.checks.find((check) => check.id === 'dev-port')?.status).toBe('warn');
+
+        // The same occupied port, held by this project's own session. Studio asks from
+        // inside that session and `lore doctor` reads the receipt, so both reach this
+        // answer rather than telling a person their working setup is broken.
+        const ours = await runDoctor({
+          cwd: project.root,
+          port,
+          portHeldByThisProject: true,
+        });
+        const check = ours.checks.find((entry) => entry.id === 'dev-port');
+        expect(check?.status).toBe('pass');
+        expect(check?.detail).toContain("this project's dev session");
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
 describe('outside a project', () => {
   it('reports the environment rather than refusing', async () => {
     const empty = mkdtempSync(join(tmpdir(), 'lore-doctor-'));

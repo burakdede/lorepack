@@ -42,6 +42,15 @@ export interface DoctorOptions {
   readonly cwd: string;
   /** The dev port to test, so a project on a custom port checks the right one. */
   readonly port?: number;
+  /**
+   * Set when this project's own dev session is the thing holding that port.
+   *
+   * Without it the report warns that the port is occupied, which is true and useless: it is
+   * occupied by the server that just answered the request, or by the `lore dev` running in
+   * the next terminal. Both callers work this out and say so, so the browser and the
+   * terminal reach the same conclusion about the same port.
+   */
+  readonly portHeldByThisProject?: boolean;
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
@@ -62,7 +71,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checks.push(writableCheck(project.root));
     checks.push(activeBuildCheck(project.root));
   }
-  checks.push(await portCheck(options.port ?? DEV_PORT));
+  checks.push(await portCheck(options.port ?? DEV_PORT, options.portHeldByThisProject === true));
 
   const counts = {
     pass: checks.filter((check) => check.status === 'pass').length,
@@ -402,9 +411,27 @@ function activeBuildCheck(root: string): CheckResult {
   }
 }
 
-/** Whether the dev port is free, by binding it rather than by guessing from a scan. */
-async function portCheck(port: number): Promise<CheckResult> {
+/**
+ * Whether the dev port is free, by binding it rather than by guessing from a scan.
+ *
+ * `ours` is the case that matters whenever a session is up: the port is held by this
+ * project's own `lore dev`, and reporting that as a problem tells a person their working
+ * setup is broken. The check concludes differently rather than a caller editing the result
+ * afterwards, which would be two opinions about one check.
+ */
+async function portCheck(port: number, ours: boolean): Promise<CheckResult> {
   const free = await isPortFree(port);
+
+  if (!free && ours) {
+    return {
+      id: 'dev-port',
+      title: 'Dev port',
+      status: 'pass',
+      detail: `127.0.0.1:${port} is in use by this project's dev session.`,
+      values: { port, session: true },
+    };
+  }
+
   return {
     id: 'dev-port',
     title: 'Dev port',

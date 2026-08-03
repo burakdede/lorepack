@@ -107,6 +107,16 @@ export interface ApiOptions {
    */
   readonly exportBundle?: (request: unknown) => Promise<string>;
   /**
+   * Environment checks and live session state, for Studio's Diagnostics route.
+   *
+   * An injected host function rather than an eighth runtime capability, for the same reason
+   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at seven capabilities that
+   * read the active build, and a diagnostic reads the *machine*. Probing SQLite and counting
+   * watched paths is not a question about a build, and a deployment answers it differently
+   * or not at all.
+   */
+  readonly diagnostics?: () => Promise<unknown>;
+  /**
    * The actions that change which build is live, and the history they act on.
    *
    * The only writes in this API, and the reason they are one optional bundle rather than five
@@ -286,6 +296,10 @@ export function createApiApp(options: ApiOptions): Hono {
   if (options.sources !== undefined) {
     const sources = options.sources;
     app.get('/v1/sources', (context) => answer(context, () => sources()));
+  }
+  if (options.diagnostics !== undefined) {
+    const diagnostics = options.diagnostics;
+    app.get('/v1/diagnostics', (context) => answer(context, () => diagnostics()));
   }
   if (options.exportBundle !== undefined) {
     const exportBundle = options.exportBundle;

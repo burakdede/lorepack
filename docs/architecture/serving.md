@@ -104,11 +104,19 @@ a surface a client has to probe.
 Anything else is a `404` in the same typed error shape as every other failure, so a client
 has one error format rather than two.
 
-Four more routes exist only where the host supplied them, because each reads something a
+Five more routes exist only where the host supplied them, because each reads something a
 deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
 `GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
-`lore export` writes. `lore serve` registers all but `/v1/plan`, because planning reads
-sources and `lore serve` promises never to.
+`lore export` writes; `GET /v1/diagnostics` reads the machine. `lore serve` registers only
+the three that read the active build, because the other two read sources and a live session,
+and `lore serve` has neither.
+
+`/v1/diagnostics` returns the same report `lore doctor --json` prints, validated against
+`schemas/doctor-report.json`, plus the live session state a one-shot command cannot see: the
+watcher, the port, the process, and which clients are configured. It is an injected host
+function rather than a runtime capability, for the same reason `currentBuild` is: architecture
+13.1 fixes `LoreRuntime` at seven capabilities that read a *build*, and a diagnostic reads the
+machine.
 
 ### The write surface
 

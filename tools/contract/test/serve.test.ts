@@ -193,6 +193,9 @@ describe('what Studio copies is what a chat product gets', () => {
     // Planning walks the source tree, and `lore serve` promises never to rebuild and has no
     // business reading sources. That route belongs to `lore dev`.
     expect((await fetch(`${url}/v1/plan`)).status).toBe(404);
+
+    // Diagnostics exists for the page that renders it, and this server mounts no page.
+    expect((await fetch(`${url}/v1/diagnostics`)).status).toBe(404);
   });
 
   it('has no route that could change which build is live', async () => {

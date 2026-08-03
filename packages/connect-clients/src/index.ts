@@ -19,6 +19,7 @@ export {
 export type {
   ClientConnector,
   ClientDetection,
+  ClientStatus,
   ConnectInput,
   ConnectionCheck,
   ConnectPlan,

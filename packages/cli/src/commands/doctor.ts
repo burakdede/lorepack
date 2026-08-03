@@ -1,5 +1,6 @@
-import { count } from '@lorepack/core';
+import { count, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
+import { DEV_PORT, isRunning, readReceipt } from '../services/dev-session.js';
 import { type CheckResult, type DoctorReport, runDoctor } from '../services/doctor.js';
 
 /**
@@ -26,9 +27,14 @@ export function doctorCommand(): CommandDefinition {
       { flags: '--port <number>', description: 'the dev port to test (default 43110)' },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
+      const port = flags.port === undefined ? undefined : Number(flags.port);
       const report = await runDoctor({
         cwd: context.options.cwd,
-        ...(flags.port === undefined ? {} : { port: Number(flags.port) }),
+        ...(port === undefined ? {} : { port }),
+        // A dev session of this project holding the port is not a problem to report, and
+        // running doctor while your own `lore dev` is up is the common case. Studio reaches
+        // the same conclusion from the other side, so the two never disagree.
+        portHeldByThisProject: heldByThisProject(context.options.cwd, port),
       });
 
       return {
@@ -41,6 +47,26 @@ export function doctorCommand(): CommandDefinition {
       };
     },
   };
+}
+
+/**
+ * Whether the port under test is held by this project's own live dev session.
+ *
+ * Read from the receipt, which is evidence rather than a lock, so the pid is checked: a
+ * receipt left behind by a crash names a process that is gone, and believing it would report
+ * a genuinely occupied port as fine.
+ */
+function heldByThisProject(cwd: string, port: number | undefined): boolean {
+  try {
+    const config = loadConfig({ cwd });
+    const receipt = readReceipt(config);
+    if (receipt === null || !isRunning(receipt.pid)) return false;
+    return receipt.port === (port ?? DEV_PORT);
+  } catch {
+    // No project, or one that will not load. Either way there is no session to credit, and
+    // doctor's whole job is to keep working in exactly those directories.
+    return false;
+  }
 }
 
 const MARK: Record<CheckResult['status'], string> = { pass: 'ok', warn: 'warn', fail: 'FAIL' };
