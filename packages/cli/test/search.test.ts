@@ -108,6 +108,20 @@ describe('lore search', () => {
     });
   });
 
+  it.each(['--path', '--type', '--source'])(
+    'refuses %s with an empty value rather than reporting no matches',
+    async (flag) => {
+      // An unset shell variable expands to nothing, and a filter that filters nothing must
+      // not answer "no matches" for a query that would otherwise have found something.
+      await builtProject(async (_root, lore) => {
+        const result = await lore(['search', 'rollback', flag, '']);
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+        expect(result.stderr).toContain(flag);
+      });
+    },
+  );
+
   it('restricts to one document with --source, by path and by artifact id', async () => {
     await builtProject(async (_root, lore) => {
       const byPath = JSON.parse(
