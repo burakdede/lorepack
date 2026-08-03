@@ -67,8 +67,11 @@ async function resolveArtifact(
   const artifact = await scope.catalog.artifact(wanted);
   if (artifact !== null) return artifact;
 
+  // Reachable from MCP and REST, where the reader is a model with no shell, so the advice
+  // has to be something it can act on from here. Search returns a locator, and a locator is
+  // exactly the identifier this read wanted (#193).
   throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No artifact ${wanted} in this build.`, {
-    remediation: 'Run `lore inspect sources` to list what this build contains.',
+    remediation: 'Search for the document first: every result carries the path to read it by.',
     subject: wanted,
   });
 }

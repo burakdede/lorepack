@@ -111,14 +111,21 @@ export function registerResources(
     'sources',
     'lore://project/sources',
     {
-      title: 'Indexed sources',
-      description: 'Every document in the active build, with its path and status.',
+      title: 'What this build indexed',
+      description:
+        'How much this build contains, and whether the sources have moved on since. Not a document listing: use lore_search to find a document, and lore_read_source to read one.',
       mimeType: 'application/json',
     },
     async (uri) =>
       read(uri, async () => {
-        // Sourced from a search with no terms rather than a new capability: the runtime
-        // interface is fixed at seven capabilities, and a resource is a view of them.
+        // Counts, deliberately, because no capability can enumerate artifacts: `LoreRuntime`
+        // is seven capabilities (architecture 13.1) and none of them lists a build's
+        // documents. This said "every document, with its path and status" until #193, which
+        // is the product claiming something it cannot do, to the one reader that believes it.
+        //
+        // The listing is a real gap rather than a decision, and #66 (Studio's Sources route)
+        // is where it has to be built. Today the only implementation is raw SQL inside
+        // `lore inspect sources`, which no remote backend can reach.
         const described = await runtime.describeBuild();
         return {
           contents: [
@@ -130,7 +137,7 @@ export function registerResources(
                   buildId: described.buildId,
                   sourceState: described.sourceState,
                   counts: described.counts,
-                  note: 'Use lore_search or lore_read_source to read a document.',
+                  note: 'This interface cannot list the documents in a build. Use lore_search to find one, then lore_read_source to read it.',
                 },
                 null,
                 2,

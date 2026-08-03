@@ -431,6 +431,34 @@ describe('a deployment that holds only the build it serves', () => {
   });
 });
 
+describe('what a resource promises against what it returns', () => {
+  /**
+   * #193. This resource was titled "Indexed sources" and described as "Every document in the
+   * active build, with its path and status", and returned a row of counts. No capability can
+   * enumerate artifacts, so it never could have done otherwise.
+   *
+   * A description is what a model reads to decide what to call, so a false one costs a turn
+   * and teaches the model something untrue about the corpus. The two sides are pinned to each
+   * other here: if a listing ever appears in the body, the description may promise one, and
+   * not before.
+   */
+  it('does not promise a document listing, because it does not return one', async () => {
+    const listed = await client.listResources();
+    const sources = listed.resources.find((resource) => resource.uri === 'lore://project/sources');
+    expect(sources).toBeDefined();
+
+    const read = await client.readResource({ uri: 'lore://project/sources' });
+    const contents = read.contents as Array<{ text: string }>;
+    const body = JSON.parse(contents[0]?.text ?? '{}') as Record<string, unknown>;
+
+    // The body carries no collection of documents, in any field.
+    expect(Object.values(body).some((value) => Array.isArray(value))).toBe(false);
+    // So the description has to say so rather than inviting the client to expect one.
+    expect(`${sources?.title} ${sources?.description}`).not.toMatch(/every document/i);
+    expect(sources?.description).toMatch(/not a document listing/i);
+  });
+});
+
 describe('whose fault a failed resource read was', () => {
   /**
    * #191. An uncaught throw becomes `-32603` INTERNAL_ERROR, which tells the client the
