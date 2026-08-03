@@ -468,6 +468,34 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'lifecycle/search-can-narrow-to-one-document',
+    title: 'A follow-up question stays on one document',
+    proves: 'Section 13.2: filters narrow the candidates, and an unknown source returns nothing.',
+    mode: 'auto',
+    regression: 185,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['--json', 'search', 'rollback', '--source', 'guides/deployment.md'],
+        json: true,
+        describe: 'Search inside one document, addressed by the path the locator gave',
+        expect: {
+          exitCode: 0,
+          json: [{ path: 'hits[0].locator.relativePath', equals: 'guides/deployment.md' }],
+        },
+      },
+      {
+        action: 'run',
+        args: ['--json', 'search', 'rollback', '--source', 'guides/'],
+        json: true,
+        describe: 'A document that does not exist is empty, never widened to a near match',
+        expect: { exitCode: 0, json: [{ path: 'hits[0]', exists: false }] },
+      },
+    ],
+  },
+
+  {
     id: 'lifecycle/search-explains-its-ranking',
     title: '`lore search --debug` says why each result ranked where it did',
     proves: 'Section 13.2 and 4.9: a page is explainable, and a score is never presented as truth.',

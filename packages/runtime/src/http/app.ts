@@ -49,7 +49,34 @@ export interface ApiOptions {
   readonly allowedOrigins?: readonly string[];
   /** Largest request body accepted, in bytes. */
   readonly maxRequestBytes?: number;
+  /**
+   * Decides whether a request may proceed, before any route runs.
+   *
+   * Absent by default, which is what a loopback server wants: the person who started it is
+   * the only one who can reach it, and asking them for a token they issued to themselves
+   * protects nothing. A remote deployment is the opposite case, and Phase 6 supplies a
+   * bearer check here rather than forking the app (architecture 18.4).
+   *
+   * Returning `false`, or a reason, refuses the request as `401`. `/health` is always
+   * exempt: a load balancer has no credential, and the probe reveals nothing but liveness.
+   */
+  readonly authorize?: (request: AuthorizationRequest) => AuthorizationDecision;
 }
+
+export interface AuthorizationRequest {
+  /** The `Authorization` header verbatim, or undefined when the client sent none. */
+  readonly authorization: string | undefined;
+  readonly method: string;
+  readonly path: string;
+  /** Every header, for a scheme that needs more than one. */
+  readonly headers: Headers;
+}
+
+/** `true` admits the request. `false` or a reason refuses it. */
+export type AuthorizationDecision = boolean | string | Promise<boolean | string>;
+
+/** The one path that runs before authorization, so liveness never needs a credential. */
+export const UNAUTHENTICATED_PATHS: readonly string[] = ['/health'];
 
 /** A megabyte is far more than any request here needs, and far less than a memory problem. */
 export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
@@ -83,6 +110,41 @@ export function createApiApp(options: ApiOptions): Hono {
     }
     return next();
   });
+
+  /**
+   * Authorization, after the origin check and before every route but `/health`.
+   *
+   * Placed here rather than per route so a route added later is protected by existing, not
+   * by its author remembering. The decision is the host's: this app knows nothing about
+   * tokens, and a local server passes no hook at all.
+   */
+  if (options.authorize !== undefined) {
+    const authorize = options.authorize;
+    app.use('*', async (context, next) => {
+      if (UNAUTHENTICATED_PATHS.includes(context.req.path)) return next();
+
+      const decision = await authorize({
+        authorization: context.req.header('Authorization'),
+        method: context.req.method,
+        path: context.req.path,
+        headers: context.req.raw.headers,
+      });
+      if (decision === true) return next();
+
+      return failure(
+        context,
+        new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          typeof decision === 'string' ? decision : 'This request is not authorized.',
+          {
+            remediation:
+              'Send the credential this deployment requires in the Authorization header.',
+          },
+        ),
+        401,
+      );
+    });
+  }
 
   app.get('/health', async (context) => {
     const active = await options.currentBuild();

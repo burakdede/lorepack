@@ -12,6 +12,7 @@ import { createRuntime } from '@lorepack/runtime';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
+import { createLocalComparer } from '../services/comparer.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 import { readFreshness, readStatus } from '../services/status.js';
 
@@ -71,7 +72,10 @@ export function mcpCommand(): CommandDefinition {
         });
       }
 
-      const server = createMcpServer({ runtime: createRuntime(backend) });
+      const server = createMcpServer({
+        runtime: createRuntime(backend),
+        comparer: createLocalComparer(config.projectRoot),
+      });
       const transport = new StdioServerTransport();
 
       // The lock and the databases have to be released however the process ends, including

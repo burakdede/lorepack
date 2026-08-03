@@ -1,5 +1,6 @@
 import type { BuildManifest } from '../schemas/build.js';
 import type { ArtifactStatus } from '../schemas/common.js';
+import type { BuildDiff } from '../schemas/diff.js';
 import type {
   BuildDescription,
   ContextBundle,
@@ -65,6 +66,8 @@ export interface CatalogSearchCriteria {
   readonly match?: 'all' | 'any' | undefined;
   readonly pathGlob?: string | undefined;
   readonly extension?: string | undefined;
+  /** Exactly one artifact. Anything else is excluded, including near matches. */
+  readonly artifactId?: string | undefined;
   readonly statuses?: readonly ArtifactStatus[] | undefined;
 }
 
@@ -191,4 +194,20 @@ export interface LoreRuntime {
   listTables(): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
   describeTable(tableId: string): Promise<TableDescription>;
   queryTable(request: TableQueryRequest): Promise<TableQueryResult>;
+}
+
+/**
+ * Comparing two builds, which is a different question from reading one.
+ *
+ * `LoreRuntime` is fixed at seven capabilities and every one of them reads the *active*
+ * build through a handle. A diff reads two builds, neither of which need be active, and
+ * possibly after the sources are gone. So it is a separate, optional port, supplied by a
+ * host that can reach build history: the local CLI can, and a deployment that keeps only
+ * the build it serves cannot, which is exactly the distinction a separate port expresses.
+ *
+ * Read-only, like everything at the AI boundary (invariant 10). Comparing builds cannot
+ * create, activate or delete one.
+ */
+export interface BuildComparer {
+  compare(fromBuildId: string, toBuildId: string): Promise<BuildDiff>;
 }

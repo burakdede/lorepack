@@ -68,7 +68,11 @@ describe('the SDK mirrors the server contracts exactly', () => {
     const asSdk: SdkSearchRequest = search;
     expect(asSdk.query).toBe('a');
 
-    const task: CoreTaskContextRequest = { task: 'a', includeArchived: false };
+    const task: CoreTaskContextRequest = {
+      task: 'a',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    };
     const asSdkTask: SdkTaskContextRequest = task;
     expect(asSdkTask.task).toBe('a');
   });

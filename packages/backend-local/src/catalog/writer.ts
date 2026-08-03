@@ -224,6 +224,8 @@ export interface CatalogSearchOptions {
   readonly statuses?: readonly string[];
   /** `all` requires every term in one chunk, `any` requires one. Defaults to `all`. */
   readonly match?: 'all' | 'any';
+  /** Restricts to one artifact, by id or by canonical path. */
+  readonly artifactId?: string;
   /**
    * SQLite GLOB pattern over the relative path (`*` and `?`). GLOB rather than a full
    * glob library because it is parameterized SQL: a filter can never become an injection,
@@ -285,6 +287,11 @@ export function searchCatalog(
   if (settings.extension !== undefined) {
     conditions.push('c.relative_path LIKE ?');
     parameters.push(`%.${settings.extension.replace(/^\./, '')}`);
+  }
+  if (settings.artifactId !== undefined) {
+    // Matched against both, because a caller holds whichever the last result gave it.
+    conditions.push('(c.artifact_id = ? OR c.relative_path = ?)');
+    parameters.push(settings.artifactId, settings.artifactId);
   }
   if (settings.statuses !== undefined && settings.statuses.length > 0) {
     // One placeholder per value, so a status filter stays parameterized SQL rather than

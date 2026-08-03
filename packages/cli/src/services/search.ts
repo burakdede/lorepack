@@ -24,6 +24,8 @@ export interface SearchOptions {
   readonly limit?: number;
   readonly pathGlob?: string;
   readonly type?: string;
+  /** One document, by artifact id or canonical path. */
+  readonly artifactId?: string;
   readonly includeArchived?: boolean;
   /** Returns the score components, so a reader can see why a page is ordered as it is. */
   readonly debug?: boolean;
@@ -51,6 +53,7 @@ export async function runSearch(options: SearchOptions): Promise<SearchResult> {
       debug: options.debug ?? false,
       ...(options.pathGlob === undefined ? {} : { pathGlob: options.pathGlob }),
       ...(options.type === undefined ? {} : { fileType: options.type }),
+      ...(options.artifactId === undefined ? {} : { artifactId: options.artifactId }),
     });
   } finally {
     backend.close();

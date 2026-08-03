@@ -12,7 +12,12 @@ import type {
 } from '@lorepack/core';
 import { LoreError } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
-import { createApiApp, DEFAULT_MAX_REQUEST_BYTES } from '../src/http/app.js';
+import {
+  type AuthorizationRequest,
+  createApiApp,
+  DEFAULT_MAX_REQUEST_BYTES,
+  UNAUTHENTICATED_PATHS,
+} from '../src/http/app.js';
 import { createRuntime } from '../src/runtime.js';
 
 /**
@@ -41,6 +46,9 @@ const HIT: CatalogSearchHit = {
   bm25: -2,
   excerpt: 'a [rollback]',
 };
+
+/** The criteria the last search reached the store with, for asserting a filter arrived. */
+let lastCriteria: CatalogSearchCriteria | null = null;
 
 const catalog: CatalogStore = {
   async manifest(): Promise<BuildManifest> {
@@ -71,6 +79,7 @@ const catalog: CatalogStore = {
     return 0;
   },
   async search(_query: string, criteria: CatalogSearchCriteria) {
+    lastCriteria = criteria;
     return [HIT].slice(0, criteria.limit);
   },
   async supersededArtifacts() {
@@ -454,5 +463,144 @@ describe('the default body limit', () => {
   it('is generous enough for a real request and small enough to matter', () => {
     expect(DEFAULT_MAX_REQUEST_BYTES).toBeGreaterThan(64 * 1024);
     expect(DEFAULT_MAX_REQUEST_BYTES).toBeLessThanOrEqual(4 * 1024 * 1024);
+  });
+});
+
+describe('the authorization hook, architecture 18.4', () => {
+  /** Every route a client can reach, as a caller would call it. */
+  const ROUTES: Array<[string, RequestInit]> = [
+    ['/v1/build', {}],
+    ['/v1/search', { method: 'POST', body: JSON.stringify({ query: 'a' }) }],
+    ['/v1/context', { method: 'POST', body: JSON.stringify({ task: 'a' }) }],
+    ['/v1/sources/p%3Aguides%2Fa.md', {}],
+    ['/v1/tables', {}],
+    ['/v1/tables/sales', {}],
+    ['/v1/tables/sales/query', { method: 'POST', body: JSON.stringify({ sql: 'SELECT 1' }) }],
+    ['/mcp', { method: 'POST', body: '{}' }],
+    ['/no/such/route', {}],
+  ];
+
+  it('is absent by default, which is what a loopback server wants', async () => {
+    // A token the user issued to themselves, to reach a port only they can reach, protects
+    // nothing and is one more thing to get wrong.
+    const response = await appFor().request('/v1/build');
+    expect(response.status).toBe(200);
+  });
+
+  it.each(ROUTES)('refuses %s when the hook declines', async (path, init) => {
+    const app = appFor({
+      authorize: () => false,
+      mcpHandler: () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+    });
+    const response = await app.request(path, {
+      ...init,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_INVALID_ARGUMENT' } });
+  });
+
+  it('exempts /health, because a probe has no credential and reveals no content', async () => {
+    const app = appFor({ authorize: () => false });
+    expect(UNAUTHENTICATED_PATHS).toEqual(['/health']);
+    const response = await app.request('/health');
+    expect(response.status).toBe(200);
+  });
+
+  it('admits the request when the hook returns true', async () => {
+    const app = appFor({ authorize: () => true });
+    const response = await app.request('/v1/build');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ buildId: BUILD });
+  });
+
+  it('sees the credential, the method and the path', async () => {
+    const seen: AuthorizationRequest[] = [];
+    const app = appFor({
+      authorize: (request) => {
+        seen.push(request);
+        return request.authorization === 'Bearer good';
+      },
+    });
+
+    const allowed = await app.request('/v1/search', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'a' }),
+      headers: { Authorization: 'Bearer good', 'Content-Type': 'application/json' },
+    });
+    expect(allowed.status).toBe(200);
+
+    const refused = await app.request('/v1/build', { headers: { Authorization: 'Bearer wrong' } });
+    expect(refused.status).toBe(401);
+
+    expect(seen[0]).toMatchObject({
+      authorization: 'Bearer good',
+      method: 'POST',
+      path: '/v1/search',
+    });
+    expect(seen[0]?.headers.get('Content-Type')).toBe('application/json');
+  });
+
+  it('reports the reason a decision gives, so a caller learns which credential is wrong', async () => {
+    const app = appFor({ authorize: () => 'This token has expired.' });
+    const response = await app.request('/v1/build');
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      error: { message: 'This token has expired.' },
+    });
+  });
+
+  it('awaits an asynchronous decision, since a real check calls something', async () => {
+    const app = appFor({
+      authorize: async (request) => request.authorization === 'Bearer good',
+    });
+    expect((await app.request('/v1/build')).status).toBe(401);
+    expect(
+      (await app.request('/v1/build', { headers: { Authorization: 'Bearer good' } })).status,
+    ).toBe(200);
+  });
+
+  it('runs before the route, so a refused request never reaches the runtime', async () => {
+    let reads = 0;
+    const app = appFor({
+      authorize: () => false,
+      runtime: {
+        async describeBuild() {
+          reads += 1;
+          throw new Error('unreachable');
+        },
+      } as never,
+    });
+    expect((await app.request('/v1/build')).status).toBe(401);
+    expect(reads).toBe(0);
+  });
+});
+
+describe('search filters reach the store, architecture 14.5', () => {
+  async function searchWith(body: Record<string, unknown>): Promise<Response> {
+    lastCriteria = null;
+    return appFor().request('/v1/search', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('passes an artifact id through unchanged', async () => {
+    const response = await searchWith({ query: 'rollback', artifactId: 'p:guides/a.md' });
+    expect(response.status).toBe(200);
+    expect(lastCriteria?.artifactId).toBe('p:guides/a.md');
+  });
+
+  it('leaves it unset when the caller does not ask, so an absent filter filters nothing', async () => {
+    const response = await searchWith({ query: 'rollback' });
+    expect(response.status).toBe(200);
+    expect(lastCriteria?.artifactId).toBeUndefined();
+  });
+
+  it('refuses an empty artifact id rather than treating it as no filter', async () => {
+    const response = await searchWith({ query: 'rollback', artifactId: '' });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { subject: 'artifactId' } });
   });
 });

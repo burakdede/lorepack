@@ -138,6 +138,9 @@ export function runRuntimeContract(options: ContractOptions): void {
               task: matchingQuery,
               includeArchived: false,
               budget,
+              // 1,000 is below the supported floor on purpose: a bound has to hold at the
+              // sizes nobody designed for, not only at the comfortable ones.
+              allowUnsupportedBudget: true,
             });
             expect(bundle.estimatedTokens).toBeLessThanOrEqual(budget);
           }

@@ -1,4 +1,4 @@
-import type { LoreRuntime } from '@lorepack/core';
+import type { BuildComparer, LoreRuntime } from '@lorepack/core';
 import { McpServer } from '@modelcontextprotocol/server';
 import { registerResources } from './resources.js';
 import { registerTools } from './tools.js';
@@ -19,6 +19,8 @@ import { registerTools } from './tools.js';
 export interface ServerOptions {
   readonly runtime: LoreRuntime;
   readonly version?: string;
+  /** Reaches build history, for the `lore://build/{buildId}/diff/{otherBuildId}` resource. */
+  readonly comparer?: BuildComparer;
 }
 
 export const SERVER_NAME = 'lorepack';
@@ -33,6 +35,8 @@ export function createMcpServer(options: ServerOptions): McpServer {
   );
 
   registerTools(server, options.runtime);
-  registerResources(server, options.runtime);
+  registerResources(server, options.runtime, {
+    ...(options.comparer === undefined ? {} : { comparer: options.comparer }),
+  });
   return server;
 }

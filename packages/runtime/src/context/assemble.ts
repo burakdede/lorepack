@@ -35,6 +35,16 @@ export const PROFILE_BUDGETS: Readonly<Record<ContextProfile, number>> = {
 export const DEFAULT_PROFILE: ContextProfile = 'agent';
 
 /**
+ * The range a budget may take without saying so explicitly (architecture 5.4).
+ *
+ * Every profile budget sits inside it. Below the floor a bundle is too small to orient an
+ * agent and still say anything; above the ceiling it stops being bounded context and
+ * becomes a different problem, on a machine whose limits nobody measured. Going outside is
+ * allowed and is a deliberate act, not a typo that succeeds.
+ */
+export const SUPPORTED_BUDGET = { minimum: 4000, maximum: 40_000 } as const;
+
+/**
  * The share of the budget held back for orientation before packing.
  *
  * Orientation is real located content, not a written summary: the opening chunk of each of
@@ -262,17 +272,22 @@ function locatorOf(hit: CatalogSearchHit): SourceLocator {
  * user overriding that deliberately, which architecture 5.4 permits, so it is accepted up
  * to the contract's own bound and refused past it with the range named.
  */
-export function resolveBudget(profile: ContextProfile, requested: number | undefined): number {
+export function resolveBudget(
+  profile: ContextProfile,
+  requested: number | undefined,
+  allowUnsupported = false,
+): number {
   if (requested === undefined) return PROFILE_BUDGETS[profile];
-  if (requested < 1000 || requested > 200_000) {
-    throw new LoreError(
-      'LORE_E_INVALID_ARGUMENT',
-      `A budget of ${count(requested, 'token')} is outside the supported range of 1,000 to 200,000.`,
-      {
-        remediation:
-          'Pass a budget between 1,000 and 200,000 tokens, or omit it for the profile default.',
-      },
-    );
-  }
-  return requested;
+
+  const inRange = requested >= SUPPORTED_BUDGET.minimum && requested <= SUPPORTED_BUDGET.maximum;
+  if (inRange || allowUnsupported) return requested;
+
+  throw new LoreError(
+    'LORE_E_INVALID_ARGUMENT',
+    `A budget of ${count(requested, 'token')} is outside the supported range of ${SUPPORTED_BUDGET.minimum.toLocaleString('en-US')} to ${SUPPORTED_BUDGET.maximum.toLocaleString('en-US')}.`,
+    {
+      remediation:
+        'Choose a budget inside that range, omit it for the profile default, or pass --allow-unsupported-budget to go outside it deliberately.',
+    },
+  );
 }

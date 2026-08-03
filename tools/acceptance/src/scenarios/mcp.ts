@@ -96,6 +96,47 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
           stderr: { contains: ['--task'] },
         },
       },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rollback', '--budget', '400'],
+        describe: 'A budget far outside the supported range is refused, and says how to mean it',
+        expect: {
+          exitCode: 1,
+          errorCode: 'LORE_E_INVALID_ARGUMENT',
+          stderr: { contains: ['4,000 to 40,000', '--allow-unsupported-budget'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rollback', '--budget', '400', '--allow-unsupported-budget'],
+        describe: 'And is honoured once it is deliberate',
+        expect: { exitCode: 0, stdout: { contains: ['budget 400 estimated tokens'] } },
+      },
+    ],
+  },
+
+  {
+    id: 'mcp/every-documented-resource-is-served',
+    title: 'A client browsing resources finds every URI section 14.2 names',
+    proves: 'Section 14.2: the resource surface, including the diff between two builds.',
+    mode: 'auto',
+    regression: 185,
+    fixture: { files: CORPUS, setup: ['init', 'build'] },
+    steps: [
+      {
+        action: 'protocol',
+        args: ['mcp', '--active-only'],
+        method: 'resources/list',
+        describe: 'Ask for the fixed resources',
+        expectResult: ['lore://project/build', 'lore://project/sources', 'lore://project/tables'],
+      },
+      {
+        action: 'protocol',
+        args: ['mcp', '--active-only'],
+        method: 'resources/templates/list',
+        describe: 'And the templated ones, which is where a diff of two builds lives',
+        expectResult: ['lore://source/{artifactId}', 'lore://build/{buildId}/diff/{otherBuildId}'],
+      },
     ],
   },
 ];

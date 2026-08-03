@@ -154,6 +154,8 @@ export interface SearchRequest {
   includeArchived?: boolean | undefined;
   pathGlob?: string | undefined;
   fileType?: string | undefined;
+  /** Narrows to one document, by artifact id or canonical path. */
+  artifactId?: string | undefined;
   status?: ArtifactStatus[] | undefined;
   debug?: boolean | undefined;
 }
@@ -162,6 +164,8 @@ export interface TaskContextRequest {
   task: string;
   profile?: ContextProfile | undefined;
   budget?: number | undefined;
+  /** Permits a budget outside the supported 4,000 to 40,000 range. */
+  allowUnsupportedBudget?: boolean | undefined;
   includeArchived?: boolean | undefined;
   filters?: Array<{ kind: 'path' | 'type' | 'status'; value: string }> | undefined;
 }

@@ -31,6 +31,8 @@ export const searchRequestSchema = z
     includeArchived: z.boolean().default(false),
     pathGlob: z.string().optional(),
     fileType: z.string().optional(),
+    /** Narrows to one document, which is how a follow-up question stays on topic. */
+    artifactId: z.string().min(1).optional(),
     status: z.array(artifactStatusSchema).optional(),
     debug: z.boolean().default(false),
   })
@@ -62,7 +64,17 @@ export const taskContextRequestSchema = z
   .object({
     task: z.string().min(1).max(4000),
     profile: contextProfileSchema.optional(),
-    budget: z.int().min(1000).max(200_000).optional(),
+    /**
+     * The absolute bound, not the policy. `SUPPORTED_BUDGET` is the range a caller may use
+     * without saying so; outside it an explicit override is required, which a schema
+     * cannot express. Beyond a million there is no bundle to assemble, only a mistake.
+     */
+    budget: z.int().min(1).max(1_000_000).optional(),
+    /**
+     * Permits a budget outside the supported 4,000 to 40,000 range (architecture 5.4).
+     * Deliberate rather than accidental: without it an out-of-range budget is refused.
+     */
+    allowUnsupportedBudget: z.boolean().default(false),
     includeArchived: z.boolean().default(false),
     filters: z
       .array(z.object({ kind: z.enum(['path', 'type', 'status']), value: z.string() }).strict())
