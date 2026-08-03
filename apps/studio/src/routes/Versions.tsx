@@ -225,88 +225,93 @@ function BuildTable({
   readonly onCompare: (buildId: string) => void;
 }): React.JSX.Element {
   return (
-    <table className="builds">
-      <caption className="visually-hidden">Every build in this project, newest first</caption>
-      <thead>
-        <tr>
-          <th scope="col">build</th>
-          <th scope="col">created</th>
-          <th scope="col">state</th>
-          <th scope="col" className="numeric">
-            artifacts
-          </th>
-          <th scope="col" className="numeric">
-            chunks
-          </th>
-          <th scope="col">capabilities</th>
-          <th scope="col">deployment</th>
-          <th scope="col">
-            <span className="visually-hidden">actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {builds.map((build) => (
-          <tr
-            key={build.buildId}
-            className={build.active ? 'build-row build-row-active' : 'build-row'}
-          >
-            <th scope="row" className="build-id">
-              {/* A word, not only a row tint: which build is live is the most important fact
-                  on this page, and a tint alone does not survive greyscale. */}
-              {build.active && <span className="active-marker">active</span>}
-              <span title={build.buildId}>{shorten(build.buildId)}</span>
+    // The table scrolls inside its own box rather than pushing the page sideways. At 200%
+    // zoom a build id, a timestamp and three actions do not fit on one line however the
+    // columns are trimmed, and a page that scrolls horizontally loses the navigation too.
+    <div className="table-scroll">
+      <table className="builds">
+        <caption className="visually-hidden">Every build in this project, newest first</caption>
+        <thead>
+          <tr>
+            <th scope="col">build</th>
+            <th scope="col">created</th>
+            <th scope="col">state</th>
+            <th scope="col" className="numeric">
+              artifacts
             </th>
-            <td className="build-created">{formatTime(build.createdAt)}</td>
-            <td>
-              <Badge tone={toneForBuildState(build.state)}>{build.state}</Badge>
-            </td>
-            <td className="numeric">{build.counts.artifacts.toLocaleString()}</td>
-            <td className="numeric">{build.counts.chunks.toLocaleString()}</td>
-            <td className="build-capabilities">
-              {build.capabilities === null ? 'unknown' : build.capabilities.join(' ')}
-            </td>
-            {/* Phase 6 fills this in. Stating "local only" now is accurate, and keeps the
-                column from appearing out of nowhere when remote targets arrive. */}
-            <td className="build-deployment">local only</td>
-            <td className="build-actions">
-              <button
-                type="button"
-                className="action"
-                onClick={() => onCompare(build.buildId)}
-                aria-label={`Compare ${shorten(build.buildId)}`}
-              >
-                Compare
-              </button>
-              {!build.active && isActivatable(build.state) && (
-                <button
-                  type="button"
-                  className="action"
-                  disabled={busy}
-                  aria-label={`Activate ${shorten(build.buildId)}`}
-                  onClick={() => onAct({ kind: 'activate', build: build.buildId })}
-                >
-                  Activate
-                </button>
-              )}
-              {/* Only a build that passed validation can be packed, so a button that would
-                  always fail is not offered. */}
-              {isActivatable(build.state) && (
-                <button
-                  type="button"
-                  className="action"
-                  disabled={busy}
-                  aria-label={`Pack ${shorten(build.buildId)}`}
-                  onClick={() => onAct({ kind: 'pack', build: build.buildId })}
-                >
-                  Pack
-                </button>
-              )}
-            </td>
+            <th scope="col" className="numeric">
+              chunks
+            </th>
+            <th scope="col">capabilities</th>
+            <th scope="col">deployment</th>
+            <th scope="col">
+              <span className="visually-hidden">actions</span>
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {builds.map((build) => (
+            <tr
+              key={build.buildId}
+              className={build.active ? 'build-row build-row-active' : 'build-row'}
+            >
+              <th scope="row" className="build-id">
+                {/* A word, not only a row tint: which build is live is the most important fact
+                  on this page, and a tint alone does not survive greyscale. */}
+                {build.active && <span className="active-marker">active</span>}
+                <span title={build.buildId}>{shorten(build.buildId)}</span>
+              </th>
+              <td className="build-created">{formatTime(build.createdAt)}</td>
+              <td>
+                <Badge tone={toneForBuildState(build.state)}>{build.state}</Badge>
+              </td>
+              <td className="numeric">{build.counts.artifacts.toLocaleString()}</td>
+              <td className="numeric">{build.counts.chunks.toLocaleString()}</td>
+              <td className="build-capabilities">
+                {build.capabilities === null ? 'unknown' : build.capabilities.join(' ')}
+              </td>
+              {/* Phase 6 fills this in. Stating "local only" now is accurate, and keeps the
+                column from appearing out of nowhere when remote targets arrive. */}
+              <td className="build-deployment">local only</td>
+              <td className="build-actions">
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => onCompare(build.buildId)}
+                  aria-label={`Compare ${shorten(build.buildId)}`}
+                >
+                  Compare
+                </button>
+                {!build.active && isActivatable(build.state) && (
+                  <button
+                    type="button"
+                    className="action"
+                    disabled={busy}
+                    aria-label={`Activate ${shorten(build.buildId)}`}
+                    onClick={() => onAct({ kind: 'activate', build: build.buildId })}
+                  >
+                    Activate
+                  </button>
+                )}
+                {/* Only a build that passed validation can be packed, so a button that would
+                  always fail is not offered. */}
+                {isActivatable(build.state) && (
+                  <button
+                    type="button"
+                    className="action"
+                    disabled={busy}
+                    aria-label={`Pack ${shorten(build.buildId)}`}
+                    onClick={() => onAct({ kind: 'pack', build: build.buildId })}
+                  >
+                    Pack
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

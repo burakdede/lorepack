@@ -37,11 +37,13 @@
     "bench:retrieval": "pnpm build && node scripts/bench-retrieval.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",
     "build:studio": "pnpm --filter @lorepack/studio build",
-    "check:studio-bundle": "node scripts/check-studio-bundle.mjs"
+    "check:studio-bundle": "node scripts/check-studio-bundle.mjs",
+    "test:e2e": "pnpm build && pnpm --filter @lorepack/studio-e2e test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@changesets/cli": "2.31.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "24.13.3",
     "typescript": "7.0.2",
     "vitest": "4.1.10",
