@@ -4,8 +4,14 @@ import { count, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { type BuildResult, runBuild } from '../services/build.js';
+import {
+  assertNoLiveSession,
+  DEV_PORT,
+  removeReceipt,
+  writeReceipt,
+} from '../services/dev-session.js';
 import { enclosingProject, type InitResult, planInit, runInit } from '../services/init.js';
-import { parsePort, SERVE_DEFAULTS, startServing, untilInterrupted } from '../services/serving.js';
+import { parsePort, startServing, untilInterrupted } from '../services/serving.js';
 import { startWatching } from '../services/watch.js';
 
 /**
@@ -37,10 +43,7 @@ export function devCommand(): CommandDefinition {
     description: 'Turn a folder into a running context runtime. Builds, serves, and connects.',
     arguments: [{ name: 'path', description: 'project directory (default: .)', required: false }],
     flags: [
-      {
-        flags: '--port <number>',
-        description: `port to listen on (default ${SERVE_DEFAULTS.port})`,
-      },
+      { flags: '--port <number>', description: `port to listen on (default ${DEV_PORT})` },
       { flags: '--host <address>', description: 'address to bind (default 127.0.0.1)' },
       {
         flags: '--yes',
@@ -61,6 +64,11 @@ export function devCommand(): CommandDefinition {
       const initialized = autoInit(directory, context);
 
       const config = loadConfig({ cwd: directory });
+
+      // Before building or binding anything: two supervisors on one project would both
+      // watch, both rebuild, and take turns losing the build lock. A receipt whose process
+      // is gone is cleared here rather than treated as an obstacle.
+      assertNoLiveSession(config);
 
       // Step 4. The same builder `lore build` runs, with its stage table on the same bus, so
       // a slow parse shows a moving count here exactly as it does there (architecture 6.4).
@@ -90,14 +98,28 @@ export function devCommand(): CommandDefinition {
         },
       });
 
+      const host = typeof flags.host === 'string' ? flags.host : '127.0.0.1';
       const server = await startServing({
         config,
-        host: typeof flags.host === 'string' ? flags.host : '127.0.0.1',
-        port: parsePort(flags.port),
+        host,
+        // Architecture 15.3 fixes the preferred dev port, which is not the one `lore serve`
+        // uses: a dev session and a read-only server are different things and a developer
+        // may want both at once.
+        port: flags.port === undefined ? DEV_PORT : parsePort(flags.port),
         warn: context.warn,
         // The hook #112 named. A supervisor that is watching the filesystem already knows
         // whether the sources moved, so the server stops paying for an interval scan.
         freshness: () => watching.freshness(),
+      });
+
+      // Written once the port is known and the build is activated, so it never advertises a
+      // session that does not exist yet.
+      writeReceipt(config, {
+        port: server.port,
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        buildId: server.buildId,
+        host,
       });
 
       // Step 6.
@@ -106,13 +128,56 @@ export function devCommand(): CommandDefinition {
       );
 
       await untilInterrupted(context.warn);
-      // The watcher first: a rebuild in flight is cancelled and its candidate discarded
-      // before the server stops answering, so nothing is half-activated on the way out.
-      await watching.close();
-      await server.close();
+      await shutdown(config, watching, server, context.warn);
       return { human: '', json: undefined };
     },
   };
+}
+
+/** How long a drain may take before the process stops waiting for it. */
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+/**
+ * The documented stop sequence, in order, with a bound on the whole thing.
+ *
+ * The order is the correctness argument. The watcher goes first so a rebuild in flight is
+ * cancelled and its candidate discarded before anything else moves: `runBuild` removes its
+ * own incomplete candidate, so activation never sees it and the build that was active
+ * stays active (architecture 6.9). The server drains next, finishing requests already in
+ * flight rather than cutting them off. Only then are the databases released, because a
+ * request still running would otherwise reach a closed handle.
+ *
+ * The receipt is removed last and unconditionally. A session that is stopping has already
+ * stopped being useful to anyone reading it, and leaving one behind makes the next
+ * `lore dev` refuse to start for a process that no longer exists.
+ *
+ * The timeout exists because a wedged request must not be able to hold the process open
+ * forever. Section 15.3's contract is that Ctrl-C ends the session; it does not promise to
+ * wait indefinitely for a socket that will never close.
+ */
+async function shutdown(
+  config: ReturnType<typeof loadConfig>,
+  watching: { close: () => Promise<void> },
+  server: { close: () => Promise<void> },
+  warn: (text: string) => void,
+): Promise<void> {
+  const bounded = async (): Promise<void> => {
+    await watching.close();
+    await server.close();
+  };
+
+  try {
+    await Promise.race([
+      bounded(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timed out')), SHUTDOWN_TIMEOUT_MS),
+      ),
+    ]);
+  } catch {
+    warn(`Shutdown took longer than ${SHUTDOWN_TIMEOUT_MS} ms. Exiting anyway.\n`);
+  } finally {
+    removeReceipt(config);
+  }
 }
 
 /**

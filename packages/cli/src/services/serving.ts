@@ -175,7 +175,11 @@ export function isLoopback(host: string): boolean {
 
 /** Milliseconds, or 0 for every request. `off` belongs to `lore mcp`, which can pin. */
 export function parseInterval(raw: unknown): number {
-  const value = Number(raw);
+  // `Number('')` is 0, and 0 is the most expensive setting there is: it content-hashes the
+  // corpus on every request. Reaching it by writing nothing, which is what a shell does
+  // with an unset variable, is not a choice anyone made (#195).
+  const blank = typeof raw === 'string' && raw.trim() === '';
+  const value = blank ? Number.NaN : Number(raw);
   if (!Number.isFinite(value) || value < 0) {
     throw new LoreError(
       'LORE_E_INVALID_ARGUMENT',

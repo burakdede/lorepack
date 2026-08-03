@@ -69,3 +69,48 @@ metadata prescreen. A supervisor that is already watching the filesystem **knows
 `lore dev` hands the server `watching.freshness()` instead, and the interval scan does not
 run at all. That is the hook #112 named, and it is an injection into `startServing` rather
 than a second server.
+
+## The dev session, and why the receipt is not a lock
+
+`lore dev` writes `.lore/dev.json` once it is serving, recording the port, pid, start time,
+active build and host. Architecture 15.3 fixes the file and the preferred port, `43110`,
+which is deliberately not `lore serve`'s: a dev session and a read-only server are different
+things and someone may want both at once.
+
+The receipt is **evidence about a process, never a lock**, and the distinction decides the
+behaviour:
+
+| Situation | What happens |
+|---|---|
+| A receipt naming a live process | The second `lore dev` refuses, naming the port and pid of the one already running |
+| A receipt naming a process that is gone | Cleared without comment, and the new session starts |
+| A receipt that is corrupt or not JSON | Treated as absent |
+| A clean stop | Removed |
+
+A lock that outlives what it protects makes a crash unrecoverable without deleting a file
+nobody mentioned. Checking the pid every time means a machine that lost power costs nothing.
+
+Refusing the second session is worth doing rather than racing: two supervisors on one
+project would both watch, both rebuild, and take turns failing to acquire the build lock,
+and what a user would see is a server that intermittently stalls for reasons nothing
+explains.
+
+## Stopping
+
+On SIGINT or SIGTERM, in this order, inside a ten second bound:
+
+1. **the watcher**, so a rebuild in flight is cancelled and its candidate discarded while
+   activation still points where it did;
+2. **the server**, which stops accepting and drains what is already in flight;
+3. **the databases**, because a request still running would otherwise reach a closed handle;
+4. **the receipt**, unconditionally, even if a step above timed out.
+
+The bound exists because a wedged request must not hold the process open forever. Ctrl-C
+ends the session; it does not promise to wait indefinitely for a socket that will never
+close.
+
+**Windows has no POSIX signals.** A parent's `kill('SIGINT')` is emulated with
+`TerminateProcess`, so the handler never runs and the supervisor dies non-zero having done
+nothing wrong. Ctrl-C typed into a console still works, because that path uses a console
+control handler. Tests that stop a supervisor from a parent process use SIGTERM, which
+reaches the handler everywhere this ships.

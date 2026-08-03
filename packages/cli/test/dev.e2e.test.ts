@@ -229,6 +229,77 @@ describe('shutting down', () => {
   }, 120_000);
 });
 
+describe('the session receipt', () => {
+  it('records the running session, and removes it on a clean stop', async () => {
+    const started = await dev();
+    const path = join(project, '.lore', 'dev.json');
+
+    const receipt = JSON.parse(readFileSync(path, 'utf8')) as {
+      port: number;
+      pid: number;
+      buildId: string;
+      host: string;
+    };
+    expect(receipt.port).toBe(started.port);
+    expect(receipt.pid).toBe(started.child.pid);
+    expect(receipt.host).toBe('127.0.0.1');
+    expect(receipt.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
+
+    started.child.kill('SIGTERM');
+    await new Promise((resolve) => started.child.once('exit', resolve));
+
+    // Left behind, it would make the next `lore dev` refuse to start for a process that no
+    // longer exists.
+    expect(existsSync(path), 'the receipt should be gone after a clean stop').toBe(false);
+  }, 120_000);
+
+  it('refuses a second session on the same project, naming the first', async () => {
+    const started = await dev();
+
+    const second = spawn(process.execPath, [BINARY, 'dev', project], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let err = '';
+    second.stderr.on('data', (chunk: Buffer) => {
+      err += chunk.toString('utf8');
+    });
+    const code = await new Promise<number>((resolve) => {
+      second.once('exit', (value) => resolve(value ?? 0));
+    });
+
+    expect(code).not.toBe(0);
+    expect(err).toContain('already running');
+    expect(err).toContain(String(started.port));
+    // The first session is untouched by the refusal.
+    expect((await fetch(`http://127.0.0.1:${started.port}/health`)).status).toBe(200);
+  }, 120_000);
+
+  it('starts over a receipt whose process is gone', async () => {
+    const started = await dev();
+    const path = join(project, '.lore', 'dev.json');
+    started.child.kill('SIGTERM');
+    await new Promise((resolve) => started.child.once('exit', resolve));
+
+    // What a machine that lost power leaves behind: a receipt naming a pid that is not
+    // there. It must not be able to stop the next session.
+    writeFileSync(
+      path,
+      JSON.stringify({
+        port: started.port,
+        pid: 0x7ffffffe,
+        startedAt: new Date().toISOString(),
+        buildId: `lore_${'a'.repeat(64)}`,
+        host: '127.0.0.1',
+      }),
+      'utf8',
+    );
+
+    const second = await dev();
+    expect(second.stdout).toContain('MCP stdio');
+    expect(JSON.parse(readFileSync(path, 'utf8')).pid).toBe(second.child.pid);
+  }, 120_000);
+});
+
 describe('refusing before it writes anything', () => {
   it('will not create a project inside a project, and leaves the directory alone', async () => {
     const nested = join(project, 'docs', 'inner');
