@@ -294,14 +294,23 @@ function checkDatabaseIntegrity(input: ValidationInput): ValidationFailure[] {
  * to find, so the check only runs when there is content.
  */
 function checkSmokeSearch(input: ValidationInput): ValidationFailure[] {
-  const term = firstSearchableTerm(input);
-  if (term === null) return [];
-  const hits = input.search(input.db, term, 1);
-  if (hits.length > 0) return [];
+  const terms = searchableTerms(input);
+  if (terms.length === 0) return [];
+
+  // Any one of them answering proves the index is alive. Several are tried because a
+  // single term can legitimately fail to match: it may be a stopword, or long enough to
+  // pass the length filter and still be rare enough to sit in a chunk the limit excludes.
+  // Failing a build on one unlucky word is a worse error than checking three.
+  for (const term of terms) {
+    if (input.search(input.db, term, 1).length > 0) return [];
+  }
+
   return [
     {
       check: 'smoke-search',
-      message: `A term taken from indexed content returned no results: "${term}". The lexical index is present but not answering.`,
+      message: `No term taken from indexed content returned a result. Tried ${terms
+        .map((term) => `"${term}"`)
+        .join(', ')}. The lexical index is present but not answering.`,
     },
   ];
 }
@@ -320,15 +329,32 @@ async function checkSmokeSourceRead(input: ValidationInput): Promise<ValidationF
   ];
 }
 
-function firstSearchableTerm(input: ValidationInput): string | null {
+/**
+ * Terms the index genuinely holds, taken the way the index takes them.
+ *
+ * Splitting on whitespace and then stripping punctuation invents words that cannot exist.
+ * `read-only` is one whitespace token, so stripping the hyphen produced `readonly`, while
+ * FTS5's `unicode61` tokenizer splits on the hyphen and stores `read` and `only`. The
+ * validator then failed the build for not finding a term it had made up, on a file whose
+ * first line was ordinary English (#184).
+ *
+ * Splitting on the same character class the tokenizer splits on removes the possibility:
+ * every candidate here is a token the index was built from.
+ */
+const HOW_FTS5_SPLITS = /[^\p{L}\p{N}]+/gu;
+const SMOKE_TERM_ATTEMPTS = 3;
+
+export function searchableTerms(input: ValidationInput): string[] {
+  const terms: string[] = [];
   for (const entry of input.artifacts) {
     for (const chunk of entry.chunks) {
-      const word = chunk.text
-        .split(/\s+/)
-        .map((candidate) => candidate.replace(/[^\p{L}\p{N}]/gu, ''))
-        .find((candidate) => candidate.length >= 4);
-      if (word !== undefined) return word;
+      for (const candidate of chunk.text.split(HOW_FTS5_SPLITS)) {
+        if (candidate.length < 4) continue;
+        if (terms.includes(candidate)) continue;
+        terms.push(candidate);
+        if (terms.length >= SMOKE_TERM_ATTEMPTS) return terms;
+      }
     }
   }
-  return null;
+  return terms;
 }
