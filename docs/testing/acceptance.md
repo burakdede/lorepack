@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-47 automated, 3 checked by hand.
+48 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -130,6 +130,21 @@ Starting point: 1 source file, already set up with `lore init`.
    Expect: it succeeds, `counts.artifacts` is 3.
 7. And the index answers, which is what the smoke check exists to prove
    Expect: it succeeds, stdout mentions "notes.txt".
+
+## The two-command path
+
+One command from a bare folder to a running, connected runtime.
+
+### `dev/one-command-turns-a-folder-into-a-runtime`
+
+**`lore dev` configures, builds and serves an unconfigured folder**
+
+Proves: Section 6.2 and 6.4: the zero-config path runs in order, writes only what it names, and prints where to connect.
+
+Starting point: 3 source files.
+
+1. Point `lore dev` at a folder that has never been built, then stop it
+   Expect: it succeeds, stdout mentions "Created:", "lore.yaml", "Build ", "Reused          0 artifacts (first build)", "HTTP            http://127.0.0.1:", "MCP HTTP        http://127.0.0.1:", "MCP stdio       lore mcp --project".
 
 ## The lifecycle
 

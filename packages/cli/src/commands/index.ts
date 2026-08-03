@@ -1,6 +1,7 @@
 import type { CommandDefinition } from '../framework/program.js';
 import { activateCommand, buildsCommand, rollbackCommand } from './activate.js';
 import { buildCommand } from './build.js';
+import { devCommand } from './dev.js';
 import { diffCommand } from './diff.js';
 import { exportCommand } from './export.js';
 import { initCommand } from './init.js';
@@ -32,6 +33,7 @@ export function registerCommands(): CommandDefinition[] {
     activateCommand(),
     rollbackCommand(),
     pruneCommand(),
+    devCommand(),
     mcpCommand(),
     serveCommand(),
     exportCommand(),

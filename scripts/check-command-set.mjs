@@ -24,6 +24,9 @@ const binary = join(root, 'packages', 'cli', 'dist', 'entry.js');
 
 const EXPECTED = [
   'init',
+  // Phase 3 adds its commands here as they land, so `--help` losing one is a failed build
+  // rather than a discovery. `doctor`, `config` and `connect` follow with #56, #57 and #58.
+  'dev',
   'plan',
   'build',
   'status',

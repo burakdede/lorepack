@@ -1,5 +1,6 @@
 import { CANCELLATION_SCENARIOS } from './scenarios/cancellation.js';
 import { DETERMINISM_SCENARIOS } from './scenarios/determinism.js';
+import { DEV_SCENARIOS } from './scenarios/dev.js';
 import { IMMUTABILITY_SCENARIOS } from './scenarios/immutability.js';
 import { INIT_SCENARIOS } from './scenarios/init.js';
 import { LIFECYCLE_SCENARIOS } from './scenarios/lifecycle.js';
@@ -31,6 +32,12 @@ export const AREAS: readonly Area[] = [
     title: 'Starting a project',
     summary: 'First contact, and the guardrails that make a first run safe.',
     scenarios: INIT_SCENARIOS,
+  },
+  {
+    id: 'dev',
+    title: 'The two-command path',
+    summary: 'One command from a bare folder to a running, connected runtime.',
+    scenarios: DEV_SCENARIOS,
   },
   {
     id: 'lifecycle',
