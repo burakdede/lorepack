@@ -23,7 +23,8 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@lorepack/core": "workspace:*"
+    "@lorepack/core": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0"
   },
   "repository": {
     "type": "git",
