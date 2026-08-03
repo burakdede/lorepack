@@ -1,4 +1,5 @@
 export { createMcpHttpHandler } from './http.js';
+export { LEGACY_HANDSHAKE_VERSIONS, MCP_PROTOCOL_VERSION } from './protocol.js';
 export {
   RESOURCE_TEMPLATES,
   RESOURCE_URIS,

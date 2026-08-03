@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { LoreClient } from '@lorepack/sdk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -124,7 +125,7 @@ describe('one server, both surfaces', () => {
         method: 'tools/list',
         params: {
           _meta: {
-            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
             'io.modelcontextprotocol/clientCapabilities': {},
           },
         },
