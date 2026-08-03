@@ -207,4 +207,48 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+
+  {
+    id: 'init/ordinary-punctuation-builds',
+    title: 'A text file that starts with a hyphenated word, a URL or a CSV header still builds',
+    proves: 'Section 12.10: validation fails a build only when something is wrong with the build.',
+    mode: 'auto',
+    regression: 184,
+    fixture: { files: { 'notes.txt': 'placeholder\n' }, setup: ['init'] },
+    steps: [
+      {
+        action: 'write',
+        path: 'notes.txt',
+        contents: 'read-only access is granted by default\n',
+        describe: 'Write a note whose first word is hyphenated, which is ordinary English',
+      },
+      { action: 'run', args: ['build'], expect: { exitCode: 0 } },
+      {
+        action: 'write',
+        path: 'export.txt',
+        contents: 'campaignName,impressions,taps,spend,installs\nBrand,45201,1203,842.11,310\n',
+        describe: 'And a comma-separated export saved as text',
+      },
+      { action: 'run', args: ['build'], expect: { exitCode: 0 } },
+      {
+        action: 'write',
+        path: 'links.txt',
+        contents: 'https://example.com is our marketing site\n',
+        describe: 'And a note that opens with a URL',
+      },
+      {
+        action: 'run',
+        args: ['build'],
+        json: true,
+        describe: 'All three are indexed, and none of them fails validation',
+        expect: { exitCode: 0, json: [{ path: 'counts.artifacts', equals: 3 }] },
+      },
+      {
+        action: 'run',
+        args: ['search', 'access'],
+        describe: 'And the index answers, which is what the smoke check exists to prove',
+        expect: { exitCode: 0, stdout: { contains: ['notes.txt'] } },
+      },
+    ],
+  },
 ];

@@ -219,6 +219,65 @@ describe('each check catches its own defect', () => {
     expect(failed(await validateCandidate(input), 'smoke-search')).toHaveLength(1);
   });
 
+  /**
+   * #184. The check used to split chunk text on whitespace and then strip punctuation,
+   * which invents words the index cannot hold: `read-only` became `readonly`, while FTS5
+   * splits on the hyphen and stores `read` and `only`. A one-line text file of ordinary
+   * English then failed its whole build for a term nobody had written.
+   */
+  it.each([
+    ['a hyphenated word', 'read-only access is granted by default'],
+    ['a longer compound', 'state-of-the-art tooling for everyone'],
+    ['comma-joined values', 'campaignName,impressions,taps,spend,installs'],
+    ['a URL', 'https://example.com is our marketing site'],
+    ['a dotted identifier', 'config.database.host is set in the environment'],
+  ])('takes a term the index actually holds, given %s', async (_case, text) => {
+    // The fake index answers only for terms it was given, so a manufactured word fails.
+    const held = new Set(
+      text
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean),
+    );
+    const base = await baseInput();
+    const input = {
+      ...base,
+      artifacts: [{ ...base.artifacts[0], chunks: [chunk({ text })] }],
+      search: (_db: unknown, term: string) =>
+        held.has(term.toLowerCase()) ? [{ chunkId: 'src:a.md@0' }] : [],
+    } as unknown as ValidationInput;
+
+    expect(failed(await validateCandidate(input), 'smoke-search')).toHaveLength(0);
+  });
+
+  it('names every term it tried, so a real failure can be diagnosed', async () => {
+    const base = await baseInput();
+    const input = {
+      ...base,
+      artifacts: [{ ...base.artifacts[0], chunks: [chunk({ text: 'alpha beta gamma delta' })] }],
+      search: () => [],
+    } as unknown as ValidationInput;
+    const message = failed(await validateCandidate(input), 'smoke-search')[0]?.message ?? '';
+
+    expect(message).toContain('alpha');
+    expect(message).toContain('beta');
+  });
+
+  it('still fails when the index genuinely holds nothing, which is the point of the check', async () => {
+    const base = await baseInput();
+    const input = {
+      ...base,
+      artifacts: [
+        {
+          ...base.artifacts[0],
+          chunks: [chunk({ text: 'read-only access is granted by default' })],
+        },
+      ],
+      search: () => [],
+    } as unknown as ValidationInput;
+    expect(failed(await validateCandidate(input), 'smoke-search')).toHaveLength(1);
+  });
+
   it('rejects a missing normalized body', async () => {
     const input = await baseInput();
     const broken = {

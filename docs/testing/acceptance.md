@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-43 automated, 3 checked by hand.
+44 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -108,6 +108,28 @@ Starting point: 3 source files, already set up with `lore init`.
    Expect: it succeeds, `sourceState` is "clean".
 7. What is readable is still searchable
    Expect: it succeeds, `hits[0].locator.relativePath` is present.
+
+### `init/ordinary-punctuation-builds`
+
+**A text file that starts with a hyphenated word, a URL or a CSV header still builds**
+
+Proves: Section 12.10: validation fails a build only when something is wrong with the build.
+
+Locks down the defect in #184.
+
+Starting point: 1 source file, already set up with `lore init`.
+
+1. Write a note whose first word is hyphenated, which is ordinary English
+2. Run `lore build`.
+   Expect: it succeeds.
+3. And a comma-separated export saved as text
+4. Run `lore build`.
+   Expect: it succeeds.
+5. And a note that opens with a URL
+6. All three are indexed, and none of them fails validation
+   Expect: it succeeds, `counts.artifacts` is 3.
+7. And the index answers, which is what the smoke check exists to prove
+   Expect: it succeeds, stdout mentions "notes.txt".
 
 ## The lifecycle
 
