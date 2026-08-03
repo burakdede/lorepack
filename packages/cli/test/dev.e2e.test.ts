@@ -155,6 +155,46 @@ describe('running it again', () => {
   }, 120_000);
 });
 
+describe('watching while it serves', () => {
+  /**
+   * The promise the command's name makes. Everything else here proves a step; this proves
+   * the loop: a document changes on disk and the next question a client asks is answered
+   * from a build that contains the change, with no restart and no client action.
+   */
+  it('rebuilds on an edit and serves the new content', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const before = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string })
+      .buildId;
+
+    writeFileSync(
+      join(project, 'docs', 'runbook.md'),
+      `${DOCUMENT}\n## Freeze\n\nNo deployments during a change freeze.\n`,
+      'utf8',
+    );
+
+    const deadline = Date.now() + 60_000;
+    let after = before;
+    while (after === before && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      after = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    }
+    expect(after, 'the edit should have produced a new build').not.toBe(before);
+
+    const found = (await (
+      await fetch(`${base}/v1/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'freeze' }),
+      })
+    ).json()) as { hits: unknown[]; sourceState: string };
+
+    expect(found.hits.length).toBeGreaterThan(0);
+    // Freshness comes from the watcher now, and the watcher has just rebuilt.
+    expect(found.sourceState).toBe('clean');
+  }, 120_000);
+});
+
 describe('shutting down', () => {
   it('stops on a signal and leaves the active build intact', async () => {
     const started = await dev();

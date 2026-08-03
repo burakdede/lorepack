@@ -23,7 +23,13 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
       {
         action: 'interrupt',
         args: ['dev'],
-        signal: 'SIGINT',
+        // SIGTERM rather than SIGINT, deliberately. Windows has no POSIX signals: Node
+        // emulates `kill('SIGINT')` from a parent with `TerminateProcess`, so the handler
+        // never runs and the supervisor dies with a non-zero code having done nothing
+        // wrong. SIGTERM reaches the handler on every platform this ships to, and a clean
+        // stop is the thing being asserted. #55 owns the shutdown contract, and #61 owns
+        // the general Windows signal question.
+        signal: 'SIGTERM',
         // Wait for the connection block, which is the last thing printed and therefore
         // proof that every step before it finished.
         afterOutput: 'MCP stdio',
@@ -43,8 +49,43 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
               'HTTP            http://127.0.0.1:',
               'MCP HTTP        http://127.0.0.1:',
               'MCP stdio       lore mcp --project',
+              // And it is watching, which is what makes it `dev` rather than `serve`.
+              'Watching for changes',
             ],
           },
+        },
+      },
+    ],
+  },
+  {
+    id: 'dev/an-edit-while-it-runs-becomes-the-next-answer',
+    title: '`lore dev` rebuilds when a document changes underneath it',
+    proves:
+      'Section 12.11: a save is noticed, coalesced, hashed and rebuilt, with no restart and no client action.',
+    mode: 'auto',
+    fixture: { files: CORPUS },
+    steps: [
+      {
+        action: 'interrupt',
+        args: ['dev'],
+        // SIGTERM rather than SIGINT, deliberately. Windows has no POSIX signals: Node
+        // emulates `kill('SIGINT')` from a parent with `TerminateProcess`, so the handler
+        // never runs and the supervisor dies with a non-zero code having done nothing
+        // wrong. SIGTERM reaches the handler on every platform this ships to, and a clean
+        // stop is the thing being asserted. #55 owns the shutdown contract, and #61 owns
+        // the general Windows signal question.
+        signal: 'SIGTERM',
+        afterOutput: 'MCP stdio',
+        // Long enough for the write below to land, be debounced, and be rebuilt.
+        afterMs: 4000,
+        writeWhileRunning: {
+          path: 'deployment.md',
+          contents: '# Deployment\n\n## Freeze\n\nNo deployments during a change freeze.\n',
+        },
+        describe: 'Change a document while `lore dev` is running, then stop it',
+        expect: {
+          exitCode: 0,
+          stderr: { contains: ['rebuilding'] },
         },
       },
     ],

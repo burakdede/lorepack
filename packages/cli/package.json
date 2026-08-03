@@ -33,6 +33,7 @@
     "@lorepack/parsers": "workspace:*",
     "@lorepack/runtime": "workspace:*",
     "@modelcontextprotocol/server": "2.0.0",
+    "chokidar": "5.0.0",
     "commander": "15.0.0",
     "hono": "4.12.33"
   },

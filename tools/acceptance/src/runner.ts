@@ -282,6 +282,7 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
         step.repeat ?? 1,
         context,
         step.afterOutput,
+        step.writeWhileRunning,
       );
       return check(result, step.expect, context).map(
         (problem) => `${context.where} interrupted \`lore ${step.args.join(' ')}\`: ${problem}`,
@@ -452,6 +453,7 @@ async function interrupt(
   repeat: number,
   context: StepContext,
   afterOutput?: string,
+  writeWhileRunning?: { readonly path: string; readonly contents: string },
 ): Promise<Executed> {
   return await new Promise<Executed>((resolve) => {
     const child = spawn(process.execPath, [context.binary, '--cwd', context.project, ...args], {
@@ -471,9 +473,20 @@ async function interrupt(
     };
 
     const pattern = afterOutput === undefined ? null : new RegExp(afterOutput);
+    let written = false;
     const considerSignalling = (): void => {
       if (pattern === null || signalled) return;
       if (pattern.test(stdout) || pattern.test(stderr)) {
+        // The change lands while the process is up, which is the only way to exercise a
+        // supervisor that reacts to the filesystem.
+        if (writeWhileRunning !== undefined && !written) {
+          written = true;
+          writeFileSync(
+            resolveInProject(context.project, writeWhileRunning.path),
+            writeWhileRunning.contents,
+            'utf8',
+          );
+        }
         // A settling delay after the stage announces itself, so the signal lands inside the
         // work rather than in the instant between two stages.
         timers.push(setTimeout(send, afterMs));

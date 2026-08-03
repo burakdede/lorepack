@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-48 automated, 3 checked by hand.
+49 automated, 3 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -144,7 +144,18 @@ Proves: Section 6.2 and 6.4: the zero-config path runs in order, writes only wha
 Starting point: 3 source files.
 
 1. Point `lore dev` at a folder that has never been built, then stop it
-   Expect: it succeeds, stdout mentions "Created:", "lore.yaml", "Build ", "Reused          0 artifacts (first build)", "HTTP            http://127.0.0.1:", "MCP HTTP        http://127.0.0.1:", "MCP stdio       lore mcp --project".
+   Expect: it succeeds, stdout mentions "Created:", "lore.yaml", "Build ", "Reused          0 artifacts (first build)", "HTTP            http://127.0.0.1:", "MCP HTTP        http://127.0.0.1:", "MCP stdio       lore mcp --project", "Watching for changes".
+
+### `dev/an-edit-while-it-runs-becomes-the-next-answer`
+
+**`lore dev` rebuilds when a document changes underneath it**
+
+Proves: Section 12.11: a save is noticed, coalesced, hashed and rebuilt, with no restart and no client action.
+
+Starting point: 3 source files.
+
+1. Change a document while `lore dev` is running, then stop it
+   Expect: it succeeds, stderr mentions "rebuilding".
 
 ## The lifecycle
 

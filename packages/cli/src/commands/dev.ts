@@ -6,6 +6,7 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { type BuildResult, runBuild } from '../services/build.js';
 import { enclosingProject, type InitResult, planInit, runInit } from '../services/init.js';
 import { parsePort, SERVE_DEFAULTS, startServing, untilInterrupted } from '../services/serving.js';
+import { startWatching } from '../services/watch.js';
 
 /**
  * `lore dev [path]`: a folder becomes a running, connected context runtime, asking nothing.
@@ -71,12 +72,32 @@ export function devCommand(): CommandDefinition {
         ...(context.signal === undefined ? {} : { signal: context.signal }),
       });
 
-      // Step 5.
+      // Step 5. Watching starts before serving, so the server can be handed the watcher's
+      // answer about freshness instead of polling for it. Architecture 12.11 step 3 runs
+      // inside this: a reconciliation scan once the watcher is ready, closing the race
+      // between the build above and the first event below.
+      const watching = startWatching({
+        config,
+        warn: context.warn,
+        rebuild: async (signal) => {
+          const result = await runBuild({
+            config,
+            progress: context.progress,
+            activate: true,
+            signal,
+          });
+          return { created: result.created };
+        },
+      });
+
       const server = await startServing({
         config,
         host: typeof flags.host === 'string' ? flags.host : '127.0.0.1',
         port: parsePort(flags.port),
         warn: context.warn,
+        // The hook #112 named. A supervisor that is watching the filesystem already knows
+        // whether the sources moved, so the server stops paying for an interval scan.
+        freshness: () => watching.freshness(),
       });
 
       // Step 6.
@@ -85,6 +106,9 @@ export function devCommand(): CommandDefinition {
       );
 
       await untilInterrupted(context.warn);
+      // The watcher first: a rebuild in flight is cancelled and its candidate discarded
+      // before the server stops answering, so nothing is half-activated on the way out.
+      await watching.close();
       await server.close();
       return { human: '', json: undefined };
     },
@@ -164,7 +188,7 @@ function render(rendered: Rendered): string {
   // line is meant to be pasted (#61 owns the general version of this).
   lines.push(`MCP stdio       lore mcp --project "${rendered.projectRoot}"`);
   lines.push('');
-  lines.push('Watching for changes is not on yet. Press Ctrl-C to stop.');
+  lines.push('Watching for changes. Press Ctrl-C to stop.');
   return lines.join('\n');
 }
 

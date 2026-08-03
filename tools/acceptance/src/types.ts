@@ -196,6 +196,14 @@ export interface InterruptStep extends StepBase {
   readonly afterMs: number;
   /** Sends the signal twice, to check the documented "second interrupt exits now". */
   readonly repeat?: number;
+  /**
+   * Changes a source file after the command is running and before it is signalled.
+   *
+   * The only way to reach a supervisor that reacts to the filesystem. `write` before the
+   * command cannot do it: what is under test is a change arriving while the process is up
+   * and watching, which is a different code path from a change that was already there.
+   */
+  readonly writeWhileRunning?: { readonly path: string; readonly contents: string };
   readonly expect?: Expect;
 }
 
