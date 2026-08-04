@@ -68,7 +68,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  rmSync(directory, { recursive: true, force: true });
+  // Retried, because of Windows. A query runs in a child process that is killed with
+  // `SIGKILL`, and the kill is deliberately not awaited; for a moment afterwards the dead
+  // child still holds the build file open, and Windows refuses to delete an open file with
+  // `EPERM`. POSIX unlinks it happily, which is why this only ever failed in CI.
+  rmSync(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 });
 
 function column(
