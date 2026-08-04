@@ -25,7 +25,7 @@
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
     "check:counted-nouns": "node scripts/check-counted-nouns.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm schemas:check && pnpm acceptance:docs:check",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm check:docs-images && pnpm schemas:check && pnpm acceptance:docs:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
@@ -38,7 +38,9 @@
     "check:command-set": "node scripts/check-command-set.mjs",
     "build:studio": "pnpm --filter @lorepack/studio build",
     "check:studio-bundle": "node scripts/check-studio-bundle.mjs",
-    "test:e2e": "pnpm build && pnpm --filter @lorepack/studio-e2e test"
+    "test:e2e": "pnpm build && pnpm --filter @lorepack/studio-e2e test",
+    "docs:capture": "pnpm build && node scripts/capture-docs.mjs",
+    "check:docs-images": "node scripts/check-docs-images.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
