@@ -297,10 +297,10 @@ describe('unsupported formats', () => {
   });
 
   it('distinguishes a format planned for a later release from an unknown one', async () => {
-    await withProject({ 'report.docx': 'PK', 'photo.png': 'x' }, (root) => {
+    await withProject({ 'report.xlsx': 'PK', 'photo.png': 'x' }, (root) => {
       const warnings = discoverIn(root).warnings;
-      expect(warnings.find((w) => w.path === 'report.docx')?.code).toBe('planned-format');
-      expect(warnings.find((w) => w.path === 'report.docx')?.message).toContain('later release');
+      expect(warnings.find((w) => w.path === 'report.xlsx')?.code).toBe('planned-format');
+      expect(warnings.find((w) => w.path === 'report.xlsx')?.message).toContain('later release');
       expect(warnings.find((w) => w.path === 'photo.png')?.code).toBe('unsupported-format');
     });
   });

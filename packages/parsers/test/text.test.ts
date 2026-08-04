@@ -186,8 +186,11 @@ describe('registry', () => {
     expect(isSupported('a.md')).toBe(true);
     expect(isSupported('a.pdf')).toBe(true);
     // Still ahead of us, and a materially different message from "unsupported".
-    expect(isSupported('a.docx')).toBe(false);
-    expect(isPlannedFormat('a.docx')).toBe(true);
+    expect(isSupported('a.docx')).toBe(true);
+    // `.xlsx` is the last format this phase turns on, so a fixture uses it to mean
+    // "supported later" without moving again every time a parser lands.
+    expect(isSupported('a.xlsx')).toBe(false);
+    expect(isPlannedFormat('a.xlsx')).toBe(true);
     expect(isPlannedFormat('a.png')).toBe(false);
   });
 
@@ -199,7 +202,7 @@ describe('registry', () => {
     expect(parserFor({ mediaType: 'application/pdf', relativePath: 'a.pdf' })?.id).toBe('pdf-text');
     // A planned format routes to nothing, which is what makes discovery warn rather than fail.
     expect(
-      parserFor({ mediaType: 'application/vnd.openxmlformats', relativePath: 'a.docx' }),
+      parserFor({ mediaType: 'application/vnd.openxmlformats', relativePath: 'a.xlsx' }),
     ).toBeNull();
   });
 

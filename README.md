@@ -113,10 +113,10 @@ what happens if yours does not.
 
 ## Limitations, honestly
 
-- **Markdown, HTML, text-layer PDF, plain text and source code** for now. A spreadsheet or a
-  Word document is reported as a format supported in a later release, not as an error, and it
-  is named in the build's exclusions rather than silently skipped. A scanned PDF is refused
-  outright rather than indexed as an empty document: OCR is out of scope for v0.1.
+- **Markdown, HTML, DOCX, text-layer PDF, plain text and source code** for now. A spreadsheet
+  is reported as a format supported in a later release, not as an error, and it is named in the
+  build's exclusions rather than silently skipped. A scanned PDF is refused outright rather than
+  indexed as an empty document: OCR is out of scope for v0.1.
 - **Lexical retrieval only.** BM25 with declared ranking hints. No embeddings in the default
   install, and the score is presented as a ranking heuristic because that is what it is.
 - **One project, one machine.** No tenancy, no accounts, no hosted control plane.

@@ -83,7 +83,7 @@ export const FORMATS: readonly FormatEntry[] = [
     extensions: ['.docx'],
     mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     parserId: 'docx',
-    available: false,
+    available: true,
   },
   { extensions: ['.csv'], mediaType: 'text/csv', parserId: 'csv', available: false },
   {

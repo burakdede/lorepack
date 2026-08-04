@@ -1,4 +1,5 @@
 import type { ArtifactParser } from '@lorepack/core';
+import { docxParser } from './docx/parser.js';
 import { htmlParser } from './html/parser.js';
 import { markdownParser } from './markdown/parser.js';
 import { pdfParser } from './pdf/parser.js';
@@ -11,6 +12,7 @@ import { textParser } from './text/parser.js';
 export const PARSERS: readonly ArtifactParser[] = [
   markdownParser,
   htmlParser,
+  docxParser,
   pdfParser,
   textParser,
 ];
