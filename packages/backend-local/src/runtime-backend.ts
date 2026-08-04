@@ -21,6 +21,7 @@ import {
   type TableStore,
 } from '@lorepack/core';
 import {
+  assertIdentifier,
   describeStoredTable,
   listTableRows,
   physicalTableNames,
@@ -29,6 +30,7 @@ import {
 import { countRows, RUNTIME_TABLES, searchCatalog } from './catalog/writer.js';
 import { stateMigrationsDirectory } from './migrations-path.js';
 import { FileObjectStore } from './object-store.js';
+import { executeQuery } from './sql/execute.js';
 import { restrictToTables } from './sqlite.js';
 import { LocalActiveBuildProvider, LocalStateStore } from './state-store.js';
 
@@ -194,9 +196,11 @@ const DESCRIBE_SAMPLE_ROWS = 5;
  */
 class LocalTableStore implements TableStore {
   readonly #db: DatabaseSync;
+  readonly #databasePath: string;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseSync, databasePath: string) {
     this.#db = db;
+    this.#databasePath = databasePath;
   }
 
   async list(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
@@ -207,21 +211,72 @@ class LocalTableStore implements TableStore {
     return describeStoredTable(this.#db, tableId, DESCRIBE_SAMPLE_ROWS);
   }
 
+  /**
+   * A bounded read-only SELECT over one table.
+   *
+   * The query runs in a worker thread against its own read-only connection, whose authorizer
+   * permits exactly this table's physical name and nothing else in the build. So a query
+   * cannot reach another table, cannot read the catalog that would tell it those tables
+   * exist, and cannot outlive its deadline. See `docs/architecture/adr-sql-surface.md`.
+   */
   async query(request: TableQueryRequest): Promise<TableQueryResult> {
-    const exists = resolveTable(this.#db, request.tableId) !== null;
-    throw new LoreError(
-      'LORE_E_UNSUPPORTED_FORMAT',
-      exists
-        ? `Querying table ${request.tableId} is not available yet.`
-        : `No table ${request.tableId} in this build.`,
-      {
-        remediation: exists
-          ? 'Use lore inspect tables to see the schema and row counts. SQL over tables arrives with the bounded query surface.'
-          : 'Run lore inspect tables to see which tables this build contains.',
+    const resolved = resolveTable(this.#db, request.tableId);
+    if (resolved === null) {
+      throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {
+        remediation: 'Run `lore inspect tables` to see which tables this build contains.',
         subject: request.tableId,
+      });
+    }
+
+    const outcome = await executeQuery({
+      databasePath: this.#databasePath,
+      // One table, per query. The allowlist is not the build's tables: it is this table,
+      // which is what makes "cannot read another table" true rather than merely intended.
+      allowedTables: [assertIdentifier(resolved.table.sql_name)],
+      sql: request.sql,
+      limit: request.limit,
+    });
+
+    // Column names and row keys are relabelled together. Relabelling only the rows would
+    // return a `columns` list that does not name the keys of its own rows, which is the kind
+    // of quiet inconsistency a caller only finds by index.
+    const rename = (name: string): string =>
+      resolved.columns.find((column) => column.sql_name === name)?.name ?? name;
+
+    return {
+      columns: outcome.columns.map(rename),
+      // Relabelled to the source column names, so a caller reads `Postal Code` even though
+      // the query addressed `c_2_postal_code`.
+      rows: outcome.rows.map((row) => relabelRow(row, resolved.columns)),
+      rowCount: outcome.rows.length,
+      truncated: outcome.truncated,
+      // Provenance is mandatory: a result without a locator is a bug, not a style issue.
+      locator: {
+        artifactId: resolved.table.artifact_id,
+        relativePath: resolved.table.relative_path,
+        ...(resolved.table.sheet === null ? {} : { sheet: resolved.table.sheet }),
+        ...(resolved.table.line_start === null ? {} : { lineStart: resolved.table.line_start }),
+        ...(resolved.table.line_end === null ? {} : { lineEnd: resolved.table.line_end }),
       },
-    );
+    } as TableQueryResult;
   }
+}
+
+/**
+ * Generated column names back to the ones the source used.
+ *
+ * A query may alias, aggregate or compute, so a returned column often has no counterpart in
+ * the catalog. Those keep whatever SQLite called them; only a plain physical column is
+ * translated, because that is the only case where a better name exists.
+ */
+function relabelRow(
+  row: Record<string, unknown>,
+  columns: readonly { name: string; sql_name: string }[],
+): Record<string, unknown> {
+  const bySqlName = new Map(columns.map((column) => [column.sql_name, column.name]));
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) out[bySqlName.get(key) ?? key] = value;
+  return out;
 }
 
 export interface LocalRuntimeOptions {
@@ -272,7 +327,10 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
           ? {}
           : { createdAt: createdAt(state, handle.buildId) as string }),
         catalog: new LocalCatalogStore(db, join(loreDirectory, 'builds', handle.buildId)),
-        tables: new LocalTableStore(db),
+        tables: new LocalTableStore(
+          db,
+          join(loreDirectory, 'builds', handle.buildId, 'context.sqlite'),
+        ),
         objects,
       };
     },

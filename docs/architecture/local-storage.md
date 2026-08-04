@@ -172,3 +172,38 @@ depend on which files the build contains.
 per-query authorizer and a deadline before user text reaches the engine; shipping an unguarded
 query because the plumbing happened to be in place is how a read-only boundary becomes a hole.
 Until then, `lore inspect tables` shows the schema, the statistics and how each file was read.
+
+### Querying a table
+
+`queryTable` accepts **one read-only SELECT** over **one table**, and everything about it is
+designed on the assumption that the SQL was written by a model that may have been talked into
+writing something else. The decisions and the measurements behind them are in
+[`adr-sql-surface.md`](./adr-sql-surface.md); this is what the surface does.
+
+**Statement shape** is checked by a tokenizer, not a SQL parser. It answers one question, is
+this exactly one statement beginning as a SELECT, and refuses everything else with a sentence
+about the rule. Comments cannot hide a second statement, because comments are removed before
+the semicolons are counted, and a semicolon inside a string or a quoted identifier is text.
+
+**Everything else is the authorizer**, installed on a fresh read-only connection and scoped
+**per query** to the physical table being queried. So a query cannot read another table in the
+same build, cannot read the catalog that would tell it those tables exist, and cannot call a
+function outside a curated allowlist. This is the control; the tokenizer is not.
+
+**The deadline is enforced by killing a process.** A query runs in a forked child, and past
+five seconds it gets `SIGKILL`. Both cheaper options were measured and neither works: the
+`vdbeOp` limit does not bound a runaway recursive CTE, and `worker.terminate()` does not return
+while a thread sits inside a synchronous SQLite call.
+
+**Results are bounded and say so.** A limit is applied by wrapping the statement rather than
+appending to it, so a compound `SELECT ... UNION SELECT ...` is bounded as a whole. Truncation
+is reported, never silent, and a response too large to serialize is refused with its size
+rather than trimmed. Every result carries the table's locator, including sheet and cell range.
+
+**Errors say what rule was broken and nothing about the machine.** SQLite words a denial as
+`access to t_secrets_f13bc4051aa0.c_0_sku is prohibited`, which names something the caller was
+not allowed to see, so the message is replaced rather than wrapped. No path, no schema, no
+other project.
+
+`describeTable` is the preferred first step. Column names are generated, so they are rarely
+what the source file called them, and a query written against the source's names will not run.
