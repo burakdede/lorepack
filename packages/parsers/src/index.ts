@@ -16,6 +16,7 @@ export {
   isPlannedFormat,
   isSupported,
   type ParserId,
+  readsBytes,
   SUPPORTED_EXTENSIONS,
 } from './registry.js';
 export { PARSERS, parserFor } from './registry-parsers.js';
@@ -36,3 +37,4 @@ export {
   TEXT_PARSER_VERSION,
   textParser,
 } from './text/parser.js';
+export { XLSX_LIMITS, XLSX_PARSER_ID, XLSX_PARSER_VERSION, xlsxParser } from './xlsx/parser.js';

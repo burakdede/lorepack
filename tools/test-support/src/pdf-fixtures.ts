@@ -18,7 +18,10 @@ export interface PageSpec {
   readonly image?: boolean;
 }
 
-export function makePdf(pages: readonly PageSpec[], options: { title?: string } = {}): Uint8Array {
+export function makePdf(
+  pages: readonly PageSpec[],
+  options: { title?: string; withNulByte?: boolean } = {},
+): Uint8Array {
   const objects: string[] = [];
   const add = (body: string): number => {
     objects.push(body);
@@ -50,6 +53,18 @@ export function makePdf(pages: readonly PageSpec[], options: { title?: string } 
 
   const infoId =
     options.title === undefined ? null : add(`<< /Title (${escapeText(options.title)}) >>`);
+
+  /**
+   * A NUL byte, which real PDFs have and this writer otherwise does not.
+   *
+   * Worth an option rather than always-on, because it is the *only* thing that made #222
+   * reproducible: a PDF written by any real tool has compressed streams full of NULs and was
+   * excluded from every build as "binary", while this hand-built fixture was pure ASCII and
+   * sailed through. A test that passes by luck is worse than no test.
+   */
+  if (options.withNulByte === true) {
+    objects.push(`<< /Type /Metadata /Note (\u0000binary) >>`);
+  }
 
   objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
   objects[pagesId - 1] =

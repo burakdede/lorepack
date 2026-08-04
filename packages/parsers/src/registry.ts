@@ -14,6 +14,16 @@ export interface FormatEntry {
   readonly parserId: ParserId;
   /** False for formats the architecture schedules for a later phase. */
   readonly available: boolean;
+  /**
+   * True when the parser reads **bytes** rather than decoded text.
+   *
+   * This is not a detail of the parser: it changes what fingerprinting is allowed to do.
+   * That stage refuses any artifact whose bytes are not valid UTF-8 (#165), which is right
+   * for a document and fatal for a container. Without this flag every `.docx` and `.xlsx`,
+   * and every `.pdf` holding a compressed stream, was dropped before its parser ran, and the
+   * user was told the file "appears to be binary" (#222). It did, and that was fine.
+   */
+  readonly readsBytes?: boolean;
 }
 
 export const FORMATS: readonly FormatEntry[] = [
@@ -78,19 +88,27 @@ export const FORMATS: readonly FormatEntry[] = [
   { extensions: ['.html', '.htm'], mediaType: 'text/html', parserId: 'html', available: true },
   // Phase 5 formats still to come. Listed so discovery can say "supported later" rather than
   // "unsupported", which is a materially different message for a user with a PDF.
-  { extensions: ['.pdf'], mediaType: 'application/pdf', parserId: 'pdf-text', available: true },
+  {
+    extensions: ['.pdf'],
+    mediaType: 'application/pdf',
+    parserId: 'pdf-text',
+    available: true,
+    readsBytes: true,
+  },
   {
     extensions: ['.docx'],
     mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     parserId: 'docx',
     available: true,
+    readsBytes: true,
   },
   { extensions: ['.csv', '.tsv'], mediaType: 'text/csv', parserId: 'csv', available: true },
   {
     extensions: ['.xlsx'],
     mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     parserId: 'xlsx',
-    available: false,
+    available: true,
+    readsBytes: true,
   },
 ];
 
@@ -118,6 +136,16 @@ export function formatFor(filename: string): FormatEntry | null {
 
 export function isSupported(filename: string): boolean {
   return formatFor(filename)?.available === true;
+}
+
+/**
+ * Whether this file's parser reads bytes, so text classification must not be applied to it.
+ *
+ * Asked by the fingerprint stage, which is the only stage that can wrongly exclude a file
+ * before anything has tried to parse it.
+ */
+export function readsBytes(filename: string): boolean {
+  return formatFor(filename)?.readsBytes === true;
 }
 
 /** Known but not implemented yet, which deserves a different message from unknown. */

@@ -248,12 +248,18 @@ importers:
       remark-parse:
         specifier: 11.0.0
         version: 11.0.0
+      sax:
+        specifier: 1.6.1
+        version: 1.6.1
       unified:
         specifier: 11.0.5
         version: 11.0.5
       yaml:
         specifier: 2.9.0
         version: 2.9.0
+      yauzl:
+        specifier: 3.4.0
+        version: 3.4.0
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*
@@ -264,9 +270,15 @@ importers:
       '@types/mdast':
         specifier: 4.0.4
         version: 4.0.4
+      '@types/sax':
+        specifier: ^1.2.7
+        version: 1.2.7
       '@types/unist':
         specifier: 3.0.3
         version: 3.0.3
+      '@types/yauzl':
+        specifier: ^3.4.0
+        version: 3.4.0
       yazl:
         specifier: 3.3.1
         version: 3.3.1
@@ -327,6 +339,12 @@ importers:
       '@lorepack/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@types/yazl':
+        specifier: ^3.3.1
+        version: 3.3.1
+      yazl:
+        specifier: 3.3.1
+        version: 3.3.1
 
 packages:
 
@@ -1180,6 +1198,9 @@ packages:
 
   '@types/react@19.2.0':
     resolution: {integrity: sha512-1LOH8xovvsKsCBq1wnT4ntDUdCJKmnEakhsuoUSy6ExlHCkGP2hqnatagYTgFk6oeL0VU31u7SNjunPN+GchtA==}
+
+  '@types/sax@1.2.7':
+    resolution: {integrity: sha512-rO73L89PJxeYM3s3pPPjiPgVVcymqU490g0YO5n5By0k2Erzj6tay/4lr1CHAAU4JyOWd1rpQ8bCf6cZfHU96A==}
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
@@ -2253,6 +2274,10 @@ packages:
 
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+
+  sax@1.6.1:
+    resolution: {integrity: sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q==}
+    engines: {node: '>=11.0.0'}
 
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
@@ -3407,6 +3432,10 @@ snapshots:
   '@types/react@19.2.0':
     dependencies:
       csstype: 3.2.3
+
+  '@types/sax@1.2.7':
+    dependencies:
+      '@types/node': 24.13.3
 
   '@types/unist@3.0.3': {}
 
@@ -4615,6 +4644,8 @@ snapshots:
   safe-buffer@5.1.2: {}
 
   safer-buffer@2.1.2: {}
+
+  sax@1.6.1: {}
 
   saxes@6.0.0:
     dependencies:

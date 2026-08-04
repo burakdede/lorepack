@@ -12,6 +12,7 @@ import {
   type UndecodableReason,
   undecodableMessage,
 } from '@lorepack/core';
+import { readsBytes } from '@lorepack/parsers';
 import type { DiscoveredArtifact, DiscoveryWarning } from '../discover/discover.js';
 
 export interface FingerprintedArtifact extends DiscoveredArtifact {
@@ -126,13 +127,18 @@ async function hashAndClassify(
   artifact: DiscoveredArtifact,
 ): Promise<{ contentHash: string; undecodable: UndecodableReason | null }> {
   const hash = createHash(HASH_ALGORITHM);
-  const classifier = new TextClassifier();
+  // A container is not decodable text and is not supposed to be. Classifying a `.docx`,
+  // `.xlsx` or `.pdf` here dropped it from the build before its parser ever ran, and told
+  // the user it "appeared to be binary" (#222). Identity is unaffected: the bytes are still
+  // hashed, exactly as for a text file. What is skipped is only the decodability verdict,
+  // which for these formats is the parser's question and not this stage's.
+  const classifier = readsBytes(artifact.relativePath) ? null : new TextClassifier();
   try {
     const stream = createReadStream(artifact.absolutePath);
     for await (const chunk of stream) {
       const bytes = chunk as Uint8Array;
       hash.update(bytes);
-      classifier.update(bytes);
+      classifier?.update(bytes);
     }
   } catch (cause) {
     throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${artifact.displayPath} could not be read.`, {
@@ -142,7 +148,7 @@ async function hashAndClassify(
       cause,
     });
   }
-  return { contentHash: hash.digest('hex'), undecodable: classifier.finish() };
+  return { contentHash: hash.digest('hex'), undecodable: classifier?.finish() ?? null };
 }
 
 /** One value summarising every artifact identity and its content. */

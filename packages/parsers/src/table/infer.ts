@@ -1,8 +1,12 @@
 import type { ColumnStatistics, ColumnTypeName, TableValue } from '@lorepack/core';
-import { looksBoolean, looksNumeric } from './dialect.js';
+import { looksBoolean, looksNumeric } from '../csv/dialect.js';
 
 /**
  * Conservative type inference, and the statistics that come with it.
+ *
+ * Shared by every format that produces a table. #75 requires XLSX to behave *exactly* as CSV
+ * does, and the only way to guarantee that is one implementation: two that agree today would
+ * disagree the first time either is touched.
  *
  * Architecture section 12.6 makes this a correctness property rather than a nicety: a column
  * of postal codes read as integers loses `00123` forever, and no downstream query can get it
@@ -202,4 +206,49 @@ function compare(left: TableValue, right: TableValue): number {
     return Number(left) - Number(right);
   }
   return String(left) < String(right) ? -1 : String(left) > String(right) ? 1 : 0;
+}
+
+/**
+ * A column's type when the cells arrive **already typed**, as they do from a spreadsheet.
+ *
+ * XLSX does not need the string-sniffing above: Excel already knows a cell holds a number, a
+ * boolean or a date, and #75 requires the outcome to match CSV's rules exactly. It does,
+ * because both obey the same principle: a column is a type only if **every** value in it is,
+ * and mixed columns are text. A leading-zero identifier is stored by Excel as a string cell,
+ * so it arrives as text without anything here needing to know it is special.
+ *
+ * The one addition is error cells. `#REF!` in a column of numbers means the column is not
+ * reliably numeric, and typing it `real` would either drop the error or coerce it to `NaN`.
+ */
+export function unifyCellTypes(
+  values: readonly TableValue[],
+  errors: readonly boolean[],
+): ColumnTypeName {
+  let seen: ColumnTypeName | null = null;
+  for (const [index, value] of values.entries()) {
+    if (value === null) continue;
+    if (errors[index] === true) return 'text';
+    const kind = kindOf(value);
+    if (seen === null) {
+      seen = kind;
+      continue;
+    }
+    if (seen === kind) continue;
+    // `integer` and `real` are the one pair worth widening rather than abandoning: a column
+    // of 1, 2 and 2.5 is genuinely numeric, and calling it text would be over-cautious in a
+    // way that loses arithmetic for no gain.
+    if ((seen === 'integer' && kind === 'real') || (seen === 'real' && kind === 'integer')) {
+      seen = 'real';
+      continue;
+    }
+    return 'text';
+  }
+  return seen ?? 'unknown';
+}
+
+function kindOf(value: Exclude<TableValue, null>): ColumnTypeName {
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'integer' : 'real';
+  // A date arrives from the sheet reader as ISO text, which is also how it is stored.
+  return /^\d{4}-\d{2}-\d{2}(T|$)/.test(value) ? 'date' : 'text';
 }

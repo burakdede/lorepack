@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Chunk } from '@lorepack/compiler';
-import type { Artifact, LoreNode, ParsedTable } from '@lorepack/core';
+import type { Artifact, LoreNode, ParsedTable, ParserWarning } from '@lorepack/core';
 import { writeFileAtomic } from '@lorepack/core';
 
 /**
@@ -30,6 +30,15 @@ export interface CachedParse {
    * be read back with its tables missing, which is the failure mode that would matter.
    */
   readonly tables?: readonly ParsedTable[];
+  /**
+   * What the parser said about this artifact, cached alongside it.
+   *
+   * Unlike table rows these are cheap, and dropping them would make a build's warnings depend
+   * on whether the cache happened to be warm: the first build would name a flattened Word
+   * style and the second would not (#223). A warning that appears only sometimes is worse
+   * than one that never appears, because it teaches a reader that silence means nothing.
+   */
+  readonly warnings?: readonly ParserWarning[];
 }
 
 interface CacheEnvelope extends CachedParse {
@@ -37,7 +46,7 @@ interface CacheEnvelope extends CachedParse {
 }
 
 /** Bumped when the cached shape changes, so old entries are ignored instead of misread. */
-const CACHE_FORMAT_VERSION = 1;
+const CACHE_FORMAT_VERSION = 2;
 
 export class ParseCache {
   readonly #directory: string;
@@ -75,6 +84,7 @@ export class ParseCache {
         nodes: parsed.nodes,
         chunks: parsed.chunks,
         objectHash: parsed.objectHash,
+        ...(parsed.warnings === undefined ? {} : { warnings: parsed.warnings }),
       };
     } catch {
       this.#misses += 1;

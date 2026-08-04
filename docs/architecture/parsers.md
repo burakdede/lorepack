@@ -310,6 +310,104 @@ memory rather than streamed, which is deliberate: the parser port hands over `by
 file is already resident, and a streaming reader would add a second code path while saving
 nothing.
 
+## XLSX
+
+Read by **a reader of our own**, over `yauzl` (already vendored for `.lorepack`) and `sax`.
+Architecture section 8.7 named ExcelJS; [`adr-xlsx-parser.md`](./adr-xlsx-parser.md) supersedes
+that line with the measurements behind it. In short: nothing maintained returned formula text,
+cell addresses, merge ranges and bounded memory together, and an unmaintained parser of
+untrusted binary input is the worst possible dependency to accept.
+
+An `.xlsx` is a ZIP of XML parts. The reader touches five of them: `workbook.xml` for sheet
+names and the date system, `workbook.xml.rels` to resolve each sheet to its part,
+`sharedStrings.xml`, `styles.xml` for the number formats, and one sheet part per worksheet.
+Not charts, pivot tables, drawings, macros or styling.
+
+### The refusal is the feature
+
+A worksheet is a canvas, not a table. People put a title in A1, leave a blank row, start the
+data at A3 and add a total row at the bottom. The detector looks for the first row of all-text
+cells sitting above a row of data of the same width, skips whatever is above it (saying so in a
+warning), and **refuses** when it finds nothing.
+
+That refusal matters more than the detection. Flattening a workbook into prose is forbidden by
+section 4.6, but inventing a table out of a layout nobody meant as one is the other failure and
+the quieter one: it produces confident, queryable, wrong data. A sheet the detector cannot read
+becomes a descriptive node and a warning naming the sheet.
+
+### Provenance is a cell range
+
+Section 10.8 wants a queried row traceable to where it came from, so a table's locator carries
+`sheet` and `cellRange` (`Invoices!A2:F5`), not an ordinal in a file that may hold several
+tables. The range is computed **after** the sheet is read: computing it in the detector, which
+runs as soon as the header is found, reported `A1:D24` for a 500,000-row sheet.
+
+### Formulas are text
+
+`=D3+E3` is stored as `D3+E3` in table metadata, beside the cached value Excel wrote in the
+cell. Lorepack has no formula engine and must never appear to have one: if a workbook's cached
+value is stale, the build reports the stale value, because that is what the file says. This is
+section 12.6 step 5, and it is the capability that eliminated `read-excel-file`, which returns
+`49.95` for a cell holding `=C2*D2` and offers no way to see the formula.
+
+### Three cases that fail quietly
+
+Each of these is handled because a library would have handled it invisibly and our reader will
+not:
+
+| Case | What goes wrong without it |
+|---|---|
+| **Inline strings** (`t="inlineStr"`) | Some writers never build the shared table. A reader that only handles `t="s"` returns empty columns and the file looks like it had no data. |
+| **The 1904 date system** | Set per workbook. Read as 1900, every date moves by exactly 1,462 days and still looks like a perfectly ordinary date. A warning records which epoch was applied. |
+| **Error cells** (`t="e"`) | `#REF!` coerced to null claims the cell is empty; coerced to a bare string in a numeric column it reads as data. It is kept as its own text, and its column is typed `text`. |
+
+Two more traps worth naming. An Excel date is **a number plus a style**, so detection needs
+`cellXfs` to `numFmtId`, the builtin date ids **and** custom `formatCode`s, with `[...]`
+sections and quoted literals stripped first (otherwise `"Sales day"#,##0.00` turns every price
+into a date). And the 1900 epoch bases at **December 30th, 1899**, which cancels the leap-year
+bug Lotus shipped in 1983 and Excel kept.
+
+Sheets are resolved through relationships rather than by sorting `sheet1.xml`, `sheet2.xml`:
+deleting a sheet does not renumber the parts, so `sheet3.xml` can be the second sheet.
+
+### Hardening is ours
+
+Because there is no library in between, section 20.9's requirements are enforced here: a part
+declaring a `DOCTYPE` is refused outright, decompressed bytes are budgeted **as they arrive**
+(a cap checked afterwards is not a cap), and part, sheet, row and column counts are capped.
+Verified separately that `sax` in strict mode does not expand custom entities at all: an XXE
+payload and a billion-laughs payload both yield a parse error and the literal `&x;`. The
+DOCTYPE refusal stays anyway, because a guarantee we depend on should be one we assert.
+
+### Measured at the envelope
+
+On 2026-08-04, 500,000 rows across 2,000,000 cells (11 MB compressed): **6.5 s**, and **16 MB
+above baseline to stream the sheet**, with the materialised table bringing the total to about
+98 MB. Both beat the ADR's budget of 85 MB and 14 s. The split is the number to watch: the
+streaming figure is flat in sheet size, so if it grows, something has started accumulating.
+
+Note also that `sax`'s stream has no `destroy`, so `source.pipe(parser)` dies under
+backpressure with `TypeError: dest.destroy is not a function`, reported as a corrupt workbook.
+The reader writes chunks in explicitly instead.
+
+## Every parser: two things the build does with the result
+
+Worth stating here rather than in each section, because both were once true of no parser and
+are now true of all of them.
+
+**A binary format is exempt from the text check.** Fingerprinting refuses any artifact whose
+bytes are not valid UTF-8, which is right for a document and fatal for a container. Formats
+declare `readsBytes` in the registry, and the fingerprint stage skips the decodability verdict
+for them. It still hashes them: the exemption is about readability, not identity. Without it
+every `.docx` and `.xlsx`, and every `.pdf` with a compressed stream, was dropped from the
+build and reported to the user as "appears to be binary" (#222).
+
+**Parser warnings reach the manifest.** Everything a parser decided and admitted to, a heading
+flattened, a column widened, a sheet not read as a table, is collected into the build's
+warnings with the artifact's path and the `parser` class. They are cached alongside the parse,
+so a warm rebuild reports the same warnings as a cold one; a warning that appears only
+sometimes teaches a reader that silence means nothing (#223).
+
 ## Typed tables in a build
 
 Rows live in real SQL tables inside the sealed build, described by a catalog. See

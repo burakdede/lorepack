@@ -113,14 +113,16 @@ what happens if yours does not.
 
 ## Limitations, honestly
 
-- **Markdown, HTML, DOCX, CSV, text-layer PDF, plain text and source code** for now. An Excel
-  workbook is reported as a format supported in a later release, not as an error, and it is
-  named in the build's exclusions rather than silently skipped. A scanned PDF is refused
-  outright rather than indexed as an empty document: OCR is out of scope for v0.1.
-- **A CSV becomes a typed table, not prose.** Column types are inferred conservatively and
-  refuse to be clever: `00123` stays text, a 19-digit id stays text, and `03/04/2026` stays
-  text because the file never says which country wrote it. `lore inspect tables` shows what was
-  decided and why. Querying those tables with SQL is not available yet.
+- **Markdown, HTML, DOCX, CSV, XLSX, text-layer PDF, plain text and source code.** A file with
+  an extension Lorepack does not know is named in the build's exclusions rather than silently
+  skipped. A scanned PDF is refused outright rather than indexed as an empty document: OCR is
+  out of scope for v0.1.
+- **A spreadsheet becomes a typed table, not prose.** Column types are inferred conservatively
+  and refuse to be clever: `00123` stays text, a 19-digit id stays text, and `03/04/2026` stays
+  text because the file never says which country wrote it. Excel formulas are stored as text
+  and never evaluated. A worksheet whose layout is not a table is described and reported, never
+  invented into one. `lore inspect tables` shows what was decided and why. Querying those tables
+  with SQL is not available yet.
 - **Lexical retrieval only.** BM25 with declared ranking hints. No embeddings in the default
   install, and the score is presented as a ranking heuristic because that is what it is.
 - **One project, one machine.** No tenancy, no accounts, no hosted control plane.

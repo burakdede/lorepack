@@ -32,8 +32,10 @@
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",
     "remark-parse": "11.0.0",
+    "sax": "1.6.1",
     "unified": "11.0.5",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "yauzl": "3.4.0"
   },
   "repository": {
     "type": "git",
@@ -44,7 +46,9 @@
     "@lorepack/test-support": "workspace:*",
     "@types/hast": "3.0.4",
     "@types/mdast": "4.0.4",
+    "@types/sax": "^1.2.7",
     "@types/unist": "3.0.3",
+    "@types/yauzl": "^3.4.0",
     "yazl": "3.3.1"
   }
 }
