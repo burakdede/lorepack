@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deployment guide</title>
+  <style>body { font-family: sans-serif; }</style>
+</head>
+<body>
+  <header class="site-header">
+    <a href="/">Acme Docs</a>
+  </header>
+  <nav aria-label="Main">
+    <ul><li><a href="/guides">Guides</a></li><li><a href="/api">API</a></li></ul>
+  </nav>
+
+  <main>
+    <article>
+      <header>
+        <h1>Deployment guide</h1>
+        <p>Last reviewed by the platform team.</p>
+      </header>
+
+      <p>Deploy on a <a href="https://example.com/change-freeze">Tuesday</a>, never during a
+      change freeze. The &amp; character and &lt;angle brackets&gt; survive as text.</p>
+
+      <h2>Before you start</h2>
+      <ul>
+        <li>Confirm the smoke tests pass</li>
+        <li>Announce in the release channel</li>
+      </ul>
+
+      <h3>Credentials</h3>
+      <p>Ask the platform team; never reuse a personal token.</p>
+
+      <h2>Rolling back</h2>
+      <pre><code class="language-bash">lore rollback \
+  --yes</code></pre>
+
+      <table>
+        <thead><tr><th>Step</th><th>Owner</th></tr></thead>
+        <tbody>
+          <tr><td>Announce</td><td>Release manager</td></tr>
+          <tr><td>Roll back</td><td>On-call</td></tr>
+        </tbody>
+      </table>
+
+      <blockquote>A rollback is a pointer change, so nothing is recompiled.</blockquote>
+    </article>
+  </main>
+
+  <footer>Copyright Acme.</footer>
+  <script>window.analytics && window.analytics.track('view');</script>
+</body>
+</html>

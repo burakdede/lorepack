@@ -1,0 +1,272 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 1504,
+    "contentHash": "1757da4f52797b17b9bf144838eeaa926b0fac08842ab06710dda196ad6e6e20",
+    "displayPath": "documents/html/documentation-page.html",
+    "id": "fixtures:documents/html/documentation-page.html",
+    "mediaType": "text/html",
+    "metadata": {
+      "noisePolicyVersion": 1
+    },
+    "parserId": "html",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/html/documentation-page.html",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "Deployment guide"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "lineEnd": 55,
+        "lineStart": 1,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "noisePolicyVersion": 1
+      },
+      "ordinal": 0,
+      "revisionHash": "ccfb779dbf937444d7b05c9c670c0718394d7b270c5584777e63022da55e3493",
+      "title": "Deployment guide"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "lineEnd": 19,
+        "lineStart": 19,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "depth": 1
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/html/documentation-page.html#0",
+      "revisionHash": "0816320d174824e11c751031766620feb26f45a23ba22e45eade3fe6aa5e27a6",
+      "title": "Deployment guide"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide"
+        ],
+        "lineEnd": 20,
+        "lineStart": 20,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1",
+      "revisionHash": "3cbf3721a84ca83a476def4a80d0cc143c08a4484092c6b46ea435eeaaa287c4",
+      "text": "Last reviewed by the platform team."
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.2",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide"
+        ],
+        "lineEnd": 24,
+        "lineStart": 23,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "links": [
+          "https://example.com/change-freeze"
+        ]
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1",
+      "revisionHash": "297c8410ab3c2aa8d08c5a8a2b79ff64150cca5cb6a51bca6c7bee4839622b92",
+      "text": "Deploy on a Tuesday, never during a change freeze. The & character and <angle brackets> survive as text."
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.3",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide"
+        ],
+        "lineEnd": 26,
+        "lineStart": 26,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "depth": 2
+      },
+      "ordinal": 3,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1",
+      "revisionHash": "67bd85b61f4f969df8043aaa3d30a16e44777c1c8c98936931bfed26ac037bce",
+      "title": "Before you start"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.3.1",
+      "kind": "list",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Before you start"
+        ],
+        "lineEnd": 30,
+        "lineStart": 27,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "items": 2,
+        "ordered": false
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.3",
+      "revisionHash": "d24a7684570745651ccec8fd86800dc5011405049df5c8603e578346e9c76189",
+      "text": "Confirm the smoke tests pass\nAnnounce in the release channel"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.3.2",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Before you start"
+        ],
+        "lineEnd": 32,
+        "lineStart": 32,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "depth": 3
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.3",
+      "revisionHash": "c44f0afae67d1c7ff27ee92a0a897079dbdee61ce6041c3e4d6eedd0769fd1ca",
+      "title": "Credentials"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.3.2.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Before you start",
+          "Credentials"
+        ],
+        "lineEnd": 33,
+        "lineStart": 33,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.3.2",
+      "revisionHash": "4bf6541c3238a27765ff760067ee75bf7a7e3d1667628863860ebc53c472aa78",
+      "text": "Ask the platform team; never reuse a personal token."
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.4",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide"
+        ],
+        "lineEnd": 35,
+        "lineStart": 35,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "depth": 2
+      },
+      "ordinal": 4,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1",
+      "revisionHash": "c8d891ee7227fb34a0ae981de34a7988939951203f56edb97bf4708721e3b949",
+      "title": "Rolling back"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.4.1",
+      "kind": "code",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Rolling back"
+        ],
+        "lineEnd": 37,
+        "lineStart": 36,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "language": "bash"
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.4",
+      "revisionHash": "6a58f1d421ea8380628a16904632b9533cda2531ac53affb86a18fccc1216e2f",
+      "text": "lore rollback \\\n  --yes"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.4.2",
+      "kind": "table",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Rolling back"
+        ],
+        "lineEnd": 45,
+        "lineStart": 39,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {
+        "rows": 3
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.4",
+      "revisionHash": "1861939cf7ccfa2485c9096875ff5912271e96d185f8052576cbb58af995d0e3",
+      "text": "Step\nOwner\nAnnounce\nRelease manager\nRoll back\nOn-call"
+    },
+    {
+      "artifactId": "fixtures:documents/html/documentation-page.html",
+      "id": "fixtures:documents/html/documentation-page.html#0.1.4.3",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/html/documentation-page.html",
+        "headingPath": [
+          "Deployment guide",
+          "Rolling back"
+        ],
+        "lineEnd": 47,
+        "lineStart": 47,
+        "relativePath": "documents/html/documentation-page.html"
+      },
+      "metadata": {},
+      "ordinal": 3,
+      "parentId": "fixtures:documents/html/documentation-page.html#0.1.4",
+      "revisionHash": "cd6f5902e24e182577494fad9c3a5ef28b66793aeb97c4ed3d4b2d73d44317f4",
+      "text": "A rollback is a pointer change, so nothing is recompiled."
+    }
+  ],
+  "warnings": []
+}
