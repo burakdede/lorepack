@@ -306,6 +306,28 @@ describe('changing which build is live, from Studio', () => {
     const now = (await (await fetch(`${base}/v1/build`)).json()) as { buildId: string };
     expect(now.buildId).toBe(first);
 
+    // And so did the freshness that travels with it (#200).
+    //
+    // This is the half that used to be missed. The build id followed the rollback and the
+    // annotation did not, so the server went on reporting `clean` about a build the sources
+    // had moved past, and Studio's header read "the sources match this build" about the
+    // state a reader had just deliberately left.
+    //
+    // One read, taken immediately, which is what makes this deterministic. The edit is still
+    // on disk and the build now active predates it, so `clean` is the one impossible answer.
+    // Polling for `dirty` instead would race the watcher's own reconcile sweep, which can
+    // legitimately rebuild and move the pointer forward again; the exact transition is
+    // asserted in `watch.test.ts`, where no server is competing for the same project.
+    const annotated = (await (await fetch(`${base}/v1/build`)).json()) as {
+      buildId: string;
+      sourceState: string;
+    };
+    expect(annotated.buildId).toBe(first);
+    expect(
+      annotated.sourceState,
+      `after rolling back past an edit, the sources cannot be reported clean.\n${started.log()}`,
+    ).not.toBe('clean');
+
     // And through MCP, which is the surface a model asks on. A tool call landing on the old
     // build after a person rolled back in Studio is the failure this asserts against.
     const call = await fetch(`${base}/mcp`, {
