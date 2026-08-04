@@ -89,6 +89,25 @@ export const htmlParser: ArtifactParser = {
   parse(input: ParseInput): ParsedArtifact {
     const warnings: ParserWarning[] = [];
     const raw = normalizeLineEndings(decodeHtml(input.bytes, input.displayPath, warnings));
+    return parseHtmlSource(input, raw, htmlParser, warnings);
+  },
+};
+
+/**
+ * The node tree for a document that is already HTML text, under a caller's parser identity.
+ *
+ * Split out because **DOCX normalizes through here** (#73): mammoth converts a Word document
+ * to HTML and this builds the nodes, so there is one set of node-construction rules rather
+ * than two that drift. The `parser` argument is what keeps the artifact honest, so a `.docx`
+ * records `docx` as its parser rather than claiming to be HTML.
+ */
+export function parseHtmlSource(
+  input: ParseInput,
+  raw: string,
+  parser: { readonly id: string; readonly version: string },
+  warnings: ParserWarning[],
+): ParsedArtifact {
+  {
     const tree = processor.parse(raw) as Root;
 
     const builder = new NodeBuilder(input);
@@ -112,15 +131,15 @@ export const htmlParser: ArtifactParser = {
     reportRemoval(kept, removed, warnings);
 
     return {
-      artifact: buildArtifact(input, htmlParser, {
+      artifact: buildArtifact(input, parser, {
         ...(documentTitle === undefined ? {} : { title: documentTitle }),
         metadata: { noisePolicyVersion: HTML_NOISE_POLICY_VERSION },
       }),
       nodes: builder.nodes as LoreNode[],
       warnings,
     };
-  },
-};
+  }
+}
 
 interface WalkState {
   readonly builder: NodeBuilder;

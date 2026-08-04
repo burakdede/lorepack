@@ -1,4 +1,5 @@
-export { HTML_PARSER_ID, HTML_PARSER_VERSION, htmlParser } from './html/parser.js';
+export { DOCX_PARSER_ID, DOCX_PARSER_VERSION, docxParser } from './docx/parser.js';
+export { HTML_PARSER_ID, HTML_PARSER_VERSION, htmlParser, parseHtmlSource } from './html/parser.js';
 export { HTML_NOISE_POLICY_VERSION } from './html/policy.js';
 export {
   MARKDOWN_PARSER_ID,

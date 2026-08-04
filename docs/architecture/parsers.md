@@ -169,3 +169,61 @@ The line is joined without inserting a space and the hyphen is kept. That is not
 conservative: keeping the hyphen preserves what was on the page, while removing it fabricates a
 spelling that appears in no document. Ligatures are the opposite case and are expanded, because
 those codepoints have exactly one expansion and leaving them makes a word unsearchable.
+
+## DOCX
+
+`mammoth` converts, and **the HTML parser builds the nodes**. One set of node-construction
+rules and one normalization path, rather than a second structure extractor that drifts from the
+first. It is why #71 landed before #73.
+
+### Why mammoth here, when XLSX went the other way
+
+Worth stating so the two decisions do not look inconsistent.
+
+mammoth **meets the bar**: BSD-2, 6.9M weekly downloads, five releases in two years, no native
+code, no post-install script. ExcelJS failed on maintenance and `read-excel-file` on
+capability; neither is true here. And the jobs are not comparable. A spreadsheet is a grid of
+typed cells and its reader is a few hundred lines. A Word document is style inheritance,
+numbering definitions, footnotes, revisions and section properties, and reimplementing that
+would be a large surface with quiet failure modes.
+
+The cost is recorded rather than hidden: mammoth pulls `jszip`, a second ZIP implementation
+alongside the `yauzl` the XLSX reader uses. Accepted deliberately.
+
+**Re-check due 2026-08-04 plus one year**, or sooner if releases stop appearing. A library
+going quiet is exactly the trigger that produced #113.
+
+### Styles, not appearance
+
+A heading in Word is a paragraph wearing the `Heading1` style, not text that happens to be
+large, so mapping styles is reading what the author declared rather than guessing from
+appearance. That is section 4.4's requirement, and the same principle that makes the PDF parser
+refuse to infer headings: there, no declaration exists to read.
+
+A style with no semantic equivalent is **named in a warning**, deduplicated, once per style
+rather than once per paragraph. That information exists only at conversion time: once the HTML
+is produced, a paragraph styled `CustomCallout` is indistinguishable from one never styled.
+
+### A DOCX has no pages
+
+Word paginates at render time against a page size, a font set and a printer, so a page number
+is a property of a rendering rather than of the document. Locators carry the heading path and
+the ordinal position, and the artifact records `pagination: none` with the reason. A reader who
+expects `page` should learn why it is absent from the build itself.
+
+### Two refusals worth their own messages
+
+- **`.doc`** is refused by name. It is a different format that shares three letters, and letting
+  it through produces "could not find the body element", which sends someone hunting for a
+  corrupt file rather than reaching for save-as.
+- **A password-protected document** is an OLE container rather than a ZIP, so it fails at the
+  archive layer with a message about a central directory. That is translated into one naming
+  the likely cause and stating that Lorepack never prompts for a credential.
+
+### Text that looks like markup
+
+Word stores the characters, mammoth escapes them to `&lt;script&gt;`, and the HTML stage decodes
+them back, so a paragraph written *about* script tags survives **as text**. It was never an
+element, so there was nothing to execute, and equally nothing was deleted. The dangerous
+direction is the second: unescaped characters would become a real `<script>` element that the
+noise policy drops with its contents, and an author's paragraph would vanish silently.
