@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
+  Adjacent,
   Badge,
   Command,
   Empty,
@@ -177,10 +178,19 @@ function Warnings({ count }: { readonly count: number }): React.JSX.Element | nu
               <ul className="warning-list">
                 {group.warnings.slice(0, 5).map((warning) => (
                   <li key={`${warning.code}-${warning.path ?? ''}-${warning.message}`}>
-                    {warning.path !== undefined && (
-                      <span className="warning-path">{warning.path}</span>
+                    {warning.path === undefined ? (
+                      <span className="warning-message prose">{withoutPath(warning)}</span>
+                    ) : (
+                      // A path is the thing a reader copies out of a warning to go and look
+                      // at the file, so it has to survive being copied (#203).
+                      <Adjacent
+                        lead={warning.path}
+                        leadClassName="warning-path"
+                        className="warning-message prose"
+                      >
+                        {withoutPath(warning)}
+                      </Adjacent>
                     )}
-                    <span className="warning-message prose">{withoutPath(warning)}</span>
                   </li>
                 ))}
                 {group.warnings.length > 5 && (

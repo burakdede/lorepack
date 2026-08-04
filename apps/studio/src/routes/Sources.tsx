@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Citation } from '../components/Citation.js';
 import {
+  Adjacent,
   Badge,
   Empty,
   Fact,
@@ -295,8 +296,13 @@ function ExcludedList({
           <tr key={`${entry.code}-${entry.path ?? ''}-${entry.message}`} className="artifact-row">
             <td className="excluded-path">{entry.path ?? '(no path)'}</td>
             <td>
-              <span className="excluded-class">{entry.class}</span>
-              <span className="excluded-message prose">{withoutPath(entry)}</span>
+              <Adjacent
+                lead={entry.class}
+                leadClassName="excluded-class"
+                className="excluded-message prose"
+              >
+                {withoutPath(entry)}
+              </Adjacent>
             </td>
           </tr>
         ))}

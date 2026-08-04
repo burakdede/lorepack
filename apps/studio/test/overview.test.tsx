@@ -127,6 +127,53 @@ describe('planning', () => {
   });
 });
 
+describe('warnings, which is where a reader goes to find a file', () => {
+  /**
+   * #203. The path and the sentence sat in adjacent spans with a margin between them and
+   * nothing in the document, so the row read as `context/notes/logo.binHas no supported
+   * parser` to a screen reader, and copying it produced the same string. A path a reader
+   * cannot copy is not much use in a warning about a file.
+   *
+   * Asserting on `textContent` rather than on the two spans is the point. Both spans were
+   * always there, and axe saw nothing wrong: the markup is valid and the words are present.
+   */
+  it('separates the path from the sentence with real text, not a margin', async () => {
+    describeBuild.mockResolvedValue({ ...BUILD, warningCount: 1 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              total: 1,
+              groups: [
+                {
+                  class: 'unsupported-file',
+                  count: 1,
+                  warnings: [
+                    {
+                      code: 'unsupported-format',
+                      path: 'context/notes/logo.bin',
+                      message:
+                        'context/notes/logo.bin has no supported parser, so it was not indexed.',
+                    },
+                  ],
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+    renderRoute();
+
+    const path = await screen.findByText('context/notes/logo.bin');
+    expect(path.closest('li')?.textContent).toBe(
+      'context/notes/logo.bin Has no supported parser, so it was not indexed.',
+    );
+  });
+});
+
 describe('what this route must not become', () => {
   it('plots nothing and shows no trend, because a build has no history to trend', async () => {
     const { container } = { container: document.body };

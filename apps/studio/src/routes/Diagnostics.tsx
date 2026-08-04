@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  Adjacent,
   Badge,
   Command,
   Fact,
@@ -260,9 +261,12 @@ function Clients({ clients }: { readonly clients: Report['clients'] }): React.JS
           {clients.map((entry) => (
             <tr key={entry.id}>
               <th scope="row" className="client-name">
-                {entry.title}
-                {entry.version !== undefined && (
-                  <span className="client-version">{entry.version}</span>
+                {entry.version === undefined ? (
+                  entry.title
+                ) : (
+                  <Adjacent lead={entry.title} className="client-version">
+                    {entry.version}
+                  </Adjacent>
                 )}
               </th>
               <td>{entry.installed ? 'yes' : 'no'}</td>

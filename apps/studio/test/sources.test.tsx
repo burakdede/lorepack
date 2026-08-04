@@ -143,6 +143,22 @@ describe('what was not parsed', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * #203. The class and the message sat in adjacent spans with a margin between them and
+   * nothing in the document, so the row read as `unsupported-fileHas no supported parser`
+   * to a screen reader and to anyone who copied it. Asserting on `textContent` rather than
+   * on the two spans is the point: the spans were always both there.
+   */
+  it('separates the reason class from the sentence with real text, not a margin', async () => {
+    renderRoute();
+    await userEvent.click(await screen.findByRole('button', { name: /excluded 1/ }));
+
+    const cell = (await screen.findByText('unsupported-file')).closest('td');
+    expect(cell?.textContent).toBe(
+      'unsupported-file Has no supported parser, so it was not indexed.',
+    );
+  });
+
   it('says so plainly when nothing was excluded', async () => {
     vi.stubGlobal(
       'fetch',

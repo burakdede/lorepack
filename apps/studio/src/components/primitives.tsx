@@ -103,6 +103,48 @@ export function Command({ value }: { readonly value: string }): React.JSX.Elemen
 }
 
 /**
+ * Two values side by side, separated by real text rather than by a margin.
+ *
+ * The gap between adjacent inline elements is usually made with `margin-right`, which puts
+ * a space on the screen and nothing in the document. A screen reader announced
+ * "context/notes/logo.binHas no supported parser", and selecting the row copied the same
+ * string (#203). Neither is visible to axe: the markup is valid, the contrast is fine, and
+ * both words are present.
+ *
+ * Only a text node makes a word boundary, so this exists to put one there once rather than
+ * to have three routes remember to type a space.
+ */
+export function Adjacent({
+  lead,
+  leadClassName,
+  className,
+  children,
+}: {
+  readonly lead: React.ReactNode;
+  readonly leadClassName?: string;
+  readonly className?: string;
+  readonly children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <>
+      <span className={leadClassName}>{lead}</span>
+      {SEPARATOR}
+      <span className={className}>{children}</span>
+    </>
+  );
+}
+
+/**
+ * A named constant rather than a literal space between the tags.
+ *
+ * JSX keeps a space written between two elements on one line and drops it when they are on
+ * separate lines, so the correctness of this component would otherwise depend on how the
+ * formatter chose to wrap it. An expression container is not whitespace, so no reflow can
+ * remove it.
+ */
+const SEPARATOR = ' ';
+
+/**
  * An empty screen is an invitation to act, so it names the next command rather than
  * apologising.
  */
