@@ -15,11 +15,35 @@ Patterns are gitignore-style, evaluated with picomatch:
 
 - a pattern without a slash matches at any depth;
 - a leading slash anchors it to the source root;
-- a trailing slash restricts it to directories and everything beneath;
+- a slash in the middle anchors it too, so `docs/*.md` is about one directory;
+- a trailing slash restricts it to directories and everything beneath, and **does not**
+  anchor it, so `build/` means "a directory called build, wherever it is";
 - `!pattern` re-includes, and the last matching rule wins.
 
 The always-on exclusions from architecture section 19.2 are applied first, then
 `.loreignore`.
+
+### Why the trailing slash is called out
+
+It is the one rule that is easy to implement backwards, and doing so is quiet. Deciding
+anchoring by looking for a separator in the raw pattern counts the trailing marker, which
+turns every `foo/` rule into a root-only rule. That is how `node_modules/**`, `.git/**` and
+four others came to apply at depth zero and nowhere else: correct on a flat folder, and
+useless on a folder containing a subproject, where the first build walks the dependency tree
+and `.git/config` becomes indexed context (#201).
+
+Two consequences shaped the fix:
+
+- **The defaults are written `foo/`, never `foo/**`.** The second form says something
+  different, and the difference does not show up until someone nests a directory.
+- **The test is a table of depths, not a list of names.** Each entry was correct at depth
+  zero, which is the only depth anything asserted, so the list read as complete for four
+  phases. `packages/compiler/test/discover.test.ts` now checks every default at three depths,
+  and `packages/cli/test/init.test.ts` checks that the `.loreignore` written by `lore init`
+  *behaves* the same as the enforced list rather than merely containing the same lines.
+
+A project always has the last word: the defaults are the first rules in the list and
+`.loreignore` comes after, so `!vendor/dist/notes.md` re-includes something a default removed.
 
 ## Every exclusion is reported
 

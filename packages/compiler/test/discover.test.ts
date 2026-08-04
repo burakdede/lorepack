@@ -1,6 +1,6 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { LoreError, loadConfig } from '@lorepack/core';
+import { ALWAYS_EXCLUDE, LoreError, loadConfig } from '@lorepack/core';
 import { checkDeterminism, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { discover } from '../src/discover/discover.js';
@@ -83,6 +83,31 @@ describe('exclusions', () => {
       },
       (root) => {
         expect(paths(discoverIn(root))).toEqual(['a.md']);
+      },
+    );
+  });
+
+  it('applies those defaults to a subdirectory too', async () => {
+    // #201. Every path below was indexed as ordinary context, because the defaults were
+    // written in a form that anchors to the project root. A folder holding one JavaScript
+    // subproject passes the 2,500 file envelope on its dependencies alone, and `.git/config`
+    // is exactly where a remote URL carries a token.
+    await withProject(
+      {
+        'context/a.md': '#',
+        'context/node_modules/pkg/README.md': '# dependency',
+        'app/.git/config': '[remote "origin"]',
+        'app/dist/out.js': '',
+        'app/build/out.js': '',
+        'app/coverage/lcov.info': '',
+        'app/.lore/state.sqlite': '',
+        'app/.env': 'SECRET=1',
+      },
+      (root) => {
+        const discovery = discoverIn(root);
+        expect(paths(discovery)).toEqual(['context/a.md']);
+        // Excluded, not merely unparsed: an exclusion is silent, a warning is not.
+        expect(discovery.warnings).toEqual([]);
       },
     );
   });
@@ -302,5 +327,100 @@ describe('ignore matching', () => {
     ]);
     expect(matcher.excludes('drafts/skip.md')).toBe(true);
     expect(matcher.excludes('drafts/keep.md')).toBe(false);
+  });
+
+  /**
+   * A trailing slash marks a directory. It does not anchor the rule, which is the
+   * distinction #201 turned on: reading the raw pattern for a separator counted the
+   * trailing marker and made every `foo/` rule root-only.
+   */
+  it.each([
+    ['build/', 'build/out.js', true],
+    ['build/', 'app/build/out.js', true],
+    ['build/', 'a/b/c/build/out.js', true],
+    ['/build/', 'build/out.js', true],
+    ['/build/', 'app/build/out.js', false],
+    ['app/build/', 'app/build/out.js', true],
+    ['app/build/', 'nested/app/build/out.js', false],
+  ])('directory pattern %s against %s is %s', (pattern, path, expected) => {
+    const matcher = createMatcher([{ pattern, negated: false, source: 'test' }]);
+    expect(matcher.excludes(path)).toBe(expected);
+  });
+});
+
+/**
+ * Every default, at three depths.
+ *
+ * The absence of exactly this table is what let a root-only list look complete for four
+ * phases: each entry was correct at depth zero, which is the only depth anything tested.
+ */
+describe('the default exclusions apply at every depth', () => {
+  const matcher = createMatcher(
+    ALWAYS_EXCLUDE.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+  );
+
+  const DIRECTORIES = ['node_modules', '.git', '.lore', 'dist', 'build', 'coverage'];
+
+  it.each(DIRECTORIES)('excludes a %s directory wherever it sits', (directory) => {
+    for (const path of [
+      `${directory}/file.md`,
+      `sub/${directory}/file.md`,
+      `packages/a/${directory}/deep/file.md`,
+    ]) {
+      expect(matcher.excludes(path), path).toBe(true);
+    }
+  });
+
+  it.each([
+    '.env',
+    '.env.production',
+    'server.pem',
+    'private.key',
+    'id_rsa',
+    'id_ed25519.pub',
+    'store.p12',
+    'store.pfx',
+    '.DS_Store',
+    'Thumbs.db',
+  ])('excludes the credential-shaped name %s at depth', (name) => {
+    expect(matcher.excludes(name), name).toBe(true);
+    expect(matcher.excludes(`nested/deeper/${name}`), name).toBe(true);
+  });
+
+  it('excludes the project files Lorepack owns, and its archives, at depth', () => {
+    for (const path of [
+      'lore.yaml',
+      'sub/lore.yaml',
+      'sub/lore.lock',
+      'sub/.loreignore',
+      'sub/project.lorepack',
+      'sub/.gitignore',
+      'sub/.gitattributes',
+    ]) {
+      expect(matcher.excludes(path), path).toBe(true);
+    }
+  });
+
+  it('still indexes ordinary documents that merely sit near an excluded name', () => {
+    for (const path of [
+      'docs/building-a-release.md',
+      'docs/distribution.md',
+      'notes/coverage-notes.md',
+      'node_modules.md',
+    ]) {
+      expect(matcher.excludes(path), path).toBe(false);
+    }
+  });
+
+  it('lets a project re-include something a default removed', () => {
+    // The defaults come first and `.loreignore` after, so last-match-wins is what gives a
+    // project the final say. Asserted here because the layering is the reason the defaults
+    // can be broad without being a trap.
+    const withOverride = createMatcher([
+      ...ALWAYS_EXCLUDE.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+      { pattern: 'vendor/dist/notes.md', negated: true, source: '.loreignore' },
+    ]);
+    expect(withOverride.excludes('vendor/dist/other.md')).toBe(true);
+    expect(withOverride.excludes('vendor/dist/notes.md')).toBe(false);
   });
 });

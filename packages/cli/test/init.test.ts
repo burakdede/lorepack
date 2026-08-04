@@ -7,7 +7,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { CONFIG_FILENAME, IGNORE_FILENAME, loadConfig } from '@lorepack/core';
+import { createMatcher, parseIgnoreFile } from '@lorepack/compiler';
+import { ALWAYS_EXCLUDE, CONFIG_FILENAME, IGNORE_FILENAME, loadConfig } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { projectNameFrom, renderConfig } from '../src/services/init.js';
@@ -311,9 +312,47 @@ describe('generated content', () => {
     await withTempProject({ files: { 'a.md': '#' } }, async (project) => {
       await init(project.root);
       const contents = readFileSync(join(project.root, IGNORE_FILENAME), 'utf8');
-      expect(contents).toContain('node_modules/**');
+      expect(contents).toContain('node_modules/');
       expect(contents).toContain('.env');
       expect(contents.startsWith('#')).toBe(true);
+    });
+  });
+
+  /**
+   * The seeded file exists so the enforced defaults are visible. It is only worth having if
+   * the two are the same rule set, and comparing the strings would not show that: #201 was a
+   * list that read correctly and matched at one depth. So compare the two matchers over a
+   * shared table of paths instead, which is a claim about behaviour.
+   */
+  it('seeds a file that behaves exactly like the enforced defaults', async () => {
+    await withTempProject({ files: { 'a.md': '#' } }, async (project) => {
+      await init(project.root);
+      const seeded = createMatcher(
+        parseIgnoreFile(readFileSync(join(project.root, IGNORE_FILENAME), 'utf8'), IGNORE_FILENAME),
+      );
+      const enforced = createMatcher(
+        ALWAYS_EXCLUDE.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+      );
+
+      for (const path of [
+        'a.md',
+        'docs/guide.md',
+        'node_modules/pkg/index.js',
+        'sub/node_modules/pkg/index.js',
+        'packages/a/node_modules/deep/index.js',
+        '.git/config',
+        'sub/.git/config',
+        'sub/.lore/state.sqlite',
+        'app/dist/out.js',
+        'app/build/out.js',
+        'app/coverage/lcov.info',
+        'sub/.env',
+        'sub/key.pem',
+        'sub/archive.lorepack',
+        'docs/building-a-release.md',
+      ]) {
+        expect(seeded.excludes(path), path).toBe(enforced.excludes(path));
+      }
     });
   });
 });
