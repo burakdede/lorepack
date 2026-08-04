@@ -28,6 +28,31 @@ export const buildWarningSchema = z
   })
   .strict();
 
+/**
+ * What an ignore rule removed, grouped by the rule that removed it.
+ *
+ * Discovery used to drop an ignored path with a bare `return`, so a file removed by a rule
+ * was recorded nowhere: not in the build, not in `lore inspect`, not over the API, and not
+ * in the Studio view whose whole purpose is naming what is missing and why (#202). A rule
+ * written too broadly could take a whole directory out of every answer, invisibly.
+ *
+ * Grouped by rule rather than listed per file, because the number of files a rule removes
+ * is bounded by the corpus and not by the build: `node_modules/` is one decision, whether it
+ * takes 12 files or 200,000. `sample` is capped and sorted so two builds of identical inputs
+ * record identical bytes.
+ */
+export const buildExclusionSchema = z
+  .object({
+    /** The rule as written, so a reader can find it in the file it came from. */
+    pattern: z.string().min(1),
+    /** Which layer wrote it: the built-in defaults, or the project's own `.loreignore`. */
+    source: z.string().min(1),
+    /** Paths this rule removed. A pruned directory counts once, not once per file inside. */
+    count: z.int().positive(),
+    sample: z.array(z.string().min(1)),
+  })
+  .strict();
+
 export const buildManifestSchema = z
   .object({
     formatVersion: z.literal(1),
@@ -58,6 +83,12 @@ export const buildManifestSchema = z
       })
       .strict(),
     warnings: z.array(buildWarningSchema),
+    /**
+     * Optional so a build written before #202 still parses. Absent means "this build does not
+     * know", which is different from an empty array meaning "nothing was excluded", and the
+     * interfaces say so rather than rendering the two the same way.
+     */
+    exclusions: z.array(buildExclusionSchema).optional(),
   })
   .strict()
   .refine(
@@ -104,4 +135,5 @@ export type Lockfile = z.infer<typeof lockfileSchema>;
 export type BuildManifest = z.infer<typeof buildManifestSchema>;
 export type BuildReceipt = z.infer<typeof buildReceiptSchema>;
 export type BuildWarning = z.infer<typeof buildWarningSchema>;
+export type BuildExclusion = z.infer<typeof buildExclusionSchema>;
 export type BuildState = z.infer<typeof buildStateSchema>;

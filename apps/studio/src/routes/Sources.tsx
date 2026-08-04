@@ -46,6 +46,14 @@ interface Excluded {
   readonly class: string;
 }
 
+/** What one ignore rule removed, grouped by the rule rather than listed per file. */
+interface Exclusion {
+  readonly pattern: string;
+  readonly source: string;
+  readonly count: number;
+  readonly sample: readonly string[];
+}
+
 type View = 'indexed' | 'excluded';
 
 export function Sources(): React.JSX.Element {
@@ -69,10 +77,16 @@ export function Sources(): React.JSX.Element {
       if (!response.ok) throw new Error('This server does not report warnings.');
       const body = (await response.json()) as {
         groups: readonly { class: string; warnings: readonly Excluded[] }[];
+        exclusions: readonly Exclusion[] | null;
+        excludedByRule: number | null;
       };
-      return body.groups.flatMap((group) =>
-        group.warnings.map((w) => ({ ...w, class: group.class })),
-      );
+      return {
+        discovered: body.groups.flatMap((group) =>
+          group.warnings.map((w) => ({ ...w, class: group.class })),
+        ),
+        byRule: body.exclusions,
+        byRuleCount: body.excludedByRule,
+      };
     },
   });
 
@@ -99,7 +113,12 @@ export function Sources(): React.JSX.Element {
     );
   }
 
-  const excludedCount = excluded.data?.length ?? 0;
+  // Everything the build left out, which is the two kinds together. The count on the control
+  // read `excluded 1` while a rule had quietly removed a whole directory, because the control
+  // counted warnings and called them exclusions (#202).
+  const discovered = excluded.data?.discovered ?? [];
+  const byRule = excluded.data?.byRule ?? null;
+  const excludedCount = discovered.length + (excluded.data?.byRuleCount ?? 0);
 
   return (
     <section>
@@ -146,7 +165,12 @@ export function Sources(): React.JSX.Element {
       </div>
 
       {view === 'excluded' ? (
-        <ExcludedList entries={excluded.data ?? []} loading={excluded.isPending} />
+        <ExcludedList
+          entries={discovered}
+          byRule={byRule}
+          loading={excluded.isPending}
+          isError={excluded.isError}
+        />
       ) : (
         <div className="sources-split">
           <ArtifactTable
@@ -265,49 +289,134 @@ function ArtifactDetail({ artifact }: { readonly artifact: Artifact }): React.JS
 }
 
 /**
- * Every file that is not in the build, and the exact reason.
+ * Everything that is not in the build, and the exact reason, in the two shapes it comes in.
  *
  * Architecture 6.9 makes exclusion transparency a promise rather than a nicety: a document a
  * person believes is indexed and is not is the single most expensive way for this product to
  * be wrong, because every answer afterwards is confidently incomplete.
+ *
+ * This kept only half of that promise until #202. A file the walk read and could not parse
+ * produces a warning and appeared here; a file an ignore rule removed produced nothing at
+ * all, so the most common reason a document is missing was the one reason this view could
+ * not show. The control said `excluded 1` while a rule had taken a whole directory.
+ *
+ * The two are kept as separate tables rather than merged into one list, because they are
+ * different decisions taken at different moments: a rule decides before anything is read,
+ * and a parser decides after. Merging them would need a column explaining which kind each
+ * row was, which is the table above it.
  */
 function ExcludedList({
   entries,
+  byRule,
   loading,
+  isError,
 }: {
   readonly entries: readonly Excluded[];
+  readonly byRule: readonly Exclusion[] | null;
   readonly loading: boolean;
+  readonly isError: boolean;
 }): React.JSX.Element {
   if (loading) return <Loading label="Reading exclusions." />;
-  if (entries.length === 0) {
-    return <Empty title="Nothing was excluded. Every file in scope is in this build." />;
+  if (isError) {
+    return <Empty title="This server does not report what was left out of the build." />;
+  }
+  if (entries.length === 0 && (byRule === null || byRule.length === 0)) {
+    return (
+      <Empty
+        title={
+          byRule === null
+            ? 'Nothing was discovered and skipped. This build predates the record of what ignore rules removed.'
+            : 'Nothing was excluded. Every file in scope is in this build.'
+        }
+      />
+    );
   }
 
   return (
-    <table className="artifacts">
-      <thead>
-        <tr>
-          <th scope="col">path</th>
-          <th scope="col">reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        {entries.map((entry) => (
-          <tr key={`${entry.code}-${entry.path ?? ''}-${entry.message}`} className="artifact-row">
-            <td className="excluded-path">{entry.path ?? '(no path)'}</td>
-            <td>
-              <Adjacent
-                lead={entry.class}
-                leadClassName="excluded-class"
-                className="excluded-message prose"
+    <>
+      {/* First, because it is the larger and quieter of the two. A rule written a little too
+          broadly takes a whole folder out of every answer without producing a warning, and
+          that is the case a person opens this view to find. */}
+      {byRule !== null && byRule.length > 0 && (
+        <table className="artifacts">
+          <caption className="excluded-caption prose">
+            Removed by an ignore rule before anything was read. Grouped by the rule, because one
+            line of configuration is one decision however many files it covers.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">rule</th>
+              <th scope="col">from</th>
+              <th scope="col" className="numeric">
+                paths
+              </th>
+              <th scope="col">for example</th>
+            </tr>
+          </thead>
+          <tbody>
+            {byRule.map((exclusion) => (
+              <tr key={`${exclusion.source}-${exclusion.pattern}`} className="artifact-row">
+                <td className="excluded-path">{exclusion.pattern}</td>
+                <td className="excluded-source">{exclusion.source}</td>
+                <td className="numeric">{exclusion.count.toLocaleString()}</td>
+                <td className="excluded-sample">
+                  <ul className="sample-list">
+                    {exclusion.sample.map((path) => (
+                      <li key={path}>{path}</li>
+                    ))}
+                    {exclusion.count > exclusion.sample.length && (
+                      <li className="prose">
+                        {`and ${(exclusion.count - exclusion.sample.length).toLocaleString()} more`}
+                      </li>
+                    )}
+                  </ul>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {byRule === null && (
+        <p className="excluded-caption prose">
+          This build predates the record of what ignore rules removed, so only files that were read
+          and skipped are listed. Build again to record both.
+        </p>
+      )}
+
+      {entries.length > 0 && (
+        <table className="artifacts">
+          <caption className="excluded-caption prose">
+            Found by the walk and not indexed, each with the reason it was skipped.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">path</th>
+              <th scope="col">reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr
+                key={`${entry.code}-${entry.path ?? ''}-${entry.message}`}
+                className="artifact-row"
               >
-                {withoutPath(entry)}
-              </Adjacent>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+                <td className="excluded-path">{entry.path ?? '(no path)'}</td>
+                <td>
+                  <Adjacent
+                    lead={entry.class}
+                    leadClassName="excluded-class"
+                    className="excluded-message prose"
+                  >
+                    {withoutPath(entry)}
+                  </Adjacent>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }
 

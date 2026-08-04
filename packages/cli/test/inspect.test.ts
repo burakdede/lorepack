@@ -62,6 +62,89 @@ describe('lore inspect warnings', () => {
   });
 });
 
+/**
+ * #202. The other half of "exactly what was not parsed", and the half that was missing.
+ * `warnings` lists files the walk read and could not use; a file an ignore rule removed
+ * produced no record at all, which is the more common reason a document is not in a build.
+ */
+describe('lore inspect exclusions', () => {
+  it('names the rule, where it came from, and what it took', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': CONFIG,
+          '.loreignore': 'drafts/\n',
+          'a.md': '# A\n\nText.',
+          'drafts/one.md': '# One',
+          'drafts/two.md': '# Two',
+        },
+      },
+      async (temp) => {
+        await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+        const result = await run(['--cwd', temp.root, 'inspect', 'exclusions']);
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('drafts/');
+        expect(result.stdout).toContain('.loreignore');
+        expect(result.stdout).toContain('drafts/one.md');
+        expect(result.stdout).toContain('drafts/two.md');
+      },
+    );
+  });
+
+  it('reports it as JSON, with the exact count and a bounded sample', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': CONFIG,
+          '.loreignore': 'drafts/\n',
+          'a.md': '# A\n\nText.',
+          'drafts/one.md': '# One',
+        },
+      },
+      async (temp) => {
+        await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+        const parsed = JSON.parse(
+          (await run(['--cwd', temp.root, '--json', 'inspect', 'exclusions'])).stdout,
+        );
+
+        expect(parsed.recorded).toBe(true);
+        const drafts = parsed.exclusions.find(
+          (one: { pattern: string }) => one.pattern === 'drafts/',
+        );
+        expect(drafts.count).toBe(1);
+        expect(drafts.sample).toEqual(['drafts/one.md']);
+        expect(parsed.total).toBe(
+          parsed.exclusions.reduce((sum: number, one: { count: number }) => sum + one.count, 0),
+        );
+      },
+    );
+  });
+
+  it('reads it out of the sealed build, so it survives the sources', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': CONFIG,
+          '.loreignore': 'drafts/\n',
+          'a.md': '# A\n\nText.',
+          'drafts/one.md': '# One',
+        },
+      },
+      async (temp) => {
+        await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+        // The whole point of sealing it: the answer is a property of the build, not something
+        // recomputed by walking a source tree that may no longer exist.
+        rmSync(join(temp.root, 'drafts'), { recursive: true, force: true });
+
+        const result = await run(['--cwd', temp.root, 'inspect', 'exclusions']);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('drafts/one.md');
+      },
+    );
+  });
+});
+
 describe('lore inspect build', () => {
   it('shows counts, capabilities, versions and canonical roots', async () => {
     await builtProject(async (_root, lore) => {

@@ -150,7 +150,11 @@ export async function startServing(options: ServingOptions): Promise<RunningServ
       try {
         const scope = await backend.open(handle);
         const manifest = await scope.catalog.manifest();
-        return { buildId: manifest.buildId, warnings: manifest.warnings };
+        return {
+          buildId: manifest.buildId,
+          warnings: manifest.warnings,
+          ...(manifest.exclusions === undefined ? {} : { exclusions: manifest.exclusions }),
+        };
       } finally {
         handle.release();
       }

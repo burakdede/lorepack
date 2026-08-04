@@ -66,7 +66,9 @@ Record the date, the browser version and the screen reader version alongside the
    The plan is never fetched until that button is pressed.
 4. **Sources.** Tab reaches the indexed/excluded switch, the filter, and every file in the
    table. Enter on a file opens the detail beside it; focus stays where it was pressed.
-   Switching to excluded and back does not lose the filter.
+   Switching to excluded and back does not lose the filter. On the excluded view, both
+   tables are present: what a rule removed, and what the walk read and could not parse. The
+   number on the switch is the sum of the two.
 5. **Playground.** Tab reaches the two tabs, the task field, profile, budget, and Assemble.
    A budget outside the documented range disables Assemble and says the range. After
    assembling, every omission is on screen without expanding anything.

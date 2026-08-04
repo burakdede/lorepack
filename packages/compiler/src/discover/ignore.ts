@@ -20,6 +20,15 @@ export interface IgnoreRule {
 export interface Matcher {
   /** True when the path is excluded. Later rules win, so a negation can re-include. */
   readonly excludes: (canonicalPath: string, isDirectory?: boolean) => boolean;
+  /**
+   * The rule that decided to exclude this path, or `null` when it is included.
+   *
+   * `excludes` answers the question discovery needs to act; this answers the one a reader
+   * needs to act. "Not in the build" is not a useful answer when the next question is always
+   * "which line of which file did that", and until #202 nothing could answer it because the
+   * deciding rule was known here and discarded one frame later.
+   */
+  readonly decide: (canonicalPath: string) => IgnoreRule | null;
   readonly rules: readonly IgnoreRule[];
 }
 
@@ -72,15 +81,22 @@ export function createMatcher(rules: readonly IgnoreRule[]): Matcher {
     isMatch: picomatch(expand(rule.pattern), { dot: true }),
   }));
 
+  function decide(canonicalPath: string): IgnoreRule | null {
+    let deciding: IgnoreRule | null = null;
+    // Last matching rule wins, which is what makes `!pattern` able to re-include. The
+    // deciding rule is the last one that matched at all, and it excludes only when it was
+    // not a negation.
+    for (const { rule, isMatch } of compiled) {
+      if (isMatch(canonicalPath)) deciding = rule.negated ? null : rule;
+    }
+    return deciding;
+  }
+
   return {
     rules,
+    decide,
     excludes(canonicalPath: string): boolean {
-      let excluded = false;
-      // Last matching rule wins, which is what makes `!pattern` able to re-include.
-      for (const { rule, isMatch } of compiled) {
-        if (isMatch(canonicalPath)) excluded = !rule.negated;
-      }
-      return excluded;
+      return decide(canonicalPath) !== null;
     },
   };
 }
