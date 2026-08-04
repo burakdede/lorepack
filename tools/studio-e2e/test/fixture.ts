@@ -96,8 +96,13 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       writeFileSync(join(projectRoot, 'docs', 'onboarding.md'), ONBOARDING, 'utf8');
       // A file no parser handles, so the exclusion list on Sources has something real in it.
       writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));
+      // And a document removed by a rule, which is the other and more common way to be
+      // missing from a build. Sources listed only the first kind until #202.
+      mkdirSync(join(projectRoot, 'drafts'));
+      writeFileSync(join(projectRoot, 'drafts', 'unfinished.md'), '# Unfinished\n', 'utf8');
 
       await lore(projectRoot, ['init', '.']);
+      writeFileSync(join(projectRoot, '.loreignore'), 'drafts/\n', { flag: 'a' });
       await lore(projectRoot, ['build']);
       // A second build, so Versions has a history to compare, activate and roll back.
       writeFileSync(

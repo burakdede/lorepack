@@ -1,5 +1,10 @@
 import { createPlan, readLockfile } from '@lorepack/compiler';
-import { type BuildWarning, type LoadedConfig, ProgressBus } from '@lorepack/core';
+import {
+  type BuildExclusion,
+  type BuildWarning,
+  type LoadedConfig,
+  ProgressBus,
+} from '@lorepack/core';
 import { readPreviousBuild } from './project.js';
 import { lockInputs } from './versions.js';
 
@@ -56,20 +61,39 @@ export interface WarningSummary {
   readonly buildId: string;
   readonly total: number;
   readonly groups: readonly WarningGroup[];
+  /**
+   * What ignore rules removed, or `null` for a build made before the record existed.
+   *
+   * `null` and `[]` are different claims and the interfaces render them differently: one is
+   * "this build does not know", the other is "no rule removed anything". Collapsing them
+   * would be the same defect this field exists to fix, one level down.
+   */
+  readonly exclusions: readonly BuildExclusion[] | null;
+  /** Paths removed by a rule, which is not the same number as the number of rules. */
+  readonly excludedByRule: number | null;
 }
 
 /**
- * The active build's warnings, grouped by class.
+ * Everything the build left out, in one answer.
  *
- * Grouped on the server so the CLI and Studio agree about what a class is, and because a
- * client that receives a flat list has to invent the grouping, which is how two surfaces come
- * to count the same thing differently.
+ * Two different things are "not in the build" and a reader looking for a missing document
+ * does not know which they have: a file with no parser, which produces a warning, and a file
+ * an ignore rule removed, which produces nothing at all until #202. They arrive together so
+ * that no client has to fetch two endpoints and decide how to add them up, which is how two
+ * surfaces come to count the same thing differently.
+ *
+ * Grouped on the server for the same reason: a client that receives a flat list has to invent
+ * the grouping.
  */
 export function createWarningsEndpoint(
-  read: () => Promise<{ buildId: string; warnings: readonly BuildWarning[] }>,
+  read: () => Promise<{
+    buildId: string;
+    warnings: readonly BuildWarning[];
+    exclusions?: readonly BuildExclusion[];
+  }>,
 ): () => Promise<WarningSummary> {
   return async () => {
-    const { buildId, warnings } = await read();
+    const { buildId, warnings, exclusions } = await read();
 
     const byClass = new Map<BuildWarning['class'], BuildWarning[]>();
     for (const warning of warnings) {
@@ -81,6 +105,11 @@ export function createWarningsEndpoint(
     return {
       buildId,
       total: warnings.length,
+      exclusions: exclusions ?? null,
+      excludedByRule:
+        exclusions === undefined
+          ? null
+          : exclusions.reduce((sum, exclusion) => sum + exclusion.count, 0),
       // Sorted by count, then by name, so the display order is stable across requests and
       // the largest group is where the eye lands first.
       groups: [...byClass.entries()]

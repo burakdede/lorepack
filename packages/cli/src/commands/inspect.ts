@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { openReadOnly } from '@lorepack/backend-local';
 import {
   type BuildId,
+  type BuildManifest,
   buildManifestSchema,
   count,
   LORE_DIRECTORY,
@@ -21,7 +22,7 @@ import { buildDirectory, openStateStore, resolveBuildId } from '../services/buil
  * (architecture section 4.9) has to mean to be worth anything.
  */
 
-const SUBJECTS = ['warnings', 'sources', 'build', 'chunks', 'builds'] as const;
+const SUBJECTS = ['warnings', 'exclusions', 'sources', 'build', 'chunks', 'builds'] as const;
 type Subject = (typeof SUBJECTS)[number];
 
 export function inspectCommand(): CommandDefinition {
@@ -58,6 +59,8 @@ export function inspectCommand(): CommandDefinition {
         switch (subject) {
           case 'warnings':
             return inspectWarnings(loreDirectory, buildId);
+          case 'exclusions':
+            return inspectExclusions(loreDirectory, buildId);
           case 'build':
             return inspectBuild(loreDirectory, buildId, active?.buildId ?? null);
           case 'sources':
@@ -152,11 +155,8 @@ function inspectWarnings(loreDirectory: string, buildId: BuildId): CommandResult
   };
 }
 
-function inspectBuild(
-  loreDirectory: string,
-  buildId: BuildId,
-  activeBuildId: BuildId | null,
-): CommandResult {
+/** The sealed manifest, validated. One reader, so two subjects cannot disagree about it. */
+function readManifest(loreDirectory: string, buildId: BuildId): BuildManifest {
   const manifestPath = join(buildDirectory(loreDirectory, buildId), 'manifest.json');
   if (!existsSync(manifestPath)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildId} has no manifest.`, {
@@ -164,7 +164,67 @@ function inspectBuild(
       subject: buildId,
     });
   }
-  const manifest = buildManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
+  return buildManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
+}
+
+/**
+ * What ignore rules removed, read from the sealed manifest.
+ *
+ * The other half of "exactly what was not parsed". `lore inspect warnings` lists files the
+ * walk read and could not use; this lists the ones a rule removed before anything was read,
+ * which is the more common reason a document is missing and was recorded nowhere until #202.
+ *
+ * Grouped by rule, because one line of configuration is one decision however many files it
+ * covers, and a per-file listing of an excluded dependency tree would be longer than the
+ * project.
+ */
+function inspectExclusions(loreDirectory: string, buildId: BuildId): CommandResult {
+  const manifest = readManifest(loreDirectory, buildId);
+  const exclusions = manifest.exclusions;
+
+  if (exclusions === undefined) {
+    return {
+      human: [
+        `${buildId.slice(0, 17)} does not record what its ignore rules removed.`,
+        '',
+        'It was built before that record existed. Run `lore build` to make one that does.',
+      ].join('\n'),
+      json: { buildId, recorded: false, total: 0, exclusions: [] },
+    };
+  }
+
+  const total = exclusions.reduce((sum, exclusion) => sum + exclusion.count, 0);
+  const lines: string[] = [];
+  if (exclusions.length === 0) {
+    lines.push('No ignore rule removed anything. Every file in scope reached the build.');
+  } else {
+    lines.push(
+      `${count(total, 'path')} removed by ${count(exclusions.length, 'rule')} in ${buildId.slice(0, 17)}`,
+      '',
+    );
+    for (const exclusion of exclusions) {
+      lines.push(
+        `${exclusion.pattern}  ${count(exclusion.count, 'path')}, from ${exclusion.source}`,
+      );
+      for (const path of exclusion.sample) lines.push(`  ${path}`);
+      const remaining = exclusion.count - exclusion.sample.length;
+      if (remaining > 0) lines.push(`  and ${count(remaining, 'more path')}`);
+      lines.push('');
+    }
+  }
+
+  return {
+    human: lines.join('\n').trimEnd(),
+    json: { buildId, recorded: true, total, exclusions },
+  };
+}
+
+function inspectBuild(
+  loreDirectory: string,
+  buildId: BuildId,
+  activeBuildId: BuildId | null,
+): CommandResult {
+  const manifest = readManifest(loreDirectory, buildId);
 
   const lines = [
     `Build ${manifest.buildId}${manifest.buildId === activeBuildId ? ' (active)' : ''}`,

@@ -58,12 +58,40 @@ test.describe('Sources', () => {
     await expect(detail).toContainText('markdown');
     await expect(detail).toContainText('Release runbook');
 
-    // And the half that gets buried: the file with no parser, and why it was skipped.
+    // And the half that gets buried, in both of the shapes it comes in: a file the walk read
+    // and could not parse, and a file a rule removed before anything was read (#202).
     await page.getByRole('button', { name: /excluded \d/ }).click();
     await expect(page.getByText('docs/diagram.bin')).toBeVisible();
     await expect(page.getByText(/no supported parser/)).toBeVisible();
+    await expect(page.getByText('drafts/', { exact: true })).toBeVisible();
+    await expect(page.getByText('drafts/unfinished.md')).toBeVisible();
 
     await checkA11y();
+  });
+
+  /**
+   * The count against the list, against a real build.
+   *
+   * The component test asserts the same equality against a fixture, and a fixture agrees with
+   * whoever wrote the component: this one is fed by a real `.loreignore` and a real walk.
+   */
+  test('counts every kind of exclusion it lists', async ({ page, session }) => {
+    await page.goto(`${session.url}/#/sources`);
+
+    const control = page.getByRole('button', { name: /excluded \d+/ });
+    const claimed = Number(/excluded (\d+)/.exec((await control.textContent()) ?? '')?.[1]);
+
+    const reported = (await (await fetch(`${session.url}/v1/warnings`)).json()) as {
+      groups: { warnings: unknown[] }[];
+      excludedByRule: number | null;
+      exclusions: { pattern: string }[] | null;
+    };
+
+    // A build that recorded nothing would make the assertion below vacuous.
+    expect(reported.exclusions?.some((one) => one.pattern === 'drafts/')).toBe(true);
+    expect(claimed).toBe(
+      (reported.excludedByRule ?? 0) + reported.groups.flatMap((group) => group.warnings).length,
+    );
   });
 });
 

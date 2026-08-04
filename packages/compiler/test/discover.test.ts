@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ALWAYS_EXCLUDE, LoreError, loadConfig } from '@lorepack/core';
 import { checkDeterminism, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
-import { discover } from '../src/discover/discover.js';
+import { discover, EXCLUSION_SAMPLE_LIMIT } from '../src/discover/discover.js';
 import { createMatcher, parseIgnoreFile } from '../src/discover/ignore.js';
 
 const CONFIG = 'version: 1\nname: p\nsources:\n  - .\n';
@@ -161,6 +161,132 @@ describe('exclusions', () => {
     );
   });
 
+  it('warns about an unsupported format, naming the exact path', async () => {
+    await withProject({ 'a.md': '#', 'photo.png': 'binary' }, (root) => {
+      const result = discoverIn(root);
+      const warning = result.warnings.find((w) => w.path === 'photo.png');
+      expect(warning?.code).toBe('unsupported-format');
+      expect(warning?.message).toContain('photo.png');
+    });
+  });
+});
+
+/**
+ * #202. A file an ignore rule removed was recorded nowhere: not in the build, not in
+ * `lore inspect`, not over the API, and not in the Studio view whose whole purpose is naming
+ * what is missing and why. A rule written a little too broadly could take a folder out of
+ * every answer, and the build would look entirely healthy.
+ */
+describe('what an ignore rule removed', () => {
+  it('names the rule, its source, how many paths it took, and some of them', async () => {
+    await withProject(
+      {
+        'a.md': '#',
+        'drafts/one.md': '#',
+        'drafts/two.md': '#',
+        'scratch.tmp': 'x',
+        '.loreignore': 'drafts/\n*.tmp\n',
+      },
+      (root) => {
+        const { exclusions } = discoverIn(root);
+        const drafts = exclusions.find((one) => one.pattern === 'drafts/');
+
+        expect(drafts).toBeDefined();
+        expect(drafts?.source).toBe('.loreignore');
+        expect(drafts?.count).toBe(2);
+        expect(drafts?.sample).toEqual(['drafts/one.md', 'drafts/two.md']);
+
+        expect(exclusions.find((one) => one.pattern === '*.tmp')?.sample).toEqual(['scratch.tmp']);
+      },
+    );
+  });
+
+  it('attributes a rule to the layer that wrote it', async () => {
+    await withProject({ 'a.md': '#', 'notes/b.md': '#', '.loreignore': 'notes/\n' }, (root) => {
+      const { exclusions } = discoverIn(root);
+      // `lore.yaml` is removed by the built-in defaults, `notes/` by the project's own file.
+      // A reader looking for the line that removed their folder needs to know which to open.
+      expect(exclusions.find((one) => one.pattern === 'lore.yaml')?.source).toBe('defaults');
+      expect(exclusions.find((one) => one.pattern === 'notes/')?.source).toBe('.loreignore');
+    });
+  });
+
+  it('records nothing for a path a negation put back', async () => {
+    await withProject(
+      {
+        'drafts/keep.md': '#',
+        'drafts/skip.md': '#',
+        '.loreignore': 'drafts/**\n!drafts/keep.md\n',
+      },
+      (root) => {
+        const { exclusions, artifacts } = discoverIn(root);
+        expect(artifacts.map((a) => a.relativePath)).toContain('drafts/keep.md');
+        const drafts = exclusions.find((one) => one.pattern === 'drafts/**');
+        expect(drafts?.count).toBe(1);
+        expect(drafts?.sample).toEqual(['drafts/skip.md']);
+      },
+    );
+  });
+
+  it('caps the sample, so one rule cannot become a second listing of the corpus', async () => {
+    const files: Record<string, string> = { 'a.md': '#', '.loreignore': 'bulk/\n' };
+    for (let index = 0; index < 40; index += 1) {
+      files[`bulk/file-${String(index).padStart(3, '0')}.md`] = '#';
+    }
+
+    await withProject(files, (root) => {
+      const bulk = discoverIn(root).exclusions.find((one) => one.pattern === 'bulk/');
+      // The count is exact and the sample is bounded: a dependency tree of 200,000 files is
+      // one decision to report, not 200,000 rows to store in a build.
+      expect(bulk?.count).toBe(40);
+      expect(bulk?.sample).toHaveLength(EXCLUSION_SAMPLE_LIMIT);
+    });
+  });
+
+  it('leaves the directory Lorepack owns out of the record', async () => {
+    // `.lore` holds the state database, the lock and the sealed builds. Its contents move
+    // while a build runs, so recording them would both mislead a reader looking for their
+    // own document and make two builds of identical sources record different bytes.
+    await withProject(
+      { 'a.md': '#', '.lore/state.sqlite': 'x', '.lore/lock/owner.json': '{}' },
+      (root) => {
+        const { exclusions } = discoverIn(root);
+        for (const exclusion of exclusions) {
+          for (const path of exclusion.sample) expect(path.startsWith('.lore/')).toBe(false);
+        }
+        expect(exclusions.find((one) => one.pattern.startsWith('.lore'))).toBeUndefined();
+      },
+    );
+  });
+
+  it('records the same bytes from two different absolute roots', async () => {
+    const files: Record<string, string> = {
+      'lore.yaml': CONFIG,
+      'a.md': '#',
+      '.loreignore': 'drafts/\n*.tmp\n',
+      'drafts/one.md': '#',
+      'drafts/two.md': '#',
+      'scratch.tmp': 'x',
+    };
+    const report = await checkDeterminism({
+      files,
+      produce: (project) => JSON.stringify(discoverIn(project.root).exclusions),
+    });
+    expect(report.message ?? '').toBe('');
+  });
+
+  it('records an empty list when no rule removed anything a user wrote', async () => {
+    await withProject({ 'a.md': '#', 'b.md': '#' }, (root) => {
+      // `lore.yaml` is still removed by the defaults, so this is about the shape rather than
+      // emptiness: the field is always present, and absent means something different.
+      const { exclusions } = discoverIn(root);
+      expect(Array.isArray(exclusions)).toBe(true);
+      expect(exclusions.every((one) => one.count > 0)).toBe(true);
+    });
+  });
+});
+
+describe('unsupported formats', () => {
   it('warns about an unsupported format, naming the exact path', async () => {
     await withProject({ 'a.md': '#', 'photo.png': 'binary' }, (root) => {
       const result = discoverIn(root);

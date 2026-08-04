@@ -51,6 +51,45 @@ Section 6.9 requires an unsupported file to be excluded "with a visible warning 
 path". Silently indexing nothing is indistinguishable from a broken build, so discovery
 never drops a file quietly.
 
+There are **two ways** to not be in a build, decided at different moments, and both are
+recorded:
+
+| | Decided | Recorded as | Read with |
+|---|---|---|---|
+| A rule removed it | before anything is read | an entry in `manifest.exclusions` | `lore inspect exclusions` |
+| Nothing could read it | after the bytes are read | an entry in `manifest.warnings` | `lore inspect warnings` |
+
+Only the second existed until #202. The first is the more common reason a document is
+missing: a rule written a shade too broadly takes a folder out of every answer, and the
+build looks entirely healthy while it happens. `if (matcher.excludes(canonical)) return;`
+knew both the path and the rule and discarded them one frame later, so nothing downstream
+could report it and Studio's "excluded" view listed only unparseable files.
+
+### The record is grouped by rule, not by file
+
+One line of configuration is one decision however many files it covers, so the unit is the
+rule: its pattern, the layer it came from (`defaults` or `.loreignore`), how many paths it
+removed, and a capped sample of them. `node_modules/` is one row whether it takes twelve
+files or two hundred thousand, and a per-file listing of an excluded dependency tree would
+be longer than the project it describes.
+
+Two consequences worth knowing:
+
+- **`.lore/` is left out of the record.** It is Lorepack's own directory, its contents move
+  while a build runs (the lock exists for the duration, the cache and the sealed builds
+  accumulate), and reporting it would both bury the reader's own missing document and make
+  two builds of identical sources record different bytes.
+- **The record is not an input to build identity.** Identity is what a build *contains*, and
+  two builds holding the same artifacts are the same build however the rest was filtered
+  out. Warnings have always sat outside identity for the same reason. `deriveBuildId` takes
+  the canonical roots, the effective configuration and the versions, and the manifest is
+  written afterwards.
+
+`exclusions` is optional in the manifest schema, so a build made before the record existed
+still parses. **Absent and empty are different claims**: one is "this build does not know",
+the other is "no rule removed anything", and every interface says which rather than
+rendering them the same way.
+
 Warnings distinguish a **planned** format from an **unsupported** one. A user with a PDF
 should read "supported in a later release", not "unsupported": those are materially
 different statements, and only one of them is a reason to look for another tool.

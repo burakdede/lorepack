@@ -310,6 +310,15 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
               ...(warning.path === '.' ? {} : { path: warning.path }),
               class: warning.class,
             })),
+            // Sealed with the build, so `lore inspect exclusions` and Studio can answer after
+            // the sources have moved on and after a rollback, without reading a source file.
+            // Not an input to `deriveBuildId`: identity is what a build contains, and two
+            // builds holding the same artifacts are the same build however the rest was
+            // filtered out. Warnings are already outside identity for the same reason.
+            exclusions: discovery.exclusions.map((exclusion) => ({
+              ...exclusion,
+              sample: [...exclusion.sample],
+            })),
           };
 
           progress.start('validating', 'Validating');

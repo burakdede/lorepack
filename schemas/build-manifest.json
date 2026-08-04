@@ -147,6 +147,41 @@
       ],
       "type": "object"
     },
+    "exclusions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "type": "integer"
+          },
+          "pattern": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sample": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "pattern",
+          "source",
+          "count",
+          "sample"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
     "formatVersion": {
       "const": 1,
       "type": "number"

@@ -176,3 +176,24 @@
     position: static;
   }
 }
+
+.excluded-caption {
+  caption-side: top;
+  text-align: left;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding-bottom: var(--space-2);
+  max-width: 82ch;
+}
+
+.excluded-source {
+  color: var(--text-muted);
+}
+
+.sample-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
