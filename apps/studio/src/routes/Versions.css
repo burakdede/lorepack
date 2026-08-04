@@ -66,6 +66,34 @@
   white-space: nowrap;
 }
 
+/**
+ * The actions stay put while the rest of the row scrolls under them.
+ *
+ * `.main` is capped at 1100px and this table is wider than that, so the column that ended up
+ * outside the scroll box was `actions`: on a route whose entire purpose is to activate and
+ * roll back, `Activate` and `Pack` were past the right edge at every window width, and a
+ * reader had to discover horizontal scrolling inside a table to find them (#210).
+ *
+ * Pinning rather than dropping a column, because `capabilities` is the cell that grows as
+ * capabilities are added, so any fix that only narrows the table postpones the problem to the
+ * phase that adds one.
+ *
+ * The background is set on the cell rather than inherited from the row: a sticky cell paints
+ * over the cells it scrolls across, and without its own background the text underneath shows
+ * through it.
+ */
+.build-actions,
+.builds th[scope="col"]:last-child {
+  position: sticky;
+  right: 0;
+  background: var(--bg);
+  padding-left: var(--space-3);
+}
+
+.build-row-active .build-actions {
+  background: var(--surface);
+}
+
 .build-actions {
   text-align: right;
   white-space: nowrap;
