@@ -28,9 +28,14 @@ Everything else the automated suite covers: `pnpm acceptance` runs the
 
    - [ ] It printed the files it created, and they exist.
    - [ ] It built and activated without asking a single question.
-   - [ ] It printed `HTTP`, `MCP HTTP`, `MCP stdio` and a `Connect now` list.
-   - [ ] It did **not** print a Studio URL. Studio is Phase 4, and printing it would be the
-         CLI naming something that does not exist.
+   - [ ] It printed `Studio`, `HTTP`, `MCP HTTP`, `MCP stdio` and a `Connect now` list.
+   - [ ] The Studio URL opens and shows the build it just made.
+
+   > This line read "it did **not** print a Studio URL" until Phase 4 shipped one. The
+   > amendment on #53 said the phase that adds the assets updates the assertion in the same
+   > change, and #64 did that in `dev.e2e.test.ts`; this checklist was missed, and said the
+   > opposite of the test for a phase. If a later phase adds a line to that block, this is the
+   > second place to change.
 
 2. **Connect the client**, from a second terminal in the same project.
 
@@ -80,6 +85,7 @@ Fill this in each time. An integration page with no date is a claim, not a recor
 | Date | Client version | Platform | Result |
 |---|---|---|---|
 | 2026-08-03 | Claude Code 2.1.220 | Linux x64 | Steps 1, 2 and 6 verified automatically and by hand. Steps 3, 4 and 5 require a human at the client and are unrecorded. |
+| 2026-08-04 | Claude Code 2.1.221 | Linux x64 | Step 1 re-run by hand on a five-document project during the Phase 4 closing pass, including the Studio line this checklist had been asserting the absence of. Step 5 verified by hand: an edit produced a new build within one watch interval and the served build id followed. Steps 3 and 4 still require a human at the client and remain unrecorded. |
 
 ## If a step fails
 
