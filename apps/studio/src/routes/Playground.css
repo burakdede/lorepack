@@ -112,6 +112,15 @@
   color: var(--text-muted);
 }
 
+.table-name {
+  color: var(--text-primary);
+}
+
+.table-id {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
 /* Arithmetic, not a verdict. No bar, no gauge, no percentage: each of those reads as
    confidence whatever the caption says. */
 .score {

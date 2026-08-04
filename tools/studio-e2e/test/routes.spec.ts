@@ -86,6 +86,42 @@ test.describe('Playground', () => {
     await checkA11y();
   });
 
+  /**
+   * The page against the bundle, from the server, with nothing mocked.
+   *
+   * The component test asserts the same equality against a fixture, and a fixture is written
+   * by whoever writes the component: #199 shipped with an `overview` of `[]` in the fixture
+   * and an `overview` the route never read. Only the real assembler produces a bundle nobody
+   * chose the shape of.
+   */
+  test('shows every passage the assembled bundle cites', async ({ page, session }) => {
+    await page.goto(`${session.url}/#/playground`);
+
+    const task = 'how do I roll back a release';
+    await page.getByLabel('Task').fill(task);
+    await page.getByRole('button', { name: 'Assemble' }).click();
+    await expect(page.locator('.item')).not.toHaveCount(0);
+
+    const bundle = (await (
+      await fetch(`${session.url}/v1/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task }),
+      })
+    ).json()) as { citations: { relativePath: string }[]; overview: unknown[] };
+
+    // The reserve is what was missing, so a bundle without one would make this pass by
+    // asserting nothing, exactly as the old fixture did.
+    expect(bundle.overview.length).toBeGreaterThan(0);
+
+    const body = await page.locator('main').innerText();
+    for (const citation of new Set(bundle.citations.map((one) => one.relativePath))) {
+      expect(body, `${citation} is cited in the bundle and must be on the page`).toContain(
+        citation,
+      );
+    }
+  });
+
   test('searches and shows the score as a ranking heuristic', async ({ page, session }) => {
     await page.goto(`${session.url}/#/playground`);
 

@@ -174,6 +174,22 @@ function ContextTab(): React.JSX.Element {
         <>
           <Accounting bundle={run.data} />
 
+          {/* The reserve, first, because that is where it is in the bundle and in what
+              `lore export` writes. Leaving it off screen was #199: a reader saw nine of
+              fifteen cited passages, and the ones withheld were the openings of the most
+              relevant documents, so the passage that answered the task could be missing
+              from a page whose whole purpose is showing what the model receives. */}
+          {run.data.overview.length > 0 && (
+            <div className="section">
+              <h2 className="section-heading">orientation</h2>
+              <p className="section-note prose">
+                The opening of each of the most relevant documents, which is what the reserve in the
+                budget above pays for. The model receives these alongside the selections.
+              </p>
+              <ItemList items={run.data.overview} />
+            </div>
+          )}
+
           <div className="section">
             <div className="section-with-action">
               <h2 className="section-heading">selected</h2>
@@ -192,6 +208,17 @@ function ContextTab(): React.JSX.Element {
               <ItemList items={run.data.selected} />
             )}
           </div>
+
+          {/* Always empty until #76 builds table import. Rendered anyway, so a bundle section
+              cannot be silently dropped a second time: the test below asserts every citation
+              in the bundle is on the page, and a table that appeared here without a panel
+              would fail it. */}
+          {run.data.tables.length > 0 && (
+            <div className="section">
+              <h2 className="section-heading">tables</h2>
+              <TableList tables={run.data.tables} />
+            </div>
+          )}
 
           {run.data.alternatives.length > 0 && (
             <div className="section">
@@ -234,14 +261,47 @@ function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.E
         <Fact label="Profile">{bundle.profile}</Fact>
         <Fact label="Budget">{bundle.budget.toLocaleString()}</Fact>
         <Fact label="Used">{bundle.estimatedTokens.toLocaleString()}</Fact>
-        <Fact label="Reserved">{bundle.reservedTokens.toLocaleString()}</Fact>
+        {/* Named for what it bought, not just its size. "Reserved 468" beside "Selected 9"
+            read as a budget line with nothing in it, because the passages it paid for were
+            the ones missing from the page (#199). */}
+        <Fact label="Orientation">
+          {`${bundle.overview.length}, using ${bundle.reservedTokens.toLocaleString()} reserved`}
+        </Fact>
         <Fact label="Selected">{String(bundle.selected.length)}</Fact>
+        {bundle.alternatives.length > 0 && (
+          <Fact label="Alternatives">{String(bundle.alternatives.length)}</Fact>
+        )}
+        {bundle.tables.length > 0 && <Fact label="Tables">{String(bundle.tables.length)}</Fact>}
+        {/* The total a reader can check against the page: every passage the model receives
+            carries a citation, so this is the number of items rendered above. */}
+        <Fact label="Cited passages">{String(bundle.citations.length)}</Fact>
         <Fact label="Omitted">{String(bundle.omitted.length)}</Fact>
         {omittedByBudget > 0 && (
           <Fact label="Cut for budget">{omittedByBudget.toLocaleString()}</Fact>
         )}
       </Facts>
     </div>
+  );
+}
+
+/**
+ * The tables a bundle names, which is a name and an id and nothing more.
+ *
+ * A bundle references tables rather than embedding rows, so this is a list of what the model
+ * was told exists. It stays a list until #76 gives a table something to show.
+ */
+function TableList({ tables }: { readonly tables: ContextBundle['tables'] }): React.JSX.Element {
+  return (
+    <ul className="items">
+      {tables.map((table) => (
+        <li key={table.tableId} className="item">
+          <div className="item-head">
+            <span className="table-name">{table.name}</span>
+            <span className="table-id">{table.tableId}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
