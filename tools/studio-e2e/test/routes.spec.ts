@@ -78,9 +78,6 @@ test.describe('Sources', () => {
   test('counts every kind of exclusion it lists', async ({ page, session }) => {
     await page.goto(`${session.url}/#/sources`);
 
-    const control = page.getByRole('button', { name: /excluded \d+/ });
-    const claimed = Number(/excluded (\d+)/.exec((await control.textContent()) ?? '')?.[1]);
-
     const reported = (await (await fetch(`${session.url}/v1/warnings`)).json()) as {
       groups: { warnings: unknown[] }[];
       excludedByRule: number | null;
@@ -89,9 +86,22 @@ test.describe('Sources', () => {
 
     // A build that recorded nothing would make the assertion below vacuous.
     expect(reported.exclusions?.some((one) => one.pattern === 'drafts/')).toBe(true);
-    expect(claimed).toBe(
-      (reported.excludedByRule ?? 0) + reported.groups.flatMap((group) => group.warnings).length,
-    );
+    const total =
+      (reported.excludedByRule ?? 0) + reported.groups.flatMap((group) => group.warnings).length;
+
+    // Polled rather than read once. The page fetches this itself, and the supervisor is
+    // watching the same project, so reading the control at one instant and the API at another
+    // compares two moments rather than two representations. What is under test is that they
+    // agree, not how quickly the page got there.
+    await expect
+      .poll(async () =>
+        Number(
+          /excluded (\d+)/.exec(
+            (await page.getByRole('button', { name: /excluded \d+/ }).textContent()) ?? '',
+          )?.[1],
+        ),
+      )
+      .toBe(total);
   });
 });
 
@@ -164,6 +174,59 @@ test.describe('Playground', () => {
 });
 
 test.describe('Versions', () => {
+  /**
+   * #210. The buttons this route exists for were outside the table's visible area at every
+   * window width, because `.main` is capped and the table is wider than the cap.
+   *
+   * Every other test here finds them with `getByRole`, and Playwright scrolls an element into
+   * view before acting on it, so a control nobody could see was still perfectly clickable.
+   * That is why this assertion is about **geometry, before anything scrolls**: it is the only
+   * shape of assertion that could have caught it.
+   */
+  for (const width of [1280, 1512]) {
+    test(`keeps every action on a build row visible at ${width}`, async ({ page, session }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${session.url}/#/versions`);
+      await expect(page.locator('.build-row').first()).toBeVisible();
+
+      // Against the scroll box, not against the viewport. That distinction is the defect:
+      // `.main` is capped at 1100px, so the buttons were inside the window and outside the
+      // container clipping them. A viewport-relative assertion passes on the broken layout,
+      // which is worth stating because the first version of this test did exactly that.
+      const scroller = page.locator('.table-scroll').first();
+      const frame = await scroller.boundingBox();
+      expect(frame, 'the history should be laid out').not.toBeNull();
+      const right = (frame?.x ?? 0) + (frame?.width ?? 0);
+
+      const visible = async (locator: import('@playwright/test').Locator, what: string) => {
+        const box = await locator.boundingBox();
+        expect(box, `${what} should be laid out`).not.toBeNull();
+        expect(
+          (box?.x ?? 0) + (box?.width ?? 0),
+          `${what} is clipped by the right edge of the history at ${width}`,
+        ).toBeLessThanOrEqual(right);
+        expect(box?.x ?? -1, `${what} is clipped by the left edge`).toBeGreaterThanOrEqual(
+          frame?.x ?? 0,
+        );
+      };
+
+      for (const name of [/^Activate lore_/, /^Pack lore_/, /^Compare lore_/]) {
+        await visible(page.getByRole('button', { name }).first(), String(name));
+      }
+
+      // The other end must not have been traded away for it: the build a row is about has to
+      // stay readable next to the buttons that act on it.
+      await visible(page.locator('.build-id').first(), 'the build id');
+
+      // And the page still does not scroll sideways, which is the guarantee the scroll box
+      // exists to keep.
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+
   test('compares two builds, activates one, and rolls back', async ({
     page,
     session,
