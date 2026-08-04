@@ -15,3 +15,15 @@ packages:
 # contributor's machine, which is the promise `check:no-native` exists to keep.
 allowBuilds:
   esbuild: false
+
+# pdfjs-dist declares `@napi-rs/canvas` as an optionalDependency and reaches for it at
+# runtime if it is present. It is only needed to *render* a page, which Lorepack never does:
+# the PDF parser extracts a text layer and nothing else. It is a native module, so letting it
+# into the tree would break invariant 7 and the clean-install matrix for a capability we do
+# not use.
+#
+# `-` removes it rather than pinning it, which is the only spelling that keeps it out of the
+# lockfile. `check:no-native` already banned the package by name; this is what makes that
+# check pass on a real install rather than only after someone deletes the directory.
+overrides:
+  '@napi-rs/canvas': '-'

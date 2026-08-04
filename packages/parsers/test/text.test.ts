@@ -184,8 +184,10 @@ describe('registry', () => {
 
   it('separates available formats from planned ones', () => {
     expect(isSupported('a.md')).toBe(true);
-    expect(isSupported('a.pdf')).toBe(false);
-    expect(isPlannedFormat('a.pdf')).toBe(true);
+    expect(isSupported('a.pdf')).toBe(true);
+    // Still ahead of us, and a materially different message from "unsupported".
+    expect(isSupported('a.docx')).toBe(false);
+    expect(isPlannedFormat('a.docx')).toBe(true);
     expect(isPlannedFormat('a.png')).toBe(false);
   });
 
@@ -194,7 +196,11 @@ describe('registry', () => {
       const parser = parserFor({ mediaType: 'text/plain', relativePath: path });
       expect(parser, path).not.toBeNull();
     }
-    expect(parserFor({ mediaType: 'application/pdf', relativePath: 'a.pdf' })).toBeNull();
+    expect(parserFor({ mediaType: 'application/pdf', relativePath: 'a.pdf' })?.id).toBe('pdf-text');
+    // A planned format routes to nothing, which is what makes discovery warn rather than fail.
+    expect(
+      parserFor({ mediaType: 'application/vnd.openxmlformats', relativePath: 'a.docx' }),
+    ).toBeNull();
   });
 
   it('enables a new text format by adding a registry entry alone', () => {

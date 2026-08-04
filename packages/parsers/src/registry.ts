@@ -78,7 +78,7 @@ export const FORMATS: readonly FormatEntry[] = [
   { extensions: ['.html', '.htm'], mediaType: 'text/html', parserId: 'html', available: true },
   // Phase 5 formats still to come. Listed so discovery can say "supported later" rather than
   // "unsupported", which is a materially different message for a user with a PDF.
-  { extensions: ['.pdf'], mediaType: 'application/pdf', parserId: 'pdf-text', available: false },
+  { extensions: ['.pdf'], mediaType: 'application/pdf', parserId: 'pdf-text', available: true },
   {
     extensions: ['.docx'],
     mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

@@ -241,7 +241,7 @@ describe('plan', () => {
 
   it('carries discovery warnings so a plan shows what will be skipped', async () => {
     await withTempProject(
-      { files: { 'lore.yaml': CONFIG, 'a.md': '# A', 'photo.png': 'x', 'report.pdf': '%PDF' } },
+      { files: { 'lore.yaml': CONFIG, 'a.md': '# A', 'photo.png': 'x', 'report.docx': 'PK' } },
       async (project) => {
         const { plan } = await planIn(project.root);
         expect(plan.warnings.length).toBeGreaterThanOrEqual(2);
