@@ -42,6 +42,13 @@ function render(result: BuildResult): string {
   lines.push(`  ${count(result.counts.artifacts, 'artifact')}`);
   lines.push(`  ${count(result.counts.nodes, 'node')}`);
   lines.push(`  ${count(result.counts.chunks, 'chunk')}`);
+  // Only when there are some. A line reading "0 tables" on every Markdown project is noise
+  // that trains people to stop reading the summary, and this one has something to say.
+  if (result.counts.tables > 0) {
+    lines.push(
+      `  ${count(result.counts.tables, 'table')}, ${count(result.counts.tableRows, 'row')}`,
+    );
+  }
   if (result.reusedArtifacts > 0)
     lines.push(`  ${count(result.reusedArtifacts, 'artifact')} reused`);
   if (result.warnings > 0) lines.push(`  ${count(result.warnings, 'warning')}`);

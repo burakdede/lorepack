@@ -162,9 +162,20 @@ export interface CatalogNode {
  */
 export interface TableStore {
   list(): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
-  describe(tableId: string): Promise<TableDescription | null>;
+  describe(tableId: string): Promise<StoredTableDescription | null>;
   query(request: TableQueryRequest): Promise<TableQueryResult>;
 }
+
+/**
+ * What a store knows about a table, which is everything except the envelope.
+ *
+ * `buildId` and `sourceState` are the runtime's to stamp: a store reports what it stored,
+ * and freshness is observed at request time against the source tree. The same split already
+ * exists for the catalog, where `CatalogSearchHit` is deliberately narrower than
+ * `SearchHit`, and it exists for the same reason: a store that had to invent a
+ * `sourceState` would be answering a question it cannot see.
+ */
+export type StoredTableDescription = Omit<TableDescription, 'buildId' | 'sourceState'>;
 
 /**
  * The stores for one acquired build.

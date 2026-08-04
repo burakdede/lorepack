@@ -45,6 +45,7 @@ import {
   LoreError,
   NORMALIZATION_VERSION,
   type ParsedArtifact,
+  type ParsedTable,
   type ProgressBus,
   secretsFromEnv,
   writeFileAtomic,
@@ -227,8 +228,16 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             chunking: config.effective.chunking,
           }),
           objectHash: normalized.objectHash,
+          ...(result.tables === undefined || result.tables.length === 0
+            ? {}
+            : { tables: result.tables }),
         };
-        cache.put(key, entry);
+        // A table-bearing parse is deliberately not cached. The cache is a JSON file per
+        // artifact, and a 500,000-row table would write hundreds of megabytes there to save
+        // a re-read that takes seconds. Rows are exactly reproducible from bytes the build
+        // has already read, so the cheap thing to keep is nothing. Nothing is ever written,
+        // so nothing can ever be read back missing its tables.
+        if (entry.tables === undefined) cache.put(key, entry);
         parsed.push(entry);
 
         handled += 1;
@@ -306,7 +315,13 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             configurationHash: hashCanonical(config.effective as unknown as Canonical),
             sourceFingerprint: fingerprint.fingerprint,
             canonicalRoots: canonicalRoots(parsed),
-            capabilities: ['lexical-search', 'structured-context'],
+            // Declared from what the build contains, not from what the compiler can do. A
+            // client that sees `table-query` and finds no tables has been misled about this
+            // build, which is worse than not offering the capability.
+            capabilities:
+              counts.tables > 0
+                ? ['lexical-search', 'structured-context', 'table-query']
+                : ['lexical-search', 'structured-context'],
             counts,
             warnings: warnings.map((warning) => ({
               code: warning.code,
@@ -430,6 +445,7 @@ function canonicalRoots(
     nodes: readonly { revisionHash: string }[];
     chunks: readonly Chunk[];
     objectHash: string;
+    tables?: readonly ParsedTable[];
   }[],
 ): { artifacts: string; nodes: string; chunks: string; tables: string; objects: string } {
   return {
@@ -438,19 +454,39 @@ function canonicalRoots(
     ),
     nodes: hashRoot(parsed.flatMap((entry) => entry.nodes.map((node) => node.revisionHash))),
     chunks: hashRoot(parsed.flatMap((entry) => entry.chunks.map((chunk) => chunk.revisionHash))),
-    tables: hashRoot([]),
+    // Every cell, not just the schema. Section 11.4 requires a row change to change the
+    // build id, and hashing only the column layout would let two builds with different data
+    // share an identity, which is the one thing a build id may never do.
+    tables: hashRoot(
+      parsed.flatMap((entry) =>
+        (entry.tables ?? []).map((table) =>
+          hashCanonical([
+            table.tableId,
+            table.columns.map((column) => [column.name, column.type, column.nullable]),
+            table.rows,
+          ] as unknown as Canonical),
+        ),
+      ),
+    ),
     objects: hashRoot(parsed.map((entry) => entry.objectHash)),
   };
 }
 
 function countsOf(
-  parsed: readonly { nodes: readonly unknown[]; chunks: readonly unknown[] }[],
+  parsed: readonly {
+    nodes: readonly unknown[];
+    chunks: readonly unknown[];
+    tables?: readonly ParsedTable[];
+  }[],
 ): BuildManifest['counts'] {
+  const tables = parsed.flatMap((entry) => entry.tables ?? []);
   return {
     artifacts: parsed.length,
     nodes: parsed.reduce((sum, entry) => sum + entry.nodes.length, 0),
     chunks: parsed.reduce((sum, entry) => sum + entry.chunks.length, 0),
-    tables: 0,
-    tableRows: 0,
+    tables: tables.length,
+    // Counted from the parse rather than read back from SQLite, so this agrees with the
+    // manifest on a rebuild that reused an existing build directory and wrote no rows.
+    tableRows: tables.reduce((sum, table) => sum + table.rows.length, 0),
   };
 }

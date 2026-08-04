@@ -11,6 +11,7 @@ export type {
   FreshnessProvider,
   LoreRuntime,
   RuntimeDeps,
+  StoredTableDescription,
   TableStore,
 } from './runtime.js';
 export type {
