@@ -12,15 +12,37 @@ import { Playground } from '../src/routes/Playground.js';
  * forbids claiming a conflict was detected. Both are one careless caption away.
  */
 
+/**
+ * A bundle with something in every section.
+ *
+ * `overview` and `citations` were both empty here, and that is precisely why #199 survived:
+ * the route rendered three of the six sections, and the fixture agreed with it. A fixture
+ * that only contains what the component already draws cannot discover a section it forgot,
+ * so every array the schema defines carries at least one item now.
+ */
 const BUNDLE = {
   task: 'how do I roll back a release',
   buildId: `lore_${'a'.repeat(64)}`,
   sourceState: 'clean',
   profile: 'agent',
   budget: 12000,
-  estimatedTokens: 47,
+  estimatedTokens: 77,
   reservedTokens: 30,
-  overview: [],
+  overview: [
+    {
+      chunkId: 'p:docs/releases.md@0',
+      text: 'Release process. How a change reaches production, and how to undo one.',
+      estimatedTokens: 30,
+      headingPath: ['Release process'],
+      labels: [],
+      locator: {
+        relativePath: 'docs/releases.md',
+        headingPath: ['Release process'],
+        lineStart: 1,
+        lineEnd: 3,
+      },
+    },
+  ],
   selected: [
     {
       chunkId: 'p:docs/runbook.md@0',
@@ -54,8 +76,23 @@ const BUNDLE = {
       locator: { relativePath: 'docs/big.md', lineStart: 1, lineEnd: 400 },
     },
   ],
-  citations: [],
-  tables: [],
+  // Everything the model receives, which is `overview` then `selected`, as the runtime
+  // assembles it. This is the list the page is checked against.
+  citations: [
+    {
+      relativePath: 'docs/releases.md',
+      headingPath: ['Release process'],
+      lineStart: 1,
+      lineEnd: 3,
+    },
+    {
+      relativePath: 'docs/runbook.md',
+      headingPath: ['Release runbook', 'Rolling back'],
+      lineStart: 9,
+      lineEnd: 11,
+    },
+  ],
+  tables: [{ tableId: 'p:data/releases.csv#releases', name: 'releases' }],
 };
 
 const SEARCH = {
@@ -142,6 +179,58 @@ describe('assembling a bundle', () => {
 
     expect(await screen.findByText(/between 4,000 and 40,000/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Assemble' })).toBeDisabled();
+  });
+
+  /**
+   * The assertion that generalises, and the one this route was missing.
+   *
+   * Every previous test named a section and checked its contents, so a section nobody named
+   * was checked by nothing: the Playground rendered `selected`, `alternatives` and `omitted`
+   * and silently dropped `overview` and `tables`, which is 40% of a bundle and, for the task
+   * that found it, the only passage that answered the question (#199).
+   *
+   * `citations` is exactly "everything the model receives", so comparing the page against it
+   * fails for any section added later and forgotten, without naming any section at all.
+   */
+  it('shows every passage the model receives, not only the selected ones', async () => {
+    renderRoute();
+    await assemble();
+
+    await waitFor(() => expect(screen.getByText(/Run lore rollback/)).toBeInTheDocument());
+
+    for (const citation of BUNDLE.citations) {
+      expect(
+        screen.getAllByText(citation.relativePath).length,
+        `${citation.relativePath} is cited in the bundle and must be on the page`,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(`${citation.lineStart}-${citation.lineEnd}`).length,
+        `the lines for ${citation.relativePath} must be on the page`,
+      ).toBeGreaterThan(0);
+    }
+
+    // The orientation passages are the ones that used to be missing, so their text is
+    // asserted directly as well as through the citation above.
+    expect(screen.getByText(/How a change reaches production/)).toBeInTheDocument();
+  });
+
+  it('accounts for the reserve rather than leaving it as a number with nothing behind it', async () => {
+    renderRoute();
+    await assemble();
+
+    await waitFor(() => expect(screen.getByText('Orientation')).toBeInTheDocument());
+    expect(screen.getByText('1, using 30 reserved')).toBeInTheDocument();
+    // The count a reader can check against the page, and the reason the two cannot drift.
+    expect(screen.getByText('Cited passages')).toBeInTheDocument();
+    expect(screen.getByText(String(BUNDLE.citations.length))).toBeInTheDocument();
+  });
+
+  it('names the tables the bundle references', async () => {
+    renderRoute();
+    await assemble();
+
+    await waitFor(() => expect(screen.getByText('tables')).toBeInTheDocument());
+    expect(screen.getByText('releases')).toBeInTheDocument();
   });
 });
 
