@@ -8,7 +8,12 @@ import { textParser } from './text/parser.js';
  * Built-in parsers, registered explicitly. Architecture section 4.8: no dynamic discovery
  * in v0.1, so the set a build can use is visible in one place and reviewable in a diff.
  */
-export const PARSERS: readonly ArtifactParser[] = [markdownParser, htmlParser, pdfParser, textParser];
+export const PARSERS: readonly ArtifactParser[] = [
+  markdownParser,
+  htmlParser,
+  pdfParser,
+  textParser,
+];
 
 export function parserFor(input: {
   mediaType: string;
