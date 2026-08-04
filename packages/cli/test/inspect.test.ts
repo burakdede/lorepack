@@ -15,7 +15,7 @@ const CORPUS = {
   'notes/meeting.txt': 'We discussed the deployment schedule.\n',
   // Two files that must show up as warnings rather than disappearing silently.
   'photo.png': 'not really an image',
-  'report.xlsx': 'PK',
+  'notes.bin': 'PK',
 };
 
 async function builtProject<T>(
@@ -34,7 +34,7 @@ describe('lore inspect warnings', () => {
 
       expect(result.code).toBe(0);
       expect(result.stdout).toContain('photo.png');
-      expect(result.stdout).toContain('report.xlsx');
+      expect(result.stdout).toContain('notes.bin');
       expect(result.stdout).toContain('unsupported-file');
     });
   });
@@ -355,7 +355,7 @@ describe('inspection reads only build data', () => {
       rmSync(join(root, 'guides'), { recursive: true, force: true });
       rmSync(join(root, 'notes'), { recursive: true, force: true });
       rmSync(join(root, 'photo.png'));
-      rmSync(join(root, 'report.xlsx'));
+      rmSync(join(root, 'notes.bin'));
 
       expect((await lore(['inspect', 'warnings'])).code).toBe(0);
       expect((await lore(['inspect', 'sources'])).stdout).toContain('guides/deployment.md');

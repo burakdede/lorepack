@@ -1,7 +1,7 @@
 import { hashBytes, LoreError, type ParsedArtifact, type ParseInput } from '@lorepack/core';
+import { makeDocx, paragraph, table, trackedChange } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { docxParser } from '../src/docx/parser.js';
-import { makeDocx, paragraph, table, trackedChange } from './support/make-docx.js';
 
 /**
  * DOCX, which normalizes through the HTML parser.

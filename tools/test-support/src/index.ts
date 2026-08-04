@@ -3,6 +3,7 @@ export {
   type DeterminismOptions,
   type DeterminismReport,
 } from './determinism.js';
+export { makeDocx, paragraph, table, trackedChange } from './docx-fixtures.js';
 export {
   canonicalJson,
   compareGolden,
@@ -12,6 +13,20 @@ export {
   goldenPathFor,
   updateMode,
 } from './golden.js';
+export {
+  boolean_,
+  empty,
+  errorCell,
+  formula,
+  inlineString,
+  makeXlsx,
+  number,
+  row,
+  type SheetSpec,
+  shared,
+  type WorkbookSpec,
+} from './office-fixtures.js';
+export { makeEncryptedPdf, makePdf, type PageSpec } from './pdf-fixtures.js';
 export {
   type ContractFixture,
   type ContractOptions,

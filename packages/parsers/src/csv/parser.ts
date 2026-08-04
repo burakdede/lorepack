@@ -14,8 +14,14 @@ import {
 import { parse as parseCsv } from 'csv-parse/sync';
 import { buildArtifact, NodeBuilder } from '../shared/builder.js';
 import { decodeUtf8Strict } from '../shared/text.js';
+import {
+  ColumnAccumulator,
+  coerce,
+  fitsType,
+  INFERENCE_SAMPLE_ROWS,
+  inferType,
+} from '../table/infer.js';
 import { DELIMITERS, decideHeader, detectDelimiter } from './dialect.js';
-import { ColumnAccumulator, coerce, fitsType, INFERENCE_SAMPLE_ROWS, inferType } from './infer.js';
 
 export const CSV_PARSER_ID = 'csv' as const;
 export const CSV_PARSER_VERSION = '0.1.0' as const;

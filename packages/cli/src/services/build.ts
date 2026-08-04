@@ -231,6 +231,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           ...(result.tables === undefined || result.tables.length === 0
             ? {}
             : { tables: result.tables }),
+          ...(result.warnings.length === 0 ? {} : { warnings: result.warnings }),
         };
         // A table-bearing parse is deliberately not cached. The cache is a JSON file per
         // artifact, and a 500,000-row table would write hundreds of megabytes there to save
@@ -248,7 +249,21 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       // One list from here on. Discovery decides an extension has no parser; parsing decides
       // the bytes are not readable text. Both are the same promise to the user, which is
       // that a file the build left out is named rather than silently missing.
-      const warnings: readonly BuildWarning[] = [...discovery.warnings, ...fingerprint.warnings]
+      const warnings: readonly BuildWarning[] = [
+        ...discovery.warnings,
+        ...fingerprint.warnings,
+        // What the parsers said. Discovery reports files left out; these report decisions
+        // taken *inside* a file that was kept, which is the other half of the same promise:
+        // a heading flattened, a column widened, a sheet not read as a table. Without this
+        // every one of them was computed carefully and then dropped (#223).
+        ...parsed.flatMap((entry) =>
+          (entry.warnings ?? []).map((warning) => ({
+            code: warning.code,
+            path: entry.artifact.displayPath,
+            message: warning.message,
+          })),
+        ),
+      ]
         .map((warning) => ({
           code: warning.code,
           class: warningClass(warning.code),

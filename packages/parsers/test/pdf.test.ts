@@ -1,8 +1,8 @@
 import { hashBytes, LoreError, type ParsedArtifact, type ParseInput } from '@lorepack/core';
+import { makeEncryptedPdf, makePdf, type PageSpec } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { pdfParser } from '../src/pdf/parser.js';
 import { normalizePageText, PDF_LIMITS } from '../src/pdf/text.js';
-import { makeEncryptedPdf, makePdf, type PageSpec } from './support/make-pdf.js';
 
 /**
  * The text-layer PDF parser.

@@ -1,6 +1,6 @@
 import { hashBytes, type LoreError, type ParseInput } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
-import { formatFor, isPlannedFormat, isSupported } from '../src/registry.js';
+import { FORMATS, formatFor, isPlannedFormat, isSupported } from '../src/registry.js';
 import { parserFor } from '../src/registry-parsers.js';
 import { splitParagraphs } from '../src/shared/text.js';
 import { textParser } from '../src/text/parser.js';
@@ -182,15 +182,25 @@ describe('registry', () => {
     expect(formatFor('unknown.xyz')).toBeNull();
   });
 
-  it('separates available formats from planned ones', () => {
+  /**
+   * Phase 5 turned on the last format in the registry, so nothing is "planned" any more.
+   *
+   * The distinction still exists in the code and still matters: a format the architecture
+   * schedules for a later release deserves a different message from one nobody has heard of,
+   * and the next format added will use it. What changed is that the set is currently empty,
+   * and asserting that is more honest than keeping a fixture pretending otherwise.
+   */
+  it('has implemented every format it lists, so nothing is merely planned', () => {
+    for (const entry of FORMATS) {
+      expect(entry.available, entry.extensions.join(' ')).toBe(true);
+      expect(isPlannedFormat(`a${entry.extensions[0] as string}`)).toBe(false);
+    }
     expect(isSupported('a.md')).toBe(true);
     expect(isSupported('a.pdf')).toBe(true);
-    // Still ahead of us, and a materially different message from "unsupported".
     expect(isSupported('a.docx')).toBe(true);
-    // `.xlsx` is the last format this phase turns on, so a fixture uses it to mean
-    // "supported later" without moving again every time a parser lands.
-    expect(isSupported('a.xlsx')).toBe(false);
-    expect(isPlannedFormat('a.xlsx')).toBe(true);
+    expect(isSupported('a.xlsx')).toBe(true);
+    // An extension nobody registered is unknown, which is a different thing again.
+    expect(isSupported('a.png')).toBe(false);
     expect(isPlannedFormat('a.png')).toBe(false);
   });
 
@@ -200,10 +210,15 @@ describe('registry', () => {
       expect(parser, path).not.toBeNull();
     }
     expect(parserFor({ mediaType: 'application/pdf', relativePath: 'a.pdf' })?.id).toBe('pdf-text');
-    // A planned format routes to nothing, which is what makes discovery warn rather than fail.
     expect(
-      parserFor({ mediaType: 'application/vnd.openxmlformats', relativePath: 'a.xlsx' }),
-    ).toBeNull();
+      parserFor({
+        mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        relativePath: 'a.xlsx',
+      })?.id,
+    ).toBe('xlsx');
+    // An unregistered extension routes to nothing, which is what makes discovery warn
+    // rather than fail.
+    expect(parserFor({ mediaType: 'image/png', relativePath: 'a.png' })).toBeNull();
   });
 
   it('enables a new text format by adding a registry entry alone', () => {

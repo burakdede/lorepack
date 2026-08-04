@@ -15,6 +15,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@lorepack/core": "workspace:*"
+    "@lorepack/core": "workspace:*",
+    "@types/yazl": "^3.3.1",
+    "yazl": "3.3.1"
   }
 }

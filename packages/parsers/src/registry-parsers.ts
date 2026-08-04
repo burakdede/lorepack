@@ -5,6 +5,7 @@ import { htmlParser } from './html/parser.js';
 import { markdownParser } from './markdown/parser.js';
 import { pdfParser } from './pdf/parser.js';
 import { textParser } from './text/parser.js';
+import { xlsxParser } from './xlsx/parser.js';
 
 /**
  * Built-in parsers, registered explicitly. Architecture section 4.8: no dynamic discovery
@@ -16,6 +17,7 @@ export const PARSERS: readonly ArtifactParser[] = [
   docxParser,
   pdfParser,
   csvParser,
+  xlsxParser,
   textParser,
 ];
 

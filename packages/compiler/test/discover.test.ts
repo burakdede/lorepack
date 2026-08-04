@@ -296,11 +296,16 @@ describe('unsupported formats', () => {
     });
   });
 
-  it('distinguishes a format planned for a later release from an unknown one', async () => {
-    await withProject({ 'report.xlsx': 'PK', 'photo.png': 'x' }, (root) => {
+  /**
+   * Phase 5 implemented the last format the registry listed, so the `planned-format` warning
+   * has nothing left to fire on. The branch stays because the next format added will use it;
+   * what this asserts is the current truth, which is that a spreadsheet is now read rather
+   * than deferred, and that an unregistered extension is still named as unsupported.
+   */
+  it('warns only about extensions nobody registered, now that every format is implemented', async () => {
+    await withProject({ 'sheet.xlsx': 'PK', 'photo.png': 'x' }, (root) => {
       const warnings = discoverIn(root).warnings;
-      expect(warnings.find((w) => w.path === 'report.xlsx')?.code).toBe('planned-format');
-      expect(warnings.find((w) => w.path === 'report.xlsx')?.message).toContain('later release');
+      expect(warnings.find((w) => w.path === 'sheet.xlsx')).toBeUndefined();
       expect(warnings.find((w) => w.path === 'photo.png')?.code).toBe('unsupported-format');
     });
   });
