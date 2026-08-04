@@ -46,14 +46,21 @@ export function readIgnoreRules(projectRoot: string, filename: string): IgnoreRu
  * A gitignore pattern matches at any depth unless it contains a slash, and a trailing
  * slash restricts it to directories. Expanding each pattern into the forms picomatch needs
  * keeps that behaviour without reimplementing the semantics.
+ *
+ * Git anchors a pattern when a separator appears at the **start or the middle**, never when
+ * it is only the trailing directory marker. Deciding that from the raw pattern instead made
+ * every `foo/` rule root-only, which is how six of the shipped defaults came to apply at
+ * depth zero and nowhere else (#201). The distinction has to be drawn after the trailing
+ * slash is removed, so the check below reads `normalized` rather than `pattern`.
  */
 function expand(pattern: string): string[] {
   let normalized = pattern.replace(/\\/g, '/');
   const directoryOnly = normalized.endsWith('/');
   if (directoryOnly) normalized = normalized.slice(0, -1);
-  if (normalized.startsWith('/')) normalized = normalized.slice(1);
+  const rooted = normalized.startsWith('/');
+  if (rooted) normalized = normalized.slice(1);
 
-  const anchored = pattern.includes('/') && !pattern.startsWith('**/');
+  const anchored = rooted || (normalized.includes('/') && !normalized.startsWith('**/'));
   const forms = anchored ? [normalized] : [normalized, `**/${normalized}`];
   // A directory pattern also excludes everything beneath it.
   return forms.flatMap((form) => [form, `${form}/**`]);

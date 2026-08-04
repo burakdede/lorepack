@@ -39,6 +39,13 @@ export interface ProductDefaults {
 /**
  * Exclusions that always apply, before `.loreignore`. Architecture section 19.2: a
  * guardrail against indexing credentials, not a claim to be a secret scanner.
+ *
+ * Directory entries are written with a **trailing slash and no other separator**, which is
+ * how gitignore says "a directory of this name, at any depth". Writing them as `foo/**`
+ * instead put a separator in the middle, which anchors the rule to the project root, so a
+ * `node_modules` or `.git` one level down was indexed like ordinary context (#201). The
+ * entries with no slash at all, `.env` and `.DS_Store`, already matched at any depth, which
+ * is why the list looked like it worked.
  */
 export const ALWAYS_EXCLUDE: readonly string[] = [
   // Lorepack's own project files. Indexing them would make editing configuration show up
@@ -56,12 +63,12 @@ export const ALWAYS_EXCLUDE: readonly string[] = [
   // Version control metadata, for the same reason.
   '.gitignore',
   '.gitattributes',
-  '.git/**',
-  'node_modules/**',
-  '.lore/**',
-  'dist/**',
-  'build/**',
-  'coverage/**',
+  '.git/',
+  'node_modules/',
+  '.lore/',
+  'dist/',
+  'build/',
+  'coverage/',
   '.env',
   '.env.*',
   '*.pem',
