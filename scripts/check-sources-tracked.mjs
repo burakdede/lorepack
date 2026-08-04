@@ -7,7 +7,10 @@ import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const ROOTS = ['packages', 'tools', 'scripts'];
-const SOURCE = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
+// `.sql` is here for a reason: migrations live under a directory named `build`, and a
+// too-broad ignore rule kept a new one out of a commit while every local test passed.
+// Anything the product loads at runtime belongs in this pattern, not just code.
+const SOURCE = /\.(ts|tsx|mts|cts|js|mjs|cjs|sql)$/;
 // `studio-dist` is Vite's output inside the CLI package, which is published but never
 // committed, exactly like `dist`. Without it this check reports the bundle it just built.
 const SKIP = new Set(['node_modules', 'dist', 'studio-dist', 'coverage']);
