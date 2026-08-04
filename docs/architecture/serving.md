@@ -192,3 +192,31 @@ not be established is how `lore search` once became useless on a large project (
 Activation is observed at the next request. Nothing is cached across requests, no session
 holds a build open, and no response ever mixes rows from two builds: the runtime asserts the
 scope it opened against the handle it acquired before reading anything.
+
+### Freshness is a claim about one build, so the pointer invalidates it
+
+`clean` never means "the sources are clean". It means "the sources match **this** build", and
+the two come apart the moment the pointer moves without a file changing, which is exactly what
+an activation or a rollback is.
+
+Under `lore dev` the answer comes from the watcher rather than from the polling revalidator,
+because a supervisor that is already watching knows without paying for a scan. That answer is
+cached, and the cache is keyed on filesystem events, which an activation does not produce. So
+rolling back in Studio left the server reporting the freshness of the build that had just
+stopped being active: the header read "the sources match this build" about the state the
+reader had deliberately left (#200).
+
+The watcher now records freshness together with the build it describes. When a read finds the
+pointer has moved, it reports `unknown` immediately and queues the re-establishment, because:
+
+- **`unknown` is honest and `clean` is invented.** Invariant 6 applies to the degraded case as
+  much as to the normal one.
+- **Establishing freshness walks and hashes the corpus**, and `/v1/build` is on the request
+  path of every Studio poll and every MCP call. It does not belong there.
+- **The recompute must not rebuild.** Rolling back to an older build makes the sources dirty by
+  definition, and treating that as a reason to build would activate a new build and undo the
+  rollback the reader just asked for. The re-establishment path is deliberately separate from
+  the settle path for that reason, and a test asserts the rebuild callback is never called.
+
+This also covers the case nobody wired: `lore activate` run in a second terminal against a
+live dev session moves the same pointer, and is noticed the same way.

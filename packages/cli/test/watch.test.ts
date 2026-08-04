@@ -1,10 +1,11 @@
 import { renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, ProgressBus } from '@lorepack/core';
+import { type BuildId, type LoadedConfig, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { createActivateEndpoint } from '../src/services/studio-mutations.js';
 import { resolveRealPath, startWatching } from '../src/services/watch.js';
 
 /**
@@ -31,11 +32,22 @@ const CORPUS = { 'lore.yaml': CONFIG, 'a.md': '# A\n\nFirst document.\n' };
  */
 const FAST = { debounceMs: 40, stabilityMs: 40, pollMs: 10, reconcileIntervalMs: 60_000 } as const;
 
-async function settled(until: () => boolean, budgetMs = 8000): Promise<void> {
+async function settled(until: () => boolean | Promise<boolean>, budgetMs = 8000): Promise<void> {
   const deadline = Date.now() + budgetMs;
-  while (!until() && Date.now() < deadline) {
+  while (!(await until()) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+}
+
+/**
+ * Activation through the route Studio actually calls.
+ *
+ * Reaching into the state store directly would prove the watcher notices *a* pointer move.
+ * Going through the endpoint proves it notices the one a reader can cause from a browser,
+ * which is the case #200 was about.
+ */
+async function activate(config: LoadedConfig, build: BuildId): Promise<void> {
+  await createActivateEndpoint(config)({ build });
 }
 
 describe('the scan and watch race, architecture 12.11 step 3', () => {
@@ -246,6 +258,77 @@ describe('what the server is told', () => {
       await settled(() => watching.rebuilds > 0);
 
       // Rebuilt and activated, so the sources match the active build again.
+      expect(await watching.freshness()).toBe('clean');
+      await watching.close();
+    });
+  }, 60_000);
+
+  /**
+   * #200. Freshness is a claim about a *specific build*, and the pointer can move without a
+   * file changing. Studio's write surface does exactly that, so the supervisor's cached
+   * answer went on describing the build that was active before, and the header said "the
+   * sources match this build" about a build the sources had moved past.
+   */
+  it('stops claiming clean when the active build changes underneath it', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      const first = await runBuild({ config, progress: new ProgressBus() });
+
+      // A second build, so there is an older one to go back to and the two differ.
+      writeFileSync(join(project.root, 'a.md'), '# A\n\nSecond revision.\n', 'utf8');
+      await runBuild({ config, progress: new ProgressBus() });
+
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        ...FAST,
+        rebuild: async () => {
+          throw new Error('the watcher must not rebuild in response to an activation');
+        },
+      });
+      await watching.ready;
+      expect(await watching.freshness()).toBe('clean');
+
+      // Activate the older build, exactly as Studio's write surface does. No source file is
+      // touched, so no filesystem event will ever describe this.
+      await activate(config, first.buildId);
+
+      // Honest immediately: the cached answer belonged to the build that just stopped being
+      // active, and establishing a new one walks the corpus, which is not request-path work.
+      expect(await watching.freshness()).toBe('unknown');
+
+      // And correct shortly after, from the queued recompute. The sources carry the second
+      // revision, and the build now active does not.
+      await settled(async () => (await watching.freshness()) === 'dirty');
+      expect(await watching.freshness()).toBe('dirty');
+
+      // The rebuild callback above throws, so reaching here at all proves the recompute did
+      // not turn a rollback into a rebuild that would have undone it.
+      expect(watching.rebuilds).toBe(0);
+      await watching.close();
+    });
+  }, 60_000);
+
+  it('reports clean again once the pointer returns to a build the sources match', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      const first = await runBuild({ config, progress: new ProgressBus() });
+      writeFileSync(join(project.root, 'a.md'), '# A\n\nSecond revision.\n', 'utf8');
+      const second = await runBuild({ config, progress: new ProgressBus() });
+
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        ...FAST,
+        rebuild: async () => ({ created: false }),
+      });
+      await watching.ready;
+
+      await activate(config, first.buildId);
+      await settled(async () => (await watching.freshness()) === 'dirty');
+
+      await activate(config, second.buildId);
+      await settled(async () => (await watching.freshness()) === 'clean');
       expect(await watching.freshness()).toBe('clean');
       await watching.close();
     });

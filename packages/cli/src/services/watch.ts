@@ -1,8 +1,9 @@
 import { realpathSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createSourceMatcher, discover } from '@lorepack/compiler';
-import type { LoadedConfig, SourceState } from '@lorepack/core';
+import { type BuildId, LORE_DIRECTORY, type LoadedConfig, type SourceState } from '@lorepack/core';
 import { watch as chokidarWatch } from 'chokidar';
+import { openStateStore } from './builds.js';
 import { readFreshness } from './status.js';
 
 /**
@@ -131,7 +132,18 @@ export function startWatching(options: WatchOptions): Watching {
    * about the same string. Symlinked roots have the same shape of problem on every platform.
    */
   const watchRoot = resolveRealPath(options.config.projectRoot);
+  const loreDirectory = join(options.config.projectRoot, LORE_DIRECTORY);
   let state: SourceState = 'clean';
+  /**
+   * The build `state` is a claim about.
+   *
+   * Freshness is never "the sources are clean", it is "the sources match *this build*", and
+   * the pointer can move without a single file changing. Activation and rollback do exactly
+   * that, and neither produces a filesystem event, so before #200 the cached answer went on
+   * describing the build that was active before: Studio's own write surface could make the
+   * header say "the sources match this build" about a build the sources had moved past.
+   */
+  let describedBuild: BuildId | null = activeBuildId();
   let rebuilds = 0;
   let noOps = 0;
   let closed = false;
@@ -213,6 +225,34 @@ export function startWatching(options: WatchOptions): Watching {
   // Never hold the process open on its own account: the supervisor decides when to exit.
   sweep.unref?.();
 
+  /**
+   * The active build, read from the pointer.
+   *
+   * One small transaction against the state database, which is what `/v1/build` already does
+   * once per request to name the build it is describing. `null` on any failure, which then
+   * compares unequal to a real id and drives a recompute: erring towards re-establishing is
+   * the safe direction, and a genuinely broken state database surfaces through the routes
+   * that read it properly rather than through a freshness annotation.
+   */
+  function activeBuildId(): BuildId | null {
+    try {
+      const store = openStateStore(loreDirectory);
+      try {
+        return store.current()?.buildId ?? null;
+      } finally {
+        store.close();
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  /** Freshness and the build it describes, written together so they cannot drift apart. */
+  function record(next: SourceState): void {
+    state = next;
+    describedBuild = activeBuildId();
+  }
+
   function schedule(): void {
     if (timer !== null) clearTimeout(timer);
     // Step 4. One save is many events, and a rename is a delete plus an add. Coalescing is
@@ -240,7 +280,7 @@ export function startWatching(options: WatchOptions): Watching {
     // a save that changed nothing all land here and stop.
     const freshness = await readFreshness({ config: options.config });
     if (freshness.sourceState === 'clean') {
-      state = 'clean';
+      record('clean');
       if (reason !== 'startup reconciliation') {
         noOps += 1;
         options.warn('No changes: the sources still match the active build.\n');
@@ -248,8 +288,27 @@ export function startWatching(options: WatchOptions): Watching {
       return;
     }
 
-    state = 'dirty';
+    record('dirty');
     await run(reason);
+  }
+
+  /**
+   * Re-establish freshness without rebuilding.
+   *
+   * The distinction from `settle` is the whole point. `settle` treats "dirty" as a reason to
+   * build, which is right for an edit and catastrophic for an activation: rolling back to an
+   * older build makes the sources dirty by definition, and a rebuild here would immediately
+   * activate a new build and undo the rollback the reader just asked for.
+   */
+  async function reestablish(): Promise<void> {
+    if (closed) return;
+    try {
+      const freshness = await readFreshness({ config: options.config });
+      record(freshness.sourceState);
+    } catch {
+      // Leave it unknown. A failure to establish freshness is not evidence of freshness,
+      // and invariant 6 makes `unknown` the only honest answer available here.
+    }
   }
 
   /** Steps 8 and 9, serialized, and cancelled by anything newer. */
@@ -268,7 +327,8 @@ export function startWatching(options: WatchOptions): Watching {
       options.warn(`${reason}: rebuilding.\n`);
       const result = await options.rebuild(controller.signal);
       if (result.created) rebuilds += 1;
-      state = 'clean';
+      // After the pointer moved, so `clean` is recorded against the build that is now active.
+      record('clean');
       lastRebuild = {
         at: new Date().toISOString(),
         durationMs: Date.now() - startedAt,
@@ -288,11 +348,11 @@ export function startWatching(options: WatchOptions): Watching {
       if (controller.signal.aborted) {
         // Cancelled by a newer change. `runBuild` removes its own incomplete candidate and
         // leaves activation alone, so there is nothing to clean up and nothing to report.
-        state = 'dirty';
+        record('dirty');
       } else {
         // Architecture 6.9: a failed rebuild keeps the previous build active and says why.
         // Serving stale context is recoverable; exiting the supervisor is not.
-        state = 'dirty';
+        record('dirty');
         options.warn(
           `Rebuild failed, so the previous build is still active: ${
             error instanceof Error ? error.message : String(error)
@@ -318,6 +378,20 @@ export function startWatching(options: WatchOptions): Watching {
       return noOps;
     },
     async freshness() {
+      const active = activeBuildId();
+      if (active === describedBuild) return state;
+
+      // The pointer moved without a source file changing, which is what an activation or a
+      // rollback is, from Studio or from a terminal running alongside this session. The
+      // cached answer belongs to the build that was active before it.
+      //
+      // Reported `unknown` rather than recomputed here: establishing freshness walks and
+      // hashes the corpus, and `/v1/build` is on the request path of every Studio poll and
+      // every MCP call. The recompute is queued instead, so the next read is accurate and
+      // this one is honest. Invariant 6: `unknown` means unknown, never clean.
+      state = 'unknown';
+      describedBuild = active;
+      chain = chain.then(reestablish);
       return state;
     },
     status(): WatchStatus {
