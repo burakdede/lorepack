@@ -107,3 +107,68 @@ cross-platform tests we own. Given the choice between a dormant dependency in th
 path of build correctness and a small tested implementation, the implementation wins. It is
 isolated in one module, so the decision is reversible without touching build or activation
 code.
+
+## Typed tables
+
+Structured sources become real SQL tables inside the sealed build, plus a catalog that maps a
+stable Lore table id to the generated physical name. Migration `0002_tables.sql` adds `tables`
+and `table_columns`; the physical tables themselves are created at import time, so they cannot
+appear in a migration.
+
+### No identifier from user content ever reaches SQL
+
+A spreadsheet may have a sheet called `"; DROP TABLE artifacts; --` and a column called the
+same. The defence is not escaping. It is that **user text is never an identifier at all**:
+
+1. The display name is slugged to `[a-z0-9_]`, losing whatever it has to.
+2. Identity comes from a hash of the *table id*, not from the slug, so two sheets that slug
+   identically still get different tables.
+3. Every name passes `assertIdentifier` immediately before it is interpolated, into DDL or a
+   query. That check can only fail if an earlier invariant broke, which is exactly why it is
+   worth keeping: the day someone adds a second name generator and forgets to slug it, it
+   throws instead of executing what they passed.
+
+So `Q3 Report` becomes `t_q3_report_8f2a91cc04e1` and the hostile name above becomes
+`t_drop_table_artifacts_a41f...`. Source names survive in the catalog for display, and
+`describeTable` relabels rows back to them on the way out, so a reader sees `Postal Code` while
+the query used `c_2_postal_code`.
+
+Names are derived from the artifact path, so they are identical on every machine and every
+rebuild. That determinism is load-bearing: the names are written into the build database, and a
+name that varied by host would make identical projects produce different bytes.
+
+### Import
+
+Everything happens inside `writeCatalog`'s transaction rather than one of its own. A build
+database is complete or it is discarded, so a failure part-way through an import rolls back the
+**whole build**, not just the offending table. There is no state in which a half-filled table
+is servable.
+
+Inserts are batched by **cells, not rows**. Rows is the natural unit and the wrong one: 500 rows
+is 1,000 bound values in a two-column table and 50,000 in a hundred-column one, and the second
+is close enough to the argument limit to fail on someone's real spreadsheet. A fixed cell budget
+makes the statement the same size whatever the table's shape.
+
+### Types
+
+SQLite storage classes, chosen to match D1 so Phase 6 is a projection rather than a redesign.
+`boolean` is stored as `INTEGER` because `node:sqlite` binds no boolean and a `STRICT` table
+needs a declared class. `date` is stored as ISO **text**: neither SQLite nor D1 has a date type,
+and an epoch integer would need a timezone the source never stated. ISO text sorts correctly as
+text, which is the point of ISO.
+
+### Reading
+
+`listTables` and `describeTable` are served from the catalog, with per-column statistics (null
+count, distinct estimate, min and max) recorded at import so a description costs no scan. The
+distinct count is exact below 10,000 values and a floor above it, and which of the two applies
+is a stored flag rather than something the caller has to guess.
+
+The read-only authorizer is widened per build with that build's physical table names, read from
+the catalog and re-validated on the way out. It cannot be a static list, because the names
+depend on which files the build contains.
+
+`queryTable` is deliberately still refused. SQL over tables needs statement validation, a
+per-query authorizer and a deadline before user text reaches the engine; shipping an unguarded
+query because the plumbing happened to be in place is how a read-only boundary becomes a hole.
+Until then, `lore inspect tables` shows the schema, the statistics and how each file was read.

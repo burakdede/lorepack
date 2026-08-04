@@ -15,11 +15,17 @@ import {
   LORE_DIRECTORY,
   LoreError,
   type RuntimeDeps,
-  type TableDescription,
+  type StoredTableDescription,
   type TableQueryRequest,
   type TableQueryResult,
   type TableStore,
 } from '@lorepack/core';
+import {
+  describeStoredTable,
+  listTableRows,
+  physicalTableNames,
+  resolveTable,
+} from './catalog/tables.js';
 import { countRows, RUNTIME_TABLES, searchCatalog } from './catalog/writer.js';
 import { stateMigrationsDirectory } from './migrations-path.js';
 import { FileObjectStore } from './object-store.js';
@@ -170,27 +176,51 @@ class LocalCatalogStore implements CatalogStore {
   }
 }
 
+/** Example rows in a `describeTable` response. A shape, not a preview of the data. */
+const DESCRIBE_SAMPLE_ROWS = 5;
+
 /**
- * Tables arrive in Phase 5. Until then the store answers honestly rather than throwing
- * "not implemented": this build genuinely has no tables, and a caller that asks learns
- * that from an empty list and a typed error, which is the same answer it will get in
- * Phase 5 for a build that happens to contain no spreadsheet.
+ * Typed tables, read from the catalog written at build time.
+ *
+ * A build with no spreadsheet gets an empty list and a typed error, exactly as the
+ * placeholder this replaced did. That symmetry is deliberate: "this build has no tables" and
+ * "tables are not implemented" should never have been distinguishable to a caller, and now
+ * only the first can be true.
+ *
+ * `query` stays refused here. The SQL surface is #77, and it needs a statement validator, a
+ * per-query authorizer and a deadline before any user text reaches the engine. Shipping the
+ * catalog with an unguarded `query` because the plumbing happened to be in place is how a
+ * read-only boundary becomes a hole, so the refusal names the ticket instead.
  */
-class EmptyTableStore implements TableStore {
-  async list(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
-    return [];
+class LocalTableStore implements TableStore {
+  readonly #db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.#db = db;
   }
 
-  async describe(_tableId: string): Promise<TableDescription | null> {
-    return null;
+  async list(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
+    return listTableRows(this.#db);
+  }
+
+  async describe(tableId: string): Promise<StoredTableDescription | null> {
+    return describeStoredTable(this.#db, tableId, DESCRIBE_SAMPLE_ROWS);
   }
 
   async query(request: TableQueryRequest): Promise<TableQueryResult> {
-    throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {
-      remediation:
-        'This build declares no tables. Typed tables arrive with the CSV and XLSX parsers.',
-      subject: request.tableId,
-    });
+    const exists = resolveTable(this.#db, request.tableId) !== null;
+    throw new LoreError(
+      'LORE_E_UNSUPPORTED_FORMAT',
+      exists
+        ? `Querying table ${request.tableId} is not available yet.`
+        : `No table ${request.tableId} in this build.`,
+      {
+        remediation: exists
+          ? 'Use lore inspect tables to see the schema and row counts. SQL over tables arrives with the bounded query surface.'
+          : 'Run lore inspect tables to see which tables this build contains.',
+        subject: request.tableId,
+      },
+    );
   }
 }
 
@@ -228,7 +258,12 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       // read surface, so a defect in query construction cannot reach something it should
       // not. The list also permits `PRAGMA data_version`, which FTS5 reads internally and
       // which, denied, fails `MATCH` with "authorization denied" and no hint about why.
-      restrictToTables(db, RUNTIME_TABLES);
+      // Widened with this build's own physical tables, which cannot be a static list:
+      // their names are generated per build from the files it contains. Read from the
+      // catalog and re-validated against the identifier pattern on the way out, so a
+      // build database that arrived from somewhere else cannot name a table into the
+      // allowlist. #77 narrows this again, per query, when user SQL becomes possible.
+      restrictToTables(db, [...RUNTIME_TABLES, ...physicalTableNames(db)]);
       return {
         buildId: handle.buildId,
         // Operational state, held beside the build rather than inside it, because a sealed
@@ -237,7 +272,7 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
           ? {}
           : { createdAt: createdAt(state, handle.buildId) as string }),
         catalog: new LocalCatalogStore(db, join(loreDirectory, 'builds', handle.buildId)),
-        tables: new EmptyTableStore(),
+        tables: new LocalTableStore(db),
         objects,
       };
     },

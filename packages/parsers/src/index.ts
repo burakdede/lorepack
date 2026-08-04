@@ -1,3 +1,4 @@
+export { CSV_LIMITS, CSV_PARSER_ID, CSV_PARSER_VERSION, csvParser } from './csv/parser.js';
 export { DOCX_PARSER_ID, DOCX_PARSER_VERSION, docxParser } from './docx/parser.js';
 export { HTML_PARSER_ID, HTML_PARSER_VERSION, htmlParser, parseHtmlSource } from './html/parser.js';
 export { HTML_NOISE_POLICY_VERSION } from './html/policy.js';

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Chunk } from '@lorepack/compiler';
-import type { Artifact, LoreNode } from '@lorepack/core';
+import type { Artifact, LoreNode, ParsedTable } from '@lorepack/core';
 import { writeFileAtomic } from '@lorepack/core';
 
 /**
@@ -21,6 +21,15 @@ export interface CachedParse {
   readonly nodes: readonly LoreNode[];
   readonly chunks: readonly Chunk[];
   readonly objectHash: string;
+  /**
+   * Typed tables, when the artifact produced any.
+   *
+   * Present on a fresh parse and never on a cached one, because a table-bearing parse is
+   * not written to the cache at all: the rows would be hundreds of megabytes of JSON to
+   * avoid a re-read of a file the build already has. Since nothing is written, nothing can
+   * be read back with its tables missing, which is the failure mode that would matter.
+   */
+  readonly tables?: readonly ParsedTable[];
 }
 
 interface CacheEnvelope extends CachedParse {

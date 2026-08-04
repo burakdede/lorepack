@@ -3,8 +3,10 @@ import {
   type Artifact,
   bm25ColumnWeights,
   type LoreNode,
+  type ParsedTable,
   type SourceLocator,
 } from '@lorepack/core';
+import { TABLE_CATALOG_TABLES, writeTables } from './tables.js';
 
 /**
  * Writes a sealed build's catalog.
@@ -32,6 +34,8 @@ export interface CatalogArtifact {
   readonly nodes: readonly LoreNode[];
   readonly chunks: readonly CatalogChunk[];
   readonly objectHash: string;
+  /** Typed tables this artifact produced. Absent for a format that has none. */
+  readonly tables?: readonly ParsedTable[];
 }
 
 export interface CatalogWarning {
@@ -89,6 +93,8 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
 
   let nodeCount = 0;
   let chunkCount = 0;
+  let tableCount = 0;
+  let tableRowCount = 0;
 
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -163,6 +169,15 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
       }
     }
 
+    // Inside the same transaction as everything above, which is what makes a mid-import
+    // failure roll back the whole build rather than leave one half-filled table behind.
+    const written = writeTables(
+      db,
+      artifacts.flatMap((entry) => entry.tables ?? []),
+    );
+    tableCount = written.tables;
+    tableRowCount = written.rows;
+
     for (const warning of options.warnings ?? []) {
       insertWarning.run(warning.code, warning.class, warning.path ?? null, warning.message);
     }
@@ -177,8 +192,8 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
     artifacts: artifacts.length,
     nodes: nodeCount,
     chunks: chunkCount,
-    tables: 0,
-    tableRows: 0,
+    tables: tableCount,
+    tableRows: tableRowCount,
   };
 }
 
@@ -262,6 +277,7 @@ export const RUNTIME_TABLES: readonly string[] = [
   'nodes',
   'supersessions',
   'build_warnings',
+  ...TABLE_CATALOG_TABLES,
 ];
 
 /**

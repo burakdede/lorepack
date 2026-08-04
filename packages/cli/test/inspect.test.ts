@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
@@ -384,5 +384,135 @@ describe('inspection reads only build data', () => {
       expect(result.code).toBe(1);
       expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
     });
+  });
+});
+
+/**
+ * Tables, end to end through the real command.
+ *
+ * The corpus above is deliberately table-free, so this builds its own project. That keeps
+ * the "no tables in this build" case honest: it is the state every other test in this file
+ * runs in, and a user with a Markdown-only project sees it.
+ */
+const TABLE_CORPUS = {
+  'lore.yaml': CONFIG,
+  'people.csv': 'staff_id,name,zip,salary\n0007,Ada,02139,120000\n0008,Alan,00501,115000\n',
+};
+
+describe('lore inspect tables', () => {
+  it('lists the tables with their row counts and source paths', async () => {
+    await withTempProject({ files: TABLE_CORPUS }, async (temp) => {
+      await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+      const result = await run(['--cwd', temp.root, 'inspect', 'tables']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('people');
+      expect(result.stdout).toContain('2 rows');
+      expect(result.stdout).toContain('people.csv');
+    });
+  });
+
+  it('shows one table by its source path, with the types it inferred', async () => {
+    await withTempProject({ files: TABLE_CORPUS }, async (temp) => {
+      await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
+      const parsed = JSON.parse(
+        (await run(['--cwd', temp.root, '--json', 'inspect', 'tables', 'people.csv'])).stdout,
+      ) as { columns: { name: string; type: string }[]; metadata: Record<string, unknown> };
+
+      // The identifier columns stayed text; only the genuinely numeric one is an integer.
+      expect(parsed.columns.map((column) => [column.name, column.type])).toEqual([
+        ['staff_id', 'text'],
+        ['name', 'text'],
+        ['zip', 'text'],
+        ['salary', 'integer'],
+      ]);
+      // How it was read is recorded, so a type a user disagrees with can be argued about.
+      expect(parsed.metadata.hasHeader).toBe(true);
+    });
+  });
+
+  it('says plainly that a build has no tables rather than printing an empty list', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['inspect', 'tables']);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('no tables');
+    });
+  });
+
+  it('names the fix when a table id does not match', async () => {
+    await builtProject(async (_root, lore) => {
+      const result = await lore(['inspect', 'tables', 'nope.csv']);
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toContain('lore inspect tables');
+    });
+  });
+});
+
+describe('a build that contains tables', () => {
+  it('declares table-query, counts the rows, and hashes them into its identity', async () => {
+    await withTempProject({ files: TABLE_CORPUS }, async (temp) => {
+      const result = await runBuild({
+        config: loadConfig({ cwd: temp.root }),
+        progress: new ProgressBus(),
+      });
+      const manifest = buildManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(temp.root, '.lore', 'builds', result.buildId, 'manifest.json'), 'utf8'),
+        ),
+      );
+
+      expect(result.counts.tables).toBe(1);
+      expect(result.counts.tableRows).toBe(2);
+      expect(manifest.capabilities).toContain('table-query');
+      // Section 11.4: a row change must change the build id, so the root cannot be the
+      // hash of an empty list the way it was before tables existed.
+      expect(manifest.canonicalRoots.tables).not.toBe(
+        '0000000000000000000000000000000000000000000000000000000000000000',
+      );
+    });
+  });
+
+  /**
+   * The property that makes a table part of the build rather than beside it. Two projects
+   * that differ only in one cell must be two different builds, or a deploy of the second
+   * would be a no-op and the wrong data would stay live.
+   */
+  it('changes the build id when a single cell changes', async () => {
+    const idFor = async (salary: string): Promise<string> =>
+      withTempProject(
+        {
+          files: {
+            ...TABLE_CORPUS,
+            'people.csv': `staff_id,name,zip,salary\n0007,Ada,02139,${salary}\n`,
+          },
+        },
+        async (temp) => {
+          const built = await runBuild({
+            config: loadConfig({ cwd: temp.root }),
+            progress: new ProgressBus(),
+          });
+          return built.buildId;
+        },
+      );
+
+    expect(await idFor('120000')).not.toBe(await idFor('120001'));
+  });
+
+  /**
+   * Determinism across absolute paths, for the table root specifically. Everything else in
+   * the build has this test already; tables are new content in the identity and could carry
+   * a path into the hash through a locator without anyone noticing.
+   */
+  it('produces the same build id from two different absolute roots', async () => {
+    const idFor = async (): Promise<string> =>
+      withTempProject({ files: TABLE_CORPUS }, async (temp) => {
+        const built = await runBuild({
+          config: loadConfig({ cwd: temp.root }),
+          progress: new ProgressBus(),
+        });
+        return built.buildId;
+      });
+
+    expect(await idFor()).toBe(await idFor());
   });
 });

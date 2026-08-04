@@ -227,3 +227,90 @@ them back, so a paragraph written *about* script tags survives **as text**. It w
 element, so there was nothing to execute, and equally nothing was deleted. The dangerous
 direction is the second: unescaped characters would become a real `<script>` element that the
 noise policy drops with its contents, and an author's paragraph would vanish silently.
+
+## CSV
+
+A CSV becomes **a typed table plus one node that describes it**. Never rows of prose.
+Architecture section 4.6 calls the alternative an invalid implementation, and the structural
+guarantee is easy to state: row count does not affect node count. Three rows and three hundred
+thousand rows both produce one `document` and one `table` node.
+
+That node exists so retrieval can find the table. It names the file, the column names and
+their types, the row count and the first few rows. Someone searching "shipping cost by region"
+matches it, and then queries. What they never get is 300,000 rows joined with commas, which no
+model can aggregate and no locator can cite.
+
+### The one rule that matters: never invent a number
+
+Type inference is written to **refuse** types, not to find them. Each candidate is asked "could
+*every* non-null value in this column be this?", most specific first, and anything short of
+unanimous falls through to `text`.
+
+Four refusals, each of which corresponds to data destroyed somewhere in the real world:
+
+| Value | Naive reading | What Lorepack stores | Why |
+|---|---|---|---|
+| `00123` | `123` | `'00123'` text | A postal code, extension or part number. The zero never comes back. |
+| `+441632960000` | `441632960000` | text | A phone number wearing a plus sign. |
+| `9007199254740993` | `9007199254740992` | text | Past `Number.MAX_SAFE_INTEGER`, so it returns changed and silent. |
+| `03/04/2026` | a date | text | March 4th in one country, April 3rd in another. The file never says which. |
+
+Only ISO-8601 shapes become `date`, and only if the date can exist: `2026-02-30` matches the
+pattern and is not a day.
+
+The bias has a cost, and it is the right one. A price column where one cell reads `n/a` stays
+text and has to be cast in SQL. Casting is a keystroke. Recovering a leading zero that the
+build discarded is impossible.
+
+### Sample, then verify
+
+Types are decided from the first 1,000 rows, because typing 500,000 rows twice is the import.
+Every remaining row is then checked against that decision, and a column whose late row does not
+fit **widens to text** rather than storing a null. Widening is announced in a warning, because
+a user who expected to sum that column needs to know why they now cannot. The sample size is
+recorded in table metadata, so the decision is auditable rather than magic.
+
+### Reading the grid as arrays, on purpose
+
+`csv-parse` offers `columns: true`, which returns objects keyed by header. Lorepack does not
+use it, and this was measured rather than assumed:
+
+- Given `a,a`, it returns **one** column and lets the second value win. A column of the user's
+  data disappears with no warning.
+- Given a row with an extra cell, it **discards the cell**.
+
+Both are exactly the silent drops this parser is required not to do. Reading arrays means
+raggedness is a length the parser can see, so a short row's missing cells become nulls, an
+extra cell becomes a real column, and either way a warning names the line numbers.
+
+### The two guesses, both written down
+
+A CSV does not record its delimiter or whether row one is a header, so both are inferred and
+both are recorded in table metadata alongside the reason.
+
+The delimiter is chosen by **consistency, not frequency**. Counting occurrences is the obvious
+approach and it is wrong: a semicolon-separated file of prose has more commas than semicolons.
+The test is which candidate splits every sampled line into the *same* number of fields, counted
+outside quotes so that `"Smith, John"` is one field.
+
+Row one is a header when every cell it has is non-empty text and none of them parse as a number
+or boolean. A header narrower than the widest body row is still a header; the unnamed columns
+get positional names rather than demoting the header to data. Duplicates become `name_2`, and
+that too is a warning, because renaming a column is a decision the reader should see.
+
+### Limits
+
+100 columns and 500,000 rows, both hard failures with the count and the limit in the message.
+The column limit matches Cloudflare D1's, so a table that imports locally can be projected in
+Phase 6 rather than failing there for the first time.
+
+Measured at the envelope on 2026-08-04: a 500,000-row, five-column file (21 MB) parses in
+1.7 s and imports in 0.4 s, holding about 360 MB above baseline. The whole file is read into
+memory rather than streamed, which is deliberate: the parser port hands over `bytes`, so the
+file is already resident, and a streaming reader would add a second code path while saving
+nothing.
+
+## Typed tables in a build
+
+Rows live in real SQL tables inside the sealed build, described by a catalog. See
+[`local-storage.md`](./local-storage.md#typed-tables) for the schema and the naming rules.

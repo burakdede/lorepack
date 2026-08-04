@@ -22,7 +22,15 @@ import { buildDirectory, openStateStore, resolveBuildId } from '../services/buil
  * (architecture section 4.9) has to mean to be worth anything.
  */
 
-const SUBJECTS = ['warnings', 'exclusions', 'sources', 'build', 'chunks', 'builds'] as const;
+const SUBJECTS = [
+  'warnings',
+  'exclusions',
+  'sources',
+  'build',
+  'chunks',
+  'tables',
+  'builds',
+] as const;
 type Subject = (typeof SUBJECTS)[number];
 
 export function inspectCommand(): CommandDefinition {
@@ -72,6 +80,8 @@ export function inspectCommand(): CommandDefinition {
             };
           case 'chunks':
             return inspectChunks(loreDirectory, buildId, args[1] ?? '');
+          case 'tables':
+            return inspectTables(loreDirectory, buildId, args[1] ?? '');
           default:
             // Anything else is treated as a source path, which is the common case and
             // saves typing `lore inspect sources <path>`.
@@ -412,6 +422,92 @@ function inspectChunks(loreDirectory: string, buildId: BuildId, path: string): C
       human: lines.join('\n'),
       json: { buildId, artifactId: artifact === null ? null : artifact.id, chunks },
     };
+  });
+}
+
+/**
+ * The typed tables in a build: bare, a listing; with a table id or a path, one schema.
+ *
+ * This is the only way to see a table's shape until the SQL surface lands, and it is what
+ * the runtime's own "no query yet" message points a user at, so it has to exist and has to
+ * be worth reading. Columns come out in source order with their inferred types, because the
+ * type is the decision a user is most likely to want to argue with.
+ */
+function inspectTables(loreDirectory: string, buildId: BuildId, target: string): CommandResult {
+  return withDatabase(loreDirectory, buildId, (db) => {
+    const tables = db
+      .prepare(
+        `SELECT id, name, sheet, row_count AS rowCount, relative_path AS relativePath, metadata
+           FROM tables ORDER BY relative_path, name`,
+      )
+      .all() as Array<Record<string, string | number | null>>;
+
+    if (target === '') {
+      if (tables.length === 0) {
+        return {
+          human:
+            'This build contains no tables.\n\nCSV and spreadsheet files become tables; other formats become text.',
+          json: { buildId, tables: [] },
+        };
+      }
+      const lines = [`${count(tables.length, 'table')} in ${buildId.slice(0, 17)}`, ''];
+      for (const table of tables) {
+        const sheet = table.sheet === null ? '' : ` (sheet ${String(table.sheet)})`;
+        lines.push(
+          `  ${String(table.name)}${sheet}  ${count(Number(table.rowCount), 'row')}  ${String(table.relativePath)}`,
+        );
+        lines.push(`    ${String(table.id)}`);
+      }
+      lines.push('', 'Pass a table id or a source path to see its columns.');
+      return { human: lines.join('\n'), json: { buildId, tables } };
+    }
+
+    const table = tables.find(
+      (one) => one.id === target || one.relativePath === target || one.name === target,
+    );
+    if (table === undefined) {
+      throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table matches ${target}.`, {
+        remediation: 'Run `lore inspect tables` to see the tables this build contains.',
+        subject: target,
+      });
+    }
+
+    const columns = db
+      .prepare(
+        `SELECT name, type, nullable, null_count AS nullCount,
+                distinct_estimate AS distinctEstimate, distinct_is_exact AS distinctIsExact,
+                min_value AS minValue, max_value AS maxValue
+           FROM table_columns WHERE table_id = ? ORDER BY ordinal`,
+      )
+      .all(String(table.id)) as Array<Record<string, string | number | null>>;
+
+    const lines = [
+      `Table ${String(table.name)} (${String(table.relativePath)})`,
+      '',
+      `  rows           ${String(table.rowCount)}`,
+      `  columns        ${String(columns.length)}`,
+      '',
+      '  column                          type      nulls   distinct  range',
+    ];
+    for (const column of columns) {
+      const distinct = `${column.distinctIsExact === 1 ? '' : '>='}${String(column.distinctEstimate)}`;
+      const range =
+        column.minValue === null ? '' : `${String(column.minValue)} .. ${String(column.maxValue)}`;
+      lines.push(
+        `  ${String(column.name).slice(0, 30).padEnd(30)}  ${String(column.type).padEnd(8)}  ${String(column.nullCount).padEnd(6)}  ${distinct.padEnd(8)}  ${range.slice(0, 40)}`,
+      );
+    }
+    // How the file was read is a judgement the build made, and a column typed unexpectedly
+    // is usually explained by it. Printing it here saves reading the manifest.
+    const metadata = JSON.parse(String(table.metadata ?? '{}')) as Record<string, unknown>;
+    if (Object.keys(metadata).length > 0) {
+      lines.push('', '  how it was read');
+      for (const [key, value] of Object.entries(metadata).sort()) {
+        lines.push(`    ${key.padEnd(20)} ${JSON.stringify(value)}`);
+      }
+    }
+
+    return { human: lines.join('\n'), json: { buildId, table, columns, metadata } };
   });
 }
 

@@ -60,6 +60,66 @@ export interface ParsedArtifact {
   readonly artifact: Artifact;
   readonly nodes: readonly LoreNode[];
   readonly warnings: readonly ParserWarning[];
+  /**
+   * Typed tables this artifact contains, if any.
+   *
+   * Separate from `nodes` on purpose, and it is the whole of architecture section 4.6: a
+   * spreadsheet flattened into prose nodes is an invalid implementation. The nodes carry a
+   * compact *description* of the table so retrieval can find it; the rows live here, and
+   * reach the reader through SQL rather than through search.
+   *
+   * Optional so a Markdown parser is not obliged to say `tables: []`.
+   */
+  readonly tables?: readonly ParsedTable[];
+}
+
+/** A cell. The set is deliberately the SQLite storage classes plus a decoded boolean. */
+export type TableValue = string | number | boolean | null;
+
+/**
+ * One typed table, ready for storage.
+ *
+ * `tableId` is the stable identity a caller passes to `describeTable` and `queryTable`, and
+ * it is derived from the artifact and the sheet rather than from a physical SQL name. The
+ * physical name is a storage detail that the backend generates and validates, and letting a
+ * user address it directly would be handing them an identifier that came from their own file.
+ */
+export interface ParsedTable {
+  readonly tableId: string;
+  /** For display and for `listTables`. Human-facing; never used to build SQL. */
+  readonly name: string;
+  /** The worksheet, where the format has them. A CSV file is one unnamed table. */
+  readonly sheet?: string;
+  readonly columns: readonly ParsedColumn[];
+  readonly rows: readonly (readonly TableValue[])[];
+  readonly locator: SourceLocator;
+  /** How the table was read: delimiter, header decision, inference sample size. */
+  readonly metadata: Readonly<Record<string, unknown>>;
+}
+
+export interface ParsedColumn {
+  readonly name: string;
+  readonly type: ColumnTypeName;
+  readonly nullable: boolean;
+  readonly statistics: ColumnStatistics;
+}
+
+/** Mirrors `columnTypeSchema`, declared here so the model does not import a Zod schema. */
+export type ColumnTypeName = 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'unknown';
+
+/**
+ * What `describeTable` reports without reading the rows.
+ *
+ * `distinctEstimate` is named an estimate because at the 500,000-row envelope an exact
+ * count is a second pass over every value. It is exact below a bounded cardinality and a
+ * lower bound above it, and which of the two applies is recorded rather than left to guess.
+ */
+export interface ColumnStatistics {
+  readonly nullCount: number;
+  readonly distinctEstimate: number;
+  readonly distinctIsExact: boolean;
+  readonly min?: TableValue;
+  readonly max?: TableValue;
 }
 
 /** What a parser is handed. Pure input: no filesystem access, no clock, no configuration. */

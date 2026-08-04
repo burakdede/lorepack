@@ -4,8 +4,24 @@ node_modules/
 
 # build output
 dist/
-build/
 *.tsbuildinfo
+# Anchored to the repo root. An unanchored `build/` matches at any depth, which silently
+# swallowed `packages/backend-local/migrations/build/
+
+# Migrations live in a directory called `build`, which is a word both this file and a
+# contributor's personal global gitignore are likely to exclude at any depth. Re-including
+# the directory explicitly is what makes a new migration commit on any machine: without it,
+# `git add -A` silently skips the file and CI fails every test that opens a build database.
+!packages/backend-local/migrations/build/0002_tables.sql`: a migration that
+# existed locally, was never committed, and failed every test in CI. Ignore rules that can
+# match a directory nobody was thinking about are worth spelling out.
+/build/
+
+# Migrations live in a directory called `build`, which is a word both this file and a
+# contributor's personal global gitignore are likely to exclude at any depth. Re-including
+# the directory explicitly is what makes a new migration commit on any machine: without it,
+# `git add -A` silently skips the file and CI fails every test that opens a build database.
+!packages/backend-local/migrations/build/
 
 # Lorepack workspace state (never committed; see docs/package-format)
 .lore/
