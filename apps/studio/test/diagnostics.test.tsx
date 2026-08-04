@@ -163,6 +163,14 @@ describe('what this route must never do', () => {
     // Section 15.6: those files hold other people's servers and other people's credentials.
     expect(document.body.textContent).not.toMatch(/token|secret|password|api[_-]?key/i);
   });
+
+  /** #203, the same defect one route over: `Claude Code2.1.0` announced as one word. */
+  it('separates the client name from its version with real text, not a margin', async () => {
+    renderRoute();
+
+    const heading = await screen.findByRole('rowheader', { name: /Claude Code/ });
+    expect(heading.textContent).toBe('Claude Code 2.1.0');
+  });
 });
 
 describe('live session state, which a one-shot command cannot show', () => {
