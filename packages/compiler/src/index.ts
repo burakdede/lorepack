@@ -71,6 +71,13 @@ export {
   renderPlan,
 } from './plan/plan.js';
 export {
+  type ResolvedArtifactRule,
+  type RuleInput,
+  type RuleResolution,
+  type RuleStatus,
+  resolveRules,
+} from './rules/resolve.js';
+export {
   type ValidationCheckName,
   type ValidationFailure,
   type ValidationInput,

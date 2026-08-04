@@ -29,6 +29,7 @@ const SUBJECTS = [
   'build',
   'chunks',
   'tables',
+  'rules',
   'builds',
 ] as const;
 type Subject = (typeof SUBJECTS)[number];
@@ -82,6 +83,8 @@ export function inspectCommand(): CommandDefinition {
             return inspectChunks(loreDirectory, buildId, args[1] ?? '');
           case 'tables':
             return inspectTables(loreDirectory, buildId, args[1] ?? '');
+          case 'rules':
+            return inspectRules(loreDirectory, buildId);
           default:
             // Anything else is treated as a source path, which is the common case and
             // saves typing `lore inspect sources <path>`.
@@ -508,6 +511,73 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
     }
 
     return { human: lines.join('\n'), json: { buildId, table, columns, metadata } };
+  });
+}
+
+/**
+ * What the declared rules actually did to each artifact.
+ *
+ * Only artifacts a rule *changed* are listed. A build of two thousand files where three carry
+ * a declaration should print three lines, not two thousand: the question this answers is
+ * "did my rules do what I meant", and every neutral row is noise against that.
+ *
+ * The heading says plainly what `authority` is. Architecture section 4.5 and section 24.6 both
+ * insist on it, and a number in a column is exactly where a reader starts believing it was
+ * measured rather than declared.
+ */
+function inspectRules(loreDirectory: string, buildId: BuildId): CommandResult {
+  return withDatabase(loreDirectory, buildId, (db) => {
+    const rows = db
+      .prepare(
+        `SELECT a.display_path AS displayPath, a.status, a.authority,
+                (SELECT group_concat(s.superseded_id, ' ')
+                   FROM supersessions s WHERE s.artifact_id = a.id) AS supersedes
+           FROM artifacts a
+          WHERE a.status != 'active' OR a.authority != 50
+             OR EXISTS (SELECT 1 FROM supersessions s WHERE s.artifact_id = a.id)
+          ORDER BY a.relative_path`,
+      )
+      .all() as Array<Record<string, string | number | null>>;
+
+    if (rows.length === 0) {
+      return {
+        human:
+          'No rule changed anything in this build.\n\nEvery artifact is active with authority 50 and supersedes nothing. Declare rules in lore.yaml under `rules:`.',
+        json: { buildId, rules: [] },
+      };
+    }
+
+    const lines = [
+      `${count(rows.length, 'artifact')} carry a declared rule in ${buildId.slice(0, 17)}`,
+      '',
+      '  authority is a ranking hint you declared. It is never evidence that a document is',
+      '  correct, and Lorepack never decides which of two documents is true.',
+      '',
+    ];
+    for (const row of rows) {
+      lines.push(`  ${String(row.displayPath)}`);
+      lines.push(`    status ${String(row.status)}, authority ${String(row.authority)}`);
+      const supersedes = row.supersedes === null ? [] : String(row.supersedes).split(' ');
+      if (supersedes.length === 1) {
+        lines.push(`    supersedes ${supersedes[0] as string}`);
+      } else if (supersedes.length > 1) {
+        lines.push(`    supersedes ${count(supersedes.length, 'artifact')}`);
+        for (const target of supersedes) lines.push(`      ${target}`);
+      }
+    }
+
+    return {
+      human: lines.join('\n'),
+      json: {
+        buildId,
+        rules: rows.map((row) => ({
+          displayPath: String(row.displayPath),
+          status: String(row.status),
+          authority: Number(row.authority),
+          supersedes: row.supersedes === null ? [] : String(row.supersedes).split(' '),
+        })),
+      },
+    };
   });
 }
 

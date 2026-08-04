@@ -70,3 +70,27 @@ ones fail with the listing command, ambiguous ones fail listing the candidates.
 Adding an input, changing the canonicalization, or changing the normalization policy
 changes every build ID in existence. Each is therefore a versioned constant, and the
 change is a reviewed, format-affecting act that needs a changeset.
+
+## Rules in build identity
+
+Resolved rules are an input to `deriveBuildId` (section 11.4), so editing a rule produces a
+different build. That is what makes `lore diff` able to show a precedence change, and what
+stops an activation from silently keeping the old ranking.
+
+What is hashed is what a rule **decided**, not how it was written:
+
+- Two configurations whose rules resolve to the same statuses, authorities and supersessions
+  produce the **same** build id. Someone tidying their `lore.yaml`, splitting a broad glob into
+  two narrower ones, or reordering rules that do not overlap, does not rebuild the world.
+- Changing any resolved value produces a different one.
+- `matchedRules` is excluded deliberately. It is attribution for a human reading
+  `lore inspect rules`, and hashing it would make reordering two rules that set the same value
+  a rebuild for no difference in what the build contains.
+
+Artifacts that no rule touched are omitted from the hashed form entirely, so a project with no
+`rules:` block hashes an empty list and is unaffected by this stage existing.
+
+The resolution also feeds the **parse cache key**. An artifact whose declared authority changed
+has to be reindexed even though its bytes did not; resolving after the parse loop instead would
+let a rule edit reuse a stale entry, which is precisely the failure the cache key exists to
+prevent.

@@ -26,7 +26,9 @@ import {
   compareLockfiles,
   createPlan,
   normalizeArtifact,
+  type ResolvedArtifactRule,
   readLockfile,
+  resolveRules,
   validateCandidate,
   writeLockfile,
 } from '@lorepack/compiler';
@@ -153,6 +155,19 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       });
       await checkpoint(options.signal, { hasActiveBuild: active !== null });
 
+      // Rules resolve here, before parsing, because the cache key depends on them: an
+      // artifact whose declared authority changed must be reindexed even though its bytes
+      // did not (architecture section 12.7). Resolving after the parse loop would let a rule
+      // edit reuse a stale entry, which is the quiet failure the cache key exists to prevent.
+      const ruleResolution = resolveRules({
+        artifacts: fingerprint.artifacts.map((artifact) => ({
+          artifactId: artifact.artifactId,
+          relativePath: artifact.relativePath,
+        })),
+        config: config.effective,
+      });
+      const rulesById = new Map(ruleResolution.resolved.map((entry) => [entry.artifactId, entry]));
+
       const cache = new ParseCache(join(loreDirectory, 'cache', 'parse'));
       progress.start('parsing', 'Parsing', fingerprint.artifacts.length);
       const parsed: CachedParse[] = [];
@@ -173,7 +188,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           parserVersion: parser.version,
           normalizationVersion: NORMALIZATION_VERSION,
           chunking: config.effective.chunking as unknown as Canonical,
-          rules: [],
+          rules: ruleResolution.canonical as unknown as Canonical,
         });
 
         // A hit still has to have its normalized body present: the object store and the
@@ -181,7 +196,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         // produce a build that cannot answer a source read.
         const cached = cache.get(key);
         if (cached !== null && (await objects.has(cached.objectHash))) {
-          parsed.push(cached);
+          parsed.push(withRules(cached, rulesById));
           handled += 1;
           continue;
         }
@@ -239,7 +254,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         // has already read, so the cheap thing to keep is nothing. Nothing is ever written,
         // so nothing can ever be read back missing its tables.
         if (entry.tables === undefined) cache.put(key, entry);
-        parsed.push(entry);
+        parsed.push(withRules(entry, rulesById));
 
         handled += 1;
         if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
@@ -256,6 +271,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         // taken *inside* a file that was kept, which is the other half of the same promise:
         // a heading flattened, a column widened, a sheet not read as a table. Without this
         // every one of them was computed carefully and then dropped (#223).
+        ...ruleResolution.warnings,
         ...parsed.flatMap((entry) =>
           (entry.warnings ?? []).map((warning) => ({
             code: warning.code,
@@ -281,7 +297,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         normalizationVersion: NORMALIZATION_VERSION,
         effectiveConfig: config.effective as unknown as Canonical,
         parserVersions: nextLock.parsers,
-        ruleResolution: [],
+        ruleResolution: ruleResolution.canonical,
         embeddingProfile: null,
         canonicalRoots: canonicalRoots(parsed),
       });
@@ -503,5 +519,33 @@ function countsOf(
     // Counted from the parse rather than read back from SQLite, so this agrees with the
     // manifest on a rebuild that reused an existing build directory and wrote no rows.
     tableRows: tables.reduce((sum, table) => sum + table.rows.length, 0),
+  };
+}
+
+/**
+ * A parsed artifact with its declared rules applied.
+ *
+ * Parsers leave every artifact neutral on purpose, with a comment forbidding them from
+ * inferring status or authority from content: that would be inventing truth. The declaration
+ * is the user's, and this is where it lands, after parsing and before indexing.
+ *
+ * Applied on the cached path too. The cache key covers the resolution, so a hit already agrees
+ * about the rules, but reapplying costs nothing and means the rule values in a build come from
+ * one place rather than from whichever path an artifact happened to take.
+ */
+function withRules(
+  entry: CachedParse,
+  rulesById: ReadonlyMap<string, ResolvedArtifactRule>,
+): CachedParse {
+  const rule = rulesById.get(entry.artifact.id);
+  if (rule === undefined) return entry;
+  return {
+    ...entry,
+    artifact: {
+      ...entry.artifact,
+      status: rule.status,
+      authority: rule.authority,
+      supersedes: [...rule.supersedes],
+    },
   };
 }
