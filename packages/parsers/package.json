@@ -25,6 +25,7 @@
   "dependencies": {
     "@lorepack/core": "workspace:*",
     "mdast-util-from-markdown": "2.0.2",
+    "pdfjs-dist": "6.2.108",
     "rehype-parse": "9.0.1",
     "remark-frontmatter": "5.0.0",
     "remark-gfm": "4.0.1",

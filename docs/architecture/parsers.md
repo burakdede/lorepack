@@ -106,3 +106,66 @@ not guessing. A legacy documentation export is exactly the file someone points L
 
 Links are kept in node metadata rather than inlined into the prose, so a reader can follow one
 without every paragraph being polluted by URLs.
+
+## PDF
+
+Text layer only, on `pdfjs-dist` (Mozilla, Apache-2.0, 22.1M weekly, zero dependencies).
+
+### Two corrections to what #72 assumed
+
+**The legacy build is necessary and not sufficient.** The ticket recorded "use the legacy build
+rather than polyfilling `DOMMatrix`". That was true only while `@napi-rs/canvas` happened to be
+installed, because canvas supplies `DOMMatrix` and pdfjs picks it up silently. Once canvas is
+removed, and it must be, the legacy build throws at **module load**:
+
+```
+const SCALE_MATRIX = new DOMMatrix();
+ReferenceError: DOMMatrix is not defined
+```
+
+So the answer is the legacy build **and** three deliberately useless stubs, confined to
+`packages/parsers/src/pdf/runtime.ts`. They exist to satisfy a module-level `new`; Lorepack
+extracts text and never renders, so nothing calls them to do arithmetic. Writing a real matrix
+would be worse, because it would look like rendering support that works.
+
+**Canvas is excluded at the lockfile.** It is an `optionalDependency` of pdfjs, which reaches
+for it at runtime if present, and it is native, so `pnpm-workspace.yaml` carries
+`overrides: {'@napi-rs/canvas': '-'}`. `check:no-native` already banned the name; the override
+is what makes that check pass on a real install rather than only after someone deletes a
+directory. Verified by wiping `node_modules` and reinstalling.
+
+`isEvalSupported: false` is deliberately **not** passed. That option and every reference to it
+were removed in pdfjs 6, which no longer evaluates anything, so passing it would be reassuring
+rather than true.
+
+### A page is the only structure
+
+A PDF has no headings, only text that happens to be larger. Inferring a hierarchy from font
+size would put structure in the build that is not in the document, and every locator beneath it
+would be a claim nobody made. So the parser emits one `section` per page titled `Page N`, with
+paragraphs under it, and the locator carries the page because that is the only coordinate the
+document actually has.
+
+### What is refused, and why refusing matters
+
+A document whose pages carry no text at all is **refused**, with a message naming OCR as out of
+scope, rather than producing an empty artifact. An empty artifact is the worst outcome
+available, because it looks like a working build. A partly scanned document is kept, with a
+warning counting the pages that gave nothing.
+
+Password-protected documents fail with a message saying Lorepack never prompts for a
+credential: a build is not an interactive session, and a parser that asked would hang CI rather
+than fail it.
+
+One damaged page does not fail the document. It becomes a warning naming the page, which is
+section 24.4's visible loss rather than a build that dies on page 400 of 600.
+
+### Hyphens: the conservative choice, stated
+
+`depart-\nment` is one word split by typesetting. `long-\nterm` is a compound that wrapped at
+its own hyphen. **Nothing in the text layer distinguishes them**, and the two repairs disagree.
+
+The line is joined without inserting a space and the hyphen is kept. That is not neutral, it is
+conservative: keeping the hyphen preserves what was on the page, while removing it fabricates a
+spelling that appears in no document. Ligatures are the opposite case and are expanded, because
+those codepoints have exactly one expansion and leaving them makes a word unsearchable.

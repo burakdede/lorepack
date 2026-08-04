@@ -5,6 +5,8 @@ export {
   MARKDOWN_PARSER_VERSION,
   markdownParser,
 } from './markdown/parser.js';
+export { PDF_PARSER_ID, PDF_PARSER_VERSION, pdfParser } from './pdf/parser.js';
+export { normalizePageText, PDF_LIMITS } from './pdf/text.js';
 export {
   FORMATS,
   type FormatEntry,
