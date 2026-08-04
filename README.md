@@ -113,8 +113,8 @@ what happens if yours does not.
 
 ## Limitations, honestly
 
-- **Markdown, plain text and source code only** for now. A PDF or a spreadsheet is reported as
-  a format supported in a later release, not as an error, and it is named in the build's
+- **Markdown, HTML, plain text and source code** for now. A PDF or a spreadsheet is reported
+  as a format supported in a later release, not as an error, and it is named in the build's
   exclusions rather than silently skipped.
 - **Lexical retrieval only.** BM25 with declared ranking hints. No embeddings in the default
   install, and the score is presented as a ranking heuristic because that is what it is.
@@ -135,6 +135,7 @@ what happens if yours does not.
 | The `lore` command line | [`docs/architecture/cli.md`](docs/architecture/cli.md) |
 | How a build is produced, and why the stage order matters | [`docs/architecture/build-orchestration.md`](docs/architecture/build-orchestration.md) |
 | What belongs in a build, and what does not | [`docs/architecture/discovery.md`](docs/architecture/discovery.md) |
+| How each format is read, and what is deliberately dropped | [`docs/architecture/parsers.md`](docs/architecture/parsers.md) |
 | How a model reaches a build, over MCP and HTTP | [`docs/architecture/serving.md`](docs/architecture/serving.md) |
 | Studio: behaviour, the manual passes, and the design direction | [`docs/architecture/studio.md`](docs/architecture/studio.md) |
 | Connecting Claude Code | [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md) |
