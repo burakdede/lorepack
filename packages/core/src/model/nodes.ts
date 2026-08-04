@@ -80,10 +80,20 @@ export interface ParseInput {
  *
  * `version` is part of the cache key and the build id, so bumping it is a deliberate act
  * that invalidates every artifact this parser produced.
+ *
+ * `parse` may return a promise, because two of the formats Phase 5 adds cannot be read any
+ * other way: `pdfjs.getDocument()` resolves a promise and `mammoth.convertToHtml()` is a
+ * thenable. Pure and asynchronous are not in tension. What "pure" is protecting is that a
+ * parser reads nothing but its input, holds no state between calls, and returns the same
+ * nodes for the same bytes; none of that is weakened by the work taking a tick.
+ *
+ * A synchronous parser needs no change: `ParsedArtifact` is assignable to
+ * `ParsedArtifact | Promise<ParsedArtifact>`, so `markdownParser` and `textParser` still
+ * return a value directly and their tests still read as straight-line code.
  */
 export interface ArtifactParser {
   readonly id: string;
   readonly version: string;
   supports(input: { mediaType: string; relativePath: string }): boolean;
-  parse(input: ParseInput): ParsedArtifact;
+  parse(input: ParseInput): ParsedArtifact | Promise<ParsedArtifact>;
 }

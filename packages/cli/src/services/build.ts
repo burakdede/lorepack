@@ -188,7 +188,11 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         const bytes = new Uint8Array(readFileSync(discovered.absolutePath));
         let result: ParsedArtifact;
         try {
-          result = parser.parse({
+          // Awaited because a parser may be asynchronous: PDF and DOCX cannot be read any
+          // other way. The `await` matters for the `catch` as much as for the value, since
+          // a rejected promise from an unawaited call would escape this block entirely and
+          // surface as an unhandled rejection rather than as `LORE_E_PARSE_FAILED`.
+          result = await parser.parse({
             artifactId: discovered.artifactId,
             sourceId: discovered.sourceId,
             relativePath: discovered.relativePath,

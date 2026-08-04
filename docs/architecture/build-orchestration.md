@@ -18,6 +18,7 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 3. **Parse.** Cached parses are reused by `cacheKey`, which covers content, parser
    identity, normalization version and the configuration that affects output. A supported,
    included file that fails to parse fails the whole candidate (section 6.9).
+   A parser [may be asynchronous](#a-parser-may-return-a-promise).
 4. **Index.** Everything goes into a candidate database under `.lore/tmp/`, in one
    transaction.
 5. **Validate.** Eleven independent checks (see `validateCandidate`). Failure names the
@@ -36,6 +37,32 @@ active build keeps serving.
 The build id is derived before the candidate is written, from content alone, so the
 directory is named correctly the first time and an identical rebuild is recognised as
 already done rather than duplicated.
+
+## A parser may return a promise
+
+`ArtifactParser.parse` returns `ParsedArtifact | Promise<ParsedArtifact>`. Two of the formats
+Phase 5 adds leave no choice: `pdfjs.getDocument()` resolves a promise and
+`mammoth.convertToHtml()` is a thenable.
+
+**Pure and asynchronous are not in tension.** What "pure" protects here is that a parser reads
+nothing but its input, keeps no state between calls, and returns the same nodes for the same
+bytes. None of that is weakened by the work taking a tick. A synchronous parser needs no
+change, because `ParsedArtifact` is assignable to the union, so the Markdown and text parsers
+still return a value directly.
+
+The load-bearing detail is at the call site, and it is not the value:
+
+```ts
+result = await parser.parse({ ... });   // inside the try
+```
+
+Without the `await`, the `try` catches nothing when the parser is asynchronous. The promise is
+returned, the block exits, and a later rejection surfaces as an unhandled rejection that ends
+the process instead of failing one artifact with `LORE_E_PARSE_FAILED` and a path. The type
+checker is equally happy either way, which is why
+`packages/cli/test/async-parser.test.ts` drives a real rejecting async parser through
+`runBuild` rather than asserting the signature: removing the `await` fails that test, and the
+type checker still passes.
 
 ## The parse cache
 
