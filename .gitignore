@@ -33,6 +33,12 @@ packages/cli/studio-dist/
 # Browser-driving artifacts: screenshots and page snapshots taken while checking a change.
 .playwright-mcp/
 *.png
+# Except the documentation, which is generated on purpose by `pnpm docs:capture` and committed.
+# The rule above is deliberately blunt so a screenshot dropped anywhere while debugging is not
+# committed by accident, and blunt is why it silently swallowed six images the README needed
+# and left it showing broken icons (#214). A negation rather than narrowing the rule, so the
+# one directory that is allowed to hold a PNG has to say so.
+!docs/images/*.png
 
 # Playwright's own output from the browser suite: traces, screenshots and the HTML report.
 tools/studio-e2e/test-results/

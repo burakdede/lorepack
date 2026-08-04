@@ -60,8 +60,25 @@ jobs:
 
       - run: pnpm check:no-em-dash
 
+      - run: pnpm check:counted-nouns
+
+      - name: Every command the sources mention is registered
+        run: pnpm check:command-set
+
+      - name: Studio fits its bundle budget
+        run: pnpm check:studio-bundle
+
       - name: Every source file is tracked by git
         run: pnpm check:sources-tracked
+
+      # Tracked, not merely present. Six generated PNGs sat in `docs/images/` behind a blanket
+      # `*.png` ignore, so the README shipped with broken icons (#214).
+      - name: Every documentation image is referenced and tracked
+        run: pnpm check:docs-images
+
+      # These steps and `pnpm verify` are one list. This is what says so.
+      - name: CI and `pnpm verify` run the same checks
+        run: pnpm check:verify-parity
 
       - name: Public schemas match their Zod definitions
         run: pnpm schemas:check
