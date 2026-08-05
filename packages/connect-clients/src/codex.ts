@@ -212,6 +212,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       return {
         clientId: CODEX_ID,
         scope: input.scope,
+        projectRoot: input.projectRoot,
         configPath: path,
         changes,
         entry: block,
@@ -238,6 +239,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       return {
         clientId: CODEX_ID,
         scope: plan.scope,
+        projectRoot: plan.projectRoot,
         serverName: plan.serverName,
         configPath: path,
         ...(backupPath === undefined ? {} : { backupPath }),
@@ -262,8 +264,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       const check = await probe({ executable: entry.command, args: entry.args ?? [] });
       if (!check.ok) return check;
 
-      const projectRoot = entry.cwd ?? dirnameOfProject(path, receipt.scope);
-      if (receipt.scope === 'project' && projectTrust(home, projectRoot) !== 'trusted') {
+      if (receipt.scope === 'project' && projectTrust(home, receipt.projectRoot) !== 'trusted') {
         return {
           ...check,
           ok: false,
@@ -276,7 +277,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       // Codex's own view, asked from the project directory so the answer is the merged one it
       // would actually use. An empty list here is exactly the silent failure this guards.
       try {
-        const { stdout } = await runClient(['mcp', 'list', '--json'], { cwd: projectRoot });
+        const { stdout } = await runClient(['mcp', 'list', '--json'], { cwd: receipt.projectRoot });
         if (!listsServer(stdout, receipt.serverName)) {
           return {
             ...check,
@@ -367,13 +368,6 @@ function serverEntry(
   const entry = (servers as Record<string, unknown>)[serverName];
   if (typeof entry !== 'object' || entry === null) return undefined;
   return entry as { command?: string; args?: string[]; cwd?: string };
-}
-
-/** The project a config path belongs to, for the trust lookup when the entry omits `cwd`. */
-function dirnameOfProject(configPath: string, scope: ConnectReceipt['scope']): string {
-  if (scope === 'user') return '';
-  // `<root>/.codex/config.toml`
-  return configPath.split(/[\\/]/).slice(0, -2).join('/');
 }
 
 /** `codex mcp list --json` answers an array of objects with a `name`. */

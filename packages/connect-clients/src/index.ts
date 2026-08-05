@@ -23,6 +23,15 @@ export {
   withServerEntry,
   writeJsonAtomically,
 } from './json-config.js';
+export {
+  JSONC_OWNERSHIP_PREFIX,
+  type JsoncConfig,
+  type JsoncOwner,
+  ownerOfEntry,
+  readJsoncConfig,
+  withOwnedEntry,
+  withoutOwnedEntry,
+} from './jsonc-config.js';
 export type {
   ClientConnector,
   ClientDetection,
@@ -54,3 +63,10 @@ export {
   writeTextAtomically,
 } from './toml-config.js';
 export { type VerifyOptions, verifyStdioServer } from './verify.js';
+export {
+  createVsCodeConnector,
+  userConfigDirectory,
+  VSCODE_ID,
+  type VsCodeOptions,
+  vsCodeSnippet,
+} from './vscode.js';

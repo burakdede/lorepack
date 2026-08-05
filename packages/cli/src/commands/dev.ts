@@ -237,7 +237,7 @@ interface Rendered {
  * URL that answers 404 would be worse than saying nothing.
  *
  * The `Connect now` list names the connectors that exist, and nothing else. Codex arrived
- * with #80; VS Code is #81 and adds its own line. #53 carries the amendment recording this.
+ * with #80 and VS Code with #81. #53 carries the amendment recording this.
  */
 function render(rendered: Rendered): string {
   const { built } = rendered;
@@ -265,6 +265,7 @@ function render(rendered: Rendered): string {
   lines.push('Connect now:');
   lines.push('  lore connect claude-code');
   lines.push('  lore connect codex');
+  lines.push('  lore connect vscode');
   lines.push('');
   lines.push('Watching for changes. Press Ctrl-C to stop.');
   return lines.join('\n');

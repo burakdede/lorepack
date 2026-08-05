@@ -6,10 +6,12 @@ import {
   type ConnectScope,
   createClaudeCodeConnector,
   createCodexConnector,
+  createVsCodeConnector,
   renderSnippetAdvice,
   renderVerifiedSnippet,
   SERVER_NAME,
   type Snippet,
+  VSCODE_ID,
 } from '@lorepack/connect-clients';
 import { LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
@@ -34,16 +36,20 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
  */
 
 /**
- * Every connector, named once. VS Code arrives with #81.
+ * Every connector, named once.
  *
  * This list and `CLIENT_IDS` are the only places a client is registered, so the help text,
  * the snippet advice and the `all` target cannot drift apart from what actually exists.
  */
 function connectors(options: { shared: boolean }): readonly ClientConnector[] {
-  return [createClaudeCodeConnector({ shared: options.shared }), createCodexConnector()];
+  return [
+    createClaudeCodeConnector({ shared: options.shared }),
+    createCodexConnector(),
+    createVsCodeConnector(),
+  ];
 }
 
-export const CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID];
+export const CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID, VSCODE_ID];
 
 const CLIENT_CHOICES = `${CLIENT_IDS.join(', ')}, or all`;
 
@@ -158,6 +164,7 @@ export function disconnectCommand(): CommandDefinition {
         await connector.remove({
           clientId: connector.id,
           scope,
+          projectRoot: config.projectRoot,
           serverName: SERVER_NAME,
           configPath: plan.configPath,
           connectedAt: new Date().toISOString(),

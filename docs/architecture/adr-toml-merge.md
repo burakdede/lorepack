@@ -1,7 +1,8 @@
 # ADR: how Lorepack edits a TOML client configuration
 
-**Status**: accepted, 2026-08-05. Decided for #80 (the Codex connector), and binding on any
-future adapter whose client is configured in TOML.
+**Status**: accepted, 2026-08-05. Decided for #80 (the Codex connector), extended to JSON with
+comments by #81 (VS Code), and binding on any adapter whose client configuration can carry a
+comment.
 
 ## The decision
 
@@ -85,3 +86,33 @@ read from the raw text rather than from the parsed document, which the splice ne
 - `mcp_servers` declared as anything other than a table of tables (`mcp_servers = 3`, or an
   array of tables) is refused. Both are valid TOML, and neither is a shape a server table can
   be spliced into.
+
+## The same decision in JSON, for VS Code (#81)
+
+`.vscode/mcp.json` turned out to be the identical problem wearing a different syntax. VS Code's
+own schema for the file declares `allowComments: true` and `allowTrailingCommas: true`, so
+`JSON.parse` refuses configurations the client accepts, and a parse-and-rewrite would delete
+the comments in them.
+
+The difference is that JSON has a standard tool for the minimal edit: `jsonc-parser`, which is
+what VS Code itself is built on. Measured: `modify` plus `applyEdits` leaves every comment,
+every sibling server and the file's indentation byte-identical, writing the same value twice is
+byte-identical, and removing the entry restores the original exactly.
+
+Two findings from that phase are worth keeping:
+
+- **`code --add-mcp` does the destructive thing.** Given a hand-written `mcp.json` with
+  comments it deleted every one, reformatted the document, and added `"type": "stdio"` to a
+  server the user had configured by hand. Architecture 6.6 step 5 prefers a client's own CLI,
+  and this is a case where deferring to it would mean adopting the exact damage this ADR
+  exists to prevent. It also writes the **user profile** only, which Lorepack never chooses
+  silently.
+- **Ownership is a comment here for a sharper reason than in TOML.** The VS Code schema for an
+  stdio server is `additionalProperties: false`, so an `x-lorepack` key would put a permanent
+  error squiggle in the user's editor, on a file we wrote. In TOML the key was merely a risk;
+  here it is a visible defect.
+
+One caveat that is not present in the TOML case: if a neighbouring entry in the same object is
+written on a single line, inserting ours expands it onto several. Content and comments are
+never lost, only that entry's line breaks. Recorded rather than fixed, because normalizing it
+would mean re-implementing the formatter.

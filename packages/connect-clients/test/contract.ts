@@ -58,6 +58,7 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
   const receiptFor = (path: string): ConnectReceipt => ({
     clientId: fixture.id,
     scope: 'project',
+    projectRoot: project(),
     serverName: SERVER_NAME,
     configPath: path,
     connectedAt: new Date().toISOString(),
@@ -127,6 +128,23 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
         // `--dry-run` is the orchestrator's flag; the guarantee it rests on is that planning
         // itself never touches the disk.
         expect(existsSync(plan.configPath as string)).toBe(false);
+      });
+
+      /**
+       * Carried, never recovered from the configuration path.
+       *
+       * An adapter that strips `.vscode/mcp.json` off the path and rejoins the rest gets
+       * `C:/Users/me/project` from `C:\\Users\\me\\project` on Windows, every ownership check
+       * then answers "not ours", and `disconnect` quietly stops working. Windows CI caught
+       * that on #81; this assertion catches it everywhere.
+       */
+      it('carries the project root it was given, byte for byte', async () => {
+        const connector = fixture.create(project());
+        const plan = await connector.plan(input());
+        expect(plan.projectRoot).toBe(project());
+
+        const receipt = await connector.apply(plan);
+        expect(receipt.projectRoot).toBe(project());
       });
 
       it('defaults to the project, never the user scope', async () => {

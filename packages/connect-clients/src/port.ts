@@ -64,6 +64,16 @@ export interface ConnectInput {
 export interface ConnectPlan {
   readonly clientId: string;
   readonly scope: ConnectScope;
+  /**
+   * The project this plan is for, carried rather than recovered.
+   *
+   * `apply` needs it to record who owns the entry it writes, and the tempting shortcut is to
+   * take the configuration path apart. That is wrong on Windows: stripping `.vscode\mcp.json`
+   * off `C:\Users\me\project` and rejoining gives `C:/Users/me/project`, which no longer
+   * equals the project root, so every ownership check silently answers "not ours" and
+   * `disconnect` stops working. Found by Windows CI, on #81.
+   */
+  readonly projectRoot: string;
   /** The file that would be written, or null when the client is configured by command. */
   readonly configPath: string | null;
   /** One line per change, in the user's terms, not a diff. */
@@ -87,6 +97,8 @@ export interface ConnectPlan {
 export interface ConnectReceipt {
   readonly clientId: string;
   readonly scope: ConnectScope;
+  /** The project this entry was written for, carried for the same reason as on the plan. */
+  readonly projectRoot: string;
   readonly serverName: string;
   readonly configPath: string | null;
   /** The backup taken before the edit, for the failure that needs undoing by hand. */
