@@ -204,7 +204,28 @@ async function readSheetTable(
     if (region !== null && collect(row, region, values, errorColumns)) lastDataRow = row.row;
   };
 
-  const content = await streamSheet(pkg, sheet.part, context, input.displayPath, sheet.name, take);
+  /**
+   * The row guard aborts the stream, and that abort is the memory bound (#242).
+   *
+   * It is thrown from inside the SAX handler on purpose: stopping mid-sheet is what keeps a
+   * 5,000,000-row sheet from being accumulated before anyone can object. So it stays a throw,
+   * and is turned into a not-imported sheet **here**, where the stream has already stopped.
+   * Warning without stopping would keep the message and lose the bound, which is the wrong
+   * half to keep.
+   */
+  let content: Awaited<ReturnType<typeof streamSheet>>;
+  try {
+    content = await streamSheet(pkg, sheet.part, context, input.displayPath, sheet.name, take);
+  } catch (cause) {
+    if (!(cause instanceof LoreError) || cause.code !== 'LORE_E_ENVELOPE_EXCEEDED') throw cause;
+    const reason = `it has more than the ${count(XLSX_LIMITS.maxRows, 'row')} Lorepack imports`;
+    warnings.push({
+      code: 'xlsx-too-many-rows',
+      message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Split it, or filter it to the rows the project needs. Every row is imported into the build and served from it.`,
+      line: 1,
+    });
+    return { table: null, rows: 0, note: reason };
+  }
 
   // A sheet shorter than the preamble never triggered the decision above.
   if (!decided) {
@@ -232,15 +253,17 @@ async function readSheetTable(
   const found: NonNullable<typeof region> = region;
   const width = found.lastColumn - found.firstColumn + 1;
   if (width > XLSX_LIMITS.maxColumns) {
-    throw new LoreError(
-      'LORE_E_ENVELOPE_EXCEEDED',
-      `${input.displayPath}, sheet ${sheet.name}, has ${count(width, 'column')}, above the supported limit of ${String(XLSX_LIMITS.maxColumns)}.`,
-      {
-        remediation:
-          'Split the sheet into narrower tables. The limit matches Cloudflare D1, so a table that exceeds it here could not be deployed either.',
-        path: input.displayPath,
-      },
-    );
+    // The same answer as a sheet whose layout could not be read, twenty lines above: a
+    // warning and a description, not a failed build (#242). A sheet laid out perfectly and
+    // found too wide is better understood than one that could not be laid out at all, so
+    // failing harder for it was never defensible.
+    const reason = `it has ${count(width, 'column')}, above the supported limit of ${String(XLSX_LIMITS.maxColumns)}`;
+    warnings.push({
+      code: 'xlsx-too-many-columns',
+      message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`,
+      line: 1,
+    });
+    return { table: null, rows: content.rows, note: reason };
   }
 
   if (content.merges.length > 0) {

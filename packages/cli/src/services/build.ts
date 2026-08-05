@@ -253,8 +253,19 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             bytes,
           });
         } catch (cause) {
-          // A supported, included file that cannot be parsed fails the candidate by
-          // default (architecture section 6.9). The previous build stays active.
+          // A parser that raised a `LoreError` classified its own failure, and that
+          // classification is kept (#242).
+          //
+          // Wrapping everything meant a parser raising `LORE_E_ENVELOPE_EXCEEDED`, a user
+          // problem that exits 1, was reported as `LORE_E_PARSE_FAILED`, a build integrity
+          // failure that exits 2. The parser was right and the pipeline overrode it, so
+          // anything branching on the stable code, which is what the taxonomy is for, was
+          // told the wrong thing.
+          if (cause instanceof LoreError) throw cause;
+
+          // Anything else is a genuine surprise, and that is exactly what this code means:
+          // a supported, included file whose bytes could not be read. It fails the candidate
+          // by default (architecture section 6.9) and the previous build stays active.
           //
           // A file whose bytes are not readable text does not reach here: fingerprinting
           // classified it and left it out with a warning, which is the other row of the

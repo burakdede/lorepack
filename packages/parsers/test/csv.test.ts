@@ -232,9 +232,24 @@ describe('statistics', () => {
 });
 
 describe('limits and refusals', () => {
-  it('fails a table wider than the supported column count, naming the limit', () => {
+  /**
+   * #242: an envelope limit excludes the table and keeps the build.
+   *
+   * It used to throw, which failed the whole project: one over-wide spreadsheet anywhere made
+   * every other document unbuildable, for a limit that is about our scale envelope rather than
+   * about the file being broken. The mechanism used here already existed for a file this parser
+   * could not lay out at all, which is a *less* well understood case than this one.
+   */
+  it('excludes a table wider than the supported column count, naming the limit', () => {
     const header = Array.from({ length: CSV_LIMITS.maxColumns + 1 }, (_, i) => `c${i}`).join(',');
-    expect(() => parse(`${header}\n`)).toThrowError(/101 columns.*limit of 100/s);
+    const parsed = parse(`${header}\n1\n`);
+
+    expect(parsed.tables).toBeUndefined();
+    const warning = parsed.warnings.find((one) => one.code === 'csv-too-many-columns');
+    // The file, the count and the limit, so a reader knows what to change without guessing.
+    expect(warning?.message).toMatch(/101 columns.*limit of 100/s);
+    // And the file is still described, so it does not vanish from a project it is sitting in.
+    expect(parsed.nodes.some((node) => node.metadata?.imported === false)).toBe(true);
   });
 
   it('makes no table from an empty file, and says why', () => {
@@ -282,9 +297,16 @@ describe('the 500,000-row envelope', () => {
     expect(table.rows.at(-1)?.[1]).toBe('99999');
   }, 60_000);
 
-  it('refuses a file above the envelope rather than importing part of it', () => {
+  it('excludes a file above the envelope rather than importing part of it', () => {
     const rows: string[] = ['id'];
     for (let index = 0; index <= CSV_LIMITS.maxRows; index += 1) rows.push(String(index));
-    expect(() => parse(`${rows.join('\n')}\n`)).toThrowError(/above the supported limit/);
+    const parsed = parse(`${rows.join('\n')}\n`);
+
+    // Not imported, and never partially imported: a table holding some of a file's rows and
+    // saying nothing about it would be the one outcome worse than refusing.
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings.find((one) => one.code === 'csv-too-many-rows')?.message).toMatch(
+      /above the supported limit/,
+    );
   }, 60_000);
 });

@@ -33,6 +33,42 @@ comment or a `<script>` body cannot reach a build however the document is shaped
 property of the construction rather than of a sanitising pass, which is what makes it hold for
 input nobody anticipated.
 
+## Which failures stop a build, and which do not
+
+Three outcomes, and the difference between them is what the failure says about the file.
+
+| Outcome | When | Result |
+|---|---|---|
+| **Excluded before parsing** | No parser handles the extension, or the bytes are not readable text | Warning, build succeeds (#165) |
+| **Excluded by a limit** | The file parsed, and a scale limit means part of it is not imported | Warning, build succeeds (#242) |
+| **Fails the build** | A supported, included file whose bytes could not be read | `LORE_E_PARSE_FAILED`, exit 2 |
+
+The middle row is the one that changed. A CSV of 101 columns or a sheet of 500,001 rows used to
+throw, which failed the entire project: one over-wide spreadsheet anywhere made every other
+document unbuildable, for a limit that is about Lorepack's scale envelope rather than about the
+file being broken.
+
+The argument that settled it is that **the mechanism already existed three lines away**. The
+XLSX parser already answered a sheet whose layout it could not read with a warning and a
+description, and a sheet laid out perfectly and found too wide is *better* understood than one
+that could not be laid out at all. Nothing justified failing harder for the better-understood
+case.
+
+It is not silent. Each produces a warning carrying the file, the count and the limit, surfaced by
+`lore inspect warnings`, by `GET /v1/warnings` and by Studio's Sources view, and the file keeps a
+node describing it so a reader searching their project still finds it. What the node says is that
+the rows are **not** in the build, never a prose dump of them: flattening a table into text is an
+invalid implementation, and it stays invalid when the table was refused.
+
+**A `LoreError` a parser raises keeps its own code and exit code.** The build wraps only what is
+*not* a `LoreError`, because a parser throwing something else is a genuine surprise and that is
+what `LORE_E_PARSE_FAILED` means. Wrapping everything reported a parser's deliberate
+`LORE_E_ENVELOPE_EXCEEDED` (exit 1, a user problem) as a build integrity failure at exit 2.
+
+The **file-count** envelope is unchanged and still refuses the build, offering
+`--allow-large-project`. It is a property of the project as a whole, so there is no smaller thing
+to exclude; a per-file limit has one.
+
 ## HTML
 
 `rehype-parse` is the same unified toolchain as Markdown, so heading stacking, node ids and

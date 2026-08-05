@@ -475,18 +475,22 @@ Starting point: an empty directory, already set up with `lore init` and `lore bu
 2. And a dry run writes nothing, which is the promise that makes it safe
    Expect: it succeeds, stdout never mentions "Wrote", "Backed up".
 
-### `mixed/a-table-past-its-column-limit-is-refused-by-name`
+### `mixed/a-table-past-its-column-limit-costs-only-that-table`
 
-**A spreadsheet wider than the supported limit is refused, naming the file and the limit**
+**A spreadsheet wider than the supported limit is left out, and the build succeeds**
 
-Proves: Section 5.4: a scale limit is stated, not discovered by a mysterious failure.
+Proves: Section 5.4: a scale limit bounds one artifact, never the whole project.
 
-Starting point: 2 source files, already set up with `lore init`.
+Locks down the defect in #242.
 
-1. Run `lore build`.
-   Expect: it exits 2, the error is `LORE_E_PARSE_FAILED`, stderr mentions "data/wide.csv", "101 columns", "100".
-2. And the failure left no half-built version behind
-   Expect: it succeeds, `builds` is present.
+Starting point: 3 source files, already set up with `lore init`.
+
+1. The build succeeds, and only the over-wide table is missing from it
+   Expect: it succeeds, `counts.artifacts` is 3, `counts.tables` is 1, `warnings` is at least 1.
+2. And the reason is recorded, naming the file, the count and the limit
+   Expect: it succeeds, stdout mentions "data/wide.csv", "101 columns", "100".
+3. The excluded file is still findable, and honest about not being imported
+   Expect: it succeeds, `hits[0].locator.relativePath` matches `/wide\.csv/`.
 
 ### `mixed/a-pdf-past-the-page-envelope-warns-and-is-still-read` (by hand)
 
