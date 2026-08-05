@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { stageInstall } from './install.js';
+import { writeMixedCorpus } from './mixed-corpus.js';
 import type { Expect, JsonExpect, Scenario, Step, TextExpect } from './types.js';
 
 const execute = promisify(execFile);
@@ -119,7 +120,7 @@ export async function runScenario(
   };
 
   try {
-    materialise(project, scenario);
+    await materialise(project, scenario);
 
     for (const step of scenario.fixture.setup ?? []) {
       const args =
@@ -765,12 +766,16 @@ export function fill(input: string, captures: ReadonlyMap<string, string>): stri
   return input.replace(/\{\{(\w+)\}\}/g, (whole, name: string) => captures.get(name) ?? whole);
 }
 
-function materialise(project: string, scenario: Scenario): void {
+async function materialise(project: string, scenario: Scenario): Promise<void> {
   for (const [path, contents] of Object.entries(scenario.fixture.files ?? {})) {
     const target = join(project, ...path.split('/'));
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, contents, 'utf8');
   }
+  // Awaited rather than generated up front: two of the formats are ZIP containers, which
+  // cannot be produced synchronously.
+  if (scenario.fixture.mixed === true) await writeMixedCorpus(project);
+
   const generated = scenario.fixture.generated;
   if (generated === undefined) return;
 

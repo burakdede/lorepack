@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lore` binary. The automated 
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-51 automated, 3 checked by hand.
+56 automated, 4 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -416,6 +416,90 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, `hits[0].scoreComponents.total` is present, `hits[0].locator.relativePath` is "guides/rollback.md".
 4. Without --debug the components are absent, so the default result stays small
    Expect: it succeeds, `hits[0].scoreComponents` is absent.
+
+## A mixed folder
+
+Milestone 2's exit criterion: documents, a spreadsheet and a PDF in one project, each cited in its own terms.
+
+### `mixed/every-format-contributes-with-its-own-provenance`
+
+**A folder of documents, spreadsheets and a PDF builds, and each cites its own kind of place**
+
+Proves: Section 21 and invariant 5: mixed input, and a locator that fits the format.
+
+Starting point: an empty directory, already set up with `lore init`.
+
+1. Run `lore build` with `--json`.
+   Expect: it succeeds, `counts.artifacts` is 8, `counts.tables` is 2, `counts.tableRows` is 6.
+2. Every format reached a parser, and each one says which parser read it
+   Expect: it succeeds, stdout mentions "runbook.md", "policy.html", "contract.pdf", "onboarding.docx".
+3. A phrase that appears only on the second page of the PDF is found
+   Expect: it succeeds, `hits[0].locator.relativePath` matches `/contract\.pdf/`, `hits[0].locator.headingPath[0]` is "Page 2".
+4. And a phrase that appears only in the DOCX
+   Expect: it succeeds, `hits[0].locator.relativePath` matches `/onboarding\.docx/`.
+
+### `mixed/a-task-bundle-cites-a-document-and-a-table`
+
+**A task that needs both prose and numbers gets both, each with its source**
+
+Proves: Section 21: useful bounded context over a mixed folder, not over one format.
+
+Starting point: an empty directory, already set up with `lore init` and `lore build`.
+
+1. The runbook says the tiers live in the spreadsheet, so the answer needs both
+   Expect: it succeeds, stdout mentions "environments.xlsx", "runbook.md", `selected[0].locator.relativePath` is present, `budget` is at least 1, `estimatedTokens` is at least 1.
+
+### `mixed/a-spreadsheet-can-be-queried-and-says-which-cells-it-came-from`
+
+**A table query returns rows, and the answer names the sheet and the cell range**
+
+Proves: Section 21 and section 10.8: a queried row traces back to a sheet and a range.
+
+Starting point: an empty directory, already set up with `lore init` and `lore build`.
+
+1. Both the CSV and the spreadsheet became tables
+   Expect: it succeeds, stdout mentions "Environments", "pricing".
+2. And the description carries the range, the statistics and the query names
+   Expect: it succeeds, `table.locator.cellRange` is "A1:D4", `table.locator.sheet` is "Environments", `table.sqlName` matches `/^t_environments_/`, `table.columns[3].sqlName` matches `/^c_3_/`, `table.columns[3].statistics.nullCount` is 0, `table.columns[3].statistics.min` is 96.2, `table.columns[3].statistics.max` is 4210.5.
+
+### `mixed/all-three-clients-connect-without-hand-editing`
+
+**Claude Code, Codex and VS Code are each planned and connected, with no manual edit**
+
+Proves: Section 21: all supported clients connect without hand-editing configuration.
+
+Starting point: an empty directory, already set up with `lore init` and `lore build`.
+
+1. The plan reports every supported client before anything is written
+   Expect: it succeeds, stdout mentions "Claude Code", "Codex", "VS Code".
+2. And a dry run writes nothing, which is the promise that makes it safe
+   Expect: it succeeds, stdout never mentions "Wrote", "Backed up".
+
+### `mixed/a-table-past-its-column-limit-is-refused-by-name`
+
+**A spreadsheet wider than the supported limit is refused, naming the file and the limit**
+
+Proves: Section 5.4: a scale limit is stated, not discovered by a mysterious failure.
+
+Starting point: 2 source files, already set up with `lore init`.
+
+1. Run `lore build`.
+   Expect: it exits 2, the error is `LORE_E_PARSE_FAILED`, stderr mentions "data/wide.csv", "101 columns", "100".
+2. And the failure left no half-built version behind
+   Expect: it succeeds, `builds` is present.
+
+### `mixed/a-pdf-past-the-page-envelope-warns-and-is-still-read` (by hand)
+
+**A PDF longer than the envelope covers is read in full, with a warning saying so**
+
+Proves: Section 5.4: beyond the envelope is untested, not refused.
+
+Starting point: 1 source file, already set up with `lore init`.
+
+- [ ] Generate a text-layer PDF of more than 500 pages, put it in the project, and run `lore build`.
+      Expect: The build succeeds. `lore inspect warnings` names the file and its page count, says the envelope covers 500, and says it was read in full rather than truncated. Generating a 500-page PDF is the reason this is a note rather than an automated scenario: the fixture would dominate the suite runtime for one warning.
+- [ ] Then scan a page to an image, put a PDF containing only that page in the project, and build again.
+      Expect: The build succeeds and the file contributes nothing, with a warning saying it has no text layer on any page and that optical character recognition is out of scope. It is never silently absent, and no text is invented for it.
 
 ## Determinism
 

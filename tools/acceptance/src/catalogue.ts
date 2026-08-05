@@ -6,6 +6,7 @@ import { INIT_SCENARIOS } from './scenarios/init.js';
 import { LIFECYCLE_SCENARIOS } from './scenarios/lifecycle.js';
 import { MANUAL_SCENARIOS } from './scenarios/manual.js';
 import { MCP_SCENARIOS } from './scenarios/mcp.js';
+import { MIXED_SCENARIOS } from './scenarios/mixed.js';
 import { OUTPUT_SCENARIOS } from './scenarios/output.js';
 import { PACKAGING_SCENARIOS } from './scenarios/packaging.js';
 import { SCALE_SCENARIOS } from './scenarios/scale.js';
@@ -44,6 +45,13 @@ export const AREAS: readonly Area[] = [
     title: 'The lifecycle',
     summary: 'plan, build, status, search, inspect, diff, activate, rollback.',
     scenarios: LIFECYCLE_SCENARIOS,
+  },
+  {
+    id: 'mixed',
+    title: 'A mixed folder',
+    summary:
+      "Milestone 2's exit criterion: documents, a spreadsheet and a PDF in one project, each cited in its own terms.",
+    scenarios: MIXED_SCENARIOS,
   },
   {
     id: 'determinism',

@@ -72,7 +72,11 @@ export function runRuntimeContract(options: ContractOptions): void {
               includeArchived: false,
               debug: false,
             }),
-            await runtime.contextForTask({ task: matchingQuery, includeArchived: false }),
+            await runtime.contextForTask({
+              task: matchingQuery,
+              includeArchived: false,
+              allowUnsupportedBudget: false,
+            }),
             await runtime.readSource({ artifactId: knownArtifactId }),
           ];
 
@@ -120,6 +124,7 @@ export function runRuntimeContract(options: ContractOptions): void {
           const bundle = await runtime.contextForTask({
             task: matchingQuery,
             includeArchived: false,
+            allowUnsupportedBudget: false,
           });
 
           for (const item of [...bundle.overview, ...bundle.selected, ...bundle.alternatives]) {

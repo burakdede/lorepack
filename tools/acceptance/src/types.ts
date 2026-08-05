@@ -57,6 +57,15 @@ export interface Fixture {
     readonly documents: number;
     readonly sectionsPerDocument: number;
   };
+  /**
+   * A realistic mixed folder: one file of every supported format, including the binary ones.
+   *
+   * Milestone 2's exit criterion (section 21) is about a *mixed* project, and every format
+   * except Markdown and text arrives as bytes rather than as a string, so it cannot be
+   * expressed with `files`. Generated rather than committed, because a repository full of
+   * binary fixtures is one nobody can review in a diff.
+   */
+  readonly mixed?: boolean;
   /** Commands run before the steps, so a scenario states only what it is about. */
   readonly setup?: readonly SetupStep[];
 }
