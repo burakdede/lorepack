@@ -68,11 +68,22 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  // Retried, because of Windows. A query runs in a child process that is killed with
-  // `SIGKILL`, and the kill is deliberately not awaited; for a moment afterwards the dead
-  // child still holds the build file open, and Windows refuses to delete an open file with
-  // `EPERM`. POSIX unlinks it happily, which is why this only ever failed in CI.
-  rmSync(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  // Best effort, and deliberately not an assertion.
+  //
+  // A query runs in a child process killed with `SIGKILL`, and the kill is not awaited: that
+  // is the whole point of the design, because waiting on a process being killed reintroduces
+  // the hang that ruled out worker threads. For a while afterwards the dead child still holds
+  // the build file open, and Windows refuses to delete an open file with `EPERM`. POSIX
+  // unlinks it happily, which is why this only ever appeared in CI.
+  //
+  // Retrying for a bounded time and then giving up is the right shape: this directory is
+  // under the OS temp directory, which the OS reclaims. Failing the suite over it would mean
+  // a green test run reporting a red result about nothing.
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  } catch {
+    // Left for the operating system to reclaim.
+  }
 });
 
 function column(
