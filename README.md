@@ -23,9 +23,9 @@ source artifacts → plan → deterministic build → immutable version
 and the images are generated from a real build by `pnpm docs:capture`, but nothing is
 released. Follow along in the [backlog](https://github.com/users/burakdede/projects/8).
 
-Working now: the local lifecycle, retrieval with provenance, MCP and HTTP serving, the
-`lore connect` flow for Claude Code, and Studio. Still to come: PDF, DOCX and spreadsheet
-parsers, the read-only SQL surface over tables, precedence rules, more clients, and the
+Working now: the local lifecycle, every parser below, typed tables with a read-only SQL
+surface, declared precedence rules, retrieval with provenance, MCP and HTTP serving, the
+`lore connect` flow for Claude Code, and Studio. Still to come: more clients, and the
 Cloudflare projection.
 
 ## The two commands
@@ -52,41 +52,18 @@ one is a bug, not a style issue:
 
 ## Studio
 
-`lore dev` prints a Studio URL. It is five routes served from static files by the same process
-that serves the API, on the same port, with no toolchain and no network.
-
-| Route | The question it answers |
-|---|---|
-| Overview | What is in this build, and have the sources moved on since it was made? |
-| Sources | Exactly what was parsed, and exactly what was not, and why |
-| Playground | What would a model actually receive for this task, and what was left out |
-| Versions | What changed between two builds, and which one is live |
-| Diagnostics | Why is this not working, and what do I run to fix it |
-
-**Overview.** Source state first, because it is the only thing on the page that changes while
-you are reading it.
-
-![Studio Overview](docs/images/studio-overview.png)
-
-**Playground.** The passages a model would receive for a task, each with its provenance, and
-every omission with the reason it was left out. Nothing here is presented as a score of truth.
+`lore dev` prints a Studio URL: five routes served from static files by the same process that
+serves the API, on the same port, with no toolchain and no network.
 
 ![Studio Context Playground](docs/images/studio-playground.png)
 
-**Sources**, on the half that usually gets buried: what is *not* in the build. A rule that
-removed a folder and a file no parser could read are different decisions, and both are named.
+The Playground answers the question that matters most before you trust any of this: **what
+would a model actually receive for this task, and what was left out.** Every passage carries
+its provenance, every omission carries its reason, and a ranking heuristic is labelled as one
+rather than presented as a score of truth.
 
-![Studio Sources, showing what was excluded and why](docs/images/studio-excluded.png)
-
-**Versions.** Every action that changes anything shows a plan, names the build it will act on,
-and is confirmed first. Activation is a pointer change, so rollback never recompiles.
-
-![Studio Versions](docs/images/studio-versions.png)
-
-**Diagnostics** renders the same checks `lore doctor` prints, plus what only a running session
-knows: the watcher, the port, the process, and which clients are configured.
-
-![Studio Diagnostics](docs/images/studio-diagnostics.png)
+The other four routes are Overview, Sources, Versions and Diagnostics.
+[Take the tour](docs/studio-tour.md), with a screenshot of each.
 
 Studio is read-mostly. The only routes that change anything exist solely under `lore dev`, and
 they refuse any browser origin that is not a loopback literal.
@@ -117,12 +94,14 @@ what happens if yours does not.
   an extension Lorepack does not know is named in the build's exclusions rather than silently
   skipped. A scanned PDF is refused outright rather than indexed as an empty document: OCR is
   out of scope for v0.1.
-- **A spreadsheet becomes a typed table, not prose.** Column types are inferred conservatively
-  and refuse to be clever: `00123` stays text, a 19-digit id stays text, and `03/04/2026` stays
-  text because the file never says which country wrote it. Excel formulas are stored as text
-  and never evaluated. A worksheet whose layout is not a table is described and reported, never
-  invented into one. `lore inspect tables` shows what was decided and why. Querying those tables
-  with SQL is not available yet.
+- **A spreadsheet becomes a typed table, not prose**, queried with SQL rather than searched as
+  text. Types are inferred conservatively and refuse to be clever: `00123` stays text, a
+  19-digit id stays text, and `03/04/2026` stays text because the file never says which country
+  wrote it. Excel formulas are stored as text and never evaluated. A worksheet whose layout is
+  not a table is described and reported, never invented into one.
+- **The SQL surface is one read-only SELECT over one table**, run in a process that is killed on
+  a deadline, behind an authorizer that permits that table and nothing else in the build. It
+  cannot write, cannot reach another table, and cannot read the catalog.
 - **Lexical retrieval only.** BM25 with declared ranking hints. No embeddings in the default
   install, and the score is presented as a ranking heuristic because that is what it is.
 - **One project, one machine.** No tenancy, no accounts, no hosted control plane.
@@ -145,6 +124,9 @@ what happens if yours does not.
 | How each format is read, and what is deliberately dropped | [`docs/architecture/parsers.md`](docs/architecture/parsers.md) |
 | How a model reaches a build, over MCP and HTTP | [`docs/architecture/serving.md`](docs/architecture/serving.md) |
 | Studio: behaviour, the manual passes, and the design direction | [`docs/architecture/studio.md`](docs/architecture/studio.md) |
+| How typed tables are stored, named and queried | [`docs/architecture/local-storage.md`](docs/architecture/local-storage.md) |
+| A tour of Studio, one screenshot per route | [`docs/studio-tour.md`](docs/studio-tour.md) |
+| Why each dependency is here, with the checks it passed | [`docs/architecture/dependencies.md`](docs/architecture/dependencies.md) |
 | Connecting Claude Code | [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md) |
 
 ## Licence
