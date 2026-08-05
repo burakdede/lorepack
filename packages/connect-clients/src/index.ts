@@ -6,6 +6,13 @@ export {
   SERVER_NAME,
 } from './claude-code.js';
 export {
+  CODEX_ID,
+  type CodexOptions,
+  codexSnippet,
+  createCodexConnector,
+  projectTrust,
+} from './codex.js';
+export {
   backup,
   isOwned,
   markOwned,
@@ -32,4 +39,18 @@ export {
   renderVerifiedSnippet,
   type Snippet,
 } from './snippet.js';
+export {
+  ownerOfTable,
+  readTomlConfig,
+  renderOwnedTable,
+  TOML_OWNERSHIP_PREFIX,
+  type TomlConfig,
+  type TomlOwner,
+  tableHeaderPath,
+  tableSpan,
+  tomlString,
+  withoutTomlTable,
+  withTomlTable,
+  writeTextAtomically,
+} from './toml-config.js';
 export { type VerifyOptions, verifyStdioServer } from './verify.js';
