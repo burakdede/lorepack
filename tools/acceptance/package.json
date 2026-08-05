@@ -18,5 +18,8 @@
     "test": "vitest run",
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@lorepack/test-support": "workspace:*"
   }
 }

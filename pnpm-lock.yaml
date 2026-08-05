@@ -304,7 +304,11 @@ importers:
 
   packages/sdk: {}
 
-  tools/acceptance: {}
+  tools/acceptance:
+    dependencies:
+      '@lorepack/test-support':
+        specifier: workspace:*
+        version: link:../test-support
 
   tools/arch: {}
 
