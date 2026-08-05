@@ -111,6 +111,29 @@ export const csvParser: ArtifactParser = {
           columns: table.columns.map((column) => column.name),
         },
       });
+    } else if (rows.length > 0) {
+      /**
+       * A file that is real but was not imported, described rather than dropped (#242).
+       *
+       * Without this the artifact carries a title and nothing else, so a person searching for
+       * what is in their project finds no trace of a file that is sitting right there. The
+       * warning explains *why* it was not imported; this is what makes the file itself
+       * discoverable, and it says plainly that the rows are not in the build rather than
+       * implying they are.
+       *
+       * Still not a prose dump of the rows: flattening a table into text is an invalid
+       * implementation (invariant 8), and it stays invalid when the table was refused.
+       */
+      builder.add({
+        ordinalPath: [0, 1],
+        kind: 'table',
+        parentId: root.id,
+        title,
+        text: `${title} is a delimited file of ${count(rows.length, 'row')} that was not imported as a table. Its rows are not in this build and cannot be queried; the file itself can be read at ${input.displayPath}.`,
+        lineStart: 1,
+        lineEnd: Math.max(1, rows.length),
+        metadata: { imported: false, rowCount: rows.length },
+      });
     }
 
     return {
@@ -194,22 +217,26 @@ function buildTable(
   // by any unit test, which is the argument for having one.
   let columnCount = 0;
   for (const row of rows) if (row.length > columnCount) columnCount = row.length;
-  assertColumnCount(columnCount, input);
+  if (columnCount > CSV_LIMITS.maxColumns) {
+    warnings.push({
+      code: 'csv-too-many-columns',
+      message: `${input.displayPath} has ${count(columnCount, 'column')}, above the supported limit of ${String(CSV_LIMITS.maxColumns)}, so it was not imported as a table. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`,
+      line: 1,
+    });
+    return null;
+  }
 
   const header = decideHeader(rows, columnCount);
   warnings.push(...header.warnings);
   const body = header.hasHeader ? rows.slice(1) : rows;
 
   if (body.length > CSV_LIMITS.maxRows) {
-    throw new LoreError(
-      'LORE_E_ENVELOPE_EXCEEDED',
-      `${input.displayPath} has ${count(body.length, 'row')}, above the supported limit of ${CSV_LIMITS.maxRows.toLocaleString('en-US')}.`,
-      {
-        remediation:
-          'Split the file, or filter it to the rows the project needs. The limit exists because every row is imported into the build and served from it.',
-        path: input.displayPath,
-      },
-    );
+    warnings.push({
+      code: 'csv-too-many-rows',
+      message: `${input.displayPath} has ${count(body.length, 'row')}, above the supported limit of ${CSV_LIMITS.maxRows.toLocaleString('en-US')}, so it was not imported as a table. Split it, or filter it to the rows the project needs. The limit exists because every row is imported into the build and served from it.`,
+      line: 1,
+    });
+    return null;
   }
 
   reportRagged(body, columnCount, header.hasHeader, warnings);
@@ -266,19 +293,6 @@ function buildTable(
       normalizationVersion: CSV_LIMITS.normalizationVersion,
     },
   };
-}
-
-function assertColumnCount(columnCount: number, input: ParseInput): void {
-  if (columnCount <= CSV_LIMITS.maxColumns) return;
-  throw new LoreError(
-    'LORE_E_ENVELOPE_EXCEEDED',
-    `${input.displayPath} has ${count(columnCount, 'column')}, above the supported limit of ${String(CSV_LIMITS.maxColumns)}.`,
-    {
-      remediation:
-        'Split the file into narrower tables. The limit matches Cloudflare D1, so a table that exceeds it here could not be deployed either.',
-      path: input.displayPath,
-    },
-  );
 }
 
 /**

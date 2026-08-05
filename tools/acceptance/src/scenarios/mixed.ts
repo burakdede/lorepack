@@ -182,13 +182,15 @@ export const MIXED_SCENARIOS: readonly Scenario[] = [
   },
 
   {
-    id: 'mixed/a-table-past-its-column-limit-is-refused-by-name',
-    title: 'A spreadsheet wider than the supported limit is refused, naming the file and the limit',
-    proves: 'Section 5.4: a scale limit is stated, not discovered by a mysterious failure.',
+    id: 'mixed/a-table-past-its-column-limit-costs-only-that-table',
+    title: 'A spreadsheet wider than the supported limit is left out, and the build succeeds',
+    proves: 'Section 5.4: a scale limit bounds one artifact, never the whole project.',
     mode: 'auto',
+    regression: 242,
     fixture: {
       files: {
         'docs/runbook.md': '# Runbook\n\nRolling back points at the previous build.\n',
+        'data/fine.csv': 'sku,qty\nA-1,5\nA-2,2\n',
         // 101 columns, exactly one past the supported 100, so it is the limit being enforced
         // rather than something else refusing a wide file.
         'data/wide.csv': `${Array.from({ length: 101 }, (_, index) => `c${String(index)}`).join(
@@ -201,33 +203,36 @@ export const MIXED_SCENARIOS: readonly Scenario[] = [
       {
         action: 'run',
         args: ['build'],
-        /**
-         * This asserts what the product **does**, and what it does is under review.
-         *
-         * #83 lists this criterion as ">100 columns fails that table". It fails the whole
-         * build: one over-wide spreadsheet anywhere in a project makes the project
-         * unbuildable. The CSV parser raises `LORE_E_ENVELOPE_EXCEEDED`, a user-level error
-         * that exits 1, and the build rewraps every parser throw as `LORE_E_PARSE_FAILED`,
-         * a build-integrity error that exits 2, so the classification the parser chose is
-         * overridden on the way out.
-         *
-         * That is #242, and it is a decision rather than a bug fix, so this scenario pins the
-         * present behaviour instead of asserting an outcome nobody has agreed to. What is
-         * genuinely right today, and asserted here, is that the refusal **names the file, the
-         * count and the limit**, so a person knows what to do.
-         */
+        json: true,
+        describe: 'The build succeeds, and only the over-wide table is missing from it',
         expect: {
-          exitCode: 2,
-          errorCode: 'LORE_E_PARSE_FAILED',
-          stderr: { contains: ['data/wide.csv', '101 columns', '100'] },
+          exitCode: 0,
+          json: [
+            // Every file is still an artifact, including the one that produced no table.
+            { path: 'counts.artifacts', equals: 3 },
+            // One table, from the narrow CSV. The wide one contributed none.
+            { path: 'counts.tables', equals: 1 },
+            { path: 'warnings', atLeast: 1 },
+          ],
         },
       },
       {
         action: 'run',
-        args: ['builds'],
+        args: ['inspect', 'warnings'],
+        describe: 'And the reason is recorded, naming the file, the count and the limit',
+        expect: { exitCode: 0, stdout: { contains: ['data/wide.csv', '101 columns', '100'] } },
+      },
+      {
+        action: 'run',
+        args: ['search', 'delimited'],
         json: true,
-        describe: 'And the failure left no half-built version behind',
-        expect: { exitCode: 0, json: [{ path: 'builds', exists: true }] },
+        describe: 'The excluded file is still findable, and honest about not being imported',
+        expect: {
+          exitCode: 0,
+          // Silence would be the one outcome worse than refusing: a file sitting in the
+          // project with no trace of it in the build.
+          json: [{ path: 'hits[0].locator.relativePath', matches: 'wide\\.csv' }],
+        },
       },
     ],
   },

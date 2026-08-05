@@ -1,5 +1,5 @@
 import type { ArtifactParser, ParsedArtifact, ParseInput } from '@lorepack/core';
-import { LoreError, loadConfig, ProgressBus } from '@lorepack/core';
+import { EXIT_CODES, exitCodeFor, LoreError, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -167,6 +167,59 @@ describe('a parser that returns a promise', () => {
       injected = null;
       const after = await runBuild({ config, progress: new ProgressBus() });
       expect(after.buildId).toBe(good.buildId);
+    });
+  });
+});
+
+/**
+ * A parser's own classification survives the build's error handling (#242).
+ *
+ * `build.ts` used to wrap **everything** a parser threw as `LORE_E_PARSE_FAILED`, which is a
+ * build integrity failure at exit 2. A parser raising `LORE_E_ENVELOPE_EXCEEDED`, a user
+ * problem at exit 1, was therefore reported as the wrong kind of thing with the wrong exit
+ * code. The parser had classified it correctly and the pipeline overrode it, so anything
+ * branching on the stable code, which is the entire point of the taxonomy, was misled.
+ */
+describe('what a parser throws keeps the meaning the parser gave it', () => {
+  it('passes a LoreError through with its own code and exit code', async () => {
+    injected = asyncParser(async () => {
+      throw new LoreError('LORE_E_ENVELOPE_EXCEEDED', 'a.md is past a limit this parser has.', {
+        remediation: 'Split it.',
+      });
+    });
+
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'a.md': '# A' } }, async (temp) => {
+      const failure = await runBuild({
+        config: loadConfig({ cwd: temp.root }),
+        progress: new ProgressBus(),
+      }).catch((error: unknown) => error);
+
+      const error = failure as LoreError;
+      expect(error.code).toBe('LORE_E_ENVELOPE_EXCEEDED');
+      expect(exitCodeFor(error.code)).toBe(EXIT_CODES.USER);
+      // The parser's own sentence and remediation, not a generic wrapper around them.
+      expect(error.message).toBe('a.md is past a limit this parser has.');
+      expect(error.remediation).toBe('Split it.');
+    });
+  });
+
+  it('still calls anything else a parse failure, because that is what it is', async () => {
+    injected = asyncParser(async () => {
+      throw new TypeError('undefined is not a function');
+    });
+
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'a.md': '# A' } }, async (temp) => {
+      const failure = await runBuild({
+        config: loadConfig({ cwd: temp.root }),
+        progress: new ProgressBus(),
+      }).catch((error: unknown) => error);
+
+      const error = failure as LoreError;
+      // A parser throwing something that is not a LoreError is a genuine surprise, which is
+      // exactly what this code means. Exit 2: the candidate failed, not the user.
+      expect(error.code).toBe('LORE_E_PARSE_FAILED');
+      expect(exitCodeFor(error.code)).toBe(EXIT_CODES.BUILD);
+      expect(String((error.cause as Error)?.message)).toContain('not a function');
     });
   });
 });

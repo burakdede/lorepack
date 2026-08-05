@@ -474,18 +474,42 @@ describe('hardening', () => {
     expect(failure).toBeInstanceOf(LoreError);
   });
 
-  it('fails a sheet wider than the column limit, naming the limit', async () => {
+  /**
+   * #242: the sheet is excluded, the workbook is still read.
+   *
+   * The same answer this parser already gave a sheet whose layout it could not read, twenty
+   * lines above the throw this replaced. A sheet laid out perfectly and found too wide is
+   * better understood than one that could not be laid out at all, so failing harder for it
+   * was never defensible.
+   */
+  it('excludes a sheet wider than the column limit, and reads the rest of the workbook', async () => {
     const header = Array.from({ length: XLSX_LIMITS.maxColumns + 1 }, (_, index) =>
       inlineString(`${lettersFor(index)}1`, `c${String(index)}`),
     );
     const body = Array.from({ length: XLSX_LIMITS.maxColumns + 1 }, (_, index) =>
       number(`${lettersFor(index)}2`, index),
     );
-    const failure = await parse({
-      sheets: [{ name: 'Wide', rows: [row(1, header), row(2, body)].join('') }],
-    }).catch((error: unknown) => error);
-    expect(failure).toBeInstanceOf(LoreError);
-    expect((failure as LoreError).message).toMatch(/101 columns.*limit of 100/s);
+    const parsed = await parse({
+      sheets: [
+        { name: 'Wide', rows: [row(1, header), row(2, body)].join('') },
+        {
+          name: 'Fine',
+          rows: [
+            row(1, [inlineString('A1', 'sku'), inlineString('B1', 'qty')]),
+            row(2, [inlineString('A2', 'A-1'), number('B2', 5)]),
+          ].join(''),
+        },
+      ],
+    });
+
+    // The narrow sheet survives, which is the whole point: one bad sheet does not cost the
+    // workbook, and a workbook does not cost the project.
+    expect(parsed.tables?.map((table) => table.sheet)).toEqual(['Fine']);
+    expect(parsed.warnings.find((one) => one.code === 'xlsx-too-many-columns')?.message).toMatch(
+      /101 columns.*limit of 100/s,
+    );
+    // And the refused sheet is described rather than dropped.
+    expect(parsed.nodes.some((node) => node.title === 'Wide')).toBe(true);
   });
 });
 
@@ -583,16 +607,20 @@ describe('the 500,000-row envelope', () => {
     expect(table.rows.at(-1)?.[0]).toBe(XLSX_LIMITS.maxRows - 1);
   }, 180_000);
 
-  it('refuses a sheet above the envelope rather than importing part of it', async () => {
+  it('excludes a sheet above the envelope rather than importing part of it', async () => {
     const rows: string[] = [row(1, [inlineString('A1', 'id')])];
     for (let index = 0; index < XLSX_LIMITS.maxRows + 64; index += 1) {
       const line = index + 2;
       rows.push(row(line, [number(`A${String(line)}`, index)]));
     }
-    const failure = await parse({ sheets: [{ name: 'TooBig', rows: rows.join('') }] }).catch(
-      (error: unknown) => error,
+    const parsed = await parse({ sheets: [{ name: 'TooBig', rows: rows.join('') }] });
+
+    // Not imported, and never partially imported. The guard still aborts the stream, which is
+    // what bounds memory; what changed is that the abort ends the *sheet* rather than the
+    // build (#242).
+    expect(parsed.tables ?? []).toEqual([]);
+    expect(parsed.warnings.find((one) => one.code === 'xlsx-too-many-rows')?.message).toMatch(
+      /more than the 500,000 rows/,
     );
-    expect(failure).toBeInstanceOf(LoreError);
-    expect((failure as LoreError).message).toMatch(/more than the 500,000 rows/);
   }, 180_000);
 });
