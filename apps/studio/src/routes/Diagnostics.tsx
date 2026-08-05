@@ -276,11 +276,23 @@ function Clients({ clients }: { readonly clients: Report['clients'] }): React.JS
           ))}
         </tbody>
       </table>
-      {clients.every((entry) => !entry.configured) && (
-        <p className="clients-hint">
-          <Command value="lore connect claude-code" />
-        </p>
-      )}
+      {/*
+        One command per client that is installed and not yet wired up.
+
+        This was a single hardcoded `lore connect claude-code`, shown only when *every* client
+        was unconfigured. That was right while one adapter existed and wrong the moment #80 and
+        #81 added two more: it named a client the reader might not use, and it vanished as soon
+        as any one client was connected, which is exactly when the remaining ones need saying.
+        A client that is not installed gets no command, because running it would only report
+        that it is not installed.
+      */}
+      {clients
+        .filter((entry) => entry.installed && !entry.configured)
+        .map((entry) => (
+          <p className="clients-hint" key={entry.id}>
+            <Command value={`lore connect ${entry.id}`} />
+          </p>
+        ))}
     </section>
   );
 }

@@ -227,3 +227,88 @@ describe('re-running', () => {
     await waitFor(() => expect(calls).toBe(2));
   });
 });
+
+/**
+ * The commands offered for a client that is not wired up yet.
+ *
+ * This block named a single hardcoded `lore connect claude-code`, and showed it only when
+ * *every* client was unconfigured. Both were fine while one adapter existed. Adding Codex and
+ * VS Code made it name a client the reader may not use, and made it disappear at exactly the
+ * moment the remaining clients still need connecting.
+ */
+describe('the clients block', () => {
+  const withClients = (clients: unknown): void => {
+    served = { ...REPORT, clients };
+  };
+
+  it('offers one command per installed client that is not connected', async () => {
+    withClients([
+      {
+        id: 'claude-code',
+        title: 'Claude Code',
+        installed: true,
+        supported: true,
+        configured: true,
+        ownedByLorepack: true,
+      },
+      {
+        id: 'codex',
+        title: 'Codex',
+        installed: true,
+        supported: true,
+        configured: false,
+        ownedByLorepack: false,
+      },
+      {
+        id: 'vscode',
+        title: 'VS Code',
+        installed: true,
+        supported: true,
+        configured: false,
+        ownedByLorepack: false,
+      },
+    ]);
+    renderRoute();
+
+    expect(await screen.findByText('lore connect codex')).toBeInTheDocument();
+    expect(screen.getByText('lore connect vscode')).toBeInTheDocument();
+    // Already connected, so there is nothing to run. Offering it anyway is how a page starts
+    // reading as a checklist that is never finished.
+    expect(screen.queryByText('lore connect claude-code')).not.toBeInTheDocument();
+  });
+
+  it('says nothing about a client that is not installed', async () => {
+    withClients([
+      {
+        id: 'codex',
+        title: 'Codex',
+        installed: false,
+        supported: false,
+        configured: false,
+        ownedByLorepack: false,
+      },
+    ]);
+    renderRoute();
+
+    await waitFor(() => expect(screen.getByText('Codex')).toBeInTheDocument());
+    // Running it would only report that Codex is not installed, which the row already says.
+    expect(screen.queryByText('lore connect codex')).not.toBeInTheDocument();
+  });
+
+  it('distinguishes an entry someone wrote by hand from one Lorepack created', async () => {
+    withClients([
+      {
+        id: 'codex',
+        title: 'Codex',
+        installed: true,
+        supported: true,
+        configured: true,
+        ownedByLorepack: false,
+      },
+    ]);
+    renderRoute();
+
+    // The same distinction that keeps `lore disconnect` from deleting someone else's server.
+    expect(await screen.findByText('yes, configured by hand')).toBeInTheDocument();
+  });
+});
