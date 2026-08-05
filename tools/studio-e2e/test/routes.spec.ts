@@ -64,7 +64,10 @@ test.describe('Sources', () => {
     await expect(page.getByText('docs/diagram.bin')).toBeVisible();
     await expect(page.getByText(/no supported parser/)).toBeVisible();
     await expect(page.getByText('drafts/', { exact: true })).toBeVisible();
-    await expect(page.getByText('drafts/unfinished.md')).toBeVisible();
+    // The rule is `drafts/`, which prunes the directory (#209), so the row names the
+    // directory and not the files inside it. Listing them would show paths discovery never
+    // walked, and on a dependency tree it would be a listing of somebody's node_modules.
+    await expect(page.getByRole('cell', { name: 'drafts/', exact: true })).toBeVisible();
 
     await checkA11y();
   });

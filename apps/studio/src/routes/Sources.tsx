@@ -361,7 +361,7 @@ function ExcludedList({
                 <td className="numeric">{exclusion.count.toLocaleString()}</td>
                 <td className="excluded-sample">
                   <ul className="sample-list">
-                    {exclusion.sample.map((path) => (
+                    {sampleWorthShowing(exclusion).map((path) => (
                       <li key={path}>{path}</li>
                     ))}
                     {exclusion.count > exclusion.sample.length && (
@@ -431,4 +431,22 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} kB`;
   return `${Math.round(bytes / (1024 * 104.86)) / 10} MB`;
+}
+
+/**
+ * The sample, minus anything that merely repeats the pattern.
+ *
+ * A pruned directory records itself as its own sample, so `drafts/` under the rule `drafts/`
+ * is the same string twice: the row already says it. Dropping it keeps the column carrying
+ * information rather than an echo, and it is why this is a render-time decision and not a
+ * change to what discovery records: a rule written `node_modules` samples `node_modules/`,
+ * which is genuinely a different string and worth showing.
+ *
+ * Only the rendered list is filtered. "and N more" still counts against the **whole** sample,
+ * because the dropped entry was shown, in the row's own heading. Subtracting it there made a
+ * pruned directory claim one hidden file that does not exist.
+ */
+function sampleWorthShowing(exclusion: { pattern: string; sample: readonly string[] }): string[] {
+  const pattern = exclusion.pattern.replace(/\/$/, '');
+  return exclusion.sample.filter((path) => path.replace(/\/$/, '') !== pattern);
 }
