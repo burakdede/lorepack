@@ -148,15 +148,15 @@ describe('one command on an unconfigured folder', () => {
    *
    * This asserted `not.toContain('Studio')` from #53 until #64 built it, and the amendment on
    * #53 said the phase that adds the assets updates this line in the same change. That is
-   * what happened. The `Connect now` list still names only `claude-code`, because Codex and
-   * VS Code are Phase 5 and each arrives with the adapter that makes it true.
+   * what happened, and it happened again for `codex` when #80 built the adapter. VS Code is
+   * still absent, and stays absent until #81 makes the line true.
    */
-  it('offers exactly what it has: Studio, and the one client with an adapter', async () => {
+  it('offers exactly what it has: Studio, and the clients with an adapter', async () => {
     const started = await dev();
 
     expect(started.stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
     expect(started.stdout).toContain('lore connect claude-code');
-    expect(started.stdout).not.toContain('lore connect codex');
+    expect(started.stdout).toContain('lore connect codex');
     expect(started.stdout).not.toContain('lore connect vscode');
   }, 120_000);
 

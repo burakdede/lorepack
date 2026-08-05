@@ -25,8 +25,8 @@ released. Follow along in the [backlog](https://github.com/users/burakdede/proje
 
 Working now: the local lifecycle, every parser below, typed tables with a read-only SQL
 surface, declared precedence rules, retrieval with provenance, MCP and HTTP serving, the
-`lore connect` flow for Claude Code, and Studio. Still to come: more clients, and the
-Cloudflare projection.
+`lore connect` flow for Claude Code and Codex, and Studio. Still to come: more clients, and
+the Cloudflare projection.
 
 ## The two commands
 
@@ -128,6 +128,7 @@ what happens if yours does not.
 | A tour of Studio, one screenshot per route | [`docs/studio-tour.md`](docs/studio-tour.md) |
 | Why each dependency is here, with the checks it passed | [`docs/architecture/dependencies.md`](docs/architecture/dependencies.md) |
 | Connecting Claude Code | [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md) |
+| Connecting Codex | [`docs/integrations/codex.md`](docs/integrations/codex.md) |
 
 ## Licence
 

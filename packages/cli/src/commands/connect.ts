@@ -1,9 +1,11 @@
 import {
   CLAUDE_CODE_ID,
   type ClientConnector,
+  CODEX_ID,
   type ConnectInput,
   type ConnectScope,
   createClaudeCodeConnector,
+  createCodexConnector,
   renderSnippetAdvice,
   renderVerifiedSnippet,
   SERVER_NAME,
@@ -31,17 +33,26 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
  * arriving in a diff.
  */
 
-/** Every connector, named. Codex and VS Code arrive in Phase 5 with #80 and #81. */
+/**
+ * Every connector, named once. VS Code arrives with #81.
+ *
+ * This list and `CLIENT_IDS` are the only places a client is registered, so the help text,
+ * the snippet advice and the `all` target cannot drift apart from what actually exists.
+ */
 function connectors(options: { shared: boolean }): readonly ClientConnector[] {
-  return [createClaudeCodeConnector({ shared: options.shared })];
+  return [createClaudeCodeConnector({ shared: options.shared }), createCodexConnector()];
 }
+
+export const CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID];
+
+const CLIENT_CHOICES = `${CLIENT_IDS.join(', ')}, or all`;
 
 export function connectCommand(): CommandDefinition {
   return {
     name: 'connect',
     description: 'Configure an AI client to read this project, and verify that it works.',
     arguments: [
-      { name: 'client', description: `which client (${CLAUDE_CODE_ID}, or all)`, required: false },
+      { name: 'client', description: `which client (${CLIENT_CHOICES})`, required: false },
     ],
     flags: [
       { flags: '--dry-run', description: 'show the plan and change nothing' },
@@ -95,6 +106,9 @@ export function connectCommand(): CommandDefinition {
           `${connector.title}${detected.version === undefined ? '' : ` ${detected.version}`}`,
         );
         for (const change of plan.changes) lines.push(`  ${change}`);
+        // Part of the plan, not of the outcome. A step the client will still require is
+        // something to know *before* deciding, which means `--dry-run` has to show it too.
+        if (plan.manualStep !== undefined) lines.push(`  ${plan.manualStep}`);
 
         if (flags.dryRun === true) {
           // Zero writes, which is the only promise `--dry-run` makes and the only one that
@@ -109,7 +123,6 @@ export function connectCommand(): CommandDefinition {
 
         const check = await connector.verify(receipt);
         lines.push(check.ok ? `  Verified: ${check.detail}` : `  Not working yet: ${check.detail}`);
-        if (plan.manualStep !== undefined) lines.push(`  ${plan.manualStep}`);
       }
 
       return { human: lines.join('\n'), json: { receipts } };
@@ -122,7 +135,7 @@ export function disconnectCommand(): CommandDefinition {
     name: 'disconnect',
     description: 'Remove the Lorepack entry from an AI client, leaving everything else.',
     arguments: [
-      { name: 'client', description: `which client (${CLAUDE_CODE_ID}, or all)`, required: false },
+      { name: 'client', description: `which client (${CLIENT_CHOICES})`, required: false },
     ],
     flags: [
       { flags: '--scope <scope>', description: 'project (default) or user' },
@@ -196,7 +209,7 @@ function renderSnippet(snippet: Snippet, client: string | undefined): string {
     lines.push('');
   }
 
-  lines.push(...renderSnippetAdvice([CLAUDE_CODE_ID]));
+  lines.push(...renderSnippetAdvice(CLIENT_IDS));
   lines.push('', 'Nothing was changed.');
   return lines.join('\n');
 }

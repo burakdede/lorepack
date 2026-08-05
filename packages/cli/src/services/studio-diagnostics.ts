@@ -3,7 +3,9 @@ import { probeFts5 } from '@lorepack/backend-local';
 import {
   CLAUDE_CODE_ID,
   type ClientStatus,
+  CODEX_ID,
   createClaudeCodeConnector,
+  createCodexConnector,
   SERVER_NAME,
 } from '@lorepack/connect-clients';
 import type { DoctorReport, LoadedConfig } from '@lorepack/core';
@@ -90,7 +92,7 @@ function environment(): Record<string, string | boolean> {
 async function clients(
   config: LoadedConfig,
 ): Promise<readonly (ClientStatus & { id: string; title: string })[]> {
-  const connectors = [createClaudeCodeConnector()];
+  const connectors = [createClaudeCodeConnector(), createCodexConnector()];
   const input = {
     projectRoot: config.projectRoot,
     serverName: SERVER_NAME,
@@ -123,5 +125,5 @@ async function clients(
   );
 }
 
-/** Exported for the tests, which assert the endpoint answers for the one registered client. */
-export const KNOWN_CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID];
+/** Exported for the tests, which assert the endpoint answers for every registered client. */
+export const KNOWN_CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID];

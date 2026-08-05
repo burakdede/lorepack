@@ -236,9 +236,8 @@ interface Rendered {
  * A package installed without them is a broken install rather than a mode, and printing a
  * URL that answers 404 would be worse than saying nothing.
  *
- * The `Connect now` list names only `claude-code`, because that is the only connector that
- * exists. Codex and VS Code are Phase 5 (#80, #81) and each adds its own line. #53 carries
- * the amendment recording this.
+ * The `Connect now` list names the connectors that exist, and nothing else. Codex arrived
+ * with #80; VS Code is #81 and adds its own line. #53 carries the amendment recording this.
  */
 function render(rendered: Rendered): string {
   const { built } = rendered;
@@ -265,6 +264,7 @@ function render(rendered: Rendered): string {
   lines.push('');
   lines.push('Connect now:');
   lines.push('  lore connect claude-code');
+  lines.push('  lore connect codex');
   lines.push('');
   lines.push('Watching for changes. Press Ctrl-C to stop.');
   return lines.join('\n');
