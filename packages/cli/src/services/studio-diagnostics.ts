@@ -6,7 +6,9 @@ import {
   CODEX_ID,
   createClaudeCodeConnector,
   createCodexConnector,
+  createVsCodeConnector,
   SERVER_NAME,
+  VSCODE_ID,
 } from '@lorepack/connect-clients';
 import type { DoctorReport, LoadedConfig } from '@lorepack/core';
 import { runDoctor } from './doctor.js';
@@ -92,7 +94,7 @@ function environment(): Record<string, string | boolean> {
 async function clients(
   config: LoadedConfig,
 ): Promise<readonly (ClientStatus & { id: string; title: string })[]> {
-  const connectors = [createClaudeCodeConnector(), createCodexConnector()];
+  const connectors = [createClaudeCodeConnector(), createCodexConnector(), createVsCodeConnector()];
   const input = {
     projectRoot: config.projectRoot,
     serverName: SERVER_NAME,
@@ -126,4 +128,4 @@ async function clients(
 }
 
 /** Exported for the tests, which assert the endpoint answers for every registered client. */
-export const KNOWN_CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID];
+export const KNOWN_CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID, VSCODE_ID];

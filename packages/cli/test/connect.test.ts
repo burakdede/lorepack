@@ -26,10 +26,10 @@ describe('which clients exist', () => {
       const result = await run(['--cwd', temp.root, 'connect', '--snippet']);
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('Verified clients: claude-code, codex.');
-      // VS Code is #81. Naming it before the adapter exists is the overclaim architecture
-      // 14.7 forbids: a snippet that looks verified and is not.
-      expect(result.stdout).not.toContain('vscode');
+      expect(result.stdout).toContain('Verified clients: claude-code, codex, vscode.');
+      // Naming a client before its adapter exists is the overclaim architecture 14.7 forbids:
+      // a snippet that looks verified and is not.
+      expect(result.stdout).not.toContain('cursor');
     });
   });
 
@@ -62,6 +62,7 @@ describe('disconnect', () => {
       expect(result.code).toBe(0);
       expect(result.stdout).toContain(join('.claude', 'settings.local.json'));
       expect(result.stdout).toContain(join('.codex', 'config.toml'));
+      expect(result.stdout).toContain(join('.vscode', 'mcp.json'));
     });
   });
 

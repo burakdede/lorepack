@@ -148,8 +148,8 @@ describe('one command on an unconfigured folder', () => {
    *
    * This asserted `not.toContain('Studio')` from #53 until #64 built it, and the amendment on
    * #53 said the phase that adds the assets updates this line in the same change. That is
-   * what happened, and it happened again for `codex` when #80 built the adapter. VS Code is
-   * still absent, and stays absent until #81 makes the line true.
+   * what happened, and it happened again for `codex` with #80 and `vscode` with #81. Every
+   * line here is true because an adapter exists behind it.
    */
   it('offers exactly what it has: Studio, and the clients with an adapter', async () => {
     const started = await dev();
@@ -157,7 +157,7 @@ describe('one command on an unconfigured folder', () => {
     expect(started.stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
     expect(started.stdout).toContain('lore connect claude-code');
     expect(started.stdout).toContain('lore connect codex');
-    expect(started.stdout).not.toContain('lore connect vscode');
+    expect(started.stdout).toContain('lore connect vscode');
   }, 120_000);
 
   it('serves Studio at the root without shadowing the API', async () => {
