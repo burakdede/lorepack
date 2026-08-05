@@ -22,6 +22,26 @@ disagree because differently tuned compilers produced them. `RANKING_WEIGHTS` in
 can say which tuning it measured.
 
 
+## At the envelope, 2026-08-06
+
+`node scripts/bench-retrieval.mjs --documents 2500 --sections 20`, which is 2,500 files and
+**exactly 50,000 chunks**: the corpus section 5.4 names. Committed as
+`benchmarks/retrieval/envelope-2026-08-06.json`, on AMD Ryzen 9 3900X, 24 cores, 31 GB, Node
+24.18.1.
+
+| Gate (section 5.5) | Target | Measured p95 |
+|---|---|---|
+| Warm search | < 250 ms | **22.1 ms** |
+| `contextForTask` | < 1,500 ms | **203.1 ms** |
+
+Both comfortably inside, at the size the gates are stated against rather than at the four
+hundred documents this script uses by default. Cold search is 16.0 ms and debug search, which
+returns the ranking breakdown, is 21.8 ms at p95: explaining a result costs about what producing
+it does.
+
+Read alongside `bench-envelope.mjs` in `build-orchestration.md`, which measures the other half:
+**retrieval is fast at the envelope and rebuilding is not** (#245).
+
 ## A citation names the coordinate its format has
 
 A PDF has pages and no lines. A Markdown file has lines and no pages. A spreadsheet has a sheet
