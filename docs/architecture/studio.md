@@ -121,7 +121,7 @@ asking each time are:
 - Does any number on screen read as a score, a grade or a confidence? (Section 4.5 and 13.4.)
 - Is any state carried by colour alone, without a word beside it?
 - Has anything acquired a card, a tile, a gradient, a shadow or a chart?
-- Does any route claim Lorepack detected a conflict or decided which document is right?
+- Does any route claim Lorepack detected a conflict or decided which document is right? <!-- lore-allow-conflict-copy: this line asks the question, it does not answer it -->
   (Invariant 6.)
 - Would a person who reads only the buttons know what each one is about to do, and to which
   build?
