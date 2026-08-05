@@ -89,7 +89,14 @@ export function Citation({ locator }: { readonly locator: Locator }): React.JSX.
               // The prefix up to this segment, which is unique within a path by
               // construction, so the key survives a heading being renamed above it.
               <span key={headings.slice(0, index + 1).join('\u001f')}>
-                {index > 0 && <span className="citation-chevron">{'›'}</span>}
+                {index > 0 && (
+                  // Real spaces here for the same reason as `Separator`: padding is not text,
+                  // so `Rollback›Procedure` is what a reader would otherwise be handed.
+                  <>
+                    {' '}
+                    <span className="citation-chevron">{'›'}</span>{' '}
+                  </>
+                )}
                 {heading}
               </span>
             ))}
@@ -116,11 +123,25 @@ export function Citation({ locator }: { readonly locator: Locator }): React.JSX.
   );
 }
 
+/**
+ * The dot between two parts of a citation, with a real space on each side.
+ *
+ * The spaces are the point (#238). The dot is `aria-hidden`, because the structure is already
+ * conveyed by the elements around it, and the parts were previously separated only by that
+ * hidden dot and a CSS `gap`. Neither is text, so a screen reader heard
+ * `orders.xlsxOrdersA1:D4` and a copied selection ran the parts together.
+ *
+ * This is #203 in a component written before it: only a text node makes a word boundary. The
+ * spaces are expression containers rather than literals between the tags, so no reflow by the
+ * formatter can quietly remove them.
+ */
 function Separator(): React.JSX.Element {
-  // Decorative: the structure is already conveyed by the elements it sits between.
   return (
-    <span className="citation-separator" aria-hidden="true">
-      {'·'}
-    </span>
+    <>
+      {' '}
+      <span className="citation-separator" aria-hidden="true">
+        {'·'}
+      </span>{' '}
+    </>
   );
 }

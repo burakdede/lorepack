@@ -1,0 +1,211 @@
+/* Tables. A list, a schema, and a console. See docs/architecture/studio-design.md. */
+
+/* The list beside the detail, collapsing to stacked when there is no room for two columns.
+   A fixed two-column grid is what pushed Versions sideways at 200% zoom (#210), so the
+   sidebar is dropped rather than squeezed. */
+.tables {
+  display: grid;
+  grid-template-columns: minmax(12ch, 22ch) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .tables {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tables-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tables-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+.tables-item:hover {
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+/* Selected by weight, surface and a rule, never by colour alone. */
+.tables-item-on {
+  color: var(--text);
+  background: var(--surface);
+  border-left-color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* `minmax(0, 1fr)` above lets this column shrink; without it a wide grid inside would set
+   the column's minimum to its content width and widen the page instead of scrolling. */
+.tables-detail {
+  min-width: 0;
+}
+
+.tables-title {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  margin: 0 0 var(--space-4);
+}
+
+.tables-heading {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: var(--space-6) 0 var(--space-2);
+}
+
+.tables-note {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.tables-schema,
+.tables-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.tables-schema th[scope="col"],
+.tables-grid th[scope="col"] {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: 0 var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tables-schema td,
+.tables-schema th[scope="row"],
+.tables-grid td {
+  padding: 0 var(--space-3) 0 0;
+  border-bottom: 1px solid var(--border-subtle);
+  height: var(--row-height);
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.tables-column-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+/* The generated name, which is the one a query has to use. Quieter than the source name,
+   because the source name is what a person is looking for, but present and copyable. */
+.tables-sql-name {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.tables-range {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell {
+  font-family: var(--font-mono);
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Numbers align on their digits, which is the only way a column of them is readable. */
+.cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A null is a fact, written in the word. Dimmed so it does not read as the string "null". */
+.cell-null {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.console {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.console-form {
+  display: block;
+}
+
+.console-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.console-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  resize: vertical;
+}
+
+.console-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.console-run,
+.console-reset {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.console-run:hover,
+.console-reset:hover {
+  background: var(--surface-raised, var(--surface));
+  color: var(--text);
+}
+
+.console-result {
+  margin-top: var(--space-4);
+}
+
+.console-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}

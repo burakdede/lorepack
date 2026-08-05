@@ -48,6 +48,21 @@ const ONBOARDING = [
   '',
 ].join('\n');
 
+/**
+ * A typed table, so the Tables route has something real to render.
+ *
+ * A nullable real and a boolean on purpose: those are the two the port reported wrongly
+ * before #235, and a fixture of nothing but text columns would render a page that looks right
+ * whatever the backend does with types.
+ */
+const PRICING = [
+  'sku,list_price,discontinued',
+  'A-1,19.99,false',
+  'A-2,4.50,false',
+  'A-3,,true',
+  '',
+].join('\n');
+
 const require = createRequire(import.meta.url);
 
 export interface Session {
@@ -96,6 +111,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       writeFileSync(join(projectRoot, 'docs', 'onboarding.md'), ONBOARDING, 'utf8');
       // A file no parser handles, so the exclusion list on Sources has something real in it.
       writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));
+      writeFileSync(join(projectRoot, 'docs', 'pricing.csv'), PRICING, 'utf8');
       // And a document removed by a rule, which is the other and more common way to be
       // missing from a build. Sources listed only the first kind until #202.
       mkdirSync(join(projectRoot, 'drafts'));

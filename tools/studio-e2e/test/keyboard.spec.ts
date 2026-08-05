@@ -12,7 +12,7 @@ import { expect, test } from './fixture.js';
  * the page still fits when everything is twice the size.
  */
 
-const ROUTES = ['/', '/sources', '/playground', '/versions', '/diagnostics'] as const;
+const ROUTES = ['/', '/sources', '/tables', '/playground', '/versions', '/diagnostics'] as const;
 
 test.describe('reaching everything by keyboard', () => {
   test('the skip link is first, and it moves focus to the content', async ({ page, session }) => {

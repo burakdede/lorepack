@@ -109,6 +109,21 @@ The largest drop-off is at the import step, not at signup.
 `,
   'context/notes/sprint.txt':
     'Sprint notes.\n\nThe auth rewrite landed behind a flag. The retention pipeline still runs nightly.\n',
+  /**
+   * A spreadsheet, because half of what Phase 5 added is that a mixed folder is a mixed
+   * folder. A demo of nothing but prose would photograph a product that does not exist.
+   *
+   * Ordinary in the same way the documents are: the sort of small operational table a team
+   * keeps beside its runbooks, with a missing value and a boolean in it so the typed columns
+   * are visibly typed rather than all text.
+   */
+  'context/ops/environments.csv': [
+    'environment,region,tier,paged,monthly_cost_usd',
+    'production,eu-west-1,critical,true,4210.50',
+    'staging,eu-west-1,standard,false,318.75',
+    'sandbox,us-east-1,standard,false,',
+    '',
+  ].join('\n'),
   'drafts/unfinished.md': '# Unfinished\n\nNot ready to be read by anything.\n',
 };
 
@@ -303,6 +318,7 @@ async function main() {
       { file: 'studio-overview.png', route: '#/', ready: '.state-banner' },
       { file: 'studio-sources.png', route: '#/sources', ready: '.artifacts' },
       { file: 'studio-versions.png', route: '#/versions', ready: '.build-row' },
+      { file: 'studio-tables.png', route: '#/tables', ready: '.tables-schema' },
       { file: 'studio-diagnostics.png', route: '#/diagnostics', ready: '.checks' },
     ];
 

@@ -1,11 +1,13 @@
 /* The citation, per docs/architecture/studio-design.md. Path in mono, heading path in sans,
    range in tabular mono, separators muted. Selectable, with a copy affordance that appears on
    hover and on keyboard focus so it is not mouse-only. */
+/* Inline, not inline-flex, and that is about text rather than layout (#238).
+   A flex container discards whitespace-only text nodes, so the real spaces the separator now
+   writes between the parts would be dropped from the rendering and the accessibility tree,
+   which is the whole reason they are there. Inline layout wraps and aligns on the baseline
+   without being asked, so nothing is lost by dropping the flex. */
 .citation {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0 var(--space-1);
+  display: inline;
   font-size: var(--text-sm);
   line-height: 1.5;
   user-select: text;
@@ -23,7 +25,6 @@
 
 .citation-chevron {
   color: var(--text-muted);
-  padding: 0 var(--space-1);
 }
 
 .citation-range {

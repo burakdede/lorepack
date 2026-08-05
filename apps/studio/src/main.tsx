@@ -7,6 +7,7 @@ import { Diagnostics } from './routes/Diagnostics.js';
 import { Overview } from './routes/Overview.js';
 import { Playground } from './routes/Playground.js';
 import { Sources } from './routes/Sources.js';
+import { Tables } from './routes/Tables.js';
 import { Versions } from './routes/Versions.js';
 import './styles.css';
 
@@ -25,6 +26,10 @@ const router = createHashRouter([
     children: [
       { index: true, element: <Overview /> },
       { path: 'sources', element: <Sources /> },
+      // Registered unconditionally even though the nav link is conditional. A build with no
+      // tables hides the link; a deep link to `#/tables` still has to answer, and it answers
+      // with the route's own empty state rather than with a blank page.
+      { path: 'tables', element: <Tables /> },
       { path: 'playground', element: <Playground /> },
       { path: 'versions', element: <Versions /> },
       { path: 'diagnostics', element: <Diagnostics /> },

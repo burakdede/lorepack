@@ -44,6 +44,24 @@ prunes it and genuinely never looks inside.
 
 ![Studio Sources, showing what was excluded and why](images/studio-excluded.png)
 
+## Tables
+
+Appears only when the build has a table in it, which it does when the project contains a CSV or
+a spreadsheet.
+
+The schema shows each column's type, how many nulls it holds, how many distinct values, and its
+range, all recorded at import so reading them costs no scan. It also shows the **generated
+names**: a query addresses `t_environments_fa5889ffa4f1` and `c_0_environment`, never
+`environments` and `environment`, because no identifier from a source file ever reaches SQL.
+
+The console runs one read-only `SELECT` through the same validator, the same per-query
+authorizer and the same deadline as the `lore_query_table` tool a model calls. Nothing is
+reachable from this page that is not reachable from a model, which is the point of there being
+one implementation rather than two. It is prefilled with a statement that already names the
+generated identifiers, so the first query a person runs works.
+
+![Studio Tables](images/studio-tables.png)
+
 ## Versions
 
 Every action that changes anything shows a plan, names the build it will act on, and is

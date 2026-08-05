@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="687" height="725" viewBox="0 0 687 725" role="img" aria-label="lore init and lore build">
-  <rect width="687" height="725" rx="6" fill="#141414"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="687" height="746" viewBox="0 0 687 746" role="img" aria-label="lore init and lore build">
+  <rect width="687" height="746" rx="6" fill="#141414"/>
   <circle cx="20" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="36" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="52" cy="20" r="5" fill="#3a3a3a"/>
@@ -15,26 +15,27 @@
   <text x="20" y="201" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="222" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lore build</text>
   <text x="20" y="243" fill="#9a9a9a" font-weight="400" xml:space="preserve">Discovering     0                               0ms</text>
-  <text x="20" y="264" fill="#9a9a9a" font-weight="400" xml:space="preserve">Discovering     5                               done</text>
-  <text x="20" y="285" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  0/5                             0ms</text>
-  <text x="20" y="306" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  5/5 files                       done</text>
-  <text x="20" y="327" fill="#9a9a9a" font-weight="400" xml:space="preserve">Parsing         0/5                             0ms</text>
-  <text x="20" y="348" fill="#9a9a9a" font-weight="400" xml:space="preserve">Parsing         5/5                             done</text>
+  <text x="20" y="264" fill="#9a9a9a" font-weight="400" xml:space="preserve">Discovering     6                               done</text>
+  <text x="20" y="285" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  0/6                             0ms</text>
+  <text x="20" y="306" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  6/6 files                       done</text>
+  <text x="20" y="327" fill="#9a9a9a" font-weight="400" xml:space="preserve">Parsing         0/6                             0ms</text>
+  <text x="20" y="348" fill="#9a9a9a" font-weight="400" xml:space="preserve">Parsing         6/6                             done</text>
   <text x="20" y="369" fill="#9a9a9a" font-weight="400" xml:space="preserve">Indexing        0                               0ms</text>
-  <text x="20" y="390" fill="#9a9a9a" font-weight="400" xml:space="preserve">Indexing        13                              done</text>
+  <text x="20" y="390" fill="#9a9a9a" font-weight="400" xml:space="preserve">Indexing        14                              done</text>
   <text x="20" y="411" fill="#9a9a9a" font-weight="400" xml:space="preserve">Validating      0                               0ms</text>
   <text x="20" y="432" fill="#9a9a9a" font-weight="400" xml:space="preserve">Validating      11                              done</text>
   <text x="20" y="453" fill="#9a9a9a" font-weight="400" xml:space="preserve">Sealing         0                               0ms</text>
   <text x="20" y="474" fill="#9a9a9a" font-weight="400" xml:space="preserve">Sealing         1                               done</text>
   <text x="20" y="495" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activating      0                               0ms</text>
   <text x="20" y="516" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activating      1                               done</text>
-  <text x="20" y="537" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_3f44f0c80968d02dd2dcbe2869bfe3094e46877bc934235f085654db8829d371</text>
+  <text x="20" y="537" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_2fbbce0df75faf159051db553338ed1e86456a5abb26bb86c470ace130ccd255</text>
   <text x="20" y="558" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="579" fill="#9a9a9a" font-weight="400" xml:space="preserve">  5 artifacts</text>
-  <text x="20" y="600" fill="#9a9a9a" font-weight="400" xml:space="preserve">  36 nodes</text>
-  <text x="20" y="621" fill="#9a9a9a" font-weight="400" xml:space="preserve">  13 chunks</text>
-  <text x="20" y="642" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 warning</text>
-  <text x="20" y="663" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="684" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 123 ms.</text>
+  <text x="20" y="579" fill="#9a9a9a" font-weight="400" xml:space="preserve">  6 artifacts</text>
+  <text x="20" y="600" fill="#9a9a9a" font-weight="400" xml:space="preserve">  38 nodes</text>
+  <text x="20" y="621" fill="#9a9a9a" font-weight="400" xml:space="preserve">  14 chunks</text>
+  <text x="20" y="642" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 table, 3 rows</text>
+  <text x="20" y="663" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 warning</text>
+  <text x="20" y="684" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
+  <text x="20" y="705" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 123 ms.</text>
   </g>
 </svg>
