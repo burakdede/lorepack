@@ -1,0 +1,34 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. The reference machine and the gates are backlog issue #101.",
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 3900X 12-Core Processor",
+    "cores": 24,
+    "memoryGb": 31,
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "files": 2500,
+    "bytesPerFile": 40000,
+    "totalBytes": 102568500,
+    "totalGb": 0.096,
+    "artifacts": 2500,
+    "chunks": 39010,
+    "atFileEnvelope": true,
+    "atByteEnvelope": false
+  },
+  "measurements": {
+    "fullBuildMs": 52337,
+    "noopRebuildP50Ms": 857.76,
+    "noopRebuildP95Ms": 915.68,
+    "incrementalRebuildP50Ms": 4561.24,
+    "incrementalRebuildP95Ms": 5631.62,
+    "samples": 3
+  },
+  "referenceGates": {
+    "fingerprintP95Ms": 4000,
+    "incrementalRebuildMs": 2000
+  }
+}
