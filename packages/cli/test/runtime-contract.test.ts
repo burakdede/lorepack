@@ -40,6 +40,32 @@ const TABLE_CSV = [
   '',
 ].join('\n');
 
+/**
+ * Removes a temp project, and never fails a test for failing to.
+ *
+ * `backend.close()` releases every database this process opened, and on POSIX that is enough.
+ * On Windows it is not: the SQL surface runs each query in a **forked child** holding its own
+ * read-only connection, and `executeQuery` kills that child with `SIGKILL` without awaiting it,
+ * deliberately, because waiting for a process being killed is exactly the hang that ruled out
+ * worker threads. So a directory whose table was queried can still be held open for a moment
+ * after the test that queried it finished.
+ *
+ * `withTempProject` already swallows this, with the same reasoning written beside it. This
+ * fixture builds its own root and had to learn it separately, which it did the hard way: the
+ * typed-table invariants added in #235 made it the first contract fixture ever to run a query,
+ * and it turned `main` red on `windows-latest` alone.
+ *
+ * A leaked temp directory is the operating system's to reclaim. A failed cleanup reported as a
+ * failed assertion is a test lying about what it tests.
+ */
+function discard(root: string): void {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // Windows may hold a handle briefly after a killed child exits.
+  }
+}
+
 /** The project the current fixture is serving, so `activateAnother` can rebuild it. */
 let currentRoot = '';
 
@@ -64,7 +90,7 @@ runRuntimeContract({
       knownTableId: 'contracted:pricing.csv#table',
       close: () => {
         backend.close();
-        rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+        discard(root);
       },
     };
   },
@@ -110,7 +136,7 @@ describe('the suite catches what it exists to catch', () => {
         matchingQuery: 'rollback',
         close: () => {
           backend.close();
-          rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+          discard(root);
         },
       },
     };
