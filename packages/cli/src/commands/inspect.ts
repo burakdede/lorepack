@@ -219,7 +219,13 @@ function inspectExclusions(loreDirectory: string, buildId: BuildId): CommandResu
       lines.push(
         `${exclusion.pattern}  ${count(exclusion.count, 'path')}, from ${exclusion.source}`,
       );
-      for (const path of exclusion.sample) lines.push(`  ${path}`);
+      // A sample entry that repeats the pattern says nothing, and a pruned directory records
+      // itself as its own sample. The heading above already named it.
+      const pattern = exclusion.pattern.replace(/\/$/, '');
+      const sample = exclusion.sample.filter((path) => path.replace(/\/$/, '') !== pattern);
+      for (const path of sample) lines.push(`  ${path}`);
+      // Against the whole sample, not the filtered one: the dropped entry was shown, in the
+      // heading. Subtracting it here made a pruned directory claim a hidden file.
       const remaining = exclusion.count - exclusion.sample.length;
       if (remaining > 0) lines.push(`  and ${count(remaining, 'more path')}`);
       lines.push('');
