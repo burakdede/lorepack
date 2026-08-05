@@ -267,9 +267,13 @@ describe('a build written at an older catalog schema', () => {
       const buildId = readdirSync(buildsRoot)[0] as string;
       const database = join(buildsRoot, buildId, 'context.sqlite');
 
-      // Rewind the build to the schema it would have had before this change.
+      // Rewind the build by one migration, whichever is latest. Naming a migration here
+      // would make this test stop exercising the guard the moment another one is added,
+      // which is exactly what happened when 0004 arrived.
       const writable = new DatabaseSync(database);
-      writable.exec("DELETE FROM schema_migrations WHERE id = '0003'");
+      writable.exec(
+        'DELETE FROM schema_migrations WHERE id = (SELECT max(id) FROM schema_migrations)',
+      );
       writable.close();
 
       const backend = createLocalRuntimeBackend({ projectRoot: root });

@@ -56,8 +56,17 @@ interface Pending {
   texts: string[];
   headingPath: readonly string[];
   tokens: number;
-  lineStart: number;
-  lineEnd: number;
+  /**
+   * Null for a format that has no lines.
+   *
+   * This used to default to 1, which put a line number on a PDF chunk where the text is not
+   * on line 1 of anything: a locator naming a place the content is not, which is worse than
+   * one naming no place at all because it looks checkable (#241).
+   */
+  lineStart: number | null;
+  lineEnd: number | null;
+  /** The first page the chunk covers, for a format whose only coordinate is a page. */
+  page: number | undefined;
 }
 
 export function chunkArtifact(options: ChunkOptions): Chunk[] {
@@ -104,8 +113,11 @@ export function chunkArtifact(options: ChunkOptions): Chunk[] {
         texts: [],
         headingPath,
         tokens: estimateTokens(prefix),
-        lineStart: node.locator.lineStart ?? 1,
-        lineEnd: node.locator.lineEnd ?? node.locator.lineStart ?? 1,
+        lineStart: node.locator.lineStart ?? null,
+        lineEnd: node.locator.lineEnd ?? node.locator.lineStart ?? null,
+        // The first page it covers. A chunk spanning a page break is cited at its start,
+        // which is what a citation means when it names a page.
+        page: node.locator.page,
       };
     }
 
@@ -113,6 +125,7 @@ export function chunkArtifact(options: ChunkOptions): Chunk[] {
     pending.texts.push(node.text);
     pending.tokens += tokens;
     pending.lineEnd = node.locator.lineEnd ?? pending.lineEnd;
+    pending.page ??= node.locator.page;
   }
 
   flush();
@@ -149,8 +162,9 @@ function makeChunk(
       artifactId,
       relativePath: first?.locator.relativePath ?? '',
       ...(pending.headingPath.length > 0 ? { headingPath: [...pending.headingPath] } : {}),
-      lineStart: pending.lineStart,
-      lineEnd: pending.lineEnd,
+      ...(pending.page === undefined ? {} : { page: pending.page }),
+      ...(pending.lineStart === null ? {} : { lineStart: pending.lineStart }),
+      ...(pending.lineEnd === null ? {} : { lineEnd: pending.lineEnd }),
     },
     revisionHash: hashBytes(text),
   };
@@ -181,8 +195,9 @@ function splitNode(node: LoreNode, chunking: ChunkingDefaults, prefix: string): 
       texts: [slice],
       headingPath,
       tokens: estimateTokens(slice),
-      lineStart: node.locator.lineStart ?? 1,
-      lineEnd: node.locator.lineEnd ?? node.locator.lineStart ?? 1,
+      lineStart: node.locator.lineStart ?? null,
+      lineEnd: node.locator.lineEnd ?? node.locator.lineStart ?? null,
+      page: node.locator.page,
     });
 
     if (boundary >= text.length) break;

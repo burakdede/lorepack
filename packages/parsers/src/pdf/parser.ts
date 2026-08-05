@@ -223,6 +223,9 @@ async function readPage(
     kind: 'section',
     parentId,
     title: `Page ${number}`,
+    // On the locator as well as in the metadata: the metadata is where a curious reader
+    // looks, the locator is where every citation comes from (#241).
+    page: number,
     metadata: { page: number },
   });
 
@@ -233,6 +236,7 @@ async function readPage(
       parentId: section.id,
       text,
       headingPath: [`Page ${number}`],
+      page: number,
       metadata: { page: number },
     });
   }

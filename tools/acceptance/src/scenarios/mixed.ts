@@ -58,14 +58,15 @@ export const MIXED_SCENARIOS: readonly Scenario[] = [
           exitCode: 0,
           json: [
             { path: 'hits[0].locator.relativePath', matches: 'contract\\.pdf' },
-            // The page reaches the reader as a heading, which is how the parser records it.
-            //
-            // `locator.page` is what should be asserted here and is **not**, because nothing
-            // populates it: the parser records the page, `chunks` has no column for it, and
-            // the hit arrives with `lineStart: 1` where the page belongs. That is #241, and
-            // this line becomes `{ path: 'hits[0].locator.page', exists: true }` when it is
-            // fixed. Asserting the line number instead would enshrine the defect.
+            // The page, as a number a client can act on, and **not** as a line number a PDF
+            // does not have (#241). The equality that matters is between the two
+            // representations of one fact: the page in the locator and the page in the
+            // heading the same hit carries.
+            { path: 'hits[0].locator.page', equals: 2 },
             { path: 'hits[0].locator.headingPath[0]', equals: 'Page 2' },
+            // A PDF has no lines, so it is cited by none. An invented `lineStart: 1` is worse
+            // than no coordinate, because it looks checkable.
+            { path: 'hits[0].locator.lineStart', exists: false },
           ],
         },
       },

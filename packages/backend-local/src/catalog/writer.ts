@@ -77,8 +77,8 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
   const insertChunk = db.prepare(
     `INSERT INTO chunks
        (id, artifact_id, node_ids, heading_path, text, estimated_tokens, relative_path,
-        line_start, line_end, revision_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        line_start, line_end, page, revision_hash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertFts = db.prepare(
     `INSERT INTO chunks_fts (chunk_id, artifact_id, status, authority, path, title, heading, body)
@@ -150,6 +150,7 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
           chunk.locator.relativePath,
           chunk.locator.lineStart ?? null,
           chunk.locator.lineEnd ?? null,
+          chunk.locator.page ?? null,
           chunk.revisionHash,
         );
 
@@ -224,6 +225,8 @@ export interface CatalogSearchHit {
   readonly text: string;
   /** The match in context, with the matched terms bracketed by FTS5 itself. */
   readonly excerpt: string;
+  /** The page, for a format whose only coordinate is a page. Null for one with lines. */
+  readonly page: number | null;
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
   readonly status: string;
@@ -327,6 +330,7 @@ export function searchCatalog(
               c.text          AS text,
               c.line_start    AS lineStart,
               c.line_end      AS lineEnd,
+              c.page          AS page,
               a.status        AS status,
               a.authority     AS authority,
               c.estimated_tokens AS estimatedTokens,
@@ -350,6 +354,7 @@ export function searchCatalog(
     headingPath: JSON.parse(String(row.headingPath)) as string[],
     text: String(row.text),
     excerpt: String(row.excerpt),
+    page: row.page === null || row.page === undefined ? null : Number(row.page),
     lineStart: row.lineStart === null ? null : Number(row.lineStart),
     lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     status: String(row.status),
