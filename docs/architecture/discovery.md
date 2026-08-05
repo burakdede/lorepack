@@ -154,12 +154,22 @@ cannot be added by accident, and each one has a test proving it invalidates.
 
 From architecture section 5.4, enforced here rather than discovered later:
 
-| Limit | Behaviour |
-|---|---|
-| 2,500 files | Refuses without `--allow-large-project` |
-| 1 GB total | Warns, naming the largest artifacts |
-| Per-artifact cap | Excludes that file with a warning |
+| Limit | Behaviour | Verified |
+|---|---|---|
+| 2,500 files | Refuses without `--allow-large-project` | End to end, `scale/envelope-guard-refuses-then-yields` |
+| 1 GB total | Warns, naming the largest artifacts | Unit, with `maxTotalBytes` lowered |
+| Per-artifact cap | Excludes that file with a warning | Unit, with `maxArtifactBytes` lowered |
+| 100 table columns | Excludes that table with a warning | End to end, `mixed/a-table-past-its-column-limit-costs-only-that-table` |
+| 500,000 table rows | Excludes that table with a warning | Unit, in the CSV and XLSX parser suites |
+| 500-page PDF | Warns, and reads it in full | Manual, `mixed/a-pdf-past-the-page-envelope-warns-and-is-still-read` |
 
 The file-count refusal is a hard stop because it is the one users hit by accident, usually
 by pointing Lorepack at a directory containing a dependency tree. The message says the
 envelope is untested beyond that point rather than unsupported, which is the honest framing.
+
+**Why three of these stop at unit level**, stated rather than left to be discovered. `limits` is
+not exposed in `lore.yaml`, so a scenario driving the real binary cannot lower a threshold and
+would have to produce a genuine gigabyte, a genuine 500,001-row file, or a genuine 500-page PDF.
+Each would dominate the suite's runtime to assert one warning. The behaviour is tested where it
+can be tested cheaply and honestly; what is untested is the wiring between the limit and the
+binary, which is shared with the two limits that *are* covered end to end.
