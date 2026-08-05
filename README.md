@@ -52,7 +52,7 @@ one is a bug, not a style issue:
 
 ## Studio
 
-`lore dev` prints a Studio URL: five routes served from static files by the same process that
+`lore dev` prints a Studio URL: six routes served from static files by the same process that
 serves the API, on the same port, with no toolchain and no network.
 
 ![Studio Context Playground](docs/images/studio-playground.png)
@@ -62,8 +62,10 @@ would a model actually receive for this task, and what was left out.** Every pas
 its provenance, every omission carries its reason, and a ranking heuristic is labelled as one
 rather than presented as a score of truth.
 
-The other four routes are Overview, Sources, Versions and Diagnostics.
-[Take the tour](docs/studio-tour.md), with a screenshot of each.
+The other five are Overview, Sources, Tables, Versions and Diagnostics. Tables appears only
+when the build has one, and its console runs a read-only `SELECT` through the same validator and
+the same limits as the tool a model calls. [Take the tour](docs/studio-tour.md), with a
+screenshot of each.
 
 Studio is read-mostly. The only routes that change anything exist solely under `lore dev`, and
 they refuse any browser origin that is not a loopback literal.
