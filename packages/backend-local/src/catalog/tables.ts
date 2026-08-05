@@ -125,8 +125,8 @@ export interface WriteTablesResult {
 export function writeTables(db: DatabaseSync, tables: readonly ParsedTable[]): WriteTablesResult {
   const insertTable = db.prepare(
     `INSERT INTO tables
-       (id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range, metadata)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertColumn = db.prepare(
     `INSERT INTO table_columns
@@ -156,6 +156,7 @@ export function writeTables(db: DatabaseSync, tables: readonly ParsedTable[]): W
       table.locator.relativePath,
       table.locator.lineStart ?? null,
       table.locator.lineEnd ?? null,
+      table.locator.cellRange ?? null,
       JSON.stringify(table.metadata),
     );
 
@@ -255,6 +256,7 @@ interface TableRow {
   readonly relative_path: string;
   readonly line_start: number | null;
   readonly line_end: number | null;
+  readonly cell_range: string | null;
 }
 
 interface ColumnRow {
@@ -293,10 +295,79 @@ export function resolveTable(
 }
 
 /**
+ * The locator for a stored table, from the columns that hold it.
+ *
+ * One function, called by both `describeTable` and `queryTable`, because they used to build it
+ * separately and disagreed: `query` reported the sheet and `describe` did not, so two responses
+ * about one table from one build named different places (#235). A locator is provenance, and
+ * invariant 5 makes it mandatory rather than decorative, so it is worth one function.
+ */
+export function tableLocator(table: TableRow): StoredTableDescription['locator'] {
+  return {
+    artifactId: table.artifact_id,
+    relativePath: table.relative_path,
+    ...(table.sheet === null ? {} : { sheet: table.sheet }),
+    ...(table.cell_range === null ? {} : { cellRange: table.cell_range }),
+    ...(table.line_start === null ? {} : { lineStart: table.line_start }),
+    ...(table.line_end === null ? {} : { lineEnd: table.line_end }),
+  };
+}
+
+/**
+ * A stored value, returned as the column's declared type rather than as its storage class.
+ *
+ * `boolean` is stored as `INTEGER` because `node:sqlite` binds no boolean and a STRICT table
+ * needs a declared class. That is the right storage decision and the wrong thing to report: a
+ * caller told the column is `boolean` and handed `1` has been given two answers to one
+ * question. Decoding is sound wherever the value is known to have come from a typed column,
+ * which is every value in a sample and every plain column reference in a query result.
+ */
+export function decodeValue(value: unknown, type: ColumnTypeName): unknown {
+  if (value === null || value === undefined) return null;
+  if (type === 'boolean') return value !== 0;
+  return value;
+}
+
+/**
+ * `min_value` and `max_value` back to the column's type.
+ *
+ * They are stored as TEXT for every column, because one STRICT column cannot hold the numbers,
+ * dates and strings that different columns produce. Reporting `"2"` for an `integer` column
+ * would recreate the disagreement `decodeValue` exists to end, so the parse lives here, beside
+ * the write that stringified them.
+ */
+function decodeBound(raw: string | null, type: ColumnTypeName): string | number | boolean | null {
+  if (raw === null) return null;
+  if (type === 'boolean') return raw === 'true' || raw === '1';
+  if (type === 'integer' || type === 'real') {
+    const parsed = Number(raw);
+    // A stored bound that will not parse is reported as it was stored rather than as `NaN`,
+    // which is not a value any caller can use and is not JSON either.
+    return Number.isFinite(parsed) ? parsed : raw;
+  }
+  return raw;
+}
+
+function statisticsOf(column: ColumnRow): StoredTableDescription['columns'][number]['statistics'] {
+  const type = column.type as ColumnTypeName;
+  const min = decodeBound(column.min_value, type);
+  const max = decodeBound(column.max_value, type);
+  return {
+    nullCount: column.null_count,
+    distinctEstimate: column.distinct_estimate,
+    distinctIsExact: column.distinct_is_exact === 1,
+    ...(min === null ? {} : { min }),
+    ...(max === null ? {} : { max }),
+  };
+}
+
+/**
  * `describeTable`, including the example rows.
  *
  * The sample is read through the *generated* column names and relabelled to the source names
- * on the way out, so a caller sees `Postal Code` while the query used `c_2_postal_code`.
+ * on the way out, so a caller sees `Postal Code` while the query used `c_2_postal_code`. The
+ * generated names are returned too: they are what a query has to use, and until #235 nothing
+ * reported them, so the SQL surface could not be reached from any documented output.
  */
 export function describeStoredTable(
   db: DatabaseSync,
@@ -318,20 +389,18 @@ export function describeStoredTable(
   return {
     tableId: table.id,
     name: table.name,
+    sqlName: table.sql_name,
     ...(table.sheet === null ? {} : { sheet: table.sheet }),
     columns: columns.map((column) => ({
       name: column.name,
+      sqlName: column.sql_name,
       type: column.type as ColumnTypeName,
       nullable: column.nullable === 1,
+      statistics: statisticsOf(column),
     })),
     rowCount: table.row_count,
     sample: sample.map((row) => relabel(row, columns)),
-    locator: {
-      artifactId: table.artifact_id,
-      relativePath: table.relative_path,
-      ...(table.line_start === null ? {} : { lineStart: table.line_start }),
-      ...(table.line_end === null ? {} : { lineEnd: table.line_end }),
-    },
+    locator: tableLocator(table),
   };
 }
 
@@ -340,6 +409,8 @@ function relabel(
   columns: readonly ColumnRow[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const column of columns) out[column.name] = row[column.sql_name] ?? null;
+  for (const column of columns) {
+    out[column.name] = decodeValue(row[column.sql_name], column.type as ColumnTypeName);
+  }
   return out;
 }

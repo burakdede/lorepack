@@ -229,7 +229,16 @@ describe('reading', () => {
     expect(listTableRows(db)).toEqual([{ tableId: 'a1#table', name: 'data' }]);
     const described = describeStoredTable(db, 'a1#table', 5);
     expect(described?.rowCount).toBe(2);
-    expect(described?.columns[1]).toEqual({ name: 'amount', type: 'integer', nullable: true });
+    expect(described?.columns[1]).toEqual({
+      name: 'amount',
+      sqlName: 'c_1_amount',
+      type: 'integer',
+      nullable: true,
+      // Reported, not merely stored. They reached no reader through the port until #235, and
+      // the bounds come back as numbers because the column is an integer, though the catalog
+      // holds them as text.
+      statistics: { nullCount: 1, distinctEstimate: 2, distinctIsExact: true, min: 1, max: 9 },
+    });
     // Provenance is mandatory, not decorative: a description without a locator is a bug.
     expect(described?.locator).toEqual({
       artifactId: 'a1',

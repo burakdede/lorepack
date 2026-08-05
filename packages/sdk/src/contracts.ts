@@ -110,16 +110,42 @@ export interface SourceReadResult {
   locator: SourceLocator;
 }
 
+/**
+ * What was measured about a column at import.
+ *
+ * `min` and `max` are typed to the column rather than to their storage: they are held as text
+ * in the catalog, because one column cannot hold the numbers, dates and strings that different
+ * columns produce, and are parsed back on the way out.
+ */
+export interface ColumnStatistics {
+  nullCount: number;
+  distinctEstimate: number;
+  /** Exact below a bounded cardinality, a lower bound above it. Never a guess. */
+  distinctIsExact: boolean;
+  min?: string | number | boolean | undefined;
+  max?: string | number | boolean | undefined;
+}
+
 export interface TableDescription {
   buildId: string;
   sourceState: SourceState;
   tableId: string;
   name: string;
+  /**
+   * The generated physical table name, which is what a query must address.
+   *
+   * Source names never reach SQL, so `SELECT * FROM "Orders"` is refused. This is what makes
+   * a description sufficient on its own to write a query that runs.
+   */
+  sqlName: string;
   sheet?: string | undefined;
   columns: Array<{
     name: string;
+    /** The generated column name, for the same reason as the table's. */
+    sqlName: string;
     type: 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'unknown';
     nullable: boolean;
+    statistics: ColumnStatistics;
   }>;
   rowCount: number;
   sample: Array<Record<string, unknown>>;

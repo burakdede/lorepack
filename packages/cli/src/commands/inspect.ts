@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { openReadOnly } from '@lorepack/backend-local';
+import { describeStoredTable, openReadOnly } from '@lorepack/backend-local';
 import {
   type BuildId,
   type BuildManifest,
@@ -21,6 +21,9 @@ import { buildDirectory, openStateStore, resolveBuildId } from '../services/buil
  * and keeps working after the sources are gone. That is what "transparent magic"
  * (architecture section 4.9) has to mean to be worth anything.
  */
+
+/** Example rows read for the detail view. The shape is the point, not a data preview. */
+const INSPECT_SAMPLE_ROWS = 5;
 
 const SUBJECTS = [
   'warnings',
@@ -437,10 +440,16 @@ function inspectChunks(loreDirectory: string, buildId: BuildId, path: string): C
 /**
  * The typed tables in a build: bare, a listing; with a table id or a path, one schema.
  *
- * This is the only way to see a table's shape until the SQL surface lands, and it is what
- * the runtime's own "no query yet" message points a user at, so it has to exist and has to
- * be worth reading. Columns come out in source order with their inferred types, because the
- * type is the decision a user is most likely to want to argue with.
+ * Columns come out in source order with their inferred types, because the type is the decision
+ * a user is most likely to want to argue with, and with the generated names, because those are
+ * what a `lore_query_table` call has to address.
+ *
+ * The detail view projects through `describeStoredTable`, the same function the runtime port
+ * serves `describeTable` from. It used to issue its own SQL and assemble its own columns, and
+ * the two drifted exactly as that arrangement invites: this command showed the per-column
+ * statistics while the model-facing surface silently dropped them (#235). Sharing the
+ * projection is what stops that recurring, so it is worth the read going through a function
+ * whose shape is set by the port rather than by this renderer.
  */
 function inspectTables(loreDirectory: string, buildId: BuildId, target: string): CommandResult {
   return withDatabase(loreDirectory, buildId, (db) => {
@@ -481,29 +490,39 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
       });
     }
 
-    const columns = db
-      .prepare(
-        `SELECT name, type, nullable, null_count AS nullCount,
-                distinct_estimate AS distinctEstimate, distinct_is_exact AS distinctIsExact,
-                min_value AS minValue, max_value AS maxValue
-           FROM table_columns WHERE table_id = ? ORDER BY ordinal`,
-      )
-      .all(String(table.id)) as Array<Record<string, string | number | null>>;
+    // The same projection the runtime port serves, rather than a second query that agrees
+    // until someone changes one of them.
+    const described = describeStoredTable(db, String(table.id), INSPECT_SAMPLE_ROWS);
+    if (described === null) {
+      throw new LoreError(
+        'LORE_E_INTERNAL',
+        `Table ${String(table.id)} is listed but unreadable.`,
+        {
+          remediation: 'The build directory may be damaged. Run `lore build` to compile it again.',
+          subject: String(table.id),
+        },
+      );
+    }
 
     const lines = [
-      `Table ${String(table.name)} (${String(table.relativePath)})`,
+      `Table ${described.name} (${described.locator.relativePath})`,
       '',
-      `  rows           ${String(table.rowCount)}`,
-      `  columns        ${String(columns.length)}`,
+      `  rows           ${String(described.rowCount)}`,
+      `  columns        ${String(described.columns.length)}`,
+      // The generated name, because a query has to address it and nothing else prints it.
+      `  sql name       ${described.sqlName}`,
       '',
-      '  column                          type      nulls   distinct  range',
+      '  column                          sql name              type      nulls   distinct  range',
     ];
-    for (const column of columns) {
-      const distinct = `${column.distinctIsExact === 1 ? '' : '>='}${String(column.distinctEstimate)}`;
+    for (const column of described.columns) {
+      const { statistics } = column;
+      const distinct = `${statistics.distinctIsExact ? '' : '>='}${String(statistics.distinctEstimate)}`;
       const range =
-        column.minValue === null ? '' : `${String(column.minValue)} .. ${String(column.maxValue)}`;
+        statistics.min === undefined
+          ? ''
+          : `${String(statistics.min)} .. ${String(statistics.max)}`;
       lines.push(
-        `  ${String(column.name).slice(0, 30).padEnd(30)}  ${String(column.type).padEnd(8)}  ${String(column.nullCount).padEnd(6)}  ${distinct.padEnd(8)}  ${range.slice(0, 40)}`,
+        `  ${column.name.slice(0, 30).padEnd(30)}  ${column.sqlName.slice(0, 20).padEnd(20)}  ${column.type.padEnd(8)}  ${String(statistics.nullCount).padEnd(6)}  ${distinct.padEnd(8)}  ${range.slice(0, 40)}`,
       );
     }
     // How the file was read is a judgement the build made, and a column typed unexpectedly
@@ -516,7 +535,10 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
       }
     }
 
-    return { human: lines.join('\n'), json: { buildId, table, columns, metadata } };
+    return {
+      human: lines.join('\n'),
+      json: { buildId, table: described, metadata },
+    };
   });
 }
 

@@ -19,6 +19,61 @@
           "nullable": {
             "type": "boolean"
           },
+          "sqlName": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "statistics": {
+            "additionalProperties": false,
+            "properties": {
+              "distinctEstimate": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "distinctIsExact": {
+                "description": "Exact below a bounded cardinality, a lower bound above it. Never a guess",
+                "type": "boolean"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "min": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "nullCount": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "nullCount",
+              "distinctEstimate",
+              "distinctIsExact"
+            ],
+            "type": "object"
+          },
           "type": {
             "enum": [
               "text",
@@ -33,8 +88,10 @@
         },
         "required": [
           "name",
+          "sqlName",
           "type",
-          "nullable"
+          "nullable",
+          "statistics"
         ],
         "type": "object"
       },
@@ -117,6 +174,10 @@
       ],
       "type": "string"
     },
+    "sqlName": {
+      "minLength": 1,
+      "type": "string"
+    },
     "tableId": {
       "minLength": 1,
       "type": "string"
@@ -127,6 +188,7 @@
     "sourceState",
     "tableId",
     "name",
+    "sqlName",
     "columns",
     "rowCount",
     "sample",

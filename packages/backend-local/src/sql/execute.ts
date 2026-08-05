@@ -218,17 +218,20 @@ function classify(message: string): LoreError {
       'The query touches something outside the table it was asked about.',
       {
         remediation:
-          'A query may read the table named in the request and call ordinary SQL functions. It cannot read other tables, the build catalog, or anything on this machine. Run `lore inspect tables` to see what a build contains.',
+          'A query may read the table named in the request and call ordinary SQL functions. It cannot read other tables, the build catalog, or anything on this machine. Call `describeTable` for the `sqlName` this table is addressed by, or `lore inspect tables` to see what a build contains.',
       },
     );
   }
-  if (/no such table/i.test(message)) {
+  if (/no such table|no such column/i.test(message)) {
     return new LoreError(
       'LORE_E_SQL_REJECTED',
-      'The query names a table this build does not expose.',
+      'The query names a table or column this build does not expose.',
       {
+        // Names the field to read, not just the command. Until #235 this said "use
+        // describeTable to see the exact names", and describeTable returned the source names,
+        // which are precisely the ones that do not work.
         remediation:
-          'Use `describeTable` first, or `lore inspect tables`, to see the exact table and column names. They are generated, so they are rarely what a source file called them.',
+          'Call `describeTable` and use the `sqlName` it reports for the table and for each column. Source names never reach SQL: a sheet called Orders is queried as `t_orders_<hash>` and its `sku` column as `c_0_sku`.',
       },
     );
   }

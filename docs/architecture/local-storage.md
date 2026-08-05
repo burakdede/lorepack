@@ -164,14 +164,48 @@ count, distinct estimate, min and max) recorded at import so a description costs
 distinct count is exact below 10,000 values and a floor above it, and which of the two applies
 is a stored flag rather than something the caller has to guess.
 
+A description reports **both names** for the table and for every column: the one the source
+file used, and the generated `sqlName` a query has to address. That is what makes it sufficient
+on its own, and it was not true until #235: the description returned the source names, the
+query surface accepted only the generated ones, and the rejection message sent a caller back to
+the description. The capability was shipped and unreachable through any documented output.
+
+**Values are reported as the type the description declared, not as the class they are stored
+in.** A `boolean` column reads `true`, `false` and `null`, in the sample and in query results,
+even though it is held as `INTEGER`; `min` and `max` come back as numbers for a numeric column,
+even though they are held as text. The storage decisions above are right, and reporting them to
+a caller who was told the column is `boolean` would be giving two answers to one question.
+
+Decoding follows renaming: a query result column that can be matched to a catalog column is
+renamed *and* decoded, and an aliased or computed one is neither. One rule degrades
+predictably; two eventually disagree.
+
 The read-only authorizer is widened per build with that build's physical table names, read from
 the catalog and re-validated on the way out. It cannot be a static list, because the names
 depend on which files the build contains.
 
-`queryTable` is deliberately still refused. SQL over tables needs statement validation, a
-per-query authorizer and a deadline before user text reaches the engine; shipping an unguarded
-query because the plumbing happened to be in place is how a read-only boundary becomes a hole.
-Until then, `lore inspect tables` shows the schema, the statistics and how each file was read.
+### The locator, and where it lives
+
+Every part of a table's locator is a column on `tables`: `relative_path`, `sheet`, `line_start`,
+`line_end`, and `cell_range`. The last was added by #235, and the reason it is a column rather
+than a lookup into the parser-defined `metadata` blob is that a locator is a typed first-class
+concept: architecture section 10.8 requires a queried row to trace back to a sheet and a cell
+range, and that should not depend on a key one parser happens to write.
+
+`describeTable` and `queryTable` build it with the same function. They built it separately
+before, and disagreed exactly as that arrangement invites: `queryTable` reported the sheet and
+`describeTable` did not, so two responses about one table from one build named different places.
+
+### Schema versions, and why an old build is refused
+
+**A sealed build is never migrated.** Migrations run only against a writable database, and a
+build is opened read-only, so a build carries the schema it was written at forever.
+
+Opening one therefore checks it, against the migration files this binary ships rather than
+against a hand-kept number. A build older or newer than the code reading it is refused with
+`LORE_E_SCHEMA_MISMATCH` and told to run `lore build`. Without the check the first symptom is
+whatever statement happens to name a column that does not exist yet, from inside a query, with
+nothing to connect it to the cause.
 
 ### Querying a table
 
@@ -205,5 +239,6 @@ rather than trimmed. Every result carries the table's locator, including sheet a
 not allowed to see, so the message is replaced rather than wrapped. No path, no schema, no
 other project.
 
-`describeTable` is the preferred first step. Column names are generated, so they are rarely
-what the source file called them, and a query written against the source's names will not run.
+`describeTable` is the required first step, not merely the preferred one. Table and column
+names are generated, so a query written against the source's names does not run, and the
+`sqlName` fields a description returns are the only place those generated names appear.

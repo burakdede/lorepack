@@ -420,14 +420,26 @@ describe('lore inspect tables', () => {
       await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
       const parsed = JSON.parse(
         (await run(['--cwd', temp.root, '--json', 'inspect', 'tables', 'people.csv'])).stdout,
-      ) as { columns: { name: string; type: string }[]; metadata: Record<string, unknown> };
+      ) as {
+        // The runtime port's own shape since #235, rather than a second one assembled by
+        // this command, which is what let the two disagree about statistics.
+        table: { columns: { name: string; sqlName: string; type: string }[] };
+        metadata: Record<string, unknown>;
+      };
 
       // The identifier columns stayed text; only the genuinely numeric one is an integer.
-      expect(parsed.columns.map((column) => [column.name, column.type])).toEqual([
+      expect(parsed.table.columns.map((column) => [column.name, column.type])).toEqual([
         ['staff_id', 'text'],
         ['name', 'text'],
         ['zip', 'text'],
         ['salary', 'integer'],
+      ]);
+      // The generated names come with it, because they are what a query has to address.
+      expect(parsed.table.columns.map((column) => column.sqlName)).toEqual([
+        'c_0_staff_id',
+        'c_1_name',
+        'c_2_zip',
+        'c_3_salary',
       ]);
       // How it was read is recorded, so a type a user disagrees with can be argued about.
       expect(parsed.metadata.hasHeader).toBe(true);

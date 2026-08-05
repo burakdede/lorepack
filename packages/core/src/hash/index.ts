@@ -9,6 +9,7 @@ export {
   formatBuildId,
   isBuildId,
   resolveBuildIdPrefix,
+  SCHEMA_VERSION,
 } from './build-id.js';
 export {
   CANONICALIZATION_VERSION,

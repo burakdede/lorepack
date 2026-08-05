@@ -28,6 +28,7 @@ export const ERROR_CODES = {
   LORE_E_OBJECT_CORRUPT: 'A content-addressed object failed its checksum.',
   LORE_E_LOCKFILE_DRIFT: 'The lockfile would change, but the build was run with --frozen.',
   LORE_E_STALE_SOURCES: 'Sources changed and the project could not be rebuilt.',
+  LORE_E_SCHEMA_MISMATCH: 'A build was written at a catalog schema this version does not read.',
 
   // Concurrency (exit 4)
   LORE_E_LOCK_HELD: 'Another Lorepack process holds the project lock.',
@@ -77,6 +78,7 @@ const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_OBJECT_CORRUPT: EXIT_CODES.BUILD,
   LORE_E_LOCKFILE_DRIFT: EXIT_CODES.BUILD,
   LORE_E_STALE_SOURCES: EXIT_CODES.BUILD,
+  LORE_E_SCHEMA_MISMATCH: EXIT_CODES.BUILD,
   LORE_E_LOCK_HELD: EXIT_CODES.CONCURRENCY,
   LORE_E_SQL_REJECTED: EXIT_CODES.USER,
   LORE_E_LIMIT_EXCEEDED: EXIT_CODES.USER,

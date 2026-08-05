@@ -7,6 +7,23 @@ export const BUILD_ID_PREFIX = 'lore_' as const;
 export const DEFAULT_DISPLAY_LENGTH = 12 as const;
 
 /**
+ * The shape of the catalog inside a sealed build.
+ *
+ * Bumped whenever a build migration changes what a reader will find, because a sealed build is
+ * never migrated in place: migrations run only against a writable database, and a build is
+ * opened read-only. So a build carries the schema it was written at, forever, and a reader
+ * that assumed otherwise would fail deep inside SQLite rather than at the boundary.
+ *
+ * It lives here rather than beside the compiler because it is a build id input, and because
+ * the storage backend has to check it. Both would otherwise reach across a package boundary
+ * for a number.
+ *
+ * - 1: the original catalog (#15, #76).
+ * - 2: `tables.cell_range`, so a table's locator carries the range the parser recorded (#235).
+ */
+export const SCHEMA_VERSION = 2 as const;
+
+/**
  * Everything that legitimately changes build output, and nothing else. Architecture
  * section 11.4 fixes this list; adding a field here changes every build ID, so it is a
  * reviewed, format-affecting act.
