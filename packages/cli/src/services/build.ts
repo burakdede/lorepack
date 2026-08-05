@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildMigrationsDirectory,
@@ -55,7 +55,7 @@ import {
 import { parserFor } from '@lorepack/parsers';
 import { checkpoint } from './cancellation.js';
 import { type CachedParse, ParseCache } from './parse-cache.js';
-import { readBuildCatalog } from './project.js';
+import { isBuildReadable, readBuildCatalog } from './project.js';
 import { lockInputs } from './versions.js';
 
 /**
@@ -347,8 +347,45 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         canonicalRoots: canonicalRoots(parsed),
       });
 
+      /**
+       * Reuse only a build that is actually there and actually readable (#251).
+       *
+       * `state.getBuild` answers from `state.sqlite`, a separate database that stays perfectly
+       * intact while the build directory it points at is deleted, truncated, overwritten or
+       * left at a catalog schema this version does not read. Trusting the record alone made
+       * every one of those permanently unrecoverable: `lore build` reported "No changes" and
+       * the next read failed exactly as before, including when the failing read's own
+       * remediation was to run `lore build`.
+       */
       const existing = state.getBuild(buildId);
-      if (existing !== null) {
+      const reusable = existing !== null && isBuildReadable(loreDirectory, buildId);
+      if (existing !== null && !reusable) {
+        // Said out loud rather than rebuilt silently: someone whose build was removed by a
+        // disk, a sync tool or an ignore rule should learn that it was.
+        progress.diagnostic(
+          'warn',
+          `The recorded build ${buildId.slice(0, 17)} cannot be read, so it is being compiled again.`,
+        );
+        /**
+         * Clear the damaged directory, or sealing will decline to replace it.
+         *
+         * `sealCandidateDirectory` treats an existing id as a no-op, and its reasoning is
+         * right for a build that is intact: identical id means identical logical content, so
+         * there is nothing to write. It is exactly wrong here. The id still describes the
+         * content, and the bytes on disk are no longer that content, so the one case where
+         * replacing matters is the one case it refused (#251).
+         *
+         * Safe because unreadability was just established: there is nothing here to lose that
+         * is not already lost, and the candidate that replaces it is validated before it is
+         * sealed.
+         */
+        rmSync(join(loreDirectory, 'builds', buildId), {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+        });
+      }
+      if (reusable) {
         const activated = options.activate !== false && state.current()?.buildId !== buildId;
         if (activated) state.activate(buildId);
         return {

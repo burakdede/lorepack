@@ -26,6 +26,32 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 6. **Seal.** A single atomic rename moves the candidate into `.lore/builds/<build id>`.
 7. **Record and activate.** Activation is a pointer change in one transaction. With
    `--no-activate` it is skipped, leaving a verified build for CI to inspect or pack.
+## Recovering a damaged build
+
+`state.sqlite` records that a build exists. It says nothing about the directory that record
+points at, which is a separate file tree that a disk, a sync tool or a `.gitignore` miss can
+remove or corrupt on its own.
+
+Reuse used to trust the record alone, so a build whose database was deleted, truncated,
+overwritten, or written by an older Lorepack left the project **permanently unusable**:
+`lore build` reported "No changes" and the next read failed exactly as before. In the schema
+case the failing read's own remediation was to run `lore build`, so the product named an action
+that did nothing about a problem it had just diagnosed (#251).
+
+Three things make a rebuild the recovery it claims to be:
+
+1. **Reuse checks the build is readable**, not merely recorded, including that its catalog
+   schema is the one this binary reads.
+2. **Reading the previous build for reuse is best effort.** It is an optimisation, so a damaged
+   predecessor costs a full rebuild rather than taking the next build down with it.
+3. **The damaged directory is cleared before sealing.** `sealCandidateDirectory` treats an
+   existing id as a no-op, and that is right for an intact build: identical id means identical
+   logical content, so there is nothing to write. It is exactly wrong when the bytes on disk are
+   no longer that content, which is the one case where replacing matters.
+
+The rebuild says so rather than happening silently. Someone whose build was removed should learn
+that it was.
+
 
 ## Why the order matters
 
