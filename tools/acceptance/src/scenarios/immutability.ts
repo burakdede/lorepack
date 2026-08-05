@@ -141,8 +141,9 @@ export const IMMUTABILITY_SCENARIOS: readonly Scenario[] = [
       {
         action: 'corrupt',
         path: '{{archive}}',
-        offset: 1200,
-        describe: 'Flip every bit of one byte inside the archive',
+        member: 'context.sqlite',
+        offset: 64,
+        describe: 'Flip every bit of one byte inside the packed context database',
       },
       {
         action: 'run',

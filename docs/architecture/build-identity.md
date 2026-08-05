@@ -22,6 +22,26 @@ for it.
 | `embeddingProfile` | Complete profile, or `null`. Matching dimensions is not compatibility |
 | `canonicalRoots` | Artifacts, nodes, chunks, tables, objects |
 
+### Where `parserVersions` comes from
+
+Derived from the parser registry, `PARSERS`, by `parserVersions()` in
+`packages/cli/src/services/versions.ts`. Never written by hand.
+
+That distinction is not stylistic. It was a hand-written literal naming markdown and text
+until #234, and the five parsers Phase 5 added were never appended to it. The result was that
+bumping the XLSX parser's version and rebuilding a project full of spreadsheets produced a
+byte-identical build id: a parser fix could not invalidate the artifacts it changed, and
+`lore diff` reported no difference between two builds whose content genuinely differed.
+Deriving it makes registering a parser and recording its version one act rather than two that
+have to be kept in step.
+
+It records **every registered parser**, not only the ones a project used. The narrower rule is
+tempting, because it would mean adding a parser to Lorepack cannot disturb the id of a project
+containing no files of that type, but it fails on both counts. The lockfile is written during
+planning, before anything is parsed, so the contributing set is not known when it is needed.
+And the stability is imaginary: `compilerVersion` is already an input, and a release that adds
+a parser bumps it, so every id moves anyway.
+
 ## What stays out, deliberately
 
 Operational timestamps, machine name, absolute workspace path, temporary directory,

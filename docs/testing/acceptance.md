@@ -531,7 +531,7 @@ Starting point: 3 source files, already set up with `lore init` and `lore build`
    Expect: it succeeds, stdout mentions "manifest.json", "checksums.json", "context.sqlite".
 3. Run `lore pack --verify {{archive}}`.
    Expect: it succeeds, stdout mentions "is intact".
-4. Flip every bit of one byte inside the archive
+4. Flip every bit of one byte inside the packed context database
 5. Run `lore pack --verify {{archive}}`.
    Expect: it exits 2, the error is `LORE_E_OBJECT_CORRUPT`, stderr mentions "cannot be trusted".
 

@@ -151,11 +151,20 @@ export interface CloneStep extends StepBase {
   readonly as: string;
 }
 
-/** Flips one byte, to prove corruption is detected rather than assumed away. */
+/**
+ * Flips one byte, to prove corruption is detected rather than assumed away.
+ *
+ * `member` names a ZIP member and makes `offset` relative to that member's stored data.
+ * Prefer it over a bare file offset whenever the target is an archive. An absolute offset
+ * silently follows the layout: #234 lengthened `manifest.json` by five lines, which pushed
+ * byte 1200 out of the payload and into `checksums.json`, so the scenario went on failing
+ * for a different reason than the one it was written to prove.
+ */
 export interface CorruptStep extends StepBase {
   readonly action: 'corrupt';
   readonly path: string;
   readonly offset: number;
+  readonly member?: string;
 }
 
 /**
