@@ -21,6 +21,31 @@ disagree because differently tuned compilers produced them. `RANKING_WEIGHTS` in
 `@lorepack/core` is the one table, versioned by `RANKING_WEIGHTS_VERSION` so a benchmark
 can say which tuning it measured.
 
+
+## A citation names the coordinate its format has
+
+A PDF has pages and no lines. A Markdown file has lines and no pages. A spreadsheet has a sheet
+and a cell range. A locator carries whichever of those the format actually provides, and never
+one it does not.
+
+That sounds obvious and was not true. The chunker defaulted a missing line number to `1`, so
+every PDF chunk was cited at line 1 of a binary file, while the page the parser had recorded
+reached the node table and stopped, because `chunks` had no column for it and every search hit,
+context item and export citation is built from a chunk (#241).
+
+**An invented coordinate is worse than a missing one**, because it looks checkable. A reader
+following `contract.pdf:1` finds nothing and cannot tell whether the citation is wrong or they
+are.
+
+The pieces, so a new format knows what to fill in:
+
+| Where | What it carries |
+|---|---|
+| `NodeBuilder.add({ page })` | A parser puts the page on the node's **locator**, not only in `metadata` |
+| `Pending.lineStart` in the chunker | `null` for a format with no lines, never a default of 1 |
+| `chunks.page` | The first page a chunk covers, so a chunk spanning a break is cited at its start |
+| `SearchHit.locator` | Whichever the chunk had; the two are alternatives, not companions |
+
 ## The score is a heuristic, not a verdict
 
 A score says how well a chunk matches the words that were asked for. It is not a

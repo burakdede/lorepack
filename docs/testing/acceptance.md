@@ -434,7 +434,7 @@ Starting point: an empty directory, already set up with `lore init`.
 2. Every format reached a parser, and each one says which parser read it
    Expect: it succeeds, stdout mentions "runbook.md", "policy.html", "contract.pdf", "onboarding.docx".
 3. A phrase that appears only on the second page of the PDF is found
-   Expect: it succeeds, `hits[0].locator.relativePath` matches `/contract\.pdf/`, `hits[0].locator.headingPath[0]` is "Page 2".
+   Expect: it succeeds, `hits[0].locator.relativePath` matches `/contract\.pdf/`, `hits[0].locator.page` is 2, `hits[0].locator.headingPath[0]` is "Page 2", `hits[0].locator.lineStart` is absent.
 4. And a phrase that appears only in the DOCX
    Expect: it succeeds, `hits[0].locator.relativePath` matches `/onboarding\.docx/`.
 

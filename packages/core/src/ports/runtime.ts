@@ -35,6 +35,14 @@ export interface CatalogChunk {
   readonly relativePath: string;
   readonly displayPath: string;
   readonly headingPath: readonly string[];
+  /**
+   * The page, for a format whose only coordinate is a page.
+   *
+   * An alternative to the line range, not a companion to it. A PDF has pages and no lines; a
+   * Markdown file has lines and no pages. Carrying an invented one beside the real one is what
+   * made a PDF citation read as line 1 (#241).
+   */
+  readonly page: number | null;
   /** Source coordinates, one-based. Null where the format has no lines. */
   readonly lineStart: number | null;
   readonly lineEnd: number | null;

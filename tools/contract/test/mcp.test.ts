@@ -47,6 +47,7 @@ const HIT: CatalogSearchHit = {
   relativePath: 'guides/a.md',
   displayPath: 'guides/a.md',
   headingPath: ['Guides'],
+  page: null,
   lineStart: 3,
   lineEnd: 4,
   status: 'active',
