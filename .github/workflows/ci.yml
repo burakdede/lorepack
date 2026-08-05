@@ -60,6 +60,9 @@ jobs:
 
       - run: pnpm check:no-em-dash
 
+      - name: Nothing claims Lorepack detected a conflict
+        run: pnpm check:no-conflict-claims
+
       - run: pnpm check:counted-nouns
 
       - name: Every command the sources mention is registered
