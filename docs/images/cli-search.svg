@@ -6,7 +6,7 @@
   <text x="72" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">every result carries where it came from</text>
   <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
   <text x="20" y="54" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lore search "how long do we keep support transcripts"</text>
-  <text x="20" y="75" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_3f44f0c80968 (sources clean), 13 chunks indexed</text>
+  <text x="20" y="75" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_2fbbce0df75f (sources clean), 14 chunks indexed</text>
   <text x="20" y="96" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="117" fill="#9a9a9a" font-weight="400" xml:space="preserve"> 1. context/engineering/retention.md:5</text>
   <text x="20" y="138" fill="#9a9a9a" font-weight="400" xml:space="preserve">    Data retention &gt; Retention windows</text>

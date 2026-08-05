@@ -13,35 +13,52 @@ import { client } from './lib/api.js';
  * permanently. It reads like the label on a specimen: quiet, always present, unambiguous.
  */
 
+/**
+ * `needs` names a capability the build must declare for the link to appear.
+ *
+ * Only Tables has one. Section 15.5 asks for the view "when structured data exists", and the
+ * honest test for that is the capability list `describeBuild` already returns: a build
+ * declares `table-query` exactly when it imported a table. A second probe, such as calling
+ * `listTables` and counting, would be a different question that happens to agree today.
+ */
 const ROUTES = [
   { to: '/', label: 'Overview', end: true },
   { to: '/sources', label: 'Sources', end: false },
+  { to: '/tables', label: 'Tables', end: false, needs: 'table-query' },
   { to: '/playground', label: 'Playground', end: false },
   { to: '/versions', label: 'Versions', end: false },
   { to: '/diagnostics', label: 'Diagnostics', end: false },
 ] as const;
 
 export function App(): React.JSX.Element {
+  const build = useQuery({
+    queryKey: ['build'],
+    queryFn: ({ signal }) => client.describeBuild(signal),
+  });
+  const capabilities = build.data?.capabilities ?? [];
+
   return (
     <div className="app">
-      {/* First in the tab order, and the only way past a sticky header and five nav links
-          for someone navigating by keyboard. It lives here rather than in index.html so the
+      {/* First in the tab order, and the only way past a sticky header and the nav links for
+          someone navigating by keyboard. It lives here rather than in index.html so the
           component tests and the accessibility suite both see it. */}
       <a className="skip-link" href="#main">
         Skip to content
       </a>
       <BuildHeader />
       <nav className="nav" aria-label="Studio sections">
-        {ROUTES.map((route) => (
-          <NavLink
-            key={route.to}
-            to={route.to}
-            end={route.end}
-            className={({ isActive }) => (isActive ? 'nav-link nav-link-active' : 'nav-link')}
-          >
-            {route.label}
-          </NavLink>
-        ))}
+        {ROUTES.filter((route) => !('needs' in route) || capabilities.includes(route.needs)).map(
+          (route) => (
+            <NavLink
+              key={route.to}
+              to={route.to}
+              end={route.end}
+              className={({ isActive }) => (isActive ? 'nav-link nav-link-active' : 'nav-link')}
+            >
+              {route.label}
+            </NavLink>
+          ),
+        )}
       </nav>
       <main className="main" id="main">
         <Outlet />

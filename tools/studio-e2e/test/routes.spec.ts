@@ -307,3 +307,94 @@ test.describe('Diagnostics', () => {
     await expect(page.getByText('Node version')).toBeVisible();
   });
 });
+
+test.describe('Tables', () => {
+  test('shows the schema with the names a query has to use, and runs one', async ({
+    page,
+    session,
+    checkA11y,
+  }) => {
+    await page.goto(`${session.url}/#/tables`);
+
+    await expect(page.getByRole('heading', { name: 'Tables', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'pricing', level: 2 })).toBeVisible();
+
+    // The generated names, which are the whole reason this page is more than a preview: a
+    // query addresses `t_pricing_<hash>` and `c_0_sku`, never `pricing` and `sku` (#235).
+    const schema = page.getByRole('table', { name: 'pricing schema' });
+    await expect(schema).toContainText('c_0_sku');
+    await expect(schema).toContainText('c_1_list_price');
+
+    // Types survive to the screen as types. `discontinued` is a boolean, and the sample
+    // shows the word rather than the 1 it is stored as.
+    await expect(schema).toContainText('boolean');
+    const sample = page.getByRole('table', { name: 'pricing sample rows' });
+    await expect(sample).toContainText('true');
+    await expect(sample).toContainText('false');
+    // A missing price is written as a null, not left as an empty cell.
+    await expect(sample).toContainText('null');
+
+    // The console is prefilled with a statement that works, which is the difference between
+    // a console a person can use and one that only rewards knowing the answer already.
+    const sql = page.getByLabel('SQL');
+    await expect(sql).toHaveValue(/FROM t_pricing_/);
+
+    await page.getByRole('button', { name: 'Run query' }).click();
+    await expect(page.getByRole('table', { name: 'Query result' })).toContainText('A-1');
+    // Scoped to the console's own count: the shell has a live region too, announcing the
+    // active build, and `getByRole('status')` matches both.
+    await expect(page.locator('.console-count')).toContainText('3 rows');
+
+    await checkA11y();
+  });
+
+  test('refuses a write and says which rule was broken', async ({ page, session }) => {
+    await page.goto(`${session.url}/#/tables`);
+    const sql = page.getByLabel('SQL');
+    await expect(sql).toHaveValue(/FROM t_pricing_/);
+
+    // The browser reaches the same validator the model-facing tool does, and the point of
+    // asserting it here is that the page shows the refusal rather than swallowing it.
+    await sql.fill('DELETE FROM t_pricing_x');
+    await page.getByRole('button', { name: 'Run query' }).click();
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('LORE_E_SQL_REJECTED');
+    await expect(alert).toContainText(/Only SELECT is allowed/i);
+  });
+
+  /**
+   * #210, applied to the thing most likely to repeat it.
+   *
+   * The audit on #82 named a query console and a result grid as the likeliest source of a
+   * page that pushes itself sideways, taking the navigation with it. A result grid is wider
+   * than the capped `.main` by construction, so the assertion is that it scrolls **inside its
+   * own box** while the document does not scroll at all.
+   */
+  for (const zoom of [1, 2]) {
+    test(`keeps the page from scrolling sideways at ${zoom === 1 ? '1280x720' : '200% zoom'}`, async ({
+      page,
+      session,
+    }) => {
+      await page.setViewportSize({ width: 1280 / zoom, height: 720 / zoom });
+      await page.goto(`${session.url}/#/tables`);
+      await expect(page.getByRole('table', { name: 'pricing schema' })).toBeVisible();
+
+      await page.getByRole('button', { name: 'Run query' }).click();
+      await expect(page.getByRole('table', { name: 'Query result' })).toBeVisible();
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(
+        overflow,
+        'the document scrolls sideways, which moves the navigation',
+      ).toBeLessThanOrEqual(0);
+
+      // And the navigation is still where it belongs, which is what a sideways page actually
+      // costs a reader.
+      const nav = await page.locator('.nav').boundingBox();
+      expect(nav?.x ?? -1).toBeGreaterThanOrEqual(0);
+    });
+  }
+});
