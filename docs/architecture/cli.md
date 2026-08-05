@@ -97,6 +97,29 @@ Two consequences worth keeping in mind:
 `--cwd` not mutating the process directory is deliberate: tests run commands in parallel
 against different temp projects, and a global mutation would make that flaky.
 
+## Environment variables
+
+`LORE_`-prefixed, and deliberately a short list rather than a general override channel. Every
+one of them is operational: none reaches the build id, so two machines that disagree about all
+of them still produce identical builds. `lore config` prints each with the layer it came from.
+
+| Variable | Effect | Default |
+|---|---|---|
+| `LORE_DEV_PORT` | Port `lore dev` listens on | 43110 |
+| `LORE_REVALIDATE_INTERVAL_MS` | How often a long-lived server rechecks freshness | see `serve` |
+| `LORE_LOCK_WAIT_MS` | How long a command waits for the project lock before reporting it held | 30000 |
+
+**On the lock wait.** Thirty seconds is how long a person will look at a command that appears
+to be doing nothing, which has nothing to do with how long a large project on a slow disk takes
+to build. The two came apart on a Windows CI runner, where a 500-document build outlasted the
+wait and the second command correctly reported the lock as held (#229). Raising the default
+would make a genuinely stale lock hang a session for longer, so the environment says what it is
+willing to wait for instead.
+
+An empty value is refused rather than read as zero. `Number('')` is 0, an unset variable
+expands to the empty string in a shell, and 0 means "do not wait at all": the opposite of what
+someone setting a wait wants, reached by writing nothing.
+
 ## Output contract
 
 With `--json`, **stdout carries the structured result and nothing else**. Progress,

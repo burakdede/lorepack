@@ -37,9 +37,20 @@ interface LockRecord {
   readonly hostname: string;
 }
 
+/**
+ * How long a command waits for the lock before reporting it as held.
+ *
+ * Exported so the value can be asserted rather than duplicated in a test, and so
+ * `LORE_LOCK_WAIT_MS` has something to be described against. It is a measure of how long a
+ * person will look at a command that appears to be doing nothing, not of how long a build
+ * takes: a large project on a slow disk legitimately exceeds it, which is what the
+ * environment variable is for (#229).
+ */
+export const DEFAULT_LOCK_WAIT_MS = 30_000;
+
 const DEFAULTS = {
   staleAfterMs: 5 * 60_000,
-  waitMs: 30_000,
+  waitMs: DEFAULT_LOCK_WAIT_MS,
   pollIntervalMs: 100,
 };
 

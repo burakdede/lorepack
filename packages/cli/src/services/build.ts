@@ -115,14 +115,48 @@ export interface BuildResult {
   readonly durationMs: number;
 }
 
+/**
+ * How long a command waits for the project lock, when the environment asks for something
+ * other than the shipped default.
+ *
+ * `LORE_LOCK_WAIT_MS` exists because 30 seconds is the right default and the wrong constant
+ * to have no way around (#229). It is the time a person is willing to look at a command that
+ * appears to be doing nothing, and it is unrelated to how long a large project on a slow disk
+ * legitimately takes to build. A Windows CI runner building a 500-document fixture exceeds it,
+ * and the honest fix is to let that environment say so rather than to make every session wait
+ * longer for a lock that is genuinely stuck.
+ *
+ * Operational, so it is an environment variable rather than configuration: it never reaches
+ * the build id, and two machines that disagree about it still produce identical builds.
+ */
+export function lockWaitFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): number | undefined {
+  const raw = environment.LORE_LOCK_WAIT_MS;
+  if (raw === undefined) return undefined;
+  // `Number('')` is 0, and 0 here means "do not wait at all", which is the opposite of what
+  // someone setting a wait wants. An unset variable expands to the empty string in a shell,
+  // so reaching that by accident is easy (#195 is the same trap on a different knob).
+  const value = raw.trim() === '' ? Number.NaN : Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      `LORE_LOCK_WAIT_MS must be a number of milliseconds, got ${raw}.`,
+      { remediation: 'Set it to milliseconds, or unset it to wait the default 30 seconds.' },
+    );
+  }
+  return value;
+}
+
 export async function runBuild(options: BuildOptions): Promise<BuildResult> {
   const { config, progress } = options;
   const now = options.now ?? (() => new Date());
   const startedAt = now();
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
 
+  const waitMs = options.lockWaitMs ?? lockWaitFromEnvironment();
   const lock = new ProjectLock(join(loreDirectory, 'lock'), {
-    ...(options.lockWaitMs === undefined ? {} : { waitMs: options.lockWaitMs }),
+    ...(waitMs === undefined ? {} : { waitMs }),
     onWait: ({ pid }) =>
       progress.diagnostic(
         'info',

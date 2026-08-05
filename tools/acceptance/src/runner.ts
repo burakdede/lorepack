@@ -76,12 +76,16 @@ export async function runScenario(
       ? stageInstall(repoRootOf(options.binary), join(root, 'installed')).binary
       : options.binary;
 
-  const lore = async (cwd: string, args: readonly string[]): Promise<Executed> => {
+  const lore = async (
+    cwd: string,
+    args: readonly string[],
+    env: Readonly<Record<string, string>> = {},
+  ): Promise<Executed> => {
     try {
       const { stdout, stderr } = await execute(process.execPath, [binary, '--cwd', cwd, ...args], {
         timeout: 600_000,
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: '1' },
+        env: { ...process.env, NO_COLOR: '1', ...env },
       });
       return { code: 0, stdout, stderr };
     } catch (error) {
@@ -168,7 +172,11 @@ interface StepContext {
   readonly project: string;
   readonly outside: string;
   readonly binary: string;
-  readonly lore: (cwd: string, args: readonly string[]) => Promise<Executed>;
+  readonly lore: (
+    cwd: string,
+    args: readonly string[],
+    env?: Readonly<Record<string, string>>,
+  ) => Promise<Executed>;
   readonly captures: Map<string, string>;
   readonly snapshots: Map<string, Snapshot>;
   readonly snapshot: () => Promise<Snapshot>;
@@ -296,9 +304,10 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
     }
 
     case 'concurrent': {
-      const background = start(step.background, context);
+      const environment = step.env ?? {};
+      const background = start(step.background, context, environment);
       await delay(step.afterMs);
-      const result = await context.lore(context.project, step.foreground);
+      const result = await context.lore(context.project, step.foreground, environment);
       const problems = check(result, step.expect, context);
       const first = await background;
       if (first.code !== 0) {
@@ -542,10 +551,14 @@ function sortKeys(value: unknown): unknown {
 }
 
 /** Starts a command and resolves when it exits, so another can run alongside it. */
-function start(args: readonly string[], context: StepContext): Promise<Executed> {
+function start(
+  args: readonly string[],
+  context: StepContext,
+  env: Readonly<Record<string, string>> = {},
+): Promise<Executed> {
   return new Promise<Executed>((resolve) => {
     const child = spawn(process.execPath, [context.binary, '--cwd', context.project, ...args], {
-      env: { ...process.env, NO_COLOR: '1' },
+      env: { ...process.env, NO_COLOR: '1', ...env },
     });
     let stdout = '';
     let stderr = '';

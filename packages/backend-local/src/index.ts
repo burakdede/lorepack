@@ -35,7 +35,7 @@ export {
   writeCatalog,
 } from './catalog/writer.js';
 export { assertFts5Available, type Fts5ProbeResult, probeFts5 } from './fts5.js';
-export { type LockOptions, ProjectLock } from './lock.js';
+export { DEFAULT_LOCK_WAIT_MS, type LockOptions, ProjectLock } from './lock.js';
 export {
   loadMigrations,
   type Migration,
