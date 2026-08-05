@@ -35,6 +35,7 @@
     "check:sources-tracked": "node scripts/check-sources-tracked.mjs",
     "bench": "pnpm build && node scripts/bench.mjs",
     "bench:retrieval": "pnpm build && node scripts/bench-retrieval.mjs",
+    "bench:envelope": "pnpm build && node scripts/bench-envelope.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",
     "build:studio": "pnpm --filter @lorepack/studio build",
     "check:studio-bundle": "node scripts/check-studio-bundle.mjs",

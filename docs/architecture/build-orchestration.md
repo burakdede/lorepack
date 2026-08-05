@@ -101,3 +101,31 @@ because a performance figure without its machine is not a measurement.
 
 Recorded 2026-08-01 on AMD Ryzen 9 3900X, 24 cores, 31 GB, Node 24.18.1, Linux x64. The
 committed run is `benchmarks/phase-1-dev-machine.json`.
+
+### At the envelope, 2026-08-05
+
+`pnpm bench:envelope` measures the corpus size section 5.4 calls supported, which the other two
+benchmarks deliberately do not: they use sixty and four hundred documents, chosen to make their
+own measurements meaningful. A number taken on sixty documents is not a number about 2,500 files.
+
+Same machine, 2,500 files and 39,010 chunks, in
+`benchmarks/envelope/reference-2026-08-05.json`:
+
+| Gate (section 5.5) | Target | Measured p95 |
+|---|---|---|
+| Fingerprint at 2,500 files | < 4,000 ms | 916 ms |
+| Single-document incremental rebuild | < 2,000 ms | **5,632 ms** |
+
+Deciding *what changed* across 2,500 files costs under a second. What costs is what happens
+after: sealing writes a whole new build database, because a build is immutable and
+content-addressed, so one edited document rewrites 39,010 chunk rows and the FTS5 index with
+them.
+
+That is a design question rather than a slow function, and it is #245. Making it fast by
+mutating the previous build in place would trade invariant 4 for the number.
+
+One trap worth knowing before writing any corpus generator: **chunks do not merge across
+headings**, so a corpus's chunk count tracks its heading count and not its byte count. A first
+version of this generator wrote 40 KB as roughly 230 tiny sections and produced 583,620 chunks
+from 2,500 files: eleven times the envelope's chunk figure at a tenth of its byte figure, which
+measures a corpus nobody has.
