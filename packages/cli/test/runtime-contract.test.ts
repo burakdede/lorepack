@@ -25,6 +25,21 @@ const CORPUS = {
     '# Deployment\n\n## Release\n\nA release goes out on Tuesday unless a freeze is in effect.\n',
 };
 
+/**
+ * A typed table in the fixture, so the contract's table invariants run rather than skip.
+ *
+ * Deliberately mixed: a nullable boolean and a real with a missing value are what turn
+ * "reports a value as the type it declared" into a real assertion, and they are the two the
+ * local backend got wrong (#235).
+ */
+const TABLE_CSV = [
+  'sku,list_price,discontinued',
+  'A-1,19.99,false',
+  'A-2,4.50,false',
+  'A-3,,true',
+  '',
+].join('\n');
+
 /** The project the current fixture is serving, so `activateAnother` can rebuild it. */
 let currentRoot = '';
 
@@ -35,6 +50,7 @@ runRuntimeContract({
     writeFileSync(join(root, 'lore.yaml'), CONFIG, 'utf8');
     writeFileSync(join(root, 'rollback.md'), CORPUS['guides/rollback.md'], 'utf8');
     writeFileSync(join(root, 'deployment.md'), CORPUS['guides/deployment.md'], 'utf8');
+    writeFileSync(join(root, 'pricing.csv'), TABLE_CSV, 'utf8');
     currentRoot = root;
 
     const config = loadConfig({ cwd: root });
@@ -45,6 +61,7 @@ runRuntimeContract({
       runtime: createRuntime(backend),
       knownArtifactId: 'rollback.md',
       matchingQuery: 'rollback',
+      knownTableId: 'contracted:pricing.csv#table',
       close: () => {
         backend.close();
         rmSync(root, { recursive: true, force: true, maxRetries: 3 });

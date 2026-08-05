@@ -12,6 +12,7 @@ import {
   type CatalogSearchCriteria,
   type CatalogSearchHit,
   type CatalogStore,
+  type ColumnTypeName,
   LORE_DIRECTORY,
   LoreError,
   type RuntimeDeps,
@@ -22,13 +23,16 @@ import {
 } from '@lorepack/core';
 import {
   assertIdentifier,
+  decodeValue,
   describeStoredTable,
   listTableRows,
   physicalTableNames,
   resolveTable,
+  tableLocator,
 } from './catalog/tables.js';
 import { countRows, RUNTIME_TABLES, searchCatalog } from './catalog/writer.js';
-import { stateMigrationsDirectory } from './migrations-path.js';
+import { loadMigrations } from './migrations.js';
+import { buildMigrationsDirectory, stateMigrationsDirectory } from './migrations-path.js';
 import { FileObjectStore } from './object-store.js';
 import { executeQuery } from './sql/execute.js';
 import { restrictToTables } from './sqlite.js';
@@ -189,10 +193,10 @@ const DESCRIBE_SAMPLE_ROWS = 5;
  * "tables are not implemented" should never have been distinguishable to a caller, and now
  * only the first can be true.
  *
- * `query` stays refused here. The SQL surface is #77, and it needs a statement validator, a
- * per-query authorizer and a deadline before any user text reaches the engine. Shipping the
- * catalog with an unguarded `query` because the plumbing happened to be in place is how a
- * read-only boundary becomes a hole, so the refusal names the ticket instead.
+ * `query` reaches the engine only behind #77's statement validator, per-query authorizer and
+ * deadline. It was refused outright until those existed, because shipping the catalog with an
+ * unguarded `query` since the plumbing happened to be in place is how a read-only boundary
+ * becomes a hole.
  */
 class LocalTableStore implements TableStore {
   readonly #db: DatabaseSync;
@@ -250,32 +254,38 @@ class LocalTableStore implements TableStore {
       rows: outcome.rows.map((row) => relabelRow(row, resolved.columns)),
       rowCount: outcome.rows.length,
       truncated: outcome.truncated,
-      // Provenance is mandatory: a result without a locator is a bug, not a style issue.
-      locator: {
-        artifactId: resolved.table.artifact_id,
-        relativePath: resolved.table.relative_path,
-        ...(resolved.table.sheet === null ? {} : { sheet: resolved.table.sheet }),
-        ...(resolved.table.line_start === null ? {} : { lineStart: resolved.table.line_start }),
-        ...(resolved.table.line_end === null ? {} : { lineEnd: resolved.table.line_end }),
-      },
+      // Provenance is mandatory: a result without a locator is a bug, not a style issue. Built
+      // by the same function `describeTable` uses, because building it twice is how the two
+      // came to disagree about the sheet (#235).
+      locator: tableLocator(resolved.table),
     } as TableQueryResult;
   }
 }
 
 /**
- * Generated column names back to the ones the source used.
+ * Generated column names back to the ones the source used, and stored values back to their
+ * declared types.
  *
  * A query may alias, aggregate or compute, so a returned column often has no counterpart in
  * the catalog. Those keep whatever SQLite called them; only a plain physical column is
  * translated, because that is the only case where a better name exists.
+ *
+ * Decoding follows the same rule rather than a second one. A column this can rename is a
+ * column whose declared type is known, which is exactly when reporting `true` instead of the
+ * stored `1` is sound; an expression is renamed by neither and decoded by neither. One rule
+ * degrades predictably, two would eventually disagree.
  */
 function relabelRow(
   row: Record<string, unknown>,
-  columns: readonly { name: string; sql_name: string }[],
+  columns: readonly { name: string; sql_name: string; type: string }[],
 ): Record<string, unknown> {
-  const bySqlName = new Map(columns.map((column) => [column.sql_name, column.name]));
+  const bySqlName = new Map(columns.map((column) => [column.sql_name, column]));
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) out[bySqlName.get(key) ?? key] = value;
+  for (const [key, value] of Object.entries(row)) {
+    const column = bySqlName.get(key);
+    out[column?.name ?? key] =
+      column === undefined ? value : decodeValue(value, column.type as ColumnTypeName);
+  }
   return out;
 }
 
@@ -302,6 +312,15 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
   const state = LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
   const provider = new LocalActiveBuildProvider(state, join(loreDirectory, 'builds'));
   const objects = new FileObjectStore(join(loreDirectory, 'objects'));
+  // Read once per backend rather than per request: the files on disk do not change while a
+  // process runs, and this is the yardstick every build opened by it is measured against.
+  const expectedMigration = latestMigrationId(loadMigrations(buildMigrationsDirectory()));
+  // Connections whose schema has been checked. Keyed by the connection rather than by build
+  // id, so a reopened build is checked again, and checked *before* the read-only authorizer
+  // narrows that connection: `schema_migrations` is deliberately outside the runtime's read
+  // surface, and widening that surface to accommodate a startup check would be the wrong
+  // trade. A sealed build cannot change under an open connection, so once is enough.
+  const schemaChecked = new WeakSet<DatabaseSync>();
   let closed = false;
 
   return {
@@ -309,6 +328,12 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
     open: async (handle: BuildHandle): Promise<BuildScope> => {
       const db = provider.database(handle);
+      // Before `restrictToTables` below, which is what makes reading `schema_migrations`
+      // possible at all without widening the read surface.
+      if (!schemaChecked.has(db)) {
+        assertBuildSchema(db, handle.buildId, expectedMigration);
+        schemaChecked.add(db);
+      }
       // Defence in depth, and not optional: the authorizer refuses every table outside the
       // read surface, so a defect in query construction cannot reach something it should
       // not. The list also permits `PRAGMA data_version`, which FTS5 reads internally and
@@ -349,4 +374,45 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
 function createdAt(state: LocalStateStore, buildId: string): string | null {
   const summary = state.listBuilds().find((build) => build.buildId === buildId);
   return summary?.createdAt ?? null;
+}
+
+function latestMigrationId(migrations: readonly { id: string }[]): string {
+  // Ids are fixed-width and zero-padded, so lexicographic order is numeric order.
+  return migrations.reduce((highest, one) => (one.id > highest ? one.id : highest), '0000');
+}
+
+/**
+ * Refuses a build written by an older Lorepack, at the boundary rather than inside SQLite.
+ *
+ * A sealed build is never migrated. Migrations run only against a writable database and a
+ * build is opened read-only, so a build carries the schema it was written at forever. Without
+ * this check the first symptom of reading an old build is whatever statement happens to name a
+ * column that did not exist yet: `no such column: cell_range`, from inside a query, with no
+ * indication that the cause is an old build or that rebuilding fixes it.
+ *
+ * Compared against the migration files this binary ships rather than against a hand-kept
+ * number, so a future migration is covered by having been added, with nothing else to remember.
+ *
+ * Deliberately one-directional. A build *newer* than this binary is refused by the same
+ * inequality, and should be: it may contain a table this code cannot read.
+ */
+function assertBuildSchema(db: DatabaseSync, buildId: string, expected: string): void {
+  const row = db.prepare('SELECT max(id) AS latest FROM schema_migrations').get() as
+    | { latest: string | null }
+    | undefined;
+  const actual = row?.latest ?? '0000';
+  if (actual === expected) return;
+
+  const older = actual < expected;
+  throw new LoreError(
+    'LORE_E_SCHEMA_MISMATCH',
+    `Build ${buildId.slice(0, 17)} was written at catalog schema ${actual}, and this Lorepack reads ${expected}.`,
+    {
+      remediation: older
+        ? 'Run `lore build` to compile this project again. A sealed build is never migrated in place, so an old one stays readable only by the version that wrote it.'
+        : 'This build was written by a newer Lorepack than the one installed. Upgrade Lorepack, or rebuild the project with this version.',
+      subject: buildId,
+      details: { expected, actual },
+    },
+  );
 }

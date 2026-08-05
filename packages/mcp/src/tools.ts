@@ -119,7 +119,7 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
     {
       title: 'Describe a table',
       description:
-        'Report a table its columns, types, row count and a small sample, with the sheet and cell range it came from. Prefer this before writing SQL.',
+        'Report a table its columns, types, per-column statistics, row count and a small sample, with the sheet and cell range it came from. Call this before writing SQL: it reports the `sqlName` of the table and of every column, which are the only names a query may use.',
       inputSchema: z.object({ tableId: z.string().min(1) }),
       outputSchema: tableDescriptionSchema,
       annotations: READ_ONLY,
@@ -132,7 +132,7 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
     {
       title: 'Query a table',
       description:
-        'Run one read-only SELECT against a build-owned table. Results carry the table and source provenance, and row and time limits apply.',
+        'Run one read-only SELECT against a build-owned table, addressing it by the `sqlName` values `lore_describe_table` reports rather than by the names the source file used. Results carry the table and source provenance, and row and time limits apply.',
       inputSchema: tableQueryRequestSchema,
       outputSchema: tableQueryResultSchema,
       annotations: READ_ONLY,

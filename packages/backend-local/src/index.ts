@@ -20,6 +20,12 @@ export {
   sealCandidateDirectory,
 } from './atomic.js';
 export {
+  decodeValue,
+  describeStoredTable,
+  listTableRows,
+  tableLocator,
+} from './catalog/tables.js';
+export {
   type CatalogArtifact,
   type CatalogChunk,
   type CatalogCounts,

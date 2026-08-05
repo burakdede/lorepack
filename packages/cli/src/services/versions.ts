@@ -1,3 +1,4 @@
+import { SCHEMA_VERSION } from '@lorepack/core';
 import { PARSERS } from '@lorepack/parsers';
 
 /**
@@ -7,7 +8,12 @@ import { PARSERS } from '@lorepack/parsers';
  * about which compiler or parser produced a build.
  */
 export const COMPILER_VERSION = '0.1.0' as const;
-export const SCHEMA_VERSION = 1 as const;
+
+/**
+ * Re-exported, not declared. It lives in core because the storage backend has to check a
+ * build's schema before reading it, and `backend-local` may not import the CLI.
+ */
+export { SCHEMA_VERSION };
 
 /**
  * Every registered parser and its version, derived rather than listed.

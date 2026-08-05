@@ -145,8 +145,42 @@ export const sourceReadResultSchema = z
   })
   .strict();
 
+/**
+ * What was measured about a column at import, so a description costs no scan.
+ *
+ * `min` and `max` are typed to the column, not to their storage. They are held as TEXT in the
+ * catalog because a STRICT table needs one storage class per column and these hold numbers,
+ * dates and strings depending on the row, but reporting `"2"` for an `integer` column would
+ * put the declared type and the reported value into exactly the disagreement this shape exists
+ * to end.
+ */
+export const columnStatisticsSchema = z
+  .object({
+    nullCount: z.int().nonnegative(),
+    distinctEstimate: z.int().nonnegative(),
+    distinctIsExact: z
+      .boolean()
+      .describe('Exact below a bounded cardinality, a lower bound above it. Never a guess'),
+    min: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    max: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  })
+  .strict();
+
 export const tableColumnSchema = z
-  .object({ name: z.string().min(1), type: columnTypeSchema, nullable: z.boolean() })
+  .object({
+    name: z.string().min(1),
+    /**
+     * The generated identifier a query must use for this column.
+     *
+     * Source names never reach SQL, so a caller writing `SELECT sku` is refused. Returning the
+     * generated name is what makes `describeTable` sufficient on its own to write a query that
+     * runs; before #235 nothing returned it and the surface could not be used as documented.
+     */
+    sqlName: z.string().min(1),
+    type: columnTypeSchema,
+    nullable: z.boolean(),
+    statistics: columnStatisticsSchema,
+  })
   .strict();
 
 export const tableDescriptionSchema = z
@@ -154,6 +188,8 @@ export const tableDescriptionSchema = z
     ...responseEnvelope,
     tableId: z.string().min(1),
     name: z.string().min(1),
+    /** The generated physical table name, for the same reason as `tableColumn.sqlName`. */
+    sqlName: z.string().min(1),
     sheet: z.string().optional(),
     columns: z.array(tableColumnSchema),
     rowCount: z.int().nonnegative(),

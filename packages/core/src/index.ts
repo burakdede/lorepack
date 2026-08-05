@@ -50,6 +50,7 @@ export {
   isBuildId,
   objectKey,
   resolveBuildIdPrefix,
+  SCHEMA_VERSION,
   sha256Hex,
 } from './hash/index.js';
 export type * from './model/index.js';
