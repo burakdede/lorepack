@@ -245,14 +245,20 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
 
     case 'corrupt': {
       const target = resolveInProject(context.project, fill(step.path, context.captures));
+      let at = step.offset;
+      if (step.member !== undefined) {
+        const start = zipMemberDataOffset(target, step.member);
+        if (start === null) return [`${context.where}: ${target} has no member ${step.member}`];
+        at = start + step.offset;
+      }
       // Every bit flipped rather than a byte zeroed: writing 0x00 over a byte that is
       // already 0x00 corrupts nothing and would make the scenario pass for the wrong reason.
       const handle = openSync(target, 'r+');
       try {
         const byte = Buffer.alloc(1);
-        readSync(handle, byte, 0, 1, step.offset);
+        readSync(handle, byte, 0, 1, at);
         byte[0] = (byte[0] ?? 0) ^ 0xff;
-        writeSync(handle, byte, 0, 1, step.offset);
+        writeSync(handle, byte, 0, 1, at);
       } finally {
         closeQuietly(handle);
       }
@@ -792,4 +798,33 @@ function closeQuietly(handle: number): void {
   } catch {
     // Nothing useful to do with a failed close in a temp directory.
   }
+}
+
+/**
+ * Where one member's stored bytes begin, by scanning local file headers.
+ *
+ * Enough ZIP to find a payload, and no more: this exists so a corruption scenario can say
+ * "inside context.sqlite" instead of "at byte 1200", and stay true when a member above it
+ * changes size.
+ *
+ * Only local headers are read, never the central directory, because the central directory is
+ * exactly what a scenario might be corrupting. Our packer writes every member with a known
+ * size and a fixed mtime, so no member carries a data descriptor and the compressed size is
+ * always present in the local header.
+ */
+function zipMemberDataOffset(archive: string, member: string): number | null {
+  const bytes = readFileSync(archive);
+  const LOCAL_HEADER = 0x04034b50;
+  let at = 0;
+
+  while (at + 30 <= bytes.length && bytes.readUInt32LE(at) === LOCAL_HEADER) {
+    const compressedSize = bytes.readUInt32LE(at + 18);
+    const nameLength = bytes.readUInt16LE(at + 26);
+    const extraLength = bytes.readUInt16LE(at + 28);
+    const name = bytes.toString('utf8', at + 30, at + 30 + nameLength);
+    const data = at + 30 + nameLength + extraLength;
+    if (name === member) return data;
+    at = data + compressedSize;
+  }
+  return null;
 }
