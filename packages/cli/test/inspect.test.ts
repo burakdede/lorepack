@@ -86,8 +86,11 @@ describe('lore inspect exclusions', () => {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('drafts/');
         expect(result.stdout).toContain('.loreignore');
-        expect(result.stdout).toContain('drafts/one.md');
-        expect(result.stdout).toContain('drafts/two.md');
+        // The directory is reported once, not file by file (#209). Discovery prunes an
+        // excluded directory and never looks inside, so naming `drafts/one.md` here would
+        // report a path the walk never saw. On a `node_modules` it would be a listing of
+        // somebody's dependency tree.
+        expect(result.stdout).not.toContain('drafts/one.md');
       },
     );
   });
@@ -113,7 +116,7 @@ describe('lore inspect exclusions', () => {
           (one: { pattern: string }) => one.pattern === 'drafts/',
         );
         expect(drafts.count).toBe(1);
-        expect(drafts.sample).toEqual(['drafts/one.md']);
+        expect(drafts.sample).toEqual(['drafts/']);
         expect(parsed.total).toBe(
           parsed.exclusions.reduce((sum: number, one: { count: number }) => sum + one.count, 0),
         );
@@ -139,7 +142,7 @@ describe('lore inspect exclusions', () => {
 
         const result = await run(['--cwd', temp.root, 'inspect', 'exclusions']);
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('drafts/one.md');
+        expect(result.stdout).toContain('drafts/');
       },
     );
   });

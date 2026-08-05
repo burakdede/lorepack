@@ -193,8 +193,11 @@ describe('what an ignore rule removed', () => {
 
         expect(drafts).toBeDefined();
         expect(drafts?.source).toBe('.loreignore');
-        expect(drafts?.count).toBe(2);
-        expect(drafts?.sample).toEqual(['drafts/one.md', 'drafts/two.md']);
+        // One entry, naming the directory, not one per file inside it (#209). The walk
+        // genuinely did not look in, so reporting two files would be reporting something
+        // discovery never saw, and on a `node_modules` it would be two hundred thousand.
+        expect(drafts?.count).toBe(1);
+        expect(drafts?.sample).toEqual(['drafts/']);
 
         expect(exclusions.find((one) => one.pattern === '*.tmp')?.sample).toEqual(['scratch.tmp']);
       },
@@ -228,19 +231,86 @@ describe('what an ignore rule removed', () => {
     );
   });
 
+  /**
+   * The cap is exercised with a **file** pattern rather than a directory one, since #209:
+   * a directory rule now prunes and reports one entry, so it can no longer produce a long
+   * sample. A pattern that matches many files still can, and that is the case the cap exists
+   * for.
+   */
   it('caps the sample, so one rule cannot become a second listing of the corpus', async () => {
-    const files: Record<string, string> = { 'a.md': '#', '.loreignore': 'bulk/\n' };
+    const files: Record<string, string> = { 'a.md': '#', '.loreignore': '*.tmp\n' };
     for (let index = 0; index < 40; index += 1) {
-      files[`bulk/file-${String(index).padStart(3, '0')}.md`] = '#';
+      files[`file-${String(index).padStart(3, '0')}.tmp`] = 'x';
     }
 
     await withProject(files, (root) => {
-      const bulk = discoverIn(root).exclusions.find((one) => one.pattern === 'bulk/');
-      // The count is exact and the sample is bounded: a dependency tree of 200,000 files is
-      // one decision to report, not 200,000 rows to store in a build.
+      const bulk = discoverIn(root).exclusions.find((one) => one.pattern === '*.tmp');
       expect(bulk?.count).toBe(40);
       expect(bulk?.sample).toHaveLength(EXCLUSION_SAMPLE_LIMIT);
     });
+  });
+
+  /**
+   * #209: an excluded directory is not descended into.
+   *
+   * The **exclusion count is the direct assertion**, not a proxy for one. A record is written
+   * per path the walk decides about, so a walked `node_modules` of fifty files produces fifty
+   * records and a pruned one produces a single record naming the directory. Fifty against one
+   * is the walk, observed through the only artefact it leaves behind.
+   *
+   * Spying on `node:fs` would be the obvious alternative and is not possible: an ESM module
+   * namespace is not configurable, so `vi.spyOn(fs, 'readdirSync')` throws rather than
+   * observing anything.
+   */
+  it('does not look inside a directory a rule excluded', async () => {
+    const files: Record<string, string> = { 'a.md': '#', '.loreignore': 'node_modules/\n' };
+    for (let index = 0; index < 50; index += 1) {
+      files[`node_modules/pkg-${String(index)}/index.md`] = '#';
+    }
+
+    await withProject(files, (root) => {
+      const result = discoverIn(root);
+      const pruned = result.exclusions.find((one) => one.pattern === 'node_modules/');
+      expect(pruned?.count).toBe(1);
+      expect(pruned?.sample).toEqual(['node_modules/']);
+      expect(result.artifacts.map((artifact) => artifact.relativePath)).toEqual(['a.md']);
+    });
+  });
+
+  /**
+   * The divergence #209 asked to resolve, decided in favour of git and asserted rather than
+   * left incidental. `drafts/**` names the *contents* of `drafts`, not the directory, so it
+   * does not prune and a negation beneath it still works. `drafts/` names the directory, so
+   * it does prune, and git says a negation cannot reach inside one. Both directions matter:
+   * pruning on any match would have silently broken the first.
+   */
+  it('prunes a directory named by a rule, and not one whose contents were named', async () => {
+    await withProject(
+      {
+        'drafts/keep.md': '#',
+        'drafts/skip.md': '#',
+        '.loreignore': 'drafts/**\n!drafts/keep.md\n',
+      },
+      (root) => {
+        expect(discoverIn(root).artifacts.map((one) => one.relativePath)).toEqual([
+          'drafts/keep.md',
+        ]);
+      },
+    );
+
+    await withProject(
+      {
+        'a.md': '#',
+        'drafts/keep.md': '#',
+        '.loreignore': 'drafts/\n!drafts/keep.md\n',
+      },
+      (root) => {
+        // The directory itself was excluded, so nothing under it is reachable. This is
+        // gitignore's documented behaviour, and following it is what keeps the walking layer
+        // and the matching layer from disagreeing.
+        expect(discoverIn(root).artifacts.map((one) => one.relativePath)).toEqual(['a.md']);
+      },
+    );
   });
 
   it('leaves the directory Lorepack owns out of the record', async () => {
