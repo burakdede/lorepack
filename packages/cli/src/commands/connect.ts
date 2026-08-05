@@ -164,6 +164,7 @@ export function disconnectCommand(): CommandDefinition {
         await connector.remove({
           clientId: connector.id,
           scope,
+          projectRoot: config.projectRoot,
           serverName: SERVER_NAME,
           configPath: plan.configPath,
           connectedAt: new Date().toISOString(),

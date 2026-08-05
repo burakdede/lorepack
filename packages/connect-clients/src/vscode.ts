@@ -172,6 +172,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
       return {
         clientId: VSCODE_ID,
         scope: input.scope,
+        projectRoot: input.projectRoot,
         configPath: path,
         changes,
         entry,
@@ -193,7 +194,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
       const backupPath = backup(path);
       const text = withOwnedEntry(config, {
         path: entryPath(plan.serverName),
-        projectRoot: projectRootOf(plan),
+        projectRoot: plan.projectRoot,
         value: plan.entry,
         removeWith: 'lore disconnect vscode',
       });
@@ -202,6 +203,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
       return {
         clientId: VSCODE_ID,
         scope: plan.scope,
+        projectRoot: plan.projectRoot,
         serverName: plan.serverName,
         configPath: path,
         ...(backupPath === undefined ? {} : { backupPath }),
@@ -247,12 +249,6 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
       writeTextAtomically(path, text);
     },
   };
-}
-
-/** The project a plan belongs to, taken from the path it targets rather than recomputed. */
-function projectRootOf(plan: ConnectPlan): string {
-  const path = plan.configPath ?? '';
-  return path.split(/[\\/]/).slice(0, -2).join('/');
 }
 
 /**

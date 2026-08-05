@@ -151,6 +151,7 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       return {
         clientId: CLAUDE_CODE_ID,
         scope: input.scope,
+        projectRoot: input.projectRoot,
         configPath: path,
         changes,
         entry,
@@ -183,6 +184,7 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       return {
         clientId: CLAUDE_CODE_ID,
         scope: plan.scope,
+        projectRoot: plan.projectRoot,
         serverName: plan.serverName,
         configPath: path,
         ...(backupPath === undefined ? {} : { backupPath }),
