@@ -48,7 +48,11 @@ export interface ResolvedConfiguration {
 }
 
 /** `LORE_`-prefixed, and deliberately a short list rather than a general override channel. */
-export const ENVIRONMENT_KEYS = ['LORE_DEV_PORT', 'LORE_REVALIDATE_INTERVAL_MS'] as const;
+export const ENVIRONMENT_KEYS = [
+  'LORE_DEV_PORT',
+  'LORE_REVALIDATE_INTERVAL_MS',
+  'LORE_LOCK_WAIT_MS',
+] as const;
 
 /** Anything whose name looks like a credential is redacted rather than printed. */
 const SECRET_PATTERN = /token|secret|password|key|credential/i;

@@ -126,6 +126,30 @@ export const SCALE_SCENARIOS: readonly Scenario[] = [
         background: ['build'],
         foreground: ['build'],
         afterMs: 1200,
+        /**
+         * The lock wait is raised for this scenario, and that is a fix rather than a nudge
+         * (#229).
+         *
+         * This scenario needs one build to still hold the lock 1,200 ms in, and the next to
+         * wait for it and then succeed. Those two put the fixture size in a vice: large
+         * enough to still be parsing on a fast Linux runner, small enough to finish inside
+         * the wait on a slow Windows one. The shipped default is 30 seconds, a 500-document
+         * build on `windows-latest` exceeds it, and the foreground command correctly reported
+         * the lock as held. It failed two of the last three `main` runs.
+         *
+         * Raising the product default was the wrong answer: 30 seconds is already a long time
+         * to look stuck, and the timeout exists so a genuinely stale lock does not hang a
+         * session. Shrinking the fixture was the wrong answer too, because it only moves the
+         * vice: the two ends are about a factor of ten apart today and the next slower runner
+         * puts it back.
+         *
+         * So the environment says how long it is willing to wait, the product keeps its
+         * honest default, and what this scenario asserts is the **behaviour**: the second
+         * command announces the wait, waits, and then succeeds. `DEFAULTS.waitMs` is covered
+         * where it belongs, in the lock's own unit tests, rather than by a race against a
+         * CI runner's disk.
+         */
+        env: { LORE_LOCK_WAIT_MS: '300000' },
         describe: 'Start a build, then start a second one while the first is still parsing',
         expect: {
           exitCode: 0,

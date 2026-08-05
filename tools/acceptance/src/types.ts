@@ -228,6 +228,8 @@ export interface ConcurrentStep extends StepBase {
   /** Delay before the second command starts, so the first is past its own startup. */
   readonly afterMs: number;
   readonly expect?: Expect;
+  /** Environment for both commands, for a knob that has no flag. */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 /**
