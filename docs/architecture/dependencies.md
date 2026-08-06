@@ -38,6 +38,8 @@ Two constraints bound every choice:
 | parsers | `sax` | 1.6.1 | Streaming XML for the read-only XLSX reader. Checked 2026-08-04: BlueOak-1.0.0, **zero dependencies**, 80 KB unpacked, no native code, no post-install script, published 2026-07-24, 85.5M weekly downloads. It is here because **no maintained XLSX library met the requirements**: the capable one is unmaintained and ships a permanent advisory, the maintained one cannot return formula text. Streaming matters twice over: it is what keeps the 500,000-row envelope at 85 MB rather than 297 MB, and refusing a `DOCTYPE` at the parser is the entity-expansion defence section 20.9 asks for. The reasoning and the measurements are in [`adr-xlsx-parser.md`](./adr-xlsx-parser.md). |
 | runtime | `hono` | 4.12.33 | The HTTP surface. Chosen in architecture 8.5 because the same route handlers run on Node and on a Worker, which is what makes the Phase 6 projection a configuration change rather than a rewrite. Checked 2026-08-03: MIT, zero runtime dependencies, 1.36 MB unpacked, no native code, no post-install script, last release three days earlier. The zero-dependency part matters most: an HTTP framework is the usual place a transitive tree arrives. |
 
+| deploy-cloudflare (**dev only**) | `wrangler`, `miniflare` | 4.119.0, 5.20260801.0-alpha | Running a Worker with D1 and R2 bindings **locally**, so the Phase 6 projection is built and tested without a Cloudflare account. Checked 2026-08-06: MIT/Apache-2.0. Dev-only is the whole justification: invariant 7 constrains what a *user* installs, and neither ever reaches a published package. `workerd` is native and ships a post-install script, declined in `pnpm-workspace.yaml` exactly as esbuild's is, because its binary arrives through `@cloudflare/workerd-<platform>` optional dependencies instead; verified by starting a Worker with live bindings with the script refused. Admitting these is what narrowed `check:no-native` to the published closure (#256), so `packages/deploy-cloudflare/test/emulator.test.ts` exists to prove the thing that bought is real. Miniflare's alpha is the version pairing with this wrangler; it is a test harness, so an alpha costs a broken test rather than a broken build. |
+
 `node:sqlite`, `node:crypto` and `node:zlib` are used directly and are deliberately not
 dependencies. That is the reason the supported Node floor is 24.15: see
 [`docs/compatibility/sqlite-fts5.md`](../compatibility/sqlite-fts5.md).
@@ -45,7 +47,13 @@ dependencies. That is the reason the supported Node floor is 24.15: see
 ## Adding one
 
 Before adding a dependency, check and record: last release, open CVEs, licence, install
-weight, whether it ships native code, and whether it runs a post-install script. Then add a
+weight, whether it ships native code, and whether it runs a post-install script.
+
+**Native code is judged by who installs it.** `check:no-native` guards the production closure of
+the published packages, which is what a user gets. A dev-only tool that ships a binary is
+allowed, and a published package that takes one is not, whatever it is for. The guard's own
+tests are in `tools/arch/test/no-native.test.ts`, and the assertion that matters there is the
+mutation: declare a native dependency on a published package and watch it fail. Then add a
 row above with the capability it provides, not the problem it solves in general. If an
 existing dependency or a Node builtin can do the job, that is the answer.
 

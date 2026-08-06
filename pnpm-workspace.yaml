@@ -15,6 +15,17 @@ packages:
 # contributor's machine, which is the promise `check:no-native` exists to keep.
 allowBuilds:
   esbuild: false
+  sharp: set this to true or false
+  # Same story as esbuild, verified 2026-08-06. `workerd` is the Cloudflare runtime Miniflare
+  # embeds; it is a dev dependency of the deployment work only and never reaches a user. Its
+  # binary arrives through `@cloudflare/workerd-<platform>` optional dependencies rather than
+  # through the script, so declining it costs nothing: `wrangler --version` and a Worker with
+  # live D1 and R2 bindings both work with it refused.
+  workerd: false
+
+minimumReleaseAgeExclude:
+  - miniflare@5.20260801.0-alpha
+  - wrangler@4.119.0
 
 # pdfjs-dist declares `@napi-rs/canvas` as an optionalDependency and reaches for it at
 # runtime if it is present. It is only needed to *render* a page, which Lorepack never does:

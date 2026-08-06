@@ -20,7 +20,8 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
     "@lorepack/core": "workspace:*"
@@ -29,5 +30,8 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/deploy-cloudflare"
+  },
+  "devDependencies": {
+    "miniflare": "5.20260801.0-alpha"
   }
 }
