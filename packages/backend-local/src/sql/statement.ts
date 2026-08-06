@@ -26,6 +26,90 @@ export interface ValidatedStatement {
   readonly hasLimit: boolean;
 }
 
+/**
+ * Words that genuinely begin a SQL statement, allowed here or not.
+ *
+ * The point of the list is to tell a **write** from a **typo**, so it is deliberately the
+ * statement verbs rather than every SQL keyword: anything outside it is a misspelling as far
+ * as a first word is concerned.
+ */
+const STATEMENT_KEYWORDS = new Set([
+  'select',
+  'with',
+  'insert',
+  'update',
+  'delete',
+  'replace',
+  'drop',
+  'create',
+  'alter',
+  'attach',
+  'detach',
+  'pragma',
+  'begin',
+  'commit',
+  'rollback',
+  'savepoint',
+  'release',
+  'vacuum',
+  'analyze',
+  'reindex',
+  'explain',
+]);
+
+/** The closest statement keyword within one edit, or null when nothing is close enough. */
+function nearestKeyword(word: string): string | null {
+  for (const keyword of STATEMENT_KEYWORDS) {
+    if (withinOneEdit(word, keyword)) return keyword;
+  }
+  return null;
+}
+
+/**
+ * Whether one word becomes the other by a single insertion, deletion, substitution or swap of
+ * two adjacent letters.
+ *
+ * One edit, not a similarity score: a suggestion is only useful when it is almost certainly
+ * what the person meant, and `SELEC` for `SELECT` is that. Anything looser starts guessing.
+ *
+ * The adjacent swap is included because it is the typo people actually make. Without it `WTIH`
+ * is two substitutions away from `WITH` and gets no suggestion, which is the commonest case
+ * left unhelped.
+ */
+function withinOneEdit(a: string, b: string): boolean {
+  if (a.length === b.length) {
+    for (let index = 0; index < a.length - 1; index += 1) {
+      if (a[index] === b[index]) continue;
+      const swapped = `${a.slice(0, index)}${a[index + 1] ?? ''}${a[index] ?? ''}${a.slice(index + 2)}`;
+      return swapped === b;
+    }
+  }
+  return withinOneSimpleEdit(a, b);
+}
+
+function withinOneSimpleEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (a.length < b.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 export function validateStatement(sql: string): ValidatedStatement {
   const stripped = stripCommentsAndStrings(sql);
   assertSingleStatement(stripped, sql);
@@ -38,6 +122,26 @@ export function validateStatement(sql: string): ValidatedStatement {
     );
   }
   if (!ALLOWED_LEADING.has(keyword)) {
+    /**
+     * A typo is not an attempted write, and saying so matters.
+     *
+     * `SELEC * FROM t` used to be refused with "Only SELECT is allowed here, and this
+     * statement begins with SELEC", plus a remediation explaining that the surface is
+     * read-only by design. Both sentences are about a rule the user did not break, and a
+     * reader would reasonably conclude their SELECT had been rejected as a write.
+     *
+     * A word that is not a SQL statement keyword at all is a misspelling; a word that is one
+     * is a genuine write. They deserve different sentences.
+     */
+    if (!STATEMENT_KEYWORDS.has(keyword)) {
+      const suggestion = nearestKeyword(keyword);
+      throw refuse(
+        `A statement must begin with SELECT or WITH, and this one begins with ${keyword.toUpperCase()}, which is not a SQL keyword.`,
+        suggestion === null
+          ? 'Check the spelling of the first word.'
+          : `Did you mean ${suggestion.toUpperCase()}?`,
+      );
+    }
     throw refuse(
       `Only SELECT is allowed here, and this statement begins with ${keyword.toUpperCase()}.`,
       'This surface is read-only by design: no model-facing tool may write, and nothing here can be made to. Use a SELECT, or `lore inspect tables` to see what a build contains.',
