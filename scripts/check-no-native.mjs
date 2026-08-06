@@ -48,11 +48,18 @@ for (const file of ours) {
  * `test/no-native.test.ts` does exactly that.
  */
 function publishedClosure() {
+  // `shell: true` on Windows, where `pnpm` is a `.cmd` shim that `execFileSync` cannot execute
+  // directly. Without it this passed on macOS and Linux and failed on `windows-latest` with a
+  // spawn error carrying no useful message, which is the shape of most Windows CI surprises.
   const listed = JSON.parse(
     execFileSync(
       'pnpm',
       ['list', '--prod', '--depth', 'Infinity', '--json', '-r', '--filter', './packages/*'],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+      {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        ...(process.platform === 'win32' ? { shell: true } : {}),
+      },
     ),
   );
 
