@@ -2,7 +2,7 @@
 // Guards the zero-surprise install promise: no native add-ons, no install scripts.
 // See AGENTS.md section 9 and architecture section 6.1.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BANNED_PACKAGES = [
@@ -30,36 +30,86 @@ for (const file of ours) {
   }
 }
 
-// 2. No banned native package anywhere in the installed tree.
-function scan(dir, depth = 0) {
-  if (depth > 6 || !existsSync(dir)) return;
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (entry === 'node_modules') {
-      scan(full, depth + 1);
-      continue;
+/**
+ * 2. No banned native package in what a **user** installs.
+ *
+ * Scoped to the production dependency closure of the published packages, not to the whole
+ * `node_modules` tree, and that is a deliberate narrowing rather than a relaxation (#256).
+ *
+ * The promise is invariant 7: *no Python, Docker, compiler toolchain, native add-on, model
+ * download, API key or account. Ever.* It is a promise about **someone installing Lorepack**.
+ * A build tool in a contributor's tree breaks none of it, and the whole-tree version of this
+ * check could not tell the two apart: it refused Miniflare, which is a dev-only Cloudflare
+ * emulator that never reaches a published package, on the strength of a transitive `sharp`.
+ *
+ * Narrowing makes the guard say something true and checkable instead of something broader and
+ * wrong. What it must never lose is the part that matters, so the mutation to run against any
+ * future edit here is: **add a native dependency to a published package and watch this fail.**
+ * `test/no-native.test.ts` does exactly that.
+ */
+function publishedClosure() {
+  // `shell: true` on Windows, where `pnpm` is a `.cmd` shim that `execFileSync` cannot execute
+  // directly. Without it this passed on macOS and Linux and failed on `windows-latest` with a
+  // spawn error carrying no useful message, which is the shape of most Windows CI surprises.
+  const listed = JSON.parse(
+    execFileSync(
+      'pnpm',
+      ['list', '--prod', '--depth', 'Infinity', '--json', '-r', '--filter', './packages/*'],
+      {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        ...(process.platform === 'win32' ? { shell: true } : {}),
+      },
+    ),
+  );
+
+  /** name -> resolved path, for every production dependency reachable from a published package. */
+  const reached = new Map();
+  const walk = (dependencies) => {
+    for (const [name, node] of Object.entries(dependencies ?? {})) {
+      // A workspace link is one of ours; its own dependencies are walked, not the link.
+      if (typeof node?.version === 'string' && node.version.startsWith('link:')) {
+        walk(node.dependencies);
+        continue;
+      }
+      if (reached.has(name)) continue;
+      reached.set(name, node?.path ?? null);
+      walk(node?.dependencies);
     }
-    if (entry.startsWith('@')) {
-      scan(full, depth + 1);
-      continue;
+  };
+  for (const workspace of listed) {
+    if (workspace.private === true) continue;
+    walk(workspace.dependencies);
+  }
+  return reached;
+}
+
+/**
+ * Direct production dependencies, read from the manifests rather than from the installed tree.
+ *
+ * Both halves are needed and they catch different things. A manifest read catches a native
+ * dependency the moment it is **declared**, before anyone installs, which is when a reviewer is
+ * looking at the diff. The installed closure below catches one that arrives **transitively**,
+ * which no manifest mentions.
+ */
+for (const file of ours) {
+  const pkg = JSON.parse(readFileSync(file, 'utf8'));
+  if (pkg.private === true || !file.startsWith('packages/')) continue;
+  for (const name of Object.keys(pkg.dependencies ?? {})) {
+    if (BANNED_PACKAGES.includes(name)) {
+      problems.push(`${file} declares ${name}, which ships native code`);
     }
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (!st.isDirectory()) continue;
-    const name = dir.includes('node_modules/@')
-      ? `${dir.slice(dir.lastIndexOf('@'))}/${entry}`
-      : entry;
-    if (BANNED_PACKAGES.includes(name)) problems.push(`installed tree contains ${name} (${full})`);
-    if (existsSync(join(full, 'binding.gyp')))
-      problems.push(`native add-on (binding.gyp) at ${full}`);
-    scan(join(full, 'node_modules'), depth + 1);
   }
 }
-scan('node_modules');
+
+for (const [name, path] of publishedClosure()) {
+  if (BANNED_PACKAGES.includes(name)) {
+    problems.push(`a published package depends on ${name}, which ships native code`);
+  }
+  if (path !== null && existsSync(join(path, 'binding.gyp'))) {
+    problems.push(`native add-on (binding.gyp) in ${name}, reachable from a published package`);
+  }
+}
 
 if (problems.length > 0) {
   console.error(
