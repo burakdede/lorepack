@@ -125,6 +125,7 @@ what happens if yours does not.
 | What belongs in a build, and what does not | [`docs/architecture/discovery.md`](docs/architecture/discovery.md) |
 | How each format is read, and what is deliberately dropped | [`docs/architecture/parsers.md`](docs/architecture/parsers.md) |
 | Every security surface, and the test that holds it | [`docs/architecture/security.md`](docs/architecture/security.md) |
+| How a build is deployed, and which rules the orchestration enforces | [`docs/architecture/deployment.md`](docs/architecture/deployment.md) |
 | How a model reaches a build, over MCP and HTTP | [`docs/architecture/serving.md`](docs/architecture/serving.md) |
 | Studio: behaviour, the manual passes, and the design direction | [`docs/architecture/studio.md`](docs/architecture/studio.md) |
 | How typed tables are stored, named and queried | [`docs/architecture/local-storage.md`](docs/architecture/local-storage.md) |

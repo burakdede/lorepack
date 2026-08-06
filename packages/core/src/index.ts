@@ -75,6 +75,7 @@ export {
   toPosix,
   UNICODE_NORMALIZATION_FORM,
 } from './paths/index.js';
+export { DEPLOY_STEPS } from './ports/deploy.js';
 export type * from './ports/index.js';
 export {
   type DiagnosticEvent,
