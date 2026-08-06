@@ -327,11 +327,33 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
     provider,
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
     open: async (handle: BuildHandle): Promise<BuildScope> => {
-      const db = provider.database(handle);
+      /**
+       * A build that cannot be opened is *damaged*, not an internal defect (#251).
+       *
+       * Without this, a truncated or overwritten `context.sqlite` surfaced as
+       * `LORE_E_INTERNAL: no such table: artifacts` or `file is not a database`: a raw SQLite
+       * string with no remediation, telling a reader nothing about what to do. A missing one
+       * named an absolute path inside `.lore/`, which is noise in a message that should say
+       * what is wrong and how to fix it.
+       *
+       * `LORE_E_SCHEMA_MISMATCH` passes through, because it already says exactly this and says
+       * it more precisely.
+       */
+      let db: DatabaseSync;
+      try {
+        db = provider.database(handle);
+      } catch (cause) {
+        throw damagedBuild(handle.buildId, cause);
+      }
       // Before `restrictToTables` below, which is what makes reading `schema_migrations`
       // possible at all without widening the read surface.
       if (!schemaChecked.has(db)) {
-        assertBuildSchema(db, handle.buildId, expectedMigration);
+        try {
+          assertBuildSchema(db, handle.buildId, expectedMigration);
+        } catch (cause) {
+          if (cause instanceof LoreError && cause.code === 'LORE_E_SCHEMA_MISMATCH') throw cause;
+          throw damagedBuild(handle.buildId, cause);
+        }
         schemaChecked.add(db);
       }
       // Defence in depth, and not optional: the authorizer refuses every table outside the
@@ -374,6 +396,20 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
 function createdAt(state: LocalStateStore, buildId: string): string | null {
   const summary = state.listBuilds().find((build) => build.buildId === buildId);
   return summary?.createdAt ?? null;
+}
+
+/** One sentence about the build, one about the fix, and nothing about this machine. */
+function damagedBuild(buildId: string, cause: unknown): LoreError {
+  return new LoreError(
+    'LORE_E_OBJECT_CORRUPT',
+    `Build ${buildId.slice(0, 17)} is damaged and cannot be read.`,
+    {
+      remediation:
+        'Run `lore build` to compile this project again. It will notice the build is unreadable and replace it.',
+      subject: buildId,
+      cause,
+    },
+  );
 }
 
 function latestMigrationId(migrations: readonly { id: string }[]): string {
