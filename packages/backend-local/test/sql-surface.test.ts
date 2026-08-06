@@ -340,3 +340,55 @@ describe('what an error is allowed to say', () => {
     expect(error.remediation).toContain('describeTable');
   });
 });
+
+/**
+ * A typo is not an attempted write (#253).
+ *
+ * `SELEC * FROM t` used to be refused with "Only SELECT is allowed here, and this statement
+ * begins with SELEC", plus a remediation explaining that the surface is read-only by design.
+ * Both sentences are about a rule the user did not break, and a reader would reasonably
+ * conclude their SELECT had been rejected as a write.
+ */
+describe('a misspelled first word', () => {
+  const message = (sql: string): { message: string; remediation?: string } => {
+    try {
+      validateStatement(sql);
+    } catch (error) {
+      return error as { message: string; remediation?: string };
+    }
+    throw new Error(`expected ${sql} to be refused`);
+  };
+
+  it('is named as a misspelling rather than as a write', () => {
+    const refusal = message('SELEC * FROM t');
+    expect(refusal.message).toContain('not a SQL keyword');
+    expect(refusal.message).not.toContain('Only SELECT is allowed');
+    // Nothing about the read-only rule, which this user did not break.
+    expect(refusal.remediation).not.toMatch(/read-only/i);
+  });
+
+  it('suggests the keyword when one is a single edit away', () => {
+    for (const [typo, meant] of [
+      ['SELEC', 'SELECT'],
+      ['SELCT', 'SELECT'],
+      // A transposition, which is the typo people actually make and which two substitutions
+      // would miss.
+      ['WTIH', 'WITH'],
+      ['SELETC', 'SELECT'],
+    ] as const) {
+      expect(message(`${typo} 1`).remediation).toBe(`Did you mean ${meant}?`);
+    }
+  });
+
+  it('suggests nothing when nothing is close, rather than guessing', () => {
+    expect(message('banana me').remediation).toBe('Check the spelling of the first word.');
+  });
+
+  it('still calls a real write a write', () => {
+    for (const write of ['DELETE FROM t', 'DROP TABLE t', 'UPDATE t SET a = 1', 'PRAGMA x']) {
+      const refusal = message(write);
+      expect(refusal.message).toContain('Only SELECT is allowed');
+      expect(refusal.remediation).toMatch(/read-only/i);
+    }
+  });
+});

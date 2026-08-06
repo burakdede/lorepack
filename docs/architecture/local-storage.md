@@ -234,6 +234,12 @@ appending to it, so a compound `SELECT ... UNION SELECT ...` is bounded as a who
 is reported, never silent, and a response too large to serialize is refused with its size
 rather than trimmed. Every result carries the table's locator, including sheet and cell range.
 
+**A typo is not an attempted write.** A first word that is not a SQL statement keyword is
+refused as a misspelling, with the keyword named where one is a single edit away, including an
+adjacent-letter swap. `SELEC` used to be told "Only SELECT is allowed here" with a remediation
+explaining that writes are forbidden, which is a rule that user did not break; for a model it was
+worse, because the obvious repair was what it had already tried (#253).
+
 **Errors say what rule was broken and nothing about the machine.** SQLite words a denial as
 `access to t_secrets_f13bc4051aa0.c_0_sku is prohibited`, which names something the caller was
 not allowed to see, so the message is replaced rather than wrapped. No path, no schema, no
