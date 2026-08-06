@@ -449,8 +449,14 @@ describe('a target cannot change the build', () => {
   it('writes its receipt outside the build directory', async () => {
     await deploying(async (root) => {
       const result = await runDeploy(base(root, fakeTarget().target));
-      expect(receiptPath(root, result.receipt.receiptId)).toContain('/receipts/');
-      expect(receiptPath(root, result.receipt.receiptId)).not.toContain('/builds/');
+      const { sep } = await import('node:path');
+
+      // Compared with the platform separator rather than a literal slash. The first version
+      // of this asserted `/receipts/` and passed everywhere except Windows, where the path is
+      // `...\receipts\...`: a test about where a file goes that only held on two of the three
+      // platforms the product supports.
+      expect(receiptPath(root, result.receipt.receiptId)).toContain(`${sep}receipts${sep}`);
+      expect(receiptPath(root, result.receipt.receiptId)).not.toContain(`${sep}builds${sep}`);
     });
   });
 });
