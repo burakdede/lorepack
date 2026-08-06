@@ -1,4 +1,15 @@
 export type {
+  ActivationReceipt,
+  DeployInput,
+  DeploymentTarget,
+  DeployPlan,
+  DeployStep,
+  TargetCapabilities,
+  TargetDetection,
+  VerificationResult,
+} from './deploy.js';
+export { DEPLOY_STEPS } from './deploy.js';
+export type {
   BuildComparer,
   BuildScope,
   CatalogArtifact,
