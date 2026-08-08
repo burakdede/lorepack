@@ -275,14 +275,7 @@ export function createCloudflareDeploymentTarget(
     },
     rollback: async (buildId) => {
       if (options.rollbackBuild !== undefined) return await options.rollbackBuild(buildId);
-      throw new LoreError(
-        'LORE_E_TARGET_NOT_CONFIGURED',
-        'Rollback for the cloudflare target is not implemented yet.',
-        {
-          remediation: 'Finish the rollback work before attempting a remote rollback.',
-          subject: String(buildId),
-        },
-      );
+      return await rollbackProjectedBuild(options, buildId);
     },
   };
 }
@@ -590,15 +583,30 @@ async function activateCandidateBuild(
   options: CloudflareDeploymentTargetOptions,
   receipt: DeploymentReceipt,
 ): Promise<ActivationReceipt> {
+  return await switchActiveBuild(options, receipt.buildId as BuildId);
+}
+
+async function rollbackProjectedBuild(
+  options: CloudflareDeploymentTargetOptions,
+  buildId: BuildId,
+): Promise<ActivationReceipt> {
+  await assertProjectionReadable(options.catalogDb, { projectId: options.projectId, buildId });
+  return await switchActiveBuild(options, buildId);
+}
+
+async function switchActiveBuild(
+  options: CloudflareDeploymentTargetOptions,
+  buildId: BuildId,
+): Promise<ActivationReceipt> {
   let previous: { readonly buildId: BuildId; readonly generation: number } | null = null;
   try {
     await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
     previous = await currentActiveBuild(options.catalogDb);
-    if (previous?.buildId !== receipt.buildId) {
+    if (previous?.buildId !== buildId) {
       const nextGeneration = (previous?.generation ?? 0) + 1;
       await options.catalogDb
         .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
-        .bind(receipt.buildId, nextGeneration)
+        .bind(buildId, nextGeneration)
         .run();
     }
     await options.catalogDb.prepare('COMMIT').run();
@@ -608,10 +616,11 @@ async function activateCandidateBuild(
     } catch {}
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
-      `Could not activate candidate ${receipt.buildId} on the cloudflare target.`,
+      `Could not switch the active cloudflare build to ${buildId}.`,
       {
-        remediation: 'Nothing was switched publicly. Deploy again once the D1 catalog is writable.',
-        subject: receipt.buildId,
+        remediation:
+          'Nothing was switched publicly. Retry once the D1 catalog is writable and the projected build is complete.',
+        subject: buildId,
         cause,
       },
     );
@@ -620,7 +629,7 @@ async function activateCandidateBuild(
   const confirmedBuildId =
     options.publicBuildId === undefined ? null : await options.publicBuildId();
   return {
-    buildId: receipt.buildId as BuildId,
+    buildId,
     previousBuildId: previous?.buildId ?? null,
     confirmedBuildId,
     endpoint: options.endpoint,

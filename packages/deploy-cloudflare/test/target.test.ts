@@ -687,6 +687,84 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     ).toEqual({ build_id: BUILD, generation: 8 });
   });
 
+  it('rolls back to a previously projected build by pointer change alone', async () => {
+    const fixture = makeBuildFixture();
+    const previousDirectory = join(dirname(fixture.buildDirectory), BUILD_B);
+    cpSync(fixture.buildDirectory, previousDirectory, { recursive: true });
+    writeFileSync(
+      join(previousDirectory, 'manifest.json'),
+      readFileSync(join(previousDirectory, 'manifest.json'), 'utf8').replaceAll(BUILD, BUILD_B),
+    );
+
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD_B,
+    });
+
+    const previousPlan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD_B,
+      buildDirectory: previousDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    await target.apply(previousPlan);
+
+    const currentPlan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const currentReceipt = await target.apply(currentPlan);
+    await target.activate(currentReceipt);
+
+    const activation = await target.rollback(BUILD_B);
+
+    expect(activation).toEqual({
+      buildId: BUILD_B,
+      previousBuildId: BUILD,
+      confirmedBuildId: BUILD_B,
+      endpoint: ENDPOINT,
+    });
+    expect(
+      fixture.projection.raw
+        .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+        .get(),
+    ).toEqual({ build_id: BUILD_B, generation: 2 });
+  });
+
+  it('refuses to roll back to an incomplete projection and leaves activation unchanged', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const currentPlan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const currentReceipt = await target.apply(currentPlan);
+    await target.activate(currentReceipt);
+
+    const failure = await target.rollback(BUILD_B).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as { code?: string }).code).toBe('LORE_E_BUILD_NOT_FOUND');
+    expect(
+      fixture.projection.raw
+        .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+        .get(),
+    ).toEqual({ build_id: BUILD, generation: 1 });
+  });
+
   it('fails one contender cleanly when activation attempts race for the lock', async () => {
     const fixture = makeBuildFixture();
     const root = dirname(dirname(dirname(fixture.buildDirectory)));
