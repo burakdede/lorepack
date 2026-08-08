@@ -277,6 +277,13 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   const activation = await target.activate(receipt);
   progress.finish('activating', 1);
 
+  const activatedReceipt = {
+    ...receipt,
+    previousBuildId: activation.previousBuildId,
+    endpoint: activation.endpoint,
+    completedSteps: steps(receipt, 'activate'),
+  };
+
   /**
    * The smoke check, which is the difference between "the write returned" and "it is serving".
    *
@@ -285,7 +292,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
    * null, and that is recorded rather than treated as success.
    */
   if (activation.confirmedBuildId !== null && activation.confirmedBuildId !== options.buildId) {
-    const failedReceipt = { ...receipt, state: 'failed' as const };
+    const failedReceipt = { ...activatedReceipt, state: 'failed' as const };
     writeReceipt(options.projectRoot, failedReceipt);
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
@@ -299,12 +306,10 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   }
 
   receipt = {
-    ...receipt,
+    ...activatedReceipt,
     state: 'active',
-    previousBuildId: activation.previousBuildId,
-    endpoint: activation.endpoint,
     deployedAt: now().toISOString(),
-    completedSteps: steps({ ...receipt, completedSteps: steps(receipt, 'activate') }, 'smoke'),
+    completedSteps: steps(activatedReceipt, 'smoke'),
   };
   writeReceipt(options.projectRoot, receipt);
 
