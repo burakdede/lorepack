@@ -2,17 +2,14 @@ import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { writeFileAtomic, loadConfig, LoreError } from '@lorepack/core';
+import { LoreError, loadConfig, writeFileAtomic } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { targetsDirectory } from '../services/config-resolve.js';
 
 const execFileAsync = promisify(execFile);
-const CLOUDFLARE_CAPABILITIES = [
-  'lexical-search',
-  'structured-context',
-  'table-query',
-] as const;
+const CLOUDFLARE_CAPABILITIES = ['lexical-search', 'structured-context', 'table-query'] as const;
+const CLOUDFLARE_SETUP_DOC = 'docs/integrations/cloudflare-target-setup.md' as const;
 const WRANGLER_BIN = join(
   import.meta.dirname,
   '..',
@@ -127,7 +124,9 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         accountId:
           typeof flags.accountId === 'string'
             ? flags.accountId
-            : (existing?.accountId ?? identity.accountId ?? '(required to connect existing resources)'),
+            : (existing?.accountId ??
+              identity.accountId ??
+              '(required to connect existing resources)'),
         workerName:
           typeof flags.worker === 'string'
             ? flags.worker
@@ -178,7 +177,10 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
             .join(', ')}.`,
           {
             remediation: `Fix the drift or remove ${cloudflareTargetPath(config.projectRoot)} and set the target up again.\n${drift
-              .map((entry) => `  ${entry.field}: receipt=${entry.current} requested=${entry.requested}`)
+              .map(
+                (entry) =>
+                  `  ${entry.field}: receipt=${entry.current} requested=${entry.requested}`,
+              )
               .join('\n')}`,
             subject: 'cloudflare',
           },
@@ -275,6 +277,9 @@ function renderCloudflarePlan(input: {
   if (input.existing !== null) {
     lines.push('  Existing receipt found and will be checked for drift before any rewrite');
   }
+  lines.push('');
+  lines.push('Permissions');
+  lines.push(`  ${CLOUDFLARE_SETUP_DOC}`);
   return lines.join('\n');
 }
 
@@ -287,12 +292,20 @@ function compareReceipt(
     readonly objectsBucketName: string;
   },
 ): Array<{ readonly field: string; readonly current: string; readonly requested: string }> {
-  const drift: Array<{ readonly field: string; readonly current: string; readonly requested: string }> = [];
+  const drift: Array<{
+    readonly field: string;
+    readonly current: string;
+    readonly requested: string;
+  }> = [];
   if (existing.accountId !== requested.accountId) {
     drift.push({ field: 'accountId', current: existing.accountId, requested: requested.accountId });
   }
   if (existing.workerName !== requested.workerName) {
-    drift.push({ field: 'workerName', current: existing.workerName, requested: requested.workerName });
+    drift.push({
+      field: 'workerName',
+      current: existing.workerName,
+      requested: requested.workerName,
+    });
   }
   if (existing.catalogDatabaseName !== requested.catalogDatabaseName) {
     drift.push({
@@ -388,10 +401,14 @@ async function confirmTargetSetup(plan: string, context: CommandContext): Promis
 export function readCloudflareTargetReceipt(projectRoot: string): CloudflareTargetReceipt {
   const path = cloudflareTargetPath(projectRoot);
   if (!existsSync(path)) {
-    throw new LoreError('LORE_E_TARGET_NOT_CONFIGURED', 'This project has no cloudflare target receipt.', {
-      remediation: 'Run `lore target add cloudflare` first.',
-      subject: 'cloudflare',
-    });
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'This project has no cloudflare target receipt.',
+      {
+        remediation: 'Run `lore target add cloudflare` first.',
+        subject: 'cloudflare',
+      },
+    );
   }
   return JSON.parse(readFileSync(path, 'utf8')) as CloudflareTargetReceipt;
 }
