@@ -22,6 +22,7 @@ import { type D1CatalogDatabaseLike, D1CatalogStore } from './catalog.js';
 import { uploadProjectArchive } from './project-archive.js';
 import { projectBuildMetadata } from './project-metadata.js';
 import { uploadProjectObjects } from './project-objects.js';
+import { preflightProjection } from './projection-preflight.js';
 import { projectSearchData } from './project-search-data.js';
 import { projectTableData } from './project-table-data.js';
 import {
@@ -89,6 +90,7 @@ export function createCloudflareDeploymentTarget(
         endpoint: options.endpoint,
       });
       const currentBuildId = await readCurrentPublicBuildId(options.publicBuildId);
+      const preflight = preflightProjection(input.buildDirectory);
       return {
         target: 'cloudflare',
         input,
@@ -125,6 +127,7 @@ export function createCloudflareDeploymentTarget(
           options,
           input,
           currentBuildId,
+          preflight,
         }),
       };
     },
@@ -371,6 +374,7 @@ async function renderDisplay(input: {
   readonly options: CloudflareDeploymentTargetOptions;
   readonly input: DeployPlan['input'];
   readonly currentBuildId: BuildId | null | undefined;
+  readonly preflight: { readonly estimatedProjectedBytes: number };
 }): Promise<DeployPlanDisplay> {
   const manifest = buildManifestSchema.parse(
     JSON.parse(readFileSync(join(input.input.buildDirectory, 'manifest.json'), 'utf8')),
@@ -394,6 +398,7 @@ async function renderDisplay(input: {
       `= ${count(compared.reused, 'artifact')} reused by content hash`,
       `+ ${count(manifest.counts.chunks, 'chunk')}`,
       `+ ${count(manifest.counts.tableRows, 'table row')}`,
+      `~ about ${input.preflight.estimatedProjectedBytes.toLocaleString('en-US')} projected D1 bytes`,
     ],
     activationLines: [
       `current ${input.currentBuildId ?? 'none'}`,

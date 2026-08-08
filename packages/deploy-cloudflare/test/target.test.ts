@@ -99,7 +99,10 @@ function trackDatabase(db: DatabaseSync): DatabaseSync {
   return db;
 }
 
-function makeBuildFixture(): {
+function makeBuildFixture(input: {
+  readonly chunkText?: string;
+  readonly tableName?: string;
+} = {}): {
   readonly buildDirectory: string;
   readonly projection: SqliteProjectionDatabase;
   readonly bucket: FakeR2Bucket;
@@ -141,6 +144,8 @@ function makeBuildFixture(): {
   );
   writeFileSync(join(buildDirectory, 'reports', 'warnings.json'), '[]\n');
 
+  const chunkText = input.chunkText ?? 'Activate the previous build to roll back.';
+  const tableName = input.tableName ?? 'Basic';
   const bodyA = new TextEncoder().encode('rollback body');
   const bodyB = new TextEncoder().encode('pricing body');
   const hashA = hashBytes(bodyA);
@@ -304,7 +309,7 @@ function makeBuildFixture(): {
       'paragraph',
       0,
       null,
-      'Activate the previous build to roll back.',
+      chunkText,
       '["Rollback"]',
       3,
       3,
@@ -322,7 +327,7 @@ function makeBuildFixture(): {
       'contracted:guides/rollback.md',
       '["n0"]',
       '["Rollback"]',
-      'Activate the previous build to roll back.',
+      chunkText,
       12,
       'guides/rollback.md',
       3,
@@ -365,8 +370,8 @@ function makeBuildFixture(): {
       0,
       1,
       1,
-      'Basic',
-      'Basic',
+      tableName,
+      tableName,
     );
   buildDb
     .prepare(
@@ -375,7 +380,7 @@ function makeBuildFixture(): {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run('contracted:pricing.xlsx#Products', 1, 'Price', 'price', 'integer', 0, 0, 1, 1, '5', '5');
-  buildDb.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run('Basic', 5);
+  buildDb.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run(tableName, 5);
   buildDb.close();
 
   const projectionDb = trackDatabase(new DatabaseSync(':memory:'));
@@ -620,9 +625,70 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
         '= 1 artifact reused by content hash',
         '+ 1 chunk',
         '+ 1 table row',
+        '~ about 47 projected D1 bytes',
       ],
       activationLines: [`current ${BUILD_B}`, `next    ${BUILD}`],
     });
+  });
+
+  it('refuses plan-time projection when one chunk text is above the D1 value limit', async () => {
+    const fixture = makeBuildFixture({ chunkText: 'x'.repeat(2_000_001) });
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const failure = await target
+      .plan({
+        projectName: PROJECT,
+        buildId: BUILD,
+        buildDirectory: fixture.buildDirectory,
+        buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      code: 'LORE_E_LIMIT_EXCEEDED',
+      subject: 'guides/rollback.md',
+    });
+    expect((failure as Error).message).toContain("Cloudflare D1's 2,000,000-byte value limit");
+    expect(
+      fixture.projection.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+        .get(),
+    ).toBeUndefined();
+  });
+
+  it('refuses plan-time projection when one table row is above the D1 row limit', async () => {
+    const fixture = makeBuildFixture({ tableName: 'x'.repeat(2_000_001) });
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const failure = await target
+      .plan({
+        projectName: PROJECT,
+        buildId: BUILD,
+        buildDirectory: fixture.buildDirectory,
+        buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+      })
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      code: 'LORE_E_LIMIT_EXCEEDED',
+      subject: 'pricing.xlsx',
+    });
+    expect((failure as Error).message).toContain("Cloudflare D1's 2,000,000-byte row limit");
+    expect(
+      fixture.projection.raw
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+        .get(),
+    ).toBeUndefined();
   });
 
   it('verifies the candidate through the projected runtime and records capabilities', async () => {
