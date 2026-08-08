@@ -59,6 +59,17 @@ const MANIFEST: BuildManifest = {
 
 function installHandlers(db: FakeD1Database): void {
   db.handlers.set(
+    `SELECT manifest_json AS manifestJson
+FROM build_manifests
+WHERE project_id = ? AND build_id = ?
+LIMIT 1`,
+    ([projectId, buildId]) =>
+      projectId === PROJECT && buildId === BUILD
+        ? [{ manifestJson: JSON.stringify(MANIFEST) }]
+        : [],
+  );
+
+  db.handlers.set(
     `SELECT count(*) AS count
 FROM chunks
 WHERE project_id = ? AND build_id = ?`,
@@ -211,25 +222,19 @@ WHERE project_id = ? AND build_id = ?`,
 }
 
 describe('D1CatalogStore', () => {
-  it('reads manifest from the injected provider', async () => {
+  it('reads manifest from the namespaced projection', async () => {
     const db = new FakeD1Database();
-    const store = new D1CatalogStore({
-      db,
-      namespace: { projectId: PROJECT, buildId: BUILD },
-      manifest: async () => MANIFEST,
-    });
+    installHandlers(db);
+    const store = new D1CatalogStore({ db, namespace: { projectId: PROJECT, buildId: BUILD } });
 
     expect(await store.manifest()).toEqual(MANIFEST);
+    expect(db.calls[0]?.bindings).toEqual([PROJECT, BUILD]);
   });
 
   it('binds project and build namespace in count and lookup queries', async () => {
     const db = new FakeD1Database();
     installHandlers(db);
-    const store = new D1CatalogStore({
-      db,
-      namespace: { projectId: PROJECT, buildId: BUILD },
-      manifest: async () => MANIFEST,
-    });
+    const store = new D1CatalogStore({ db, namespace: { projectId: PROJECT, buildId: BUILD } });
 
     expect(await store.countChunks()).toBe(2);
     expect(await store.countWarnings()).toBe(1);
@@ -256,11 +261,7 @@ describe('D1CatalogStore', () => {
   it('returns namespaced nodes and superseded artifact ids', async () => {
     const db = new FakeD1Database();
     installHandlers(db);
-    const store = new D1CatalogStore({
-      db,
-      namespace: { projectId: PROJECT, buildId: BUILD },
-      manifest: async () => MANIFEST,
-    });
+    const store = new D1CatalogStore({ db, namespace: { projectId: PROJECT, buildId: BUILD } });
 
     expect(await store.nodes('contracted:guides/rollback.md')).toEqual([
       {
@@ -281,11 +282,7 @@ describe('D1CatalogStore', () => {
   it('searches through the namespaced FTS projection', async () => {
     const db = new FakeD1Database();
     installHandlers(db);
-    const store = new D1CatalogStore({
-      db,
-      namespace: { projectId: PROJECT, buildId: BUILD },
-      manifest: async () => MANIFEST,
-    });
+    const store = new D1CatalogStore({ db, namespace: { projectId: PROJECT, buildId: BUILD } });
 
     const hits = await store.search('rollback', { limit: 10 });
 

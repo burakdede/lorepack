@@ -25,7 +25,6 @@ export interface D1CatalogNamespace {
 export interface D1CatalogStoreOptions {
   readonly db: D1CatalogDatabaseLike;
   readonly namespace: D1CatalogNamespace;
-  readonly manifest: () => Promise<BuildManifest>;
 }
 
 interface ArtifactRow {
@@ -80,6 +79,11 @@ const COUNT_CHUNKS_QUERY = `SELECT count(*) AS count
 FROM chunks
 WHERE project_id = ? AND build_id = ?`;
 
+const MANIFEST_QUERY = `SELECT manifest_json AS manifestJson
+FROM build_manifests
+WHERE project_id = ? AND build_id = ?
+LIMIT 1`;
+
 const COUNT_WARNINGS_QUERY = `SELECT count(*) AS count
 FROM build_warnings
 WHERE project_id = ? AND build_id = ?`;
@@ -114,16 +118,25 @@ WHERE project_id = ? AND build_id = ?`;
 export class D1CatalogStore implements CatalogStore {
   readonly #db: D1CatalogDatabaseLike;
   readonly #namespace: D1CatalogNamespace;
-  readonly #manifest: () => Promise<BuildManifest>;
 
   constructor(options: D1CatalogStoreOptions) {
     this.#db = options.db;
     this.#namespace = options.namespace;
-    this.#manifest = options.manifest;
   }
 
   async manifest(): Promise<BuildManifest> {
-    return this.#manifest();
+    const row = (
+      await this.#run<{ manifestJson: string }>(MANIFEST_QUERY, [
+        this.#namespace.projectId,
+        this.#namespace.buildId,
+      ])
+    )[0];
+    if (row === undefined) {
+      throw new Error(
+        `Projected manifest missing for ${this.#namespace.projectId}/${this.#namespace.buildId}.`,
+      );
+    }
+    return JSON.parse(row.manifestJson) as BuildManifest;
   }
 
   async countChunks(): Promise<number> {

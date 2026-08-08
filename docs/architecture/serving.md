@@ -76,7 +76,7 @@ stays well under the 50-query free-tier ceiling even on its fallback path:
 
 | Capability | Maximum D1 queries | Why |
 |---|---:|---|
-| `describeBuild` | 2 | active-build pointer, warning count |
+| `describeBuild` | 3 | active-build pointer, projected manifest lookup, warning count |
 | `search` | 5 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids, chunk count |
 | `contextForTask` | 4 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids |
 | `readSource` | 3 | pointer, artifact lookup, node lookup. The body is in R2 |
