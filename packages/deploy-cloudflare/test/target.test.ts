@@ -449,6 +449,56 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     ).toEqual({ build_id: null });
   });
 
+  it('skips archive and object uploads when the candidate payload is already present', async () => {
+    const fixture = makeBuildFixture();
+    const firstTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+    const secondTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const firstPlan = await firstTarget.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    await firstTarget.apply(firstPlan);
+
+    const secondPlan = await secondTarget.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const secondReceipt = await secondTarget.apply(secondPlan);
+
+    expect(secondReceipt.transfer?.archive).toMatchObject({
+      key: r2ArchiveKey(PROJECT, BUILD),
+    });
+    expect(secondReceipt.transfer?.objects).toEqual({
+      referenced: 2,
+      uploaded: 0,
+      skipped: 2,
+      verified: 2,
+    });
+    expect(secondReceipt.transfer?.state).toMatchObject({
+      migrations_done: true,
+      metadata_done: true,
+      search_done: true,
+      tables_done: true,
+      archive_done: true,
+      objects_done: true,
+    });
+  });
+
   it('reports projection steps and upload bytes while applying', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
