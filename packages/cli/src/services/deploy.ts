@@ -192,7 +192,14 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   // Project the candidate. Build-scoped only, so nothing a reader can see changes yet.
   if (!done(options.resume, 'project')) {
     progress.start('projecting', 'Projecting', plan.steps.length);
-    const applied = await target.apply(plan, options.resume);
+    let applied: DeploymentReceipt;
+    try {
+      applied = await target.apply(plan, options.resume);
+    } catch (error) {
+      const partial = partialReceipt(error);
+      if (partial !== null) writeReceipt(options.projectRoot, partial);
+      throw error;
+    }
     /**
      * Merged, not replaced. The orchestration owns what it decided.
      *
@@ -306,4 +313,10 @@ function steps(receipt: DeploymentReceipt, step: DeployStep): string[] {
   const present = new Set(receipt.completedSteps);
   present.add(step);
   return DEPLOY_STEPS.filter((known) => present.has(known));
+}
+
+function partialReceipt(error: unknown): DeploymentReceipt | null {
+  if (typeof error !== 'object' || error === null || !('receipt' in error)) return null;
+  const parsed = deploymentReceiptSchema.safeParse((error as { receipt: unknown }).receipt);
+  return parsed.success ? parsed.data : null;
 }
