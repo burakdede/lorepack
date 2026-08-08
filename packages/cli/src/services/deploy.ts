@@ -4,6 +4,7 @@ import {
   type ActivationReceipt,
   type Capability,
   DEPLOY_STEPS,
+  type DeployApplyReporter,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
@@ -191,10 +192,39 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
 
   // Project the candidate. Build-scoped only, so nothing a reader can see changes yet.
   if (!done(options.resume, 'project')) {
-    progress.start('projecting', 'Projecting', plan.steps.length);
+    let projectionStarted = false;
+    let uploadStarted = false;
+    let projectionCompleted = 0;
+    let uploadCompleted = 0;
+    const reportApplyProgress: DeployApplyReporter = (update) => {
+      if (update.stage === 'projecting') {
+        if (!projectionStarted) {
+          progress.start('projecting', 'Projecting', update.total);
+          projectionStarted = true;
+        }
+        projectionCompleted = update.completed;
+        progress.progress('projecting', update.completed, {
+          ...(update.total === undefined ? {} : { total: update.total }),
+          ...(update.unit === undefined ? {} : { unit: update.unit }),
+          ...(update.detail === undefined ? {} : { detail: update.detail }),
+        });
+        return;
+      }
+
+      if (!uploadStarted) {
+        progress.start('uploading', 'Uploading', update.total);
+        uploadStarted = true;
+      }
+      uploadCompleted = update.completed;
+      progress.progress('uploading', update.completed, {
+        ...(update.total === undefined ? {} : { total: update.total }),
+        ...(update.unit === undefined ? {} : { unit: update.unit }),
+        ...(update.detail === undefined ? {} : { detail: update.detail }),
+      });
+    };
     let applied: DeploymentReceipt;
     try {
-      applied = await target.apply(plan, options.resume);
+      applied = await target.apply(plan, options.resume, reportApplyProgress);
     } catch (error) {
       const partial = partialReceipt(error);
       if (partial !== null) writeReceipt(options.projectRoot, partial);
@@ -223,7 +253,10 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
       completedSteps: steps(applied, 'project'),
     };
     writeReceipt(options.projectRoot, receipt);
-    progress.finish('projecting', plan.steps.length);
+    progress.finish('projecting', projectionStarted ? projectionCompleted : plan.steps.length);
+    if (uploadStarted) {
+      progress.finish('uploading', uploadCompleted);
+    }
   }
 
   /**

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, LoreError, objectKey } from '@lorepack/core';
@@ -14,6 +14,14 @@ export interface ProjectObjectUploadOptions {
   readonly projectId: string;
   readonly buildDirectory: string;
   readonly objectsDirectory: string;
+  readonly onProgress?: (update: {
+    readonly completedBytes: number;
+    readonly totalBytes: number;
+    readonly completedObjects: number;
+    readonly totalObjects: number;
+    readonly uploadedObjects: number;
+    readonly skippedObjects: number;
+  }) => void;
 }
 
 export interface ProjectObjectUploadResult {
@@ -36,19 +44,34 @@ export async function uploadProjectObjects(
     const objectHashes = (
       buildDatabase.prepare(BUILD_OBJECTS_QUERY).all() as unknown as BuildArtifactRow[]
     ).map((row) => row.object_hash);
+    const totalBytes = objectHashes.reduce(
+      (sum, hash) => sum + localObjectSize(options.objectsDirectory, hash),
+      0,
+    );
 
     let uploadedObjects = 0;
     let skippedObjects = 0;
     let verifiedObjects = 0;
+    let completedBytes = 0;
 
     for (const hash of objectHashes) {
       const key = r2ObjectKey(options.projectId, hash);
       const existing = await options.bucket.head(key);
+      const sizeBytes = localObjectSize(options.objectsDirectory, hash);
 
       if (existing !== null) {
         await verifyRemoteObject(options.bucket, key, hash);
         skippedObjects += 1;
         verifiedObjects += 1;
+        completedBytes += sizeBytes;
+        options.onProgress?.({
+          completedBytes,
+          totalBytes,
+          completedObjects: verifiedObjects,
+          totalObjects: objectHashes.length,
+          uploadedObjects,
+          skippedObjects,
+        });
         continue;
       }
 
@@ -57,6 +80,15 @@ export async function uploadProjectObjects(
       await verifyRemoteObject(options.bucket, key, hash);
       uploadedObjects += 1;
       verifiedObjects += 1;
+      completedBytes += bytes.byteLength;
+      options.onProgress?.({
+        completedBytes,
+        totalBytes,
+        completedObjects: verifiedObjects,
+        totalObjects: objectHashes.length,
+        uploadedObjects,
+        skippedObjects,
+      });
     }
 
     return {
@@ -95,6 +127,22 @@ function openBuildDatabase(buildDirectory: string): DatabaseSync {
       cause,
     });
   }
+}
+
+function localObjectSize(objectsDirectory: string, hash: string): number {
+  const path = join(objectsDirectory, ...objectKey(hash).split('/'));
+  if (!existsSync(path)) {
+    throw new LoreError(
+      'LORE_E_OBJECT_CORRUPT',
+      `Build object ${hash} is missing from ${objectsDirectory}.`,
+      {
+        remediation: 'Rebuild so the normalized object cache is complete, then deploy again.',
+        subject: hash,
+        details: { path },
+      },
+    );
+  }
+  return statSync(path).size;
 }
 
 function readLocalObject(objectsDirectory: string, hash: string): Uint8Array {

@@ -1,10 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { hashBytes, SCHEMA_VERSION, type Capability, type DeploymentTarget, LoreError } from '@lorepack/core';
-import { withTempProject } from '@lorepack/test-support';
-import { afterEach, describe, expect, it } from 'vitest';
+import {
+  type Capability,
+  type DeploymentTarget,
+  hashBytes,
+  type LoreError,
+  SCHEMA_VERSION,
+} from '@lorepack/core';
 import {
   createCloudflareDeploymentTarget,
   createCloudflareWorkerFromBindings,
@@ -15,6 +18,8 @@ import {
   type ProjectionMigrationStatementLike,
   type R2BucketLike,
 } from '@lorepack/deploy-cloudflare';
+import { withTempProject } from '@lorepack/test-support';
+import { afterEach, describe, expect, it } from 'vitest';
 import { readReceipt, runDeploy } from '../src/services/deploy.js';
 
 const PROJECT = 'contracted';
@@ -44,7 +49,9 @@ class FakeR2Bucket implements R2BucketLike {
   }
 }
 
-class SqliteStatement implements ProjectionMigrationStatementLike, ReturnType<D1DatabaseLike['prepare']> {
+class SqliteStatement
+  implements ProjectionMigrationStatementLike, ReturnType<D1DatabaseLike['prepare']>
+{
   readonly #db: DatabaseSync;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
@@ -76,7 +83,11 @@ class SqliteStatement implements ProjectionMigrationStatementLike, ReturnType<D1
 }
 
 class SqliteBindingsDatabase
-  implements ProjectionMigrationDatabaseLike, D1CatalogDatabaseLike, D1QueryDatabaseLike, D1DatabaseLike
+  implements
+    ProjectionMigrationDatabaseLike,
+    D1CatalogDatabaseLike,
+    D1QueryDatabaseLike,
+    D1DatabaseLike
 {
   readonly raw: DatabaseSync;
 
@@ -126,7 +137,13 @@ function createBuild(
 
   const body = new TextEncoder().encode(text);
   const hash = hashBytes(body);
-  const objectPath = join(objectsDirectory, 'sha256', hash.slice(0, 2), hash.slice(2, 4), hash.slice(4));
+  const objectPath = join(
+    objectsDirectory,
+    'sha256',
+    hash.slice(0, 2),
+    hash.slice(2, 4),
+    hash.slice(4),
+  );
   mkdirSync(dirname(objectPath), { recursive: true });
   writeFileSync(objectPath, body);
 
@@ -302,7 +319,10 @@ function createBuild(
   return buildDirectory;
 }
 
-function countingTarget(target: DeploymentTarget): { readonly target: DeploymentTarget; readonly calls: string[] } {
+function countingTarget(target: DeploymentTarget): {
+  readonly target: DeploymentTarget;
+  readonly calls: string[];
+} {
   const calls: string[] = [];
   return {
     calls,
@@ -317,9 +337,9 @@ function countingTarget(target: DeploymentTarget): { readonly target: Deployment
         calls.push('plan');
         return target.plan(input);
       },
-      apply: async (plan, resume) => {
+      apply: async (plan, resume, progress) => {
         calls.push('apply');
-        return target.apply(plan, resume);
+        return target.apply(plan, resume, progress);
       },
       verify: async (receipt) => {
         calls.push('verify');
@@ -406,7 +426,9 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
           catalogDb: targetProjection,
           objects: bucket,
           publicBuildId: async () => {
-            const response = await staleWorker.fetch(new Request('https://worker.example/v1/build'));
+            const response = await staleWorker.fetch(
+              new Request('https://worker.example/v1/build'),
+            );
             const payload = (await response.json()) as { buildId: string };
             return payload.buildId as typeof ACTIVE_BUILD;
           },
@@ -420,13 +442,15 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
         buildId: CANDIDATE_BUILD,
         buildDirectory: candidateDirectory,
         buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
-        progress: { start() {}, finish() {}, tick() {}, log() {} },
+        progress: { start() {}, progress() {}, finish() {}, diagnostic() {} },
         now: () => new Date('2026-08-08T14:20:00.000Z'),
       }).catch((error: unknown) => error);
 
       expect((firstFailure as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
       expect((firstFailure as LoreError).message).toContain(ACTIVE_BUILD);
-      expect((firstFailure as LoreError).remediation).toContain('projected candidate is still there');
+      expect((firstFailure as LoreError).remediation).toContain(
+        'projected candidate is still there',
+      );
       expect(firstTarget.calls).toEqual(['detect', 'plan', 'apply', 'verify', 'activate']);
 
       const partial = readReceipt(temp.root, `cloudflare-${CANDIDATE_BUILD.slice(5, 17)}`);
@@ -471,13 +495,19 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
         buildDirectory: candidateDirectory,
         buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
         resume: partial,
-        progress: { start() {}, finish() {}, tick() {}, log() {} },
+        progress: { start() {}, progress() {}, finish() {}, diagnostic() {} },
         now: () => new Date('2026-08-08T14:25:00.000Z'),
       });
 
       expect(resumeTarget.calls).toEqual(['detect', 'plan', 'activate']);
       expect(resumed.receipt.state).toBe('active');
-      expect(resumed.receipt.completedSteps).toEqual(['plan', 'project', 'verify', 'activate', 'smoke']);
+      expect(resumed.receipt.completedSteps).toEqual([
+        'plan',
+        'project',
+        'verify',
+        'activate',
+        'smoke',
+      ]);
       expect(
         targetProjection.raw
           .prepare('SELECT build_id AS buildId, generation FROM active_build WHERE id = 1')

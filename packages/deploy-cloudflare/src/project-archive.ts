@@ -1,8 +1,8 @@
-import { collectBuildMembers, collectObjects, writeArchive } from '@lorepack/backend-local';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { collectBuildMembers, collectObjects, writeArchive } from '@lorepack/backend-local';
 import { hashBytes, LoreError } from '@lorepack/core';
 import { r2ArchiveKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
@@ -17,6 +17,11 @@ export interface ProjectArchiveUploadOptions {
   readonly buildId: string;
   readonly buildDirectory: string;
   readonly objectsDirectory: string;
+  readonly onProgress?: (update: {
+    readonly completedBytes: number;
+    readonly totalBytes: number;
+    readonly detail: string;
+  }) => void;
 }
 
 export interface ProjectArchiveUploadResult {
@@ -37,6 +42,11 @@ export async function uploadProjectArchive(
   const existing = await options.bucket.head(key);
   if (existing !== null) {
     await verifyRemoteArchive(options.bucket, key, sha256);
+    options.onProgress?.({
+      completedBytes: archive.bytes.byteLength,
+      totalBytes: archive.bytes.byteLength,
+      detail: 'archive verified',
+    });
     return {
       key,
       uploaded: false,
@@ -48,6 +58,11 @@ export async function uploadProjectArchive(
 
   await options.bucket.put(key, archive.bytes);
   await verifyRemoteArchive(options.bucket, key, sha256);
+  options.onProgress?.({
+    completedBytes: archive.bytes.byteLength,
+    totalBytes: archive.bytes.byteLength,
+    detail: 'archive uploaded',
+  });
 
   return {
     key,
@@ -66,7 +81,10 @@ async function buildArchive(
   readonly memberCount: number;
 }> {
   const objectHashes = readObjectHashes(buildDirectory);
-  const members = collectBuildMembers(buildDirectory, collectObjects(objectsDirectory, objectHashes));
+  const members = collectBuildMembers(
+    buildDirectory,
+    collectObjects(objectsDirectory, objectHashes),
+  );
   const working = mkdtempSync(join(tmpdir(), 'lore-r2-archive-'));
   const path = join(working, 'build.lorepack');
 

@@ -1,5 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import type { DeployInput, DeploymentReceipt, DeploymentTarget, DeployPlan } from '@lorepack/core';
+import type {
+  DeployApplyProgress,
+  DeployInput,
+  DeploymentReceipt,
+  DeploymentTarget,
+  DeployPlan,
+} from '@lorepack/core';
 import { LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -10,7 +16,12 @@ import { run } from './helpers.js';
 const CONFIG = 'version: 1\nname: deployed\nsources:\n  - .\n';
 
 function fakeTarget(
-  options: { readonly calls?: string[]; readonly failResume?: boolean } = {},
+  options: {
+    readonly calls?: string[];
+    readonly failResume?: boolean;
+    readonly applyProgress?: readonly DeployApplyProgress[];
+    readonly applyProgressDelayMs?: number;
+  } = {},
 ): DeploymentTarget {
   const calls = options.calls ?? [];
   return {
@@ -30,13 +41,19 @@ function fakeTarget(
         endpoint: 'https://example.workers.dev/mcp',
       };
     },
-    apply: async (_plan, resume): Promise<DeploymentReceipt> => {
+    apply: async (_plan, resume, progress): Promise<DeploymentReceipt> => {
       calls.push(resume === undefined ? 'apply' : `apply:${resume.receiptId}`);
       if (options.failResume === true && resume !== undefined) {
         throw new LoreError('LORE_E_REMOTE_DEPLOY', 'resume failed', {
           remediation: 'Try again.',
           details: { receiptId: resume.receiptId },
         });
+      }
+      for (const update of options.applyProgress ?? []) {
+        progress?.(update);
+        if ((options.applyProgressDelayMs ?? 0) > 0) {
+          await new Promise((resolve) => setTimeout(resolve, options.applyProgressDelayMs));
+        }
       }
       return (
         resume ?? {
@@ -390,6 +407,47 @@ describe('lore deploy command, issue 91', () => {
         expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
         expect(result.stderr).toContain('missing-catalog');
         expect(result.stderr).toContain('not visible');
+      },
+    );
+  });
+
+  it('prints measurable projection and upload progress during a slow deploy', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const result = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () =>
+                fakeTarget({
+                  applyProgress: [
+                    {
+                      stage: 'projecting',
+                      completed: 1,
+                      total: 4,
+                      unit: 'steps',
+                      detail: 'metadata',
+                    },
+                    {
+                      stage: 'uploading',
+                      completed: 2048,
+                      total: 4096,
+                      unit: 'bytes',
+                      detail: '1/2 objects, 1 uploaded, 0 skipped',
+                    },
+                  ],
+                  applyProgressDelayMs: 1100,
+                }),
+              confirm: async () => true,
+            }),
+          ],
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('Projecting');
+        expect(result.stdout).toContain('1/4 steps metadata');
+        expect(result.stdout).toContain('Uploading');
+        expect(result.stdout).toContain('2,048/4,096 bytes 1/2 objects, 1 uploaded, 0 skipped');
       },
     );
   });

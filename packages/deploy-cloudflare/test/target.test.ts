@@ -1,16 +1,16 @@
-import {
-  hashBytes,
-  SCHEMA_VERSION,
-  type Capability,
-  type DeploymentReceipt,
-  type VerificationResult,
-} from '@lorepack/core';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import {
+  type Capability,
+  type DeploymentReceipt,
+  hashBytes,
+  SCHEMA_VERSION,
+  type VerificationResult,
+} from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCloudflareDeploymentTarget, CloudflareApplyError } from '../src/index.js';
+import { CloudflareApplyError, createCloudflareDeploymentTarget } from '../src/index.js';
 import type {
   ProjectionMigrationDatabaseLike,
   ProjectionMigrationStatementLike,
@@ -150,7 +150,13 @@ function makeBuildFixture(): {
     [hashA, bodyA],
     [hashB, bodyB],
   ] as const) {
-    const path = join(objectsDirectory, 'sha256', hash.slice(0, 2), hash.slice(2, 4), hash.slice(4));
+    const path = join(
+      objectsDirectory,
+      'sha256',
+      hash.slice(0, 2),
+      hash.slice(2, 4),
+      hash.slice(4),
+    );
     mkdirSync(join(path, '..'), { recursive: true });
     writeFileSync(path, body);
   }
@@ -349,7 +355,19 @@ function makeBuildFixture(): {
       (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run('contracted:pricing.xlsx#Products', 0, 'Name', 'name', 'text', 0, 0, 1, 1, 'Basic', 'Basic');
+    .run(
+      'contracted:pricing.xlsx#Products',
+      0,
+      'Name',
+      'name',
+      'text',
+      0,
+      0,
+      1,
+      1,
+      'Basic',
+      'Basic',
+    );
   buildDb
     .prepare(
       `INSERT INTO table_columns
@@ -423,12 +441,66 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       verified: 2,
     });
     expect(fixture.bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
-    expect(fixture.bucket.objects.has(r2ObjectKey(PROJECT, fixture.objectHashes[0] as string))).toBe(
-      true,
-    );
+    expect(
+      fixture.bucket.objects.has(r2ObjectKey(PROJECT, fixture.objectHashes[0] as string)),
+    ).toBe(true);
     expect(
       fixture.projection.raw.prepare('SELECT build_id FROM active_build WHERE id = 1').get(),
     ).toEqual({ build_id: null });
+  });
+
+  it('reports projection steps and upload bytes while applying', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const updates: Array<{
+      stage: string;
+      completed: number;
+      total?: number;
+      unit?: string;
+      detail?: string;
+    }> = [];
+
+    await target.apply(plan, undefined, (update) => {
+      updates.push(update);
+    });
+
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'projecting',
+          completed: 1,
+          total: 4,
+          unit: 'steps',
+          detail: 'migrations',
+        }),
+        expect.objectContaining({
+          stage: 'uploading',
+          unit: 'bytes',
+        }),
+      ]),
+    );
+    expect(
+      updates.some(
+        (update) =>
+          update.stage === 'uploading' &&
+          update.detail?.includes('objects') === true &&
+          typeof update.completed === 'number' &&
+          typeof update.total === 'number' &&
+          update.completed <= update.total,
+      ),
+    ).toBe(true);
   });
 
   it('verifies the candidate through the projected runtime and records capabilities', async () => {
@@ -487,7 +559,9 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       endpoint: ENDPOINT,
     });
     expect(
-      fixture.projection.raw.prepare('SELECT build_id, generation FROM active_build WHERE id = 1').get(),
+      fixture.projection.raw
+        .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+        .get(),
     ).toEqual({ build_id: BUILD, generation: 8 });
   });
 
@@ -502,8 +576,12 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     );
 
     const projectionPath = join(root, 'projection.sqlite');
-    const firstProjection = new SqliteProjectionDatabase(trackDatabase(new DatabaseSync(projectionPath)));
-    const secondProjection = new SqliteProjectionDatabase(trackDatabase(new DatabaseSync(projectionPath)));
+    const firstProjection = new SqliteProjectionDatabase(
+      trackDatabase(new DatabaseSync(projectionPath)),
+    );
+    const secondProjection = new SqliteProjectionDatabase(
+      trackDatabase(new DatabaseSync(projectionPath)),
+    );
     const firstTarget = createCloudflareDeploymentTarget({
       projectId: PROJECT,
       endpoint: ENDPOINT,
@@ -552,7 +630,9 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     expect(
-      firstProjection.raw.prepare('SELECT build_id, generation FROM active_build WHERE id = 1').get(),
+      firstProjection.raw
+        .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+        .get(),
     ).toEqual({
       build_id: expect.stringMatching(/^lore_[ab]{64}$/),
       generation: 8,

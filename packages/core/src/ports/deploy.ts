@@ -84,6 +84,22 @@ export interface DeployTransfer {
 }
 
 /**
+ * In-flight progress reported by a deployment target while `apply()` is running.
+ *
+ * Counts are always measurable work. Upload reporting may use bytes as the primary count and
+ * carry object counts or step names in `detail`, which the renderer shows verbatim.
+ */
+export interface DeployApplyProgress {
+  readonly stage: 'projecting' | 'uploading';
+  readonly completed: number;
+  readonly total?: number;
+  readonly unit?: string;
+  readonly detail?: string;
+}
+
+export type DeployApplyReporter = (update: DeployApplyProgress) => void;
+
+/**
  * What would happen, computed without touching anything remote.
  *
  * `capabilityLoss` is the target's report, not its decision. Refusing is the orchestration's
@@ -133,7 +149,11 @@ export interface DeploymentTarget {
   /** Read-only. Nothing remote changes, which is asserted rather than trusted. */
   plan(input: DeployInput): Promise<DeployPlan>;
   /** Writes only build-scoped candidate data. The active build is untouched. */
-  apply(plan: DeployPlan, resume?: DeploymentReceipt): Promise<DeploymentReceipt>;
+  apply(
+    plan: DeployPlan,
+    resume?: DeploymentReceipt,
+    progress?: DeployApplyReporter,
+  ): Promise<DeploymentReceipt>;
   /** Queries the candidate explicitly, never whatever happens to be active. */
   verify(receipt: DeploymentReceipt): Promise<VerificationResult>;
   /** The smallest possible pointer mutation, and nothing else. */

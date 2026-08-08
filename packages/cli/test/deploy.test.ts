@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import {
   type ActivationReceipt,
   type Capability,
+  type DeployApplyProgress,
   type DeployInput,
-  type DeployTransfer,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
+  type DeployTransfer,
   deploymentReceiptSchema,
   LoreError,
   ProgressBus,
@@ -41,6 +42,7 @@ interface FakeOptions {
   readonly installed?: boolean;
   readonly planTransfer?: DeployTransfer;
   readonly appliedTransfer?: DeployTransfer;
+  readonly applyProgress?: readonly DeployApplyProgress[];
 }
 
 const PLAN_TRANSFER: DeployTransfer = {
@@ -112,7 +114,7 @@ function fakeTarget(options: FakeOptions = {}): {
         ...(options.planTransfer === undefined ? {} : { transfer: options.planTransfer }),
       };
     },
-    apply: async (plan, resume): Promise<DeploymentReceipt> => {
+    apply: async (plan, resume, progress): Promise<DeploymentReceipt> => {
       calls.push('apply');
       if (options.partialApplyReceipt !== undefined) {
         throw Object.assign(
@@ -128,6 +130,7 @@ function fakeTarget(options: FakeOptions = {}): {
           remediation: 'Try again.',
         });
       }
+      for (const update of options.applyProgress ?? []) progress?.(update);
       return (
         resume ?? {
           formatVersion: 1,
@@ -238,6 +241,57 @@ describe('the sequence architecture 18.5 fixes', () => {
       // a remediation pointing at a command that does not exist is worse than none.
       expect((failure as LoreError).remediation).toContain('Set up the fake target');
       expect(fake.calls).toEqual(['detect']);
+    });
+  });
+
+  it('forwards in-flight projection and upload progress to the shared bus', async () => {
+    await deploying(async (root) => {
+      let clock = 0;
+      const progress = new ProgressBus(() => clock);
+      const events: Array<{ type: string; stage?: string; completed?: number; detail?: string }> =
+        [];
+      progress.subscribe((event) => {
+        if (event.type === 'stage-progress') {
+          events.push({
+            type: event.type,
+            stage: event.stage,
+            completed: event.completed,
+            detail: event.detail,
+          });
+        }
+      });
+      const fake = fakeTarget({
+        applyProgress: [
+          { stage: 'projecting', completed: 1, total: 4, unit: 'steps', detail: 'metadata' },
+          {
+            stage: 'uploading',
+            completed: 1024,
+            total: 4096,
+            unit: 'bytes',
+            detail: '1/2 objects, 1 uploaded, 0 skipped',
+          },
+        ],
+      });
+
+      clock = 1000;
+      await runDeploy(base(root, fake.target, { progress }));
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          {
+            type: 'stage-progress',
+            stage: 'projecting',
+            completed: 1,
+            detail: 'metadata',
+          },
+          {
+            type: 'stage-progress',
+            stage: 'uploading',
+            completed: 1024,
+            detail: '1/2 objects, 1 uploaded, 0 skipped',
+          },
+        ]),
+      );
     });
   });
 });
