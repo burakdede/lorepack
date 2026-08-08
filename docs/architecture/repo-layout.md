@@ -61,7 +61,7 @@ pnpm typecheck       # tsc -b (composite projects cannot use --noEmit)
 pnpm lint            # biome check
 pnpm format:check
 pnpm test            # vitest run
-pnpm check:no-native # no native add-ons or install scripts in the tree
+pnpm check:no-native # no native add-ons or install scripts in published dependencies
 pnpm check:no-em-dash
 pnpm verify          # everything above, the pre-PR gate
 ```

@@ -4,6 +4,7 @@ import { buildCommand } from './build.js';
 import { configCommand } from './config.js';
 import { connectCommand, disconnectCommand } from './connect.js';
 import { devCommand } from './dev.js';
+import { deployCommand } from './deploy.js';
 import { diffCommand } from './diff.js';
 import { doctorCommand } from './doctor.js';
 import { exportCommand } from './export.js';
@@ -16,6 +17,7 @@ import { pruneCommand } from './prune.js';
 import { searchCommand } from './search.js';
 import { serveCommand } from './serve.js';
 import { statusCommand } from './status.js';
+import { targetCommand } from './target.js';
 
 /**
  * Commands are registered explicitly. No dynamic discovery: architecture section 4.8
@@ -37,6 +39,8 @@ export function registerCommands(): CommandDefinition[] {
     rollbackCommand(),
     pruneCommand(),
     devCommand(),
+    deployCommand(),
+    targetCommand(),
     connectCommand(),
     disconnectCommand(),
     doctorCommand(),

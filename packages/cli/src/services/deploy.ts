@@ -4,6 +4,7 @@ import {
   type ActivationReceipt,
   type Capability,
   DEPLOY_STEPS,
+  type DeployApplyReporter,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
@@ -44,6 +45,7 @@ export interface DeployOptions {
   readonly buildDirectory: string;
   readonly buildCapabilities: readonly Capability[];
   readonly progress: ProgressBus;
+  readonly plan?: DeployPlan;
   /** Stop after printing the plan. Nothing remote is touched, which is the point. */
   readonly dryRun?: boolean;
   /**
@@ -135,14 +137,17 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
 
   // `validating` rather than a new stage name: the stage set is closed on purpose, and what
   // planning does here is check a build against a target without changing either.
-  progress.start('validating', 'Planning', 1);
-  const plan = await target.plan({
-    projectName: options.projectName,
-    buildId: options.buildId as DeployPlan['input']['buildId'],
-    buildDirectory: options.buildDirectory,
-    buildCapabilities: options.buildCapabilities,
-  });
-  progress.finish('validating', 1);
+  let plan = options.plan;
+  if (plan === undefined) {
+    progress.start('validating', 'Planning', 1);
+    plan = await target.plan({
+      projectName: options.projectName,
+      buildId: options.buildId as DeployPlan['input']['buildId'],
+      buildDirectory: options.buildDirectory,
+      buildCapabilities: options.buildCapabilities,
+    });
+    progress.finish('validating', 1);
+  }
 
   /**
    * Capability loss fails by default, and the override is per capability.
@@ -177,6 +182,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
     endpoint: plan.endpoint,
     capabilityLossAccepted: [...accepted],
     completedSteps: ['plan'],
+    ...(plan.transfer === undefined ? {} : { transfer: plan.transfer }),
     verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
   };
 
@@ -190,8 +196,44 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
 
   // Project the candidate. Build-scoped only, so nothing a reader can see changes yet.
   if (!done(options.resume, 'project')) {
-    progress.start('projecting', 'Projecting', plan.steps.length);
-    const applied = await target.apply(plan, options.resume);
+    let projectionStarted = false;
+    let uploadStarted = false;
+    let projectionCompleted = 0;
+    let uploadCompleted = 0;
+    const reportApplyProgress: DeployApplyReporter = (update) => {
+      if (update.stage === 'projecting') {
+        if (!projectionStarted) {
+          progress.start('projecting', 'Projecting', update.total);
+          projectionStarted = true;
+        }
+        projectionCompleted = update.completed;
+        progress.progress('projecting', update.completed, {
+          ...(update.total === undefined ? {} : { total: update.total }),
+          ...(update.unit === undefined ? {} : { unit: update.unit }),
+          ...(update.detail === undefined ? {} : { detail: update.detail }),
+        });
+        return;
+      }
+
+      if (!uploadStarted) {
+        progress.start('uploading', 'Uploading', update.total);
+        uploadStarted = true;
+      }
+      uploadCompleted = update.completed;
+      progress.progress('uploading', update.completed, {
+        ...(update.total === undefined ? {} : { total: update.total }),
+        ...(update.unit === undefined ? {} : { unit: update.unit }),
+        ...(update.detail === undefined ? {} : { detail: update.detail }),
+      });
+    };
+    let applied: DeploymentReceipt;
+    try {
+      applied = await target.apply(plan, options.resume, reportApplyProgress);
+    } catch (error) {
+      const partial = partialReceipt(error);
+      if (partial !== null) writeReceipt(options.projectRoot, partial);
+      throw error;
+    }
     /**
      * Merged, not replaced. The orchestration owns what it decided.
      *
@@ -208,11 +250,17 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
       target: receipt.target,
       receiptId: receipt.receiptId,
       capabilityLossAccepted: receipt.capabilityLossAccepted,
+      ...(applied.transfer === undefined && receipt.transfer !== undefined
+        ? { transfer: receipt.transfer }
+        : {}),
       state: 'projected',
       completedSteps: steps(applied, 'project'),
     };
     writeReceipt(options.projectRoot, receipt);
-    progress.finish('projecting', plan.steps.length);
+    progress.finish('projecting', projectionStarted ? projectionCompleted : plan.steps.length);
+    if (uploadStarted) {
+      progress.finish('uploading', uploadCompleted);
+    }
   }
 
   /**
@@ -229,6 +277,9 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
     receipt = {
       ...receipt,
       state: 'verified',
+      ...(verification.capabilities === undefined
+        ? {}
+        : { verifiedCapabilities: [...verification.capabilities] }),
       verification: {
         search: verification.search,
         sourceRead: verification.sourceRead,
@@ -263,6 +314,13 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   const activation = await target.activate(receipt);
   progress.finish('activating', 1);
 
+  const activatedReceipt = {
+    ...receipt,
+    previousBuildId: activation.previousBuildId,
+    endpoint: activation.endpoint,
+    completedSteps: steps(receipt, 'activate'),
+  };
+
   /**
    * The smoke check, which is the difference between "the write returned" and "it is serving".
    *
@@ -271,7 +329,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
    * null, and that is recorded rather than treated as success.
    */
   if (activation.confirmedBuildId !== null && activation.confirmedBuildId !== options.buildId) {
-    const failedReceipt = { ...receipt, state: 'failed' as const };
+    const failedReceipt = { ...activatedReceipt, state: 'failed' as const };
     writeReceipt(options.projectRoot, failedReceipt);
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
@@ -285,12 +343,10 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   }
 
   receipt = {
-    ...receipt,
+    ...activatedReceipt,
     state: 'active',
-    previousBuildId: activation.previousBuildId,
-    endpoint: activation.endpoint,
     deployedAt: now().toISOString(),
-    completedSteps: steps({ ...receipt, completedSteps: steps(receipt, 'activate') }, 'smoke'),
+    completedSteps: steps(activatedReceipt, 'smoke'),
   };
   writeReceipt(options.projectRoot, receipt);
 
@@ -302,4 +358,10 @@ function steps(receipt: DeploymentReceipt, step: DeployStep): string[] {
   const present = new Set(receipt.completedSteps);
   present.add(step);
   return DEPLOY_STEPS.filter((known) => present.has(known));
+}
+
+function partialReceipt(error: unknown): DeploymentReceipt | null {
+  if (typeof error !== 'object' || error === null || !('receipt' in error)) return null;
+  const parsed = deploymentReceiptSchema.safeParse((error as { receipt: unknown }).receipt);
+  return parsed.success ? parsed.data : null;
 }

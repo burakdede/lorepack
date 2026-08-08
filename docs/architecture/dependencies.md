@@ -7,11 +7,19 @@ its capability matches an actual need, and that it costs the user nothing on fir
 Two constraints bound every choice:
 
 - **Zero-surprise first run.** No native add-ons, no post-install scripts, no compiler
-  toolchain. `pnpm check:no-native` enforces this in CI, so a dependency that pulls in a
-  native module fails the build rather than the user's install.
+  toolchain. `pnpm check:no-native` enforces this in CI across the **published dependency
+  closure** of every non-private workspace package, which is the install a user receives.
+  Contributor-only root dev tooling may be heavier, but it must stay outside that closure.
 - **Ports and adapters.** `core` may not depend on a parser, a database, a protocol or a
   cloud SDK. The dependency list per package is part of that boundary, and `pnpm arch`
   enforces the import direction.
+
+The distinction matters for Phase 6's local Cloudflare emulation. `wrangler` pulls native
+tooling for contributor use, not for the shipped CLI. The guard therefore measures the thing
+the product promises, a user's install, rather than the whole workspace checkout. Verified
+2026-08-06: `workerd` still does not get a post-install exemption. Its script stays declined
+in `pnpm-workspace.yaml`, because the binary resolves through optional dependencies and the
+emulator still starts without downloading anything at install time.
 
 ## The list
 

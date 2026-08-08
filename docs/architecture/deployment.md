@@ -76,3 +76,17 @@ never started.
 back: a receipt whose steps are whatever a target felt like writing can only be resumed by that
 target. A resume skips the steps already done, so it continues rather than restarting, and
 resuming a finished deploy changes nothing.
+
+## Cloudflare R2 key layout
+
+Phase 6's Cloudflare target stores two distinct things in one bucket, so the key shape is part
+of the deployment contract rather than an implementation detail:
+
+- normalized objects: `project/objects/sha256/<hash>`
+- sealed build archive: `project/builds/<buildId>/archive.lorepack`
+
+The project id comes first in both cases because the bucket is target-owned and may hold more
+than one Lorepack project. Objects are shared across builds under the project because they are
+content addressed and deduplicated. The archive is build scoped because retention, rollback and
+status address one sealed build at a time, and a deterministic `project/builds/<buildId>/`
+prefix lets later work enumerate or remove exactly that build without guessing.

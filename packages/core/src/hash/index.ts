@@ -9,8 +9,8 @@ export {
   formatBuildId,
   isBuildId,
   resolveBuildIdPrefix,
-  SCHEMA_VERSION,
 } from './build-id.js';
+export { hashBytes, objectKey } from './bytes.js';
 export {
   CANONICALIZATION_VERSION,
   type Canonical,
@@ -21,4 +21,5 @@ export {
   hashRoot,
   sha256Hex,
 } from './canonical.js';
-export { hashBytes, hashFile, objectKey } from './content.js';
+export { hashFile } from './content.js';
+export { SCHEMA_VERSION } from './schema.js';

@@ -8,7 +8,7 @@ import {
   secretsFromEnv,
   tableQueryRequestSchema,
   taskContextRequestSchema,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { type ZodType, z } from 'zod';

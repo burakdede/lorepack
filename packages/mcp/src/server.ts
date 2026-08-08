@@ -1,4 +1,4 @@
-import type { BuildComparer, LoreRuntime } from '@lorepack/core';
+import type { BuildComparer, LoreRuntime } from '@lorepack/core/worker';
 import { McpServer } from '@modelcontextprotocol/server';
 import { LEGACY_HANDSHAKE_VERSIONS, MCP_PROTOCOL_VERSION } from './protocol.js';
 import { registerResources } from './resources.js';

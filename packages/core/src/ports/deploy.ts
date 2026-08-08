@@ -64,6 +64,48 @@ export interface DeployInput {
   readonly buildCapabilities: readonly Capability[];
 }
 
+export interface DeployTransferArchive {
+  readonly key: string;
+  readonly sha256?: string;
+  readonly sizeBytes?: number;
+}
+
+export interface DeployTransferObjects {
+  readonly referenced: number;
+  readonly uploaded: number;
+  readonly skipped: number;
+  readonly verified: number;
+}
+
+export interface DeployTransfer {
+  readonly archive?: DeployTransferArchive;
+  readonly objects?: DeployTransferObjects;
+  readonly state?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+/**
+ * In-flight progress reported by a deployment target while `apply()` is running.
+ *
+ * Counts are always measurable work. Upload reporting may use bytes as the primary count and
+ * carry object counts or step names in `detail`, which the renderer shows verbatim.
+ */
+export interface DeployApplyProgress {
+  readonly stage: 'projecting' | 'uploading';
+  readonly completed: number;
+  readonly total?: number;
+  readonly unit?: string;
+  readonly detail?: string;
+}
+
+export type DeployApplyReporter = (update: DeployApplyProgress) => void;
+
+export interface DeployPlanDisplay {
+  readonly targetLabel?: string;
+  readonly resourceLines: readonly string[];
+  readonly projectionLines: readonly string[];
+  readonly activationLines: readonly string[];
+}
+
 /**
  * What would happen, computed without touching anything remote.
  *
@@ -79,6 +121,8 @@ export interface DeployPlan {
   /** One line per remote change, in the order it would happen, for a person to read. */
   readonly steps: readonly string[];
   readonly endpoint: string | null;
+  readonly transfer?: DeployTransfer;
+  readonly display?: DeployPlanDisplay;
 }
 
 /** What a verification actually asked the candidate, per capability. */
@@ -86,6 +130,7 @@ export interface VerificationResult {
   readonly search: 'passed' | 'failed' | 'skipped';
   readonly sourceRead: 'passed' | 'failed' | 'skipped';
   readonly tableQuery: 'passed' | 'failed' | 'skipped';
+  readonly capabilities?: readonly Capability[];
   /** Why something failed, for the receipt and for the person reading it. */
   readonly failures?: readonly string[];
 }
@@ -112,7 +157,11 @@ export interface DeploymentTarget {
   /** Read-only. Nothing remote changes, which is asserted rather than trusted. */
   plan(input: DeployInput): Promise<DeployPlan>;
   /** Writes only build-scoped candidate data. The active build is untouched. */
-  apply(plan: DeployPlan, resume?: DeploymentReceipt): Promise<DeploymentReceipt>;
+  apply(
+    plan: DeployPlan,
+    resume?: DeploymentReceipt,
+    progress?: DeployApplyReporter,
+  ): Promise<DeploymentReceipt>;
   /** Queries the candidate explicitly, never whatever happens to be active. */
   verify(receipt: DeploymentReceipt): Promise<VerificationResult>;
   /** The smallest possible pointer mutation, and nothing else. */
