@@ -45,6 +45,8 @@ export interface ProjectTableDataResult {
 }
 
 const SAFE_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
+const MAX_D1_BOUND_PARAMETERS = 100;
+const MAX_D1_SQL_BYTES = 95_000;
 
 const BUILD_TABLES_QUERY = `SELECT id, artifact_id, name, sheet, sql_name, row_count,
        relative_path, line_start, line_end, cell_range, metadata
@@ -228,6 +230,17 @@ async function createPhysicalTable(
   sqlName: string,
   columns: readonly BuildColumnRow[],
 ): Promise<void> {
+  if (columns.length > MAX_D1_BOUND_PARAMETERS) {
+    throw new LoreError(
+      'LORE_E_LIMIT_EXCEEDED',
+      `Table ${sqlName} has ${columns.length} columns, which exceeds Cloudflare D1's limit of ${MAX_D1_BOUND_PARAMETERS}.`,
+      {
+        remediation:
+          'Reduce the table width in the source build before projecting it to Cloudflare D1.',
+        subject: sqlName,
+      },
+    );
+  }
   const definition = columns
     .map((column) => `${assertIdentifier(column.sql_name)} ${typeOf(column.type)}`)
     .join(', ');
@@ -248,21 +261,45 @@ async function copyRows(
     .all() as Array<Record<string, TableValue>>;
   if (rows.length === 0) return 0;
 
+  const prefix = `INSERT INTO ${assertIdentifier(targetSqlName)} (${selected.join(', ')}) VALUES `;
   const tuple = `(${selected.map(() => '?').join(', ')})`;
-  const statement = `INSERT INTO ${assertIdentifier(targetSqlName)} (${selected.join(', ')}) VALUES ${rows
-    .map(() => tuple)
-    .join(', ')}`;
-  const values: Array<string | number | null> = [];
-  for (const row of rows) {
-    for (const column of columns) {
-      values.push(toSqlValue(row[column.sql_name] ?? null));
+  const maxRowsByParams = Math.max(1, Math.floor(MAX_D1_BOUND_PARAMETERS / columns.length));
+
+  let offset = 0;
+  while (offset < rows.length) {
+    const batchSize = batchSizeFor({
+      prefix,
+      tuple,
+      maxRowsByParams,
+      remainingRows: rows.length - offset,
+    });
+    const statement = `${prefix}${Array.from({ length: batchSize }, () => tuple).join(', ')}`;
+    const values: Array<string | number | null> = [];
+    for (const row of rows.slice(offset, offset + batchSize)) {
+      for (const column of columns) {
+        values.push(toSqlValue(row[column.sql_name] ?? null));
+      }
     }
+    await projection.prepare(statement).bind(...values).run();
+    offset += batchSize;
   }
-  await projection
-    .prepare(statement)
-    .bind(...values)
-    .run();
   return rows.length;
+}
+
+function batchSizeFor(options: {
+  readonly prefix: string;
+  readonly tuple: string;
+  readonly maxRowsByParams: number;
+  readonly remainingRows: number;
+}): number {
+  const upper = Math.min(options.maxRowsByParams, options.remainingRows);
+  let chosen = 1;
+  for (let rows = 1; rows <= upper; rows += 1) {
+    const statement = `${options.prefix}${Array.from({ length: rows }, () => options.tuple).join(', ')}`;
+    if (byteLength(statement) > MAX_D1_SQL_BYTES) break;
+    chosen = rows;
+  }
+  return chosen;
 }
 
 function typeOf(columnType: string): string {
@@ -280,4 +317,8 @@ function toSqlValue(value: TableValue): string | number | null {
   if (value === null) return null;
   if (typeof value === 'boolean') return value ? 1 : 0;
   return value;
+}
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
 }

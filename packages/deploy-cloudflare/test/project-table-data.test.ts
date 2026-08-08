@@ -48,11 +48,17 @@ class SqliteStatement
 {
   readonly #db: DatabaseSync;
   readonly #query: string;
+  readonly #onRun?: (query: string, bindings: readonly unknown[]) => void;
   #bindings: readonly unknown[] = [];
 
-  constructor(db: DatabaseSync, query: string) {
+  constructor(
+    db: DatabaseSync,
+    query: string,
+    onRun?: (query: string, bindings: readonly unknown[]) => void,
+  ) {
     this.#db = db;
     this.#query = query;
+    this.#onRun = onRun;
   }
 
   bind(...values: unknown[]): SqliteStatement {
@@ -67,19 +73,22 @@ class SqliteStatement
       return { results: statement.all(...this.#bindings) as readonly T[] };
     }
     statement.run(...this.#bindings);
+    this.#onRun?.(this.#query, this.#bindings);
     return {};
   }
 }
 
 class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike, D1QueryDatabaseLike {
   readonly #db: DatabaseSync;
+  readonly #onRun?: (query: string, bindings: readonly unknown[]) => void;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseSync, onRun?: (query: string, bindings: readonly unknown[]) => void) {
     this.#db = db;
+    this.#onRun = onRun;
   }
 
   prepare(query: string): SqliteStatement {
-    return new SqliteStatement(this.#db, query);
+    return new SqliteStatement(this.#db, query, this.#onRun);
   }
 }
 
@@ -153,19 +162,7 @@ function makeBuildDirectory(buildId: string, rowCount: number): string {
     `INSERT INTO table_columns
       (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    TABLE_ID,
-    0,
-    'SKU',
-    'c_0_sku',
-    'text',
-    0,
-    0,
-    rowCount,
-    1,
-    'A-1',
-    rowCount === 3 ? 'A-3' : 'A-2',
-  );
+  ).run(TABLE_ID, 0, 'SKU', 'c_0_sku', 'text', 0, 0, rowCount, 1, 'A-1', `A-${rowCount}`);
   db.prepare(
     `INSERT INTO table_columns
       (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
@@ -196,10 +193,16 @@ function makeBuildDirectory(buildId: string, rowCount: number): string {
           ['A-2', 4.5, 1],
           ['A-3', null, 0],
         ]
-      : [
-          ['A-1', 19.99, 1],
-          ['A-2', 4.5, 0],
-        ];
+      : rowCount === 2
+        ? [
+            ['A-1', 19.99, 1],
+            ['A-2', 4.5, 0],
+          ]
+        : Array.from({ length: rowCount }, (_, index) => [
+            `A-${index + 1}`,
+            Number((index + 1) * 1.5),
+            index % 2 === 0 ? 1 : 0,
+          ]);
   for (const row of baseRows) {
     db.prepare('INSERT INTO t_products (c_0_sku, c_1_price, c_2_available) VALUES (?, ?, ?)').run(
       row[0],
@@ -313,5 +316,33 @@ describe('projectTableData, issue 258', () => {
     ).rejects.toMatchObject({
       code: 'LORE_E_SQL_REJECTED',
     });
+  });
+
+  it('batches projected row inserts under D1 parameter and SQL-size limits', async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 40);
+    const projection = new DatabaseSync(':memory:');
+    databases.push(projection);
+    const writes: Array<{ query: string; bindings: readonly unknown[] }> = [];
+    const db = new SqliteProjectionDatabase(projection, (query, bindings) => {
+      if (query.startsWith('INSERT INTO t_products_')) {
+        writes.push({ query, bindings });
+      }
+    });
+    await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
+
+    const result = await projectTableData({
+      db,
+      projectId: PROJECT,
+      buildId: BUILD_A,
+      buildDirectory,
+    });
+
+    expect(result).toEqual({ projectedTables: 1, projectedRows: 40 });
+    expect(writes).toHaveLength(2);
+    expect(writes.map((write) => write.bindings.length)).toEqual([99, 21]);
+    for (const write of writes) {
+      expect(write.bindings.length).toBeLessThanOrEqual(100);
+      expect(new TextEncoder().encode(write.query).length).toBeLessThan(100_000);
+    }
   });
 });
