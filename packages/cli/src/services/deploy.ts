@@ -240,6 +240,9 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
     receipt = {
       ...receipt,
       state: 'verified',
+      ...(verification.capabilities === undefined
+        ? {}
+        : { verifiedCapabilities: [...verification.capabilities] }),
       verification: {
         search: verification.search,
         sourceRead: verification.sourceRead,

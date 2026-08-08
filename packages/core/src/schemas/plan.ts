@@ -118,6 +118,7 @@ export const deploymentReceiptSchema = z
     capabilityLossAccepted: z.array(capabilitySchema),
     completedSteps: z.array(z.string()),
     transfer: deployTransferSchema.optional(),
+    verifiedCapabilities: z.array(capabilitySchema).optional(),
     verification: z
       .object({
         search: z.enum(['passed', 'failed', 'skipped']),

@@ -1,4 +1,10 @@
-import { hashBytes, type Capability, type DeploymentReceipt, type VerificationResult } from '@lorepack/core';
+import {
+  hashBytes,
+  SCHEMA_VERSION,
+  type Capability,
+  type DeploymentReceipt,
+  type VerificationResult,
+} from '@lorepack/core';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -113,7 +119,7 @@ function makeBuildFixture(): {
         buildId: BUILD,
         projectName: PROJECT,
         compilerVersion: '0.1.0',
-        schemaVersion: 1,
+        schemaVersion: SCHEMA_VERSION,
         configurationHash: 'c'.repeat(64),
         sourceFingerprint: 'd'.repeat(64),
         canonicalRoots: {
@@ -381,14 +387,6 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       catalogDb: fixture.projection,
       objects: fixture.bucket,
       now: () => '2026-08-08T13:55:00.000Z',
-      verifyCandidate: async () =>
-        ({ search: 'passed', sourceRead: 'passed', tableQuery: 'passed' }) satisfies VerificationResult,
-      activateCandidate: async () => ({
-        buildId: BUILD,
-        previousBuildId: null,
-        confirmedBuildId: BUILD,
-        endpoint: ENDPOINT,
-      }),
       rollbackBuild: async () => ({
         buildId: BUILD,
         previousBuildId: null,
@@ -429,6 +427,66 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect(
       fixture.projection.raw.prepare('SELECT build_id FROM active_build WHERE id = 1').get(),
     ).toEqual({ build_id: null });
+  });
+
+  it('verifies the candidate through the projected runtime and records capabilities', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const receipt = await target.apply(plan);
+    const verification = await target.verify(receipt);
+
+    expect(verification).toEqual({
+      search: 'passed',
+      sourceRead: 'passed',
+      tableQuery: 'passed',
+      capabilities: ['lexical-search', 'structured-context', 'table-query'],
+    } satisfies VerificationResult);
+  });
+
+  it('activates atomically by switching the pointer and incrementing generation', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const receipt = await target.apply(plan);
+    fixture.projection.raw
+      .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+      .run(`lore_${'b'.repeat(64)}`, 7);
+    const activation = await target.activate(receipt);
+
+    expect(activation).toEqual({
+      buildId: BUILD,
+      previousBuildId: `lore_${'b'.repeat(64)}`,
+      confirmedBuildId: BUILD,
+      endpoint: ENDPOINT,
+    });
+    expect(
+      fixture.projection.raw.prepare('SELECT build_id, generation FROM active_build WHERE id = 1').get(),
+    ).toEqual({ build_id: BUILD, generation: 8 });
   });
 
   it('resumes from transfer state without re-uploading the archive', async () => {
