@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest';
+import { createWorkerRuntimeFixture, MATCHING_QUERY } from './worker-runtime-fixture.js';
+
+/**
+ * Worker D1 query budget, verified 2026-08-08.
+ *
+ * These maxima include the per-request `active_build` read. The manifest stays injected for
+ * now, so `describeBuild()` spends one D1 query on warnings rather than two on metadata.
+ *
+ * Current bounds:
+ * - `describeBuild`: 2 queries
+ * - `search`: 4 queries on the common path, 5 with fallback
+ * - `contextForTask`: 3 queries on the common path, 4 with fallback
+ * - `readSource`: 3 queries
+ * - `listTables`: 2 queries
+ * - `describeTable`: 4 queries
+ * - `queryTable`: 4 queries
+ */
+
+describe('the Worker D1 query budget, issue 86', () => {
+  it('keeps each runtime capability within its documented query maximum', async () => {
+    const fixture = createWorkerRuntimeFixture({ fallbackHitCount: 25 });
+    const { runtime, db, knownArtifactId, knownTableId } = fixture;
+
+    const countFor = async (call: () => Promise<unknown>): Promise<number> => {
+      db.resetCalls();
+      await call();
+      return db.calls.length;
+    };
+
+    expect(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(2);
+    expect(
+      await countFor(() =>
+        runtime.search({
+          query: MATCHING_QUERY,
+          limit: 10,
+          includeArchived: false,
+          debug: false,
+        }),
+      ),
+    ).toBeLessThanOrEqual(4);
+    expect(
+      await countFor(() =>
+        runtime.contextForTask({
+          task: 'rollback release',
+          includeArchived: false,
+          allowUnsupportedBudget: false,
+        }),
+      ),
+    ).toBeLessThanOrEqual(4);
+    expect(
+      await countFor(() => runtime.readSource({ artifactId: knownArtifactId })),
+    ).toBeLessThanOrEqual(3);
+    expect(await countFor(() => runtime.listTables())).toBeLessThanOrEqual(2);
+    expect(await countFor(() => runtime.describeTable(knownTableId))).toBeLessThanOrEqual(4);
+    expect(
+      await countFor(() =>
+        runtime.queryTable({
+          tableId: knownTableId,
+          sql: 'SELECT c_0_sku FROM t_products_active',
+        }),
+      ),
+    ).toBeLessThanOrEqual(4);
+  });
+
+  it('does not fan out D1 queries with deeper context assembly', async () => {
+    const fixture = createWorkerRuntimeFixture({ fallbackHitCount: 25 });
+    const { runtime, db } = fixture;
+
+    db.resetCalls();
+    const bundle = await runtime.contextForTask({
+      task: 'rollback release',
+      includeArchived: false,
+      budget: 24_000,
+      allowUnsupportedBudget: false,
+    });
+
+    expect(bundle.selected.length).toBeGreaterThan(0);
+    expect(db.calls.length).toBeLessThanOrEqual(4);
+    expect(db.calls.filter((call) => call.query.includes('FROM chunks_fts')).length).toBe(2);
+  });
+});
