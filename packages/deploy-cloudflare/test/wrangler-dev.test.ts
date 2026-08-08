@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type BuildManifest, hashBytes, type SourceReadResult } from '@lorepack/core';
+import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
 import { r2ObjectKey } from '../src/r2-keys.js';
@@ -48,12 +49,26 @@ let schemaFile = '';
 let objectFile = '';
 let worker: Unstable_DevWorker | null = null;
 
+const envelope = {
+  'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+  'io.modelcontextprotocol/clientCapabilities': {},
+  'io.modelcontextprotocol/clientInfo': { name: 'wrangler-dev-tests', version: '0.0.0' },
+};
+
 function runWrangler(args: readonly string[]): void {
   execFileSync(process.execPath, [WRANGLER_BIN, ...args], {
     cwd: WORKER_ROOT,
     env: { ...process.env, NO_D1_WARNING: 'true' },
     stdio: 'pipe',
   });
+}
+
+async function decodeMcp(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  const payload = text.startsWith('event:')
+    ? (text.split('\n').find((line) => line.startsWith('data: ')) ?? '').slice('data: '.length)
+    : text;
+  return JSON.parse(payload) as Record<string, unknown>;
 }
 
 beforeAll(async () => {
@@ -233,7 +248,7 @@ afterAll(async () => {
 }, 30_000);
 
 describe('wrangler dev for the Worker runtime, issue 86', () => {
-  it('serves build metadata, source bodies, and active-build table routes from local D1 and R2 emulation', async () => {
+  it('serves the public read surface, including MCP, from local D1 and R2 emulation', async () => {
     if (worker === null) {
       throw new Error('wrangler dev did not start');
     }
@@ -308,5 +323,40 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       `/v1/tables/${encodeURIComponent(CANDIDATE_TABLE_ID)}`,
     );
     expect(candidateResponse.status).toBe(404);
+
+    const mcpResponse = await worker.fetch('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/list',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: { _meta: envelope },
+      }),
+    });
+    expect(mcpResponse.status).toBe(200);
+    expect(await decodeMcp(mcpResponse)).toMatchObject({
+      jsonrpc: '2.0',
+      result: {
+        tools: expect.arrayContaining([
+          expect.objectContaining({ name: 'lore_context_for_task' }),
+          expect.objectContaining({ name: 'lore_search' }),
+        ]),
+      },
+    });
+
+    const writes = [
+      await worker.fetch('/v1/builds'),
+      await worker.fetch('/v1/builds/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ build: BUILD }),
+      }),
+    ];
+    expect(writes.map((response) => response.status)).toEqual([404, 404]);
   }, 20_000);
 });
