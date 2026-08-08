@@ -166,6 +166,10 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   });
 }
 
+function registeredRoutes(app: ReturnType<typeof appFor>): string[] {
+  return app.routes.map((route) => `${route.method} ${route.path}`);
+}
+
 describe('the route list, architecture 14.5', () => {
   it('answers GET /health with the build, the generation and the freshness', async () => {
     const response = await appFor().request('/health');
@@ -441,6 +445,30 @@ describe('the write surface, architecture 15.6 and 19.4', () => {
       },
     };
   }
+
+  it('registers no build-changing routes when the host supplies no local actions', () => {
+    const routes = registeredRoutes(appFor());
+
+    expect(routes).not.toContain('GET /v1/builds');
+    expect(routes).not.toContain('GET /v1/builds/:from/diff/:to');
+    expect(routes).not.toContain('POST /v1/builds/activate');
+    expect(routes).not.toContain('POST /v1/builds/rollback');
+    expect(routes).not.toContain('POST /v1/builds/pack');
+    // The remote criterion is about route registration, not HTTP verbs. This POST is a
+    // read route and must stay present.
+    expect(routes).toContain('POST /v1/tables/:tableId/query');
+  });
+
+  it('registers the full local write surface only when the host supplies actions', () => {
+    const { actions } = actionsFor();
+    const routes = registeredRoutes(appFor({ localActions: actions }));
+
+    expect(routes).toContain('GET /v1/builds');
+    expect(routes).toContain('GET /v1/builds/:from/diff/:to');
+    expect(routes).toContain('POST /v1/builds/activate');
+    expect(routes).toContain('POST /v1/builds/rollback');
+    expect(routes).toContain('POST /v1/builds/pack');
+  });
 
   it.each(WRITES)(
     'is absent entirely when the host supplies no actions: %s %s',
