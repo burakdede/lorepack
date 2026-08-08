@@ -4,6 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { LoreError } from '@lorepack/core';
 
 const MAX_D1_VALUE_BYTES = 2_000_000;
+export const D1_FREE_TIER_LIMIT_BYTES = 500_000_000;
+export const D1_FREE_TIER_WARN_BYTES = 400_000_000;
 
 interface ChunkRow {
   readonly relative_path: string;
