@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, objectKey, type LoreError } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { uploadProjectObjects } from '../src/project-objects.js';
-import { r2ObjectKey } from '../src/storage.js';
+import { r2ObjectKey } from '../src/r2-keys.js';
 
 const PROJECT = 'contracted';
 

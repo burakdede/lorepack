@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { type BuildManifest, hashBytes, type SourceReadResult } from '@lorepack/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
-import { r2ObjectKey } from '../src/storage.js';
+import { r2ObjectKey } from '../src/r2-keys.js';
 
 const BUILD = `lore_${'a'.repeat(64)}`;
 const PROJECT = 'demo';

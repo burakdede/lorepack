@@ -6,6 +6,7 @@ import {
   LoreError,
   type ObjectStore,
 } from '@lorepack/core/worker';
+import { r2ObjectKey } from './r2-keys.js';
 
 interface D1PreparedStatementLike {
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -87,10 +88,6 @@ export class R2ObjectStore implements ObjectStore {
     }
     return data;
   }
-}
-
-export function r2ObjectKey(projectId: string, hash: string): string {
-  return `${projectId}/objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {

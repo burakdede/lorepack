@@ -1,10 +1,10 @@
 import { type BuildId, hashBytes, type LoreError } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
+import { r2ObjectKey } from '../src/r2-keys.js';
 import {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
   R2ObjectStore,
-  r2ObjectKey,
 } from '../src/storage.js';
 
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;

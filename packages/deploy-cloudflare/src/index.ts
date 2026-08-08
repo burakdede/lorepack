@@ -15,6 +15,7 @@ import {
   type R2BucketLike,
   R2ObjectStore,
 } from './storage.js';
+import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import { type D1QueryDatabaseLike, type D1TableNamespace, D1TableStore } from './tables.js';
 
 /**
@@ -143,4 +144,6 @@ export {
   D1TableStore as D1NamespacedTableStore,
   D1TableStore,
   R2ObjectStore,
+  r2ArchiveKey,
+  r2ObjectKey,
 };

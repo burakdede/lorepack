@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, LoreError, objectKey } from '@lorepack/core';
-import { r2ObjectKey, type R2BucketLike } from './storage.js';
+import { r2ObjectKey } from './r2-keys.js';
+import type { R2BucketLike } from './storage.js';
 
 interface BuildArtifactRow {
   readonly object_hash: string;
