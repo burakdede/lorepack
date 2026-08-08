@@ -3,23 +3,11 @@ import { createMcpHttpHandler } from '@lorepack/mcp';
 import { type ApiOptions, createApiApp, createRuntime } from '@lorepack/runtime';
 import type { Hono } from 'hono';
 import {
-  CloudflareApplyError,
-  type CloudflareDeploymentTargetOptions,
-  createCloudflareDeploymentTarget,
-} from './target.js';
-import {
   type D1CatalogDatabaseLike,
   type D1CatalogNamespace,
   D1CatalogStore,
   type D1CatalogStoreOptions,
 } from './catalog.js';
-import { assertProjectionReadable } from './projection-state.js';
-import {
-  D1ActiveBuildProvider,
-  type D1DatabaseLike,
-  type R2BucketLike,
-  R2ObjectStore,
-} from './storage.js';
 import {
   type ProjectArchiveUploadOptions,
   type ProjectArchiveUploadResult,
@@ -30,8 +18,24 @@ import {
   type ProjectObjectUploadResult,
   uploadProjectObjects,
 } from './project-objects.js';
+import type {
+  ProjectionMigrationDatabaseLike,
+  ProjectionMigrationStatementLike,
+} from './projection-migrations.js';
+import { assertProjectionReadable } from './projection-state.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
+import {
+  D1ActiveBuildProvider,
+  type D1DatabaseLike,
+  type R2BucketLike,
+  R2ObjectStore,
+} from './storage.js';
 import { type D1QueryDatabaseLike, type D1TableNamespace, D1TableStore } from './tables.js';
+import {
+  CloudflareApplyError,
+  type CloudflareDeploymentTargetOptions,
+  createCloudflareDeploymentTarget,
+} from './target.js';
 
 /**
  * The Cloudflare Worker-facing assembly of the shared REST and MCP surfaces.
@@ -145,15 +149,17 @@ export function createCloudflareWorkerFromBindings(
 }
 
 export type {
+  CloudflareDeploymentTargetOptions,
   D1CatalogDatabaseLike,
   D1CatalogNamespace,
   D1CatalogStoreOptions,
   D1DatabaseLike,
   D1QueryDatabaseLike,
   D1TableNamespace,
-  CloudflareDeploymentTargetOptions,
   ProjectArchiveUploadOptions,
   ProjectArchiveUploadResult,
+  ProjectionMigrationDatabaseLike,
+  ProjectionMigrationStatementLike,
   ProjectObjectUploadOptions,
   ProjectObjectUploadResult,
   R2BucketLike,
