@@ -72,3 +72,9 @@ export {
   type R2BucketLike,
   R2ObjectStore,
 } from './storage.js';
+export {
+  type D1QueryDatabaseLike,
+  type D1TableNamespace,
+  D1TableStore,
+  D1TableStore as D1NamespacedTableStore,
+} from './tables.js';
