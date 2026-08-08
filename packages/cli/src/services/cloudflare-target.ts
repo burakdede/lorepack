@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { type DeploymentTarget, LoreError } from '@lorepack/core';
+import { type BuildId, type DeploymentTarget, LoreError } from '@lorepack/core';
 import {
   createCloudflareDeploymentTarget,
   type D1CatalogDatabaseLike,
@@ -123,8 +123,12 @@ export async function resolveCloudflareTargetWithAdapter(
   return createCloudflareDeploymentTarget({
     projectId: receipt.project,
     endpoint: `https://${receipt.workerName}.workers.dev/mcp`,
+    workerName: receipt.workerName,
+    catalogDatabaseName: receipt.catalogDatabaseName,
+    objectsBucketName: receipt.objectsBucketName,
     catalogDb: adapter.openCatalogDatabase(receipt.catalogDatabaseName),
     objects: adapter.openObjectsBucket(receipt.objectsBucketName),
+    publicBuildId: async () => await readPublicBuildId(receipt.workerName),
   });
 }
 
@@ -361,4 +365,19 @@ function readableFileExists(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+async function readPublicBuildId(workerName: string): Promise<BuildId | null> {
+  try {
+    const response = await fetch(`https://${workerName}.workers.dev/v1/build`);
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { readonly buildId?: unknown };
+    return isBuildId(payload.buildId) ? payload.buildId : null;
+  } catch {
+    return null;
+  }
+}
+
+function isBuildId(value: unknown): value is BuildId {
+  return typeof value === 'string' && /^lore_[0-9a-f]{64}$/.test(value);
 }

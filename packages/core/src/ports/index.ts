@@ -5,6 +5,7 @@ export type {
   DeployInput,
   DeploymentTarget,
   DeployPlan,
+  DeployPlanDisplay,
   DeployStep,
   DeployTransfer,
   DeployTransferArchive,

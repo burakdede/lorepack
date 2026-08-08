@@ -8,7 +8,7 @@ import type {
 } from '@lorepack/core';
 import { LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deployCommand } from '../src/commands/deploy.js';
 import type { CloudflareResolverAdapter } from '../src/services/cloudflare-target.js';
 import { run } from './helpers.js';
@@ -39,6 +39,22 @@ function fakeTarget(
         capabilityLoss: [],
         steps: ['project metadata', 'upload archive'],
         endpoint: 'https://example.workers.dev/mcp',
+        display: {
+          targetLabel: 'cloudflare / personal',
+          resourceLines: [
+            '= Worker deployed-runtime',
+            '= D1 deployed-catalog',
+            '= R2 deployed-objects',
+          ],
+          projectionLines: [
+            '+ 1 artifact',
+            '~ 0 artifacts',
+            '= 0 artifacts reused by content hash',
+            '+ 1 chunk',
+            '+ 0 table rows',
+          ],
+          activationLines: [`current none`, `next    ${input.buildId}`],
+        },
       };
     },
     apply: async (_plan, resume, progress): Promise<DeploymentReceipt> => {
@@ -93,6 +109,10 @@ function fakeTarget(
     }),
   };
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function writeCloudflareReceipt(
   root: string,
@@ -183,12 +203,13 @@ describe('lore deploy command, issue 91', () => {
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('Plan for first build');
-        expect(result.stdout).toContain('Deploy plan for cloudflare');
-        expect(result.stdout).toContain('Target');
-        expect(result.stdout).toContain('Build');
-        expect(result.stdout).toContain('Resources');
-        expect(result.stdout).toContain('Projection');
-        expect(result.stdout).toContain('Activation');
+        expect(result.stdout).toContain('Target: cloudflare / personal');
+        expect(result.stdout).toContain('= Worker deployed-runtime');
+        expect(result.stdout).toContain('= D1 deployed-catalog');
+        expect(result.stdout).toContain('= R2 deployed-objects');
+        expect(result.stdout).toContain('+ 1 artifact');
+        expect(result.stdout).toContain('= 0 artifacts reused by content hash');
+        expect(result.stdout).toContain('current none');
         expect(result.stdout).toContain('Endpoint: https://example.workers.dev/mcp');
         expect(result.stdout).toContain('Receipt:');
         expect(calls).toContain('apply');
@@ -215,6 +236,9 @@ describe('lore deploy command, issue 91', () => {
         );
 
         expect(result.code).toBe(0);
+        expect(result.stdout).toContain('Target: cloudflare / personal');
+        expect(result.stdout).toContain('= Worker deployed-runtime');
+        expect(result.stdout).toContain('+ 1 artifact');
         expect(result.stdout).toContain('Dry run only. Nothing remote was changed.');
         expect(calls).toEqual(expect.arrayContaining(['detect']));
         expect(calls).toEqual(expect.arrayContaining([expect.stringMatching(/^plan:lore_/)]));
@@ -299,7 +323,7 @@ describe('lore deploy command, issue 91', () => {
 
         expect(result.code).toBe(0);
         expect(calls).not.toContain('apply:cloudflare-aaaaaaaaaaaa');
-        expect(calls).toEqual(['detect', `plan:${buildId}`, 'verify', 'activate']);
+        expect(calls).toEqual([`plan:${buildId}`, 'detect', 'verify', 'activate']);
         expect(result.stdout).toContain('Active build:');
       },
     );
@@ -310,6 +334,7 @@ describe('lore deploy command, issue 91', () => {
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
       async (temp) => {
         writeCloudflareReceipt(temp.root);
+        vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
 
         const result = await run(
           ['--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--dry-run'],
@@ -319,7 +344,14 @@ describe('lore deploy command, issue 91', () => {
         );
 
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('Deploy plan for cloudflare');
+        expect(result.stdout).toContain('Target: cloudflare / personal');
+        expect(result.stdout).toContain('= Worker deployed-runtime');
+        expect(result.stdout).toContain('= D1 deployed-catalog');
+        expect(result.stdout).toContain('= R2 deployed-objects');
+        expect(result.stdout).toContain('+ 1 artifact');
+        expect(result.stdout).toContain('+ 0 chunks');
+        expect(result.stdout).toContain('+ 0 table rows');
+        expect(result.stdout).toContain('current none');
         expect(result.stdout).toContain('Dry run only. Nothing remote was changed.');
       },
     );

@@ -1,13 +1,17 @@
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
   type ActivationReceipt,
   type BuildId,
+  buildManifestSchema,
   type Capability,
+  count,
   type DeployApplyReporter,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
+  type DeployPlanDisplay,
   LoreError,
   type TargetCapabilities,
   type TargetDetection,
@@ -34,6 +38,9 @@ const DEFAULT_CAPABILITIES = ['lexical-search', 'structured-context', 'table-que
 export interface CloudflareDeploymentTargetOptions {
   readonly projectId: string;
   readonly endpoint: string;
+  readonly workerName?: string;
+  readonly catalogDatabaseName?: string;
+  readonly objectsBucketName?: string;
   readonly catalogDb: ProjectionMigrationDatabaseLike &
     D1CatalogDatabaseLike &
     D1QueryDatabaseLike &
@@ -81,6 +88,7 @@ export function createCloudflareDeploymentTarget(
         supported: [...DEFAULT_CAPABILITIES] as Capability[],
         endpoint: options.endpoint,
       });
+      const currentBuildId = await readCurrentPublicBuildId(options.publicBuildId);
       return {
         target: 'cloudflare',
         input,
@@ -113,6 +121,11 @@ export function createCloudflareDeploymentTarget(
             objects_done: false,
           },
         },
+        display: await renderDisplay({
+          options,
+          input,
+          currentBuildId,
+        }),
       };
     },
     apply: async (plan, resume, progress): Promise<DeploymentReceipt> => {
@@ -358,6 +371,118 @@ function countReferencedObjects(buildDirectory: string): number {
     return rows.length;
   } finally {
     db.close();
+  }
+}
+
+async function renderDisplay(input: {
+  readonly options: CloudflareDeploymentTargetOptions;
+  readonly input: DeployPlan['input'];
+  readonly currentBuildId: BuildId | null | undefined;
+}): Promise<DeployPlanDisplay> {
+  const manifest = buildManifestSchema.parse(
+    JSON.parse(readFileSync(join(input.input.buildDirectory, 'manifest.json'), 'utf8')),
+  );
+  const compared = await compareProjectedArtifacts(
+    input.options.catalogDb,
+    input.options.projectId,
+    input.input.buildDirectory,
+    input.currentBuildId,
+  );
+  return {
+    targetLabel: 'cloudflare / personal',
+    resourceLines: [
+      `= Worker ${input.options.workerName ?? '(resolved by receipt)'}`,
+      `= D1 ${input.options.catalogDatabaseName ?? '(resolved by receipt)'}`,
+      `= R2 ${input.options.objectsBucketName ?? '(resolved by receipt)'}`,
+    ],
+    projectionLines: [
+      `+ ${count(compared.added, 'artifact')}`,
+      `~ ${count(compared.changed, 'artifact')}`,
+      `= ${count(compared.reused, 'artifact')} reused by content hash`,
+      `+ ${count(manifest.counts.chunks, 'chunk')}`,
+      `+ ${count(manifest.counts.tableRows, 'table row')}`,
+    ],
+    activationLines: [
+      `current ${input.currentBuildId ?? 'none'}`,
+      `next    ${input.input.buildId}`,
+    ],
+  };
+}
+
+async function compareProjectedArtifacts(
+  db: ProjectionMigrationDatabaseLike,
+  projectId: string,
+  buildDirectory: string,
+  currentBuildId: BuildId | null | undefined,
+): Promise<{ readonly added: number; readonly changed: number; readonly reused: number }> {
+  const candidate = readCandidateArtifactHashes(buildDirectory);
+  if (currentBuildId === undefined || currentBuildId === null) {
+    return { added: candidate.size, changed: 0, reused: 0 };
+  }
+  const current = await readProjectedArtifactHashes(db, projectId, currentBuildId);
+  let added = 0;
+  let changed = 0;
+  let reused = 0;
+  for (const [artifactId, contentHash] of candidate) {
+    const previous = current.get(artifactId);
+    if (previous === undefined) {
+      added += 1;
+      continue;
+    }
+    if (previous === contentHash) {
+      reused += 1;
+      continue;
+    }
+    changed += 1;
+  }
+  return { added, changed, reused };
+}
+
+function readCandidateArtifactHashes(buildDirectory: string): ReadonlyMap<string, string> {
+  const db = new DatabaseSync(join(buildDirectory, 'context.sqlite'), {
+    readOnly: true,
+    allowExtension: false,
+    enableDoubleQuotedStringLiterals: false,
+  });
+  try {
+    const rows = db
+      .prepare('SELECT id, content_hash AS contentHash FROM artifacts ORDER BY id')
+      .all() as Array<{
+      readonly id: string;
+      readonly contentHash: string;
+    }>;
+    return new Map(rows.map((row) => [row.id, row.contentHash]));
+  } finally {
+    db.close();
+  }
+}
+
+async function readProjectedArtifactHashes(
+  db: ProjectionMigrationDatabaseLike,
+  projectId: string,
+  buildId: BuildId,
+): Promise<ReadonlyMap<string, string>> {
+  try {
+    const rows = await db
+      .prepare(
+        'SELECT id, content_hash AS contentHash FROM artifacts WHERE project_id = ? AND build_id = ? ORDER BY id',
+      )
+      .bind(projectId, buildId)
+      .run<{ readonly id: string; readonly contentHash: string }>();
+    return new Map((rows.results ?? []).map((row) => [row.id, row.contentHash]));
+  } catch {
+    return new Map();
+  }
+}
+
+async function readCurrentPublicBuildId(
+  publicBuildId: CloudflareDeploymentTargetOptions['publicBuildId'],
+): Promise<BuildId | null | undefined> {
+  if (publicBuildId === undefined) return undefined;
+  try {
+    return await publicBuildId();
+  } catch {
+    return undefined;
   }
 }
 

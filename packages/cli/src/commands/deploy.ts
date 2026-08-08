@@ -7,6 +7,7 @@ import {
   type Capability,
   type DeploymentReceipt,
   type DeploymentTarget,
+  type DeployPlan,
   LORE_DIRECTORY,
   LoreError,
   loadConfig,
@@ -87,10 +88,15 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
         context,
         ...(resume === undefined ? {} : { resume }),
       });
-      const planLines = [
-        ...preparation.localPlanLines,
-        renderDeployPlan(target.id, preparation.buildId, preparation.buildCapabilities),
-      ].filter((line) => line !== '');
+      const deployPlan = await target.plan({
+        projectName: config.config.name,
+        buildId: preparation.buildId,
+        buildDirectory: preparation.buildDirectory,
+        buildCapabilities: preparation.buildCapabilities,
+      });
+      const planLines = [...preparation.localPlanLines, renderDeployPlan(deployPlan)].filter(
+        (line) => line !== '',
+      );
       const planText = planLines.join('\n\n');
 
       if (flags.yes !== true && flags.dryRun !== true) {
@@ -106,6 +112,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
         buildId: preparation.buildId,
         buildDirectory: preparation.buildDirectory,
         buildCapabilities: preparation.buildCapabilities,
+        plan: deployPlan,
         progress: context.progress,
         dryRun: flags.dryRun === true,
         ...(resume === undefined ? {} : { resume }),
@@ -227,30 +234,40 @@ function readBuildInputs(projectRoot: string, buildId: BuildId): PreparedBuild {
   };
 }
 
-function renderDeployPlan(
-  target: string,
-  buildId: BuildId,
-  capabilities: readonly Capability[],
-): string {
-  return [
-    `Deploy plan for ${target}`,
-    '',
-    'Target',
-    `  ${target}`,
-    '',
-    'Build',
-    `  ${buildId}`,
-    `  Capabilities: ${capabilities.join(', ')}`,
+function renderDeployPlan(plan: DeployPlan): string {
+  const lines = [
+    `Target: ${plan.display?.targetLabel ?? plan.target}`,
+    `Build:  ${plan.input.buildId}`,
+  ];
+  if (plan.display === undefined) {
+    lines.push(`Capabilities: ${plan.input.buildCapabilities.join(', ')}`);
+  }
+  lines.push(
     '',
     'Resources',
-    '  Resolved by the selected deployment target.',
+    ...prefixPlanLines(
+      plan.display?.resourceLines ?? ['Resolved by the selected deployment target.'],
+    ),
     '',
     'Projection',
-    '  Project the sealed build as a candidate and verify it before activation.',
+    ...prefixPlanLines(
+      plan.display?.projectionLines ?? [
+        'Project the sealed build as a candidate and verify it before activation.',
+      ],
+    ),
     '',
     'Activation',
-    '  Switch the active pointer only after candidate verification and smoke confirmation.',
-  ].join('\n');
+    ...prefixPlanLines(
+      plan.display?.activationLines ?? [
+        'Switch the active pointer only after candidate verification and smoke confirmation.',
+      ],
+    ),
+  );
+  return lines.join('\n');
+}
+
+function prefixPlanLines(lines: readonly string[]): readonly string[] {
+  return lines.map((line) => `  ${line}`);
 }
 
 function renderDeployResult(

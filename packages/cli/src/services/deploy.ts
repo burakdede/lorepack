@@ -45,6 +45,7 @@ export interface DeployOptions {
   readonly buildDirectory: string;
   readonly buildCapabilities: readonly Capability[];
   readonly progress: ProgressBus;
+  readonly plan?: DeployPlan;
   /** Stop after printing the plan. Nothing remote is touched, which is the point. */
   readonly dryRun?: boolean;
   /**
@@ -136,14 +137,17 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
 
   // `validating` rather than a new stage name: the stage set is closed on purpose, and what
   // planning does here is check a build against a target without changing either.
-  progress.start('validating', 'Planning', 1);
-  const plan = await target.plan({
-    projectName: options.projectName,
-    buildId: options.buildId as DeployPlan['input']['buildId'],
-    buildDirectory: options.buildDirectory,
-    buildCapabilities: options.buildCapabilities,
-  });
-  progress.finish('validating', 1);
+  let plan = options.plan;
+  if (plan === undefined) {
+    progress.start('validating', 'Planning', 1);
+    plan = await target.plan({
+      projectName: options.projectName,
+      buildId: options.buildId as DeployPlan['input']['buildId'],
+      buildDirectory: options.buildDirectory,
+      buildCapabilities: options.buildCapabilities,
+    });
+    progress.finish('validating', 1);
+  }
 
   /**
    * Capability loss fails by default, and the override is per capability.
