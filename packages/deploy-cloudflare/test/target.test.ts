@@ -631,6 +631,47 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
   });
 
+  it('warns when the projected D1 size approaches the free-tier limit and names the largest contributors', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      workerName: 'contracted-runtime',
+      catalogDatabaseName: 'contracted-catalog',
+      objectsBucketName: 'contracted-objects',
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      preflight: () => ({
+        estimatedProjectedBytes: 451_000_000,
+        largestContributors: [
+          { relativePath: 'pricing.xlsx', bytes: 300_000_000 },
+          { relativePath: 'guides/rollback.md', bytes: 120_000_000 },
+          { relativePath: 'appendix.md', bytes: 31_000_000 },
+        ],
+      }),
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+
+    expect(plan.display?.projectionLines).toEqual([
+      '+ 2 artifacts',
+      '~ 0 artifacts',
+      '= 0 artifacts reused by content hash',
+      '+ 1 chunk',
+      '+ 1 table row',
+      '~ about 451,000,000 projected D1 bytes',
+      "! approaches Cloudflare D1's free-tier 500,000,000 byte limit",
+      '! pricing.xlsx: about 300,000,000 bytes',
+      '! guides/rollback.md: about 120,000,000 bytes',
+      '! appendix.md: about 31,000,000 bytes',
+    ]);
+  });
+
   it('refuses plan-time projection when one chunk text is above the D1 value limit', async () => {
     const fixture = makeBuildFixture({ chunkText: 'x'.repeat(2_000_001) });
     const target = createCloudflareDeploymentTarget({
