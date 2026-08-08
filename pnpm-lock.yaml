@@ -205,6 +205,15 @@ importers:
       '@lorepack/core':
         specifier: workspace:*
         version: link:../core
+      '@lorepack/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@lorepack/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      hono:
+        specifier: 4.12.33
+        version: 4.12.33
 
   packages/mcp:
     dependencies:
