@@ -7,10 +7,8 @@ import {
   buildWarningSchema,
   LoreError,
 } from '@lorepack/core';
-import {
-  PROJECTION_SCHEMA_VERSION,
-  type ProjectionMigrationDatabaseLike,
-} from './projection-migrations.js';
+import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
+import { PROJECTION_SCHEMA_VERSION } from './projection-schema.js';
 
 interface BuildArtifactRow {
   readonly id: string;

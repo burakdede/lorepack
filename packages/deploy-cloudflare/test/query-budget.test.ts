@@ -8,13 +8,13 @@ import { createWorkerRuntimeFixture, MATCHING_QUERY } from './worker-runtime-fix
  * `build_manifests` lookup.
  *
  * Current bounds:
- * - `describeBuild`: 3 queries
- * - `search`: 4 queries on the common path, 5 with fallback
- * - `contextForTask`: 3 queries on the common path, 4 with fallback
- * - `readSource`: 3 queries
- * - `listTables`: 2 queries
- * - `describeTable`: 4 queries
- * - `queryTable`: 4 queries
+ * - `describeBuild`: 4 queries
+ * - `search`: 5 queries on the common path, 6 with fallback
+ * - `contextForTask`: 4 queries on the common path, 5 with fallback
+ * - `readSource`: 4 queries
+ * - `listTables`: 3 queries
+ * - `describeTable`: 5 queries
+ * - `queryTable`: 5 queries
  */
 
 describe('the Worker D1 query budget, issue 86', () => {
@@ -28,7 +28,7 @@ describe('the Worker D1 query budget, issue 86', () => {
       return db.calls.length;
     };
 
-    expect(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(3);
+    expect(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(4);
     expect(
       await countFor(() =>
         runtime.search({
@@ -38,7 +38,7 @@ describe('the Worker D1 query budget, issue 86', () => {
           debug: false,
         }),
       ),
-    ).toBeLessThanOrEqual(4);
+    ).toBeLessThanOrEqual(5);
     expect(
       await countFor(() =>
         runtime.contextForTask({
@@ -47,12 +47,12 @@ describe('the Worker D1 query budget, issue 86', () => {
           allowUnsupportedBudget: false,
         }),
       ),
-    ).toBeLessThanOrEqual(4);
+    ).toBeLessThanOrEqual(5);
     expect(
       await countFor(() => runtime.readSource({ artifactId: knownArtifactId })),
-    ).toBeLessThanOrEqual(3);
-    expect(await countFor(() => runtime.listTables())).toBeLessThanOrEqual(2);
-    expect(await countFor(() => runtime.describeTable(knownTableId))).toBeLessThanOrEqual(4);
+    ).toBeLessThanOrEqual(4);
+    expect(await countFor(() => runtime.listTables())).toBeLessThanOrEqual(3);
+    expect(await countFor(() => runtime.describeTable(knownTableId))).toBeLessThanOrEqual(5);
     expect(
       await countFor(() =>
         runtime.queryTable({
@@ -60,7 +60,7 @@ describe('the Worker D1 query budget, issue 86', () => {
           sql: 'SELECT c_0_sku FROM t_products_active',
         }),
       ),
-    ).toBeLessThanOrEqual(4);
+    ).toBeLessThanOrEqual(5);
   });
 
   it('does not fan out D1 queries with deeper context assembly', async () => {
@@ -76,7 +76,7 @@ describe('the Worker D1 query budget, issue 86', () => {
     });
 
     expect(bundle.selected.length).toBeGreaterThan(0);
-    expect(db.calls.length).toBeLessThanOrEqual(4);
+    expect(db.calls.length).toBeLessThanOrEqual(5);
     expect(db.calls.filter((call) => call.query.includes('FROM chunks_fts')).length).toBe(2);
   });
 });

@@ -8,6 +8,7 @@ import {
   D1CatalogStore,
   type D1CatalogStoreOptions,
 } from './catalog.js';
+import { assertProjectionReadable } from './projection-state.js';
 import {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
@@ -102,15 +103,19 @@ export function createCloudflareWorkerFromBindings(
   const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB);
   const runtime = createRuntime({
     provider,
-    open: async (handle) => ({
-      buildId: handle.buildId,
-      catalog: new D1CatalogStore({
-        db: bindings.CATALOG_DB,
-        namespace: namespaceOf(bindings, handle.buildId),
-      }),
-      tables: new D1TableStore(bindings.CATALOG_DB, namespaceOf(bindings, handle.buildId)),
-      objects: new R2ObjectStore(bindings.OBJECTS),
-    }),
+    open: async (handle) => {
+      const namespace = namespaceOf(bindings, handle.buildId);
+      await assertProjectionReadable(bindings.CATALOG_DB, namespace);
+      return {
+        buildId: handle.buildId,
+        catalog: new D1CatalogStore({
+          db: bindings.CATALOG_DB,
+          namespace,
+        }),
+        tables: new D1TableStore(bindings.CATALOG_DB, namespace),
+        objects: new R2ObjectStore(bindings.OBJECTS),
+      };
+    },
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
   });
 
