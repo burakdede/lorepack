@@ -113,7 +113,7 @@ export function createCloudflareWorkerFromBindings(
           namespace,
         }),
         tables: new D1TableStore(bindings.CATALOG_DB, namespace),
-        objects: new R2ObjectStore(bindings.OBJECTS),
+        objects: new R2ObjectStore(bindings.PROJECT_ID, bindings.OBJECTS),
       };
     },
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),

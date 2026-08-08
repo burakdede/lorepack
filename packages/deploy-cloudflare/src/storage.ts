@@ -40,15 +40,17 @@ const ACTIVE_BUILD_QUERY =
  * reads verify checksums before returning bytes, and an unknown hash is an ordinary miss.
  */
 export class R2ObjectStore implements ObjectStore {
+  readonly #projectId: string;
   readonly #bucket: R2BucketLike;
 
-  constructor(bucket: R2BucketLike) {
+  constructor(projectId: string, bucket: R2BucketLike) {
+    this.#projectId = projectId;
     this.#bucket = bucket;
   }
 
   async put(data: Uint8Array): Promise<string> {
     const hash = await sha256Hex(data);
-    const key = objectKey(hash);
+    const key = r2ObjectKey(this.#projectId, hash);
     const existing = await this.#bucket.get(key);
     if (existing !== null) {
       await this.#readVerified(hash, existing);
@@ -59,13 +61,13 @@ export class R2ObjectStore implements ObjectStore {
   }
 
   async get(hash: string): Promise<Uint8Array | null> {
-    const object = await this.#bucket.get(objectKey(hash));
+    const object = await this.#bucket.get(r2ObjectKey(this.#projectId, hash));
     if (object === null) return null;
     return this.#readVerified(hash, object);
   }
 
   async has(hash: string): Promise<boolean> {
-    return (await this.#bucket.head(objectKey(hash))) !== null;
+    return (await this.#bucket.head(r2ObjectKey(this.#projectId, hash))) !== null;
   }
 
   async #readVerified(hash: string, object: R2ObjectBodyLike): Promise<Uint8Array> {
@@ -87,8 +89,8 @@ export class R2ObjectStore implements ObjectStore {
   }
 }
 
-function objectKey(hash: string): string {
-  return `sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+export function r2ObjectKey(projectId: string, hash: string): string {
+  return `${projectId}/objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {

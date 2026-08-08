@@ -2,9 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type BuildManifest, hashBytes, objectKey, type SourceReadResult } from '@lorepack/core';
+import { type BuildManifest, hashBytes, type SourceReadResult } from '@lorepack/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
+import { r2ObjectKey } from '../src/storage.js';
 
 const BUILD = `lore_${'a'.repeat(64)}`;
 const PROJECT = 'demo';
@@ -143,7 +144,7 @@ VALUES
     'r2',
     'object',
     'put',
-    `lorepack-build-objects-local/${objectKey(OBJECT_HASH)}`,
+    `lorepack-build-objects-local/${r2ObjectKey(PROJECT, OBJECT_HASH)}`,
     '--local',
     '--config',
     CONFIG,
