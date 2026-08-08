@@ -80,13 +80,13 @@ stays well under the 50-query free-tier ceiling even on its fallback path:
 
 | Capability | Maximum D1 queries | Why |
 |---|---:|---|
-| `describeBuild` | 3 | active-build pointer, projected manifest lookup, warning count |
-| `search` | 5 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids, chunk count |
-| `contextForTask` | 4 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids |
-| `readSource` | 3 | pointer, artifact lookup, node lookup. The body is in R2 |
-| `listTables` | 2 | pointer, table listing |
-| `describeTable` | 4 | pointer, table lookup, column lookup, sample rows |
-| `queryTable` | 4 | pointer, table lookup, column lookup, table query |
+| `describeBuild` | 4 | active-build pointer, projection-state check, projected manifest lookup, warning count |
+| `search` | 6 | pointer, projection-state check, precise FTS search, fallback FTS search when precise is empty, superseded ids, chunk count |
+| `contextForTask` | 5 | pointer, projection-state check, precise FTS search, fallback FTS search when precise is empty, superseded ids |
+| `readSource` | 4 | pointer, projection-state check, artifact lookup, node lookup. The body is in R2 |
+| `listTables` | 3 | pointer, projection-state check, table listing |
+| `describeTable` | 5 | pointer, projection-state check, table lookup, column lookup, sample rows |
+| `queryTable` | 5 | pointer, projection-state check, table lookup, column lookup, table query |
 
 Two details keep these counts fixed rather than proportional to result size:
 
@@ -94,6 +94,9 @@ Two details keep these counts fixed rather than proportional to result size:
   metadata. A deeper candidate list costs bytes, not round trips.
 - `readSource` resolves a range through node rows and reads the normalized body from R2, so
   the Worker does not spend D1 queries on full document text.
+- Every capability checks `projected_builds` at the request boundary before opening the
+  projected namespace, so an older or newer projection fails with `LORE_E_SCHEMA_MISMATCH`
+  rather than surfacing as a missing column or table from inside a later query.
 
 ## MCP resources
 

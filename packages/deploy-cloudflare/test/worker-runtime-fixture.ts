@@ -32,7 +32,7 @@ const MANIFEST: BuildManifest = {
     tables: '3'.repeat(64),
     objects: '4'.repeat(64),
   },
-  capabilities: ['lexical-search', 'structured-context', 'typed-tables'],
+  capabilities: ['lexical-search', 'structured-context', 'table-query'],
   counts: { artifacts: 1, nodes: 2, chunks: 1, tables: 1, tableRows: 3 },
   warnings: [],
 } as BuildManifest;
@@ -116,6 +116,18 @@ function installHandlers(db: FakeD1Database, options: SearchFixtureOptions): voi
   db.handlers.set('SELECT build_id AS buildId, generation FROM active_build WHERE id = 1', () => [
     { buildId: BUILD, generation: 7 },
   ]);
+
+  db.handlers.set(
+    `SELECT build_schema_version AS buildSchemaVersion,
+       projection_schema_version AS projectionSchemaVersion
+FROM projected_builds
+WHERE project_id = ? AND build_id = ?
+LIMIT 1`,
+    ([projectId, buildId]) =>
+      projectId === PROJECT && buildId === BUILD
+        ? [{ buildSchemaVersion: 3, projectionSchemaVersion: 1 }]
+        : [],
+  );
 
   db.handlers.set(
     `SELECT manifest_json AS manifestJson

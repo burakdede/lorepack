@@ -32,7 +32,7 @@ const MANIFEST: BuildManifest = {
     tables: '3'.repeat(64),
     objects: '4'.repeat(64),
   },
-  capabilities: ['lexical-search', 'structured-context', 'typed-tables'],
+  capabilities: ['lexical-search', 'structured-context', 'table-query'],
   counts: { artifacts: 1, nodes: 2, chunks: 0, tables: 0, tableRows: 0 },
   warnings: [],
 };
@@ -66,6 +66,15 @@ CREATE TABLE build_manifests (
   project_id TEXT NOT NULL,
   build_id TEXT NOT NULL,
   manifest_json TEXT NOT NULL,
+  PRIMARY KEY (project_id, build_id)
+);
+CREATE TABLE projected_builds (
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  build_schema_version INTEGER NOT NULL,
+  compiler_version TEXT NOT NULL,
+  projection_schema_version INTEGER NOT NULL,
+  projected_at TEXT NOT NULL,
   PRIMARY KEY (project_id, build_id)
 );
 CREATE TABLE build_warnings (
@@ -106,6 +115,8 @@ INSERT INTO active_build (id, build_id, generation)
 VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
 VALUES ('${PROJECT}', '${BUILD}', '${JSON.stringify(MANIFEST).replace(/'/g, "''")}');
+INSERT INTO projected_builds (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 1, '2026-08-08T12:00:00.000Z');
 INSERT INTO artifacts (id, project_id, build_id, relative_path, display_path, title, status, authority, media_type, object_hash)
 VALUES ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
 INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, text, heading_path, line_start, line_end)

@@ -35,6 +35,7 @@ export {
   isBuildId,
   resolveBuildIdPrefix,
 } from './hash/id.js';
+export { SCHEMA_VERSION } from './hash/schema.js';
 export type { ColumnTypeName } from './model/nodes.js';
 export { DEPLOY_STEPS } from './ports/deploy.js';
 export type * from './ports/index.js';

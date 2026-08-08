@@ -26,7 +26,6 @@ import {
  * - 3: `chunks.page`, so a citation of a PDF names the page rather than a line it is not on
  *      (#241).
  */
-export const SCHEMA_VERSION = 3 as const;
 
 /**
  * Everything that legitimately changes build output, and nothing else. Architecture

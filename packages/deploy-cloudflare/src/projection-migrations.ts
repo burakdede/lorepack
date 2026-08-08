@@ -34,8 +34,6 @@ interface AppliedMigrationRow {
   readonly checksum: string;
 }
 
-export const PROJECTION_SCHEMA_VERSION = 1;
-
 const SCHEMA_MIGRATIONS_TABLE = `CREATE TABLE IF NOT EXISTS schema_migrations (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
