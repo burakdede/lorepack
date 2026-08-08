@@ -1,6 +1,9 @@
 export type {
   ActivationReceipt,
   DeployInput,
+  DeployTransfer,
+  DeployTransferArchive,
+  DeployTransferObjects,
   DeploymentTarget,
   DeployPlan,
   DeployStep,

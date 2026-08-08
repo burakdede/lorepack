@@ -177,6 +177,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
     endpoint: plan.endpoint,
     capabilityLossAccepted: [...accepted],
     completedSteps: ['plan'],
+    ...(plan.transfer === undefined ? {} : { transfer: plan.transfer }),
     verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
   };
 
@@ -208,6 +209,9 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
       target: receipt.target,
       receiptId: receipt.receiptId,
       capabilityLossAccepted: receipt.capabilityLossAccepted,
+      ...(applied.transfer === undefined && receipt.transfer !== undefined
+        ? { transfer: receipt.transfer }
+        : {}),
       state: 'projected',
       completedSteps: steps(applied, 'project'),
     };

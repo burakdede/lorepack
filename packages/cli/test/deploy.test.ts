@@ -3,6 +3,7 @@ import {
   type ActivationReceipt,
   type Capability,
   type DeployInput,
+  type DeployTransfer,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
@@ -37,7 +38,45 @@ interface FakeOptions {
   readonly failApplyOnce?: boolean;
   readonly confirms?: string | null;
   readonly installed?: boolean;
+  readonly planTransfer?: DeployTransfer;
+  readonly appliedTransfer?: DeployTransfer;
 }
+
+const PLAN_TRANSFER: DeployTransfer = {
+  archive: {
+    key: 'deployed/builds/lore_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/archive.lorepack',
+    sha256: 'c'.repeat(64),
+    sizeBytes: 4096,
+  },
+  objects: {
+    referenced: 3,
+    uploaded: 2,
+    skipped: 1,
+    verified: 0,
+  },
+  state: {
+    candidateBuild: BUILD,
+    uploadPhase: 'planned',
+  },
+};
+
+const APPLIED_TRANSFER: DeployTransfer = {
+  archive: {
+    key: 'deployed/builds/lore_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/archive.lorepack',
+    sha256: 'c'.repeat(64),
+    sizeBytes: 4096,
+  },
+  objects: {
+    referenced: 3,
+    uploaded: 2,
+    skipped: 1,
+    verified: 3,
+  },
+  state: {
+    candidateBuild: BUILD,
+    uploadPhase: 'projected',
+  },
+};
 
 /** Records every call, so the assertions can be about order and about what never happened. */
 function fakeTarget(options: FakeOptions = {}): {
@@ -69,6 +108,7 @@ function fakeTarget(options: FakeOptions = {}): {
         capabilityLoss: input.buildCapabilities.filter((one) => !supported.includes(one)),
         steps: ['write rows', 'upload objects'],
         endpoint: 'https://fake.example/mcp',
+        ...(options.planTransfer === undefined ? {} : { transfer: options.planTransfer }),
       };
     },
     apply: async (plan, resume): Promise<DeploymentReceipt> => {
@@ -92,6 +132,7 @@ function fakeTarget(options: FakeOptions = {}): {
           endpoint: plan.endpoint,
           capabilityLossAccepted: [],
           completedSteps: ['plan'],
+          ...(options.appliedTransfer === undefined ? {} : { transfer: options.appliedTransfer }),
           verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
         }
       );
@@ -280,6 +321,17 @@ describe('a dry run', () => {
       expect((failure as LoreError).code).toBe('LORE_E_CAPABILITY_LOSS');
     });
   });
+
+  it('returns transfer details without writing a receipt', async () => {
+    await deploying(async (root) => {
+      const fake = fakeTarget({ planTransfer: PLAN_TRANSFER });
+
+      const result = await runDeploy(base(root, fake.target, { dryRun: true }));
+
+      expect(result.receipt.transfer).toEqual(PLAN_TRANSFER);
+      expect(existsSync(receiptPath(root, result.receipt.receiptId))).toBe(false);
+    });
+  });
 });
 
 describe('receipts', () => {
@@ -301,6 +353,16 @@ describe('receipts', () => {
 
       expect(result.receipt.endpoint).toBe('https://fake.example/mcp');
       expect(result.receipt.buildId).toBe(BUILD);
+    });
+  });
+
+  it('preserve transfer details through projection and activation', async () => {
+    await deploying(async (root) => {
+      const fake = fakeTarget({ planTransfer: PLAN_TRANSFER, appliedTransfer: APPLIED_TRANSFER });
+      const result = await runDeploy(base(root, fake.target));
+
+      expect(result.receipt.transfer).toEqual(APPLIED_TRANSFER);
+      expect(result.activation?.endpoint).toBe('https://fake.example/mcp');
     });
   });
 
@@ -376,6 +438,7 @@ describe('resume', () => {
       // The receipt written before the failure is what a resume is driven by.
       const partial = readReceipt(root, 'fake-aaaaaaaaaaaa');
       expect(partial.completedSteps).toEqual(['plan']);
+      expect(partial.transfer).toBeUndefined();
 
       const resuming = fakeTarget();
       const result = await runDeploy(
@@ -388,6 +451,31 @@ describe('resume', () => {
       expect(resuming.calls).not.toContain('apply');
       expect(resuming.calls).toEqual(['detect', 'plan', 'verify', 'activate']);
       expect(result.receipt.state).toBe('active');
+    });
+  });
+
+  it('keeps transfer state from a partial receipt when resuming past projection', async () => {
+    await deploying(async (root) => {
+      const fake = fakeTarget({ failApplyOnce: true, planTransfer: PLAN_TRANSFER });
+      const first = await runDeploy(base(root, fake.target)).catch((error: unknown) => error);
+      expect((first as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
+
+      const partial = readReceipt(root, 'fake-aaaaaaaaaaaa');
+      expect(partial.transfer).toEqual(PLAN_TRANSFER);
+
+      const resuming = fakeTarget();
+      const result = await runDeploy(
+        base(root, resuming.target, {
+          resume: {
+            ...partial,
+            transfer: APPLIED_TRANSFER,
+            completedSteps: ['plan', 'project'],
+          },
+        }),
+      );
+
+      expect(resuming.calls).toEqual(['detect', 'plan', 'verify', 'activate']);
+      expect(result.receipt.transfer).toEqual(APPLIED_TRANSFER);
     });
   });
 

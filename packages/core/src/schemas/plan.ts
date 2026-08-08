@@ -4,6 +4,7 @@ import {
   canonicalPathSchema,
   capabilitySchema,
   isoTimestampSchema,
+  sha256Schema,
 } from './common.js';
 
 const changeKindSchema = z.enum(['added', 'changed', 'removed', 'reused']);
@@ -29,6 +30,31 @@ export const tableChangeSchema = z
     rowsAfter: z.int().nonnegative().nullable(),
     columnsAdded: z.array(z.string()),
     columnsRemoved: z.array(z.string()),
+  })
+  .strict();
+
+const transferStateValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export const deployTransferSchema = z
+  .object({
+    archive: z
+      .object({
+        key: z.string().min(1),
+        sha256: sha256Schema.optional(),
+        sizeBytes: z.int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    objects: z
+      .object({
+        referenced: z.int().nonnegative(),
+        uploaded: z.int().nonnegative(),
+        skipped: z.int().nonnegative(),
+        verified: z.int().nonnegative(),
+      })
+      .strict()
+      .optional(),
+    state: z.record(z.string(), transferStateValueSchema).optional(),
   })
   .strict();
 
@@ -91,6 +117,7 @@ export const deploymentReceiptSchema = z
     endpoint: z.url().nullable(),
     capabilityLossAccepted: z.array(capabilitySchema),
     completedSteps: z.array(z.string()),
+    transfer: deployTransferSchema.optional(),
     verification: z
       .object({
         search: z.enum(['passed', 'failed', 'skipped']),
