@@ -1,4 +1,4 @@
-import { type CloudflareBindings, createCloudflareWorkerFromBindings } from './index.js';
+import { type CloudflareBindings, createCloudflareWorkerFromBindings } from './worker-app.js';
 
 export interface WorkerEnv extends CloudflareBindings {}
 
