@@ -396,18 +396,22 @@ async function activateCandidateBuild(
   options: CloudflareDeploymentTargetOptions,
   receipt: DeploymentReceipt,
 ): Promise<ActivationReceipt> {
-  const previous = await currentActiveBuild(options.catalogDb);
-
-  await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
+  let previous: { readonly buildId: BuildId; readonly generation: number } | null = null;
   try {
-    const nextGeneration = (previous?.generation ?? 0) + 1;
-    await options.catalogDb
-      .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
-      .bind(receipt.buildId, nextGeneration)
-      .run();
+    await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
+    previous = await currentActiveBuild(options.catalogDb);
+    if (previous?.buildId !== receipt.buildId) {
+      const nextGeneration = (previous?.generation ?? 0) + 1;
+      await options.catalogDb
+        .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+        .bind(receipt.buildId, nextGeneration)
+        .run();
+    }
     await options.catalogDb.prepare('COMMIT').run();
   } catch (cause) {
-    await options.catalogDb.prepare('ROLLBACK').run();
+    try {
+      await options.catalogDb.prepare('ROLLBACK').run();
+    } catch {}
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
       `Could not activate candidate ${receipt.buildId} on the cloudflare target.`,

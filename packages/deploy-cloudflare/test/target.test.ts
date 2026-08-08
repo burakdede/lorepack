@@ -5,7 +5,7 @@ import {
   type DeploymentReceipt,
   type VerificationResult,
 } from '@lorepack/core';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -19,6 +19,8 @@ import { r2ArchiveKey, r2ObjectKey } from '../src/r2-keys.js';
 
 const PROJECT = 'contracted';
 const BUILD = `lore_${'a'.repeat(64)}` as DeploymentReceipt['buildId'];
+const BUILD_B = `lore_${'b'.repeat(64)}` as DeploymentReceipt['buildId'];
+const BUILD_C = `lore_${'c'.repeat(64)}` as DeploymentReceipt['buildId'];
 const ENDPOINT = 'https://example.workers.dev/mcp';
 
 class FakeR2Bucket {
@@ -487,6 +489,74 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect(
       fixture.projection.raw.prepare('SELECT build_id, generation FROM active_build WHERE id = 1').get(),
     ).toEqual({ build_id: BUILD, generation: 8 });
+  });
+
+  it('fails one contender cleanly when activation attempts race for the lock', async () => {
+    const fixture = makeBuildFixture();
+    const root = dirname(dirname(dirname(fixture.buildDirectory)));
+    const secondDirectory = join(dirname(fixture.buildDirectory), BUILD_B);
+    cpSync(fixture.buildDirectory, secondDirectory, { recursive: true });
+    writeFileSync(
+      join(secondDirectory, 'manifest.json'),
+      readFileSync(join(secondDirectory, 'manifest.json'), 'utf8').replace(BUILD, BUILD_B),
+    );
+
+    const projectionPath = join(root, 'projection.sqlite');
+    const firstProjection = new SqliteProjectionDatabase(trackDatabase(new DatabaseSync(projectionPath)));
+    const secondProjection = new SqliteProjectionDatabase(trackDatabase(new DatabaseSync(projectionPath)));
+    const firstTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: firstProjection,
+      objects: fixture.bucket,
+      publicBuildId: async () => null,
+    });
+    const secondTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: secondProjection,
+      objects: fixture.bucket,
+      publicBuildId: async () => null,
+    });
+
+    const firstPlan = await firstTarget.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const secondPlan = await secondTarget.plan({
+      projectName: PROJECT,
+      buildId: BUILD_B,
+      buildDirectory: secondDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const firstReceipt = await firstTarget.apply(firstPlan);
+    const secondReceipt = await secondTarget.apply(secondPlan);
+
+    firstProjection.raw
+      .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+      .run(BUILD_C, 7);
+
+    const settled = await Promise.allSettled([
+      firstTarget.activate(firstReceipt),
+      secondTarget.activate(secondReceipt),
+    ]);
+
+    expect(settled.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(settled.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const failure = settled.find((result) => result.status === 'rejected');
+    expect(failure?.status).toBe('rejected');
+    expect((failure as PromiseRejectedResult).reason).toMatchObject({
+      code: 'LORE_E_REMOTE_DEPLOY',
+    });
+
+    expect(
+      firstProjection.raw.prepare('SELECT build_id, generation FROM active_build WHERE id = 1').get(),
+    ).toEqual({
+      build_id: expect.stringMatching(/^lore_[ab]{64}$/),
+      generation: 8,
+    });
   });
 
   it('resumes from transfer state without re-uploading the archive', async () => {
