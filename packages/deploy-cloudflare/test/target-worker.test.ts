@@ -1,8 +1,8 @@
-import { hashBytes, SCHEMA_VERSION, type Capability } from '@lorepack/core';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { type Capability, hashBytes, SCHEMA_VERSION } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createCloudflareDeploymentTarget,
@@ -13,6 +13,7 @@ import {
   type ProjectionMigrationDatabaseLike,
   type ProjectionMigrationStatementLike,
   type R2BucketLike,
+  r2ObjectKey,
 } from '../src/index.js';
 
 const PROJECT = 'contracted';
@@ -41,7 +42,48 @@ class FakeR2Bucket implements R2BucketLike {
   }
 }
 
-class SqliteStatement implements ProjectionMigrationStatementLike, ReturnType<D1DatabaseLike['prepare']> {
+class DelayedR2Bucket extends FakeR2Bucket {
+  #delayedKey: string | null = null;
+  #release: Promise<void> | null = null;
+  #resolveRelease: (() => void) | null = null;
+  #blocked: Promise<void> | null = null;
+  #resolveBlocked: (() => void) | null = null;
+
+  delayKey(key: string): void {
+    this.#delayedKey = key;
+    this.#release = new Promise<void>((resolve) => {
+      this.#resolveRelease = resolve;
+    });
+    this.#blocked = new Promise<void>((resolve) => {
+      this.#resolveBlocked = resolve;
+    });
+  }
+
+  async waitUntilBlocked(): Promise<void> {
+    await this.#blocked;
+  }
+
+  releaseDelayedRead(): void {
+    this.#resolveRelease?.();
+    this.#resolveRelease = null;
+    this.#release = null;
+    this.#resolveBlocked = null;
+    this.#blocked = null;
+    this.#delayedKey = null;
+  }
+
+  override async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
+    if (this.#delayedKey === key && this.#release !== null) {
+      this.#resolveBlocked?.();
+      await this.#release;
+    }
+    return await super.get(key);
+  }
+}
+
+class SqliteStatement
+  implements ProjectionMigrationStatementLike, ReturnType<D1DatabaseLike['prepare']>
+{
   readonly #db: DatabaseSync;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
@@ -73,7 +115,11 @@ class SqliteStatement implements ProjectionMigrationStatementLike, ReturnType<D1
 }
 
 class SqliteBindingsDatabase
-  implements ProjectionMigrationDatabaseLike, D1CatalogDatabaseLike, D1QueryDatabaseLike, D1DatabaseLike
+  implements
+    ProjectionMigrationDatabaseLike,
+    D1CatalogDatabaseLike,
+    D1QueryDatabaseLike,
+    D1DatabaseLike
 {
   readonly raw: DatabaseSync;
 
@@ -99,7 +145,7 @@ function trackDatabase(db: DatabaseSync): DatabaseSync {
   return db;
 }
 
-function createProjectFixture(): {
+function createProjectFixture(bucket: FakeR2Bucket = new FakeR2Bucket()): {
   readonly projectRoot: string;
   readonly projection: SqliteBindingsDatabase;
   readonly bucket: FakeR2Bucket;
@@ -107,7 +153,7 @@ function createProjectFixture(): {
   const projectRoot = trackDirectory(mkdtempSync(join(tmpdir(), 'lore-cloudflare-public-')));
   mkdirSync(join(projectRoot, '.lore', 'objects'), { recursive: true });
   const projection = new SqliteBindingsDatabase(trackDatabase(new DatabaseSync(':memory:')));
-  return { projectRoot, projection, bucket: new FakeR2Bucket() };
+  return { projectRoot, projection, bucket };
 }
 
 function createBuild(
@@ -122,7 +168,13 @@ function createBuild(
 
   const body = new TextEncoder().encode(text);
   const hash = hashBytes(body);
-  const objectPath = join(objectsDirectory, 'sha256', hash.slice(0, 2), hash.slice(2, 4), hash.slice(4));
+  const objectPath = join(
+    objectsDirectory,
+    'sha256',
+    hash.slice(0, 2),
+    hash.slice(2, 4),
+    hash.slice(4),
+  );
   mkdirSync(dirname(objectPath), { recursive: true });
   writeFileSync(objectPath, body);
 
@@ -364,7 +416,9 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     });
 
     const beforeBuild = await worker.fetch(new Request('https://worker.example/v1/build'));
-    expect((await beforeBuild.json()) as { buildId: string }).toMatchObject({ buildId: ACTIVE_BUILD });
+    expect((await beforeBuild.json()) as { buildId: string }).toMatchObject({
+      buildId: ACTIVE_BUILD,
+    });
 
     const beforeSearch = await worker.fetch(
       new Request('https://worker.example/v1/search', {
@@ -401,6 +455,102 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       }),
     );
     expect(((await afterSearch.json()) as { hits: unknown[] }).hits).toHaveLength(1);
+
+    await worker.close();
+  });
+
+  it('finishes an in-flight public source read on its captured build while the next request sees the activated build', async () => {
+    const bucket = new DelayedR2Bucket();
+    const fixture = createProjectFixture(bucket);
+    const activeText = 'active source body';
+    const candidateText = 'candidate source body';
+    const queryWord = 'shared';
+    const artifactId = `${PROJECT}:guides/${queryWord}.md`;
+    const activeHash = hashBytes(new TextEncoder().encode(activeText));
+
+    const activeDirectory = createBuild(fixture.projectRoot, ACTIVE_BUILD, activeText, queryWord);
+    const candidateDirectory = createBuild(
+      fixture.projectRoot,
+      CANDIDATE_BUILD,
+      candidateText,
+      queryWord,
+    );
+
+    const activeTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+    const activePlan = await activeTarget.plan({
+      projectName: PROJECT,
+      buildId: ACTIVE_BUILD,
+      buildDirectory: activeDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
+    });
+    const activeReceipt = await activeTarget.apply(activePlan);
+    await activeTarget.activate(activeReceipt);
+
+    const worker = createCloudflareWorkerFromBindings({
+      CATALOG_DB: fixture.projection,
+      OBJECTS: fixture.bucket,
+      PROJECT_ID: PROJECT,
+    });
+
+    const candidateTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => {
+        const response = await worker.fetch(new Request('https://worker.example/v1/build'));
+        const payload = (await response.json()) as { buildId: string };
+        return payload.buildId as typeof CANDIDATE_BUILD;
+      },
+    });
+    const candidatePlan = await candidateTarget.plan({
+      projectName: PROJECT,
+      buildId: CANDIDATE_BUILD,
+      buildDirectory: candidateDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
+    });
+    const candidateReceipt = await candidateTarget.apply(candidatePlan);
+
+    bucket.delayKey(r2ObjectKey(PROJECT, activeHash));
+
+    const inFlight = worker
+      .fetch(new Request(`https://worker.example/v1/sources/${encodeURIComponent(artifactId)}`))
+      .then(async (response) => ({
+        status: response.status,
+        body: (await response.json()) as { buildId: string; text: string },
+      }));
+
+    await bucket.waitUntilBlocked();
+
+    const activation = await candidateTarget.activate(candidateReceipt);
+    expect(activation.confirmedBuildId).toBe(CANDIDATE_BUILD);
+
+    const nextBuild = await worker.fetch(new Request('https://worker.example/v1/build'));
+    expect((await nextBuild.json()) as { buildId: string }).toMatchObject({
+      buildId: CANDIDATE_BUILD,
+    });
+
+    bucket.releaseDelayedRead();
+
+    const captured = await inFlight;
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({
+      buildId: ACTIVE_BUILD,
+      text: activeText,
+    });
+
+    const nextSource = await worker.fetch(
+      new Request(`https://worker.example/v1/sources/${encodeURIComponent(artifactId)}`),
+    );
+    expect((await nextSource.json()) as { buildId: string; text: string }).toMatchObject({
+      buildId: CANDIDATE_BUILD,
+      text: candidateText,
+    });
 
     await worker.close();
   });
