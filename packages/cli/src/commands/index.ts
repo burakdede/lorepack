@@ -4,6 +4,7 @@ import { buildCommand } from './build.js';
 import { configCommand } from './config.js';
 import { connectCommand, disconnectCommand } from './connect.js';
 import { devCommand } from './dev.js';
+import { deployCommand } from './deploy.js';
 import { diffCommand } from './diff.js';
 import { doctorCommand } from './doctor.js';
 import { exportCommand } from './export.js';
@@ -37,6 +38,7 @@ export function registerCommands(): CommandDefinition[] {
     rollbackCommand(),
     pruneCommand(),
     devCommand(),
+    deployCommand(),
     connectCommand(),
     disconnectCommand(),
     doctorCommand(),
