@@ -70,6 +70,10 @@ classified still reports an internal error, because that is what it is.
 Verified on **2026-08-08** against the Phase 6 Worker fixture in
 `packages/deploy-cloudflare/test/query-budget.test.ts`.
 
+The Phase 6 Worker is intentionally **stateless**: each request reads the active build through D1
+and R2 directly, with no Durable Object in the path. The design reason is recorded in
+`docs/architecture/adr-cloudflare-worker-stateless.md`.
+
 The bound that matters is **D1 queries per runtime request**, because the Worker also spends
 one query acquiring the active build pointer before every capability. The current read path
 stays well under the 50-query free-tier ceiling even on its fallback path:
