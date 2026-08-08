@@ -4,11 +4,11 @@ import { createWorkerRuntimeFixture, MATCHING_QUERY } from './worker-runtime-fix
 /**
  * Worker D1 query budget, verified 2026-08-08.
  *
- * These maxima include the per-request `active_build` read. The manifest stays injected for
- * now, so `describeBuild()` spends one D1 query on warnings rather than two on metadata.
+ * These maxima include the per-request `active_build` read and the namespaced
+ * `build_manifests` lookup.
  *
  * Current bounds:
- * - `describeBuild`: 2 queries
+ * - `describeBuild`: 3 queries
  * - `search`: 4 queries on the common path, 5 with fallback
  * - `contextForTask`: 3 queries on the common path, 4 with fallback
  * - `readSource`: 3 queries
@@ -28,7 +28,7 @@ describe('the Worker D1 query budget, issue 86', () => {
       return db.calls.length;
     };
 
-    expect(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(2);
+    expect(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(3);
     expect(
       await countFor(() =>
         runtime.search({

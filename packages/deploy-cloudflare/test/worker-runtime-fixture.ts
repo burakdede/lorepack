@@ -118,6 +118,17 @@ function installHandlers(db: FakeD1Database, options: SearchFixtureOptions): voi
   ]);
 
   db.handlers.set(
+    `SELECT manifest_json AS manifestJson
+FROM build_manifests
+WHERE project_id = ? AND build_id = ?
+LIMIT 1`,
+    ([projectId, buildId]) =>
+      projectId === PROJECT && buildId === BUILD
+        ? [{ manifestJson: JSON.stringify(MANIFEST) }]
+        : [],
+  );
+
+  db.handlers.set(
     `SELECT count(*) AS count
 FROM chunks
 WHERE project_id = ? AND build_id = ?`,
@@ -387,11 +398,7 @@ export function createWorkerRuntimeFixture(
     provider,
     open: async (handle): Promise<BuildScope> => ({
       buildId: handle.buildId,
-      catalog: new D1CatalogStore({
-        db,
-        namespace: namespace(),
-        manifest: async () => MANIFEST,
-      }),
+      catalog: new D1CatalogStore({ db, namespace: namespace() }),
       tables: new D1TableStore(db, { projectId: PROJECT, buildId: handle.buildId }),
       objects: {
         async get(hash: string) {
