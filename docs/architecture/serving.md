@@ -208,6 +208,13 @@ Returning `true` admits the request; `false` or a reason refuses it as `401`, wi
 reason as the error message. The decision may be asynchronous, because a real check calls
 something.
 
+On `/mcp`, the standard Streamable HTTP headers are validated against the parsed JSON-RPC
+body **before** the hook runs. `Mcp-Method` must agree with `body.method`, and `Mcp-Name`
+must agree with `params.name` or `params.uri` on the methods that mirror one. A divergence is
+rejected as HTTP `400` with MCP error `-32020` (`HeaderMismatch`). That is what makes those
+headers safe to use as a routing hint in Cloudflare Access or WAF policy: the body remains the
+source of truth, and a forged header is refused before an authorization decision can trust it.
+
 **No hook is passed locally, and that is deliberate.** A loopback server can only be reached
 by the person who started it, and a token they issue to themselves protects nothing while
 adding something to get wrong. The hook exists for the remote target in Phase 6, which is
