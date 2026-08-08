@@ -223,6 +223,9 @@ importers:
       '@lorepack/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@modelcontextprotocol/hono':
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.33)
       '@modelcontextprotocol/node':
         specifier: 2.0.0
         version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.33)
@@ -835,6 +838,13 @@ packages:
   '@modelcontextprotocol/core@2.0.0':
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
     engines: {node: '>=20'}
+
+  '@modelcontextprotocol/hono@2.0.0':
+    resolution: {integrity: sha512-lKCSXRusLxpX63G+6og9ewcRkqVbjB2xSxpvU/VJhxcUkpvGgpDrmcgNRQ4dTapGr8AspNFdRBdmJc500Vhl/A==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.0.0
+      hono: ^4.11.4
 
   '@modelcontextprotocol/node@2.0.0':
     resolution: {integrity: sha512-Y4hAC2XdGDUdDOCbLDOCA4+aL3NUldjsOWlDL/YwpAxrPhRm1xHd7lZ+mLacvZ9t3PaH28wgNoaLQGrIk1P2pg==}
@@ -3180,6 +3190,11 @@ snapshots:
   '@modelcontextprotocol/core@2.0.0':
     dependencies:
       zod: 4.4.3
+
+  '@modelcontextprotocol/hono@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.33)':
+    dependencies:
+      '@modelcontextprotocol/server': 2.0.0
+      hono: 4.12.33
 
   '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.33)':
     dependencies:
