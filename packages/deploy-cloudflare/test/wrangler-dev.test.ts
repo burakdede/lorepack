@@ -8,9 +8,14 @@ import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
 import { r2ObjectKey } from '../src/r2-keys.js';
 
 const BUILD = `lore_${'a'.repeat(64)}`;
+const CANDIDATE_BUILD = `lore_${'b'.repeat(64)}`;
 const PROJECT = 'demo';
 const ARTIFACT_ID = 'demo:guides/rollback.md';
 const ARTIFACT_PATH = 'guides/rollback.md';
+const TABLE_ID = 'demo:products';
+const CANDIDATE_TABLE_ID = 'demo:products-candidate';
+const TABLE_SQL = 't_products_active';
+const CANDIDATE_TABLE_SQL = 't_products_candidate';
 const WORKER_ROOT = join(import.meta.dirname, '..');
 const WRANGLER_BIN = join(WORKER_ROOT, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const CONFIG = join(WORKER_ROOT, 'wrangler.jsonc');
@@ -34,7 +39,7 @@ const MANIFEST: BuildManifest = {
     objects: '4'.repeat(64),
   },
   capabilities: ['lexical-search', 'structured-context', 'table-query'],
-  counts: { artifacts: 1, nodes: 2, chunks: 0, tables: 0, tableRows: 0 },
+  counts: { artifacts: 1, nodes: 2, chunks: 0, tables: 1, tableRows: 2 },
   warnings: [],
 };
 
@@ -112,6 +117,38 @@ CREATE TABLE nodes (
   line_start INTEGER,
   line_end INTEGER
 );
+CREATE TABLE tables (
+  id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  artifact_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  sheet TEXT,
+  sql_name TEXT NOT NULL,
+  row_count INTEGER NOT NULL,
+  relative_path TEXT NOT NULL,
+  line_start INTEGER,
+  line_end INTEGER,
+  cell_range TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  PRIMARY KEY (project_id, build_id, id)
+);
+CREATE TABLE table_columns (
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  table_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  sql_name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  nullable INTEGER NOT NULL,
+  null_count INTEGER NOT NULL,
+  distinct_estimate INTEGER NOT NULL,
+  distinct_is_exact INTEGER NOT NULL,
+  min_value TEXT,
+  max_value TEXT,
+  PRIMARY KEY (project_id, build_id, table_id, ordinal)
+);
 INSERT INTO active_build (id, build_id, generation)
 VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
@@ -124,6 +161,31 @@ INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, 
 VALUES
   ('n0', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 0, NULL, 'To roll back a release, activate the previous build.', '["Rollback"]', 3, 3),
   ('n1', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 1, NULL, 'Tell the team what changed after the rollback.', '["Rollback"]', 5, 5);
+INSERT INTO tables (id, project_id, build_id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range, metadata_json)
+VALUES
+  ('${TABLE_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'Products', 'Products', '${TABLE_SQL}', 2, '${ARTIFACT_PATH}', 1, 4, 'A1:B3', '{}'),
+  ('${CANDIDATE_TABLE_ID}', '${PROJECT}', '${CANDIDATE_BUILD}', '${ARTIFACT_ID}', 'Products Candidate', 'Products', '${CANDIDATE_TABLE_SQL}', 1, '${ARTIFACT_PATH}', 1, 3, 'A1:B2', '{}');
+INSERT INTO table_columns (project_id, build_id, table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+VALUES
+  ('${PROJECT}', '${BUILD}', '${TABLE_ID}', 0, 'SKU', 'c_0_sku', 'string', 0, 0, 2, 1, 'SKU-1', 'SKU-2'),
+  ('${PROJECT}', '${BUILD}', '${TABLE_ID}', 1, 'Price', 'c_1_price', 'integer', 0, 0, 2, 1, '10', '20'),
+  ('${PROJECT}', '${CANDIDATE_BUILD}', '${CANDIDATE_TABLE_ID}', 0, 'SKU', 'c_0_sku', 'string', 0, 0, 1, 1, 'SKU-C', 'SKU-C'),
+  ('${PROJECT}', '${CANDIDATE_BUILD}', '${CANDIDATE_TABLE_ID}', 1, 'Price', 'c_1_price', 'integer', 0, 0, 1, 1, '99', '99');
+CREATE TABLE ${TABLE_SQL} (
+  c_0_sku TEXT NOT NULL,
+  c_1_price INTEGER NOT NULL
+);
+INSERT INTO ${TABLE_SQL} (c_0_sku, c_1_price)
+VALUES
+  ('SKU-1', 10),
+  ('SKU-2', 20);
+CREATE TABLE ${CANDIDATE_TABLE_SQL} (
+  c_0_sku TEXT NOT NULL,
+  c_1_price INTEGER NOT NULL
+);
+INSERT INTO ${CANDIDATE_TABLE_SQL} (c_0_sku, c_1_price)
+VALUES
+  ('SKU-C', 99);
 `,
   );
   writeFileSync(objectFile, OBJECT_BODY);
@@ -171,7 +233,7 @@ afterAll(async () => {
 }, 30_000);
 
 describe('wrangler dev for the Worker runtime, issue 86', () => {
-  it('serves build metadata and source bodies from local D1 and R2 emulation', async () => {
+  it('serves build metadata, source bodies, and active-build table routes from local D1 and R2 emulation', async () => {
     if (worker === null) {
       throw new Error('wrangler dev did not start');
     }
@@ -193,5 +255,58 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     expect(source.buildId).toBe(BUILD);
     expect(source.text).toContain('activate the previous build');
     expect(source.locator.artifactId).toBe(ARTIFACT_ID);
+
+    const listResponse = await worker.fetch('/v1/tables');
+    expect(listResponse.status).toBe(200);
+    expect(await listResponse.json()).toEqual({
+      tables: [{ tableId: TABLE_ID, name: 'Products' }],
+    });
+
+    const describeResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}`);
+    expect(describeResponse.status).toBe(200);
+    expect(await describeResponse.json()).toMatchObject({
+      tableId: TABLE_ID,
+      name: 'Products',
+      sqlName: TABLE_SQL,
+      sheet: 'Products',
+      rowCount: 2,
+      locator: {
+        artifactId: ARTIFACT_ID,
+        relativePath: ARTIFACT_PATH,
+        sheet: 'Products',
+        cellRange: 'A1:B3',
+      },
+      columns: [
+        expect.objectContaining({ name: 'SKU', sqlName: 'c_0_sku', type: 'string' }),
+        expect.objectContaining({ name: 'Price', sqlName: 'c_1_price', type: 'integer' }),
+      ],
+    });
+
+    const queryResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql: `SELECT c_0_sku, c_1_price FROM ${TABLE_SQL}` }),
+    });
+    expect(queryResponse.status).toBe(200);
+    expect(await queryResponse.json()).toMatchObject({
+      columns: ['SKU', 'Price'],
+      rows: [
+        { SKU: 'SKU-1', Price: 10 },
+        { SKU: 'SKU-2', Price: 20 },
+      ],
+      rowCount: 2,
+      truncated: false,
+      locator: {
+        artifactId: ARTIFACT_ID,
+        relativePath: ARTIFACT_PATH,
+        sheet: 'Products',
+        cellRange: 'A1:B3',
+      },
+    });
+
+    const candidateResponse = await worker.fetch(
+      `/v1/tables/${encodeURIComponent(CANDIDATE_TABLE_ID)}`,
+    );
+    expect(candidateResponse.status).toBe(404);
   }, 20_000);
 });
