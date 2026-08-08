@@ -64,6 +64,25 @@ export interface DeployInput {
   readonly buildCapabilities: readonly Capability[];
 }
 
+export interface DeployTransferArchive {
+  readonly key: string;
+  readonly sha256?: string;
+  readonly sizeBytes?: number;
+}
+
+export interface DeployTransferObjects {
+  readonly referenced: number;
+  readonly uploaded: number;
+  readonly skipped: number;
+  readonly verified: number;
+}
+
+export interface DeployTransfer {
+  readonly archive?: DeployTransferArchive;
+  readonly objects?: DeployTransferObjects;
+  readonly state?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
 /**
  * What would happen, computed without touching anything remote.
  *
@@ -79,6 +98,7 @@ export interface DeployPlan {
   /** One line per remote change, in the order it would happen, for a person to read. */
   readonly steps: readonly string[];
   readonly endpoint: string | null;
+  readonly transfer?: DeployTransfer;
 }
 
 /** What a verification actually asked the candidate, per capability. */
