@@ -1,10 +1,16 @@
 import { type BuildId, hashBytes, type LoreError } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
-import { D1ActiveBuildProvider, type D1DatabaseLike, R2ObjectStore } from '../src/storage.js';
+import {
+  D1ActiveBuildProvider,
+  type D1DatabaseLike,
+  R2ObjectStore,
+  r2ObjectKey,
+} from '../src/storage.js';
 
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;
 const BUILD_A = buildId('a');
 const BUILD_B = buildId('b');
+const PROJECT = 'demo';
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
@@ -46,11 +52,12 @@ describe('R2ObjectStore', () => {
 
   it('round-trips content and returns its hash', async () => {
     const bucket = new FakeR2Bucket();
-    const store = new R2ObjectStore(bucket);
+    const store = new R2ObjectStore(PROJECT, bucket);
 
     const hash = await store.put(bytes('hello world'));
 
     expect(hash).toBe(hashBytes(bytes('hello world')));
+    expect([...bucket.objects.keys()]).toEqual([r2ObjectKey(PROJECT, hash)]);
     expect(new TextDecoder().decode((await store.get(hash)) ?? new Uint8Array())).toBe(
       'hello world',
     );
@@ -58,14 +65,14 @@ describe('R2ObjectStore', () => {
   });
 
   it('returns null for an unknown hash rather than throwing', async () => {
-    const store = new R2ObjectStore(new FakeR2Bucket());
+    const store = new R2ObjectStore(PROJECT, new FakeR2Bucket());
     expect(await store.get('f'.repeat(64))).toBeNull();
     expect(await store.has('f'.repeat(64))).toBe(false);
   });
 
   it('deduplicates identical content without rewriting', async () => {
     const bucket = new FakeR2Bucket();
-    const store = new R2ObjectStore(bucket);
+    const store = new R2ObjectStore(PROJECT, bucket);
 
     const first = await store.put(bytes('same'));
     const second = await store.put(bytes('same'));
@@ -76,15 +83,26 @@ describe('R2ObjectStore', () => {
 
   it('detects corruption on read and names the hash', async () => {
     const bucket = new FakeR2Bucket();
-    const store = new R2ObjectStore(bucket);
+    const store = new R2ObjectStore(PROJECT, bucket);
     const hash = await store.put(bytes('original'));
-    const key = `sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+    const key = r2ObjectKey(PROJECT, hash);
     bucket.objects.set(key, bytes('tampered'));
 
     await expect(store.get(hash)).rejects.toMatchObject({
       code: 'LORE_E_OBJECT_CORRUPT',
       subject: hash,
     });
+  });
+
+  it('does not read another project namespace', async () => {
+    const hash = hashBytes(bytes('shared'));
+    const bucket = new FakeR2Bucket();
+    bucket.objects.set(r2ObjectKey('other', hash), bytes('shared'));
+
+    const store = new R2ObjectStore(PROJECT, bucket);
+
+    expect(await store.get(hash)).toBeNull();
+    expect(await store.has(hash)).toBe(false);
   });
 });
 
