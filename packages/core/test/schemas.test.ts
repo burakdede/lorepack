@@ -309,6 +309,48 @@ describe('plan and deployment receipt', () => {
     expect(receipt.state).toBe('active');
   });
 
+  it('accepts transfer details with a flat resumable state map', () => {
+    const receipt = deploymentReceiptSchema.parse({
+      formatVersion: 1,
+      receiptId: 'r-1',
+      target: 'cloudflare',
+      project: 'sarjbot',
+      buildId: BUILD_ID,
+      previousBuildId: null,
+      state: 'projected',
+      deployedAt: '2026-07-31T20:00:00Z',
+      endpoint: 'https://context.example.com/mcp',
+      capabilityLossAccepted: [],
+      completedSteps: ['plan', 'project'],
+      transfer: {
+        archive: {
+          key: 'sarjbot/builds/lore_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/archive.lorepack',
+          sha256: 'b'.repeat(64),
+          sizeBytes: 4096,
+        },
+        objects: {
+          referenced: 3,
+          uploaded: 2,
+          skipped: 1,
+          verified: 3,
+        },
+        state: {
+          migrations_done: true,
+          upload_phase: 'objects',
+          uploaded_bytes: 4096,
+          retryable: null,
+        },
+      },
+      verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
+    });
+    expect(receipt.transfer?.state).toEqual({
+      migrations_done: true,
+      upload_phase: 'objects',
+      uploaded_bytes: 4096,
+      retryable: null,
+    });
+  });
+
   it('rejects an endpoint that is not a url', () => {
     const result = deploymentReceiptSchema.safeParse({
       formatVersion: 1,
@@ -325,6 +367,31 @@ describe('plan and deployment receipt', () => {
       verification: { search: 'passed', sourceRead: 'passed', tableQuery: 'passed' },
     });
     expect(firstIssuePath(result)).toBe('endpoint');
+  });
+
+  it('rejects nested transfer state that cannot be serialized as a flat resume cursor', () => {
+    const result = deploymentReceiptSchema.safeParse({
+      formatVersion: 1,
+      receiptId: 'r-1',
+      target: 'cloudflare',
+      project: 'p',
+      buildId: BUILD_ID,
+      previousBuildId: null,
+      state: 'projected',
+      deployedAt: '2026-07-31T20:00:00Z',
+      endpoint: 'https://context.example.com/mcp',
+      capabilityLossAccepted: [],
+      completedSteps: ['plan', 'project'],
+      transfer: {
+        state: {
+          archive: {
+            uploaded: true,
+          },
+        },
+      },
+      verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
+    });
+    expect(firstIssuePath(result)).toBe('transfer.state.archive');
   });
 });
 
