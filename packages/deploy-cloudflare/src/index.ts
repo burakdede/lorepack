@@ -65,3 +65,10 @@ export function createCloudflareWorker(options: CloudflareRuntimeOptions): Cloud
   const worker = createWorkerApp(options);
   return { app: worker.app, fetch: worker.fetch, close: worker.close };
 }
+
+export {
+  D1ActiveBuildProvider,
+  type D1DatabaseLike,
+  type R2BucketLike,
+  R2ObjectStore,
+} from './storage.js';
