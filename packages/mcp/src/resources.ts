@@ -1,4 +1,4 @@
-import { type BuildComparer, LoreError, type LoreRuntime } from '@lorepack/core';
+import { type BuildComparer, LoreError, type LoreRuntime } from '@lorepack/core/worker';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
   INVALID_PARAMS,

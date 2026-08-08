@@ -8,8 +8,14 @@ const SECRET_ENV_PATTERN = /(TOKEN|SECRET|PASSWORD|KEY|CREDENTIAL|API[_-]?KEY|AU
 const MIN_SECRET_LENGTH = 8;
 export const REDACTED = '[redacted]';
 
+function defaultEnv(): Record<string, string | undefined> {
+  return typeof process === 'object' && process !== null && 'env' in process
+    ? ((process as { env: Record<string, string | undefined> }).env ?? {})
+    : {};
+}
+
 /** Values worth hiding, drawn from the environment at render time. */
-export function secretsFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+export function secretsFromEnv(env: Record<string, string | undefined> = defaultEnv()): string[] {
   const values: string[] = [];
   for (const [name, value] of Object.entries(env)) {
     if (value === undefined) continue;

@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "lorepack-runtime",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["enable_request_signal"],
+  "vars": {
+    "PROJECT_ID": "demo"
+  },
+  "d1_databases": [
+    {
+      "binding": "CATALOG_DB",
+      "database_name": "lorepack-catalog",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "preview_database_id": "lorepack-catalog-local",
+      "remote": false
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "OBJECTS",
+      "bucket_name": "lorepack-build-objects",
+      "preview_bucket_name": "lorepack-build-objects-local",
+      "remote": false
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  }
+}

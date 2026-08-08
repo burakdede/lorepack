@@ -6,7 +6,7 @@ import {
   RUNTIME_LIMITS,
   type SourceLocator,
   type SourceReadRequest,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 
 /**
  * Reading an exact, cited range out of a sealed build.

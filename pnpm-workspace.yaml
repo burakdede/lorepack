@@ -15,6 +15,7 @@ packages:
 # contributor's machine, which is the promise `check:no-native` exists to keep.
 allowBuilds:
   esbuild: false
+  workerd: false
 
 # pdfjs-dist declares `@napi-rs/canvas` as an optionalDependency and reaches for it at
 # runtime if it is present. It is only needed to *render* a page, which Lorepack never does:

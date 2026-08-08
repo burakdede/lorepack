@@ -3,11 +3,9 @@ import {
   assertBuildId,
   type BuildHandle,
   type BuildId,
-  hashBytes,
   LoreError,
   type ObjectStore,
-  objectKey,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 
 interface D1PreparedStatementLike {
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -49,7 +47,7 @@ export class R2ObjectStore implements ObjectStore {
   }
 
   async put(data: Uint8Array): Promise<string> {
-    const hash = hashBytes(data);
+    const hash = await sha256Hex(data);
     const key = objectKey(hash);
     const existing = await this.#bucket.get(key);
     if (existing !== null) {
@@ -72,7 +70,7 @@ export class R2ObjectStore implements ObjectStore {
 
   async #readVerified(hash: string, object: R2ObjectBodyLike): Promise<Uint8Array> {
     const data = new Uint8Array(await object.arrayBuffer());
-    const actual = hashBytes(data);
+    const actual = await sha256Hex(data);
     if (actual !== hash) {
       throw new LoreError(
         'LORE_E_OBJECT_CORRUPT',
@@ -87,6 +85,15 @@ export class R2ObjectStore implements ObjectStore {
     }
     return data;
   }
+}
+
+function objectKey(hash: string): string {
+  return `sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+}
+
+async function sha256Hex(data: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
