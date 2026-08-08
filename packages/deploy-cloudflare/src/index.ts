@@ -3,6 +3,11 @@ import { createMcpHttpHandler } from '@lorepack/mcp';
 import { type ApiOptions, createApiApp, createRuntime } from '@lorepack/runtime';
 import type { Hono } from 'hono';
 import {
+  CloudflareApplyError,
+  type CloudflareDeploymentTargetOptions,
+  createCloudflareDeploymentTarget,
+} from './target.js';
+import {
   type D1CatalogDatabaseLike,
   type D1CatalogNamespace,
   D1CatalogStore,
@@ -146,6 +151,7 @@ export type {
   D1DatabaseLike,
   D1QueryDatabaseLike,
   D1TableNamespace,
+  CloudflareDeploymentTargetOptions,
   ProjectArchiveUploadOptions,
   ProjectArchiveUploadResult,
   ProjectObjectUploadOptions,
@@ -153,6 +159,8 @@ export type {
   R2BucketLike,
 };
 export {
+  CloudflareApplyError,
+  createCloudflareDeploymentTarget,
   D1ActiveBuildProvider,
   D1CatalogStore,
   D1TableStore as D1NamespacedTableStore,

@@ -36,6 +36,7 @@ interface FakeOptions {
   readonly supported?: readonly Capability[];
   readonly verification?: VerificationResult;
   readonly failApplyOnce?: boolean;
+  readonly partialApplyReceipt?: DeploymentReceipt;
   readonly confirms?: string | null;
   readonly installed?: boolean;
   readonly planTransfer?: DeployTransfer;
@@ -113,6 +114,14 @@ function fakeTarget(options: FakeOptions = {}): {
     },
     apply: async (plan, resume): Promise<DeploymentReceipt> => {
       calls.push('apply');
+      if (options.partialApplyReceipt !== undefined) {
+        throw Object.assign(
+          new LoreError('LORE_E_REMOTE_DEPLOY', 'The fake target failed after partial work.', {
+            remediation: 'Try again with --resume.',
+          }),
+          { receipt: options.partialApplyReceipt },
+        );
+      }
       if (state.failNext) {
         state.failNext = false;
         throw new LoreError('LORE_E_REMOTE_DEPLOY', 'The fake target failed part way through.', {
@@ -451,6 +460,32 @@ describe('resume', () => {
       expect(resuming.calls).not.toContain('apply');
       expect(resuming.calls).toEqual(['detect', 'plan', 'verify', 'activate']);
       expect(result.receipt.state).toBe('active');
+    });
+  });
+
+  it('writes a target-supplied partial receipt when apply fails', async () => {
+    await deploying(async (root) => {
+      const partialReceipt: DeploymentReceipt = {
+        formatVersion: 1,
+        receiptId: 'fake-aaaaaaaaaaaa',
+        target: 'fake',
+        project: 'deployed',
+        buildId: BUILD,
+        previousBuildId: null,
+        state: 'projecting',
+        deployedAt: '2026-08-06T00:00:00.000Z',
+        endpoint: 'https://fake.example/mcp',
+        capabilityLossAccepted: [],
+        completedSteps: ['plan'],
+        transfer: APPLIED_TRANSFER,
+        verification: { search: 'skipped', sourceRead: 'skipped', tableQuery: 'skipped' },
+      };
+
+      const failing = fakeTarget({ partialApplyReceipt: partialReceipt });
+      const first = await runDeploy(base(root, failing.target)).catch((error: unknown) => error);
+      expect((first as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
+
+      expect(readReceipt(root, 'fake-aaaaaaaaaaaa').transfer).toEqual(APPLIED_TRANSFER);
     });
   });
 
