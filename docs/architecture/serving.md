@@ -65,6 +65,32 @@ handler.
 `-32603` is narrowed by this, not removed. A runtime that throws something Lorepack never
 classified still reports an internal error, because that is what it is.
 
+## Worker D1 query budget
+
+Verified on **2026-08-08** against the Phase 6 Worker fixture in
+`packages/deploy-cloudflare/test/query-budget.test.ts`.
+
+The bound that matters is **D1 queries per runtime request**, because the Worker also spends
+one query acquiring the active build pointer before every capability. The current read path
+stays well under the 50-query free-tier ceiling even on its fallback path:
+
+| Capability | Maximum D1 queries | Why |
+|---|---:|---|
+| `describeBuild` | 2 | active-build pointer, warning count |
+| `search` | 5 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids, chunk count |
+| `contextForTask` | 4 | pointer, precise FTS search, fallback FTS search when precise is empty, superseded ids |
+| `readSource` | 3 | pointer, artifact lookup, node lookup. The body is in R2 |
+| `listTables` | 2 | pointer, table listing |
+| `describeTable` | 4 | pointer, table lookup, column lookup, sample rows |
+| `queryTable` | 4 | pointer, table lookup, column lookup, table query |
+
+Two details keep these counts fixed rather than proportional to result size:
+
+- `contextForTask` ranks and assembles from one FTS result set instead of fetching per-hit
+  metadata. A deeper candidate list costs bytes, not round trips.
+- `readSource` resolves a range through node rows and reads the normalized body from R2, so
+  the Worker does not spend D1 queries on full document text.
+
 ## MCP resources
 
 Tools are for what a client wants to ask; resources are for what it wants to browse
