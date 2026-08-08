@@ -179,6 +179,21 @@ describe('ProgressRenderer', () => {
     renderer.handle({ type: 'diagnostic', level: 'warn', message: '2 unsupported files', at: 1 });
     expect(text()).toContain('warn: 2 unsupported files');
   });
+
+  it('renders progress detail beside measurable counts, which deploy uses for bytes and objects', () => {
+    const { renderer, text } = setup(false);
+    renderer.handle({ type: 'stage-started', stage: 'uploading', label: 'Uploading', at: 0 });
+    renderer.handle({
+      type: 'stage-progress',
+      stage: 'uploading',
+      completed: 2048,
+      total: 4096,
+      unit: 'bytes',
+      detail: '1/2 objects, 1 uploaded, 0 skipped',
+      at: 1200,
+    });
+    expect(text()).toContain('2,048/4,096 bytes 1/2 objects, 1 uploaded, 0 skipped');
+  });
 });
 
 describe('shouldUseColor', () => {

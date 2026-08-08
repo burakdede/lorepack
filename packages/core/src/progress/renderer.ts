@@ -23,6 +23,7 @@ interface StageState {
   completed: number;
   total: number | undefined;
   unit: string | undefined;
+  detail: string | undefined;
   startedAt: number;
   lastRenderAt: number;
   finished: boolean;
@@ -91,6 +92,7 @@ export class ProgressRenderer {
           completed: 0,
           total: event.total,
           unit: undefined,
+          detail: undefined,
           startedAt: event.at,
           lastRenderAt: 0,
           finished: false,
@@ -103,6 +105,7 @@ export class ProgressRenderer {
         state.completed = event.completed;
         if (event.total !== undefined) state.total = event.total;
         if (event.unit !== undefined) state.unit = event.unit;
+        if (event.detail !== undefined) state.detail = event.detail;
         this.#render(event.stage, event.at, false);
         break;
       }
@@ -140,12 +143,13 @@ export class ProgressRenderer {
         ? `${formatCount(state.completed)}/${formatCount(state.total)}`
         : formatCount(state.completed);
     const unit = state.unit === undefined ? '' : ` ${state.unit}`;
+    const detail = state.detail === undefined ? '' : ` ${state.detail}`;
     const elapsed = formatElapsed(at - state.startedAt);
     const status = state.finished ? outcome : elapsed;
 
     // Laid out before it is coloured, so a style never counts toward the width and never
     // gets cut in half, which would leave the rest of the terminal wearing the colour.
-    const plain = layout(`${label}${counted}${unit}`, status, this.#options.columns);
+    const plain = layout(`${label}${counted}${unit}${detail}`, status, this.#options.columns);
     const line = this.#paint(plain, state.finished ? outcome : null);
 
     if (this.#options.isTty && !state.finished) {

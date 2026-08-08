@@ -1,8 +1,10 @@
+import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import {
-  SCHEMA_VERSION,
-  type BuildId,
   type ActivationReceipt,
+  type BuildId,
   type Capability,
+  type DeployApplyReporter,
   type DeploymentReceipt,
   type DeploymentTarget,
   type DeployPlan,
@@ -11,17 +13,18 @@ import {
   type TargetDetection,
   type VerificationResult,
 } from '@lorepack/core';
-import { type D1CatalogDatabaseLike, D1CatalogStore } from './catalog.js';
-import { dirname, join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { createRuntime } from '@lorepack/runtime';
-import { assertProjectionReadable } from './projection-state.js';
-import { projectBuildMetadata } from './project-metadata.js';
+import { type D1CatalogDatabaseLike, D1CatalogStore } from './catalog.js';
 import { uploadProjectArchive } from './project-archive.js';
+import { projectBuildMetadata } from './project-metadata.js';
 import { uploadProjectObjects } from './project-objects.js';
 import { projectSearchData } from './project-search-data.js';
 import { projectTableData } from './project-table-data.js';
-import { runProjectionMigrations, type ProjectionMigrationDatabaseLike } from './projection-migrations.js';
+import {
+  type ProjectionMigrationDatabaseLike,
+  runProjectionMigrations,
+} from './projection-migrations.js';
+import { assertProjectionReadable } from './projection-state.js';
 import { r2ArchiveKey } from './r2-keys.js';
 import { type D1DatabaseLike, type R2BucketLike, R2ObjectStore } from './storage.js';
 import { type D1QueryDatabaseLike, D1TableStore } from './tables.js';
@@ -112,17 +115,22 @@ export function createCloudflareDeploymentTarget(
         },
       };
     },
-    apply: async (plan, resume): Promise<DeploymentReceipt> => {
+    apply: async (plan, resume, progress): Promise<DeploymentReceipt> => {
       let receipt = receiptFor(plan, resume);
       let transfer = normalizeTransfer(receipt.transfer, plan);
       const buildDirectory = plan.input.buildDirectory;
       const objectsDirectory = join(dirname(dirname(buildDirectory)), 'objects');
+      let projectedSteps = countCompletedProjectionSteps(transfer);
+      let uploadedBytes = transfer.archive?.sizeBytes ?? 0;
+      let uploadTotalBytes = uploadedBytes;
 
       try {
         if (transfer.state?.migrations_done !== true) {
           await runProjectionMigrations(options.catalogDb, options.now);
           transfer = updateState(transfer, 'migrations_done', true);
           receipt = { ...receipt, transfer };
+          projectedSteps += 1;
+          reportProjectionProgress(progress, projectedSteps, 'migrations');
         }
 
         if (transfer.state?.metadata_done !== true) {
@@ -134,6 +142,8 @@ export function createCloudflareDeploymentTarget(
           });
           transfer = updateState(transfer, 'metadata_done', true);
           receipt = { ...receipt, transfer };
+          projectedSteps += 1;
+          reportProjectionProgress(progress, projectedSteps, 'metadata');
         }
 
         if (transfer.state?.search_done !== true) {
@@ -145,6 +155,8 @@ export function createCloudflareDeploymentTarget(
           });
           transfer = updateState(transfer, 'search_done', true);
           receipt = { ...receipt, transfer };
+          projectedSteps += 1;
+          reportProjectionProgress(progress, projectedSteps, 'search');
         }
 
         if (transfer.state?.tables_done !== true) {
@@ -156,6 +168,8 @@ export function createCloudflareDeploymentTarget(
           });
           transfer = updateState(transfer, 'tables_done', true);
           receipt = { ...receipt, transfer };
+          projectedSteps += 1;
+          reportProjectionProgress(progress, projectedSteps, 'tables');
         }
 
         if (transfer.state?.archive_done !== true) {
@@ -165,6 +179,17 @@ export function createCloudflareDeploymentTarget(
             buildId: plan.input.buildId,
             buildDirectory,
             objectsDirectory,
+            onProgress: (update) => {
+              uploadedBytes = update.completedBytes;
+              uploadTotalBytes = Math.max(uploadTotalBytes, update.totalBytes);
+              progress?.({
+                stage: 'uploading',
+                completed: uploadedBytes,
+                total: uploadTotalBytes,
+                unit: 'bytes',
+                detail: update.detail,
+              });
+            },
           });
           transfer = updateState(
             {
@@ -187,6 +212,20 @@ export function createCloudflareDeploymentTarget(
             projectId: options.projectId,
             buildDirectory,
             objectsDirectory,
+            onProgress: (update) => {
+              uploadTotalBytes = Math.max(
+                uploadTotalBytes,
+                (transfer.archive?.sizeBytes ?? 0) + update.totalBytes,
+              );
+              uploadedBytes = (transfer.archive?.sizeBytes ?? 0) + update.completedBytes;
+              progress?.({
+                stage: 'uploading',
+                completed: uploadedBytes,
+                total: uploadTotalBytes,
+                unit: 'bytes',
+                detail: `${update.completedObjects}/${update.totalObjects} objects, ${update.uploadedObjects} uploaded, ${update.skippedObjects} skipped`,
+              });
+            },
           });
           transfer = updateState(
             {
@@ -233,6 +272,31 @@ export function createCloudflareDeploymentTarget(
       );
     },
   };
+}
+
+function reportProjectionProgress(
+  progress: DeployApplyReporter | undefined,
+  completed: number,
+  detail: string,
+): void {
+  progress?.({
+    stage: 'projecting',
+    completed,
+    total: 4,
+    unit: 'steps',
+    detail,
+  });
+}
+
+function countCompletedProjectionSteps(
+  transfer: NonNullable<DeploymentReceipt['transfer']>,
+): number {
+  return [
+    transfer.state?.migrations_done === true,
+    transfer.state?.metadata_done === true,
+    transfer.state?.search_done === true,
+    transfer.state?.tables_done === true,
+  ].filter(Boolean).length;
 }
 
 function receiptFor(plan: DeployPlan, resume?: DeploymentReceipt): DeploymentReceipt {
@@ -365,17 +429,22 @@ async function verifyCandidateBuild(
     if (tables.length === 0) {
       tableQuery = 'skipped';
     } else {
-      const description = await runtime.describeTable(tables[0]!.tableId);
-      const firstColumn = description.columns[0]?.sqlName;
-      if (firstColumn === undefined) {
+      const firstTable = tables[0];
+      if (firstTable === undefined) {
         tableQuery = 'skipped';
       } else {
-        await runtime.queryTable({
-          tableId: description.tableId,
-          sql: `SELECT ${firstColumn} FROM ${description.sqlName} LIMIT 1`,
-          limit: 1,
-        });
-        tableQuery = 'passed';
+        const description = await runtime.describeTable(firstTable.tableId);
+        const firstColumn = description.columns[0]?.sqlName;
+        if (firstColumn === undefined) {
+          tableQuery = 'skipped';
+        } else {
+          await runtime.queryTable({
+            tableId: description.tableId,
+            sql: `SELECT ${firstColumn} FROM ${description.sqlName} LIMIT 1`,
+            limit: 1,
+          });
+          tableQuery = 'passed';
+        }
       }
     }
   } catch (cause) {
@@ -423,7 +492,8 @@ async function activateCandidateBuild(
     );
   }
 
-  const confirmedBuildId = options.publicBuildId === undefined ? null : await options.publicBuildId();
+  const confirmedBuildId =
+    options.publicBuildId === undefined ? null : await options.publicBuildId();
   return {
     buildId: receipt.buildId as BuildId,
     previousBuildId: previous?.buildId ?? null,
@@ -443,7 +513,9 @@ function smokeQueryFor(projectName: string): string {
 async function candidateSmokeQuery(catalog: D1CatalogStore): Promise<string | null> {
   const artifact = (await catalog.artifacts())[0];
   if (artifact === undefined) return null;
-  const node = (await catalog.nodes(artifact.artifactId)).find((candidate) => candidate.text.trim() !== '');
+  const node = (await catalog.nodes(artifact.artifactId)).find(
+    (candidate) => candidate.text.trim() !== '',
+  );
   const words = (node?.text ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/g)
