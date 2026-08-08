@@ -17,6 +17,7 @@ import { pruneCommand } from './prune.js';
 import { searchCommand } from './search.js';
 import { serveCommand } from './serve.js';
 import { statusCommand } from './status.js';
+import { targetCommand } from './target.js';
 
 /**
  * Commands are registered explicitly. No dynamic discovery: architecture section 4.8
@@ -39,6 +40,7 @@ export function registerCommands(): CommandDefinition[] {
     pruneCommand(),
     devCommand(),
     deployCommand(),
+    targetCommand(),
     connectCommand(),
     disconnectCommand(),
     doctorCommand(),
