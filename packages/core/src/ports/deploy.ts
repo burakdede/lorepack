@@ -99,6 +99,13 @@ export interface DeployApplyProgress {
 
 export type DeployApplyReporter = (update: DeployApplyProgress) => void;
 
+export interface DeployPlanDisplay {
+  readonly targetLabel?: string;
+  readonly resourceLines: readonly string[];
+  readonly projectionLines: readonly string[];
+  readonly activationLines: readonly string[];
+}
+
 /**
  * What would happen, computed without touching anything remote.
  *
@@ -115,6 +122,7 @@ export interface DeployPlan {
   readonly steps: readonly string[];
   readonly endpoint: string | null;
   readonly transfer?: DeployTransfer;
+  readonly display?: DeployPlanDisplay;
 }
 
 /** What a verification actually asked the candidate, per capability. */

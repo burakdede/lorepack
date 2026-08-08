@@ -503,6 +503,78 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     ).toBe(true);
   });
 
+  it('renders resolved resource, projection, and activation facts in the plan', async () => {
+    const fixture = makeBuildFixture();
+    const previousDirectory = join(dirname(fixture.buildDirectory), BUILD_B);
+    cpSync(fixture.buildDirectory, previousDirectory, { recursive: true });
+    writeFileSync(
+      join(previousDirectory, 'manifest.json'),
+      readFileSync(join(previousDirectory, 'manifest.json'), 'utf8').replaceAll(BUILD, BUILD_B),
+    );
+    const previousDb = new DatabaseSync(join(previousDirectory, 'context.sqlite'), {
+      allowExtension: false,
+      enableDoubleQuotedStringLiterals: false,
+    });
+    previousDb
+      .prepare('UPDATE artifacts SET content_hash = ? WHERE id = ?')
+      .run('9'.repeat(64), 'contracted:pricing.xlsx');
+    previousDb.close();
+
+    const previousTarget = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      workerName: 'contracted-runtime',
+      catalogDatabaseName: 'contracted-catalog',
+      objectsBucketName: 'contracted-objects',
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD_B,
+    });
+    const previousPlan = await previousTarget.plan({
+      projectName: PROJECT,
+      buildId: BUILD_B,
+      buildDirectory: previousDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const previousReceipt = await previousTarget.apply(previousPlan);
+    await previousTarget.activate(previousReceipt);
+
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      workerName: 'contracted-runtime',
+      catalogDatabaseName: 'contracted-catalog',
+      objectsBucketName: 'contracted-objects',
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD_B,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+
+    expect(plan.display).toEqual({
+      targetLabel: 'cloudflare / personal',
+      resourceLines: [
+        '= Worker contracted-runtime',
+        '= D1 contracted-catalog',
+        '= R2 contracted-objects',
+      ],
+      projectionLines: [
+        '+ 0 artifacts',
+        '~ 1 artifact',
+        '= 1 artifact reused by content hash',
+        '+ 1 chunk',
+        '+ 1 table row',
+      ],
+      activationLines: [`current ${BUILD_B}`, `next    ${BUILD}`],
+    });
+  });
+
   it('verifies the candidate through the projected runtime and records capabilities', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
