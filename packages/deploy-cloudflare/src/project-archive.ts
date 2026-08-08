@@ -17,6 +17,9 @@ export interface ProjectArchiveUploadOptions {
   readonly buildId: string;
   readonly buildDirectory: string;
   readonly objectsDirectory: string;
+  readonly retryAttempts?: number;
+  readonly retryDelayMs?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: (update: {
     readonly completedBytes: number;
     readonly totalBytes: number;
@@ -38,8 +41,14 @@ export async function uploadProjectArchive(
   const archive = await buildArchive(options.buildDirectory, options.objectsDirectory);
   const key = r2ArchiveKey(options.projectId, options.buildId);
   const sha256 = hashBytes(archive.bytes);
+  const retry = retryPolicy(options);
 
-  const existing = await options.bucket.head(key);
+  const existing = await withRetries(
+    () => options.bucket.head(key),
+    retry,
+    `inspect remote archive ${key}`,
+    key,
+  );
   if (existing !== null) {
     await verifyRemoteArchive(options.bucket, key, sha256);
     options.onProgress?.({
@@ -56,7 +65,12 @@ export async function uploadProjectArchive(
     };
   }
 
-  await options.bucket.put(key, archive.bytes);
+  await withRetries(
+    () => options.bucket.put(key, archive.bytes),
+    retry,
+    `upload archive ${key}`,
+    key,
+  );
   await verifyRemoteArchive(options.bucket, key, sha256);
   options.onProgress?.({
     completedBytes: archive.bytes.byteLength,
@@ -131,7 +145,12 @@ async function verifyRemoteArchive(
   key: string,
   expected: string,
 ): Promise<void> {
-  const object = await bucket.get(key);
+  const object = await withRetries(
+    () => bucket.get(key),
+    defaultRetryPolicy(),
+    `read uploaded archive ${key}`,
+    key,
+  );
   if (object === null) {
     throw new LoreError(
       'LORE_E_OBJECT_CORRUPT',
@@ -163,4 +182,74 @@ function withCleanup<T>(directory: string, body: () => Promise<T>): Promise<T> {
   return body().finally(() => {
     rmSync(directory, { recursive: true, force: true });
   });
+}
+
+interface RetryPolicy {
+  readonly attempts: number;
+  readonly delayMs: number;
+  readonly sleep: (ms: number) => Promise<void>;
+}
+
+function retryPolicy(
+  options: Pick<ProjectArchiveUploadOptions, 'retryAttempts' | 'retryDelayMs' | 'sleep'>,
+): RetryPolicy {
+  return {
+    attempts: options.retryAttempts ?? 3,
+    delayMs: options.retryDelayMs ?? 250,
+    sleep: options.sleep ?? defaultSleep,
+  };
+}
+
+function defaultRetryPolicy(): RetryPolicy {
+  return {
+    attempts: 3,
+    delayMs: 250,
+    sleep: defaultSleep,
+  };
+}
+
+async function withRetries<T>(
+  work: () => Promise<T>,
+  policy: RetryPolicy,
+  action: string,
+  subject: string,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === policy.attempts) {
+        throw new LoreError('LORE_E_REMOTE_DEPLOY', `Could not ${action}.`, {
+          remediation:
+            'Retry the deploy. If this recurs, the remote object store or network path is unstable.',
+          subject,
+          cause: error,
+        });
+      }
+      await policy.sleep(policy.delayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+function isTransient(error: unknown): boolean {
+  const message = String(
+    (error as { message?: unknown }).message ?? (error as { code?: unknown }).code ?? error,
+  ).toLowerCase();
+  return (
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econnreset') ||
+    message.includes('temporar') ||
+    message.includes('unavailable') ||
+    message.includes('rate limit') ||
+    message.includes('429')
+  );
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
