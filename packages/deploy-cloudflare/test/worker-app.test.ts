@@ -243,4 +243,43 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
     expect(localNames).toEqual([...TOOL_NAMES]);
     expect(workerNames).toEqual(localNames);
   });
+
+  it('rejects MCP header mismatches before the Worker auth hook can inspect them', async () => {
+    let authorized = 0;
+    const worker = createCloudflareWorker({
+      runtime: runtimeFor(),
+      currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
+      freshness: async () => 'clean',
+      authorize: () => {
+        authorized += 1;
+        return true;
+      },
+    });
+    closers.push(() => worker.close());
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'tools/list',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'lore_context_for_task', arguments: {} },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32020 },
+      id: 1,
+    });
+    expect(authorized).toBe(0);
+  });
 });

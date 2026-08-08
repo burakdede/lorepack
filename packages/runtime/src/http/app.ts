@@ -193,6 +193,13 @@ export const UNAUTHENTICATED_PATHS: readonly string[] = ['/health'];
 /** A megabyte is far more than any request here needs, and far less than a memory problem. */
 export const DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024;
 
+const HEADER_MISMATCH_ERROR_CODE = -32020;
+const MCP_NAME_HEADER_SOURCE: Readonly<Record<string, 'name' | 'uri'>> = {
+  'tools/call': 'name',
+  'prompts/get': 'name',
+  'resources/read': 'uri',
+};
+
 export function createApiApp(options: ApiOptions): Hono {
   const app = new Hono();
   const allowed = new Set(options.allowedOrigins ?? []);
@@ -239,6 +246,11 @@ export function createApiApp(options: ApiOptions): Hono {
     const authorize = options.authorize;
     app.use('*', async (context, next) => {
       if (UNAUTHENTICATED_PATHS.includes(context.req.path)) return next();
+
+      if (context.req.path === '/mcp') {
+        const mismatch = await validateMcpHeadersBeforeAuthorization(context.req.raw);
+        if (mismatch !== null) return mismatch;
+      }
 
       const decision = await authorize({
         authorization: context.req.header('Authorization'),
@@ -589,4 +601,115 @@ function numeric(name: 'lineStart' | 'lineEnd', raw: string | undefined): Record
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
+}
+
+async function validateMcpHeadersBeforeAuthorization(request: Request): Promise<Response | null> {
+  if (request.method.toUpperCase() !== 'POST') return null;
+  const methodHeader = request.headers.get('Mcp-Method');
+  const nameHeader = request.headers.get('Mcp-Name');
+  if (methodHeader === null && nameHeader === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = await request.clone().json();
+  } catch {
+    return null;
+  }
+
+  if (!isPlainObject(parsed)) return null;
+  const method = typeof parsed.method === 'string' ? parsed.method : undefined;
+  if (method === undefined) return null;
+
+  if (methodHeader === null) {
+    return mcpHeaderMismatch(
+      parsed,
+      '(missing)',
+      `the body names method ${method} but the required Mcp-Method header is absent`,
+    );
+  }
+  if (methodHeader !== method) {
+    return mcpHeaderMismatch(
+      parsed,
+      methodHeader,
+      `the body names method ${method} but the Mcp-Method header names ${methodHeader}`,
+    );
+  }
+
+  const sourceField = MCP_NAME_HEADER_SOURCE[method];
+  if (sourceField === undefined) return null;
+
+  const params = isPlainObject(parsed.params) ? parsed.params : null;
+  const bodyValue = typeof params?.[sourceField] === 'string' ? params[sourceField] : undefined;
+  if (bodyValue === undefined) return null;
+
+  if (nameHeader === null) {
+    return mcpHeaderMismatch(
+      parsed,
+      '(missing)',
+      `the body carries params.${sourceField}=${JSON.stringify(bodyValue)} but the required Mcp-Name header is absent`,
+    );
+  }
+
+  const decodedName = decodeMcpNameHeader(nameHeader);
+  if (decodedName === undefined) {
+    return mcpHeaderMismatch(
+      parsed,
+      nameHeader,
+      'the Mcp-Name header carries an invalid Base64 sentinel value',
+    );
+  }
+  if (decodedName !== bodyValue) {
+    return mcpHeaderMismatch(
+      parsed,
+      nameHeader,
+      `the body carries params.${sourceField}=${JSON.stringify(bodyValue)} but the Mcp-Name header names ${JSON.stringify(decodedName)}`,
+    );
+  }
+
+  return null;
+}
+
+function mcpHeaderMismatch(parsed: Record<string, unknown>, header: string, detail: string): Response {
+  return Response.json(
+    {
+      jsonrpc: '2.0',
+      error: {
+        code: HEADER_MISMATCH_ERROR_CODE,
+        message: `Bad Request: the request headers and body disagree: ${detail}`,
+        data: {
+          mismatch: {
+            header,
+            body: detail,
+          },
+        },
+      },
+      id: echoableJsonRpcId(parsed),
+    },
+    {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
+
+function echoableJsonRpcId(parsed: Record<string, unknown>): string | number | null {
+  const value = parsed.id;
+  return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
+
+function decodeMcpNameHeader(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  const encoded = /^=\?base64\?([A-Za-z0-9+/=]+)\?=$/i.exec(trimmed);
+  if (encoded === null) return trimmed;
+  try {
+    const binary = atob(encoded[1] ?? '');
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }

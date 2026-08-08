@@ -737,6 +737,75 @@ describe('the authorization hook, architecture 18.4', () => {
     expect((await app.request('/v1/build')).status).toBe(401);
     expect(reads).toBe(0);
   });
+
+  it('rejects an MCP method-header mismatch before the auth hook can inspect it', async () => {
+    let authorized = 0;
+    const app = appFor({
+      authorize: () => {
+        authorized += 1;
+        return true;
+      },
+      mcpHandler: () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+    });
+
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/list',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'lore_context_for_task', arguments: {} },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32020 },
+      id: 1,
+    });
+    expect(authorized).toBe(0);
+  });
+
+  it('rejects an MCP name-header mismatch before the auth hook can inspect it', async () => {
+    let authorized = 0;
+    const app = appFor({
+      authorize: () => {
+        authorized += 1;
+        return true;
+      },
+      mcpHandler: () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+    });
+
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'lore_search',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'lore_context_for_task', arguments: {} },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32020 },
+      id: 1,
+    });
+    expect(authorized).toBe(0);
+  });
 });
 
 describe('search filters reach the store, architecture 14.5', () => {
