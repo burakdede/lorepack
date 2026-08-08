@@ -1,7 +1,19 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import { type BuildId, type BuildSummary, LORE_DIRECTORY, loadConfig } from '@lorepack/core';
+import {
+  type BuildId,
+  type BuildSummary,
+  LORE_DIRECTORY,
+  loadConfig,
+  LoreError,
+  type DeploymentTarget,
+} from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
+import {
+  type CloudflareResolverAdapter,
+  resolveCloudflareTarget,
+  resolveCloudflareTargetWithAdapter,
+} from '../services/cloudflare-target.js';
 import {
   assertActivatable,
   openStateStore,
@@ -16,6 +28,14 @@ import {
  * produced the old build are gone.
  */
 
+export interface ActivateCommandOptions {
+  readonly resolveTarget?: (
+    name: string,
+    input: { readonly projectRoot: string; readonly configPath: string },
+  ) => Promise<DeploymentTarget>;
+  readonly cloudflareAdapter?: CloudflareResolverAdapter;
+}
+
 export function activateCommand(): CommandDefinition {
   return {
     name: 'activate',
@@ -26,18 +46,31 @@ export function activateCommand(): CommandDefinition {
   };
 }
 
-export function rollbackCommand(): CommandDefinition {
+export function rollbackCommand(options: ActivateCommandOptions = {}): CommandDefinition {
   return {
     name: 'rollback',
     description: 'Return to the previous verified build. Never recompiles.',
     arguments: [{ name: 'build', description: 'build id or unambiguous prefix', required: false }],
-    handler: async (args, _flags, context): Promise<CommandResult> =>
-      switchTo(
+    flags: [{ flags: '--target <target>', description: 'roll back a remote deployment target' }],
+    handler: async (args, flags, context): Promise<CommandResult> => {
+      const targetName =
+        typeof flags.target === 'string' && flags.target.trim() !== '' ? flags.target.trim() : null;
+      if (targetName !== null) {
+        return await rollbackRemote(
+          context.options.cwd,
+          targetName,
+          args[0],
+          options.resolveTarget,
+          options.cloudflareAdapter,
+        );
+      }
+      return await switchTo(
         context.options.cwd,
         (builds, active) =>
           args[0] === undefined ? previousBuild(builds, active) : resolveBuildId(builds, args[0]),
         'Rolled back to',
-      ),
+      );
+    },
   };
 }
 
@@ -129,4 +162,65 @@ function renderBuilds(builds: readonly BuildRow[]): string {
   }
   lines.push('', '* active');
   return lines.join('\n');
+}
+
+async function rollbackRemote(
+  cwd: string,
+  targetName: string,
+  buildId: string | undefined,
+  resolveTargetOverride: ActivateCommandOptions['resolveTarget'],
+  cloudflareAdapter: CloudflareResolverAdapter | undefined,
+): Promise<CommandResult> {
+  if (buildId === undefined || buildId.trim() === '') {
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      'Remote rollback currently requires an explicit build id.',
+      {
+        remediation:
+          'Pass the build id to roll back to, for example `lore rollback --target cloudflare lore_...`.',
+      },
+    );
+  }
+
+  const config = loadConfig({ cwd });
+  const target =
+    resolveTargetOverride === undefined
+      ? await resolveRemoteTarget(targetName, config.projectRoot, config.configPath, cloudflareAdapter)
+      : await resolveTargetOverride(targetName, {
+          projectRoot: config.projectRoot,
+          configPath: config.configPath,
+        });
+
+  const activation = await target.rollback(buildId as BuildId);
+  return {
+    human: [
+      `Rolled back ${target.id} to ${activation.buildId}.`,
+      `Endpoint: ${activation.endpoint ?? 'unknown'}`,
+      `Active build: ${activation.buildId}`,
+    ].join('\n'),
+    json: {
+      buildId: activation.buildId,
+      previousBuildId: activation.previousBuildId,
+      confirmedBuildId: activation.confirmedBuildId,
+      endpoint: activation.endpoint,
+      changed: true,
+    },
+  };
+}
+
+async function resolveRemoteTarget(
+  name: string,
+  projectRoot: string,
+  _configPath: string,
+  cloudflareAdapter?: CloudflareResolverAdapter,
+): Promise<DeploymentTarget> {
+  if (name !== 'cloudflare') {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown rollback target ${name}.`, {
+      remediation: 'Use `cloudflare`. Additional remote rollback targets are not implemented in v0.1.',
+      subject: name,
+    });
+  }
+  return cloudflareAdapter === undefined
+    ? await resolveCloudflareTarget(projectRoot)
+    : await resolveCloudflareTargetWithAdapter(projectRoot, cloudflareAdapter);
 }

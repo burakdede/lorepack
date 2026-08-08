@@ -1,8 +1,9 @@
 import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig, ProgressBus } from '@lorepack/core';
+import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import { rollbackCommand } from '../src/commands/activate.js';
 import { runBuild } from '../src/services/build.js';
 import { readActiveBuild } from '../src/services/project.js';
 import { run } from './helpers.js';
@@ -36,6 +37,41 @@ async function threeBuilds(
 
 function active(root: string): string | null {
   return readActiveBuild(join(root, '.lore'))?.buildId ?? null;
+}
+
+function fakeRemoteRollbackTarget(
+  calls: string[] = [],
+  buildId: BuildId = `lore_${'b'.repeat(64)}` as BuildId,
+): DeploymentTarget {
+  return {
+    id: 'cloudflare',
+    detect: async () => {
+      calls.push('detect');
+      return { installed: true, version: '1.0.0' };
+    },
+    capabilities: async () => ({ supported: ['lexical-search', 'structured-context'] }),
+    plan: async () => {
+      throw new Error('rollback tests do not call plan');
+    },
+    apply: async () => {
+      throw new Error('rollback tests do not call apply');
+    },
+    verify: async () => {
+      throw new Error('rollback tests do not call verify');
+    },
+    activate: async () => {
+      throw new Error('rollback tests do not call activate');
+    },
+    rollback: async (requestedBuildId) => {
+      calls.push(`rollback:${requestedBuildId}`);
+      return {
+        buildId: requestedBuildId,
+        previousBuildId: buildId,
+        confirmedBuildId: requestedBuildId,
+        endpoint: 'https://example.workers.dev/mcp',
+      };
+    },
+  };
 }
 
 describe('lore builds', () => {
@@ -207,6 +243,67 @@ describe('lore rollback', () => {
       const result = await lore(['rollback']);
       expect(result.code).toBe(1);
       expect(result.stderr).toContain('no earlier verified build');
+    });
+  });
+
+  it('rolls back a remote target to a named build id', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const calls: string[] = [];
+      const buildId = `lore_${'b'.repeat(64)}` as BuildId;
+      const result = await run(
+        ['--cwd', temp.root, 'rollback', '--target', 'cloudflare', buildId],
+        {
+          commands: [
+            rollbackCommand({
+              resolveTarget: async () => fakeRemoteRollbackTarget(calls, `lore_${'a'.repeat(64)}` as BuildId),
+            }),
+          ],
+        },
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(`Rolled back cloudflare to ${buildId}.`);
+      expect(result.stdout).toContain('Endpoint: https://example.workers.dev/mcp');
+      expect(calls).toEqual([`rollback:${buildId}`]);
+    });
+  });
+
+  it('refuses a remote rollback with no explicit build id', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
+        commands: [
+          rollbackCommand({
+            resolveTarget: async () => fakeRemoteRollbackTarget(),
+          }),
+        ],
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+      expect(result.stderr).toContain('requires an explicit build id');
+    });
+  });
+
+  it('does not depend on local sources when rolling back a remote target', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'a.md': '# A\n\nText.' } }, async (temp) => {
+      rmSync(join(temp.root, 'a.md'));
+      const calls: string[] = [];
+      const buildId = `lore_${'c'.repeat(64)}` as BuildId;
+
+      const result = await run(
+        ['--cwd', temp.root, 'rollback', '--target', 'cloudflare', buildId],
+        {
+          commands: [
+            rollbackCommand({
+              resolveTarget: async () => fakeRemoteRollbackTarget(calls),
+            }),
+          ],
+        },
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(`Active build: ${buildId}`);
+      expect(calls).toEqual([`rollback:${buildId}`]);
     });
   });
 });
