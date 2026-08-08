@@ -23,7 +23,10 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@lorepack/core": "workspace:*"
+    "@lorepack/core": "workspace:*",
+    "@lorepack/mcp": "workspace:*",
+    "@lorepack/runtime": "workspace:*",
+    "hono": "4.12.33"
   },
   "repository": {
     "type": "git",
