@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { PROJECTION_SCHEMA_VERSION } from './projection-schema.js';
 
 /**
  * The D1 projection schema for Phase 6.
@@ -190,6 +191,8 @@ export const PROJECTION_MIGRATIONS: readonly ProjectionMigration[] =
       .update(migration.statements.join('\n-- statement --\n'))
       .digest('hex'),
   }));
+
+export { PROJECTION_SCHEMA_VERSION };
 
 export async function runProjectionMigrations(
   db: ProjectionMigrationDatabaseLike,
