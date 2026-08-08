@@ -1,4 +1,10 @@
 export { AREAS, type Area, AUTOMATED, SCENARIOS, skippedHere } from './catalogue.js';
+export {
+  missingCloudflareTestingEnv,
+  readCloudflareTestingEnv,
+  requiredCloudflareTestingEnv,
+  resourcePrefixFor,
+} from './cloudflare-testing.js';
 export { describeExpect, describeStep, renderCatalogue } from './render.js';
 export { fill, pluck, type RunnerOptions, runScenario, type ScenarioReport } from './runner.js';
 export type {
