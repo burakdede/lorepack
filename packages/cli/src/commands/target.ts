@@ -122,16 +122,24 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       }
 
       const defaults = defaultNames(config.config.name);
+      const existing = readCloudflareTargetReceiptIfPresent(config.projectRoot);
       const planned = {
         accountId:
           typeof flags.accountId === 'string'
             ? flags.accountId
-            : (identity.accountId ?? '(required to connect existing resources)'),
-        workerName: typeof flags.worker === 'string' ? flags.worker : defaults.workerName,
+            : (existing?.accountId ?? identity.accountId ?? '(required to connect existing resources)'),
+        workerName:
+          typeof flags.worker === 'string'
+            ? flags.worker
+            : (existing?.workerName ?? defaults.workerName),
         catalogDatabaseName:
-          typeof flags.catalogDb === 'string' ? flags.catalogDb : defaults.catalogDatabaseName,
+          typeof flags.catalogDb === 'string'
+            ? flags.catalogDb
+            : (existing?.catalogDatabaseName ?? defaults.catalogDatabaseName),
         objectsBucketName:
-          typeof flags.objectsBucket === 'string' ? flags.objectsBucket : defaults.objectsBucketName,
+          typeof flags.objectsBucket === 'string'
+            ? flags.objectsBucket
+            : (existing?.objectsBucketName ?? defaults.objectsBucketName),
       };
 
       const plan = renderCloudflarePlan({
@@ -139,6 +147,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         wranglerVersion: detection.version ?? 'unknown',
         identity,
         planned,
+        existing,
       });
 
       if (flags.dryRun === true) {
@@ -158,6 +167,35 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       if (flags.yes !== true) {
         const confirmed = await (options.confirm ?? confirmTargetSetup)(plan, context);
         if (!confirmed) return { human: `${plan}\n\nCancelled. Nothing was changed.` };
+      }
+
+      const drift = existing === null ? [] : compareReceipt(existing, planned);
+      if (drift.length > 0) {
+        throw new LoreError(
+          'LORE_E_TARGET_NOT_CONFIGURED',
+          `The cloudflare target receipt does not match the requested resources: ${drift
+            .map((entry) => entry.field)
+            .join(', ')}.`,
+          {
+            remediation: `Fix the drift or remove ${cloudflareTargetPath(config.projectRoot)} and set the target up again.\n${drift
+              .map((entry) => `  ${entry.field}: receipt=${entry.current} requested=${entry.requested}`)
+              .join('\n')}`,
+            subject: 'cloudflare',
+          },
+        );
+      }
+
+      if (
+        existing !== null &&
+        typeof flags.accountId !== 'string' &&
+        typeof flags.worker !== 'string' &&
+        typeof flags.catalogDb !== 'string' &&
+        typeof flags.objectsBucket !== 'string'
+      ) {
+        return {
+          human: `${plan}\n\ncloudflare already matches ${cloudflareTargetPath(config.projectRoot)}.`,
+          json: existing,
+        };
       }
 
       if (
@@ -208,6 +246,7 @@ function renderCloudflarePlan(input: {
   readonly project: string;
   readonly wranglerVersion: string;
   readonly identity: WranglerIdentity;
+  readonly existing: CloudflareTargetReceipt | null;
   readonly planned: {
     readonly accountId: string;
     readonly workerName: string;
@@ -233,7 +272,43 @@ function renderCloudflarePlan(input: {
   lines.push('');
   lines.push('Receipt');
   lines.push('  Write non-secret Cloudflare identifiers under .lore/targets/cloudflare.json');
+  if (input.existing !== null) {
+    lines.push('  Existing receipt found and will be checked for drift before any rewrite');
+  }
   return lines.join('\n');
+}
+
+function compareReceipt(
+  existing: CloudflareTargetReceipt,
+  requested: {
+    readonly accountId: string;
+    readonly workerName: string;
+    readonly catalogDatabaseName: string;
+    readonly objectsBucketName: string;
+  },
+): Array<{ readonly field: string; readonly current: string; readonly requested: string }> {
+  const drift: Array<{ readonly field: string; readonly current: string; readonly requested: string }> = [];
+  if (existing.accountId !== requested.accountId) {
+    drift.push({ field: 'accountId', current: existing.accountId, requested: requested.accountId });
+  }
+  if (existing.workerName !== requested.workerName) {
+    drift.push({ field: 'workerName', current: existing.workerName, requested: requested.workerName });
+  }
+  if (existing.catalogDatabaseName !== requested.catalogDatabaseName) {
+    drift.push({
+      field: 'catalogDatabaseName',
+      current: existing.catalogDatabaseName,
+      requested: requested.catalogDatabaseName,
+    });
+  }
+  if (existing.objectsBucketName !== requested.objectsBucketName) {
+    drift.push({
+      field: 'objectsBucketName',
+      current: existing.objectsBucketName,
+      requested: requested.objectsBucketName,
+    });
+  }
+  return drift;
 }
 
 function defaultNames(project: string): {
@@ -318,5 +393,11 @@ export function readCloudflareTargetReceipt(projectRoot: string): CloudflareTarg
       subject: 'cloudflare',
     });
   }
+  return JSON.parse(readFileSync(path, 'utf8')) as CloudflareTargetReceipt;
+}
+
+function readCloudflareTargetReceiptIfPresent(projectRoot: string): CloudflareTargetReceipt | null {
+  const path = cloudflareTargetPath(projectRoot);
+  if (!existsSync(path)) return null;
   return JSON.parse(readFileSync(path, 'utf8')) as CloudflareTargetReceipt;
 }

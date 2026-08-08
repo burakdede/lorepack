@@ -115,6 +115,107 @@ describe('lore target add cloudflare, issue 85', () => {
     });
   });
 
+  it('is idempotent when rerun against an unchanged receipt', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } }, async (temp) => {
+      const args = [
+        '--cwd',
+        temp.root,
+        'target',
+        'add',
+        'cloudflare',
+        '--yes',
+        '--account-id',
+        'acct_123',
+        '--worker',
+        'demo-runtime',
+        '--catalog-db',
+        'demo-catalog',
+        '--objects-bucket',
+        'demo-objects',
+      ];
+      const command = targetCommand({
+        adapter: {
+          detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
+          whoami: async () => ({
+            authenticated: true,
+            email: 'dev@example.com',
+            accountName: 'Example Account',
+            accountId: 'acct_123',
+          }),
+        },
+        now: () => new Date('2026-08-08T15:00:00.000Z'),
+      });
+
+      const first = await run(args, { commands: [command] });
+      expect(first.code).toBe(0);
+      const path = `${temp.root}/.lore/targets/cloudflare.json`;
+      const before = readFileSync(path, 'utf8');
+
+      const second = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
+        commands: [command],
+      });
+
+      expect(second.code).toBe(0);
+      expect(second.stdout).toContain('already matches');
+      expect(readFileSync(path, 'utf8')).toBe(before);
+    });
+  });
+
+  it('reports receipt drift when rerun asks for different resources', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } }, async (temp) => {
+      const command = targetCommand({
+        adapter: {
+          detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
+          whoami: async () => ({
+            authenticated: true,
+            email: 'dev@example.com',
+            accountName: 'Example Account',
+            accountId: 'acct_123',
+          }),
+        },
+        now: () => new Date('2026-08-08T15:00:00.000Z'),
+      });
+      await run(
+        [
+          '--cwd',
+          temp.root,
+          'target',
+          'add',
+          'cloudflare',
+          '--yes',
+          '--account-id',
+          'acct_123',
+          '--worker',
+          'demo-runtime',
+          '--catalog-db',
+          'demo-catalog',
+          '--objects-bucket',
+          'demo-objects',
+        ],
+        { commands: [command] },
+      );
+
+      const drift = await run(
+        [
+          '--cwd',
+          temp.root,
+          'target',
+          'add',
+          'cloudflare',
+          '--yes',
+          '--worker',
+          'other-runtime',
+        ],
+        { commands: [command] },
+      );
+
+      expect(drift.code).toBe(5);
+      expect(drift.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
+      expect(drift.stderr).toContain('workerName');
+      expect(drift.stderr).toContain('receipt=demo-runtime requested=other-runtime');
+    });
+  });
+
   it('refuses a non-dry-run setup without explicit existing-resource identifiers', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } }, async (temp) => {
       const result = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
