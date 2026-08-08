@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type {
+  Capability,
   DeployApplyProgress,
   DeployInput,
   DeploymentReceipt,
@@ -21,6 +22,7 @@ function fakeTarget(
     readonly failResume?: boolean;
     readonly applyProgress?: readonly DeployApplyProgress[];
     readonly applyProgressDelayMs?: number;
+    readonly capabilityLoss?: readonly Capability[];
   } = {},
 ): DeploymentTarget {
   const calls = options.calls ?? [];
@@ -36,7 +38,7 @@ function fakeTarget(
       return {
         target: 'cloudflare',
         input,
-        capabilityLoss: [],
+        capabilityLoss: [...(options.capabilityLoss ?? [])],
         steps: ['project metadata', 'upload archive'],
         endpoint: 'https://example.workers.dev/mcp',
         display: {
@@ -325,6 +327,86 @@ describe('lore deploy command, issue 91', () => {
         expect(calls).not.toContain('apply:cloudflare-aaaaaaaaaaaa');
         expect(calls).toEqual([`plan:${buildId}`, 'detect', 'verify', 'activate']);
         expect(result.stdout).toContain('Active build:');
+      },
+    );
+  });
+
+  it('cancels before any remote write when confirmation is declined', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const calls: string[] = [];
+        const result = await run(['--cwd', temp.root, 'deploy', 'cloudflare'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () => fakeTarget({ calls }),
+              confirm: async () => false,
+            }),
+          ],
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('Target: cloudflare / personal');
+        expect(result.stdout).toContain('Cancelled. Nothing was changed.');
+        expect(calls).not.toContain('apply');
+        expect(calls).not.toContain('activate');
+      },
+    );
+  });
+
+  it('fails clearly in a non-interactive environment when --yes is omitted', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const result = await run(['--cwd', temp.root, 'deploy', 'cloudflare'], {
+          commands: [deployCommand({ resolveTarget: async () => fakeTarget() })],
+        });
+
+        expect(result.code ?? 1).toBe(1);
+        expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+        expect(result.stderr).toContain('Deploy confirmation requires a terminal');
+        expect(result.stderr).toContain('Re-run with `--yes`');
+      },
+    );
+  });
+
+  it('requires the named capability-loss override and succeeds when it is given', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const denied = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () => fakeTarget({ capabilityLoss: ['table-query'] }),
+            }),
+          ],
+        });
+
+        expect(denied.code ?? 1).toBeGreaterThan(0);
+        expect(denied.stderr).toContain('LORE_E_CAPABILITY_LOSS');
+        expect(denied.stderr).toContain('--allow-capability-loss table-query');
+
+        const accepted = await run(
+          [
+            '--cwd',
+            temp.root,
+            'deploy',
+            'cloudflare',
+            '--yes',
+            '--allow-capability-loss',
+            'table-query',
+          ],
+          {
+            commands: [
+              deployCommand({
+                resolveTarget: async () => fakeTarget({ capabilityLoss: ['table-query'] }),
+              }),
+            ],
+          },
+        );
+
+        expect(accepted.code).toBe(0);
+        expect(accepted.stdout).toContain('Deployed');
       },
     );
   });
