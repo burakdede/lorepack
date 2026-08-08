@@ -112,7 +112,7 @@ describe('check:no-native', () => {
     writeWorkspacePackage(root, 'packages/cli', {
       name: '@lorepack/cli',
       version: '0.0.0',
-      dependencies: { native-helper: '1.0.0' },
+      dependencies: { 'native-helper': '1.0.0' },
     });
     writeInstalledPackage(root, 'native-helper', { version: '1.0.0' }, ['binding.gyp']);
 
