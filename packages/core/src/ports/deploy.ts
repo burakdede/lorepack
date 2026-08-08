@@ -106,6 +106,7 @@ export interface VerificationResult {
   readonly search: 'passed' | 'failed' | 'skipped';
   readonly sourceRead: 'passed' | 'failed' | 'skipped';
   readonly tableQuery: 'passed' | 'failed' | 'skipped';
+  readonly capabilities?: readonly Capability[];
   /** Why something failed, for the receipt and for the person reading it. */
   readonly failures?: readonly string[];
 }
