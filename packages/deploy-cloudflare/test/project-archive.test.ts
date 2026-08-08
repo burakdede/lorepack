@@ -1,9 +1,9 @@
-import { verifyArchive } from '@lorepack/backend-local';
-import { hashBytes, objectKey, type LoreError } from '@lorepack/core';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { verifyArchive } from '@lorepack/backend-local';
+import { hashBytes, type LoreError, objectKey } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { uploadProjectArchive } from '../src/project-archive.js';
 import { r2ArchiveKey } from '../src/r2-keys.js';
@@ -13,8 +13,15 @@ const BUILD = `lore_${'a'.repeat(64)}`;
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
+  putFailures = 0;
 
   async put(key: string, value: Uint8Array): Promise<void> {
+    if (this.putFailures > 0) {
+      this.putFailures -= 1;
+      const error = new Error('temporary timeout');
+      (error as Error & { code?: string }).code = 'ETIMEDOUT';
+      throw error;
+    }
     this.objects.set(key, new Uint8Array(value));
   }
 
@@ -171,5 +178,24 @@ describe('uploadProjectArchive, issue 88', () => {
       expect((error as LoreError).code).toBe('LORE_E_OBJECT_CORRUPT');
       expect((error as LoreError).subject).toBe(key);
     }
+  });
+
+  it('retries a transient archive upload failure and eventually succeeds', async () => {
+    const fixture = makeBuildDirectory('rollback body');
+    const bucket = new FakeR2Bucket();
+    bucket.putFailures = 1;
+
+    const result = await uploadProjectArchive({
+      bucket,
+      projectId: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      objectsDirectory: fixture.objectsDirectory,
+      retryDelayMs: 0,
+      sleep: async () => {},
+    });
+
+    expect(result.uploaded).toBe(true);
+    expect(bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
   });
 });

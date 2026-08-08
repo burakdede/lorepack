@@ -14,6 +14,9 @@ export interface ProjectObjectUploadOptions {
   readonly projectId: string;
   readonly buildDirectory: string;
   readonly objectsDirectory: string;
+  readonly retryAttempts?: number;
+  readonly retryDelayMs?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: (update: {
     readonly completedBytes: number;
     readonly totalBytes: number;
@@ -39,6 +42,7 @@ export async function uploadProjectObjects(
   options: ProjectObjectUploadOptions,
 ): Promise<ProjectObjectUploadResult> {
   const buildDatabase = openBuildDatabase(options.buildDirectory);
+  const retry = retryPolicy(options);
 
   try {
     const objectHashes = (
@@ -56,11 +60,16 @@ export async function uploadProjectObjects(
 
     for (const hash of objectHashes) {
       const key = r2ObjectKey(options.projectId, hash);
-      const existing = await options.bucket.head(key);
+      const existing = await withRetries(
+        () => options.bucket.head(key),
+        retry,
+        `inspect remote object ${hash}`,
+        hash,
+      );
       const sizeBytes = localObjectSize(options.objectsDirectory, hash);
 
       if (existing !== null) {
-        await verifyRemoteObject(options.bucket, key, hash);
+        await verifyRemoteObject(options.bucket, key, hash, retry);
         skippedObjects += 1;
         verifiedObjects += 1;
         completedBytes += sizeBytes;
@@ -76,8 +85,8 @@ export async function uploadProjectObjects(
       }
 
       const bytes = readLocalObject(options.objectsDirectory, hash);
-      await options.bucket.put(key, bytes);
-      await verifyRemoteObject(options.bucket, key, hash);
+      await withRetries(() => options.bucket.put(key, bytes), retry, `upload object ${hash}`, hash);
+      await verifyRemoteObject(options.bucket, key, hash, retry);
       uploadedObjects += 1;
       verifiedObjects += 1;
       completedBytes += bytes.byteLength;
@@ -175,8 +184,18 @@ function readLocalObject(objectsDirectory: string, hash: string): Uint8Array {
   return bytes;
 }
 
-async function verifyRemoteObject(bucket: R2BucketLike, key: string, hash: string): Promise<void> {
-  const object = await bucket.get(key);
+async function verifyRemoteObject(
+  bucket: R2BucketLike,
+  key: string,
+  hash: string,
+  retry: RetryPolicy,
+): Promise<void> {
+  const object = await withRetries(
+    () => bucket.get(key),
+    retry,
+    `read uploaded object ${hash}`,
+    hash,
+  );
   if (object === null) {
     throw new LoreError(
       'LORE_E_OBJECT_CORRUPT',
@@ -203,4 +222,66 @@ async function verifyRemoteObject(bucket: R2BucketLike, key: string, hash: strin
       },
     );
   }
+}
+
+interface RetryPolicy {
+  readonly attempts: number;
+  readonly delayMs: number;
+  readonly sleep: (ms: number) => Promise<void>;
+}
+
+function retryPolicy(
+  options: Pick<ProjectObjectUploadOptions, 'retryAttempts' | 'retryDelayMs' | 'sleep'>,
+): RetryPolicy {
+  return {
+    attempts: options.retryAttempts ?? 3,
+    delayMs: options.retryDelayMs ?? 250,
+    sleep: options.sleep ?? defaultSleep,
+  };
+}
+
+async function withRetries<T>(
+  work: () => Promise<T>,
+  policy: RetryPolicy,
+  action: string,
+  subject: string,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      lastError = error;
+      if (!isTransient(error) || attempt === policy.attempts) {
+        throw new LoreError('LORE_E_REMOTE_DEPLOY', `Could not ${action}.`, {
+          remediation:
+            'Retry the deploy. If this recurs, the remote object store or network path is unstable.',
+          subject,
+          cause: error,
+        });
+      }
+      await policy.sleep(policy.delayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+function isTransient(error: unknown): boolean {
+  const message = String(
+    (error as { message?: unknown }).message ?? (error as { code?: unknown }).code ?? error,
+  ).toLowerCase();
+  return (
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econnreset') ||
+    message.includes('temporar') ||
+    message.includes('unavailable') ||
+    message.includes('rate limit') ||
+    message.includes('429')
+  );
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

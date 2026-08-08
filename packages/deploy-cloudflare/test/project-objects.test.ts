@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { hashBytes, objectKey, type LoreError } from '@lorepack/core';
+import { hashBytes, type LoreError, objectKey } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { uploadProjectObjects } from '../src/project-objects.js';
 import { r2ObjectKey } from '../src/r2-keys.js';
@@ -11,8 +11,16 @@ const PROJECT = 'contracted';
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
+  putFailures = new Map<string, number>();
 
   async put(key: string, value: Uint8Array): Promise<void> {
+    const failures = this.putFailures.get(key) ?? 0;
+    if (failures > 0) {
+      this.putFailures.set(key, failures - 1);
+      const error = new Error('temporary timeout');
+      (error as Error & { code?: string }).code = 'ETIMEDOUT';
+      throw error;
+    }
     this.objects.set(key, new Uint8Array(value));
   }
 
@@ -153,5 +161,31 @@ describe('uploadProjectObjects, issue 88', () => {
       expect((error as LoreError).code).toBe('LORE_E_OBJECT_CORRUPT');
       expect((error as LoreError).subject).toBe(hash);
     }
+  });
+
+  it('retries a transient object upload failure and eventually succeeds', async () => {
+    const fixture = makeBuildDirectory({
+      'contracted:guides/rollback.md': 'rollback body',
+    });
+    const bucket = new FakeR2Bucket();
+    const hash = fixture.hashes[0] as string;
+    bucket.putFailures.set(r2ObjectKey(PROJECT, hash), 1);
+
+    const result = await uploadProjectObjects({
+      bucket,
+      projectId: PROJECT,
+      buildDirectory: fixture.buildDirectory,
+      objectsDirectory: fixture.objectsDirectory,
+      retryDelayMs: 0,
+      sleep: async () => {},
+    });
+
+    expect(result).toEqual({
+      referencedObjects: 1,
+      uploadedObjects: 1,
+      skippedObjects: 0,
+      verifiedObjects: 1,
+    });
+    expect(bucket.objects.has(r2ObjectKey(PROJECT, hash))).toBe(true);
   });
 });
