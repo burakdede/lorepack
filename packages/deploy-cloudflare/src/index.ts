@@ -67,6 +67,12 @@ export function createCloudflareWorker(options: CloudflareRuntimeOptions): Cloud
 }
 
 export {
+  type D1CatalogDatabaseLike,
+  type D1CatalogNamespace,
+  D1CatalogStore,
+  type D1CatalogStoreOptions,
+} from './catalog.js';
+export {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
   type R2BucketLike,
