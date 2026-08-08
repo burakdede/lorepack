@@ -15,6 +15,16 @@ import {
   type R2BucketLike,
   R2ObjectStore,
 } from './storage.js';
+import {
+  type ProjectArchiveUploadOptions,
+  type ProjectArchiveUploadResult,
+  uploadProjectArchive,
+} from './project-archive.js';
+import {
+  type ProjectObjectUploadOptions,
+  type ProjectObjectUploadResult,
+  uploadProjectObjects,
+} from './project-objects.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import { type D1QueryDatabaseLike, type D1TableNamespace, D1TableStore } from './tables.js';
 
@@ -136,6 +146,10 @@ export type {
   D1DatabaseLike,
   D1QueryDatabaseLike,
   D1TableNamespace,
+  ProjectArchiveUploadOptions,
+  ProjectArchiveUploadResult,
+  ProjectObjectUploadOptions,
+  ProjectObjectUploadResult,
   R2BucketLike,
 };
 export {
@@ -146,4 +160,6 @@ export {
   R2ObjectStore,
   r2ArchiveKey,
   r2ObjectKey,
+  uploadProjectArchive,
+  uploadProjectObjects,
 };

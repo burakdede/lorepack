@@ -23,6 +23,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@lorepack/backend-local": "workspace:*",
     "@lorepack/core": "workspace:*",
     "@lorepack/mcp": "workspace:*",
     "@lorepack/runtime": "workspace:*",
