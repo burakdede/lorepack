@@ -3,7 +3,7 @@ import {
   type CatalogSearchHit,
   RANKING_WEIGHTS,
   type SearchHit,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 
 /**
  * The deterministic retrieval path from architecture 13.2, steps 2 to 9.

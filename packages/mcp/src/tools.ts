@@ -11,7 +11,7 @@ import {
   tableQueryRequestSchema,
   tableQueryResultSchema,
   taskContextRequestSchema,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 

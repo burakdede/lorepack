@@ -6,7 +6,7 @@ import type {
   CatalogSearchCriteria,
   CatalogSearchHit,
   CatalogStore,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 
 export interface D1CatalogStatementLike {
   bind(...values: unknown[]): D1CatalogStatementLike;

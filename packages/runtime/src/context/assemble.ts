@@ -5,7 +5,7 @@ import {
   count,
   LoreError,
   type SourceLocator,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 import type { DropReason, RankedHit } from '../ranking/rank.js';
 
 /**

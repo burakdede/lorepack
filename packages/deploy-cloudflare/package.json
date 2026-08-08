@@ -32,5 +32,8 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/deploy-cloudflare"
+  },
+  "devDependencies": {
+    "wrangler": "4.119.0"
   }
 }

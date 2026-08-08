@@ -19,7 +19,7 @@ import {
   type TableQueryRequest,
   type TableQueryResult,
   type TaskContextRequest,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';

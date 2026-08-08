@@ -1,7 +1,20 @@
-import type { BuildComparer, BuildId, LoreRuntime, SourceState } from '@lorepack/core';
+import type { BuildComparer, BuildId, LoreRuntime, SourceState } from '@lorepack/core/worker';
 import { createMcpHttpHandler } from '@lorepack/mcp';
-import { type ApiOptions, createApiApp } from '@lorepack/runtime';
+import { type ApiOptions, createApiApp, createRuntime } from '@lorepack/runtime';
 import type { Hono } from 'hono';
+import {
+  type D1CatalogDatabaseLike,
+  type D1CatalogNamespace,
+  D1CatalogStore,
+  type D1CatalogStoreOptions,
+} from './catalog.js';
+import {
+  D1ActiveBuildProvider,
+  type D1DatabaseLike,
+  type R2BucketLike,
+  R2ObjectStore,
+} from './storage.js';
+import { type D1QueryDatabaseLike, type D1TableNamespace, D1TableStore } from './tables.js';
 
 /**
  * The Cloudflare Worker-facing assembly of the shared REST and MCP surfaces.
@@ -28,6 +41,18 @@ export interface CloudflareWorkerApp {
   readonly app: Hono;
   readonly fetch: (request: Request) => Promise<Response> | Response;
   readonly close: () => Promise<void>;
+}
+
+export interface CloudflareBindings {
+  readonly CATALOG_DB: D1DatabaseLike & D1CatalogDatabaseLike & D1QueryDatabaseLike;
+  readonly OBJECTS: R2BucketLike;
+  readonly PROJECT_ID: string;
+}
+
+export interface CloudflareBoundWorkerOptions {
+  readonly freshness?: () => Promise<SourceState>;
+  readonly authorize?: ApiOptions['authorize'];
+  readonly comparer?: BuildComparer;
 }
 
 function createWorkerApp(
@@ -66,21 +91,51 @@ export function createCloudflareWorker(options: CloudflareRuntimeOptions): Cloud
   return { app: worker.app, fetch: worker.fetch, close: worker.close };
 }
 
-export {
-  type D1CatalogDatabaseLike,
-  type D1CatalogNamespace,
-  D1CatalogStore,
-  type D1CatalogStoreOptions,
-} from './catalog.js';
+function namespaceOf(bindings: CloudflareBindings, buildId: BuildId): D1CatalogNamespace {
+  return { projectId: bindings.PROJECT_ID, buildId };
+}
+
+export function createCloudflareWorkerFromBindings(
+  bindings: CloudflareBindings,
+  options: CloudflareBoundWorkerOptions = {},
+): CloudflareWorkerApp {
+  const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB);
+  const runtime = createRuntime({
+    provider,
+    open: async (handle) => ({
+      buildId: handle.buildId,
+      catalog: new D1CatalogStore({
+        db: bindings.CATALOG_DB,
+        namespace: namespaceOf(bindings, handle.buildId),
+      }),
+      tables: new D1TableStore(bindings.CATALOG_DB, namespaceOf(bindings, handle.buildId)),
+      objects: new R2ObjectStore(bindings.OBJECTS),
+    }),
+    ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
+  });
+
+  return createCloudflareWorker({
+    runtime,
+    currentBuild: () => provider.current(),
+    ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
+    ...(options.authorize === undefined ? {} : { authorize: options.authorize }),
+    ...(options.comparer === undefined ? {} : { comparer: options.comparer }),
+  });
+}
+
+export type {
+  D1CatalogDatabaseLike,
+  D1CatalogNamespace,
+  D1CatalogStoreOptions,
+  D1DatabaseLike,
+  D1QueryDatabaseLike,
+  D1TableNamespace,
+  R2BucketLike,
+};
 export {
   D1ActiveBuildProvider,
-  type D1DatabaseLike,
-  type R2BucketLike,
-  R2ObjectStore,
-} from './storage.js';
-export {
-  type D1QueryDatabaseLike,
-  type D1TableNamespace,
-  D1TableStore,
+  D1CatalogStore,
   D1TableStore as D1NamespacedTableStore,
-} from './tables.js';
+  D1TableStore,
+  R2ObjectStore,
+};

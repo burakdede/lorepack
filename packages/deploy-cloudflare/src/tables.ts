@@ -5,7 +5,7 @@ import {
   type TableQueryRequest,
   type TableQueryResult,
   type TableStore,
-} from '@lorepack/core';
+} from '@lorepack/core/worker';
 
 /**
  * The remote table projection contract for Phase 6.

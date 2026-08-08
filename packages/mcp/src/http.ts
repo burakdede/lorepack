@@ -1,4 +1,4 @@
-import type { BuildComparer, LoreRuntime } from '@lorepack/core';
+import type { BuildComparer, LoreRuntime } from '@lorepack/core/worker';
 import { createMcpHonoApp } from '@modelcontextprotocol/hono';
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { createMcpServer } from './server.js';
