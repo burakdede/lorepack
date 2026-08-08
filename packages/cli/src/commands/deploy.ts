@@ -8,15 +8,20 @@ import {
   type DeploymentReceipt,
   type DeploymentTarget,
   LORE_DIRECTORY,
-  loadConfig,
   LoreError,
+  loadConfig,
 } from '@lorepack/core';
-import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import type { CommandContext } from '../framework/context.js';
-import { buildDirectory as localBuildDirectory } from '../services/builds.js';
+import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
+import { buildDirectory as localBuildDirectory } from '../services/builds.js';
+import {
+  type CloudflareResolverAdapter,
+  resolveCloudflareTarget,
+  resolveCloudflareTargetWithAdapter,
+} from '../services/cloudflare-target.js';
 import { readReceipt, receiptPath, runDeploy } from '../services/deploy.js';
-import { readPreviousBuild, readActiveBuild } from '../services/project.js';
+import { readActiveBuild, readPreviousBuild } from '../services/project.js';
 import { readStatus } from '../services/status.js';
 import { lockInputs } from '../services/versions.js';
 
@@ -25,10 +30,8 @@ export interface DeployCommandOptions {
     name: string,
     input: { readonly projectRoot: string; readonly configPath: string },
   ) => Promise<DeploymentTarget>;
-  readonly confirm?: (
-    prompt: string,
-    context: CommandContext,
-  ) => Promise<boolean>;
+  readonly cloudflareAdapter?: CloudflareResolverAdapter;
+  readonly confirm?: (prompt: string, context: CommandContext) => Promise<boolean>;
 }
 
 export function deployCommand(options: DeployCommandOptions = {}): CommandDefinition {
@@ -51,13 +54,20 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
       const targetName = resolveTargetName(args[0]);
       const target =
         options.resolveTarget === undefined
-          ? await resolveTarget(targetName, config.projectRoot, config.configPath)
+          ? await resolveTarget(
+              targetName,
+              config.projectRoot,
+              config.configPath,
+              options.cloudflareAdapter,
+            )
           : await options.resolveTarget(targetName, {
               projectRoot: config.projectRoot,
               configPath: config.configPath,
             });
       const resume =
-        typeof flags.resume === 'string' ? readReceipt(config.projectRoot, flags.resume) : undefined;
+        typeof flags.resume === 'string'
+          ? readReceipt(config.projectRoot, flags.resume)
+          : undefined;
 
       if (resume !== undefined && resume.target !== target.id) {
         throw new LoreError(
@@ -192,7 +202,10 @@ async function prepareBuild(options: {
       remediation: 'Run `lore build` first, or omit `--no-build` so `lore deploy` can build one.',
     });
   }
-  return { ...(readBuildInputs(options.configRoot, active.buildId) as PreparedBuild), localPlanLines };
+  return {
+    ...(readBuildInputs(options.configRoot, active.buildId) as PreparedBuild),
+    localPlanLines,
+  };
 }
 
 function readBuildInputs(projectRoot: string, buildId: BuildId): PreparedBuild {
@@ -246,7 +259,9 @@ function renderDeployResult(
   dryRun: boolean,
 ): string {
   if (dryRun) {
-    return ['Dry run only. Nothing remote was changed.', `Receipt id: ${receipt.receiptId}`].join('\n');
+    return ['Dry run only. Nothing remote was changed.', `Receipt id: ${receipt.receiptId}`].join(
+      '\n',
+    );
   }
   return [
     `Deployed ${receipt.buildId} to ${receipt.target}.`,
@@ -270,6 +285,7 @@ async function resolveTarget(
   name: string,
   projectRoot: string,
   _configPath: string,
+  cloudflareAdapter?: CloudflareResolverAdapter,
 ): Promise<DeploymentTarget> {
   if (name !== 'cloudflare') {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown deploy target ${name}.`, {
@@ -277,20 +293,9 @@ async function resolveTarget(
       subject: name,
     });
   }
-
-  const configured = existsSync(join(projectRoot, '.lore', 'targets', 'cloudflare.json'));
-  throw new LoreError(
-    'LORE_E_TARGET_NOT_CONFIGURED',
-    configured
-      ? 'The cloudflare target is configured, but this CLI does not yet have the node-side Cloudflare adapter.'
-      : 'The cloudflare target is not configured for this project.',
-    {
-      remediation: configured
-        ? 'Finish the Cloudflare target adapter work before using `lore deploy cloudflare` from the CLI.'
-        : 'Set up the cloudflare target first once `lore target add cloudflare` is available.',
-      subject: name,
-    },
-  );
+  return cloudflareAdapter === undefined
+    ? await resolveCloudflareTarget(projectRoot)
+    : await resolveCloudflareTargetWithAdapter(projectRoot, cloudflareAdapter);
 }
 
 async function confirmDeploy(plan: string, context: CommandContext): Promise<boolean> {

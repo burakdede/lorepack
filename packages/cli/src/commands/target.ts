@@ -22,7 +22,7 @@ const WRANGLER_BIN = join(
   'wrangler.js',
 );
 
-interface CloudflareTargetReceipt {
+export interface CloudflareTargetReceipt {
   readonly formatVersion: 1;
   readonly target: 'cloudflare';
   readonly project: string;
@@ -35,20 +35,20 @@ interface CloudflareTargetReceipt {
   readonly capabilities: readonly string[];
 }
 
-interface WranglerDetection {
+export interface WranglerDetection {
   readonly installed: boolean;
   readonly version?: string;
   readonly path?: string;
 }
 
-interface WranglerIdentity {
+export interface WranglerIdentity {
   readonly authenticated: boolean;
   readonly accountId?: string;
   readonly accountName?: string;
   readonly email?: string;
 }
 
-interface CloudflareTargetAdapter {
+export interface CloudflareTargetAdapter {
   detect(): Promise<WranglerDetection>;
   whoami(): Promise<WranglerIdentity>;
 }
@@ -341,7 +341,7 @@ function defaultNames(project: string): {
   };
 }
 
-function createWranglerAdapter(): CloudflareTargetAdapter {
+export function createWranglerAdapter(): CloudflareTargetAdapter {
   return {
     async detect(): Promise<WranglerDetection> {
       if (!existsSync(WRANGLER_BIN)) return { installed: false };
@@ -410,11 +410,62 @@ export function readCloudflareTargetReceipt(projectRoot: string): CloudflareTarg
       },
     );
   }
-  return JSON.parse(readFileSync(path, 'utf8')) as CloudflareTargetReceipt;
+  return readCloudflareTargetReceiptFile(path);
 }
 
 function readCloudflareTargetReceiptIfPresent(projectRoot: string): CloudflareTargetReceipt | null {
   const path = cloudflareTargetPath(projectRoot);
   if (!existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, 'utf8')) as CloudflareTargetReceipt;
+  return readCloudflareTargetReceiptFile(path);
+}
+
+function readCloudflareTargetReceiptFile(path: string): CloudflareTargetReceipt {
+  try {
+    return parseCloudflareTargetReceipt(JSON.parse(readFileSync(path, 'utf8')), path);
+  } catch (cause) {
+    if (cause instanceof LoreError) throw cause;
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The cloudflare target receipt at ${path} could not be read.`,
+      {
+        remediation:
+          'Fix or remove the unreadable receipt, then run `lore target add cloudflare` again.',
+        subject: path,
+        cause,
+      },
+    );
+  }
+}
+
+function parseCloudflareTargetReceipt(raw: unknown, path: string): CloudflareTargetReceipt {
+  if (!isCloudflareTargetReceipt(raw)) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The cloudflare target receipt at ${path} is invalid.`,
+      {
+        remediation:
+          'Remove the invalid receipt and run `lore target add cloudflare` again so it is rewritten.',
+        subject: path,
+      },
+    );
+  }
+  return raw;
+}
+
+function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt {
+  if (typeof raw !== 'object' || raw === null) return false;
+  const receipt = raw as Record<string, unknown>;
+  return (
+    receipt.formatVersion === 1 &&
+    receipt.target === 'cloudflare' &&
+    typeof receipt.project === 'string' &&
+    typeof receipt.configuredAt === 'string' &&
+    typeof receipt.wranglerVersion === 'string' &&
+    typeof receipt.accountId === 'string' &&
+    typeof receipt.workerName === 'string' &&
+    typeof receipt.catalogDatabaseName === 'string' &&
+    typeof receipt.objectsBucketName === 'string' &&
+    Array.isArray(receipt.capabilities) &&
+    receipt.capabilities.every((value) => typeof value === 'string')
+  );
 }
