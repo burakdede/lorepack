@@ -20,7 +20,10 @@ import {
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
 } from '../src/cloudflare-smoke.js';
-import { missingCloudflareTestingEnv } from '../src/cloudflare-testing.js';
+import {
+  missingCloudflareTestingEnv,
+  writeCloudflareArtifactSummary,
+} from '../src/cloudflare-testing.js';
 
 const BINARY = join(import.meta.dirname, '..', '..', '..', 'packages', 'cli', 'dist', 'entry.js');
 const UNIQUE_QUERY = 'phase6-rollback-token';
@@ -34,6 +37,15 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
   });
 
   const missing = missingCloudflareTestingEnv(process.env);
+  writeCloudflareArtifactSummary(process.env, {
+    suite: 'cloudflare-smoke',
+    credentialed: missing.length === 0,
+    missing,
+    note:
+      missing.length === 0
+        ? 'Cloudflare smoke is configured to run.'
+        : `Cloudflare smoke skipped because credentials are missing: ${missing.join(', ')}`,
+  });
   it.skipIf(missing.length > 0)(
     `deploys, redeploys after an edit, and rolls back remotely (missing: ${missing.join(', ') || 'none'})`,
     async () => {

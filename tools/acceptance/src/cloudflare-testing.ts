@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 const REQUIRED_ENV_VARS = [
   'CLOUDFLARE_API_TOKEN',
   'CLOUDFLARE_ACCOUNT_ID',
@@ -14,6 +17,13 @@ export interface CloudflareTestingEnv {
   readonly runAttempt: string | null;
 }
 
+export interface CloudflareArtifactSummary {
+  readonly suite: string;
+  readonly credentialed: boolean;
+  readonly missing: readonly CloudflareTestingEnvVar[];
+  readonly note?: string;
+}
+
 export function cloudflareArtifactDirectory(
   env: Readonly<Record<string, string | undefined>>,
 ): string | null {
@@ -21,6 +31,32 @@ export function cloudflareArtifactDirectory(
   if (value === undefined) return null;
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+export function writeCloudflareArtifactSummary(
+  env: Readonly<Record<string, string | undefined>>,
+  summary: CloudflareArtifactSummary,
+): string | null {
+  const directory = cloudflareArtifactDirectory(env);
+  if (directory === null) return null;
+
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, `${summary.suite}.summary.json`);
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        suite: summary.suite,
+        credentialed: summary.credentialed,
+        missing: summary.missing,
+        note: summary.note ?? null,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+  return path;
 }
 
 const SAFE_PREFIX = /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/;

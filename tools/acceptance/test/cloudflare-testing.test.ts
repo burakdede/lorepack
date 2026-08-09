@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,6 +8,7 @@ import {
   readCloudflareTestingEnv,
   requiredCloudflareTestingEnv,
   resourcePrefixFor,
+  writeCloudflareArtifactSummary,
 } from '../src/cloudflare-testing.js';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -51,6 +53,31 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     );
   });
 
+  it('writes a summary artifact when the Cloudflare artifact directory is configured', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-cf-artifacts-'));
+    try {
+      const path = writeCloudflareArtifactSummary(
+        { LORE_CF_ARTIFACT_DIR: root },
+        {
+          suite: 'cloudflare-testing',
+          credentialed: false,
+          missing: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'],
+          note: 'credentialed smoke skipped',
+        },
+      );
+      expect(path).toBe(join(root, 'cloudflare-testing.summary.json'));
+      expect(existsSync(path as string)).toBe(true);
+      expect(JSON.parse(readFileSync(path as string, 'utf8'))).toEqual({
+        suite: 'cloudflare-testing',
+        credentialed: false,
+        missing: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'],
+        note: 'credentialed smoke skipped',
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('documents the integration environment, scopes, skips, and artifacts', () => {
     expect(existsSync(DOC), `${DOC} is missing.`).toBe(true);
     const text = readFileSync(DOC, 'utf8');
@@ -69,6 +96,15 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
   });
 
   const missing = missingCloudflareTestingEnv(process.env);
+  writeCloudflareArtifactSummary(process.env, {
+    suite: 'cloudflare-testing',
+    credentialed: missing.length === 0,
+    missing,
+    note:
+      missing.length === 0
+        ? 'Cloudflare environment contract is configured.'
+        : `Cloudflare environment contract is missing: ${missing.join(', ')}`,
+  });
   it.skipIf(missing.length > 0)(
     `runs the credentialed Cloudflare integration suite when configured (missing: ${missing.join(', ') || 'none'})`,
     () => {

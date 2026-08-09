@@ -5,6 +5,7 @@ export {
   readCloudflareTestingEnv,
   requiredCloudflareTestingEnv,
   resourcePrefixFor,
+  writeCloudflareArtifactSummary,
 } from './cloudflare-testing.js';
 export { describeExpect, describeStep, renderCatalogue } from './render.js';
 export { fill, pluck, type RunnerOptions, runScenario, type ScenarioReport } from './runner.js';
