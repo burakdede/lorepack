@@ -26,7 +26,8 @@ function readJson(file) {
 
 function formatPath(rootDir, fullPath) {
   const rel = relative(realpathSync.native(rootDir), realpathSync.native(fullPath));
-  return rel === '' || rel.startsWith('..') ? fullPath : rel;
+  const shown = rel === '' || rel.startsWith('..') ? fullPath : rel;
+  return shown.replaceAll('\\', '/');
 }
 
 function listWorkspaceManifestFiles(rootDir) {
