@@ -347,6 +347,33 @@ export async function deployCloudflareTarget(
   return { buildId: payload.buildId, receiptId: payload.receiptId };
 }
 
+export async function rollbackCloudflareTarget(
+  project: CloudflareSmokeProject,
+  buildId: BuildId,
+): Promise<{
+  readonly buildId: BuildId;
+  readonly previousBuildId: BuildId | null;
+  readonly confirmedBuildId: BuildId | null;
+}> {
+  const result = await project.lore(['--json', 'rollback', '--target', 'cloudflare', buildId]);
+  if (result.code !== 0) {
+    throw new Error(`lore rollback --target cloudflare failed:\n${result.stderr}`);
+  }
+  const payload = JSON.parse(result.stdout) as {
+    readonly buildId?: unknown;
+    readonly previousBuildId?: unknown;
+    readonly confirmedBuildId?: unknown;
+  };
+  if (!isBuildId(payload.buildId)) {
+    throw new Error(`lore rollback --target cloudflare returned no build id:\n${result.stdout}`);
+  }
+  return {
+    buildId: payload.buildId,
+    previousBuildId: isBuildId(payload.previousBuildId) ? payload.previousBuildId : null,
+    confirmedBuildId: isBuildId(payload.confirmedBuildId) ? payload.confirmedBuildId : null,
+  };
+}
+
 function resourceNamesFor(
   projectName: string,
   env: ReturnType<typeof readCloudflareTestingEnv>,

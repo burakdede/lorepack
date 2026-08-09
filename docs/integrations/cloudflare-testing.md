@@ -75,11 +75,13 @@ The checked-in gates today are:
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
   database, and one R2 bucket, deploys the checked-in Worker package, runs
-  `lore target add cloudflare`, runs `lore deploy cloudflare`, then verifies the deployed
-  build through `GET /v1/build`, `POST /v1/context`, and an MCP `lore_search` call
+  `lore target add cloudflare`, runs `lore deploy cloudflare`, edits the mixed corpus, runs a
+  second `lore deploy cloudflare`, then verifies the public build id and read surface before
+  and after `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
+  `POST /v1/context`, and MCP `lore_search`
 
-The broader multi-deploy, rollback, resume, capability-loss, and auth cases are still open
-work on `#93`.
+The broader resume, capability-loss, full auth, and CI artifact cases are still open work on
+`#93`.
 
 ## Cost expectations
 

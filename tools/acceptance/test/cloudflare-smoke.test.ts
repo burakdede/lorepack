@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { describe, expect, it } from 'vitest';
@@ -10,12 +10,15 @@ import {
   deployCloudflareTarget,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
+  rollbackCloudflareTarget,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
 } from '../src/cloudflare-smoke.js';
 import { missingCloudflareTestingEnv } from '../src/cloudflare-testing.js';
 
 const BINARY = join(import.meta.dirname, '..', '..', '..', 'packages', 'cli', 'dist', 'entry.js');
+const UNIQUE_QUERY = 'phase6-rollback-token';
+const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
 
 describe('the credentialed Cloudflare smoke, issue 93', () => {
   it('depends on the built CLI binary', () => {
@@ -24,7 +27,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
 
   const missing = missingCloudflareTestingEnv(process.env);
   it.skipIf(missing.length > 0)(
-    `deploys one local build and verifies REST and MCP read it remotely (missing: ${missing.join(', ') || 'none'})`,
+    `deploys, redeploys after an edit, and rolls back remotely (missing: ${missing.join(', ') || 'none'})`,
     async () => {
       const project = createCloudflareSmokeProject('Cloudflare Acceptance');
       const buildIds: string[] = [];
@@ -46,13 +49,79 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect((context as ContextBundle).buildId).toBe(localBuildId);
         expect(context.selected.length + context.overview.length).toBeGreaterThan(0);
 
-        const search = await callRemoteMcpTool<SearchResult>(target.endpointBase, 'lore_search', {
-          query: 'rollback',
-          limit: 3,
-        });
-        expect(search.structuredContent.buildId).toBe(localBuildId);
-        expect(search.structuredContent.hits.length).toBeGreaterThan(0);
-        expect(search.structuredContent.hits[0]?.locator.relativePath).toBeDefined();
+        const firstSearch = await callRemoteMcpTool<SearchResult>(
+          target.endpointBase,
+          'lore_search',
+          {
+            query: 'rollback',
+            limit: 3,
+          },
+        );
+        expect(firstSearch.structuredContent.buildId).toBe(localBuildId);
+        expect(firstSearch.structuredContent.hits.length).toBeGreaterThan(0);
+        expect(firstSearch.structuredContent.hits[0]?.locator.relativePath).toBeDefined();
+
+        writeFileSync(
+          join(project.root, UNIQUE_FILE),
+          `# Phase 6 rollback proof\n\n${UNIQUE_QUERY} appears only in the second deployed build.\n`,
+          'utf8',
+        );
+        const secondBuildId = await buildProject(project);
+        buildIds.push(secondBuildId);
+        expect(secondBuildId).not.toBe(localBuildId);
+
+        const secondDeploy = await deployCloudflareTarget(project);
+        expect(secondDeploy.buildId).toBe(secondBuildId);
+        await waitForRemoteBuild(target.endpointBase, secondBuildId);
+
+        const secondContext = await readRemoteContext(target.endpointBase, UNIQUE_QUERY);
+        expect(secondContext.buildId).toBe(secondBuildId);
+        expect(secondContext.selected.length + secondContext.overview.length).toBeGreaterThan(0);
+
+        const secondSearch = await callRemoteMcpTool<SearchResult>(
+          target.endpointBase,
+          'lore_search',
+          {
+            query: UNIQUE_QUERY,
+            limit: 3,
+          },
+        );
+        expect(secondSearch.structuredContent.buildId).toBe(secondBuildId);
+        expect(secondSearch.structuredContent.hits.length).toBeGreaterThan(0);
+        expect(secondSearch.structuredContent.hits[0]?.locator.relativePath).toBe(UNIQUE_FILE);
+
+        const rollback = await rollbackCloudflareTarget(project, localBuildId);
+        expect(rollback.buildId).toBe(localBuildId);
+        expect(rollback.previousBuildId).toBe(secondBuildId);
+        await waitForRemoteBuild(target.endpointBase, localBuildId);
+
+        const rolledBackContext = await readRemoteContext(target.endpointBase, 'rollback');
+        expect(rolledBackContext.buildId).toBe(localBuildId);
+        expect(
+          rolledBackContext.selected.length + rolledBackContext.overview.length,
+        ).toBeGreaterThan(0);
+
+        const rolledBackUniqueSearch = await callRemoteMcpTool<SearchResult>(
+          target.endpointBase,
+          'lore_search',
+          {
+            query: UNIQUE_QUERY,
+            limit: 3,
+          },
+        );
+        expect(rolledBackUniqueSearch.structuredContent.buildId).toBe(localBuildId);
+        expect(rolledBackUniqueSearch.structuredContent.hits).toHaveLength(0);
+
+        const rolledBackRollbackSearch = await callRemoteMcpTool<SearchResult>(
+          target.endpointBase,
+          'lore_search',
+          {
+            query: 'rollback',
+            limit: 3,
+          },
+        );
+        expect(rolledBackRollbackSearch.structuredContent.buildId).toBe(localBuildId);
+        expect(rolledBackRollbackSearch.structuredContent.hits.length).toBeGreaterThan(0);
       } finally {
         try {
           if (target !== undefined) {
