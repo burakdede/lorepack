@@ -325,6 +325,12 @@ importers:
 
   tools/acceptance:
     dependencies:
+      '@lorepack/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@lorepack/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@lorepack/test-support':
         specifier: workspace:*
         version: link:../test-support

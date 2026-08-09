@@ -5,7 +5,7 @@ Cloudflare target setup notes in [cloudflare-target-setup.md](./cloudflare-targe
 
 This page defines the environment contract for `#93`, the Milestone 3 acceptance and
 integration gate. It does not claim the whole remote suite is finished today. It records the
-inputs, limits, and visible skip behavior the eventual credentialed suite will use.
+inputs, limits, visible skip behavior, and the current checked-in credentialed smoke.
 
 ## Required environment
 
@@ -69,9 +69,17 @@ When the required credentials are absent, the Cloudflare integration suite skips
 explicit message that names the missing variables. It skips with an explicit message in test
 output and is not treated as a pass.
 
-The current checked-in gate is the acceptance-side test
-`tools/acceptance/test/cloudflare-testing.test.ts`. It verifies the environment contract, the
-resource-prefix rule, and the documented skip behavior before the full remote suite is wired.
+The checked-in gates today are:
+
+- `tools/acceptance/test/cloudflare-testing.test.ts`, which verifies the environment contract,
+  the resource-prefix rule, and the documented skip behavior
+- `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
+  database, and one R2 bucket, deploys the checked-in Worker package, runs
+  `lore target add cloudflare`, runs `lore deploy cloudflare`, then verifies the deployed
+  build through `GET /v1/build`, `POST /v1/context`, and an MCP `lore_search` call
+
+The broader multi-deploy, rollback, resume, capability-loss, and auth cases are still open
+work on `#93`.
 
 ## Cost expectations
 
