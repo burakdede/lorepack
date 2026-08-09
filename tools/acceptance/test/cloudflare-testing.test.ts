@@ -48,8 +48,14 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
   it('treats the Cloudflare artifact directory as optional metadata', () => {
     expect(cloudflareArtifactDirectory({})).toBeNull();
     expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: '   ' })).toBeNull();
-    expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: 'tmp/cloudflare-artifacts' })).toBe(
-      'tmp/cloudflare-artifacts',
+    expect(
+      cloudflareArtifactDirectory({
+        LORE_CF_ARTIFACT_DIR: 'tmp/cloudflare-artifacts',
+        GITHUB_WORKSPACE: '/workspace/lorepack',
+      }),
+    ).toBe('/workspace/lorepack/tmp/cloudflare-artifacts');
+    expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: '/tmp/cloudflare-artifacts' })).toBe(
+      '/tmp/cloudflare-artifacts',
     );
   });
 
