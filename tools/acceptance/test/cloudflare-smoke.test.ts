@@ -9,6 +9,7 @@ import {
   callRemoteMcpTool,
   createCloudflareSmokeProject,
   deployCloudflareTarget,
+  issueCloudflareRuntimeToken,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
   rollbackCloudflareTarget,
@@ -41,13 +42,14 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
 
         target = await provisionCloudflareSmokeTarget(project.projectName);
         await addCloudflareTarget(project, target);
+        const runtimeToken = await issueCloudflareRuntimeToken(project);
 
-        const deployed = await deployCloudflareTarget(project);
+        const deployed = await deployCloudflareTarget(project, runtimeToken);
         expect(deployed.buildId).toBe(localBuildId);
 
-        await waitForRemoteBuild(target.endpointBase, localBuildId);
+        await waitForRemoteBuild(target.endpointBase, localBuildId, runtimeToken);
 
-        const context = await readRemoteContext(target.endpointBase, 'rollback');
+        const context = await readRemoteContext(target.endpointBase, 'rollback', runtimeToken);
         expect((context as ContextBundle).buildId).toBe(localBuildId);
         expect(context.selected.length + context.overview.length).toBeGreaterThan(0);
 
@@ -58,6 +60,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
             query: 'rollback',
             limit: 3,
           },
+          runtimeToken,
         );
         expect(firstSearch.structuredContent.buildId).toBe(localBuildId);
         expect(firstSearch.structuredContent.hits.length).toBeGreaterThan(0);
@@ -72,11 +75,15 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         buildIds.push(secondBuildId);
         expect(secondBuildId).not.toBe(localBuildId);
 
-        const secondDeploy = await deployCloudflareTarget(project);
+        const secondDeploy = await deployCloudflareTarget(project, runtimeToken);
         expect(secondDeploy.buildId).toBe(secondBuildId);
-        await waitForRemoteBuild(target.endpointBase, secondBuildId);
+        await waitForRemoteBuild(target.endpointBase, secondBuildId, runtimeToken);
 
-        const secondContext = await readRemoteContext(target.endpointBase, UNIQUE_QUERY);
+        const secondContext = await readRemoteContext(
+          target.endpointBase,
+          UNIQUE_QUERY,
+          runtimeToken,
+        );
         expect(secondContext.buildId).toBe(secondBuildId);
         expect(secondContext.selected.length + secondContext.overview.length).toBeGreaterThan(0);
 
@@ -87,17 +94,22 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
             query: UNIQUE_QUERY,
             limit: 3,
           },
+          runtimeToken,
         );
         expect(secondSearch.structuredContent.buildId).toBe(secondBuildId);
         expect(secondSearch.structuredContent.hits.length).toBeGreaterThan(0);
         expect(secondSearch.structuredContent.hits[0]?.locator.relativePath).toBe(UNIQUE_FILE);
 
-        const rollback = await rollbackCloudflareTarget(project, localBuildId);
+        const rollback = await rollbackCloudflareTarget(project, localBuildId, runtimeToken);
         expect(rollback.buildId).toBe(localBuildId);
         expect(rollback.previousBuildId).toBe(secondBuildId);
-        await waitForRemoteBuild(target.endpointBase, localBuildId);
+        await waitForRemoteBuild(target.endpointBase, localBuildId, runtimeToken);
 
-        const rolledBackContext = await readRemoteContext(target.endpointBase, 'rollback');
+        const rolledBackContext = await readRemoteContext(
+          target.endpointBase,
+          'rollback',
+          runtimeToken,
+        );
         expect(rolledBackContext.buildId).toBe(localBuildId);
         expect(
           rolledBackContext.selected.length + rolledBackContext.overview.length,
@@ -110,6 +122,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
             query: UNIQUE_QUERY,
             limit: 3,
           },
+          runtimeToken,
         );
         expect(rolledBackUniqueSearch.structuredContent.buildId).toBe(localBuildId);
         expect(rolledBackUniqueSearch.structuredContent.hits).toHaveLength(0);
@@ -121,6 +134,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
             query: 'rollback',
             limit: 3,
           },
+          runtimeToken,
         );
         expect(rolledBackRollbackSearch.structuredContent.buildId).toBe(localBuildId);
         expect(rolledBackRollbackSearch.structuredContent.hits.length).toBeGreaterThan(0);
@@ -152,10 +166,13 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         const buildId = await buildProject(project);
         target = await provisionCloudflareSmokeTarget(project.projectName);
         await addCloudflareTarget(project, target);
+        const runtimeToken = await issueCloudflareRuntimeToken(project);
 
         addSemanticSearchCapability(project.root, buildId);
 
-        const denied = await project.lore(['deploy', 'cloudflare', '--no-build', '--yes']);
+        const denied = await project.lore(['deploy', 'cloudflare', '--no-build', '--yes'], {
+          LORE_REMOTE_BEARER_TOKEN: runtimeToken,
+        });
         expect(denied.code).toBe(1);
         expect(denied.stderr).toContain('LORE_E_CAPABILITY_LOSS');
         expect(denied.stderr).toContain('semantic-search');

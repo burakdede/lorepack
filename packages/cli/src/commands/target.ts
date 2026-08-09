@@ -1,8 +1,19 @@
 import { execFile } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { LoreError, loadConfig, writeFileAtomic } from '@lorepack/core';
+import {
+  hashRuntimeToken,
+  hasRuntimeToken,
+  type ProjectionMigrationDatabaseLike,
+  type ProjectionMigrationStatementLike,
+  type RuntimeAuthDatabaseLike,
+  revokeRuntimeTokens,
+  runProjectionMigrations,
+  storeRuntimeTokenHash,
+} from '@lorepack/deploy-cloudflare';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { targetsDirectory } from '../services/config-resolve.js';
@@ -53,8 +64,12 @@ export interface CloudflareTargetAdapter {
   whoami(): Promise<WranglerIdentity>;
 }
 
+export interface CloudflareTargetTokenAdapter extends CloudflareTargetAdapter {
+  openCatalogDatabase(name: string): ProjectionMigrationDatabaseLike & RuntimeAuthDatabaseLike;
+}
+
 export interface TargetCommandOptions {
-  readonly adapter?: CloudflareTargetAdapter;
+  readonly adapter?: CloudflareTargetAdapter | CloudflareTargetTokenAdapter;
   readonly confirm?: (plan: string, context: CommandContext) => Promise<boolean>;
   readonly now?: () => Date;
 }
@@ -64,12 +79,14 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
     name: 'target',
     description: 'Prepare and inspect deployment targets.',
     arguments: [
-      { name: 'subject', description: 'add', required: true },
+      { name: 'subject', description: 'add or token', required: true },
       { name: 'target', description: 'cloudflare', required: true },
     ],
     flags: [
       { flags: '--dry-run', description: 'show the setup plan and change nothing' },
       { flags: '--yes', description: 'apply without asking' },
+      { flags: '--rotate', description: 'replace the current runtime bearer token' },
+      { flags: '--revoke', description: 'remove every runtime bearer token' },
       { flags: '--account-id <id>', description: 'connect to an existing Cloudflare account id' },
       { flags: '--worker <name>', description: 'connect to an existing Worker name' },
       { flags: '--catalog-db <name>', description: 'connect to an existing D1 database name' },
@@ -81,16 +98,18 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
     handler: async (args, flags, context): Promise<CommandResult> => {
       const subject = args[0];
       const target = args[1];
-      if (subject !== 'add' || target !== 'cloudflare') {
+      if (target !== 'cloudflare' || (subject !== 'add' && subject !== 'token')) {
         throw new LoreError(
           'LORE_E_INVALID_ARGUMENT',
           `Unknown target command: ${[subject, target].filter(Boolean).join(' ')}.`,
           {
-            remediation: 'Use `lore target add cloudflare`.',
+            remediation: 'Use `lore target add cloudflare` or `lore target token cloudflare`.',
             subject: [subject, target].filter(Boolean).join(' '),
           },
         );
       }
+
+      if (subject === 'token') return await handleTokenCommand(flags, context, options);
 
       const config = loadConfig({ cwd: context.options.cwd });
       const adapter = options.adapter ?? createWranglerAdapter();
@@ -240,6 +259,123 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
   };
 }
 
+async function handleTokenCommand(
+  flags: Record<string, unknown>,
+  context: CommandContext,
+  options: TargetCommandOptions,
+): Promise<CommandResult> {
+  if (flags.rotate === true && flags.revoke === true) {
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      'Choose either --rotate or --revoke, not both.',
+      {
+        remediation: 'Use `lore target token cloudflare --rotate` or `--revoke`.',
+      },
+    );
+  }
+
+  const config = loadConfig({ cwd: context.options.cwd });
+  const adapter = options.adapter ?? createWranglerAdapter();
+  if (!isCloudflareTargetTokenAdapter(adapter)) {
+    throw new LoreError(
+      'LORE_E_INTERNAL',
+      'The Cloudflare target adapter cannot open the catalog database for token management.',
+      {
+        remediation:
+          'Use the default Wrangler-backed adapter, or provide an adapter with openCatalogDatabase().',
+      },
+    );
+  }
+  const detection = await adapter.detect();
+  if (!detection.installed) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'The pinned Cloudflare Wrangler dependency is not available.',
+      {
+        remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+        subject: 'cloudflare',
+      },
+    );
+  }
+
+  const identity = await adapter.whoami();
+  if (!identity.authenticated) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'Wrangler is installed, but no Cloudflare login is available for this machine.',
+      {
+        remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+        subject: 'cloudflare',
+      },
+    );
+  }
+
+  const receipt = readCloudflareTargetReceipt(config.projectRoot);
+  if (identity.accountId !== undefined && identity.accountId !== receipt.accountId) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The cloudflare target receipt belongs to account ${receipt.accountId}, but Wrangler is logged into ${identity.accountId}.`,
+      {
+        remediation:
+          'Log into the matching Cloudflare account or rewrite the receipt with `lore target add cloudflare`.',
+        subject: receipt.accountId,
+      },
+    );
+  }
+
+  const db = adapter.openCatalogDatabase(receipt.catalogDatabaseName);
+  await runProjectionMigrations(db);
+
+  if (flags.revoke === true) {
+    const revoked = await revokeRuntimeTokens(db);
+    return {
+      human:
+        revoked === 0
+          ? `No runtime token was configured for ${receipt.workerName}.`
+          : `Revoked ${revoked} runtime token${revoked === 1 ? '' : 's'} for ${receipt.workerName}.`,
+      json: { target: 'cloudflare', worker: receipt.workerName, revoked },
+    };
+  }
+
+  const alreadyConfigured = await hasRuntimeToken(db);
+  if (alreadyConfigured && flags.rotate !== true) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `A runtime token already exists for ${receipt.workerName}.`,
+      {
+        remediation:
+          'Use `lore target token cloudflare --rotate` to replace it, or `--revoke` to remove it first.',
+        subject: receipt.workerName,
+      },
+    );
+  }
+
+  const token = issueRuntimeToken();
+  await storeRuntimeTokenHash(
+    db,
+    await hashRuntimeToken(token),
+    (options.now ?? (() => new Date()))().toISOString(),
+  );
+
+  const action = alreadyConfigured ? 'Rotated' : 'Generated';
+  return {
+    human: [
+      `${action} the runtime bearer token for ${receipt.workerName}.`,
+      'Token (shown once):',
+      token,
+      '',
+      'Set it in your shell before running remote verification or client requests:',
+      `  export LORE_REMOTE_BEARER_TOKEN=${token}`,
+    ].join('\n'),
+    json: {
+      target: 'cloudflare',
+      worker: receipt.workerName,
+      rotated: alreadyConfigured,
+      token,
+    },
+  };
+}
+
 export function cloudflareTargetPath(projectRoot: string): string {
   return join(targetsDirectory(projectRoot), 'cloudflare.json');
 }
@@ -341,7 +477,7 @@ function defaultNames(project: string): {
   };
 }
 
-export function createWranglerAdapter(): CloudflareTargetAdapter {
+export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
   return {
     async detect(): Promise<WranglerDetection> {
       if (!existsSync(WRANGLER_BIN)) return { installed: false };
@@ -376,7 +512,18 @@ export function createWranglerAdapter(): CloudflareTargetAdapter {
         return { authenticated: false };
       }
     },
+    openCatalogDatabase(name) {
+      return new WranglerCatalogDatabase(name);
+    },
   };
+}
+
+function isCloudflareTargetTokenAdapter(
+  adapter: CloudflareTargetAdapter | CloudflareTargetTokenAdapter,
+): adapter is CloudflareTargetTokenAdapter {
+  return (
+    typeof (adapter as Partial<CloudflareTargetTokenAdapter>).openCatalogDatabase === 'function'
+  );
 }
 
 async function confirmTargetSetup(plan: string, context: CommandContext): Promise<boolean> {
@@ -467,5 +614,116 @@ function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt
     typeof receipt.objectsBucketName === 'string' &&
     Array.isArray(receipt.capabilities) &&
     receipt.capabilities.every((value) => typeof value === 'string')
+  );
+}
+
+class WranglerCatalogDatabase implements ProjectionMigrationDatabaseLike, RuntimeAuthDatabaseLike {
+  readonly #name: string;
+
+  constructor(name: string) {
+    this.#name = name;
+  }
+
+  prepare(query: string): WranglerStatement {
+    return new WranglerStatement(this.#name, query);
+  }
+}
+
+class WranglerStatement implements ProjectionMigrationStatementLike {
+  readonly #databaseName: string;
+  readonly #query: string;
+  #bindings: readonly unknown[] = [];
+
+  constructor(databaseName: string, query: string) {
+    this.#databaseName = databaseName;
+    this.#query = query;
+  }
+
+  bind(...values: unknown[]): WranglerStatement {
+    this.#bindings = values;
+    return this;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const rendered = renderSql(this.#query, this.#bindings);
+    const { stdout } = await execWrangler([
+      'd1',
+      'execute',
+      this.#databaseName,
+      '--remote',
+      '--json',
+      '--command',
+      rendered,
+    ]);
+    return { results: readD1Results<T>(JSON.parse(stdout) as unknown) };
+  }
+}
+
+function issueRuntimeToken(): string {
+  return `lore_rt_${randomBytes(24).toString('hex')}`;
+}
+
+async function execWrangler(args: readonly string[]): Promise<{ readonly stdout: string }> {
+  const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
+    cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
+    env: { ...process.env, NO_D1_WARNING: 'true' },
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return { stdout };
+}
+
+function readD1Results<T>(raw: unknown): readonly T[] {
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const results = readResultsArray<T>(item);
+      if (results !== null) return results;
+    }
+    return [];
+  }
+  return readResultsArray<T>(raw) ?? [];
+}
+
+function readResultsArray<T>(raw: unknown): readonly T[] | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const value = raw as { readonly results?: readonly T[]; readonly result?: readonly T[] };
+  if (Array.isArray(value.results)) return value.results;
+  if (Array.isArray(value.result)) return value.result;
+  return null;
+}
+
+function renderSql(query: string, bindings: readonly unknown[]): string {
+  let index = 0;
+  const rendered = query.replace(/\?/g, () => {
+    if (index >= bindings.length) {
+      throw new LoreError(
+        'LORE_E_INTERNAL',
+        'A Cloudflare D1 statement was missing a bound value.',
+        {
+          remediation: 'Fix the Cloudflare CLI adapter so every placeholder is bound exactly once.',
+        },
+      );
+    }
+    return literalFor(bindings[index++]);
+  });
+  if (index !== bindings.length) {
+    throw new LoreError('LORE_E_INTERNAL', 'A Cloudflare D1 statement bound too many values.', {
+      remediation: 'Fix the Cloudflare CLI adapter so every placeholder is bound exactly once.',
+    });
+  }
+  return rendered;
+}
+
+function literalFor(value: unknown): string {
+  if (value === null) return 'NULL';
+  if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`;
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'boolean') return value ? '1' : '0';
+  throw new LoreError(
+    'LORE_E_INTERNAL',
+    `Unsupported Cloudflare D1 binding type ${typeof value}.`,
+    {
+      remediation: 'Fix the Cloudflare CLI adapter so it writes only scalar SQLite values.',
+    },
   );
 }

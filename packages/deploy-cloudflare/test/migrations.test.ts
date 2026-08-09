@@ -66,7 +66,7 @@ describe('projection migrations, issue 87', () => {
     const projection = new SqliteProjectionDatabase(db);
 
     const result = await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
-    expect(result).toEqual({ applied: ['0001'], alreadyApplied: [] });
+    expect(result).toEqual({ applied: ['0001', '0002'], alreadyApplied: [] });
 
     const names = (
       db
@@ -85,6 +85,7 @@ describe('projection migrations, issue 87', () => {
         'chunks_fts',
         'nodes',
         'projected_builds',
+        'runtime_tokens',
         'schema_migrations',
         'supersessions',
         'table_columns',
@@ -121,7 +122,7 @@ describe('projection migrations, issue 87', () => {
 
     await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
     const second = await runProjectionMigrations(projection, () => '2026-08-08T12:05:00.000Z');
-    expect(second).toEqual({ applied: [], alreadyApplied: ['0001'] });
+    expect(second).toEqual({ applied: [], alreadyApplied: ['0001', '0002'] });
 
     const rows = db
       .prepare('SELECT id, checksum FROM schema_migrations ORDER BY id')
@@ -134,7 +135,11 @@ describe('projection migrations, issue 87', () => {
         id: '0001',
         checksum: PROJECTION_MIGRATIONS[0]?.checksum ?? '',
       },
+      {
+        id: '0002',
+        checksum: PROJECTION_MIGRATIONS[1]?.checksum ?? '',
+      },
     ]);
-    expect(PROJECTION_SCHEMA_VERSION).toBe(1);
+    expect(PROJECTION_SCHEMA_VERSION).toBe(2);
   });
 });

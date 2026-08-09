@@ -58,10 +58,16 @@ fixture that could drift.
 The eventual `#93` suite is expected to prove:
 
 1. `lore target add cloudflare`
-2. `lore deploy cloudflare`
-3. remote REST and MCP reads report the same build id as the deployed local build
-4. a second deploy changes the served build id
-5. remote rollback returns the earlier build id by pointer change alone
+2. `lore target token cloudflare`
+3. `lore deploy cloudflare`
+4. remote REST and MCP reads report the same build id as the deployed local build
+5. a second deploy changes the served build id
+6. remote rollback returns the earlier build id by pointer change alone
+
+The checked-in smoke now generates a runtime bearer token after `lore target add cloudflare`
+and passes it through `LORE_REMOTE_BEARER_TOKEN` for deploy and rollback confirmation, and as
+`Authorization: Bearer <token>` for direct `GET /v1/build`, `POST /v1/context`, and `POST /mcp`
+verification calls.
 
 ## Visible skip behavior
 
@@ -75,9 +81,10 @@ The checked-in gates today are:
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
   database, and one R2 bucket, deploys the checked-in Worker package, runs
-  `lore target add cloudflare`, runs `lore deploy cloudflare`, edits the mixed corpus, runs a
-  second `lore deploy cloudflare`, then verifies the public build id and read surface before
-  and after `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
+  `lore target add cloudflare`, runs `lore target token cloudflare`, runs
+  `lore deploy cloudflare`, edits the mixed corpus, runs a second `lore deploy cloudflare`,
+  then verifies the public build id and read surface before and after
+  `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
   `POST /v1/context`, and MCP `lore_search`
 - the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also mutates a real local
   build to advertise `semantic-search`, then proves `lore deploy cloudflare` refuses it with

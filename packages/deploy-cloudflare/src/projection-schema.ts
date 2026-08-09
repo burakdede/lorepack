@@ -1,1 +1,1 @@
-export const PROJECTION_SCHEMA_VERSION = 1 as const;
+export const PROJECTION_SCHEMA_VERSION = 2 as const;

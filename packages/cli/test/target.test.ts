@@ -1,10 +1,75 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import type {
+  ProjectionMigrationDatabaseLike,
+  ProjectionMigrationStatementLike,
+  RuntimeAuthDatabaseLike,
+  RuntimeAuthStatementLike,
+} from '@lorepack/deploy-cloudflare';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { targetCommand } from '../src/commands/target.js';
 import { run } from './helpers.js';
 
 const CONFIG = 'version: 1\nname: Deploy Demo\nsources:\n  - .\n';
+
+class SqliteStatement implements ProjectionMigrationStatementLike, RuntimeAuthStatementLike {
+  readonly #db: DatabaseSync;
+  readonly #query: string;
+  #bindings: readonly unknown[] = [];
+
+  constructor(db: DatabaseSync, query: string) {
+    this.#db = db;
+    this.#query = query;
+  }
+
+  bind(...values: unknown[]): ProjectionMigrationStatementLike & RuntimeAuthStatementLike {
+    this.#bindings = values;
+    return this;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const statement = this.#db.prepare(this.#query);
+    const trimmed = this.#query.trim().toLowerCase();
+    if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
+    statement.run(...this.#bindings);
+    return {};
+  }
+}
+
+class SqliteTargetDatabase implements ProjectionMigrationDatabaseLike, RuntimeAuthDatabaseLike {
+  readonly #db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.#db = db;
+  }
+
+  prepare(query: string): ProjectionMigrationStatementLike & RuntimeAuthStatementLike {
+    return new SqliteStatement(this.#db, query);
+  }
+}
+
+function createTargetAdapter() {
+  const db = new DatabaseSync(':memory:');
+  const catalog = new SqliteTargetDatabase(db);
+  const adapter = {
+    detect: async () => ({
+      installed: true,
+      version: '4.119.0',
+      path: '/tmp/wrangler.js',
+    }),
+    whoami: async () => ({
+      authenticated: true,
+      email: 'dev@example.com',
+      accountName: 'Example Account',
+      accountId: 'acct_123',
+    }),
+    openCatalogDatabase: () => catalog,
+  };
+  return { db, adapter };
+}
 
 describe('lore target add cloudflare, issue 85', () => {
   it('prints a deterministic plan and writes nothing under --dry-run', async () => {
@@ -262,6 +327,145 @@ describe('lore target add cloudflare, issue 85', () => {
         expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
         expect(result.stderr).toContain('--account-id');
         expect(result.stderr).toContain('--worker');
+      },
+    );
+  });
+});
+
+describe('lore target token cloudflare, issue 90', () => {
+  it('generates a runtime token once and stores only its hash remotely', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { db, adapter } = createTargetAdapter();
+        const command = targetCommand({
+          adapter,
+          now: () => new Date('2026-08-09T10:00:00.000Z'),
+        });
+
+        const setup = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [command] },
+        );
+        expect(setup.code).toBe(0);
+
+        const issued = await run(['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare'], {
+          commands: [command],
+        });
+        expect(issued.code).toBe(0);
+        const payload = JSON.parse(issued.stdout) as {
+          token: string;
+          rotated: boolean;
+          worker: string;
+        };
+        expect(payload.rotated).toBe(false);
+        expect(payload.worker).toBe('demo-runtime');
+        expect(payload.token).toMatch(/^lore_rt_[0-9a-f]{48}$/);
+
+        const rows = db
+          .prepare('SELECT token_hash, created_at FROM runtime_tokens ORDER BY token_hash')
+          .all() as Array<{ token_hash: string; created_at: string }>;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.token_hash).toMatch(/^[0-9a-f]{64}$/);
+        expect(rows[0]?.token_hash).not.toContain(payload.token);
+        expect(rows[0]?.created_at).toBe('2026-08-09T10:00:00.000Z');
+
+        const second = await run(['--cwd', temp.root, 'target', 'token', 'cloudflare'], {
+          commands: [command],
+        });
+        expect(second.code).toBe(5);
+        expect(second.stderr).toContain('A runtime token already exists');
+
+        db.close();
+      },
+    );
+  });
+
+  it('rotates and revokes the runtime token', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { db, adapter } = createTargetAdapter();
+        let now = '2026-08-09T10:00:00.000Z';
+        const command = targetCommand({
+          adapter,
+          now: () => new Date(now),
+        });
+
+        await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [command] },
+        );
+
+        const first = JSON.parse(
+          (
+            await run(['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare'], {
+              commands: [command],
+            })
+          ).stdout,
+        ) as { token: string };
+
+        now = '2026-08-09T10:05:00.000Z';
+        const rotated = JSON.parse(
+          (
+            await run(['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare', '--rotate'], {
+              commands: [command],
+            })
+          ).stdout,
+        ) as { token: string; rotated: boolean };
+        expect(rotated.rotated).toBe(true);
+        expect(rotated.token).not.toBe(first.token);
+
+        const rows = db
+          .prepare('SELECT token_hash, created_at FROM runtime_tokens ORDER BY token_hash')
+          .all() as Array<{ token_hash: string; created_at: string }>;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.created_at).toBe('2026-08-09T10:05:00.000Z');
+
+        const revoked = await run(
+          ['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare', '--revoke'],
+          { commands: [command] },
+        );
+        expect(revoked.code).toBe(0);
+        expect(JSON.parse(revoked.stdout)).toMatchObject({
+          worker: 'demo-runtime',
+          revoked: 1,
+        });
+        expect(
+          (db.prepare('SELECT token_hash FROM runtime_tokens').all() as unknown[]).length,
+        ).toBe(0);
+
+        db.close();
       },
     );
   });

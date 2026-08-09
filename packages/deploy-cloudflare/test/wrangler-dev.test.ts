@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +24,8 @@ const CONFIG = join(WORKER_ROOT, 'wrangler.jsonc');
 const OBJECT_BODY =
   '# Rollback\n\nTo roll back a release, activate the previous build.\n\nTell the team what changed after the rollback.\n';
 const OBJECT_HASH = hashBytes(new TextEncoder().encode(OBJECT_BODY));
+const TOKEN = 'lore_rt_acceptance_worker_token';
+const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex');
 
 const MANIFEST: BuildManifest = {
   formatVersion: 1,
@@ -169,7 +172,13 @@ VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
 VALUES ('${PROJECT}', '${BUILD}', '${JSON.stringify(MANIFEST).replace(/'/g, "''")}');
 INSERT INTO projected_builds (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
-VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 1, '2026-08-08T12:00:00.000Z');
+VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 2, '2026-08-08T12:00:00.000Z');
+CREATE TABLE runtime_tokens (
+  token_hash TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+INSERT INTO runtime_tokens (token_hash, created_at)
+VALUES ('${TOKEN_HASH}', '2026-08-08T12:00:00.000Z');
 INSERT INTO artifacts (id, project_id, build_id, relative_path, display_path, title, status, authority, media_type, object_hash)
 VALUES ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
 INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, text, heading_path, line_start, line_end)
@@ -253,7 +262,15 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       throw new Error('wrangler dev did not start');
     }
 
-    const buildResponse = await worker.fetch('/v1/build');
+    const health = await worker.fetch('/health');
+    expect(health.status).toBe(200);
+
+    const unauthorized = await worker.fetch('/v1/build');
+    expect(unauthorized.status).toBe(401);
+
+    const auth = { Authorization: `Bearer ${TOKEN}` };
+
+    const buildResponse = await worker.fetch('/v1/build', { headers: auth });
     expect(buildResponse.status).toBe(200);
     expect(await buildResponse.json()).toMatchObject({
       buildId: BUILD,
@@ -264,20 +281,24 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       warningCount: 0,
     });
 
-    const sourceResponse = await worker.fetch(`/v1/sources/${encodeURIComponent(ARTIFACT_ID)}`);
+    const sourceResponse = await worker.fetch(`/v1/sources/${encodeURIComponent(ARTIFACT_ID)}`, {
+      headers: auth,
+    });
     expect(sourceResponse.status).toBe(200);
     const source = (await sourceResponse.json()) as SourceReadResult;
     expect(source.buildId).toBe(BUILD);
     expect(source.text).toContain('activate the previous build');
     expect(source.locator.artifactId).toBe(ARTIFACT_ID);
 
-    const listResponse = await worker.fetch('/v1/tables');
+    const listResponse = await worker.fetch('/v1/tables', { headers: auth });
     expect(listResponse.status).toBe(200);
     expect(await listResponse.json()).toEqual({
       tables: [{ tableId: TABLE_ID, name: 'Products' }],
     });
 
-    const describeResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}`);
+    const describeResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}`, {
+      headers: auth,
+    });
     expect(describeResponse.status).toBe(200);
     expect(await describeResponse.json()).toMatchObject({
       tableId: TABLE_ID,
@@ -299,7 +320,7 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
 
     const queryResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}/query`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ sql: `SELECT c_0_sku, c_1_price FROM ${TABLE_SQL}` }),
     });
     expect(queryResponse.status).toBe(200);
@@ -321,6 +342,7 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
 
     const candidateResponse = await worker.fetch(
       `/v1/tables/${encodeURIComponent(CANDIDATE_TABLE_ID)}`,
+      { headers: auth },
     );
     expect(candidateResponse.status).toBe(404);
 
@@ -328,6 +350,7 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${TOKEN}`,
         Accept: 'application/json, text/event-stream',
         'Mcp-Method': 'tools/list',
       },
@@ -350,10 +373,10 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     });
 
     const writes = [
-      await worker.fetch('/v1/builds'),
+      await worker.fetch('/v1/builds', { headers: auth }),
       await worker.fetch('/v1/builds/activate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...auth, 'Content-Type': 'application/json' },
         body: JSON.stringify({ build: BUILD }),
       }),
     ];

@@ -21,6 +21,7 @@ export interface CloudflareSmokeProject {
   readonly projectName: string;
   readonly lore: (
     args: readonly string[],
+    env?: Readonly<Record<string, string>>,
   ) => Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }>;
   cleanup(): void;
 }
@@ -34,6 +35,7 @@ export interface CloudflareSmokeTarget {
   readonly configPath: string;
   readonly endpointBase: string;
   readonly wranglerEnv: Readonly<Record<string, string>>;
+  readonly runtimeToken: string | null;
 }
 
 export interface McpCallResult<T> {
@@ -64,7 +66,7 @@ export function createCloudflareSmokeProject(name: string): CloudflareSmokeProje
   return {
     root,
     projectName,
-    lore: async (args) => {
+    lore: async (args, env = {}) => {
       try {
         const { stdout, stderr } = await execute(
           process.execPath,
@@ -73,7 +75,7 @@ export function createCloudflareSmokeProject(name: string): CloudflareSmokeProje
             cwd: REPO_ROOT,
             timeout: 600_000,
             maxBuffer: 64 * 1024 * 1024,
-            env: { ...process.env, NO_COLOR: '1' },
+            env: { ...process.env, NO_COLOR: '1', ...env },
           },
         );
         return { code: 0, stdout, stderr };
@@ -157,6 +159,7 @@ export async function provisionCloudflareSmokeTarget(
     configPath,
     endpointBase: `https://${names.workerName}.workers.dev`,
     wranglerEnv,
+    runtimeToken: null,
   };
 }
 
@@ -212,12 +215,14 @@ export async function teardownCloudflareSmokeTarget(
 export async function waitForRemoteBuild(
   endpointBase: string,
   buildId: BuildId,
+  token: string | null,
   timeoutMs = 120_000,
 ): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
       const response = await fetch(`${endpointBase}/v1/build`, {
+        headers: authHeaders(token),
         signal: AbortSignal.timeout(30_000),
       });
       if (response.ok) {
@@ -233,10 +238,11 @@ export async function waitForRemoteBuild(
 export async function readRemoteContext(
   endpointBase: string,
   task: string,
+  token: string | null,
 ): Promise<ContextBundle> {
   const response = await fetch(`${endpointBase}/v1/context`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
     body: JSON.stringify({ task }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -250,10 +256,12 @@ export async function callRemoteMcpTool<T>(
   endpointBase: string,
   name: string,
   args: Record<string, unknown>,
+  token: string | null,
 ): Promise<McpCallResult<T>> {
   const response = await fetch(`${endpointBase}/mcp`, {
     method: 'POST',
     headers: {
+      ...authHeaders(token),
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
       'Mcp-Method': 'tools/call',
@@ -332,8 +340,12 @@ export async function addCloudflareTarget(
 
 export async function deployCloudflareTarget(
   project: CloudflareSmokeProject,
+  token: string | null,
 ): Promise<{ readonly buildId: BuildId; readonly receiptId: string }> {
-  const result = await project.lore(['--json', 'deploy', 'cloudflare', '--no-build', '--yes']);
+  const result = await project.lore(
+    ['--json', 'deploy', 'cloudflare', '--no-build', '--yes'],
+    runtimeTokenEnv(token),
+  );
   if (result.code !== 0) {
     throw new Error(`lore deploy cloudflare failed:\n${result.stderr}`);
   }
@@ -350,12 +362,16 @@ export async function deployCloudflareTarget(
 export async function rollbackCloudflareTarget(
   project: CloudflareSmokeProject,
   buildId: BuildId,
+  token: string | null,
 ): Promise<{
   readonly buildId: BuildId;
   readonly previousBuildId: BuildId | null;
   readonly confirmedBuildId: BuildId | null;
 }> {
-  const result = await project.lore(['--json', 'rollback', '--target', 'cloudflare', buildId]);
+  const result = await project.lore(
+    ['--json', 'rollback', '--target', 'cloudflare', buildId],
+    runtimeTokenEnv(token),
+  );
   if (result.code !== 0) {
     throw new Error(`lore rollback --target cloudflare failed:\n${result.stderr}`);
   }
@@ -372,6 +388,27 @@ export async function rollbackCloudflareTarget(
     previousBuildId: isBuildId(payload.previousBuildId) ? payload.previousBuildId : null,
     confirmedBuildId: isBuildId(payload.confirmedBuildId) ? payload.confirmedBuildId : null,
   };
+}
+
+export async function issueCloudflareRuntimeToken(
+  project: CloudflareSmokeProject,
+  rotate = false,
+): Promise<string> {
+  const result = await project.lore([
+    '--json',
+    'target',
+    'token',
+    'cloudflare',
+    ...(rotate ? ['--rotate'] : []),
+  ]);
+  if (result.code !== 0) {
+    throw new Error(`lore target token cloudflare failed:\n${result.stderr}`);
+  }
+  const payload = JSON.parse(result.stdout) as { readonly token?: unknown };
+  if (typeof payload.token !== 'string' || payload.token.trim() === '') {
+    throw new Error(`lore target token cloudflare returned no token:\n${result.stdout}`);
+  }
+  return payload.token;
 }
 
 export function addSemanticSearchCapability(projectRoot: string, buildId: BuildId): void {
@@ -539,4 +576,12 @@ function messageOf(error: unknown): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function authHeaders(token: string | null): Record<string, string> {
+  return token === null ? {} : { Authorization: `Bearer ${token}` };
+}
+
+function runtimeTokenEnv(token: string | null): Readonly<Record<string, string>> {
+  return token === null ? {} : { LORE_REMOTE_BEARER_TOKEN: token };
 }
