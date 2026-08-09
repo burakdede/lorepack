@@ -44,6 +44,19 @@ Even when credentials are absent and the credentialed smoke skips, the acceptanc
 write summary JSON files into `LORE_CF_ARTIFACT_DIR` so CI still uploads a visible Cloudflare
 artifact explaining that the run was a skip rather than a pass.
 
+## Where this environment must exist
+
+The expected primary home for these credentials is the checked-in GitHub Actions job
+`cloudflare acceptance (ubuntu-latest)` in `.github/workflows/ci.yml`. That is the Phase 6
+lane that must eventually stop skipping and start producing credentialed remote artifacts for
+`#93`.
+
+If repository secrets are intentionally unavailable on a given branch or release candidate,
+the same variables must exist in another documented release-candidate environment before Phase 6
+can close. A local shell is useful for debugging, but it is not sufficient closure evidence for
+this phase because `#93` requires uploaded receipts and remote summaries from the acceptance
+lane.
+
 ## Token scopes
 
 The least-privilege token shape for the current Phase 6 integration path matches the setup and
