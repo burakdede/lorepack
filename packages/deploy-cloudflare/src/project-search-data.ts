@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { LoreError } from '@lorepack/core';
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
+import {
+  createProjectionWriteState,
+  type ProjectionWriteOptions,
+  projectionWriteOptions,
+  runProjectionBatch,
+} from './projection-write.js';
 
 interface BuildNodeRow {
   readonly id: string;
@@ -41,6 +47,10 @@ export interface ProjectSearchDataOptions {
   readonly projectId: string;
   readonly buildId: string;
   readonly buildDirectory: string;
+  readonly retryAttempts?: number;
+  readonly retryDelayMs?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly onProgress?: ProjectionWriteOptions['onProgress'];
 }
 
 export interface ProjectSearchDataResult {
@@ -82,22 +92,36 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 export async function projectSearchData(
   options: ProjectSearchDataOptions,
 ): Promise<ProjectSearchDataResult> {
+  const writeOptions = projectionWriteOptions(options);
   const buildDatabase = openBuildDatabase(options.buildDirectory);
 
   try {
     const nodes = buildDatabase.prepare(BUILD_NODES_QUERY).all() as unknown as BuildNodeRow[];
     const chunks = buildDatabase.prepare(BUILD_CHUNKS_QUERY).all() as unknown as BuildChunkRow[];
+    const progress = createProjectionWriteState(3 + nodes.length + chunks.length * 2);
 
     await options.db.prepare('BEGIN IMMEDIATE').run();
     try {
-      for (const statement of [DELETE_FTS, DELETE_CHUNKS, DELETE_NODES]) {
-        await options.db.prepare(statement).bind(options.projectId, options.buildId).run();
+      for (const [statement, detail] of [
+        [DELETE_FTS, 'delete projected FTS rows'],
+        [DELETE_CHUNKS, 'delete projected chunks'],
+        [DELETE_NODES, 'delete projected nodes'],
+      ] as const) {
+        await runProjectionBatch(
+          options.db,
+          statement,
+          [options.projectId, options.buildId],
+          writeOptions,
+          progress,
+          detail,
+        );
       }
 
       for (const node of nodes) {
-        await options.db
-          .prepare(INSERT_NODE)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_NODE,
+          [
             node.id,
             options.projectId,
             options.buildId,
@@ -112,14 +136,18 @@ export async function projectSearchData(
             node.line_end,
             node.metadata,
             node.revision_hash,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert node ${node.id}`,
+        );
       }
 
       for (const chunk of chunks) {
-        await options.db
-          .prepare(INSERT_CHUNK)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_CHUNK,
+          [
             chunk.id,
             options.projectId,
             options.buildId,
@@ -133,13 +161,17 @@ export async function projectSearchData(
             chunk.line_end,
             chunk.page,
             chunk.revision_hash,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert chunk ${chunk.id}`,
+        );
 
         const heading = (JSON.parse(chunk.heading_path) as string[]).join(' ');
-        await options.db
-          .prepare(INSERT_FTS)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_FTS,
+          [
             options.projectId,
             options.buildId,
             chunk.id,
@@ -150,8 +182,11 @@ export async function projectSearchData(
             chunk.title ?? '',
             heading,
             chunk.text,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert FTS row ${chunk.id}`,
+        );
       }
 
       await options.db.prepare('COMMIT').run();

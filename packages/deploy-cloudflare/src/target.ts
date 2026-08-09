@@ -22,19 +22,20 @@ import { type D1CatalogDatabaseLike, D1CatalogStore } from './catalog.js';
 import { uploadProjectArchive } from './project-archive.js';
 import { projectBuildMetadata } from './project-metadata.js';
 import { uploadProjectObjects } from './project-objects.js';
-import {
-  D1_FREE_TIER_LIMIT_BYTES,
-  D1_FREE_TIER_WARN_BYTES,
-  preflightProjection,
-  type ProjectionPreflightResult,
-} from './projection-preflight.js';
 import { projectSearchData } from './project-search-data.js';
 import { projectTableData } from './project-table-data.js';
 import {
   type ProjectionMigrationDatabaseLike,
   runProjectionMigrations,
 } from './projection-migrations.js';
+import {
+  D1_FREE_TIER_LIMIT_BYTES,
+  D1_FREE_TIER_WARN_BYTES,
+  type ProjectionPreflightResult,
+  preflightProjection,
+} from './projection-preflight.js';
 import { assertProjectionReadable } from './projection-state.js';
+import { projectionWriteOptions } from './projection-write.js';
 import { r2ArchiveKey } from './r2-keys.js';
 import { type D1DatabaseLike, type R2BucketLike, R2ObjectStore } from './storage.js';
 import { type D1QueryDatabaseLike, D1TableStore } from './tables.js';
@@ -60,6 +61,9 @@ export interface CloudflareDeploymentTargetOptions {
   readonly publicBuildId?: () => Promise<BuildId | null>;
   readonly rollbackBuild?: (buildId: DeploymentReceipt['buildId']) => Promise<ActivationReceipt>;
   readonly preflight?: (buildDirectory: string) => ProjectionPreflightResult;
+  readonly projectionRetryAttempts?: number;
+  readonly projectionRetryDelayMs?: number;
+  readonly projectionSleep?: (ms: number) => Promise<void>;
 }
 
 export class CloudflareApplyError extends LoreError {
@@ -145,6 +149,11 @@ export function createCloudflareDeploymentTarget(
       let projectedSteps = countCompletedProjectionSteps(transfer);
       let uploadedBytes = transfer.archive?.sizeBytes ?? 0;
       let uploadTotalBytes = uploadedBytes;
+      const projectionOptions = projectionWriteOptions({
+        retryAttempts: options.projectionRetryAttempts,
+        retryDelayMs: options.projectionRetryDelayMs,
+        sleep: options.projectionSleep,
+      });
 
       try {
         if (transfer.state?.migrations_done !== true) {
@@ -161,11 +170,19 @@ export function createCloudflareDeploymentTarget(
             projectId: options.projectId,
             buildDirectory,
             ...(options.now === undefined ? {} : { projectedAt: options.now() }),
+            ...projectionOptions,
+            onProgress: (update) => {
+              progress?.({
+                stage: 'projecting',
+                completed: update.completedBatches,
+                total: update.totalBatches,
+                unit: 'batches',
+                detail: `metadata: ${update.detail}`,
+              });
+            },
           });
           transfer = updateState(transfer, 'metadata_done', true);
           receipt = { ...receipt, transfer };
-          projectedSteps += 1;
-          reportProjectionProgress(progress, projectedSteps, 'metadata');
         }
 
         if (transfer.state?.search_done !== true) {
@@ -174,11 +191,19 @@ export function createCloudflareDeploymentTarget(
             projectId: options.projectId,
             buildId: plan.input.buildId,
             buildDirectory,
+            ...projectionOptions,
+            onProgress: (update) => {
+              progress?.({
+                stage: 'projecting',
+                completed: update.completedBatches,
+                total: update.totalBatches,
+                unit: 'batches',
+                detail: `search: ${update.detail}`,
+              });
+            },
           });
           transfer = updateState(transfer, 'search_done', true);
           receipt = { ...receipt, transfer };
-          projectedSteps += 1;
-          reportProjectionProgress(progress, projectedSteps, 'search');
         }
 
         if (transfer.state?.tables_done !== true) {
@@ -187,11 +212,19 @@ export function createCloudflareDeploymentTarget(
             projectId: options.projectId,
             buildId: plan.input.buildId,
             buildDirectory,
+            ...projectionOptions,
+            onProgress: (update) => {
+              progress?.({
+                stage: 'projecting',
+                completed: update.completedBatches,
+                total: update.totalBatches,
+                unit: 'batches',
+                detail: `tables: ${update.detail}`,
+              });
+            },
           });
           transfer = updateState(transfer, 'tables_done', true);
           receipt = { ...receipt, transfer };
-          projectedSteps += 1;
-          reportProjectionProgress(progress, projectedSteps, 'tables');
         }
 
         if (transfer.state?.archive_done !== true) {
