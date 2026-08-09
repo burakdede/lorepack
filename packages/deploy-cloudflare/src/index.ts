@@ -15,6 +15,7 @@ import type {
 } from './projection-migrations.js';
 import { runProjectionMigrations } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
+import { planRemoteRetention, type RemoteRetentionPlan } from './retention.js';
 import {
   createRuntimeTokenAuthorizer,
   hashRuntimeToken,
@@ -74,6 +75,7 @@ export type {
   ProjectObjectUploadOptions,
   ProjectObjectUploadResult,
   R2BucketLike,
+  RemoteRetentionPlan,
   RuntimeAuthDatabaseLike,
   RuntimeTokenRecord,
 };
@@ -88,6 +90,7 @@ export {
   hashRuntimeToken,
   hasRuntimeToken,
   listRuntimeTokens,
+  planRemoteRetention,
   R2ObjectStore,
   RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
