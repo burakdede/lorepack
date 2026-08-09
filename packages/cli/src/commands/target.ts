@@ -347,12 +347,13 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
 interface CloudflareRemoteBuildRow {
   readonly buildId: string;
   readonly projectedAt: string;
+  readonly verifiedAt: string | null;
 }
 
 interface CloudflareTargetStatusRow {
   readonly buildId: string;
   readonly deployedAt: string;
-  readonly state: 'active' | 'projected';
+  readonly state: 'active' | 'projected' | 'verified';
   readonly active: boolean;
 }
 
@@ -442,7 +443,7 @@ async function readCloudflareTargetStatus(
   const activeBuildId = active.results?.[0]?.buildId ?? null;
   const projected = await db
     .prepare(
-      `SELECT build_id AS buildId, projected_at AS projectedAt
+      `SELECT build_id AS buildId, projected_at AS projectedAt, verified_at AS verifiedAt
 FROM projected_builds
 WHERE project_id = ?
 ORDER BY projected_at DESC, build_id DESC`,
@@ -455,7 +456,12 @@ ORDER BY projected_at DESC, build_id DESC`,
     builds: (projected.results ?? []).map((row) => ({
       buildId: row.buildId,
       deployedAt: row.projectedAt,
-      state: row.buildId === activeBuildId ? 'active' : 'projected',
+      state:
+        row.buildId === activeBuildId
+          ? 'active'
+          : row.verifiedAt === null
+            ? 'projected'
+            : 'verified',
       active: row.buildId === activeBuildId,
     })),
   };

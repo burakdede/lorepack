@@ -378,7 +378,7 @@ describe('lore rollback', () => {
     });
   });
 
-  it('rolls back a remote target to the previous projected build when no id is given', async () => {
+  it('rolls back a remote target to the previous verified build when no id is given', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
       const db = new DatabaseSync(':memory:');
       writeCloudflareReceipt(temp.root);
@@ -398,14 +398,21 @@ describe('lore rollback', () => {
           compiler_version TEXT NOT NULL,
           projection_schema_version INTEGER NOT NULL,
           projected_at TEXT NOT NULL,
+          verified_at TEXT,
+          activated_at TEXT,
           PRIMARY KEY (project_id, build_id)
         );
         INSERT INTO projected_builds
-          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
         VALUES
-          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z'),
-          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z');
+          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:58:00.000Z', NULL, NULL),
+          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z', '2026-08-09T11:59:30.000Z', '2026-08-09T11:59:45.000Z'),
+          ('demo', 'lore_${'c'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z', '2026-08-09T12:00:45.000Z');
       `);
+      db.prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1').run(
+        `lore_${'c'.repeat(64)}`,
+        4,
+      );
 
       const calls: string[] = [];
       const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
@@ -418,13 +425,13 @@ describe('lore rollback', () => {
       });
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain(`Rolled back cloudflare to lore_${'a'.repeat(64)}.`);
-      expect(calls).toEqual([`rollback:lore_${'a'.repeat(64)}`]);
+      expect(result.stdout).toContain(`Rolled back cloudflare to lore_${'b'.repeat(64)}.`);
+      expect(calls).toEqual([`rollback:lore_${'b'.repeat(64)}`]);
       db.close();
     });
   });
 
-  it('fails clearly when a remote target has no earlier projected build', async () => {
+  it('fails clearly when a remote target has no earlier verified build', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
       const db = new DatabaseSync(':memory:');
       writeCloudflareReceipt(temp.root);
@@ -444,12 +451,15 @@ describe('lore rollback', () => {
           compiler_version TEXT NOT NULL,
           projection_schema_version INTEGER NOT NULL,
           projected_at TEXT NOT NULL,
+          verified_at TEXT,
+          activated_at TEXT,
           PRIMARY KEY (project_id, build_id)
         );
         INSERT INTO projected_builds
-          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
         VALUES
-          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z');
+          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z', NULL, NULL),
+          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z', '2026-08-09T12:00:45.000Z');
       `);
 
       const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {

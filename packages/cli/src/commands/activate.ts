@@ -241,13 +241,13 @@ async function previousRemoteBuildId(
   const activeBuildId = active.results?.[0]?.buildId ?? null;
   const projected = await db
     .prepare(
-      `SELECT build_id AS buildId
+      `SELECT build_id AS buildId, verified_at AS verifiedAt
 FROM projected_builds
-WHERE project_id = ?
-ORDER BY projected_at DESC, build_id DESC`,
+WHERE project_id = ? AND verified_at IS NOT NULL
+ORDER BY verified_at DESC, projected_at DESC, build_id DESC`,
     )
     .bind(receipt.project)
-    .run<{ buildId: string }>();
+    .run<{ buildId: string; verifiedAt: string }>();
   const previous = (projected.results ?? []).find((row) => row.buildId !== activeBuildId);
   if (previous === undefined) {
     throw new LoreError(

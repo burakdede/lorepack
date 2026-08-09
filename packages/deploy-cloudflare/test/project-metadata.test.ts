@@ -224,7 +224,7 @@ describe('projectBuildMetadata, issue 87', () => {
     expect(
       projection
         .prepare(
-          'SELECT build_schema_version, compiler_version, projection_schema_version, projected_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
+          'SELECT build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
         )
         .get(PROJECT, BUILD),
     ).toEqual({
@@ -232,6 +232,8 @@ describe('projectBuildMetadata, issue 87', () => {
       compiler_version: '0.1.0',
       projection_schema_version: PROJECTION_SCHEMA_VERSION,
       projected_at: '2026-08-08T12:30:00.000Z',
+      verified_at: null,
+      activated_at: null,
     });
 
     const manifestRow = projection
