@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PROJECTION_SCHEMA_VERSION } from '../src/projection-schema.js';
 import {
   assertProjectionReadable,
   type ProjectionStateDatabaseLike,
@@ -50,7 +51,7 @@ describe('assertProjectionReadable', () => {
     const db = new FakeD1Database();
     db.handlers.set(PROJECTION_QUERY, ([projectId, buildId]) =>
       projectId === PROJECT && buildId === BUILD
-        ? [{ buildSchemaVersion: 3, projectionSchemaVersion: 1 }]
+        ? [{ buildSchemaVersion: 3, projectionSchemaVersion: PROJECTION_SCHEMA_VERSION }]
         : [],
     );
 

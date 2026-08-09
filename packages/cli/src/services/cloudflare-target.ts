@@ -139,7 +139,15 @@ export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
       const { stdout } = await execWrangler(['d1', 'list', '--json']);
       const parsed = JSON.parse(stdout) as unknown;
       if (!Array.isArray(parsed) || !parsed.every(isDatabaseInfo)) {
-        throw new Error('Unexpected Wrangler D1 list JSON shape.');
+        throw new LoreError(
+          'LORE_E_TARGET_NOT_CONFIGURED',
+          'Wrangler returned an unreadable Cloudflare D1 list response.',
+          {
+            remediation:
+              'Check that Wrangler is current and authenticated, then retry `lore deploy cloudflare`.',
+            subject: 'cloudflare',
+          },
+        );
       }
       return parsed;
     },

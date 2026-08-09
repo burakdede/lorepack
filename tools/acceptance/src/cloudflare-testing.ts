@@ -38,9 +38,9 @@ export function readCloudflareTestingEnv(
     throw new Error(`Missing Cloudflare integration environment: ${missing.join(', ')}`);
   }
 
-  const apiToken = env.CLOUDFLARE_API_TOKEN!.trim();
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID!.trim();
-  const testPrefix = env.LORE_CF_TEST_PREFIX!.trim().toLowerCase();
+  const apiToken = readRequiredEnv(env, 'CLOUDFLARE_API_TOKEN');
+  const accountId = readRequiredEnv(env, 'CLOUDFLARE_ACCOUNT_ID');
+  const testPrefix = readRequiredEnv(env, 'LORE_CF_TEST_PREFIX').toLowerCase();
   const runId = trimOptional(env.GITHUB_RUN_ID);
   const runAttempt = trimOptional(env.GITHUB_RUN_ATTEMPT);
 
@@ -69,3 +69,13 @@ function trimOptional(value: string | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
+function readRequiredEnv(
+  env: Readonly<Record<string, string | undefined>>,
+  name: CloudflareTestingEnvVar,
+): string {
+  const value = env[name];
+  if (value === undefined) {
+    throw new Error(`Missing Cloudflare integration environment: ${name}`);
+  }
+  return value.trim();
+}

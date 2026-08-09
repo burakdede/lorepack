@@ -669,7 +669,11 @@ async function validateMcpHeadersBeforeAuthorization(request: Request): Promise<
   return null;
 }
 
-function mcpHeaderMismatch(parsed: Record<string, unknown>, header: string, detail: string): Response {
+function mcpHeaderMismatch(
+  parsed: Record<string, unknown>,
+  header: string,
+  detail: string,
+): Response {
   return Response.json(
     {
       jsonrpc: '2.0',

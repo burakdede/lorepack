@@ -3,23 +3,23 @@ import { ProjectLock } from '@lorepack/backend-local';
 import {
   type BuildId,
   type BuildSummary,
-  LORE_DIRECTORY,
-  loadConfig,
-  LoreError,
   type DeploymentTarget,
+  LORE_DIRECTORY,
+  LoreError,
+  loadConfig,
 } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
-import {
-  type CloudflareResolverAdapter,
-  resolveCloudflareTarget,
-  resolveCloudflareTargetWithAdapter,
-} from '../services/cloudflare-target.js';
 import {
   assertActivatable,
   openStateStore,
   previousBuild,
   resolveBuildId,
 } from '../services/builds.js';
+import {
+  type CloudflareResolverAdapter,
+  resolveCloudflareTarget,
+  resolveCloudflareTargetWithAdapter,
+} from '../services/cloudflare-target.js';
 
 /**
  * Activation and rollback are pointer changes (architecture section 18.4). Neither
@@ -185,7 +185,12 @@ async function rollbackRemote(
   const config = loadConfig({ cwd });
   const target =
     resolveTargetOverride === undefined
-      ? await resolveRemoteTarget(targetName, config.projectRoot, config.configPath, cloudflareAdapter)
+      ? await resolveRemoteTarget(
+          targetName,
+          config.projectRoot,
+          config.configPath,
+          cloudflareAdapter,
+        )
       : await resolveTargetOverride(targetName, {
           projectRoot: config.projectRoot,
           configPath: config.configPath,
@@ -216,7 +221,8 @@ async function resolveRemoteTarget(
 ): Promise<DeploymentTarget> {
   if (name !== 'cloudflare') {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown rollback target ${name}.`, {
-      remediation: 'Use `cloudflare`. Additional remote rollback targets are not implemented in v0.1.',
+      remediation:
+        'Use `cloudflare`. Additional remote rollback targets are not implemented in v0.1.',
       subject: name,
     });
   }

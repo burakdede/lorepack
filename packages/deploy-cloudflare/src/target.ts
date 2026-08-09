@@ -278,7 +278,7 @@ export function createCloudflareDeploymentTarget(
                 completed: uploadedBytes,
                 total: uploadTotalBytes,
                 unit: 'bytes',
-                detail: `${update.completedObjects}/${update.totalObjects} objects, ${update.uploadedObjects} uploaded, ${update.skippedObjects} skipped`,
+                detail: `${count(update.completedObjects, 'object')} of ${count(update.totalObjects, 'object')}, ${count(update.uploadedObjects, 'uploaded object')}, ${count(update.skippedObjects, 'skipped object')}`,
               });
             },
           });

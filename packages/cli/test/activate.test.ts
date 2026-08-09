@@ -255,7 +255,8 @@ describe('lore rollback', () => {
         {
           commands: [
             rollbackCommand({
-              resolveTarget: async () => fakeRemoteRollbackTarget(calls, `lore_${'a'.repeat(64)}` as BuildId),
+              resolveTarget: async () =>
+                fakeRemoteRollbackTarget(calls, `lore_${'a'.repeat(64)}` as BuildId),
             }),
           ],
         },
@@ -285,26 +286,29 @@ describe('lore rollback', () => {
   });
 
   it('does not depend on local sources when rolling back a remote target', async () => {
-    await withTempProject({ files: { 'lore.yaml': CONFIG, 'a.md': '# A\n\nText.' } }, async (temp) => {
-      rmSync(join(temp.root, 'a.md'));
-      const calls: string[] = [];
-      const buildId = `lore_${'c'.repeat(64)}` as BuildId;
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'a.md': '# A\n\nText.' } },
+      async (temp) => {
+        rmSync(join(temp.root, 'a.md'));
+        const calls: string[] = [];
+        const buildId = `lore_${'c'.repeat(64)}` as BuildId;
 
-      const result = await run(
-        ['--cwd', temp.root, 'rollback', '--target', 'cloudflare', buildId],
-        {
-          commands: [
-            rollbackCommand({
-              resolveTarget: async () => fakeRemoteRollbackTarget(calls),
-            }),
-          ],
-        },
-      );
+        const result = await run(
+          ['--cwd', temp.root, 'rollback', '--target', 'cloudflare', buildId],
+          {
+            commands: [
+              rollbackCommand({
+                resolveTarget: async () => fakeRemoteRollbackTarget(calls),
+              }),
+            ],
+          },
+        );
 
-      expect(result.code).toBe(0);
-      expect(result.stdout).toContain(`Active build: ${buildId}`);
-      expect(calls).toEqual([`rollback:${buildId}`]);
-    });
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain(`Active build: ${buildId}`);
+        expect(calls).toEqual([`rollback:${buildId}`]);
+      },
+    );
   });
 });
 
