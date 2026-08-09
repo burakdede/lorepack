@@ -13,6 +13,8 @@ import {
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
+  isMissingCloudflareBucketError,
+  isMissingCloudflareD1Error,
   issueCloudflareRuntimeToken,
   parseCloudflareTargetReceipt,
   parseWranglerDeploymentInfo,
@@ -107,6 +109,42 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     ).toBe(
       'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/workers/scripts/lorepack-ci-31329883479-1-cloudflare-acc-runtime',
     );
+  });
+
+  it('treats the Cloudflare R2 already-missing response as a tolerated teardown case', () => {
+    expect(
+      isMissingCloudflareBucketError(
+        new Error(
+          [
+            'wrangler r2 bucket delete lorepack-ci-demo-objects exited 1',
+            'A request to the Cloudflare API (/accounts/demo/r2/buckets/lorepack-ci-demo-objects) failed.',
+            '',
+            '  The specified bucket does not exist. [code: 10006]',
+          ].join('\n'),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingCloudflareBucketError(
+        new Error('wrangler r2 bucket delete failed for another reason'),
+      ),
+    ).toBe(false);
+  });
+
+  it('treats the Cloudflare D1 already-missing response as a tolerated teardown case', () => {
+    expect(
+      isMissingCloudflareD1Error(
+        new Error(
+          [
+            'wrangler d1 delete lorepack-ci-demo-catalog --skip-confirmation exited 1',
+            "Couldn't find a D1 DB with name or binding 'lorepack-ci-demo-catalog' in your config or the API.",
+          ].join('\n'),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingCloudflareD1Error(new Error('wrangler d1 delete failed for another reason')),
+    ).toBe(false);
   });
 
   it('depends on the built CLI binary', () => {
