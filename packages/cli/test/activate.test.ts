@@ -1,10 +1,12 @@
-import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { rollbackCommand } from '../src/commands/activate.js';
 import { runBuild } from '../src/services/build.js';
+import type { CloudflareResolverAdapter } from '../src/services/cloudflare-target.js';
 import { readActiveBuild } from '../src/services/project.js';
 import { run } from './helpers.js';
 
@@ -71,6 +73,97 @@ function fakeRemoteRollbackTarget(
         endpoint: 'https://example.workers.dev/mcp',
       };
     },
+  };
+}
+
+class SqliteStatement {
+  readonly #db: DatabaseSync;
+  readonly #query: string;
+  #bindings: readonly unknown[] = [];
+
+  constructor(db: DatabaseSync, query: string) {
+    this.#db = db;
+    this.#query = query;
+  }
+
+  bind(...values: unknown[]): SqliteStatement {
+    this.#bindings = values;
+    return this;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const statement = this.#db.prepare(this.#query);
+    const trimmed = this.#query.trim().toLowerCase();
+    if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
+    statement.run(...this.#bindings);
+    return {};
+  }
+
+  async first<T = Record<string, unknown>>(): Promise<T | null> {
+    const rows = await this.run<T>();
+    return (rows.results?.[0] as T | undefined) ?? null;
+  }
+}
+
+class SqliteCloudflareDatabase {
+  readonly #db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.#db = db;
+  }
+
+  prepare(query: string): SqliteStatement {
+    return new SqliteStatement(this.#db, query);
+  }
+}
+
+function writeCloudflareReceipt(root: string): void {
+  mkdirSync(join(root, '.lore', 'targets'), { recursive: true });
+  writeFileSync(
+    join(root, '.lore', 'targets', 'cloudflare.json'),
+    `${JSON.stringify(
+      {
+        formatVersion: 1,
+        target: 'cloudflare',
+        project: 'demo',
+        configuredAt: '2026-08-09T12:00:00.000Z',
+        wranglerVersion: '4.119.0',
+        accountId: 'acct_123',
+        workerName: 'demo-runtime',
+        catalogDatabaseName: 'demo-catalog',
+        objectsBucketName: 'demo-objects',
+        capabilities: ['lexical-search', 'structured-context', 'table-query'],
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+}
+
+function fakeCloudflareRollbackAdapter(db: DatabaseSync): CloudflareResolverAdapter {
+  const catalog = new SqliteCloudflareDatabase(db);
+  return {
+    detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
+    whoami: async () => ({
+      authenticated: true,
+      email: 'dev@example.com',
+      accountId: 'acct_123',
+      accountName: 'Example',
+    }),
+    listDatabases: async () => [{ name: 'demo-catalog' }],
+    openCatalogDatabase: () => catalog,
+    openObjectsBucket: () => ({
+      async put() {},
+      async get() {
+        return null;
+      },
+      async head() {
+        return null;
+      },
+    }),
   };
 }
 
@@ -269,7 +362,7 @@ describe('lore rollback', () => {
     });
   });
 
-  it('refuses a remote rollback with no explicit build id', async () => {
+  it('fails clearly when a remote rollback has no target receipt yet', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
       const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
         commands: [
@@ -279,9 +372,99 @@ describe('lore rollback', () => {
         ],
       });
 
+      expect(result.code).toBe(5);
+      expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
+      expect(result.stderr).toContain('Run `lore target add cloudflare` first.');
+    });
+  });
+
+  it('rolls back a remote target to the previous projected build when no id is given', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const db = new DatabaseSync(':memory:');
+      writeCloudflareReceipt(temp.root);
+
+      db.exec(`
+        CREATE TABLE active_build (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          build_id TEXT,
+          generation INTEGER NOT NULL
+        );
+        INSERT INTO active_build (id, build_id, generation)
+        VALUES (1, 'lore_${'b'.repeat(64)}', 4);
+        CREATE TABLE projected_builds (
+          project_id TEXT NOT NULL,
+          build_id TEXT NOT NULL,
+          build_schema_version INTEGER NOT NULL,
+          compiler_version TEXT NOT NULL,
+          projection_schema_version INTEGER NOT NULL,
+          projected_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, build_id)
+        );
+        INSERT INTO projected_builds
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+        VALUES
+          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z'),
+          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z');
+      `);
+
+      const calls: string[] = [];
+      const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
+        commands: [
+          rollbackCommand({
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
+            resolveTarget: async () => fakeRemoteRollbackTarget(calls),
+          }),
+        ],
+      });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(`Rolled back cloudflare to lore_${'a'.repeat(64)}.`);
+      expect(calls).toEqual([`rollback:lore_${'a'.repeat(64)}`]);
+      db.close();
+    });
+  });
+
+  it('fails clearly when a remote target has no earlier projected build', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const db = new DatabaseSync(':memory:');
+      writeCloudflareReceipt(temp.root);
+
+      db.exec(`
+        CREATE TABLE active_build (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          build_id TEXT,
+          generation INTEGER NOT NULL
+        );
+        INSERT INTO active_build (id, build_id, generation)
+        VALUES (1, 'lore_${'b'.repeat(64)}', 4);
+        CREATE TABLE projected_builds (
+          project_id TEXT NOT NULL,
+          build_id TEXT NOT NULL,
+          build_schema_version INTEGER NOT NULL,
+          compiler_version TEXT NOT NULL,
+          projection_schema_version INTEGER NOT NULL,
+          projected_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, build_id)
+        );
+        INSERT INTO projected_builds
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+        VALUES
+          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z');
+      `);
+
+      const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
+        commands: [
+          rollbackCommand({
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
+            resolveTarget: async () => fakeRemoteRollbackTarget(),
+          }),
+        ],
+      });
+
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
-      expect(result.stderr).toContain('requires an explicit build id');
+      expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
+      expect(result.stderr).toContain('There is no earlier verified remote build to return to.');
+      db.close();
     });
   });
 
