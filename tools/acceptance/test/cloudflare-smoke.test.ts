@@ -9,6 +9,7 @@ import {
   addSemanticSearchCapability,
   buildProject,
   callRemoteMcpTool,
+  cloudflareWorkerDeleteUrl,
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
@@ -95,6 +96,17 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     ).toEqual({
       endpointBase: 'https://lorepack-ci-31329883479-1-cloudflare-acc-runtime.workers.dev',
     });
+  });
+
+  it('builds the direct Cloudflare Worker delete URL from account and worker names', () => {
+    expect(
+      cloudflareWorkerDeleteUrl(
+        'de1984edb8b3db5f67105c1bc99d1dca',
+        'lorepack-ci-31329883479-1-cloudflare-acc-runtime',
+      ),
+    ).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/workers/scripts/lorepack-ci-31329883479-1-cloudflare-acc-runtime',
+    );
   });
 
   it('depends on the built CLI binary', () => {
