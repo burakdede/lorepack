@@ -88,8 +88,9 @@ The checked-in gates today are:
 - `tools/acceptance/test/cloudflare-testing.test.ts`, which verifies the environment contract,
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
-  database, and one R2 bucket, deploys the checked-in Worker package, runs
-  `lore target add cloudflare`, runs `lore target token cloudflare`, runs
+  runtime plus target resources, runs `lore target add cloudflare` in automatic provisioning
+  mode so the command itself creates the D1 database and R2 bucket, then deploys the checked-in
+  Worker package, runs `lore target token cloudflare`, runs
   `lore deploy cloudflare`, edits the mixed corpus, runs a second `lore deploy cloudflare`,
   proves unauthenticated REST and MCP requests are rejected while the issued runtime token
   succeeds, then verifies the public build id and read surface before and after

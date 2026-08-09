@@ -46,7 +46,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         buildIds.push(localBuildId);
 
         target = await provisionCloudflareSmokeTarget(project.projectName);
-        await addCloudflareTarget(project, target);
+        target = await addCloudflareTarget(project, target);
         const runtimeToken = await issueCloudflareRuntimeToken(project);
 
         const deployed = await deployCloudflareTarget(project, runtimeToken);
@@ -213,7 +213,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         buildIds.push(buildId);
 
         target = await provisionCloudflareSmokeTarget(project.projectName);
-        await addCloudflareTarget(project, target);
+        target = await addCloudflareTarget(project, target);
         const runtimeToken = await issueCloudflareRuntimeToken(project);
 
         const forcedFailure = await deployCloudflareTargetExpectFailureAfterProject(
@@ -278,7 +278,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
       try {
         const buildId = await buildProject(project);
         target = await provisionCloudflareSmokeTarget(project.projectName);
-        await addCloudflareTarget(project, target);
+        target = await addCloudflareTarget(project, target);
         const runtimeToken = await issueCloudflareRuntimeToken(project);
 
         addSemanticSearchCapability(project.root, buildId);
