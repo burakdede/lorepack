@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   cloudflareArtifactDirectory,
@@ -53,7 +53,7 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
         LORE_CF_ARTIFACT_DIR: 'tmp/cloudflare-artifacts',
         GITHUB_WORKSPACE: '/workspace/lorepack',
       }),
-    ).toBe('/workspace/lorepack/tmp/cloudflare-artifacts');
+    ).toBe(resolve('/workspace/lorepack', 'tmp/cloudflare-artifacts'));
     expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: '/tmp/cloudflare-artifacts' })).toBe(
       '/tmp/cloudflare-artifacts',
     );
