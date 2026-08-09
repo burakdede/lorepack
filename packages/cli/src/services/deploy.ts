@@ -58,6 +58,13 @@ export interface DeployOptions {
   readonly allowCapabilityLoss?: readonly Capability[];
   /** A receipt to continue from, so a partial deploy resumes rather than restarts. */
   readonly resume?: DeploymentReceipt;
+  /**
+   * Test-only hook for forcing a resumable failure after candidate projection completed.
+   *
+   * The hook lives at the orchestration boundary so acceptance can interrupt a real target
+   * after the projected receipt was written, while production callers omit it entirely.
+   */
+  readonly afterProject?: ((receipt: DeploymentReceipt) => Promise<void> | void) | undefined;
   readonly now?: () => Date;
 }
 
@@ -257,6 +264,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
       completedSteps: steps(applied, 'project'),
     };
     writeReceipt(options.projectRoot, receipt);
+    await options.afterProject?.(receipt);
     progress.finish('projecting', projectionStarted ? projectionCompleted : plan.steps.length);
     if (uploadStarted) {
       progress.finish('uploading', uploadCompleted);

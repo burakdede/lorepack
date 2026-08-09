@@ -114,6 +114,7 @@ function fakeTarget(
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 function writeCloudflareReceipt(
@@ -327,6 +328,59 @@ describe('lore deploy command, issue 91', () => {
         expect(calls).not.toContain('apply:cloudflare-aaaaaaaaaaaa');
         expect(calls).toEqual([`plan:${buildId}`, 'detect', 'verify', 'activate']);
         expect(result.stdout).toContain('Active build:');
+      },
+    );
+  });
+
+  it('forces a resumable failure after projection only under the test hook env', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const initial = await run(['--cwd', temp.root, 'build']);
+        expect(initial.code).toBe(0);
+
+        vi.stubEnv('LORE_TEST_ALLOW_HOOKS', '1');
+        vi.stubEnv('LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT', '1');
+
+        const calls: string[] = [];
+        const failed = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () => fakeTarget({ calls }),
+              confirm: async () => true,
+            }),
+          ],
+        });
+
+        expect(failed.code ?? 1).toBeGreaterThan(0);
+        expect(failed.stderr).toContain('Forced test failure after candidate projection.');
+        expect(failed.stderr).toContain('Resume with `lore deploy cloudflare --resume');
+        expect(calls).toEqual(
+          expect.arrayContaining(['detect', expect.stringMatching(/^plan:lore_/), 'apply']),
+        );
+        expect(calls).not.toContain('verify');
+
+        const receiptId = failed.stderr.match(/--resume (cloudflare-[0-9a-f]{12})/)?.[1];
+        expect(receiptId).toBeDefined();
+
+        vi.stubEnv('LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT', '0');
+        const resumedCalls: string[] = [];
+        const resumed = await run(
+          ['--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--resume', receiptId ?? ''],
+          {
+            commands: [
+              deployCommand({
+                resolveTarget: async () => fakeTarget({ calls: resumedCalls }),
+                confirm: async () => true,
+              }),
+            ],
+          },
+        );
+
+        expect(resumed.code).toBe(0);
+        expect(resumedCalls).not.toContain(`apply:${receiptId}`);
+        expect(resumedCalls).toEqual(expect.arrayContaining(['detect', 'verify', 'activate']));
+        expect(resumed.stdout).toContain('Active build:');
       },
     );
   });

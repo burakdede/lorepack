@@ -5,14 +5,17 @@ import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
 import {
   addCloudflareTarget,
+  addResumeMutationToken,
   addSemanticSearchCapability,
   buildProject,
   callRemoteMcpTool,
   createCloudflareSmokeProject,
   deployCloudflareTarget,
+  deployCloudflareTargetExpectFailureAfterProject,
   issueCloudflareRuntimeToken,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
+  resumeCloudflareTarget,
   rollbackCloudflareTarget,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
@@ -21,6 +24,7 @@ import { missingCloudflareTestingEnv } from '../src/cloudflare-testing.js';
 
 const BINARY = join(import.meta.dirname, '..', '..', '..', 'packages', 'cli', 'dist', 'entry.js');
 const UNIQUE_QUERY = 'phase6-rollback-token';
+const RESUME_MUTATION_QUERY = 'phase6-resume-mutation-token';
 const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
 const RECEIPTS_DIRECTORY = '.lore/receipts';
 
@@ -179,6 +183,74 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(rolledBackRollbackSearch.structuredContent.buildId).toBe(localBuildId);
         expect(rolledBackRollbackSearch.structuredContent.hits.length).toBeGreaterThan(0);
+      } finally {
+        try {
+          if (target !== undefined) {
+            await teardownCloudflareSmokeTarget(
+              target,
+              project.projectName,
+              project.root,
+              buildIds,
+            );
+          }
+        } finally {
+          project.cleanup();
+        }
+      }
+    },
+    600_000,
+  );
+
+  it.skipIf(missing.length > 0)(
+    `resumes a forced post-projection Cloudflare deploy without reprojection (missing: ${missing.join(', ') || 'none'})`,
+    async () => {
+      const project = createCloudflareSmokeProject('Cloudflare Resume');
+      const buildIds: string[] = [];
+      let target: Awaited<ReturnType<typeof provisionCloudflareSmokeTarget>> | undefined;
+
+      try {
+        const buildId = await buildProject(project);
+        buildIds.push(buildId);
+
+        target = await provisionCloudflareSmokeTarget(project.projectName);
+        await addCloudflareTarget(project, target);
+        const runtimeToken = await issueCloudflareRuntimeToken(project);
+
+        const forcedFailure = await deployCloudflareTargetExpectFailureAfterProject(
+          project,
+          runtimeToken,
+        );
+        expect(forcedFailure.stderr).toContain('Forced test failure after candidate projection.');
+        expect(forcedFailure.stderr).toContain(
+          `lore deploy cloudflare --resume ${forcedFailure.receiptId}`,
+        );
+        expect(
+          existsSync(join(project.root, RECEIPTS_DIRECTORY, `${forcedFailure.receiptId}.json`)),
+        ).toBe(true);
+
+        addResumeMutationToken(project.root, buildId, RESUME_MUTATION_QUERY);
+
+        const resumed = await resumeCloudflareTarget(
+          project,
+          forcedFailure.receiptId,
+          runtimeToken,
+        );
+        expect(resumed.buildId).toBe(buildId);
+        expect(resumed.receiptId).toBe(forcedFailure.receiptId);
+
+        await waitForRemoteBuild(target.endpointBase, buildId, runtimeToken);
+
+        const resumedSearch = await callRemoteMcpTool<SearchResult>(
+          target.endpointBase,
+          'lore_search',
+          {
+            query: RESUME_MUTATION_QUERY,
+            limit: 3,
+          },
+          runtimeToken,
+        );
+        expect(resumedSearch.structuredContent.buildId).toBe(buildId);
+        expect(resumedSearch.structuredContent.hits).toHaveLength(0);
       } finally {
         try {
           if (target !== undefined) {
