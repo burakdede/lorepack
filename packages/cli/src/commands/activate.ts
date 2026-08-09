@@ -17,9 +17,11 @@ import {
 } from '../services/builds.js';
 import {
   type CloudflareResolverAdapter,
+  createWranglerDeployAdapter,
   resolveCloudflareTarget,
   resolveCloudflareTargetWithAdapter,
 } from '../services/cloudflare-target.js';
+import { readCloudflareTargetReceipt } from './target.js';
 
 /**
  * Activation and rollback are pointer changes (architecture section 18.4). Neither
@@ -171,18 +173,11 @@ async function rollbackRemote(
   resolveTargetOverride: ActivateCommandOptions['resolveTarget'],
   cloudflareAdapter: CloudflareResolverAdapter | undefined,
 ): Promise<CommandResult> {
-  if (buildId === undefined || buildId.trim() === '') {
-    throw new LoreError(
-      'LORE_E_INVALID_ARGUMENT',
-      'Remote rollback currently requires an explicit build id.',
-      {
-        remediation:
-          'Pass the build id to roll back to, for example `lore rollback --target cloudflare lore_...`.',
-      },
-    );
-  }
-
   const config = loadConfig({ cwd });
+  const requestedBuildId =
+    buildId === undefined || buildId.trim() === ''
+      ? await previousRemoteBuildId(targetName, config.projectRoot, cloudflareAdapter)
+      : (buildId.trim() as BuildId);
   const target =
     resolveTargetOverride === undefined
       ? await resolveRemoteTarget(
@@ -196,7 +191,7 @@ async function rollbackRemote(
           configPath: config.configPath,
         });
 
-  const activation = await target.rollback(buildId as BuildId);
+  const activation = await target.rollback(requestedBuildId);
   return {
     human: [
       `Rolled back ${target.id} to ${activation.buildId}.`,
@@ -211,6 +206,57 @@ async function rollbackRemote(
       changed: true,
     },
   };
+}
+
+async function previousRemoteBuildId(
+  targetName: string,
+  projectRoot: string,
+  cloudflareAdapter: CloudflareResolverAdapter | undefined,
+): Promise<BuildId> {
+  if (targetName !== 'cloudflare') {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown rollback target ${targetName}.`, {
+      remediation:
+        'Use `cloudflare`. Additional remote rollback targets are not implemented in v0.1.',
+      subject: targetName,
+    });
+  }
+
+  const receipt = readCloudflareTargetReceipt(projectRoot);
+  const adapter = cloudflareAdapter ?? createWranglerDeployAdapter();
+  const db = adapter.openCatalogDatabase(receipt.catalogDatabaseName);
+  const hasProjectedBuilds = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+    .run<{ name: string }>();
+  if ((hasProjectedBuilds.results?.length ?? 0) === 0) {
+    throw new LoreError(
+      'LORE_E_BUILD_NOT_FOUND',
+      'There is no earlier verified remote build to return to.',
+      { remediation: 'Run `lore target status cloudflare` to see the remote history.' },
+    );
+  }
+
+  const active = await db
+    .prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1')
+    .run<{ buildId: string | null }>();
+  const activeBuildId = active.results?.[0]?.buildId ?? null;
+  const projected = await db
+    .prepare(
+      `SELECT build_id AS buildId
+FROM projected_builds
+WHERE project_id = ?
+ORDER BY projected_at DESC, build_id DESC`,
+    )
+    .bind(receipt.project)
+    .run<{ buildId: string }>();
+  const previous = (projected.results ?? []).find((row) => row.buildId !== activeBuildId);
+  if (previous === undefined) {
+    throw new LoreError(
+      'LORE_E_BUILD_NOT_FOUND',
+      'There is no earlier verified remote build to return to.',
+      { remediation: 'Run `lore target status cloudflare` to see the remote history.' },
+    );
+  }
+  return previous.buildId as BuildId;
 }
 
 async function resolveRemoteTarget(
