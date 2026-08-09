@@ -17,9 +17,12 @@ import { runProjectionMigrations } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import {
   applyRemoteRetention,
+  applyRemoteRetentionPlan,
   planRemoteRetention,
+  RemoteRetentionApplyError,
   type RemoteRetentionApplyResult,
   type RemoteRetentionPlan,
+  type RemoteRetentionResumeState,
 } from './retention.js';
 import {
   createRuntimeTokenAuthorizer,
@@ -82,10 +85,13 @@ export type {
   R2BucketLike,
   RemoteRetentionApplyResult,
   RemoteRetentionPlan,
+  RemoteRetentionResumeState,
   RuntimeAuthDatabaseLike,
   RuntimeTokenRecord,
 };
 export {
+  applyRemoteRetention,
+  applyRemoteRetentionPlan,
   CloudflareApplyError,
   createCloudflareDeploymentTarget,
   createRuntimeTokenAuthorizer,
@@ -96,9 +102,9 @@ export {
   hashRuntimeToken,
   hasRuntimeToken,
   listRuntimeTokens,
-  applyRemoteRetention,
   planRemoteRetention,
   R2ObjectStore,
+  RemoteRetentionApplyError,
   RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   RUNTIME_TOKENS_TABLE,

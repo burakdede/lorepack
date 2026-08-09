@@ -1,0 +1,224 @@
+{
+  "$id": "https://lorepack.dev/schemas/remote-retention-receipt.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completedSteps": {
+      "items": {
+        "enum": [
+          "plan",
+          "d1",
+          "archives",
+          "objects"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+      "type": "string"
+    },
+    "d1": {
+      "additionalProperties": false,
+      "properties": {
+        "artifactsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "buildManifestsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "buildWarningsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "chunksRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ftsRowsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "nodesRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "physicalTablesDropped": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "projectedBuildsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectedTableColumnsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projectedTablesRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "supersessionsRemoved": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "projectedBuildsRemoved",
+        "buildManifestsRemoved",
+        "buildWarningsRemoved",
+        "artifactsRemoved",
+        "supersessionsRemoved",
+        "nodesRemoved",
+        "chunksRemoved",
+        "ftsRowsRemoved",
+        "projectedTablesRemoved",
+        "projectedTableColumnsRemoved",
+        "physicalTablesDropped"
+      ],
+      "type": "object"
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "keepPrevious": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "plan": {
+      "additionalProperties": false,
+      "properties": {
+        "activeBuildId": {
+          "anyOf": [
+            {
+              "description": "Content-derived build identifier",
+              "pattern": "^lore_[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "archiveKeysToRemove": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "keep": {
+          "items": {
+            "description": "Content-derived build identifier",
+            "pattern": "^lore_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "objectKeysToRemove": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "remove": {
+          "items": {
+            "description": "Content-derived build identifier",
+            "pattern": "^lore_[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "activeBuildId",
+        "keep",
+        "remove",
+        "archiveKeysToRemove",
+        "objectKeysToRemove"
+      ],
+      "type": "object"
+    },
+    "project": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "r2": {
+      "additionalProperties": false,
+      "properties": {
+        "archiveKeysRemoved": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "objectKeysRemoved": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "archiveKeysRemoved",
+        "objectKeysRemoved"
+      ],
+      "type": "object"
+    },
+    "receiptId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "planned",
+        "applying",
+        "applied",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "target": {
+      "const": "cloudflare",
+      "type": "string"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "receiptId",
+    "target",
+    "project",
+    "keepPrevious",
+    "createdAt",
+    "state",
+    "completedSteps",
+    "plan",
+    "d1",
+    "r2"
+  ],
+  "title": "remote-retention-receipt",
+  "type": "object"
+}

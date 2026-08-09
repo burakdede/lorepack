@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { buildManifestSchema, buildReceiptSchema, lockfileSchema } from '../src/schemas/build.js';
 import { sourceLocatorSchema } from '../src/schemas/common.js';
 import { configSchema, ruleSchema } from '../src/schemas/config.js';
-import { deploymentReceiptSchema, planSchema } from '../src/schemas/plan.js';
+import {
+  deploymentReceiptSchema,
+  planSchema,
+  remoteRetentionReceiptSchema,
+} from '../src/schemas/plan.js';
 import { PUBLIC_SCHEMAS } from '../src/schemas/registry.js';
 import {
   contextBundleSchema,
@@ -351,6 +355,46 @@ describe('plan and deployment receipt', () => {
     });
   });
 
+  it('accepts a remote retention receipt in the documented shape', () => {
+    const receipt = remoteRetentionReceiptSchema.parse({
+      formatVersion: 1,
+      receiptId: 'cloudflare-prune-aaaaaaaaaaaa',
+      target: 'cloudflare',
+      project: 'sarjbot',
+      keepPrevious: 5,
+      createdAt: '2026-08-09T13:30:00Z',
+      state: 'failed',
+      completedSteps: ['plan', 'd1'],
+      plan: {
+        activeBuildId: BUILD_ID,
+        keep: [BUILD_ID],
+        remove: [`lore_${'b'.repeat(64)}`],
+        archiveKeysToRemove: ['sarjbot/builds/lore_b/archive.lorepack'],
+        objectKeysToRemove: ['sarjbot/objects/sha256/aa/bb/cc'],
+      },
+      d1: {
+        projectedBuildsRemoved: 1,
+        buildManifestsRemoved: 1,
+        buildWarningsRemoved: 0,
+        artifactsRemoved: 2,
+        supersessionsRemoved: 0,
+        nodesRemoved: 3,
+        chunksRemoved: 1,
+        ftsRowsRemoved: 1,
+        projectedTablesRemoved: 0,
+        projectedTableColumnsRemoved: 0,
+        physicalTablesDropped: ['projected_sarjbot_budget'],
+      },
+      r2: {
+        archiveKeysRemoved: [],
+        objectKeysRemoved: ['sarjbot/objects/sha256/aa/bb/cc'],
+      },
+    });
+
+    expect(receipt.state).toBe('failed');
+    expect(receipt.completedSteps).toEqual(['plan', 'd1']);
+  });
+
   it('rejects an endpoint that is not a url', () => {
     const result = deploymentReceiptSchema.safeParse({
       formatVersion: 1,
@@ -409,6 +453,7 @@ describe('public registry', () => {
         'lore-config',
         'lore-lock',
         'plan',
+        'remote-retention-receipt',
         'search-request',
         'search-result',
         'source-read-request',

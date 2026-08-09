@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
@@ -146,6 +146,7 @@ function writeCloudflareReceipt(root: string): void {
 
 interface FakeCloudflareObjectsBucket {
   readonly deletedKeys: string[];
+  failOnDeleteKey: string | null;
   seed(key: string, value?: Uint8Array): void;
 }
 
@@ -158,6 +159,7 @@ function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObj
   const deletedKeys: string[] = [];
   return {
     deletedKeys,
+    failOnDeleteKey: null,
     seed(key: string, value: Uint8Array = new Uint8Array([1])) {
       objects.set(key, value);
     },
@@ -176,6 +178,9 @@ function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObj
       return objects.has(key) ? {} : null;
     },
     async delete(key: string) {
+      if (this.failOnDeleteKey === key) {
+        throw new Error(`Refused delete for ${key}`);
+      }
       if (!objects.has(key)) return;
       objects.delete(key);
       deletedKeys.push(key);
@@ -1023,7 +1028,9 @@ describe('lore prune', () => {
       });
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('Cloudflare cleanup applied: removed 1 remote build, kept 2.');
+      expect(result.stdout).toContain(
+        'Cloudflare cleanup applied: removed 1 remote build, kept 2.',
+      );
       expect(result.stdout).toContain('1 projected build');
       expect(result.stdout).toContain('1 build archive and 1 unreferenced object.');
       expect(result.stdout).toContain('Dropped 1 physical table.');
@@ -1056,6 +1063,104 @@ describe('lore prune', () => {
       expect(parsed.r2.objectKeysRemoved).toEqual([jsonFixture.objectKey]);
       humanFixture.db.close();
       jsonFixture.db.close();
+    });
+  });
+
+  it('requires --yes when resuming a remote cleanup', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const result = await run(
+        [
+          '--cwd',
+          temp.root,
+          'prune',
+          '--target',
+          'cloudflare',
+          '--resume',
+          'cloudflare-prune-demo',
+        ],
+        {
+          commands: [pruneCommand()],
+        },
+      );
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('Remote cleanup resume requires `--yes`.');
+    });
+  });
+
+  it('writes a resumable receipt when remote cleanup fails and finishes from that receipt', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      writeCloudflareReceipt(temp.root);
+      const fixture = seedRemoteCleanupFixture(new DatabaseSync(':memory:'));
+      fixture.objects.failOnDeleteKey = fixture.objectKey;
+
+      const failed = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'], {
+        commands: [
+          pruneCommand({
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(fixture.db, fixture.objects),
+          }),
+        ],
+      });
+
+      expect(failed.code).toBe(5);
+      expect(failed.stderr).toContain('LORE_E_REMOTE_DEPLOY');
+      expect(failed.stderr).toContain('Completed cleanup work was recorded.');
+      const receiptId = failed.stderr.match(/--resume (cloudflare-prune-[a-z0-9]+)/)?.[1];
+      expect(receiptId).toBeDefined();
+
+      const receipt = JSON.parse(
+        readFileSync(join(temp.root, '.lore', 'receipts', `${receiptId}.json`), 'utf8'),
+      ) as {
+        state: string;
+        completedSteps: string[];
+        r2: { archiveKeysRemoved: string[]; objectKeysRemoved: string[] };
+      };
+      expect(receipt.state).toBe('failed');
+      expect(receipt.completedSteps).toEqual(['plan', 'd1', 'archives']);
+      expect(receipt.r2.archiveKeysRemoved).toEqual([fixture.archiveKey]);
+      expect(receipt.r2.objectKeysRemoved).toEqual([]);
+      expect(fixture.objects.deletedKeys).toEqual([fixture.archiveKey]);
+
+      fixture.objects.failOnDeleteKey = null;
+      const resumed = await run(
+        [
+          '--cwd',
+          temp.root,
+          'prune',
+          '--target',
+          'cloudflare',
+          '--yes',
+          '--resume',
+          receiptId as string,
+        ],
+        {
+          commands: [
+            pruneCommand({
+              cloudflareAdapter: fakeCloudflareRollbackAdapter(fixture.db, fixture.objects),
+            }),
+          ],
+        },
+      );
+
+      expect(resumed.code).toBe(0);
+      expect(resumed.stdout).toContain(
+        'Cloudflare cleanup applied: removed 1 remote build, kept 2.',
+      );
+      expect(fixture.objects.deletedKeys).toEqual([fixture.archiveKey, fixture.objectKey]);
+
+      const finished = JSON.parse(
+        readFileSync(join(temp.root, '.lore', 'receipts', `${receiptId}.json`), 'utf8'),
+      ) as {
+        state: string;
+        completedSteps: string[];
+        r2: { archiveKeysRemoved: string[]; objectKeysRemoved: string[] };
+      };
+      expect(finished.state).toBe('applied');
+      expect(finished.completedSteps).toEqual(['plan', 'd1', 'archives', 'objects']);
+      expect(finished.r2.archiveKeysRemoved).toEqual([fixture.archiveKey]);
+      expect(finished.r2.objectKeysRemoved).toEqual([fixture.objectKey]);
+
+      fixture.db.close();
     });
   });
 });
