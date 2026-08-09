@@ -81,6 +81,10 @@ output and is not treated as a pass.
 
 The checked-in gates today are:
 
+- `packages/deploy-cloudflare/test/runtime-contract.test.ts`, which now runs the shared
+  Phase 2 runtime contract against a real projected Cloudflare fixture backed by the
+  package's D1 and R2 ports rather than a hand-wired query fake, including the activation
+  invariant
 - `tools/acceptance/test/cloudflare-testing.test.ts`, which verifies the environment contract,
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
