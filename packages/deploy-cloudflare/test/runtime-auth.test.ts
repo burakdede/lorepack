@@ -4,10 +4,13 @@ import {
   createRuntimeTokenAuthorizer,
   hashRuntimeToken,
   hasRuntimeToken,
+  listRuntimeTokens,
+  RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   type RuntimeAuthDatabaseLike,
   type RuntimeAuthStatementLike,
   revokeRuntimeTokens,
+  rotateRuntimeTokenHash,
   storeRuntimeTokenHash,
 } from '../src/runtime-auth.js';
 
@@ -138,20 +141,77 @@ describe('runtime token auth, issue 90', () => {
     ).toBe('This token is not valid for this build.');
   });
 
-  it('rotates by replacement and revokes by deletion', async () => {
+  it('keeps the previous token valid through the overlap window, then expires it', async () => {
     const { db, auth } = openRuntimeDatabase();
-    const first = await hashRuntimeToken(`${RUNTIME_TOKEN_PREFIX}first`);
-    const second = await hashRuntimeToken(`${RUNTIME_TOKEN_PREFIX}second`);
+    const firstToken = `${RUNTIME_TOKEN_PREFIX}first`;
+    const secondToken = `${RUNTIME_TOKEN_PREFIX}second`;
+    const overlapEndsAt = new Date(
+      Date.parse('2026-08-09T10:05:00.000Z') + RUNTIME_TOKEN_OVERLAP_MS,
+    ).toISOString();
 
-    await storeRuntimeTokenHash(auth, first, '2026-08-09T10:00:00.000Z');
-    await storeRuntimeTokenHash(auth, second, '2026-08-09T10:05:00.000Z');
+    await storeRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken(firstToken),
+      '2026-08-09T10:00:00.000Z',
+    );
+    await rotateRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken(secondToken),
+      '2026-08-09T10:05:00.000Z',
+      overlapEndsAt,
+    );
 
-    const hashes = db
-      .prepare('SELECT token_hash FROM runtime_tokens ORDER BY token_hash')
-      .all() as Array<{ token_hash: string }>;
-    expect(hashes).toEqual([{ token_hash: second }]);
+    const rows = await listRuntimeTokens(auth);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        createdAt: '2026-08-09T10:00:00.000Z',
+        expiresAt: overlapEndsAt,
+      }),
+      expect.objectContaining({
+        createdAt: '2026-08-09T10:05:00.000Z',
+        expiresAt: null,
+      }),
+    ]);
 
-    expect(await revokeRuntimeTokens(auth)).toBe(1);
+    const duringOverlap = createRuntimeTokenAuthorizer(auth, () => '2026-08-09T10:14:59.000Z');
+    expect(
+      await duringOverlap({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `Bearer ${firstToken}`,
+      }),
+    ).toBe(true);
+    expect(
+      await duringOverlap({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `Bearer ${secondToken}`,
+      }),
+    ).toBe(true);
+
+    const afterOverlap = createRuntimeTokenAuthorizer(auth, () => '2026-08-09T10:15:00.000Z');
+    expect(
+      await afterOverlap({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `Bearer ${firstToken}`,
+      }),
+    ).toBe('This token is not valid for this build.');
+    expect(
+      await afterOverlap({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `Bearer ${secondToken}`,
+      }),
+    ).toBe(true);
+
+    expect(await revokeRuntimeTokens(auth)).toBe(2);
     expect(await hasRuntimeToken(auth)).toBe(false);
+
+    expect(
+      db.prepare('SELECT token_hash FROM runtime_tokens ORDER BY token_hash').all() as Array<{
+        token_hash: string;
+      }>,
+    ).toEqual([]);
   });
 });

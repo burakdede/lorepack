@@ -82,6 +82,11 @@ bearer token with the `lore_rt_` prefix. A Cloudflare deployment credential such
 `CLOUDFLARE_API_TOKEN` is never a valid runtime token, even if someone hashes and stores it by
 mistake.
 
+`lore target token cloudflare --rotate` keeps the previous token valid for exactly **10
+minutes**, then expires it automatically. That overlap window is there so an already-running
+client can swap credentials without being cut off mid-session. During the window, both the old
+and new runtime tokens work; after the window, only the new token does.
+
 Use `lore target token cloudflare --rotate` to replace the token, or
 `lore target token cloudflare --revoke` to remove it. The token must not be written to the
 project receipt or committed to the repository.

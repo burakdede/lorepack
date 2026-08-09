@@ -66,7 +66,7 @@ describe('projection migrations, issue 87', () => {
     const projection = new SqliteProjectionDatabase(db);
 
     const result = await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
-    expect(result).toEqual({ applied: ['0001', '0002'], alreadyApplied: [] });
+    expect(result).toEqual({ applied: ['0001', '0002', '0003'], alreadyApplied: [] });
 
     const names = (
       db
@@ -114,6 +114,13 @@ describe('projection migrations, issue 87', () => {
         'projected_at',
       ]),
     );
+
+    const runtimeTokenColumns = (
+      db.prepare('PRAGMA table_info(runtime_tokens)').all() as Array<{ name: string }>
+    ).map((column) => column.name);
+    expect(runtimeTokenColumns).toEqual(
+      expect.arrayContaining(['token_hash', 'created_at', 'expires_at']),
+    );
   });
 
   it('are idempotent and record the checked-in checksum once', async () => {
@@ -122,7 +129,7 @@ describe('projection migrations, issue 87', () => {
 
     await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
     const second = await runProjectionMigrations(projection, () => '2026-08-08T12:05:00.000Z');
-    expect(second).toEqual({ applied: [], alreadyApplied: ['0001', '0002'] });
+    expect(second).toEqual({ applied: [], alreadyApplied: ['0001', '0002', '0003'] });
 
     const rows = db
       .prepare('SELECT id, checksum FROM schema_migrations ORDER BY id')
@@ -139,7 +146,11 @@ describe('projection migrations, issue 87', () => {
         id: '0002',
         checksum: PROJECTION_MIGRATIONS[1]?.checksum ?? '',
       },
+      {
+        id: '0003',
+        checksum: PROJECTION_MIGRATIONS[2]?.checksum ?? '',
+      },
     ]);
-    expect(PROJECTION_SCHEMA_VERSION).toBe(2);
+    expect(PROJECTION_SCHEMA_VERSION).toBe(3);
   });
 });

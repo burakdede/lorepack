@@ -11,13 +11,22 @@ export interface RuntimeAuthDatabaseLike {
 
 interface RuntimeTokenRow {
   readonly tokenHash: string;
+  readonly expiresAt?: string | null;
 }
 
 export const RUNTIME_TOKEN_PREFIX = 'lore_rt_' as const;
+export const RUNTIME_TOKEN_OVERLAP_MS = 10 * 60 * 1000;
 export const RUNTIME_TOKENS_TABLE = `CREATE TABLE IF NOT EXISTS runtime_tokens (
   token_hash TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  expires_at TEXT
 )`;
+
+export interface RuntimeTokenRecord {
+  readonly tokenHash: string;
+  readonly createdAt: string;
+  readonly expiresAt: string | null;
+}
 
 export async function storeRuntimeTokenHash(
   db: RuntimeAuthDatabaseLike,
@@ -27,7 +36,24 @@ export async function storeRuntimeTokenHash(
   await db.prepare(RUNTIME_TOKENS_TABLE).run();
   await db.prepare('DELETE FROM runtime_tokens').run();
   await db
-    .prepare('INSERT INTO runtime_tokens (token_hash, created_at) VALUES (?, ?)')
+    .prepare('INSERT INTO runtime_tokens (token_hash, created_at, expires_at) VALUES (?, ?, NULL)')
+    .bind(tokenHash, now)
+    .run();
+}
+
+export async function rotateRuntimeTokenHash(
+  db: RuntimeAuthDatabaseLike,
+  tokenHash: string,
+  now: string,
+  overlapUntil: string,
+): Promise<void> {
+  await db.prepare(RUNTIME_TOKENS_TABLE).run();
+  await db
+    .prepare('UPDATE runtime_tokens SET expires_at = ? WHERE expires_at IS NULL OR expires_at > ?')
+    .bind(overlapUntil, now)
+    .run();
+  await db
+    .prepare('INSERT INTO runtime_tokens (token_hash, created_at, expires_at) VALUES (?, ?, NULL)')
     .bind(tokenHash, now)
     .run();
 }
@@ -50,15 +76,28 @@ export async function hasRuntimeToken(db: RuntimeAuthDatabaseLike): Promise<bool
   return (rows.results?.length ?? 0) > 0;
 }
 
+export async function listRuntimeTokens(
+  db: RuntimeAuthDatabaseLike,
+): Promise<readonly RuntimeTokenRecord[]> {
+  await db.prepare(RUNTIME_TOKENS_TABLE).run();
+  const rows = await db
+    .prepare(
+      'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM runtime_tokens ORDER BY created_at, token_hash',
+    )
+    .run<RuntimeTokenRecord>();
+  return rows.results ?? [];
+}
+
 export function createRuntimeTokenAuthorizer(
   db: RuntimeAuthDatabaseLike,
+  now: () => string = () => new Date().toISOString(),
 ): (request: AuthorizationRequest) => Promise<boolean | string> {
   return async (request) => {
     const token = bearerTokenFrom(request.authorization);
     if (token === null) return 'This token is not valid for this build.';
     if (!token.startsWith(RUNTIME_TOKEN_PREFIX)) return 'This token is not valid for this build.';
     const candidate = await hashRuntimeToken(token);
-    const hashes = await readRuntimeTokenHashes(db);
+    const hashes = await readRuntimeTokenHashes(db, now());
     if (hashes.length === 0) return 'This token is not valid for this build.';
     for (const hash of hashes) {
       if (constantTimeEqualHex(candidate, hash)) return true;
@@ -73,10 +112,16 @@ export async function hashRuntimeToken(token: string): Promise<string> {
   return hexOf(new Uint8Array(digest));
 }
 
-async function readRuntimeTokenHashes(db: RuntimeAuthDatabaseLike): Promise<readonly string[]> {
+async function readRuntimeTokenHashes(
+  db: RuntimeAuthDatabaseLike,
+  now: string,
+): Promise<readonly string[]> {
   await db.prepare(RUNTIME_TOKENS_TABLE).run();
   const rows = await db
-    .prepare('SELECT token_hash AS tokenHash FROM runtime_tokens ORDER BY token_hash')
+    .prepare(
+      'SELECT token_hash AS tokenHash FROM runtime_tokens WHERE expires_at IS NULL OR expires_at > ? ORDER BY token_hash',
+    )
+    .bind(now)
     .run<RuntimeTokenRow>();
   return (rows.results ?? []).map((row) => row.tokenHash);
 }

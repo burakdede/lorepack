@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { PROJECTION_SCHEMA_VERSION } from './projection-schema.js';
-import { RUNTIME_TOKENS_TABLE } from './runtime-auth.js';
 
 /**
  * The D1 projection schema for Phase 6.
@@ -186,7 +185,20 @@ const PROJECTION_MIGRATIONS_SOURCE = [
   {
     id: '0002',
     name: 'runtime-auth',
-    statements: [RUNTIME_TOKENS_TABLE],
+    statements: [
+      `CREATE TABLE IF NOT EXISTS runtime_tokens (
+  token_hash TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+)`,
+    ],
+  },
+  {
+    id: '0003',
+    name: 'runtime-auth-overlap',
+    statements: [
+      `ALTER TABLE runtime_tokens ADD COLUMN expires_at TEXT`,
+      `UPDATE runtime_tokens SET expires_at = NULL WHERE expires_at IS NOT NULL`,
+    ],
   },
 ] as const;
 
