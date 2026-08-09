@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import type {
   BuildHandle,
   BuildId,
@@ -13,7 +14,14 @@ import type {
 import { createMcpHttpHandler, MCP_PROTOCOL_VERSION, TOOL_NAMES } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCloudflareWorker, createCloudflareWorkerFromBindings } from '../src/index.js';
+import {
+  createCloudflareWorker,
+  createCloudflareWorkerFromBindings,
+  hashRuntimeToken,
+  type RuntimeAuthDatabaseLike,
+  type RuntimeAuthStatementLike,
+  storeRuntimeTokenHash,
+} from '../src/index.js';
 
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
@@ -167,6 +175,43 @@ const envelope = {
   'io.modelcontextprotocol/clientInfo': { name: 'deploy-cloudflare-tests', version: '0.0.0' },
 };
 
+class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
+  readonly #db: DatabaseSync;
+  readonly #query: string;
+  #bindings: readonly unknown[] = [];
+
+  constructor(db: DatabaseSync, query: string) {
+    this.#db = db;
+    this.#query = query;
+  }
+
+  bind(...values: unknown[]): RuntimeAuthStatementLike {
+    this.#bindings = values;
+    return this;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const statement = this.#db.prepare(this.#query);
+    if (this.#query.trim().toLowerCase().startsWith('select')) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
+    statement.run(...this.#bindings);
+    return {};
+  }
+}
+
+class SqliteRuntimeDatabase implements RuntimeAuthDatabaseLike {
+  readonly #db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.#db = db;
+  }
+
+  prepare(query: string): RuntimeAuthStatementLike {
+    return new SqliteRuntimeStatement(this.#db, query);
+  }
+}
+
 function mcpRequest(method: string): Request {
   return new Request('https://worker.example/mcp', {
     method: 'POST',
@@ -189,10 +234,14 @@ async function decodeMcp(response: Response): Promise<Record<string, unknown>> {
 
 describe('the Worker-facing runtime assembly, issue 86', () => {
   const closers: Array<() => Promise<void>> = [];
+  const databases: DatabaseSync[] = [];
 
   afterEach(async () => {
     for (const close of closers.splice(0)) {
       await close();
+    }
+    while (databases.length > 0) {
+      databases.pop()?.close();
     }
   });
 
@@ -367,5 +416,69 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
 
     expect(response.status).toBe(204);
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://admin.example');
+  });
+
+  it('never echoes rejected bearer or Access tokens in the Worker 401 body', async () => {
+    const db = new DatabaseSync(':memory:');
+    databases.push(db);
+    const auth = new SqliteRuntimeDatabase(db);
+    await storeRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken('lore_rt_good'),
+      '2026-08-09T12:00:00.000Z',
+    );
+
+    const bearerWorker = createCloudflareWorkerFromBindings(
+      {
+        CATALOG_DB: auth as never,
+        OBJECTS: {} as never,
+        PROJECT_ID: 'demo',
+      },
+      { authMode: 'runtime-token' },
+    );
+    closers.push(() => bearerWorker.close());
+
+    const badBearer = 'lore_rt_secret_that_must_not_echo';
+    const bearerResponse = await bearerWorker.fetch(
+      new Request('https://worker.example/v1/build', {
+        headers: { Authorization: `Bearer ${badBearer}` },
+      }),
+    );
+    const bearerBody = JSON.stringify(await bearerResponse.json());
+    expect(bearerResponse.status).toBe(401);
+    expect(bearerBody).toContain('This token is not valid for this build.');
+    expect(bearerBody).not.toContain(badBearer);
+
+    const accessWorker = createCloudflareWorkerFromBindings(
+      {
+        CATALOG_DB: {
+          prepare() {
+            throw new Error('the request should stop at auth');
+          },
+        } as never,
+        OBJECTS: {} as never,
+        PROJECT_ID: 'demo',
+      },
+      {
+        authMode: 'disabled',
+        access: {
+          teamDomain: 'lorepack.cloudflareaccess.com',
+          audience: 'cf-access-aud',
+          verifyToken: async () => false,
+        },
+      },
+    );
+    closers.push(() => accessWorker.close());
+
+    const badAccess = 'access.jwt.must.not.echo';
+    const accessResponse = await accessWorker.fetch(
+      new Request('https://worker.example/v1/build', {
+        headers: { 'Cf-Access-Jwt-Assertion': badAccess },
+      }),
+    );
+    const accessBody = JSON.stringify(await accessResponse.json());
+    expect(accessResponse.status).toBe(401);
+    expect(accessBody).toContain('This request is not authorized for this build.');
+    expect(accessBody).not.toContain(badAccess);
   });
 });
