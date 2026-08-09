@@ -27,7 +27,8 @@
     "@lorepack/core": "workspace:*",
     "@lorepack/mcp": "workspace:*",
     "@lorepack/runtime": "workspace:*",
-    "hono": "4.12.33"
+    "hono": "4.12.33",
+    "jose": "6.2.7"
   },
   "repository": {
     "type": "git",

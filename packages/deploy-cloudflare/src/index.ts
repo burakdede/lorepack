@@ -20,13 +20,13 @@ import {
   hashRuntimeToken,
   hasRuntimeToken,
   listRuntimeTokens,
-  rotateRuntimeTokenHash,
   RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   RUNTIME_TOKENS_TABLE,
-  type RuntimeTokenRecord,
   type RuntimeAuthDatabaseLike,
+  type RuntimeTokenRecord,
   revokeRuntimeTokens,
+  rotateRuntimeTokenHash,
   storeRuntimeTokenHash,
 } from './runtime-auth.js';
 import { D1ActiveBuildProvider, type R2BucketLike, R2ObjectStore } from './storage.js';
@@ -37,6 +37,16 @@ import {
   createCloudflareDeploymentTarget,
 } from './target.js';
 
+export type {
+  CloudflareAccessBindings,
+  CloudflareAccessConfig,
+  CloudflareRequestAuthorizerOptions,
+} from './access-auth.js';
+export {
+  createCloudflareAccessAuthorizer,
+  createCloudflareRequestAuthorizer,
+  resolveCloudflareAccessConfigFromBindings,
+} from './access-auth.js';
 export type {
   CloudflareBindings,
   CloudflareBoundWorkerOptions,
@@ -79,13 +89,13 @@ export {
   hasRuntimeToken,
   listRuntimeTokens,
   R2ObjectStore,
-  rotateRuntimeTokenHash,
   RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   RUNTIME_TOKENS_TABLE,
   r2ArchiveKey,
   r2ObjectKey,
   revokeRuntimeTokens,
+  rotateRuntimeTokenHash,
   runProjectionMigrations,
   storeRuntimeTokenHash,
   uploadProjectArchive,

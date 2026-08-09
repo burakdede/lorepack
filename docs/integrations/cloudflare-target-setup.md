@@ -113,6 +113,68 @@ Use `lore target token cloudflare --rotate` to replace the token, or
 `lore target token cloudflare --revoke` to remove it. The token must not be written to the
 project receipt or committed to the repository.
 
+## Cloudflare Access as an alternative front door
+
+As of **2026-08-09**, the checked-in Worker can also accept a valid
+`Cf-Access-Jwt-Assertion` header from Cloudflare Access. This is an alternative read-surface
+credential path for the same public Worker. It does not create any admin route, and it does
+not make deployment credentials usable at runtime.
+
+The current reference path works on the existing `workers.dev` endpoint. Cloudflare's current
+Workers docs say you can enable Access for a `workers.dev` URL from **Workers & Pages >
+<your Worker> > Settings > Domains & Routes > Enable Cloudflare Access**, and then you must
+still validate the Access JWT inside the Worker with the Access audience and JWK set. Lorepack
+now does that validation when the two Worker variables below are present.
+
+Set these variables on the Worker:
+
+```text
+CLOUDFLARE_ACCESS_TEAM_DOMAIN=<your-team>.cloudflareaccess.com
+CLOUDFLARE_ACCESS_AUD=<the Access application aud value>
+```
+
+Exact setup flow for the current Phase 6 path:
+
+1. Deploy the Worker normally and keep `workers.dev` enabled.
+2. In Cloudflare, open **Workers & Pages**, select the deployed Worker, then open
+   **Settings > Domains & Routes**.
+3. On the `workers.dev` route, select **Enable Cloudflare Access**.
+4. If you need to adjust who can reach it, open **Manage Cloudflare Access** and update the
+   Access policy there.
+5. Record the Access team domain and the application `aud` value.
+6. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` on the Worker, then
+   redeploy.
+
+Interaction with bearer auth:
+
+- if only the Lore runtime bearer token is configured, remote reads require that bearer token
+- if Cloudflare Access is also configured, a request may authenticate with either a valid
+  Lore runtime bearer token or a valid Access JWT
+- deployment credentials are still rejected structurally, because only Lore runtime tokens
+  with the `lore_rt_` prefix and valid Access JWTs are accepted
+
+Cloudflare's current `workers.dev` docs also note that the Access gate can use policy rules
+over the request before it reaches the Worker. For Lorepack's MCP surface, the relevant safe
+policy hints are the mirrored `Mcp-Method` and `Mcp-Name` headers. The body remains the source
+of truth, and the Worker still rejects header and body mismatches before authorization.
+
+## Manual verification for the Access path
+
+Recorded on **2026-08-09** as the required manual checklist for `#90`:
+
+1. Enable Cloudflare Access on the deployed `workers.dev` route.
+2. Set `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`, then redeploy.
+3. In a private browser session, open `https://<worker>.<subdomain>.workers.dev/v1/build` and
+   confirm Cloudflare Access redirects to authentication before the Worker responds.
+4. After authenticating through Access, reload the same URL and confirm the Worker returns the
+   build payload without a Lore bearer token.
+5. In a non-browser client that sends neither a bearer token nor a valid
+   `Cf-Access-Jwt-Assertion`, confirm the same URL returns `401`.
+6. In a non-browser client that sends `Authorization: Bearer <lore_rt_...>`, confirm the same
+   URL still returns `200` even without an Access session.
+7. Send an invalid `Cf-Access-Jwt-Assertion` header and confirm the Worker returns `401`
+   without exposing token material or an enumeration hint.
+
 ## Current command boundary
 
 As of **2026-08-08**, `lore target add cloudflare` supports two setup behaviors:

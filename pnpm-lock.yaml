@@ -217,6 +217,9 @@ importers:
       hono:
         specifier: 4.12.33
         version: 4.12.33
+      jose:
+        specifier: 6.2.7
+        version: 6.2.7
     devDependencies:
       wrangler:
         specifier: 4.119.0
