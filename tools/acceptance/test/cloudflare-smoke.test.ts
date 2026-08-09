@@ -14,6 +14,7 @@ import {
   deployCloudflareTargetExpectFailureAfterProject,
   issueCloudflareRuntimeToken,
   parseCloudflareTargetReceipt,
+  parseWranglerDeploymentInfo,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
   resumeCloudflareTarget,
@@ -65,6 +66,34 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
       workerName: 'cloudflare-acceptance-runtime',
       catalogDatabaseName: 'cloudflare-acceptance-catalog',
       objectsBucketName: 'cloudflare-acceptance-objects',
+    });
+  });
+
+  it('uses the actual deployed Workers endpoint from Wrangler output', () => {
+    expect(
+      parseWranglerDeploymentInfo(
+        [
+          'Uploaded lorepack-ci-31329883479-1-cloudflare-acc-runtime (5.75 sec)',
+          'Deployed lorepack-ci-31329883479-1-cloudflare-acc-runtime triggers (2.54 sec)',
+          '  https://lorepack-ci-31329883479-1-cloudflare-acc-runtime.burakdede87.workers.dev',
+          'Current Version ID: 57baedf4-f3b7-40df-8157-79d9d33e2466',
+        ].join('\n'),
+        'lorepack-ci-31329883479-1-cloudflare-acc-runtime',
+      ),
+    ).toEqual({
+      endpointBase:
+        'https://lorepack-ci-31329883479-1-cloudflare-acc-runtime.burakdede87.workers.dev',
+    });
+  });
+
+  it('falls back to the plain workers.dev host when Wrangler prints no URL', () => {
+    expect(
+      parseWranglerDeploymentInfo(
+        'Uploaded lorepack-ci-31329883479-1-cloudflare-acc-runtime',
+        'lorepack-ci-31329883479-1-cloudflare-acc-runtime',
+      ),
+    ).toEqual({
+      endpointBase: 'https://lorepack-ci-31329883479-1-cloudflare-acc-runtime.workers.dev',
     });
   });
 
