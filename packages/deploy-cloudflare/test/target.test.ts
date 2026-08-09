@@ -1,4 +1,13 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -524,6 +533,28 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect(
       fixture.projection.raw.prepare('SELECT build_id FROM active_build WHERE id = 1').get(),
     ).toEqual({ build_id: null });
+  });
+
+  it('leaves the sealed build byte for byte identical while projecting it', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+
+    const before = digestDirectory(fixture.buildDirectory);
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+
+    await target.apply(plan);
+
+    expect(digestDirectory(fixture.buildDirectory)).toBe(before);
   });
 
   it('skips archive and object uploads when the candidate payload is already present', async () => {
@@ -1154,3 +1185,24 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     }
   });
 });
+
+function digestDirectory(path: string): string {
+  const hash = createHash('sha256');
+
+  const walk = (directory: string, relative = ''): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      const nextRelative = relative === '' ? entry.name : `${relative}/${entry.name}`;
+      const nextPath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(nextPath, nextRelative);
+        continue;
+      }
+      hash.update(nextRelative).update(readFileSync(nextPath));
+    }
+  };
+
+  walk(path);
+  return hash.digest('hex');
+}
