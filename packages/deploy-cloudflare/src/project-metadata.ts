@@ -9,6 +9,12 @@ import {
 } from '@lorepack/core';
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
 import { PROJECTION_SCHEMA_VERSION } from './projection-schema.js';
+import {
+  createProjectionWriteState,
+  type ProjectionWriteOptions,
+  projectionWriteOptions,
+  runProjectionBatch,
+} from './projection-write.js';
 
 interface BuildArtifactRow {
   readonly id: string;
@@ -37,6 +43,10 @@ export interface ProjectBuildMetadataOptions {
   readonly projectId: string;
   readonly buildDirectory: string;
   readonly projectedAt?: string;
+  readonly retryAttempts?: number;
+  readonly retryDelayMs?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly onProgress?: ProjectionWriteOptions['onProgress'];
 }
 
 export interface ProjectBuildMetadataResult {
@@ -85,6 +95,7 @@ ORDER BY artifact_id, superseded_id`;
 export async function projectBuildMetadata(
   options: ProjectBuildMetadataOptions,
 ): Promise<ProjectBuildMetadataResult> {
+  const writeOptions = projectionWriteOptions(options);
   const manifest = readManifest(options.buildDirectory);
   const warnings = readWarnings(options.buildDirectory, manifest.warnings);
   const projectedAt = options.projectedAt ?? new Date().toISOString();
@@ -97,46 +108,68 @@ export async function projectBuildMetadata(
     const supersessions = buildDatabase
       .prepare(BUILD_SUPERSESSIONS_QUERY)
       .all() as unknown as SupersessionRow[];
+    const progress = createProjectionWriteState(
+      5 + 2 + warnings.length + artifacts.length + supersessions.length,
+    );
 
     await options.db.prepare('BEGIN IMMEDIATE').run();
     try {
-      await deleteNamespace(options.db, options.projectId, manifest.buildId);
+      await deleteNamespace(
+        options.db,
+        options.projectId,
+        manifest.buildId,
+        writeOptions,
+        progress,
+      );
 
-      await options.db
-        .prepare(UPSERT_PROJECTED_BUILD)
-        .bind(
+      await runProjectionBatch(
+        options.db,
+        UPSERT_PROJECTED_BUILD,
+        [
           options.projectId,
           manifest.buildId,
           manifest.schemaVersion,
           manifest.compilerVersion,
           PROJECTION_SCHEMA_VERSION,
           projectedAt,
-        )
-        .run();
+        ],
+        writeOptions,
+        progress,
+        'upsert projected build metadata',
+      );
 
-      await options.db
-        .prepare(UPSERT_MANIFEST)
-        .bind(options.projectId, manifest.buildId, JSON.stringify(manifest))
-        .run();
+      await runProjectionBatch(
+        options.db,
+        UPSERT_MANIFEST,
+        [options.projectId, manifest.buildId, JSON.stringify(manifest)],
+        writeOptions,
+        progress,
+        'upsert build manifest',
+      );
 
       for (const warning of warnings) {
-        await options.db
-          .prepare(INSERT_WARNING)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_WARNING,
+          [
             options.projectId,
             manifest.buildId,
             warning.code,
             warning.class,
             warning.path ?? null,
             warning.message,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert warning ${warning.code}`,
+        );
       }
 
       for (const artifact of artifacts) {
-        await options.db
-          .prepare(INSERT_ARTIFACT)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_ARTIFACT,
+          [
             artifact.id,
             options.projectId,
             manifest.buildId,
@@ -153,20 +186,27 @@ export async function projectBuildMetadata(
             artifact.authority,
             artifact.object_hash,
             artifact.metadata,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert artifact ${artifact.id}`,
+        );
       }
 
       for (const supersession of supersessions) {
-        await options.db
-          .prepare(INSERT_SUPERSESSION)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_SUPERSESSION,
+          [
             options.projectId,
             manifest.buildId,
             supersession.artifact_id,
             supersession.superseded_id,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert supersession ${supersession.artifact_id}`,
+        );
       }
 
       await options.db.prepare('COMMIT').run();
@@ -237,14 +277,16 @@ async function deleteNamespace(
   db: ProjectionMigrationDatabaseLike,
   projectId: string,
   buildId: string,
+  options: ProjectionWriteOptions,
+  progress: ReturnType<typeof createProjectionWriteState>,
 ): Promise<void> {
-  for (const statement of [
-    DELETE_SUPERSESSIONS,
-    DELETE_ARTIFACTS,
-    DELETE_WARNINGS,
-    DELETE_MANIFEST,
-    DELETE_PROJECTED_BUILD,
-  ]) {
-    await db.prepare(statement).bind(projectId, buildId).run();
+  for (const [statement, detail] of [
+    [DELETE_SUPERSESSIONS, 'delete projected supersessions'],
+    [DELETE_ARTIFACTS, 'delete projected artifacts'],
+    [DELETE_WARNINGS, 'delete projected warnings'],
+    [DELETE_MANIFEST, 'delete projected manifest'],
+    [DELETE_PROJECTED_BUILD, 'delete projected build metadata'],
+  ] as const) {
+    await runProjectionBatch(db, statement, [projectId, buildId], options, progress, detail);
   }
 }

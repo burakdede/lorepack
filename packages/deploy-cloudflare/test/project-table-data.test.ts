@@ -48,16 +48,19 @@ class SqliteStatement
 {
   readonly #db: DatabaseSync;
   readonly #query: string;
+  readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
   readonly #onRun?: (query: string, bindings: readonly unknown[]) => void;
   #bindings: readonly unknown[] = [];
 
   constructor(
     db: DatabaseSync,
     query: string,
+    beforeRun?: (query: string, bindings: readonly unknown[]) => void,
     onRun?: (query: string, bindings: readonly unknown[]) => void,
   ) {
     this.#db = db;
     this.#query = query;
+    this.#beforeRun = beforeRun;
     this.#onRun = onRun;
   }
 
@@ -67,6 +70,7 @@ class SqliteStatement
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    this.#beforeRun?.(this.#query, this.#bindings);
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
@@ -80,15 +84,21 @@ class SqliteStatement
 
 class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike, D1QueryDatabaseLike {
   readonly #db: DatabaseSync;
+  readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
   readonly #onRun?: (query: string, bindings: readonly unknown[]) => void;
 
-  constructor(db: DatabaseSync, onRun?: (query: string, bindings: readonly unknown[]) => void) {
+  constructor(
+    db: DatabaseSync,
+    beforeRun?: (query: string, bindings: readonly unknown[]) => void,
+    onRun?: (query: string, bindings: readonly unknown[]) => void,
+  ) {
     this.#db = db;
+    this.#beforeRun = beforeRun;
     this.#onRun = onRun;
   }
 
   prepare(query: string): SqliteStatement {
-    return new SqliteStatement(this.#db, query, this.#onRun);
+    return new SqliteStatement(this.#db, query, this.#beforeRun, this.#onRun);
   }
 }
 
@@ -323,7 +333,7 @@ describe('projectTableData, issue 258', () => {
     const projection = new DatabaseSync(':memory:');
     databases.push(projection);
     const writes: Array<{ query: string; bindings: readonly unknown[] }> = [];
-    const db = new SqliteProjectionDatabase(projection, (query, bindings) => {
+    const db = new SqliteProjectionDatabase(projection, undefined, (query, bindings) => {
       if (query.startsWith('INSERT INTO t_products_')) {
         writes.push({ query, bindings });
       }
@@ -344,5 +354,44 @@ describe('projectTableData, issue 258', () => {
       expect(write.bindings.length).toBeLessThanOrEqual(100);
       expect(new TextEncoder().encode(write.query).length).toBeLessThan(100_000);
     }
+  });
+
+  it('retries a transient row-batch failure and reports per-batch projection progress', async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 40);
+    const projection = new DatabaseSync(':memory:');
+    databases.push(projection);
+    let failures = 0;
+    const updates: Array<{ completedBatches: number; totalBatches: number; detail: string }> = [];
+    const db = new SqliteProjectionDatabase(
+      projection,
+      (query) => {
+        if (query.startsWith('INSERT INTO t_products_') && failures === 0) {
+          failures += 1;
+          throw new Error('too many requests');
+        }
+      },
+      undefined,
+    );
+    await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
+
+    const result = await projectTableData({
+      db,
+      projectId: PROJECT,
+      buildId: BUILD_A,
+      buildDirectory,
+      retryDelayMs: 0,
+      sleep: async () => {},
+      onProgress: (update) => {
+        updates.push(update);
+      },
+    });
+
+    expect(failures).toBe(1);
+    expect(result).toEqual({ projectedTables: 1, projectedRows: 40 });
+    expect(updates.at(-1)).toEqual({
+      completedBatches: 9,
+      totalBatches: 9,
+      detail: 'insert projected column demo:pricing.xlsx#Products.c_2_available',
+    });
   });
 });

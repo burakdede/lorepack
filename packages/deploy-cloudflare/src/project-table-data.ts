@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, LoreError, type TableValue } from '@lorepack/core';
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
+import {
+  createProjectionWriteState,
+  type ProjectionWriteOptions,
+  projectionWriteOptions,
+  runProjectionBatch,
+} from './projection-write.js';
 
 interface BuildTableRow {
   readonly id: string;
@@ -37,6 +43,10 @@ export interface ProjectTableDataOptions {
   readonly projectId: string;
   readonly buildId: string;
   readonly buildDirectory: string;
+  readonly retryAttempts?: number;
+  readonly retryDelayMs?: number;
+  readonly sleep?: (ms: number) => Promise<void>;
+  readonly onProgress?: ProjectionWriteOptions['onProgress'];
 }
 
 export interface ProjectTableDataResult {
@@ -87,6 +97,7 @@ const SQL_TYPES: Record<string, string> = {
 export async function projectTableData(
   options: ProjectTableDataOptions,
 ): Promise<ProjectTableDataResult> {
+  const writeOptions = projectionWriteOptions(options);
   const buildDatabase = openBuildDatabase(options.buildDirectory);
 
   try {
@@ -105,34 +116,61 @@ export async function projectTableData(
         .prepare(LOOKUP_PROJECTED_SQL_NAMES)
         .bind(options.projectId, options.buildId)
         .run<{ sql_name: string }>();
+      const progress = createProjectionWriteState(
+        totalBatchesForProjection(tables, columnsByTable, previous.results?.length ?? 0),
+      );
       for (const row of previous.results ?? []) {
-        await options.db.prepare(`DROP TABLE IF EXISTS ${assertIdentifier(row.sql_name)}`).run();
+        await runProjectionBatch(
+          options.db,
+          `DROP TABLE IF EXISTS ${assertIdentifier(row.sql_name)}`,
+          [],
+          writeOptions,
+          progress,
+          `drop projected table ${row.sql_name}`,
+        );
       }
-      await options.db
-        .prepare(DELETE_PROJECTED_COLUMNS)
-        .bind(options.projectId, options.buildId)
-        .run();
-      await options.db
-        .prepare(DELETE_PROJECTED_TABLES)
-        .bind(options.projectId, options.buildId)
-        .run();
+      await runProjectionBatch(
+        options.db,
+        DELETE_PROJECTED_COLUMNS,
+        [options.projectId, options.buildId],
+        writeOptions,
+        progress,
+        'delete projected table columns',
+      );
+      await runProjectionBatch(
+        options.db,
+        DELETE_PROJECTED_TABLES,
+        [options.projectId, options.buildId],
+        writeOptions,
+        progress,
+        'delete projected tables',
+      );
 
       let projectedRows = 0;
       for (const table of tables) {
         const projectedSqlName = projectedSqlNameFor(options.buildId, table.id, table.sql_name);
         const tableColumns = columnsByTable.get(table.id) ?? [];
-        await createPhysicalTable(options.db, projectedSqlName, tableColumns);
+        await createPhysicalTable(
+          options.db,
+          projectedSqlName,
+          tableColumns,
+          writeOptions,
+          progress,
+        );
         projectedRows += await copyRows(
           buildDatabase,
           options.db,
           table.sql_name,
           projectedSqlName,
           tableColumns,
+          writeOptions,
+          progress,
         );
 
-        await options.db
-          .prepare(INSERT_PROJECTED_TABLE)
-          .bind(
+        await runProjectionBatch(
+          options.db,
+          INSERT_PROJECTED_TABLE,
+          [
             table.id,
             options.projectId,
             options.buildId,
@@ -146,13 +184,17 @@ export async function projectTableData(
             table.line_end,
             table.cell_range,
             table.metadata,
-          )
-          .run();
+          ],
+          writeOptions,
+          progress,
+          `insert projected table ${table.id}`,
+        );
 
         for (const column of tableColumns) {
-          await options.db
-            .prepare(INSERT_PROJECTED_COLUMN)
-            .bind(
+          await runProjectionBatch(
+            options.db,
+            INSERT_PROJECTED_COLUMN,
+            [
               options.projectId,
               options.buildId,
               table.id,
@@ -166,8 +208,11 @@ export async function projectTableData(
               column.distinct_is_exact,
               column.min_value,
               column.max_value,
-            )
-            .run();
+            ],
+            writeOptions,
+            progress,
+            `insert projected column ${table.id}.${column.sql_name}`,
+          );
         }
       }
 
@@ -229,6 +274,8 @@ async function createPhysicalTable(
   db: ProjectionMigrationDatabaseLike,
   sqlName: string,
   columns: readonly BuildColumnRow[],
+  options: ProjectionWriteOptions,
+  progress: ReturnType<typeof createProjectionWriteState>,
 ): Promise<void> {
   if (columns.length > MAX_D1_BOUND_PARAMETERS) {
     throw new LoreError(
@@ -244,7 +291,14 @@ async function createPhysicalTable(
   const definition = columns
     .map((column) => `${assertIdentifier(column.sql_name)} ${typeOf(column.type)}`)
     .join(', ');
-  await db.prepare(`CREATE TABLE ${assertIdentifier(sqlName)} (${definition}) STRICT`).run();
+  await runProjectionBatch(
+    db,
+    `CREATE TABLE ${assertIdentifier(sqlName)} (${definition}) STRICT`,
+    [],
+    options,
+    progress,
+    `create projected table ${sqlName}`,
+  );
 }
 
 async function copyRows(
@@ -253,6 +307,8 @@ async function copyRows(
   sourceSqlName: string,
   targetSqlName: string,
   columns: readonly BuildColumnRow[],
+  options: ProjectionWriteOptions,
+  progress: ReturnType<typeof createProjectionWriteState>,
 ): Promise<number> {
   if (columns.length === 0) return 0;
   const selected = columns.map((column) => assertIdentifier(column.sql_name));
@@ -280,10 +336,48 @@ async function copyRows(
         values.push(toSqlValue(row[column.sql_name] ?? null));
       }
     }
-    await projection.prepare(statement).bind(...values).run();
+    await runProjectionBatch(
+      projection,
+      statement,
+      values,
+      options,
+      progress,
+      `insert rows into ${targetSqlName} (${offset + 1}-${offset + batchSize})`,
+    );
     offset += batchSize;
   }
   return rows.length;
+}
+
+function totalBatchesForProjection(
+  tables: readonly BuildTableRow[],
+  columnsByTable: ReadonlyMap<string, readonly BuildColumnRow[]>,
+  previousTableCount: number,
+): number {
+  let total = previousTableCount + 2;
+  for (const table of tables) {
+    const tableColumns = columnsByTable.get(table.id) ?? [];
+    total += 1;
+    total += countInsertBatches(table.row_count, tableColumns.length);
+    total += 1;
+    total += tableColumns.length;
+  }
+  return total;
+}
+
+function countInsertBatches(rowCount: number, columnCount: number): number {
+  if (rowCount === 0 || columnCount === 0) return 0;
+  const prefix = `INSERT INTO t (${Array.from({ length: columnCount }, (_, index) => `c_${index}`).join(', ')}) VALUES `;
+  const tuple = `(${Array.from({ length: columnCount }, () => '?').join(', ')})`;
+  const maxRowsByParams = Math.max(1, Math.floor(MAX_D1_BOUND_PARAMETERS / columnCount));
+  let count = 0;
+  let remainingRows = rowCount;
+  while (remainingRows > 0) {
+    const batchSize = batchSizeFor({ prefix, tuple, maxRowsByParams, remainingRows });
+    remainingRows -= batchSize;
+    count += 1;
+  }
+  return count;
 }
 
 function batchSizeFor(options: {

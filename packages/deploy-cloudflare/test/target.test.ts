@@ -99,10 +99,9 @@ function trackDatabase(db: DatabaseSync): DatabaseSync {
   return db;
 }
 
-function makeBuildFixture(input: {
-  readonly chunkText?: string;
-  readonly tableName?: string;
-} = {}): {
+function makeBuildFixture(
+  input: { readonly chunkText?: string; readonly tableName?: string } = {},
+): {
   readonly buildDirectory: string;
   readonly projection: SqliteProjectionDatabase;
   readonly bucket: FakeR2Bucket;
@@ -549,6 +548,39 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect(
       updates.some(
         (update) =>
+          update.stage === 'projecting' &&
+          update.unit === 'batches' &&
+          update.detail?.startsWith('metadata: ') === true &&
+          typeof update.completed === 'number' &&
+          typeof update.total === 'number' &&
+          update.completed <= update.total,
+      ),
+    ).toBe(true);
+    expect(
+      updates.some(
+        (update) =>
+          update.stage === 'projecting' &&
+          update.unit === 'batches' &&
+          update.detail?.startsWith('search: ') === true &&
+          typeof update.completed === 'number' &&
+          typeof update.total === 'number' &&
+          update.completed <= update.total,
+      ),
+    ).toBe(true);
+    expect(
+      updates.some(
+        (update) =>
+          update.stage === 'projecting' &&
+          update.unit === 'batches' &&
+          update.detail?.startsWith('tables: ') === true &&
+          typeof update.completed === 'number' &&
+          typeof update.total === 'number' &&
+          update.completed <= update.total,
+      ),
+    ).toBe(true);
+    expect(
+      updates.some(
+        (update) =>
           update.stage === 'uploading' &&
           update.detail?.includes('objects') === true &&
           typeof update.completed === 'number' &&
@@ -697,7 +729,9 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect((failure as Error).message).toContain("Cloudflare D1's 2,000,000-byte value limit");
     expect(
       fixture.projection.raw
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'",
+        )
         .get(),
     ).toBeUndefined();
   });
@@ -727,7 +761,9 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     expect((failure as Error).message).toContain("Cloudflare D1's 2,000,000-byte row limit");
     expect(
       fixture.projection.raw
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'",
+        )
         .get(),
     ).toBeUndefined();
   });

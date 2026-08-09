@@ -43,14 +43,34 @@ const WARNINGS: readonly BuildWarning[] = [
   },
 ];
 
-class SqliteProjectionStatement implements ProjectionMigrationStatementLike {
+class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
+  readonly #db: DatabaseSync;
+  readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
+
+  constructor(db: DatabaseSync, beforeRun?: (query: string, bindings: readonly unknown[]) => void) {
+    this.#db = db;
+    this.#beforeRun = beforeRun;
+  }
+
+  prepare(query: string): ProjectionMigrationStatementLike {
+    return new SqliteProjectionStatementWithHook(this.#db, query, this.#beforeRun);
+  }
+}
+
+class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementLike {
   readonly #db: DatabaseSync;
   readonly #query: string;
+  readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
   #bindings: readonly unknown[] = [];
 
-  constructor(db: DatabaseSync, query: string) {
+  constructor(
+    db: DatabaseSync,
+    query: string,
+    beforeRun?: (query: string, bindings: readonly unknown[]) => void,
+  ) {
     this.#db = db;
     this.#query = query;
+    this.#beforeRun = beforeRun;
   }
 
   bind(...values: unknown[]): ProjectionMigrationStatementLike {
@@ -59,6 +79,7 @@ class SqliteProjectionStatement implements ProjectionMigrationStatementLike {
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    this.#beforeRun?.(this.#query, this.#bindings);
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
@@ -66,18 +87,6 @@ class SqliteProjectionStatement implements ProjectionMigrationStatementLike {
     }
     statement.run(...this.#bindings);
     return {};
-  }
-}
-
-class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
-  readonly #db: DatabaseSync;
-
-  constructor(db: DatabaseSync) {
-    this.#db = db;
-  }
-
-  prepare(query: string): ProjectionMigrationStatementLike {
-    return new SqliteProjectionStatement(this.#db, query);
   }
 }
 
@@ -341,5 +350,48 @@ describe('projectBuildMetadata, issue 87', () => {
         .prepare('SELECT count(*) AS count FROM build_manifests WHERE project_id = ?')
         .get('other'),
     ).toEqual({ count: 1 });
+  });
+
+  it('retries transient metadata write failures and reports batch progress', async () => {
+    const buildDirectory = makeBuildDirectory();
+    const projection = trackDatabase(new DatabaseSync(':memory:'));
+    await runProjectionMigrations(
+      new SqliteProjectionDatabase(projection),
+      () => '2026-08-08T12:00:00.000Z',
+    );
+
+    let failures = 0;
+    const updates: Array<{ completedBatches: number; totalBatches: number; detail: string }> = [];
+    const db = new SqliteProjectionDatabase(projection, (query) => {
+      if (query.startsWith('INSERT INTO artifacts') && failures === 0) {
+        failures += 1;
+        throw new Error('database is locked');
+      }
+    });
+
+    const result = await projectBuildMetadata({
+      db,
+      projectId: PROJECT,
+      buildDirectory,
+      projectedAt: '2026-08-08T13:00:00.000Z',
+      retryDelayMs: 0,
+      sleep: async () => {},
+      onProgress: (update) => {
+        updates.push(update);
+      },
+    });
+
+    expect(failures).toBe(1);
+    expect(result).toEqual({
+      buildId: BUILD,
+      projectedArtifacts: 2,
+      projectedWarnings: 1,
+      projectedSupersessions: 1,
+    });
+    expect(updates.at(-1)).toEqual({
+      completedBatches: 11,
+      totalBatches: 11,
+      detail: 'insert supersession contracted:guides/rollback.md',
+    });
   });
 });
