@@ -129,5 +129,55 @@ export const deploymentReceiptSchema = z
   })
   .strict();
 
+export const remoteRetentionPlanSchema = z
+  .object({
+    activeBuildId: buildIdSchema.nullable(),
+    keep: z.array(buildIdSchema),
+    remove: z.array(buildIdSchema),
+    archiveKeysToRemove: z.array(z.string().min(1)),
+    objectKeysToRemove: z.array(z.string().min(1)),
+  })
+  .strict();
+
+const remoteRetentionD1ReportSchema = z
+  .object({
+    projectedBuildsRemoved: z.int().nonnegative(),
+    buildManifestsRemoved: z.int().nonnegative(),
+    buildWarningsRemoved: z.int().nonnegative(),
+    artifactsRemoved: z.int().nonnegative(),
+    supersessionsRemoved: z.int().nonnegative(),
+    nodesRemoved: z.int().nonnegative(),
+    chunksRemoved: z.int().nonnegative(),
+    ftsRowsRemoved: z.int().nonnegative(),
+    projectedTablesRemoved: z.int().nonnegative(),
+    projectedTableColumnsRemoved: z.int().nonnegative(),
+    physicalTablesDropped: z.array(z.string().min(1)),
+  })
+  .strict();
+
+const remoteRetentionR2ReportSchema = z
+  .object({
+    archiveKeysRemoved: z.array(z.string().min(1)),
+    objectKeysRemoved: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export const remoteRetentionReceiptSchema = z
+  .object({
+    formatVersion: z.literal(1),
+    receiptId: z.string().min(1),
+    target: z.literal('cloudflare'),
+    project: z.string().min(1),
+    keepPrevious: z.int().nonnegative(),
+    createdAt: isoTimestampSchema,
+    state: z.enum(['planned', 'applying', 'applied', 'failed']),
+    completedSteps: z.array(z.enum(['plan', 'd1', 'archives', 'objects'])),
+    plan: remoteRetentionPlanSchema,
+    d1: remoteRetentionD1ReportSchema,
+    r2: remoteRetentionR2ReportSchema,
+  })
+  .strict();
+
 export type Plan = z.infer<typeof planSchema>;
 export type DeploymentReceipt = z.infer<typeof deploymentReceiptSchema>;
+export type RemoteRetentionReceipt = z.infer<typeof remoteRetentionReceiptSchema>;

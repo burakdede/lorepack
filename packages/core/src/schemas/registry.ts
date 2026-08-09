@@ -3,7 +3,7 @@ import { buildManifestSchema, buildReceiptSchema, lockfileSchema } from './build
 import { configSchema } from './config.js';
 import { buildDiffSchema } from './diff.js';
 import { doctorReportSchema } from './doctor.js';
-import { deploymentReceiptSchema, planSchema } from './plan.js';
+import { deploymentReceiptSchema, planSchema, remoteRetentionReceiptSchema } from './plan.js';
 import {
   buildDescriptionSchema,
   contextBundleSchema,
@@ -33,6 +33,7 @@ export const PUBLIC_SCHEMAS = {
   status: statusSchema,
   'doctor-report': doctorReportSchema,
   'deployment-receipt': deploymentReceiptSchema,
+  'remote-retention-receipt': remoteRetentionReceiptSchema,
   'search-request': searchRequestSchema,
   'search-result': searchResultSchema,
   'task-context-request': taskContextRequestSchema,

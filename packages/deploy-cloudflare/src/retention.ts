@@ -45,6 +45,27 @@ export interface RemoteRetentionApplyResult extends RemoteRetentionPlan {
   };
 }
 
+export interface RemoteRetentionResumeState {
+  readonly d1Completed: boolean;
+  readonly archivesCompleted: boolean;
+  readonly objectsCompleted: boolean;
+  readonly d1: RemoteRetentionApplyResult['d1'];
+  readonly archiveKeysRemoved: readonly string[];
+  readonly objectKeysRemoved: readonly string[];
+}
+
+export class RemoteRetentionApplyError extends Error {
+  readonly progress: RemoteRetentionResumeState;
+  override readonly cause: unknown;
+
+  constructor(message: string, progress: RemoteRetentionResumeState, cause: unknown) {
+    super(message);
+    this.name = 'RemoteRetentionApplyError';
+    this.progress = progress;
+    this.cause = cause;
+  }
+}
+
 interface MutableD1RetentionReport {
   projectedBuildsRemoved: number;
   buildManifestsRemoved: number;
@@ -161,6 +182,15 @@ export async function applyRemoteRetention(
   keepPrevious: number,
 ): Promise<RemoteRetentionApplyResult> {
   const plan = await planRemoteRetention(db, projectId, keepPrevious);
+  return await applyRemoteRetentionPlan(db, bucket, plan);
+}
+
+export async function applyRemoteRetentionPlan(
+  db: ProjectionMigrationDatabaseLike,
+  bucket: R2BucketLike,
+  plan: RemoteRetentionPlan,
+  resume?: RemoteRetentionResumeState,
+): Promise<RemoteRetentionApplyResult> {
   if (plan.remove.length === 0) {
     return {
       ...plan,
@@ -169,9 +199,45 @@ export async function applyRemoteRetention(
     };
   }
 
-  const d1 = await deleteProjectedBuildsFromD1(db, projectId, plan.remove);
-  const r2 = await deletePlannedR2Objects(bucket, plan);
-  return { ...plan, d1, r2 };
+  const progress = cloneResumeState(resume);
+
+  try {
+    if (!progress.d1Completed) {
+      progress.d1 = await deleteProjectedBuildsFromD1(db, projectIdForPlan(plan), plan.remove);
+      progress.d1Completed = true;
+    }
+    if (!progress.archivesCompleted) {
+      progress.archiveKeysRemoved = await deletePlannedR2Keys(
+        bucket,
+        plan.archiveKeysToRemove,
+        progress.archiveKeysRemoved,
+      );
+      progress.archivesCompleted = true;
+    }
+    if (!progress.objectsCompleted) {
+      progress.objectKeysRemoved = await deletePlannedR2Keys(
+        bucket,
+        plan.objectKeysToRemove,
+        progress.objectKeysRemoved,
+      );
+      progress.objectsCompleted = true;
+    }
+  } catch (cause) {
+    throw new RemoteRetentionApplyError(
+      `The cloudflare target failed while cleaning up ${plan.remove.length} remote build${plan.remove.length === 1 ? '' : 's'}.`,
+      progress,
+      cause,
+    );
+  }
+
+  return {
+    ...plan,
+    d1: progress.d1,
+    r2: {
+      archiveKeysRemoved: progress.archiveKeysRemoved,
+      objectKeysRemoved: progress.objectKeysRemoved,
+    },
+  };
 }
 
 async function hasProjectedBuildsTable(db: ProjectionMigrationDatabaseLike): Promise<boolean> {
@@ -205,7 +271,7 @@ async function deleteProjectedBuildsFromD1(
   db: ProjectionMigrationDatabaseLike,
   projectId: string,
   buildIds: readonly BuildId[],
-): Promise<RemoteRetentionApplyResult['d1']> {
+): Promise<MutableD1RetentionReport> {
   const deleted: MutableD1RetentionReport = emptyD1Report();
 
   try {
@@ -300,29 +366,25 @@ async function deleteRows(
   return count;
 }
 
-async function deletePlannedR2Objects(
+async function deletePlannedR2Keys(
   bucket: R2BucketLike,
-  plan: RemoteRetentionPlan,
-): Promise<RemoteRetentionApplyResult['r2']> {
+  keys: readonly string[],
+  alreadyRemoved: readonly string[],
+): Promise<string[]> {
   if (bucket.delete === undefined) {
     throw new Error('The configured R2 bucket adapter cannot delete objects.');
   }
 
-  const archiveKeysRemoved: string[] = [];
-  for (const key of plan.archiveKeysToRemove) {
+  const removed = [...alreadyRemoved];
+  const seen = new Set(removed);
+  for (const key of keys) {
+    if (seen.has(key)) continue;
     if ((await bucket.head(key)) === null) continue;
     await bucket.delete(key);
-    archiveKeysRemoved.push(key);
+    removed.push(key);
+    seen.add(key);
   }
-
-  const objectKeysRemoved: string[] = [];
-  for (const key of plan.objectKeysToRemove) {
-    if ((await bucket.head(key)) === null) continue;
-    await bucket.delete(key);
-    objectKeysRemoved.push(key);
-  }
-
-  return { archiveKeysRemoved, objectKeysRemoved };
+  return removed;
 }
 
 function emptyD1Report(): MutableD1RetentionReport {
@@ -339,4 +401,40 @@ function emptyD1Report(): MutableD1RetentionReport {
     projectedTableColumnsRemoved: 0,
     physicalTablesDropped: [],
   };
+}
+
+function cloneResumeState(resume?: RemoteRetentionResumeState): {
+  d1Completed: boolean;
+  archivesCompleted: boolean;
+  objectsCompleted: boolean;
+  d1: MutableD1RetentionReport;
+  archiveKeysRemoved: string[];
+  objectKeysRemoved: string[];
+} {
+  return {
+    d1Completed: resume?.d1Completed === true,
+    archivesCompleted: resume?.archivesCompleted === true,
+    objectsCompleted: resume?.objectsCompleted === true,
+    d1: {
+      ...emptyD1Report(),
+      ...(resume?.d1 === undefined
+        ? {}
+        : {
+            ...resume.d1,
+            physicalTablesDropped: [...resume.d1.physicalTablesDropped],
+          }),
+    },
+    archiveKeysRemoved: [...(resume?.archiveKeysRemoved ?? [])],
+    objectKeysRemoved: [...(resume?.objectKeysRemoved ?? [])],
+  };
+}
+
+function projectIdForPlan(plan: RemoteRetentionPlan): string {
+  const firstArchiveKey = plan.archiveKeysToRemove[0];
+  if (firstArchiveKey !== undefined) return firstArchiveKey.slice(0, firstArchiveKey.indexOf('/'));
+
+  const firstObjectKey = plan.objectKeysToRemove[0];
+  if (firstObjectKey !== undefined) return firstObjectKey.slice(0, firstObjectKey.indexOf('/'));
+
+  throw new Error('A non-empty remote retention plan did not include any project-scoped keys.');
 }

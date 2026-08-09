@@ -6,7 +6,12 @@ import {
   runProjectionMigrations,
 } from '../src/projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from '../src/r2-keys.js';
-import { applyRemoteRetention, planRemoteRetention } from '../src/retention.js';
+import {
+  applyRemoteRetention,
+  applyRemoteRetentionPlan,
+  planRemoteRetention,
+  RemoteRetentionApplyError,
+} from '../src/retention.js';
 
 class SqliteStatement implements ProjectionMigrationStatementLike {
   readonly #db: DatabaseSync;
@@ -56,6 +61,8 @@ function openDatabase(): SqliteProjectionDatabase {
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
+  readonly deletedKeys: string[] = [];
+  failOnDeleteKey: string | null = null;
 
   async put(key: string, value: Uint8Array): Promise<void> {
     this.objects.set(key, value);
@@ -75,7 +82,11 @@ class FakeR2Bucket {
   }
 
   async delete(key: string): Promise<void> {
+    if (this.failOnDeleteKey === key) {
+      throw new Error(`Refused delete for ${key}`);
+    }
     this.objects.delete(key);
+    this.deletedKeys.push(key);
   }
 }
 
@@ -453,13 +464,100 @@ describe('remote retention planning, issue 92', () => {
     });
     expect(result.r2.archiveKeysRemoved).toEqual([removeArchiveKey]);
     expect(result.r2.objectKeysRemoved).toEqual([removeObjectKey]);
-    expect(db.raw.prepare('SELECT count(*) AS count FROM projected_builds WHERE project_id = ?').get('demo'))
-      .toEqual({ count: 2 });
-    expect(db.raw.prepare('SELECT count(*) AS count FROM artifacts WHERE project_id = ? AND build_id = ?').get('demo', `lore_${'c'.repeat(64)}`))
-      .toEqual({ count: 0 });
-    expect(db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_demo_remove'").get())
-      .toBeUndefined();
+    expect(
+      db.raw
+        .prepare('SELECT count(*) AS count FROM projected_builds WHERE project_id = ?')
+        .get('demo'),
+    ).toEqual({ count: 2 });
+    expect(
+      db.raw
+        .prepare('SELECT count(*) AS count FROM artifacts WHERE project_id = ? AND build_id = ?')
+        .get('demo', `lore_${'c'.repeat(64)}`),
+    ).toEqual({ count: 0 });
+    expect(
+      db.raw
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_demo_remove'",
+        )
+        .get(),
+    ).toBeUndefined();
     expect(await bucket.head(removeArchiveKey)).toBeNull();
     expect(await bucket.head(removeObjectKey)).toBeNull();
+  });
+
+  it('resumes a failed remote cleanup without repeating completed deletions', async () => {
+    const db = openDatabase();
+    const bucket = new FakeR2Bucket();
+    await runProjectionMigrations(db, () => '2026-08-09T12:00:00.000Z');
+
+    db.raw
+      .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+      .run(`lore_${'b'.repeat(64)}`, 3);
+    for (const [buildId, projectedAt, verifiedAt] of [
+      [`lore_${'c'.repeat(64)}`, '2026-08-09T12:02:00.000Z', null],
+      [`lore_${'b'.repeat(64)}`, '2026-08-09T12:01:00.000Z', '2026-08-09T12:01:30.000Z'],
+      [`lore_${'a'.repeat(64)}`, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z'],
+    ] as const) {
+      db.raw
+        .prepare(
+          `INSERT INTO projected_builds
+            (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run('demo', buildId, 1, '0.1.0', 4, projectedAt, verifiedAt, verifiedAt);
+    }
+    db.raw
+      .prepare('INSERT INTO build_manifests (project_id, build_id, manifest_json) VALUES (?, ?, ?)')
+      .run('demo', `lore_${'c'.repeat(64)}`, '{"build":"remove"}');
+    db.raw
+      .prepare(
+        `INSERT INTO artifacts
+        (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size,
+         content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'remove-artifact',
+        'demo',
+        `lore_${'c'.repeat(64)}`,
+        'remove.md',
+        'remove.md',
+        'remove.md',
+        'text/markdown',
+        10,
+        '3'.repeat(64),
+        'markdown',
+        '1.0.0',
+        'Remove unique',
+        'active',
+        50,
+        'unique'.padEnd(64, 'u'),
+        '{}',
+      );
+
+    const plan = await planRemoteRetention(db, 'demo', 2);
+    const archiveKey = r2ArchiveKey('demo', `lore_${'c'.repeat(64)}`);
+    const objectKey = r2ObjectKey('demo', 'unique'.padEnd(64, 'u'));
+    await bucket.put(archiveKey, new Uint8Array([1]));
+    await bucket.put(objectKey, new Uint8Array([2]));
+    bucket.failOnDeleteKey = objectKey;
+
+    const first = await applyRemoteRetentionPlan(db, bucket, plan).catch((error: unknown) => error);
+
+    expect(first).toBeInstanceOf(RemoteRetentionApplyError);
+    const failure = first as RemoteRetentionApplyError;
+    expect(failure.progress.d1Completed).toBe(true);
+    expect(failure.progress.archivesCompleted).toBe(true);
+    expect(failure.progress.objectsCompleted).toBe(false);
+    expect(failure.progress.archiveKeysRemoved).toEqual([archiveKey]);
+    expect(failure.progress.objectKeysRemoved).toEqual([]);
+    expect(bucket.deletedKeys).toEqual([archiveKey]);
+
+    bucket.failOnDeleteKey = null;
+    const resumed = await applyRemoteRetentionPlan(db, bucket, plan, failure.progress);
+
+    expect(resumed.r2.archiveKeysRemoved).toEqual([archiveKey]);
+    expect(resumed.r2.objectKeysRemoved).toEqual([objectKey]);
+    expect(bucket.deletedKeys).toEqual([archiveKey, objectKey]);
   });
 });
