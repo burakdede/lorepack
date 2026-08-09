@@ -79,6 +79,9 @@ The checked-in gates today are:
   second `lore deploy cloudflare`, then verifies the public build id and read surface before
   and after `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
   `POST /v1/context`, and MCP `lore_search`
+- the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also mutates a real local
+  build to advertise `semantic-search`, then proves `lore deploy cloudflare` refuses it with
+  `LORE_E_CAPABILITY_LOSS` unless the loss is explicitly named
 
 The broader resume, capability-loss, full auth, and CI artifact cases are still open work on
 `#93`.
