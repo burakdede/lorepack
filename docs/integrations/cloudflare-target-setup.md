@@ -77,6 +77,11 @@ once. Set it in your shell before remote reads, deploy confirmation, or rollback
 export LORE_REMOTE_BEARER_TOKEN=<token>
 ```
 
+Only Lore-generated runtime tokens are accepted on the remote read surface. Today that means a
+bearer token with the `lore_rt_` prefix. A Cloudflare deployment credential such as
+`CLOUDFLARE_API_TOKEN` is never a valid runtime token, even if someone hashes and stores it by
+mistake.
+
 Use `lore target token cloudflare --rotate` to replace the token, or
 `lore target token cloudflare --revoke` to remove it. The token must not be written to the
 project receipt or committed to the repository.

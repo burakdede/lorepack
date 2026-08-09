@@ -26,6 +26,8 @@ const OBJECT_BODY =
 const OBJECT_HASH = hashBytes(new TextEncoder().encode(OBJECT_BODY));
 const TOKEN = 'lore_rt_acceptance_worker_token';
 const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex');
+const DEPLOYMENT_CREDENTIAL = 'cf_api_token_for_deploy';
+const DEPLOYMENT_CREDENTIAL_HASH = createHash('sha256').update(DEPLOYMENT_CREDENTIAL).digest('hex');
 
 const MANIFEST: BuildManifest = {
   formatVersion: 1,
@@ -179,6 +181,8 @@ CREATE TABLE runtime_tokens (
 );
 INSERT INTO runtime_tokens (token_hash, created_at)
 VALUES ('${TOKEN_HASH}', '2026-08-08T12:00:00.000Z');
+INSERT INTO runtime_tokens (token_hash, created_at)
+VALUES ('${DEPLOYMENT_CREDENTIAL_HASH}', '2026-08-08T12:00:01.000Z');
 INSERT INTO artifacts (id, project_id, build_id, relative_path, display_path, title, status, authority, media_type, object_hash)
 VALUES ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
 INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, text, heading_path, line_start, line_end)
@@ -267,6 +271,10 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
 
     const unauthorized = await worker.fetch('/v1/build');
     expect(unauthorized.status).toBe(401);
+    const deploymentCredentialResponse = await worker.fetch('/v1/build', {
+      headers: { Authorization: `Bearer ${DEPLOYMENT_CREDENTIAL}` },
+    });
+    expect(deploymentCredentialResponse.status).toBe(401);
 
     const auth = { Authorization: `Bearer ${TOKEN}` };
 
