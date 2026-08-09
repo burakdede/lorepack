@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { BuildId, ContextBundle } from '@lorepack/core/worker';
+import type { BuildId, BuildManifest, ContextBundle } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { readCloudflareTestingEnv, resourcePrefixFor } from './cloudflare-testing.js';
 import { writeMixedCorpus } from './mixed-corpus.js';
@@ -372,6 +372,24 @@ export async function rollbackCloudflareTarget(
     previousBuildId: isBuildId(payload.previousBuildId) ? payload.previousBuildId : null,
     confirmedBuildId: isBuildId(payload.confirmedBuildId) ? payload.confirmedBuildId : null,
   };
+}
+
+export function addSemanticSearchCapability(projectRoot: string, buildId: BuildId): void {
+  const manifestPath = join(projectRoot, '.lore', 'builds', buildId, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as BuildManifest;
+  if (!manifest.capabilities.includes('semantic-search')) {
+    manifest.capabilities = [...manifest.capabilities, 'semantic-search'];
+  }
+  manifest.embeddingProfile ??= {
+    modelId: 'acceptance-smoke',
+    revision: '1',
+    tokenizer: 'acceptance-smoke',
+    pooling: 'mean',
+    normalized: true,
+    dimensions: 3,
+    valueType: 'float32',
+  };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
 function resourceNamesFor(
