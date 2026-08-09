@@ -105,7 +105,11 @@ class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike, D1Que
 const directories: string[] = [];
 const databases: DatabaseSync[] = [];
 
-function makeBuildDirectory(buildId: string, rowCount: number): string {
+function makeBuildDirectory(
+  buildId: string,
+  rowCount: number,
+  options: { readonly columnCount?: number } = {},
+): string {
   const directory = mkdtempSync(join(tmpdir(), 'lore-build-'));
   directories.push(directory);
   mkdirSync(join(directory, 'reports'));
@@ -145,10 +149,13 @@ function makeBuildDirectory(buildId: string, rowCount: number): string {
     max_value TEXT,
     PRIMARY KEY (table_id, ordinal)
   ) STRICT`);
+  const columnCount = options.columnCount ?? 3;
+  const physicalColumns =
+    columnCount === 3
+      ? ['c_0_sku TEXT', 'c_1_price REAL', 'c_2_available INTEGER']
+      : Array.from({ length: columnCount }, (_, index) => `c_${index}_value TEXT`);
   db.exec(`CREATE TABLE t_products (
-    c_0_sku TEXT,
-    c_1_price REAL,
-    c_2_available INTEGER
+    ${physicalColumns.join(',\n    ')}
   ) STRICT`);
 
   db.prepare(
@@ -168,56 +175,84 @@ function makeBuildDirectory(buildId: string, rowCount: number): string {
     'A1:C4',
     '{}',
   );
-  db.prepare(
-    `INSERT INTO table_columns
-      (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(TABLE_ID, 0, 'SKU', 'c_0_sku', 'text', 0, 0, rowCount, 1, 'A-1', `A-${rowCount}`);
-  db.prepare(
-    `INSERT INTO table_columns
-      (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    TABLE_ID,
-    1,
-    'Price',
-    'c_1_price',
-    'real',
-    1,
-    rowCount === 3 ? 1 : 0,
-    rowCount,
-    1,
-    '4.5',
-    '19.99',
-  );
-  db.prepare(
-    `INSERT INTO table_columns
-      (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(TABLE_ID, 2, 'Available', 'c_2_available', 'boolean', 0, 0, 2, 1, 'false', 'true');
+  if (columnCount === 3) {
+    db.prepare(
+      `INSERT INTO table_columns
+        (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(TABLE_ID, 0, 'SKU', 'c_0_sku', 'text', 0, 0, rowCount, 1, 'A-1', `A-${rowCount}`);
+    db.prepare(
+      `INSERT INTO table_columns
+        (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      TABLE_ID,
+      1,
+      'Price',
+      'c_1_price',
+      'real',
+      1,
+      rowCount === 3 ? 1 : 0,
+      rowCount,
+      1,
+      '4.5',
+      '19.99',
+    );
+    db.prepare(
+      `INSERT INTO table_columns
+        (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(TABLE_ID, 2, 'Available', 'c_2_available', 'boolean', 0, 0, 2, 1, 'false', 'true');
 
-  const baseRows =
-    rowCount === 3
-      ? [
-          ['A-1', 19.99, 1],
-          ['A-2', 4.5, 1],
-          ['A-3', null, 0],
-        ]
-      : rowCount === 2
+    const baseRows =
+      rowCount === 3
         ? [
             ['A-1', 19.99, 1],
-            ['A-2', 4.5, 0],
+            ['A-2', 4.5, 1],
+            ['A-3', null, 0],
           ]
-        : Array.from({ length: rowCount }, (_, index) => [
-            `A-${index + 1}`,
-            Number((index + 1) * 1.5),
-            index % 2 === 0 ? 1 : 0,
-          ]);
-  for (const row of baseRows) {
-    db.prepare('INSERT INTO t_products (c_0_sku, c_1_price, c_2_available) VALUES (?, ?, ?)').run(
-      row[0],
-      row[1],
-      row[2],
+        : rowCount === 2
+          ? [
+              ['A-1', 19.99, 1],
+              ['A-2', 4.5, 0],
+            ]
+          : Array.from({ length: rowCount }, (_, index) => [
+              `A-${index + 1}`,
+              Number((index + 1) * 1.5),
+              index % 2 === 0 ? 1 : 0,
+            ]);
+    for (const row of baseRows) {
+      db.prepare('INSERT INTO t_products (c_0_sku, c_1_price, c_2_available) VALUES (?, ?, ?)').run(
+        row[0],
+        row[1],
+        row[2],
+      );
+    }
+  } else {
+    for (let ordinal = 0; ordinal < columnCount; ordinal += 1) {
+      db.prepare(
+        `INSERT INTO table_columns
+          (table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        TABLE_ID,
+        ordinal,
+        `Column ${ordinal + 1}`,
+        `c_${ordinal}_value`,
+        'text',
+        0,
+        0,
+        rowCount,
+        1,
+        'value',
+        'value',
+      );
+    }
+
+    const selected = Array.from({ length: columnCount }, (_, index) => `c_${index}_value`);
+    const placeholders = selected.map(() => '?').join(', ');
+    db.prepare(`INSERT INTO t_products (${selected.join(', ')}) VALUES (${placeholders})`).run(
+      ...Array.from({ length: columnCount }, (_, index) => `value-${index + 1}`),
     );
   }
 
@@ -392,6 +427,27 @@ describe('projectTableData, issue 258', () => {
       completedBatches: 9,
       totalBatches: 9,
       detail: 'insert projected column demo:pricing.xlsx#Products.c_2_available',
+    });
+  });
+
+  it("refuses a table wider than Cloudflare D1's 100-column limit with an actionable message", async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 1, { columnCount: 101 });
+    const projection = new DatabaseSync(':memory:');
+    databases.push(projection);
+    const db = new SqliteProjectionDatabase(projection);
+    await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
+
+    await expect(
+      projectTableData({
+        db,
+        projectId: PROJECT,
+        buildId: BUILD_A,
+        buildDirectory,
+      }),
+    ).rejects.toMatchObject({
+      code: 'LORE_E_LIMIT_EXCEEDED',
+      subject: expect.stringMatching(/^t_products_[0-9a-f]{16}$/),
+      remediation: expect.stringContaining('Reduce the table width'),
     });
   });
 });
