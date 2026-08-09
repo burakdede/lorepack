@@ -174,15 +174,16 @@ VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
 VALUES ('${PROJECT}', '${BUILD}', '${JSON.stringify(MANIFEST).replace(/'/g, "''")}');
 INSERT INTO projected_builds (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
-VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 2, '2026-08-08T12:00:00.000Z');
+VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 3, '2026-08-08T12:00:00.000Z');
 CREATE TABLE runtime_tokens (
   token_hash TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  expires_at TEXT
 );
-INSERT INTO runtime_tokens (token_hash, created_at)
-VALUES ('${TOKEN_HASH}', '2026-08-08T12:00:00.000Z');
-INSERT INTO runtime_tokens (token_hash, created_at)
-VALUES ('${DEPLOYMENT_CREDENTIAL_HASH}', '2026-08-08T12:00:01.000Z');
+INSERT INTO runtime_tokens (token_hash, created_at, expires_at)
+VALUES ('${TOKEN_HASH}', '2026-08-08T12:00:00.000Z', NULL);
+INSERT INTO runtime_tokens (token_hash, created_at, expires_at)
+VALUES ('${DEPLOYMENT_CREDENTIAL_HASH}', '2026-08-08T12:00:01.000Z', NULL);
 INSERT INTO artifacts (id, project_id, build_id, relative_path, display_path, title, status, authority, media_type, object_hash)
 VALUES ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
 INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, text, heading_path, line_start, line_end)

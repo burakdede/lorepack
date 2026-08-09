@@ -7,11 +7,14 @@ import { LoreError, loadConfig, writeFileAtomic } from '@lorepack/core';
 import {
   hashRuntimeToken,
   hasRuntimeToken,
+  listRuntimeTokens,
   type ProjectionMigrationDatabaseLike,
   type ProjectionMigrationStatementLike,
+  RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   type RuntimeAuthDatabaseLike,
   revokeRuntimeTokens,
+  rotateRuntimeTokenHash,
   runProjectionMigrations,
   storeRuntimeTokenHash,
 } from '@lorepack/deploy-cloudflare';
@@ -352,16 +355,26 @@ async function handleTokenCommand(
   }
 
   const token = issueRuntimeToken();
-  await storeRuntimeTokenHash(
-    db,
-    await hashRuntimeToken(token),
-    (options.now ?? (() => new Date()))().toISOString(),
-  );
+  const issuedAt = (options.now ?? (() => new Date()))();
+  const issuedAtIso = issuedAt.toISOString();
+  const overlapEndsAt =
+    alreadyConfigured === true
+      ? new Date(issuedAt.getTime() + RUNTIME_TOKEN_OVERLAP_MS).toISOString()
+      : null;
+  if (overlapEndsAt === null) {
+    await storeRuntimeTokenHash(db, await hashRuntimeToken(token), issuedAtIso);
+  } else {
+    await rotateRuntimeTokenHash(db, await hashRuntimeToken(token), issuedAtIso, overlapEndsAt);
+  }
 
   const action = alreadyConfigured ? 'Rotated' : 'Generated';
+  const activeTokens = await listRuntimeTokens(db);
   return {
     human: [
       `${action} the runtime bearer token for ${receipt.workerName}.`,
+      ...(overlapEndsAt === null
+        ? []
+        : [`The previous token remains valid until ${overlapEndsAt}.`]),
       'Token (shown once):',
       token,
       '',
@@ -372,6 +385,8 @@ async function handleTokenCommand(
       target: 'cloudflare',
       worker: receipt.workerName,
       rotated: alreadyConfigured,
+      activeTokens,
+      ...(overlapEndsAt === null ? {} : { overlapEndsAt }),
       token,
     },
   };

@@ -442,15 +442,31 @@ describe('lore target token cloudflare, issue 90', () => {
               commands: [command],
             })
           ).stdout,
-        ) as { token: string; rotated: boolean };
+        ) as {
+          token: string;
+          rotated: boolean;
+          overlapEndsAt: string;
+          activeTokens: Array<{
+            tokenHash: string;
+            createdAt: string;
+            expiresAt: string | null;
+          }>;
+        };
         expect(rotated.rotated).toBe(true);
         expect(rotated.token).not.toBe(first.token);
+        expect(rotated.overlapEndsAt).toBe('2026-08-09T10:15:00.000Z');
 
         const rows = db
-          .prepare('SELECT token_hash, created_at FROM runtime_tokens ORDER BY token_hash')
-          .all() as Array<{ token_hash: string; created_at: string }>;
-        expect(rows).toHaveLength(1);
-        expect(rows[0]?.created_at).toBe('2026-08-09T10:05:00.000Z');
+          .prepare(
+            'SELECT token_hash, created_at, expires_at FROM runtime_tokens ORDER BY created_at, token_hash',
+          )
+          .all() as Array<{ token_hash: string; created_at: string; expires_at: string | null }>;
+        expect(rows).toHaveLength(2);
+        expect(rows[0]?.created_at).toBe('2026-08-09T10:00:00.000Z');
+        expect(rows[0]?.expires_at).toBe('2026-08-09T10:15:00.000Z');
+        expect(rows[1]?.created_at).toBe('2026-08-09T10:05:00.000Z');
+        expect(rows[1]?.expires_at).toBeNull();
+        expect(rotated.activeTokens).toHaveLength(2);
 
         const revoked = await run(
           ['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare', '--revoke'],
@@ -459,7 +475,7 @@ describe('lore target token cloudflare, issue 90', () => {
         expect(revoked.code).toBe(0);
         expect(JSON.parse(revoked.stdout)).toMatchObject({
           worker: 'demo-runtime',
-          revoked: 1,
+          revoked: 2,
         });
         expect(
           (db.prepare('SELECT token_hash FROM runtime_tokens').all() as unknown[]).length,
