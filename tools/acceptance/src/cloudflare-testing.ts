@@ -14,6 +14,15 @@ export interface CloudflareTestingEnv {
   readonly runAttempt: string | null;
 }
 
+export function cloudflareArtifactDirectory(
+  env: Readonly<Record<string, string | undefined>>,
+): string | null {
+  const value = env.LORE_CF_ARTIFACT_DIR;
+  if (value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 const SAFE_PREFIX = /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/;
 const SAFE_RUN_COMPONENT = /^[0-9]+$/;
 

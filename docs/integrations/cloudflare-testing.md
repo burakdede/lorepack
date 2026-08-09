@@ -20,6 +20,7 @@ Optional CI metadata:
 
 - `GITHUB_RUN_ID`
 - `GITHUB_RUN_ATTEMPT`
+- `LORE_CF_ARTIFACT_DIR`
 
 When CI metadata is present, the harness derives a per-run resource prefix by appending those
 numeric values. That keeps parallel runs from colliding while preserving a stable human-owned
@@ -34,6 +35,10 @@ GITHUB_RUN_ATTEMPT=2
 ```
 
 This becomes the resource prefix `lorepack-ci-12345-2`.
+
+When `LORE_CF_ARTIFACT_DIR` is set, the credentialed smoke writes machine-readable command
+logs, deployment receipts, and a remote summary into that directory so CI can upload them as
+artifacts even when the run later fails during verification or teardown.
 
 ## Token scopes
 
@@ -132,6 +137,9 @@ CI artifacts for that suite must include:
 - the local build id and the remote build ids observed during verification
 - command logs for setup, deploy, resume, and rollback
 - any generated result summary used by the acceptance gate
+
+The checked-in smoke now writes those files under `LORE_CF_ARTIFACT_DIR/<project-name>/`
+when the environment variable is present.
 
 Those artifacts are what make a skipped run visibly different from a failing or passing one,
 and what let a later session audit the exact remote state transitions that were observed.
