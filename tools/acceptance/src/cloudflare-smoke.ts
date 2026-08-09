@@ -199,7 +199,9 @@ export async function teardownCloudflareSmokeTarget(
   try {
     await runWrangler(['r2', 'bucket', 'delete', target.objectsBucketName], target.wranglerEnv);
   } catch (error) {
-    failures.push(`delete bucket ${target.objectsBucketName}: ${messageOf(error)}`);
+    if (!isMissingCloudflareBucketError(error)) {
+      failures.push(`delete bucket ${target.objectsBucketName}: ${messageOf(error)}`);
+    }
   }
 
   try {
@@ -208,7 +210,9 @@ export async function teardownCloudflareSmokeTarget(
       target.wranglerEnv,
     );
   } catch (error) {
-    failures.push(`delete D1 ${target.catalogDatabaseName}: ${messageOf(error)}`);
+    if (!isMissingCloudflareD1Error(error)) {
+      failures.push(`delete D1 ${target.catalogDatabaseName}: ${messageOf(error)}`);
+    }
   }
 
   try {
@@ -744,6 +748,17 @@ export function parseWranglerDeploymentInfo(
 
 export function cloudflareWorkerDeleteUrl(accountId: string, workerName: string): string {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`;
+}
+
+export function isMissingCloudflareBucketError(error: unknown): boolean {
+  const message = messageOf(error);
+  return (
+    message.includes('The specified bucket does not exist.') && message.includes('[code: 10006]')
+  );
+}
+
+export function isMissingCloudflareD1Error(error: unknown): boolean {
+  return messageOf(error).includes("Couldn't find a D1 DB with name or binding");
 }
 
 function sanitizeName(value: string): string {
