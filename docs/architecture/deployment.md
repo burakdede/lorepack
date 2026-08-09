@@ -90,3 +90,18 @@ than one Lorepack project. Objects are shared across builds under the project be
 content addressed and deduplicated. The archive is build scoped because retention, rollback and
 status address one sealed build at a time, and a deterministic `project/builds/<buildId>/`
 prefix lets later work enumerate or remove exactly that build without guessing.
+
+## Cloudflare D1 projection concurrency
+
+Phase 6 keeps Cloudflare D1 projection writes **serial**. The current chosen concurrency is `1`:
+one D1 write statement is awaited before the next begins. This is not left implicit in the code.
+
+The checked-in probe [`benchmarks/cloudflare/projection-concurrency-2026-08-09.json`](../../benchmarks/cloudflare/projection-concurrency-2026-08-09.json)
+was recorded on **Sunday, August 9, 2026** with `pnpm bench:cloudflare-projection -- --out <file>`.
+It measures the current projection path with delayed write statements and records the maximum
+in-flight D1 writes observed. The recorded result is `maxInflightWrites: 1`, which is the
+evidence behind keeping the write path serial while D1 remains single-threaded.
+
+If a later change proposes parallel D1 projection writes, it must replace that artifact with a
+new measurement and update this section. Until then, higher concurrency would be an optimization
+before measured need.

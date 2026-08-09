@@ -86,6 +86,79 @@ class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
   }
 }
 
+class TrackingSqliteStatement implements ProjectionMigrationStatementLike {
+  readonly #db: DatabaseSync;
+  readonly #query: string;
+  readonly #tracking: {
+    inflightWrites: number;
+    maxInflightWrites: number;
+    writeStatements: number;
+    delayMs: number;
+  };
+  #bindings: readonly unknown[] = [];
+
+  constructor(
+    db: DatabaseSync,
+    query: string,
+    tracking: {
+      inflightWrites: number;
+      maxInflightWrites: number;
+      writeStatements: number;
+      delayMs: number;
+    },
+  ) {
+    this.#db = db;
+    this.#query = query;
+    this.#tracking = tracking;
+  }
+
+  bind(...values: unknown[]): TrackingSqliteStatement {
+    this.#bindings = values;
+    return this;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const statement = this.#db.prepare(this.#query);
+    const trimmed = this.#query.trim().toLowerCase();
+    if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
+
+    this.#tracking.writeStatements += 1;
+    this.#tracking.inflightWrites += 1;
+    this.#tracking.maxInflightWrites = Math.max(
+      this.#tracking.maxInflightWrites,
+      this.#tracking.inflightWrites,
+    );
+    try {
+      await new Promise((resolve) => setTimeout(resolve, this.#tracking.delayMs));
+      statement.run(...this.#bindings);
+      return {};
+    } finally {
+      this.#tracking.inflightWrites -= 1;
+    }
+  }
+}
+
+class TrackingSqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
+  readonly raw: DatabaseSync;
+  readonly tracking = {
+    inflightWrites: 0,
+    maxInflightWrites: 0,
+    writeStatements: 0,
+    delayMs: 2,
+  };
+
+  constructor(db: DatabaseSync, delayMs = 2) {
+    this.raw = db;
+    this.tracking.delayMs = delayMs;
+  }
+
+  prepare(query: string): TrackingSqliteStatement {
+    return new TrackingSqliteStatement(this.raw, query, this.tracking);
+  }
+}
+
 const directories: string[] = [];
 const databases: DatabaseSync[] = [];
 
@@ -588,6 +661,30 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
           update.completed <= update.total,
       ),
     ).toBe(true);
+  });
+
+  it('does not overlap D1 write statements while projecting a build', async () => {
+    const fixture = makeBuildFixture();
+    const projection = new TrackingSqliteProjectionDatabase(
+      trackDatabase(new DatabaseSync(':memory:')),
+    );
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: projection,
+      objects: fixture.bucket,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    await target.apply(plan);
+
+    expect(projection.tracking.writeStatements).toBeGreaterThan(0);
+    expect(projection.tracking.maxInflightWrites).toBe(1);
   });
 
   it('renders resolved resource, projection, and activation facts in the plan', async () => {
