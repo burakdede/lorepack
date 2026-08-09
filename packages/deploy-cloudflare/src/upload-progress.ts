@@ -1,4 +1,4 @@
-export async function withUploadProgressHeartbeat<T>(
+export async function withProgressHeartbeat<T>(
   intervalMs: number,
   emit: () => void,
   work: () => Promise<T>,

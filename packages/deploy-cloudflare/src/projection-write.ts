@@ -1,4 +1,5 @@
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
+import { withProgressHeartbeat } from './upload-progress.js';
 
 export interface ProjectionBatchProgress {
   readonly completedBatches: number;
@@ -9,6 +10,7 @@ export interface ProjectionBatchProgress {
 export interface ProjectionWriteOptions {
   readonly retryAttempts?: number;
   readonly retryDelayMs?: number;
+  readonly progressIntervalMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: (update: ProjectionBatchProgress) => void;
 }
@@ -16,12 +18,16 @@ export interface ProjectionWriteOptions {
 export function projectionWriteOptions(options: {
   readonly retryAttempts?: number | undefined;
   readonly retryDelayMs?: number | undefined;
+  readonly progressIntervalMs?: number | undefined;
   readonly sleep?: ((ms: number) => Promise<void>) | undefined;
   readonly onProgress?: ((update: ProjectionBatchProgress) => void) | undefined;
 }): ProjectionWriteOptions {
   return {
     ...(options.retryAttempts === undefined ? {} : { retryAttempts: options.retryAttempts }),
     ...(options.retryDelayMs === undefined ? {} : { retryDelayMs: options.retryDelayMs }),
+    ...(options.progressIntervalMs === undefined
+      ? {}
+      : { progressIntervalMs: options.progressIntervalMs }),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
     ...(options.onProgress === undefined ? {} : { onProgress: options.onProgress }),
   };
@@ -51,10 +57,22 @@ export async function runProjectionBatch(
   detail: string,
 ): Promise<void> {
   await withProjectionRetries(async () => {
-    await db
-      .prepare(query)
-      .bind(...bindings)
-      .run();
+    await withProgressHeartbeat(
+      options.progressIntervalMs ?? 1000,
+      () => {
+        options.onProgress?.({
+          completedBatches: state.completedBatches,
+          totalBatches: state.totalBatches,
+          detail,
+        });
+      },
+      async () => {
+        await db
+          .prepare(query)
+          .bind(...bindings)
+          .run();
+      },
+    );
   }, options);
   state.completedBatches += 1;
   options.onProgress?.({

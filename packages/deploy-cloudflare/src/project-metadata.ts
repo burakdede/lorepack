@@ -45,6 +45,7 @@ export interface ProjectBuildMetadataOptions {
   readonly projectedAt?: string;
   readonly retryAttempts?: number;
   readonly retryDelayMs?: number;
+  readonly progressIntervalMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: ProjectionWriteOptions['onProgress'];
 }
