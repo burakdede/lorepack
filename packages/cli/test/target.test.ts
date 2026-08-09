@@ -6,6 +6,7 @@ import type {
   RuntimeAuthDatabaseLike,
   RuntimeAuthStatementLike,
 } from '@lorepack/deploy-cloudflare';
+import { runProjectionMigrations } from '@lorepack/deploy-cloudflare';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { targetCommand } from '../src/commands/target.js';
@@ -586,6 +587,173 @@ describe('lore target token cloudflare, issue 90', () => {
         ).toBe(0);
 
         db.close();
+      },
+    );
+  });
+});
+
+describe('lore target status cloudflare, issue 92', () => {
+  it('lists remote projected builds newest first with the active marker, deploy time, and state', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { db, adapter } = createTargetAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
+        const command = targetCommand({
+          adapter,
+          now: () => new Date('2026-08-09T10:00:00.000Z'),
+        });
+
+        const setup = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [command] },
+        );
+        expect(setup.code).toBe(0);
+
+        const catalog = new SqliteTargetDatabase(db);
+        await runProjectionMigrations(catalog, () => '2026-08-09T10:01:00.000Z');
+        db.prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1').run(
+          `lore_${'b'.repeat(64)}`,
+          4,
+        );
+        db.prepare(
+          `INSERT INTO projected_builds (
+            project_id,
+            build_id,
+            build_schema_version,
+            compiler_version,
+            projection_schema_version,
+            projected_at
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run('Deploy Demo', `lore_${'a'.repeat(64)}`, 1, '0.1.0', 1, '2026-08-09T10:02:00.000Z');
+        db.prepare(
+          `INSERT INTO projected_builds (
+            project_id,
+            build_id,
+            build_schema_version,
+            compiler_version,
+            projection_schema_version,
+            projected_at
+          ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run('Deploy Demo', `lore_${'b'.repeat(64)}`, 1, '0.1.0', 1, '2026-08-09T10:03:00.000Z');
+
+        const result = await run(['--cwd', temp.root, 'target', 'status', 'cloudflare'], {
+          commands: [command],
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('Cloudflare target status for demo-runtime');
+        expect(result.stdout).toContain('* active');
+        const lines = result.stdout.split('\n').filter((line) => line.includes('lore_'));
+        expect(lines).toHaveLength(2);
+        expect(lines[0]).toContain(`lore_${'b'.repeat(12)}`);
+        expect(lines[0]).toContain('2026-08-09T10:03:00');
+        expect(lines[0]).toContain('active');
+        expect(lines[1]).toContain(`lore_${'a'.repeat(12)}`);
+        expect(lines[1]).toContain('projected');
+
+        const parsed = JSON.parse(
+          (
+            await run(['--json', '--cwd', temp.root, 'target', 'status', 'cloudflare'], {
+              commands: [command],
+            })
+          ).stdout,
+        ) as {
+          target: string;
+          worker: string;
+          activeBuildId: string;
+          builds: Array<{ buildId: string; deployedAt: string; state: string; active: boolean }>;
+        };
+        expect(parsed.target).toBe('cloudflare');
+        expect(parsed.worker).toBe('demo-runtime');
+        expect(parsed.activeBuildId).toBe(`lore_${'b'.repeat(64)}`);
+        expect(parsed.builds).toEqual([
+          {
+            buildId: `lore_${'b'.repeat(64)}`,
+            deployedAt: '2026-08-09T10:03:00.000Z',
+            state: 'active',
+            active: true,
+          },
+          {
+            buildId: `lore_${'a'.repeat(64)}`,
+            deployedAt: '2026-08-09T10:02:00.000Z',
+            state: 'projected',
+            active: false,
+          },
+        ]);
+      },
+    );
+  });
+
+  it('reports an empty remote target cleanly before the first deploy', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter } = createTargetAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
+        const command = targetCommand({
+          adapter,
+          now: () => new Date('2026-08-09T10:00:00.000Z'),
+        });
+
+        const setup = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [command] },
+        );
+        expect(setup.code).toBe(0);
+
+        const result = await run(['--cwd', temp.root, 'target', 'status', 'cloudflare'], {
+          commands: [command],
+        });
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('No remote projected builds yet.');
+
+        const parsed = JSON.parse(
+          (
+            await run(['--json', '--cwd', temp.root, 'target', 'status', 'cloudflare'], {
+              commands: [command],
+            })
+          ).stdout,
+        ) as {
+          activeBuildId: string | null;
+          builds: unknown[];
+        };
+        expect(parsed.activeBuildId).toBeNull();
+        expect(parsed.builds).toEqual([]);
       },
     );
   });

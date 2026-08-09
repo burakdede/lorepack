@@ -99,7 +99,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
     name: 'target',
     description: 'Prepare and inspect deployment targets.',
     arguments: [
-      { name: 'subject', description: 'add or token', required: true },
+      { name: 'subject', description: 'add, status, or token', required: true },
       { name: 'target', description: 'cloudflare', required: true },
     ],
     flags: [
@@ -118,18 +118,23 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
     handler: async (args, flags, context): Promise<CommandResult> => {
       const subject = args[0];
       const target = args[1];
-      if (target !== 'cloudflare' || (subject !== 'add' && subject !== 'token')) {
+      if (
+        target !== 'cloudflare' ||
+        (subject !== 'add' && subject !== 'status' && subject !== 'token')
+      ) {
         throw new LoreError(
           'LORE_E_INVALID_ARGUMENT',
           `Unknown target command: ${[subject, target].filter(Boolean).join(' ')}.`,
           {
-            remediation: 'Use `lore target add cloudflare` or `lore target token cloudflare`.',
+            remediation:
+              'Use `lore target add cloudflare`, `lore target status cloudflare`, or `lore target token cloudflare`.',
             subject: [subject, target].filter(Boolean).join(' '),
           },
         );
       }
 
       if (subject === 'token') return await handleTokenCommand(flags, context, options);
+      if (subject === 'status') return await handleStatusCommand(context, options);
 
       const config = loadConfig({ cwd: context.options.cwd });
       const adapter = options.adapter ?? createWranglerAdapter();
@@ -337,6 +342,146 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       };
     },
   };
+}
+
+interface CloudflareRemoteBuildRow {
+  readonly buildId: string;
+  readonly projectedAt: string;
+}
+
+interface CloudflareTargetStatusRow {
+  readonly buildId: string;
+  readonly deployedAt: string;
+  readonly state: 'active' | 'projected';
+  readonly active: boolean;
+}
+
+async function handleStatusCommand(
+  context: CommandContext,
+  options: TargetCommandOptions,
+): Promise<CommandResult> {
+  const config = loadConfig({ cwd: context.options.cwd });
+  const adapter = options.adapter ?? createWranglerAdapter();
+  if (!isCloudflareTargetTokenAdapter(adapter)) {
+    throw new LoreError(
+      'LORE_E_INTERNAL',
+      'The Cloudflare target adapter cannot open the catalog database for target status.',
+      {
+        remediation:
+          'Use the default Wrangler-backed adapter, or provide an adapter with openCatalogDatabase().',
+      },
+    );
+  }
+  const detection = await adapter.detect();
+  if (!detection.installed) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'The pinned Cloudflare Wrangler dependency is not available.',
+      {
+        remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+        subject: 'cloudflare',
+      },
+    );
+  }
+
+  const identity = await adapter.whoami();
+  if (!identity.authenticated) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'Wrangler is installed, but no Cloudflare login is available for this machine.',
+      {
+        remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+        subject: 'cloudflare',
+      },
+    );
+  }
+
+  const receipt = readCloudflareTargetReceipt(config.projectRoot);
+  if (identity.accountId !== undefined && identity.accountId !== receipt.accountId) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The cloudflare target receipt belongs to account ${receipt.accountId}, but Wrangler is logged into ${identity.accountId}.`,
+      {
+        remediation:
+          'Log into the matching Cloudflare account or rewrite the receipt with `lore target add cloudflare`.',
+        subject: receipt.accountId,
+      },
+    );
+  }
+
+  const db = adapter.openCatalogDatabase(receipt.catalogDatabaseName);
+  const status = await readCloudflareTargetStatus(db, receipt.project);
+  return {
+    human: renderCloudflareTargetStatus(receipt.workerName, status),
+    json: {
+      target: 'cloudflare',
+      worker: receipt.workerName,
+      activeBuildId: status.activeBuildId,
+      builds: status.builds,
+    },
+  };
+}
+
+async function readCloudflareTargetStatus(
+  db: ProjectionMigrationDatabaseLike,
+  projectId: string,
+): Promise<{
+  readonly activeBuildId: string | null;
+  readonly builds: readonly CloudflareTargetStatusRow[];
+}> {
+  const hasProjectedBuilds = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
+    .run<{ name: string }>();
+  if ((hasProjectedBuilds.results?.length ?? 0) === 0) {
+    return { activeBuildId: null, builds: [] };
+  }
+
+  const active = await db
+    .prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1')
+    .run<{ buildId: string | null }>();
+  const activeBuildId = active.results?.[0]?.buildId ?? null;
+  const projected = await db
+    .prepare(
+      `SELECT build_id AS buildId, projected_at AS projectedAt
+FROM projected_builds
+WHERE project_id = ?
+ORDER BY projected_at DESC, build_id DESC`,
+    )
+    .bind(projectId)
+    .run<CloudflareRemoteBuildRow>();
+
+  return {
+    activeBuildId,
+    builds: (projected.results ?? []).map((row) => ({
+      buildId: row.buildId,
+      deployedAt: row.projectedAt,
+      state: row.buildId === activeBuildId ? 'active' : 'projected',
+      active: row.buildId === activeBuildId,
+    })),
+  };
+}
+
+function renderCloudflareTargetStatus(
+  workerName: string,
+  status: {
+    readonly activeBuildId: string | null;
+    readonly builds: readonly CloudflareTargetStatusRow[];
+  },
+): string {
+  const lines = [`Cloudflare target status for ${workerName}`, ''];
+  if (status.builds.length === 0) {
+    lines.push('No remote projected builds yet.');
+    return lines.join('\n');
+  }
+
+  lines.push('  BUILD              DEPLOYED              STATE');
+  for (const build of status.builds) {
+    lines.push(
+      `${build.active ? '*' : ' '} ${build.buildId.slice(0, 17)}  ${build.deployedAt.slice(0, 19)}  ${build.state}`,
+    );
+  }
+  lines.push('', '* active');
+  return lines.join('\n');
 }
 
 async function handleTokenCommand(
