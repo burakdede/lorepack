@@ -13,10 +13,12 @@ import {
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
   issueCloudflareRuntimeToken,
+  parseCloudflareTargetReceipt,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
   resumeCloudflareTarget,
   rollbackCloudflareTarget,
+  smokeProjectName,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
 } from '../src/cloudflare-smoke.js';
@@ -32,6 +34,40 @@ const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
 const RECEIPTS_DIRECTORY = '.lore/receipts';
 
 describe('the credentialed Cloudflare smoke, issue 93', () => {
+  it('builds a per-run unique project name when the Cloudflare environment is configured', () => {
+    expect(
+      smokeProjectName('Cloudflare Acceptance', {
+        CLOUDFLARE_API_TOKEN: 'token',
+        CLOUDFLARE_ACCOUNT_ID: 'account',
+        LORE_CF_TEST_PREFIX: 'lorepack-ci',
+        GITHUB_RUN_ID: '12345',
+        GITHUB_RUN_ATTEMPT: '2',
+      }),
+    ).toBe('lorepack-ci-12345-2-cloudflare-acceptance');
+  });
+
+  it('keeps the base project name when the Cloudflare environment is absent', () => {
+    expect(smokeProjectName('Cloudflare Acceptance', {})).toBe('cloudflare-acceptance');
+  });
+
+  it('parses the actual Cloudflare target receipt returned by the CLI', () => {
+    expect(
+      parseCloudflareTargetReceipt(
+        JSON.stringify({
+          accountId: 'acc-1',
+          workerName: 'cloudflare-acceptance-runtime',
+          catalogDatabaseName: 'cloudflare-acceptance-catalog',
+          objectsBucketName: 'cloudflare-acceptance-objects',
+        }),
+      ),
+    ).toEqual({
+      accountId: 'acc-1',
+      workerName: 'cloudflare-acceptance-runtime',
+      catalogDatabaseName: 'cloudflare-acceptance-catalog',
+      objectsBucketName: 'cloudflare-acceptance-objects',
+    });
+  });
+
   it('depends on the built CLI binary', () => {
     expect(existsSync(BINARY), `${BINARY} is missing. Run \`pnpm build\` first.`).toBe(true);
   });
