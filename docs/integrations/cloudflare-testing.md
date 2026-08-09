@@ -69,6 +69,10 @@ and passes it through `LORE_REMOTE_BEARER_TOKEN` for deploy and rollback confirm
 `Authorization: Bearer <token>` for direct `GET /v1/build`, `POST /v1/context`, and `POST /mcp`
 verification calls.
 
+The same smoke now also proves the rejection side of that contract: an unauthenticated
+`GET /v1/build` returns `401`, an unauthenticated MCP `POST /mcp` returns `401`, and a
+wrong runtime bearer token is rejected without being echoed back in the response body.
+
 ## Visible skip behavior
 
 When the required credentials are absent, the Cloudflare integration suite skips with an
@@ -83,15 +87,15 @@ The checked-in gates today are:
   database, and one R2 bucket, deploys the checked-in Worker package, runs
   `lore target add cloudflare`, runs `lore target token cloudflare`, runs
   `lore deploy cloudflare`, edits the mixed corpus, runs a second `lore deploy cloudflare`,
-  then verifies the public build id and read surface before and after
+  proves unauthenticated REST and MCP requests are rejected while the issued runtime token
+  succeeds, then verifies the public build id and read surface before and after
   `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
   `POST /v1/context`, and MCP `lore_search`
 - the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also mutates a real local
   build to advertise `semantic-search`, then proves `lore deploy cloudflare` refuses it with
   `LORE_E_CAPABILITY_LOSS` unless the loss is explicitly named
 
-The broader resume, capability-loss, full auth, and CI artifact cases are still open work on
-`#93`.
+The broader resume, Phase 2 contract-suite, and CI artifact cases are still open work on `#93`.
 
 ## Cost expectations
 

@@ -1,6 +1,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
+import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
 import {
   addCloudflareTarget,
@@ -48,6 +49,46 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect(deployed.buildId).toBe(localBuildId);
 
         await waitForRemoteBuild(target.endpointBase, localBuildId, runtimeToken);
+
+        const unauthenticatedBuild = await fetch(`${target.endpointBase}/v1/build`, {
+          signal: AbortSignal.timeout(30_000),
+        });
+        expect(unauthenticatedBuild.status).toBe(401);
+
+        const wrongToken = 'lore_rt_wrong_smoke_token';
+        const wrongTokenBuild = await fetch(`${target.endpointBase}/v1/build`, {
+          headers: { Authorization: `Bearer ${wrongToken}` },
+          signal: AbortSignal.timeout(30_000),
+        });
+        expect(wrongTokenBuild.status).toBe(401);
+        const wrongTokenBody = await wrongTokenBuild.text();
+        expect(wrongTokenBody).not.toContain(wrongToken);
+
+        const unauthenticatedMcp = await fetch(`${target.endpointBase}/mcp`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'Mcp-Method': 'tools/list',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {
+              _meta: {
+                'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': {
+                  name: 'cloudflare-auth-smoke',
+                  version: '0.0.0',
+                },
+              },
+            },
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        expect(unauthenticatedMcp.status).toBe(401);
 
         const context = await readRemoteContext(target.endpointBase, 'rollback', runtimeToken);
         expect((context as ContextBundle).buildId).toBe(localBuildId);
