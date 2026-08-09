@@ -101,6 +101,8 @@ CREATE TABLE projected_builds (
   compiler_version TEXT NOT NULL,
   projection_schema_version INTEGER NOT NULL,
   projected_at TEXT NOT NULL,
+  verified_at TEXT,
+  activated_at TEXT,
   PRIMARY KEY (project_id, build_id)
 );
 CREATE TABLE build_warnings (
@@ -173,8 +175,26 @@ INSERT INTO active_build (id, build_id, generation)
 VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
 VALUES ('${PROJECT}', '${BUILD}', '${JSON.stringify(MANIFEST).replace(/'/g, "''")}');
-INSERT INTO projected_builds (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
-VALUES ('${PROJECT}', '${BUILD}', 3, '0.1.0', 3, '2026-08-08T12:00:00.000Z');
+INSERT INTO projected_builds (
+  project_id,
+  build_id,
+  build_schema_version,
+  compiler_version,
+  projection_schema_version,
+  projected_at,
+  verified_at,
+  activated_at
+)
+VALUES (
+  '${PROJECT}',
+  '${BUILD}',
+  3,
+  '0.1.0',
+  4,
+  '2026-08-08T12:00:00.000Z',
+  '2026-08-08T12:00:30.000Z',
+  '2026-08-08T12:00:45.000Z'
+);
 CREATE TABLE runtime_tokens (
   token_hash TEXT PRIMARY KEY,
   created_at TEXT NOT NULL,

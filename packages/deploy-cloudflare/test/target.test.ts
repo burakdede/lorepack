@@ -903,6 +903,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
+      now: () => '2026-08-08T14:00:00.000Z',
       publicBuildId: async () => BUILD,
     });
 
@@ -921,6 +922,16 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       tableQuery: 'passed',
       capabilities: ['lexical-search', 'structured-context', 'table-query'],
     } satisfies VerificationResult);
+    expect(
+      fixture.projection.raw
+        .prepare(
+          'SELECT verified_at, activated_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
+        )
+        .get(PROJECT, BUILD),
+    ).toEqual({
+      verified_at: '2026-08-08T14:00:00.000Z',
+      activated_at: null,
+    });
   });
 
   it('activates atomically by switching the pointer and incrementing generation', async () => {
@@ -930,6 +941,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
+      now: () => '2026-08-08T14:10:00.000Z',
       publicBuildId: async () => BUILD,
     });
 
@@ -956,6 +968,16 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
         .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
         .get(),
     ).toEqual({ build_id: BUILD, generation: 8 });
+    expect(
+      fixture.projection.raw
+        .prepare(
+          'SELECT verified_at, activated_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
+        )
+        .get(PROJECT, BUILD),
+    ).toEqual({
+      verified_at: '2026-08-08T14:10:00.000Z',
+      activated_at: '2026-08-08T14:10:00.000Z',
+    });
   });
 
   it('rolls back to a previously projected build by pointer change alone', async () => {
@@ -972,6 +994,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
+      now: () => '2026-08-08T14:25:00.000Z',
       publicBuildId: async () => BUILD_B,
     });
 
@@ -1005,6 +1028,16 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
         .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
         .get(),
     ).toEqual({ build_id: BUILD_B, generation: 2 });
+    expect(
+      fixture.projection.raw
+        .prepare(
+          'SELECT verified_at, activated_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
+        )
+        .get(PROJECT, BUILD_B),
+    ).toEqual({
+      verified_at: '2026-08-08T14:25:00.000Z',
+      activated_at: '2026-08-08T14:25:00.000Z',
+    });
   });
 
   it('refuses to roll back to an incomplete projection and leaves activation unchanged', async () => {

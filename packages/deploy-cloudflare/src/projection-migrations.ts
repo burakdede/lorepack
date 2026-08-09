@@ -200,6 +200,16 @@ const PROJECTION_MIGRATIONS_SOURCE = [
       `UPDATE runtime_tokens SET expires_at = NULL WHERE expires_at IS NOT NULL`,
     ],
   },
+  {
+    id: '0004',
+    name: 'projected-build-verification-state',
+    statements: [
+      `ALTER TABLE projected_builds ADD COLUMN verified_at TEXT`,
+      `ALTER TABLE projected_builds ADD COLUMN activated_at TEXT`,
+      `UPDATE projected_builds SET verified_at = NULL WHERE verified_at IS NOT NULL`,
+      `UPDATE projected_builds SET activated_at = NULL WHERE activated_at IS NOT NULL`,
+    ],
+  },
 ] as const;
 
 export const PROJECTION_MIGRATIONS: readonly ProjectionMigration[] =

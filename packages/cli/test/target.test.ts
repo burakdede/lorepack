@@ -640,9 +640,20 @@ describe('lore target status cloudflare, issue 92', () => {
             build_schema_version,
             compiler_version,
             projection_schema_version,
-            projected_at
-          ) VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run('Deploy Demo', `lore_${'a'.repeat(64)}`, 1, '0.1.0', 1, '2026-08-09T10:02:00.000Z');
+            projected_at,
+            verified_at,
+            activated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          'Deploy Demo',
+          `lore_${'a'.repeat(64)}`,
+          1,
+          '0.1.0',
+          1,
+          '2026-08-09T10:02:00.000Z',
+          '2026-08-09T10:02:30.000Z',
+          '2026-08-09T10:02:45.000Z',
+        );
         db.prepare(
           `INSERT INTO projected_builds (
             project_id,
@@ -650,9 +661,20 @@ describe('lore target status cloudflare, issue 92', () => {
             build_schema_version,
             compiler_version,
             projection_schema_version,
-            projected_at
-          ) VALUES (?, ?, ?, ?, ?, ?)`,
-        ).run('Deploy Demo', `lore_${'b'.repeat(64)}`, 1, '0.1.0', 1, '2026-08-09T10:03:00.000Z');
+            projected_at,
+            verified_at,
+            activated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          'Deploy Demo',
+          `lore_${'b'.repeat(64)}`,
+          1,
+          '0.1.0',
+          1,
+          '2026-08-09T10:03:00.000Z',
+          '2026-08-09T10:03:30.000Z',
+          '2026-08-09T10:03:45.000Z',
+        );
 
         const result = await run(['--cwd', temp.root, 'target', 'status', 'cloudflare'], {
           commands: [command],
@@ -667,7 +689,7 @@ describe('lore target status cloudflare, issue 92', () => {
         expect(lines[0]).toContain('2026-08-09T10:03:00');
         expect(lines[0]).toContain('active');
         expect(lines[1]).toContain(`lore_${'a'.repeat(12)}`);
-        expect(lines[1]).toContain('projected');
+        expect(lines[1]).toContain('verified');
 
         const parsed = JSON.parse(
           (
@@ -694,7 +716,7 @@ describe('lore target status cloudflare, issue 92', () => {
           {
             buildId: `lore_${'a'.repeat(64)}`,
             deployedAt: '2026-08-09T10:02:00.000Z',
-            state: 'projected',
+            state: 'verified',
             active: false,
           },
         ]);

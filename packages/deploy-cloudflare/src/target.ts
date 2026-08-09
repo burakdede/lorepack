@@ -626,6 +626,10 @@ async function verifyCandidateBuild(
     failures.push(`candidate table query failed: ${LoreError.from(cause).message}`);
   }
 
+  if (search === 'passed' && sourceRead === 'passed' && tableQuery !== 'failed') {
+    await markProjectedBuildVerified(options, buildId);
+  }
+
   return {
     search,
     sourceRead,
@@ -654,6 +658,7 @@ async function switchActiveBuild(
   options: CloudflareDeploymentTargetOptions,
   buildId: BuildId,
 ): Promise<ActivationReceipt> {
+  const switchedAt = options.now?.() ?? new Date().toISOString();
   let previous: { readonly buildId: BuildId; readonly generation: number } | null = null;
   try {
     await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
@@ -665,6 +670,15 @@ async function switchActiveBuild(
         .bind(buildId, nextGeneration)
         .run();
     }
+    await options.catalogDb
+      .prepare(
+        `UPDATE projected_builds
+SET verified_at = COALESCE(verified_at, ?),
+    activated_at = ?
+WHERE project_id = ? AND build_id = ?`,
+      )
+      .bind(switchedAt, switchedAt, options.projectId, buildId)
+      .run();
     await options.catalogDb.prepare('COMMIT').run();
   } catch (cause) {
     try {
@@ -690,6 +704,21 @@ async function switchActiveBuild(
     confirmedBuildId,
     endpoint: options.endpoint,
   };
+}
+
+async function markProjectedBuildVerified(
+  options: CloudflareDeploymentTargetOptions,
+  buildId: BuildId,
+): Promise<void> {
+  const verifiedAt = options.now?.() ?? new Date().toISOString();
+  await options.catalogDb
+    .prepare(
+      `UPDATE projected_builds
+SET verified_at = COALESCE(verified_at, ?)
+WHERE project_id = ? AND build_id = ?`,
+    )
+    .bind(verifiedAt, options.projectId, buildId)
+    .run();
 }
 
 function smokeQueryFor(projectName: string): string {
