@@ -191,7 +191,7 @@ export async function teardownCloudflareSmokeTarget(
   }
 
   try {
-    await runWrangler(['delete', target.workerName, '--force'], target.wranglerEnv, WORKER_ROOT);
+    await deleteCloudflareWorker(target);
   } catch (error) {
     failures.push(`delete worker ${target.workerName}: ${messageOf(error)}`);
   }
@@ -742,6 +742,10 @@ export function parseWranglerDeploymentInfo(
   return { endpointBase: `https://${workerName}.workers.dev` };
 }
 
+export function cloudflareWorkerDeleteUrl(accountId: string, workerName: string): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`;
+}
+
 function sanitizeName(value: string): string {
   return value
     .toLowerCase()
@@ -825,4 +829,29 @@ function authHeaders(token: string | null): Record<string, string> {
 
 function runtimeTokenEnv(token: string | null): Readonly<Record<string, string>> {
   return token === null ? {} : { LORE_REMOTE_BEARER_TOKEN: token };
+}
+
+async function deleteCloudflareWorker(target: CloudflareSmokeTarget): Promise<void> {
+  const apiToken = target.wranglerEnv.CLOUDFLARE_API_TOKEN;
+  if (typeof apiToken !== 'string' || apiToken.trim() === '') {
+    throw new Error('CLOUDFLARE_API_TOKEN is required to delete the Cloudflare Worker script.');
+  }
+
+  const url = new URL(cloudflareWorkerDeleteUrl(target.accountId, target.workerName));
+  url.searchParams.set('force', 'true');
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (response.ok || response.status === 404) {
+    return;
+  }
+
+  const body = await response.text();
+  throw new Error(
+    `Cloudflare API delete failed with ${response.status}: ${body.trim() === '' ? '(empty response body)' : body}`,
+  );
 }
