@@ -1,7 +1,11 @@
 import { type ContractFixture, runRuntimeContract } from '../../../tools/test-support/src/index.ts';
-import { createWorkerRuntimeFixture } from './worker-runtime-fixture.js';
+import {
+  activateProjectedWorkerRuntimeFixture,
+  createProjectedWorkerRuntimeFixture,
+} from './projected-runtime-fixture.js';
 
 runRuntimeContract({
-  name: 'Cloudflare Worker runtime fixture',
-  create: async (): Promise<ContractFixture> => createWorkerRuntimeFixture(),
+  name: 'Cloudflare projected SQLite and object ports',
+  create: async (): Promise<ContractFixture> => await createProjectedWorkerRuntimeFixture(),
+  activateAnother: async (): Promise<string> => await activateProjectedWorkerRuntimeFixture(),
 });

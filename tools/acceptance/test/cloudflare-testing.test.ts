@@ -53,6 +53,7 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     expect(text).toContain('D1 Edit');
     expect(text).toContain('Workers R2 Storage Edit');
     expect(text).toContain('mixed-corpus.ts');
+    expect(text).toContain('runtime-contract.test.ts');
     expect(text).toContain('skips with an explicit message');
     expect(text).toContain('CI artifacts');
   });
@@ -68,4 +69,3 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     },
   );
 });
-
