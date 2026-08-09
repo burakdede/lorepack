@@ -23,7 +23,9 @@ Optional CI metadata:
 - `LORE_CF_ARTIFACT_DIR`
 
 When CI metadata is present, the harness derives a per-run resource prefix by appending those
-numeric values. That keeps parallel runs from colliding while preserving a stable human-owned
+numeric values. It prepends that prefix to the smoke project name before
+`lore target add cloudflare`, so the CLI's own deterministic default names stay aligned with the
+acceptance harness. That keeps parallel runs from colliding while preserving a stable human-owned
 prefix for manual cleanup and dashboard inspection.
 
 Example:

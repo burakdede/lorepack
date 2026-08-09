@@ -18,6 +18,7 @@ import type { BuildId, BuildManifest, ContextBundle } from '@lorepack/core/worke
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import {
   cloudflareArtifactDirectory,
+  missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
   resourcePrefixFor,
 } from './cloudflare-testing.js';
@@ -69,9 +70,16 @@ interface D1DatabaseInfo {
   readonly id: string;
 }
 
+interface CloudflareTargetReceiptJson {
+  readonly accountId: string;
+  readonly workerName: string;
+  readonly catalogDatabaseName: string;
+  readonly objectsBucketName: string;
+}
+
 export function createCloudflareSmokeProject(name: string): CloudflareSmokeProject {
   const root = mkdtempSync(join(tmpdir(), 'lore-cloudflare-acceptance-'));
-  const projectName = sanitizeName(name);
+  const projectName = smokeProjectName(name, process.env);
   const artifactsRoot = cloudflareArtifactDirectory(process.env);
   const artifactDirectory =
     artifactsRoot === null ? null : join(artifactsRoot, sanitizeName(projectName));
@@ -109,7 +117,7 @@ export async function provisionCloudflareSmokeTarget(
   projectName: string,
 ): Promise<CloudflareSmokeTarget> {
   const env = readCloudflareTestingEnv(process.env);
-  const names = resourceNamesFor(projectName, env);
+  const names = resourceNamesFor(projectName);
   const wranglerEnv = {
     ...process.env,
     CLOUDFLARE_API_TOKEN: env.apiToken,
@@ -322,9 +330,22 @@ export async function addCloudflareTarget(
     throw new Error(`lore target add cloudflare failed:\n${result.stderr}`);
   }
 
-  const databaseId = await lookupD1DatabaseId(target.catalogDatabaseName, target.wranglerEnv);
-  const configuredTarget = {
+  const receipt = parseCloudflareTargetReceipt(result.stdout);
+  const configuredNames = {
     ...target,
+    accountId: receipt.accountId,
+    workerName: receipt.workerName,
+    catalogDatabaseName: receipt.catalogDatabaseName,
+    objectsBucketName: receipt.objectsBucketName,
+    configPath: join(WORKER_ROOT, `.wrangler-acceptance-${receipt.workerName}.jsonc`),
+    endpointBase: `https://${receipt.workerName}.workers.dev`,
+  };
+  const databaseId = await lookupD1DatabaseId(
+    configuredNames.catalogDatabaseName,
+    configuredNames.wranglerEnv,
+  );
+  const configuredTarget = {
+    ...configuredNames,
     catalogDatabaseId: databaseId,
   };
   await deployAcceptanceWorker(configuredTarget, project.projectName);
@@ -495,24 +516,15 @@ export function addResumeMutationToken(projectRoot: string, buildId: BuildId, to
   }
 }
 
-function resourceNamesFor(
-  projectName: string,
-  env: ReturnType<typeof readCloudflareTestingEnv>,
-): {
+function resourceNamesFor(projectName: string): {
   readonly workerName: string;
   readonly catalogDatabaseName: string;
   readonly objectsBucketName: string;
 } {
-  const stable = sanitizeName(resourcePrefixFor(env));
-  const unique =
-    env.runId === null
-      ? sanitizeName(`local-${process.pid}-${Math.random().toString(36).slice(2, 8)}`)
-      : 'ci';
-  const base = sanitizeName(`${stable}-${unique}-${projectName}`);
   return {
-    workerName: withSuffix(base, 'runtime', 63),
-    catalogDatabaseName: withSuffix(base, 'catalog', 63),
-    objectsBucketName: withSuffix(base, 'objects', 63),
+    workerName: withSuffix(projectName, 'runtime', 63),
+    catalogDatabaseName: withSuffix(projectName, 'catalog', 63),
+    objectsBucketName: withSuffix(projectName, 'objects', 63),
   };
 }
 
@@ -669,6 +681,42 @@ function decodeMcpPayload(raw: string): Record<string, unknown> {
     ? (raw.split('\n').find((line) => line.startsWith('data: ')) ?? '').slice('data: '.length)
     : raw;
   return JSON.parse(payload) as Record<string, unknown>;
+}
+
+export function smokeProjectName(
+  name: string,
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const base = sanitizeName(name);
+  if (missingCloudflareTestingEnv(env).length > 0) {
+    return base;
+  }
+  const prefix = sanitizeName(resourcePrefixFor(readCloudflareTestingEnv(env)));
+  return prefix === '' ? base : sanitizeName(`${prefix}-${base}`);
+}
+
+export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetReceiptJson {
+  const payload = JSON.parse(raw) as Record<string, unknown>;
+  const accountId = typeof payload.accountId === 'string' ? payload.accountId : null;
+  const workerName = typeof payload.workerName === 'string' ? payload.workerName : null;
+  const catalogDatabaseName =
+    typeof payload.catalogDatabaseName === 'string' ? payload.catalogDatabaseName : null;
+  const objectsBucketName =
+    typeof payload.objectsBucketName === 'string' ? payload.objectsBucketName : null;
+  if (
+    accountId === null ||
+    workerName === null ||
+    catalogDatabaseName === null ||
+    objectsBucketName === null
+  ) {
+    throw new Error(`lore target add cloudflare returned an unreadable receipt:\n${raw}`);
+  }
+  return {
+    accountId,
+    workerName,
+    catalogDatabaseName,
+    objectsBucketName,
+  };
 }
 
 function sanitizeName(value: string): string {
