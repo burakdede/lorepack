@@ -369,7 +369,14 @@ function readableFileExists(path: string): boolean {
 
 async function readPublicBuildId(workerName: string): Promise<BuildId | null> {
   try {
-    const response = await fetch(`https://${workerName}.workers.dev/v1/build`);
+    const token = process.env.LORE_REMOTE_BEARER_TOKEN;
+    const headers =
+      token === undefined || token.trim() === ''
+        ? null
+        : { Authorization: `Bearer ${token.trim()}` };
+    const response = await fetch(`https://${workerName}.workers.dev/v1/build`, {
+      ...(headers === null ? {} : { headers }),
+    });
     if (!response.ok) return null;
     const payload = (await response.json()) as { readonly buildId?: unknown };
     return isBuildId(payload.buildId) ? payload.buildId : null;

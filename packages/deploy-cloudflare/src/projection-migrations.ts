@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { PROJECTION_SCHEMA_VERSION } from './projection-schema.js';
+import { RUNTIME_TOKENS_TABLE } from './runtime-auth.js';
 
 /**
  * The D1 projection schema for Phase 6.
@@ -179,8 +180,13 @@ const PROJECTION_MIGRATIONS_SOURCE = [
   min_value TEXT,
   max_value TEXT,
   PRIMARY KEY (project_id, build_id, table_id, ordinal)
-)`,
+  )`,
     ],
+  },
+  {
+    id: '0002',
+    name: 'runtime-auth',
+    statements: [RUNTIME_TOKENS_TABLE],
   },
 ] as const;
 

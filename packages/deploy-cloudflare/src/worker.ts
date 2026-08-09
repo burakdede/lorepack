@@ -11,6 +11,6 @@ export interface WorkerEnv extends CloudflareBindings {}
  */
 export default {
   fetch(request: Request, env: WorkerEnv): Promise<Response> | Response {
-    return createCloudflareWorkerFromBindings(env).fetch(request);
+    return createCloudflareWorkerFromBindings(env, { authMode: 'runtime-token' }).fetch(request);
   },
 };

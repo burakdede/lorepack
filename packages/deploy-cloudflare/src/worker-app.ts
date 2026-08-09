@@ -9,6 +9,7 @@ import {
   type D1CatalogStoreOptions,
 } from './catalog.js';
 import { assertProjectionReadable } from './projection-state.js';
+import { createRuntimeTokenAuthorizer } from './runtime-auth.js';
 import {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
@@ -45,6 +46,7 @@ export interface CloudflareBindings {
 }
 
 export interface CloudflareBoundWorkerOptions {
+  readonly authMode?: 'runtime-token' | 'disabled';
   readonly freshness?: () => Promise<SourceState>;
   readonly authorize?: ApiOptions['authorize'];
   readonly comparer?: BuildComparer;
@@ -88,6 +90,12 @@ export function createCloudflareWorkerFromBindings(
   options: CloudflareBoundWorkerOptions = {},
 ): CloudflareWorkerApp {
   const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB);
+  const authMode = options.authMode ?? 'disabled';
+  const authorize =
+    options.authorize ??
+    (authMode === 'runtime-token'
+      ? createRuntimeTokenAuthorizer(bindings.CATALOG_DB)
+      : undefined);
   const runtime = createRuntime({
     provider,
     open: async (handle) => {
@@ -110,7 +118,7 @@ export function createCloudflareWorkerFromBindings(
     runtime,
     currentBuild: () => provider.current(),
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
-    ...(options.authorize === undefined ? {} : { authorize: options.authorize }),
+    ...(authorize === undefined ? {} : { authorize }),
     ...(options.comparer === undefined ? {} : { comparer: options.comparer }),
   });
 }
@@ -124,4 +132,3 @@ export type {
   D1TableNamespace,
   R2BucketLike,
 };
-

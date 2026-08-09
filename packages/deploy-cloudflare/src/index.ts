@@ -13,23 +13,25 @@ import type {
   ProjectionMigrationDatabaseLike,
   ProjectionMigrationStatementLike,
 } from './projection-migrations.js';
+import { runProjectionMigrations } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import {
-  D1ActiveBuildProvider,
-  type R2BucketLike,
-  R2ObjectStore,
-} from './storage.js';
+  createRuntimeTokenAuthorizer,
+  hashRuntimeToken,
+  hasRuntimeToken,
+  RUNTIME_TOKENS_TABLE,
+  type RuntimeAuthDatabaseLike,
+  revokeRuntimeTokens,
+  storeRuntimeTokenHash,
+} from './runtime-auth.js';
+import { D1ActiveBuildProvider, type R2BucketLike, R2ObjectStore } from './storage.js';
 import { D1TableStore } from './tables.js';
 import {
   CloudflareApplyError,
   type CloudflareDeploymentTargetOptions,
   createCloudflareDeploymentTarget,
 } from './target.js';
-export {
-  createCloudflareWorker,
-  createCloudflareWorkerApp,
-  createCloudflareWorkerFromBindings,
-} from './worker-app.js';
+
 export type {
   CloudflareBindings,
   CloudflareBoundWorkerOptions,
@@ -40,6 +42,11 @@ export type {
   D1DatabaseLike,
   D1QueryDatabaseLike,
   D1TableNamespace,
+} from './worker-app.js';
+export {
+  createCloudflareWorker,
+  createCloudflareWorkerApp,
+  createCloudflareWorkerFromBindings,
 } from './worker-app.js';
 
 export type {
@@ -52,17 +59,25 @@ export type {
   ProjectObjectUploadOptions,
   ProjectObjectUploadResult,
   R2BucketLike,
+  RuntimeAuthDatabaseLike,
 };
 export {
   CloudflareApplyError,
   createCloudflareDeploymentTarget,
+  createRuntimeTokenAuthorizer,
   D1ActiveBuildProvider,
   D1CatalogStore,
   D1TableStore as D1NamespacedTableStore,
   D1TableStore,
+  hashRuntimeToken,
+  hasRuntimeToken,
   R2ObjectStore,
+  RUNTIME_TOKENS_TABLE,
   r2ArchiveKey,
   r2ObjectKey,
+  revokeRuntimeTokens,
+  runProjectionMigrations,
+  storeRuntimeTokenHash,
   uploadProjectArchive,
   uploadProjectObjects,
 };

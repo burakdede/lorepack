@@ -61,6 +61,26 @@ Never write any of these to the project:
 Deployment credentials stay in Wrangler or Cloudflare, not in `lore.yaml` and not in the target
 receipt.
 
+## Runtime bearer token flow
+
+As of **2026-08-09**, the deployed Worker read surface is no longer anonymous. After
+`lore target add cloudflare`, issue a runtime token exactly once with:
+
+```text
+lore target token cloudflare
+```
+
+That command stores only a SHA-256 hash in the remote D1 catalog and prints the plaintext token
+once. Set it in your shell before remote reads, deploy confirmation, or rollback confirmation:
+
+```text
+export LORE_REMOTE_BEARER_TOKEN=<token>
+```
+
+Use `lore target token cloudflare --rotate` to replace the token, or
+`lore target token cloudflare --revoke` to remove it. The token must not be written to the
+project receipt or committed to the repository.
+
 ## Current command boundary
 
 As of **2026-08-08**, `lore target add cloudflare` supports two setup behaviors:
