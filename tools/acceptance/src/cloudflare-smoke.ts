@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 import type { BuildId, BuildManifest, ContextBundle } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
@@ -341,11 +342,17 @@ export async function addCloudflareTarget(
 export async function deployCloudflareTarget(
   project: CloudflareSmokeProject,
   token: string | null,
+  options: { readonly failAfterProject?: boolean } = {},
 ): Promise<{ readonly buildId: BuildId; readonly receiptId: string }> {
-  const result = await project.lore(
-    ['--json', 'deploy', 'cloudflare', '--no-build', '--yes'],
-    runtimeTokenEnv(token),
-  );
+  const result = await project.lore(['--json', 'deploy', 'cloudflare', '--no-build', '--yes'], {
+    ...runtimeTokenEnv(token),
+    ...(options.failAfterProject === true
+      ? {
+          LORE_TEST_ALLOW_HOOKS: '1',
+          LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT: '1',
+        }
+      : {}),
+  });
   if (result.code !== 0) {
     throw new Error(`lore deploy cloudflare failed:\n${result.stderr}`);
   }
@@ -355,6 +362,52 @@ export async function deployCloudflareTarget(
   };
   if (!isBuildId(payload.buildId) || typeof payload.receiptId !== 'string') {
     throw new Error(`lore deploy cloudflare returned an unreadable receipt:\n${result.stdout}`);
+  }
+  return { buildId: payload.buildId, receiptId: payload.receiptId };
+}
+
+export async function deployCloudflareTargetExpectFailureAfterProject(
+  project: CloudflareSmokeProject,
+  token: string | null,
+): Promise<{ readonly receiptId: string; readonly stderr: string }> {
+  const before = new Set(listReceiptIds(project.root));
+  const result = await project.lore(['deploy', 'cloudflare', '--no-build', '--yes'], {
+    ...runtimeTokenEnv(token),
+    LORE_TEST_ALLOW_HOOKS: '1',
+    LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT: '1',
+  });
+  if (result.code === 0) {
+    throw new Error('lore deploy cloudflare unexpectedly succeeded under the failure hook.');
+  }
+  const after = listReceiptIds(project.root).filter((receiptId) => !before.has(receiptId));
+  if (after.length !== 1) {
+    throw new Error(
+      `Expected exactly one new receipt after the forced failure, found ${after.length}.`,
+    );
+  }
+  return { receiptId: after[0] as string, stderr: result.stderr };
+}
+
+export async function resumeCloudflareTarget(
+  project: CloudflareSmokeProject,
+  receiptId: string,
+  token: string | null,
+): Promise<{ readonly buildId: BuildId; readonly receiptId: string }> {
+  const result = await project.lore(
+    ['--json', 'deploy', 'cloudflare', '--no-build', '--yes', '--resume', receiptId],
+    runtimeTokenEnv(token),
+  );
+  if (result.code !== 0) {
+    throw new Error(`lore deploy cloudflare --resume ${receiptId} failed:\n${result.stderr}`);
+  }
+  const payload = JSON.parse(result.stdout) as {
+    readonly buildId?: unknown;
+    readonly receiptId?: unknown;
+  };
+  if (!isBuildId(payload.buildId) || typeof payload.receiptId !== 'string') {
+    throw new Error(
+      `lore deploy cloudflare --resume ${receiptId} returned an unreadable receipt:\n${result.stdout}`,
+    );
   }
   return { buildId: payload.buildId, receiptId: payload.receiptId };
 }
@@ -429,6 +482,27 @@ export function addSemanticSearchCapability(projectRoot: string, buildId: BuildI
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
+export function addResumeMutationToken(projectRoot: string, buildId: BuildId, token: string): void {
+  const databasePath = join(projectRoot, '.lore', 'builds', buildId, 'context.sqlite');
+  const db = new DatabaseSync(databasePath, {
+    allowExtension: false,
+    enableDoubleQuotedStringLiterals: false,
+  });
+  try {
+    const row = db.prepare('SELECT id, text FROM chunks ORDER BY id LIMIT 1').get() as
+      | { readonly id: string; readonly text: string }
+      | undefined;
+    if (row === undefined) {
+      throw new Error(`Build ${buildId} has no chunks to mutate for resume verification.`);
+    }
+    const mutated = `${row.text}\n${token}`;
+    db.prepare('UPDATE chunks SET text = ? WHERE id = ?').run(mutated, row.id);
+    db.prepare('UPDATE chunks_fts SET body = ? WHERE chunk_id = ?').run(mutated, row.id);
+  } finally {
+    db.close();
+  }
+}
+
 function resourceNamesFor(
   projectName: string,
   env: ReturnType<typeof readCloudflareTestingEnv>,
@@ -448,6 +522,18 @@ function resourceNamesFor(
     catalogDatabaseName: withSuffix(base, 'catalog', 63),
     objectsBucketName: withSuffix(base, 'objects', 63),
   };
+}
+
+function listReceiptIds(projectRoot: string): readonly string[] {
+  const receiptsRoot = join(projectRoot, '.lore', 'receipts');
+  try {
+    return readdirSync(receiptsRoot)
+      .filter((entry) => entry.endsWith('.json'))
+      .map((entry) => entry.slice(0, -'.json'.length))
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 async function lookupD1DatabaseId(

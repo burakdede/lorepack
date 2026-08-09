@@ -21,10 +21,14 @@ import {
   resolveCloudflareTarget,
   resolveCloudflareTargetWithAdapter,
 } from '../services/cloudflare-target.js';
+import type { DeployOptions } from '../services/deploy.js';
 import { readReceipt, receiptPath, runDeploy } from '../services/deploy.js';
 import { readActiveBuild, readPreviousBuild } from '../services/project.js';
 import { readStatus } from '../services/status.js';
 import { lockInputs } from '../services/versions.js';
+
+const TEST_ALLOW_HOOKS_ENV = 'LORE_TEST_ALLOW_HOOKS';
+const TEST_FAIL_AFTER_PROJECT_ENV = 'LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT';
 
 export interface DeployCommandOptions {
   readonly resolveTarget?: (
@@ -105,6 +109,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
       }
 
       const accepted = normalizeCapabilityLoss(flags.allowCapabilityLoss);
+      const afterProject = testAfterProjectHookFromEnv();
       const result = await runDeploy({
         target,
         projectRoot: config.projectRoot,
@@ -115,6 +120,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
         plan: deployPlan,
         progress: context.progress,
         dryRun: flags.dryRun === true,
+        ...(afterProject === undefined ? {} : { afterProject }),
         ...(resume === undefined ? {} : { resume }),
         ...(accepted.length === 0 ? {} : { allowCapabilityLoss: accepted }),
       }).catch((error: unknown) => {
@@ -231,6 +237,18 @@ function readBuildInputs(projectRoot: string, buildId: BuildId): PreparedBuild {
     buildDirectory,
     buildCapabilities: manifest.capabilities,
     localPlanLines: [],
+  };
+}
+
+function testAfterProjectHookFromEnv(): DeployOptions['afterProject'] {
+  if (process.env[TEST_ALLOW_HOOKS_ENV] !== '1') return undefined;
+  if (process.env[TEST_FAIL_AFTER_PROJECT_ENV] !== '1') return undefined;
+  return (receipt) => {
+    throw new LoreError('LORE_E_REMOTE_DEPLOY', 'Forced test failure after candidate projection.', {
+      remediation:
+        'This test hook stops the deploy after candidate projection. Resume with the recorded receipt id.',
+      details: { receiptId: receipt.receiptId },
+    });
   };
 }
 

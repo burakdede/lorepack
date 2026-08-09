@@ -95,11 +95,16 @@ The checked-in gates today are:
   succeeds, then verifies the public build id and read surface before and after
   `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
   `POST /v1/context`, and MCP `lore_search`
+- the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also forces a test-only
+  failure immediately after candidate projection, mutates the local sealed build, then
+  resumes with `lore deploy cloudflare --resume <receiptId>` and proves the remote search
+  surface did not pick up that local mutation, which is the checked-in evidence that resume
+  reused the prior projection instead of silently restarting it
 - the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also mutates a real local
   build to advertise `semantic-search`, then proves `lore deploy cloudflare` refuses it with
   `LORE_E_CAPABILITY_LOSS` unless the loss is explicitly named
 
-The broader resume, Phase 2 contract-suite, and CI artifact cases are still open work on `#93`.
+The broader Phase 2 contract-suite and CI artifact cases are still open work on `#93`.
 
 ## Cost expectations
 
