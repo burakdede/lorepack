@@ -998,7 +998,8 @@ core <- parsers <- compiler
 core <- backend-local <- runtime
 runtime <- mcp
 runtime HTTP <- studio
-core/build-format <- deploy-cloudflare
+core <- backend-local <- deploy-cloudflare <- cli
+runtime <- mcp <- deploy-cloudflare
 connect-clients <- cli
 ```
 
@@ -1010,7 +1011,9 @@ Rules:
 - `backend-local` implements catalog, table, object, build-store, and active-build-provider ports.
 - `runtime` consumes request-scoped read-only build handles.
 - `mcp` maps runtime capabilities into protocol schemas.
-- `deploy-cloudflare` consumes the portable build format, never compiler internals.
+- `deploy-cloudflare` owns the Cloudflare Worker app plus plan/apply/verify/activate logic. It
+  may consume the portable runtime and MCP layers and read sealed local builds through
+  `backend-local`, but it never reaches into compiler internals.
 - `studio` communicates only through HTTP APIs.
 
 ### 9.2 No package explosion

@@ -141,10 +141,14 @@ export function preflightProjection(buildDirectory: string): ProjectionPreflight
 function openBuildDatabase(buildDirectory: string): DatabaseSync {
   const path = join(buildDirectory, 'context.sqlite');
   if (!existsSync(path)) {
-    throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildDirectory} has no context.sqlite.`, {
-      remediation: 'Project only a verified sealed build directory.',
-      subject: path,
-    });
+    throw new LoreError(
+      'LORE_E_BUILD_NOT_FOUND',
+      `Build ${buildDirectory} has no context.sqlite.`,
+      {
+        remediation: 'Project only a verified sealed build directory.',
+        subject: path,
+      },
+    );
   }
 
   try {
@@ -161,7 +165,10 @@ function openBuildDatabase(buildDirectory: string): DatabaseSync {
   }
 }
 
-function projectedRowBytes(columns: readonly string[], row: Readonly<Record<string, unknown>>): number {
+function projectedRowBytes(
+  columns: readonly string[],
+  row: Readonly<Record<string, unknown>>,
+): number {
   let bytes = 0;
   for (const column of columns) {
     const value = row[column];
@@ -184,7 +191,8 @@ function renderChunkLocator(chunk: ChunkRow): string {
 function assertIdentifier(name: string): string {
   if (!/^[a-z][a-z0-9_]{0,62}$/.test(name)) {
     throw new LoreError('LORE_E_INTERNAL', `Refusing to use ${name} as a SQL identifier.`, {
-      remediation: 'This is a defect in projection planning. Please report the build that triggered it.',
+      remediation:
+        'This is a defect in projection planning. Please report the build that triggered it.',
     });
   }
   return name;

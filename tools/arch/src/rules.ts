@@ -35,7 +35,10 @@ export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly Pack
   runtime: ['core'],
   mcp: ['core', 'runtime'],
   'connect-clients': ['core'],
-  'deploy-cloudflare': ['core'],
+  // Phase 6 ships one Cloudflare package that owns both the Worker app and the deploy
+  // adapter. It consumes the portable runtime and MCP layers, and it also reads sealed
+  // local builds through backend-local without reaching into compiler internals.
+  'deploy-cloudflare': ['core', 'backend-local', 'runtime', 'mcp'],
   sdk: [],
   // parsers is reachable through compiler, but the CLI names parser versions in the
   // lockfile, so the edge is explicit rather than transitive.
@@ -79,7 +82,7 @@ export const FORBIDDEN_EXTERNAL: Readonly<Record<string, readonly (string | RegE
   parsers: ['node:sqlite', /^hono/, /^react/, /^@modelcontextprotocol\//, /^@cloudflare\//],
   compiler: [/^hono/, /^react/, /^@modelcontextprotocol\//, /^@cloudflare\//],
   runtime: [/^react/, /^@modelcontextprotocol\//],
-  'deploy-cloudflare': ['node:sqlite', /^react/],
+  'deploy-cloudflare': [/^react/],
   sdk: ['node:sqlite', /^hono/, /^react/, /^@modelcontextprotocol\//],
 };
 

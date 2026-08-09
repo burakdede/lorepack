@@ -81,6 +81,88 @@
       "minLength": 1,
       "type": "string"
     },
+    "transfer": {
+      "additionalProperties": false,
+      "properties": {
+        "archive": {
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "sizeBytes": {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "type": "object"
+        },
+        "objects": {
+          "additionalProperties": false,
+          "properties": {
+            "referenced": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "skipped": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "uploaded": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "verified": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "referenced",
+            "uploaded",
+            "skipped",
+            "verified"
+          ],
+          "type": "object"
+        },
+        "state": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "verification": {
       "additionalProperties": false,
       "properties": {
@@ -115,6 +197,18 @@
         "tableQuery"
       ],
       "type": "object"
+    },
+    "verifiedCapabilities": {
+      "items": {
+        "enum": [
+          "lexical-search",
+          "structured-context",
+          "table-query",
+          "semantic-search"
+        ],
+        "type": "string"
+      },
+      "type": "array"
     }
   },
   "required": [

@@ -27,13 +27,20 @@ core       <- parsers <- compiler <- cli
 core       <- backend-local <- runtime <- mcp
 runtime    <- cli
 core       <- connect-clients <- cli
-core       <- deploy-cloudflare <- cli
+core       <- backend-local <- deploy-cloudflare <- cli
+runtime    <- mcp <- deploy-cloudflare
 sdk        <- studio (over HTTP only)
 ```
 
 `core` imports no parser, database, MCP, UI, or Cloudflare code. That constraint is what
 keeps the release-candidate `node:sqlite` API and future MCP protocol churn contained to
 one package each.
+
+Phase 6 deliberately keeps the Cloudflare Worker app and the Cloudflare deploy adapter in one
+package. That package depends on the portable runtime and MCP layers for the public read
+surface, and on `backend-local` plus `node:sqlite` to read sealed local builds during plan,
+projection, archive, and verification steps. The boundary it still may not cross is compiler
+internals.
 
 ## Why no build orchestrator
 

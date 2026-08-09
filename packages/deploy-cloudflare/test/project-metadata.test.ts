@@ -10,6 +10,7 @@ import {
   type ProjectionMigrationStatementLike,
   runProjectionMigrations,
 } from '../src/projection-migrations.js';
+import { PROJECTION_SCHEMA_VERSION } from '../src/projection-schema.js';
 
 const PROJECT = 'contracted';
 const BUILD = `lore_${'a'.repeat(64)}`;
@@ -229,7 +230,7 @@ describe('projectBuildMetadata, issue 87', () => {
     ).toEqual({
       build_schema_version: 1,
       compiler_version: '0.1.0',
-      projection_schema_version: 1,
+      projection_schema_version: PROJECTION_SCHEMA_VERSION,
       projected_at: '2026-08-08T12:30:00.000Z',
     });
 
