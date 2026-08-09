@@ -177,11 +177,17 @@ Recorded on **2026-08-09** as the required manual checklist for `#90`:
 
 ## Current command boundary
 
-As of **2026-08-08**, `lore target add cloudflare` supports two setup behaviors:
+As of **2026-08-09**, `lore target add cloudflare` supports three setup behaviors:
 
-1. `--dry-run`: show the deterministic resource names and write nothing.
-2. connect existing resources with explicit identifiers:
+1. `--dry-run`: show the deterministic resource plan and write nothing.
+2. no explicit resource identifiers: create the deterministic **D1** database and **R2** bucket,
+   then write the target receipt. The Worker name is recorded for the first deploy.
+3. connect existing resources with explicit identifiers:
    `--account-id`, `--worker`, `--catalog-db`, `--objects-bucket`
 
-Automatic provisioning is still open work in Phase 6. Until that lands, the deterministic names
-in the dry-run plan are a proposed resource plan, not proof that those resources already exist.
+On rerun, the command is idempotent. It reuses an unchanged receipt, checks the remote D1 and R2
+resources are still visible, and reports drift if the receipt no longer matches the account state.
+
+The Worker resource is still created by the first successful deploy rather than by target setup.
+That is why reruns treat an undeployed Worker name as valid while still insisting that the D1
+database and R2 bucket exist remotely.

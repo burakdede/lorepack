@@ -63,12 +63,28 @@ export interface WranglerIdentity {
   readonly email?: string;
 }
 
+export interface CloudflareRemoteResources {
+  readonly workerExists: boolean;
+  readonly catalogDatabaseExists: boolean;
+  readonly objectsBucketExists: boolean;
+}
+
 export interface CloudflareTargetAdapter {
   detect(): Promise<WranglerDetection>;
   whoami(): Promise<WranglerIdentity>;
 }
 
-export interface CloudflareTargetTokenAdapter extends CloudflareTargetAdapter {
+export interface CloudflareTargetProvisioningAdapter extends CloudflareTargetAdapter {
+  inspectResources(input: {
+    readonly workerName: string;
+    readonly catalogDatabaseName: string;
+    readonly objectsBucketName: string;
+  }): Promise<CloudflareRemoteResources>;
+  createCatalogDatabase(name: string): Promise<void>;
+  createObjectsBucket(name: string): Promise<void>;
+}
+
+export interface CloudflareTargetTokenAdapter extends CloudflareTargetProvisioningAdapter {
   openCatalogDatabase(name: string): ProjectionMigrationDatabaseLike & RuntimeAuthDatabaseLike;
 }
 
@@ -143,13 +159,16 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
 
       const defaults = defaultNames(config.config.name);
       const existing = readCloudflareTargetReceiptIfPresent(config.projectRoot);
+      const usesExplicitResources =
+        typeof flags.accountId === 'string' ||
+        typeof flags.worker === 'string' ||
+        typeof flags.catalogDb === 'string' ||
+        typeof flags.objectsBucket === 'string';
       const planned = {
         accountId:
           typeof flags.accountId === 'string'
             ? flags.accountId
-            : (existing?.accountId ??
-              identity.accountId ??
-              '(required to connect existing resources)'),
+            : (existing?.accountId ?? identity.accountId ?? '(unavailable from wrangler whoami)'),
         workerName:
           typeof flags.worker === 'string'
             ? flags.worker
@@ -163,6 +182,26 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
             ? flags.objectsBucket
             : (existing?.objectsBucketName ?? defaults.objectsBucketName),
       };
+      if (planned.accountId.startsWith('(')) {
+        throw new LoreError(
+          'LORE_E_TARGET_NOT_CONFIGURED',
+          'Wrangler did not report a Cloudflare account id for this login.',
+          {
+            remediation:
+              'Log into the intended Cloudflare account again, or pass --account-id explicitly.',
+            subject: 'cloudflare',
+          },
+        );
+      }
+
+      const adapterWithProvisioning = requireProvisioningAdapter(adapter);
+      const remote = await adapterWithProvisioning.inspectResources({
+        workerName: planned.workerName,
+        catalogDatabaseName: planned.catalogDatabaseName,
+        objectsBucketName: planned.objectsBucketName,
+      });
+      const mode: 'provision' | 'connect-existing' | 'reuse' =
+        existing === null ? (usesExplicitResources ? 'connect-existing' : 'provision') : 'reuse';
 
       const plan = renderCloudflarePlan({
         project: config.config.name,
@@ -170,6 +209,8 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         identity,
         planned,
         existing,
+        remote,
+        mode,
       });
 
       if (flags.dryRun === true) {
@@ -210,13 +251,18 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         );
       }
 
-      if (
-        existing !== null &&
-        typeof flags.accountId !== 'string' &&
-        typeof flags.worker !== 'string' &&
-        typeof flags.catalogDb !== 'string' &&
-        typeof flags.objectsBucket !== 'string'
-      ) {
+      if (existing !== null && usesExplicitResources === false) {
+        const missing = describeMissingRemoteResources(remote);
+        if (missing.length > 0) {
+          throw new LoreError(
+            'LORE_E_TARGET_NOT_CONFIGURED',
+            `The cloudflare target receipt points at remote resources that are missing: ${missing.join(', ')}.`,
+            {
+              remediation: `Recreate the missing resources or remove ${cloudflareTargetPath(config.projectRoot)} and run \`lore target add cloudflare\` again.`,
+              subject: 'cloudflare',
+            },
+          );
+        }
         return {
           human: `${plan}\n\ncloudflare already matches ${cloudflareTargetPath(config.projectRoot)}.`,
           json: existing,
@@ -224,20 +270,50 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       }
 
       if (
-        typeof flags.accountId !== 'string' ||
-        typeof flags.worker !== 'string' ||
-        typeof flags.catalogDb !== 'string' ||
-        typeof flags.objectsBucket !== 'string'
+        usesExplicitResources &&
+        (typeof flags.worker !== 'string' ||
+          typeof flags.catalogDb !== 'string' ||
+          typeof flags.objectsBucket !== 'string')
       ) {
         throw new LoreError(
           'LORE_E_TARGET_NOT_CONFIGURED',
-          'Connecting existing Cloudflare resources requires explicit identifiers in this slice.',
+          'Connecting existing Cloudflare resources requires explicit resource identifiers together.',
           {
             remediation:
-              'Pass --account-id, --worker, --catalog-db, and --objects-bucket to connect existing resources, or use --dry-run to inspect the deterministic names first.',
+              'Pass --worker, --catalog-db, and --objects-bucket together (and --account-id when Wrangler cannot infer it), or omit them all to provision the deterministic names automatically.',
             subject: 'cloudflare',
           },
         );
+      }
+
+      if (usesExplicitResources) {
+        const missing = describeMissingExistingResources(remote);
+        if (missing.length > 0) {
+          throw new LoreError(
+            'LORE_E_TARGET_NOT_CONFIGURED',
+            `The requested existing Cloudflare resources are not visible: ${missing.join(', ')}.`,
+            {
+              remediation:
+                'Create the named resources first, or omit the explicit identifiers so Lorepack provisions the deterministic names.',
+              subject: 'cloudflare',
+            },
+          );
+        }
+      } else {
+        const conflicts = describeProvisioningConflicts(remote, planned);
+        if (conflicts.length > 0) {
+          throw new LoreError(
+            'LORE_E_TARGET_NOT_CONFIGURED',
+            'The deterministic Cloudflare resource names are already in use.',
+            {
+              remediation: `Connect those resources explicitly with --worker, --catalog-db, and --objects-bucket, or rename the project before rerunning.\n${conflicts
+                .map((line) => `  ${line}`)
+                .join('\n')}`,
+              subject: 'cloudflare',
+            },
+          );
+        }
+        await createCloudflareProvisionedResources(adapterWithProvisioning, planned);
       }
 
       const receipt: CloudflareTargetReceipt = {
@@ -246,10 +322,10 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         project: config.config.name,
         configuredAt: (options.now ?? (() => new Date()))().toISOString(),
         wranglerVersion: detection.version ?? 'unknown',
-        accountId: flags.accountId,
-        workerName: flags.worker,
-        catalogDatabaseName: flags.catalogDb,
-        objectsBucketName: flags.objectsBucket,
+        accountId: planned.accountId,
+        workerName: planned.workerName,
+        catalogDatabaseName: planned.catalogDatabaseName,
+        objectsBucketName: planned.objectsBucketName,
         capabilities: [...CLOUDFLARE_CAPABILITIES],
       };
       const path = cloudflareTargetPath(config.projectRoot);
@@ -401,6 +477,8 @@ function renderCloudflarePlan(input: {
   readonly wranglerVersion: string;
   readonly identity: WranglerIdentity;
   readonly existing: CloudflareTargetReceipt | null;
+  readonly remote: CloudflareRemoteResources;
+  readonly mode: 'provision' | 'connect-existing' | 'reuse';
   readonly planned: {
     readonly accountId: string;
     readonly workerName: string;
@@ -416,9 +494,13 @@ function renderCloudflarePlan(input: {
   );
   lines.push('');
   lines.push('Resources');
-  lines.push(`  Worker: ${input.planned.workerName}`);
-  lines.push(`  D1 catalog: ${input.planned.catalogDatabaseName}`);
-  lines.push(`  R2 objects: ${input.planned.objectsBucketName}`);
+  lines.push(`  Worker: ${describeWorkerPlan(input.mode, input.planned.workerName, input.remote)}`);
+  lines.push(
+    `  D1 catalog: ${describeCatalogPlan(input.mode, input.planned.catalogDatabaseName, input.remote)}`,
+  );
+  lines.push(
+    `  R2 objects: ${describeBucketPlan(input.mode, input.planned.objectsBucketName, input.remote)}`,
+  );
   lines.push(`  Account: ${input.planned.accountId}`);
   lines.push('');
   lines.push('Capabilities');
@@ -433,6 +515,44 @@ function renderCloudflarePlan(input: {
   lines.push('Permissions');
   lines.push(`  ${CLOUDFLARE_SETUP_DOC}`);
   return lines.join('\n');
+}
+
+function describeWorkerPlan(
+  mode: 'provision' | 'connect-existing' | 'reuse',
+  name: string,
+  remote: CloudflareRemoteResources,
+): string {
+  if (mode === 'provision') {
+    return remote.workerExists ? `conflict ${name}` : `reserve ${name} for the first deploy`;
+  }
+  if (mode === 'connect-existing') {
+    return remote.workerExists ? `connect ${name}` : `record ${name} for the first deploy`;
+  }
+  return remote.workerExists ? `reuse ${name}` : `reuse ${name} (not deployed yet)`;
+}
+
+function describeCatalogPlan(
+  mode: 'provision' | 'connect-existing' | 'reuse',
+  name: string,
+  remote: CloudflareRemoteResources,
+): string {
+  if (mode === 'provision') {
+    return remote.catalogDatabaseExists ? `conflict ${name}` : `create ${name}`;
+  }
+  if (mode === 'connect-existing') return `connect ${name}`;
+  return remote.catalogDatabaseExists ? `reuse ${name}` : `reuse ${name} (missing remotely)`;
+}
+
+function describeBucketPlan(
+  mode: 'provision' | 'connect-existing' | 'reuse',
+  name: string,
+  remote: CloudflareRemoteResources,
+): string {
+  if (mode === 'provision') {
+    return remote.objectsBucketExists ? `conflict ${name}` : `create ${name}`;
+  }
+  if (mode === 'connect-existing') return `connect ${name}`;
+  return remote.objectsBucketExists ? `reuse ${name}` : `reuse ${name} (missing remotely)`;
 }
 
 function compareReceipt(
@@ -528,10 +648,59 @@ export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
         return { authenticated: false };
       }
     },
+    async inspectResources({
+      workerName,
+      catalogDatabaseName,
+      objectsBucketName,
+    }): Promise<CloudflareRemoteResources> {
+      const [worker, catalog, bucket] = await Promise.all([
+        wranglerWorkerExists(workerName),
+        wranglerD1Exists(catalogDatabaseName),
+        wranglerBucketExists(objectsBucketName),
+      ]);
+      return {
+        workerExists: worker,
+        catalogDatabaseExists: catalog,
+        objectsBucketExists: bucket,
+      };
+    },
+    async createCatalogDatabase(name) {
+      await execWrangler(['d1', 'create', name]);
+    },
+    async createObjectsBucket(name) {
+      await execWrangler(['r2', 'bucket', 'create', name]);
+    },
     openCatalogDatabase(name) {
       return new WranglerCatalogDatabase(name);
     },
   };
+}
+
+function requireProvisioningAdapter(
+  adapter: CloudflareTargetAdapter | CloudflareTargetTokenAdapter,
+): CloudflareTargetProvisioningAdapter {
+  if (isCloudflareTargetProvisioningAdapter(adapter)) return adapter;
+  throw new LoreError(
+    'LORE_E_INTERNAL',
+    'The Cloudflare target adapter cannot inspect or provision remote resources.',
+    {
+      remediation:
+        'Use the default Wrangler-backed adapter, or provide one with inspectResources(), createCatalogDatabase(), and createObjectsBucket().',
+    },
+  );
+}
+
+function isCloudflareTargetProvisioningAdapter(
+  adapter: CloudflareTargetAdapter | CloudflareTargetTokenAdapter,
+): adapter is CloudflareTargetProvisioningAdapter {
+  return (
+    typeof (adapter as Partial<CloudflareTargetProvisioningAdapter>).inspectResources ===
+      'function' &&
+    typeof (adapter as Partial<CloudflareTargetProvisioningAdapter>).createCatalogDatabase ===
+      'function' &&
+    typeof (adapter as Partial<CloudflareTargetProvisioningAdapter>).createObjectsBucket ===
+      'function'
+  );
 }
 
 function isCloudflareTargetTokenAdapter(
@@ -540,6 +709,76 @@ function isCloudflareTargetTokenAdapter(
   return (
     typeof (adapter as Partial<CloudflareTargetTokenAdapter>).openCatalogDatabase === 'function'
   );
+}
+
+function describeMissingRemoteResources(remote: CloudflareRemoteResources): readonly string[] {
+  return [
+    ...(remote.catalogDatabaseExists ? [] : ['D1 catalog']),
+    ...(remote.objectsBucketExists ? [] : ['R2 objects']),
+  ];
+}
+
+function describeMissingExistingResources(remote: CloudflareRemoteResources): readonly string[] {
+  return describeMissingRemoteResources(remote);
+}
+
+function describeProvisioningConflicts(
+  remote: CloudflareRemoteResources,
+  planned: {
+    readonly workerName: string;
+    readonly catalogDatabaseName: string;
+    readonly objectsBucketName: string;
+  },
+): readonly string[] {
+  return [
+    ...(remote.workerExists
+      ? [`Worker name ${planned.workerName} already has deployments in this account.`]
+      : []),
+    ...(remote.catalogDatabaseExists
+      ? [`D1 database ${planned.catalogDatabaseName} already exists.`]
+      : []),
+    ...(remote.objectsBucketExists
+      ? [`R2 bucket ${planned.objectsBucketName} already exists.`]
+      : []),
+  ];
+}
+
+async function createCloudflareProvisionedResources(
+  adapter: CloudflareTargetProvisioningAdapter,
+  planned: {
+    readonly workerName: string;
+    readonly catalogDatabaseName: string;
+    readonly objectsBucketName: string;
+  },
+): Promise<void> {
+  try {
+    await adapter.createCatalogDatabase(planned.catalogDatabaseName);
+    await adapter.createObjectsBucket(planned.objectsBucketName);
+  } catch (cause) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'Cloudflare resource provisioning failed during target setup.',
+      {
+        remediation: `Check the token permissions in ${CLOUDFLARE_SETUP_DOC}, the account quota, and whether the resource names are available, then rerun \`lore target add cloudflare\`.`,
+        subject: 'cloudflare',
+        cause,
+      },
+    );
+  }
+
+  const confirmed = await adapter.inspectResources(planned);
+  const missing = describeMissingRemoteResources(confirmed);
+  if (missing.length > 0) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `Cloudflare target setup did not leave the expected remote resources visible: ${missing.join(', ')}.`,
+      {
+        remediation:
+          'Retry the setup, then inspect the Cloudflare account directly if the resources still do not appear.',
+        subject: 'cloudflare',
+      },
+    );
+  }
 }
 
 async function confirmTargetSetup(plan: string, context: CommandContext): Promise<boolean> {
@@ -687,6 +926,34 @@ async function execWrangler(args: readonly string[]): Promise<{ readonly stdout:
     maxBuffer: 10 * 1024 * 1024,
   });
   return { stdout };
+}
+
+async function wranglerD1Exists(name: string): Promise<boolean> {
+  try {
+    await execWrangler(['d1', 'info', name, '--json']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function wranglerBucketExists(name: string): Promise<boolean> {
+  try {
+    await execWrangler(['r2', 'bucket', 'info', name, '--json']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function wranglerWorkerExists(name: string): Promise<boolean> {
+  try {
+    const { stdout } = await execWrangler(['deployments', 'list', '--name', name, '--json']);
+    const parsed = JSON.parse(stdout) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function readD1Results<T>(raw: unknown): readonly T[] {
