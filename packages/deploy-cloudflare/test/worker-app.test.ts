@@ -13,7 +13,7 @@ import type {
 import { createMcpHttpHandler, MCP_PROTOCOL_VERSION, TOOL_NAMES } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCloudflareWorker } from '../src/index.js';
+import { createCloudflareWorker, createCloudflareWorkerFromBindings } from '../src/index.js';
 
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
@@ -281,5 +281,91 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
       id: 1,
     });
     expect(authorized).toBe(0);
+  });
+
+  it('adds security headers and keeps CORS closed by default', async () => {
+    const { worker } = createSurfaces();
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/v1/build', {
+        headers: { Origin: 'https://evil.example' },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(response.headers.get('Content-Security-Policy')).toBe(
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    );
+    expect(response.headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
+    expect(response.headers.get('Permissions-Policy')).toBe(
+      'camera=(), geolocation=(), microphone=()',
+    );
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect(response.headers.get('Strict-Transport-Security')).toBe('max-age=31536000');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+  });
+
+  it('answers CORS preflight and echoes an explicitly allowed origin', async () => {
+    const runtime = runtimeFor();
+    const worker = createCloudflareWorker({
+      runtime,
+      currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
+      freshness: async () => 'clean',
+      allowedOrigins: ['https://app.example'],
+    });
+    closers.push(() => worker.close());
+
+    const preflight = await worker.fetch(
+      new Request('https://worker.example/v1/context', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://app.example',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'authorization, content-type',
+        },
+      }),
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example');
+    expect(preflight.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
+    expect(preflight.headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
+    expect(preflight.headers.get('Vary')).toContain('Origin');
+
+    const build = await worker.fetch(
+      new Request('https://worker.example/v1/build', {
+        headers: { Origin: 'https://app.example' },
+      }),
+    );
+    expect(build.status).toBe(200);
+    expect(build.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example');
+  });
+
+  it('parses an allowlist from the deployed Worker bindings', async () => {
+    const worker = createCloudflareWorkerFromBindings({
+      CATALOG_DB: {
+        prepare() {
+          throw new Error('the request should stop at CORS preflight');
+        },
+      } as never,
+      OBJECTS: {} as never,
+      PROJECT_ID: 'demo',
+      ALLOWED_ORIGINS: 'https://app.example, https://admin.example',
+    });
+    closers.push(() => worker.close());
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/v1/build', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://admin.example',
+          'Access-Control-Request-Method': 'GET',
+        },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://admin.example');
   });
 });
