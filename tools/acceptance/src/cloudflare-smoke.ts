@@ -77,6 +77,10 @@ interface CloudflareTargetReceiptJson {
   readonly objectsBucketName: string;
 }
 
+interface WranglerDeploymentInfo {
+  readonly endpointBase: string;
+}
+
 export function createCloudflareSmokeProject(name: string): CloudflareSmokeProject {
   const root = mkdtempSync(join(tmpdir(), 'lore-cloudflare-acceptance-'));
   const projectName = smokeProjectName(name, process.env);
@@ -348,8 +352,11 @@ export async function addCloudflareTarget(
     ...configuredNames,
     catalogDatabaseId: databaseId,
   };
-  await deployAcceptanceWorker(configuredTarget, project.projectName);
-  return configuredTarget;
+  const deployed = await deployAcceptanceWorker(configuredTarget, project.projectName);
+  return {
+    ...configuredTarget,
+    endpointBase: deployed.endpointBase,
+  };
 }
 
 export async function deployCloudflareTarget(
@@ -561,7 +568,7 @@ async function lookupD1DatabaseId(
 async function deployAcceptanceWorker(
   target: CloudflareSmokeTarget,
   projectName: string,
-): Promise<void> {
+): Promise<WranglerDeploymentInfo> {
   writeFileSync(
     target.configPath,
     `${JSON.stringify(
@@ -598,7 +605,12 @@ async function deployAcceptanceWorker(
     'utf8',
   );
 
-  await runWrangler(['deploy', '--config', target.configPath], target.wranglerEnv, WORKER_ROOT);
+  const deployed = await runWrangler(
+    ['deploy', '--config', target.configPath],
+    target.wranglerEnv,
+    WORKER_ROOT,
+  );
+  return parseWranglerDeploymentInfo(deployed.stdout, target.workerName);
 }
 
 function parseD1DatabaseInfo(value: unknown): D1DatabaseInfo | null {
@@ -717,6 +729,17 @@ export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetRecei
     catalogDatabaseName,
     objectsBucketName,
   };
+}
+
+export function parseWranglerDeploymentInfo(
+  stdout: string,
+  workerName: string,
+): WranglerDeploymentInfo {
+  const explicit = stdout.match(/https:\/\/[a-z0-9.-]+\.workers\.dev/gi)?.[0] ?? null;
+  if (explicit !== null) {
+    return { endpointBase: explicit };
+  }
+  return { endpointBase: `https://${workerName}.workers.dev` };
 }
 
 function sanitizeName(value: string): string {
