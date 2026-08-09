@@ -1,5 +1,6 @@
 export { AREAS, type Area, AUTOMATED, SCENARIOS, skippedHere } from './catalogue.js';
 export {
+  cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
   requiredCloudflareTestingEnv,

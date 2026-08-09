@@ -1,12 +1,26 @@
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 import type { BuildId, BuildManifest, ContextBundle } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
-import { readCloudflareTestingEnv, resourcePrefixFor } from './cloudflare-testing.js';
+import {
+  cloudflareArtifactDirectory,
+  readCloudflareTestingEnv,
+  resourcePrefixFor,
+} from './cloudflare-testing.js';
 import { writeMixedCorpus } from './mixed-corpus.js';
 
 const execute = promisify(execFile);
@@ -58,6 +72,10 @@ interface D1DatabaseInfo {
 export function createCloudflareSmokeProject(name: string): CloudflareSmokeProject {
   const root = mkdtempSync(join(tmpdir(), 'lore-cloudflare-acceptance-'));
   const projectName = sanitizeName(name);
+  const artifactsRoot = cloudflareArtifactDirectory(process.env);
+  const artifactDirectory =
+    artifactsRoot === null ? null : join(artifactsRoot, sanitizeName(projectName));
+  let commandSequence = 0;
   writeFileSync(
     join(root, 'lore.yaml'),
     `version: 1\nname: ${projectName}\nsources:\n  - .\n`,
@@ -68,26 +86,18 @@ export function createCloudflareSmokeProject(name: string): CloudflareSmokeProje
     root,
     projectName,
     lore: async (args, env = {}) => {
-      try {
-        const { stdout, stderr } = await execute(
-          process.execPath,
-          [CLI_BINARY, '--cwd', root, ...args],
-          {
-            cwd: REPO_ROOT,
-            timeout: 600_000,
-            maxBuffer: 64 * 1024 * 1024,
-            env: { ...process.env, NO_COLOR: '1', ...env },
-          },
-        );
-        return { code: 0, stdout, stderr };
-      } catch (error) {
-        const failure = error as { code?: number; stdout?: string; stderr?: string };
-        return {
-          code: typeof failure.code === 'number' ? failure.code : 1,
-          stdout: failure.stdout ?? '',
-          stderr: failure.stderr ?? '',
-        };
+      const command = [CLI_BINARY, '--cwd', root, ...args];
+      const result = await execCommand(command, {
+        cwd: REPO_ROOT,
+        timeout: 600_000,
+        maxBuffer: 64 * 1024 * 1024,
+        env: { ...process.env, NO_COLOR: '1', ...env },
+      });
+      if (artifactDirectory !== null) {
+        commandSequence += 1;
+        writeCommandArtifact(artifactDirectory, commandSequence, 'lore', args, result);
       }
+      return result;
     },
     cleanup() {
       rmSync(root, { recursive: true, force: true });
@@ -128,7 +138,34 @@ export async function teardownCloudflareSmokeTarget(
   projectRoot: string,
   buildIds: readonly BuildId[],
 ): Promise<void> {
+  const artifactsRoot = cloudflareArtifactDirectory(process.env);
+  const artifactDirectory =
+    artifactsRoot === null ? null : join(artifactsRoot, sanitizeName(projectName));
   const failures: string[] = [];
+
+  if (artifactDirectory !== null) {
+    mkdirSync(artifactDirectory, { recursive: true });
+    const receiptsRoot = join(projectRoot, '.lore', 'receipts');
+    if (existsSync(receiptsRoot)) {
+      cpSync(receiptsRoot, join(artifactDirectory, 'receipts'), { recursive: true });
+    }
+    writeFileSync(
+      join(artifactDirectory, 'remote-summary.json'),
+      `${JSON.stringify(
+        {
+          projectName,
+          workerName: target.workerName,
+          endpointBase: target.endpointBase,
+          catalogDatabaseName: target.catalogDatabaseName,
+          objectsBucketName: target.objectsBucketName,
+          buildIds,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+  }
 
   for (const key of remoteObjectKeys(projectRoot, projectName, buildIds)) {
     try {
@@ -567,26 +604,24 @@ async function runWrangler(
   env: Readonly<Record<string, string>>,
   cwd = REPO_ROOT,
 ): Promise<CommandOutput> {
-  try {
-    const { stdout, stderr } = await execute(process.execPath, [WRANGLER_BIN, ...args], {
-      cwd,
-      timeout: 600_000,
-      maxBuffer: 64 * 1024 * 1024,
-      env,
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    const failure = error as { code?: number; stdout?: string; stderr?: string };
+  const result = await execCommand([WRANGLER_BIN, ...args], {
+    cwd,
+    timeout: 600_000,
+    maxBuffer: 64 * 1024 * 1024,
+    env,
+  });
+  const artifactsRoot = cloudflareArtifactDirectory(process.env);
+  if (artifactsRoot !== null) {
+    writeCommandArtifact(artifactsRoot, Date.now(), 'wrangler', args, result);
+  }
+  if (result.code !== 0) {
     throw new Error(
-      [
-        `wrangler ${args.join(' ')} exited ${typeof failure.code === 'number' ? failure.code : 1}`,
-        failure.stderr ?? '',
-        failure.stdout ?? '',
-      ]
+      [`wrangler ${args.join(' ')} exited ${result.code}`, result.stderr, result.stdout]
         .filter((line) => line.trim() !== '')
         .join('\n'),
     );
   }
+  return result;
 }
 
 function remoteObjectKeys(
@@ -656,6 +691,57 @@ function isBuildId(value: unknown): value is BuildId {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function execCommand(
+  command: readonly string[],
+  options: Parameters<typeof execute>[2],
+): Promise<CommandOutput> {
+  try {
+    const { stdout, stderr } = await execute(process.execPath, command, options);
+    return { code: 0, stdout: String(stdout), stderr: String(stderr) };
+  } catch (error) {
+    const failure = error as {
+      code?: number;
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+    };
+    return {
+      code: typeof failure.code === 'number' ? failure.code : 1,
+      stdout: failure.stdout === undefined ? '' : String(failure.stdout),
+      stderr: failure.stderr === undefined ? '' : String(failure.stderr),
+    };
+  }
+}
+
+function writeCommandArtifact(
+  root: string,
+  sequence: number,
+  tool: 'lore' | 'wrangler',
+  args: readonly string[],
+  result: CommandOutput,
+): void {
+  mkdirSync(root, { recursive: true });
+  const label = `${String(sequence).padStart(4, '0')}-${tool}-${sanitizeName(args.join('-') || tool)}`;
+  writeFileSync(
+    join(root, `${label}.json`),
+    `${JSON.stringify(
+      {
+        tool,
+        args,
+        code: result.code,
+        stdout: redactTokens(result.stdout),
+        stderr: redactTokens(result.stderr),
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+}
+
+function redactTokens(text: string): string {
+  return text.replaceAll(/lore_rt_[A-Za-z0-9_-]+/g, 'lore_rt_<redacted>');
 }
 
 function sleep(ms: number): Promise<void> {

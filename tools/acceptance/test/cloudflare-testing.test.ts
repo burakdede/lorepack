@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
   requiredCloudflareTestingEnv,
@@ -42,6 +43,14 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     ).toThrow(/LORE_CF_TEST_PREFIX/);
   });
 
+  it('treats the Cloudflare artifact directory as optional metadata', () => {
+    expect(cloudflareArtifactDirectory({})).toBeNull();
+    expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: '   ' })).toBeNull();
+    expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: 'tmp/cloudflare-artifacts' })).toBe(
+      'tmp/cloudflare-artifacts',
+    );
+  });
+
   it('documents the integration environment, scopes, skips, and artifacts', () => {
     expect(existsSync(DOC), `${DOC} is missing.`).toBe(true);
     const text = readFileSync(DOC, 'utf8');
@@ -49,6 +58,7 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     expect(text).toContain('CLOUDFLARE_API_TOKEN');
     expect(text).toContain('CLOUDFLARE_ACCOUNT_ID');
     expect(text).toContain('LORE_CF_TEST_PREFIX');
+    expect(text).toContain('LORE_CF_ARTIFACT_DIR');
     expect(text).toContain('Workers Scripts Edit');
     expect(text).toContain('D1 Edit');
     expect(text).toContain('Workers R2 Storage Edit');
