@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, LoreError, objectKey } from '@lorepack/core';
 import { r2ObjectKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
+import { withUploadProgressHeartbeat } from './upload-progress.js';
 
 interface BuildArtifactRow {
   readonly object_hash: string;
@@ -16,6 +17,7 @@ export interface ProjectObjectUploadOptions {
   readonly objectsDirectory: string;
   readonly retryAttempts?: number;
   readonly retryDelayMs?: number;
+  readonly progressIntervalMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: (update: {
     readonly completedBytes: number;
@@ -85,7 +87,26 @@ export async function uploadProjectObjects(
       }
 
       const bytes = readLocalObject(options.objectsDirectory, hash);
-      await withRetries(() => options.bucket.put(key, bytes), retry, `upload object ${hash}`, hash);
+      await withRetries(
+        () =>
+          withUploadProgressHeartbeat(
+            options.progressIntervalMs ?? 1000,
+            () => {
+              options.onProgress?.({
+                completedBytes,
+                totalBytes,
+                completedObjects: verifiedObjects,
+                totalObjects: objectHashes.length,
+                uploadedObjects,
+                skippedObjects,
+              });
+            },
+            () => options.bucket.put(key, bytes),
+          ),
+        retry,
+        `upload object ${hash}`,
+        hash,
+      );
       await verifyRemoteObject(options.bucket, key, hash, retry);
       uploadedObjects += 1;
       verifiedObjects += 1;

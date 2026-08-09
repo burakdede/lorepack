@@ -6,6 +6,7 @@ import { collectBuildMembers, collectObjects, writeArchive } from '@lorepack/bac
 import { hashBytes, LoreError } from '@lorepack/core';
 import { r2ArchiveKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
+import { withUploadProgressHeartbeat } from './upload-progress.js';
 
 interface BuildReferenceRow {
   readonly object_hash: string;
@@ -19,6 +20,7 @@ export interface ProjectArchiveUploadOptions {
   readonly objectsDirectory: string;
   readonly retryAttempts?: number;
   readonly retryDelayMs?: number;
+  readonly progressIntervalMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: (update: {
     readonly completedBytes: number;
@@ -66,7 +68,18 @@ export async function uploadProjectArchive(
   }
 
   await withRetries(
-    () => options.bucket.put(key, archive.bytes),
+    () =>
+      withUploadProgressHeartbeat(
+        options.progressIntervalMs ?? 1000,
+        () => {
+          options.onProgress?.({
+            completedBytes: 0,
+            totalBytes: archive.bytes.byteLength,
+            detail: 'archive upload in progress',
+          });
+        },
+        () => options.bucket.put(key, archive.bytes),
+      ),
     retry,
     `upload archive ${key}`,
     key,

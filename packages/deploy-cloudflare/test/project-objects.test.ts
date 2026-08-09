@@ -12,6 +12,7 @@ const PROJECT = 'contracted';
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
   putFailures = new Map<string, number>();
+  putDelayMs = 0;
 
   async put(key: string, value: Uint8Array): Promise<void> {
     const failures = this.putFailures.get(key) ?? 0;
@@ -20,6 +21,9 @@ class FakeR2Bucket {
       const error = new Error('temporary timeout');
       (error as Error & { code?: string }).code = 'ETIMEDOUT';
       throw error;
+    }
+    if (this.putDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.putDelayMs));
     }
     this.objects.set(key, new Uint8Array(value));
   }
@@ -187,5 +191,54 @@ describe('uploadProjectObjects, issue 88', () => {
       verifiedObjects: 1,
     });
     expect(bucket.objects.has(r2ObjectKey(PROJECT, hash))).toBe(true);
+  });
+
+  it('emits repeated progress updates during a slow object upload', async () => {
+    const fixture = makeBuildDirectory({
+      'contracted:guides/rollback.md': 'rollback body',
+    });
+    const bucket = new FakeR2Bucket();
+    bucket.putDelayMs = 90;
+    const updates: {
+      completedBytes: number;
+      totalBytes: number;
+      completedObjects: number;
+      totalObjects: number;
+      uploadedObjects: number;
+      skippedObjects: number;
+    }[] = [];
+
+    const result = await uploadProjectObjects({
+      bucket,
+      projectId: PROJECT,
+      buildDirectory: fixture.buildDirectory,
+      objectsDirectory: fixture.objectsDirectory,
+      progressIntervalMs: 25,
+      onProgress: (update) => {
+        updates.push(update);
+      },
+    });
+
+    expect(result).toEqual({
+      referencedObjects: 1,
+      uploadedObjects: 1,
+      skippedObjects: 0,
+      verifiedObjects: 1,
+    });
+    expect(
+      updates.filter(
+        (update) =>
+          update.completedBytes === 0 &&
+          update.completedObjects === 0 &&
+          update.uploadedObjects === 0 &&
+          update.skippedObjects === 0,
+      ),
+    ).toHaveLength(3);
+    expect(updates.at(-1)).toMatchObject({
+      completedObjects: 1,
+      totalObjects: 1,
+      uploadedObjects: 1,
+      skippedObjects: 0,
+    });
   });
 });
