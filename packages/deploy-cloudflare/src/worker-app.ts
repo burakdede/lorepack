@@ -30,6 +30,7 @@ export interface CloudflareRuntimeOptions {
   readonly currentBuild: () => Promise<{ buildId: BuildId; generation: number } | null>;
   readonly freshness?: () => Promise<SourceState>;
   readonly authorize?: ApiOptions['authorize'];
+  readonly allowedOrigins?: readonly string[];
   readonly comparer?: BuildComparer;
 }
 
@@ -43,14 +44,30 @@ export interface CloudflareBindings {
   readonly CATALOG_DB: D1DatabaseLike & D1CatalogDatabaseLike & D1QueryDatabaseLike;
   readonly OBJECTS: R2BucketLike;
   readonly PROJECT_ID: string;
+  readonly ALLOWED_ORIGINS?: string;
 }
 
 export interface CloudflareBoundWorkerOptions {
   readonly authMode?: 'runtime-token' | 'disabled';
   readonly freshness?: () => Promise<SourceState>;
   readonly authorize?: ApiOptions['authorize'];
+  readonly allowedOrigins?: readonly string[];
   readonly comparer?: BuildComparer;
 }
+
+const WORKER_SECURITY_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), geolocation=(), microphone=()',
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+} as const;
+
+const CORS_ALLOWED_HEADERS = 'Authorization, Content-Type, Accept, Mcp-Method, Mcp-Name';
+const CORS_ALLOWED_METHODS = 'GET, POST, OPTIONS';
+const CORS_MAX_AGE_SECONDS = '600';
 
 function createWorkerApp(
   options: CloudflareRuntimeOptions,
@@ -59,15 +76,28 @@ function createWorkerApp(
   const apiOptions: ApiOptions = {
     runtime: options.runtime,
     currentBuild: options.currentBuild,
+    ...(options.allowedOrigins === undefined ? {} : { allowedOrigins: options.allowedOrigins }),
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
     ...(options.authorize === undefined ? {} : { authorize: options.authorize }),
     mcpHandler: (request) => mcp.fetch(request),
   };
   const app = createApiApp(apiOptions);
+  const allowedOrigins = new Set(options.allowedOrigins ?? []);
   return {
     app,
     apiOptions,
-    fetch: (request) => app.fetch(request),
+    fetch: async (request) => {
+      const origin = request.headers.get('Origin');
+      if (isCorsPreflight(request) && origin !== null && allowedOrigins.has(origin)) {
+        return withWorkerHeaders(new Response(null, { status: 204 }), origin);
+      }
+      const response = await app.fetch(request);
+      return withWorkerHeaders(
+        response,
+        origin !== null && allowedOrigins.has(origin) ? origin : null,
+        request.url,
+      );
+    },
     close: () => mcp.close(),
   };
 }
@@ -93,9 +123,8 @@ export function createCloudflareWorkerFromBindings(
   const authMode = options.authMode ?? 'disabled';
   const authorize =
     options.authorize ??
-    (authMode === 'runtime-token'
-      ? createRuntimeTokenAuthorizer(bindings.CATALOG_DB)
-      : undefined);
+    (authMode === 'runtime-token' ? createRuntimeTokenAuthorizer(bindings.CATALOG_DB) : undefined);
+  const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(bindings.ALLOWED_ORIGINS);
   const runtime = createRuntime({
     provider,
     open: async (handle) => {
@@ -117,10 +146,60 @@ export function createCloudflareWorkerFromBindings(
   return createCloudflareWorker({
     runtime,
     currentBuild: () => provider.current(),
+    ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
     ...(options.freshness === undefined ? {} : { freshness: options.freshness }),
     ...(authorize === undefined ? {} : { authorize }),
     ...(options.comparer === undefined ? {} : { comparer: options.comparer }),
   });
+}
+
+function withWorkerHeaders(response: Response, origin: string | null, url?: string): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(WORKER_SECURITY_HEADERS)) {
+    headers.set(name, value);
+  }
+  if (url !== undefined && new URL(url).protocol === 'https:') {
+    headers.set('Strict-Transport-Security', 'max-age=31536000');
+  }
+  if (origin !== null) {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.set('Access-Control-Allow-Methods', CORS_ALLOWED_METHODS);
+    headers.set('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
+    headers.set('Access-Control-Max-Age', CORS_MAX_AGE_SECONDS);
+    appendVary(headers, 'Origin');
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function appendVary(headers: Headers, value: string): void {
+  const current = headers.get('Vary');
+  if (current === null || current.trim() === '') {
+    headers.set('Vary', value);
+    return;
+  }
+  const values = current.split(',').map((entry) => entry.trim());
+  if (!values.includes(value)) headers.set('Vary', `${current}, ${value}`);
+}
+
+function isCorsPreflight(request: Request): boolean {
+  return (
+    request.method === 'OPTIONS' &&
+    request.headers.has('Origin') &&
+    request.headers.has('Access-Control-Request-Method')
+  );
+}
+
+function parseAllowedOrigins(value: string | undefined): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  const parsed = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+  return parsed.length === 0 ? undefined : parsed;
 }
 
 export type {

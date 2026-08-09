@@ -87,6 +87,28 @@ minutes**, then expires it automatically. That overlap window is there so an alr
 client can swap credentials without being cut off mid-session. During the window, both the old
 and new runtime tokens work; after the window, only the new token does.
 
+## Browser origins and Worker headers
+
+The deployed Worker is **closed to browsers by default**. A tool or SDK that sends no
+`Origin` header is unaffected, but a browser page from any unrecognised origin is refused and
+gets no CORS allow header back.
+
+If you intentionally need browser access to the remote read surface, set the Worker variable
+`ALLOWED_ORIGINS` to a comma-separated list of exact origins, for example:
+
+```text
+ALLOWED_ORIGINS=https://app.example,https://admin.example
+```
+
+Only those exact origins receive CORS preflight responses and `Access-Control-Allow-Origin`.
+This does not widen the authenticated read boundary: the runtime bearer token is still required
+for the protected routes.
+
+The Worker also adds a fixed response hardening set on every reply: `Content-Security-Policy`,
+`Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Referrer-Policy`,
+`X-Content-Type-Options`, `X-Frame-Options`, and `Strict-Transport-Security` on HTTPS
+requests.
+
 Use `lore target token cloudflare --rotate` to replace the token, or
 `lore target token cloudflare --revoke` to remove it. The token must not be written to the
 project receipt or committed to the repository.
