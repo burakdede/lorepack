@@ -1,0 +1,33 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. This probe records the current D1 projection write concurrency, not a release gate.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGb": 32,
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "buildId": "lore_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "artifacts": 2,
+    "nodes": 2,
+    "chunks": 1,
+    "tables": 1,
+    "tableRows": 40
+  },
+  "measurements": {
+    "totalApplyMs": 127.12,
+    "writeDelayMs": 2,
+    "d1WriteStatements": 45,
+    "maxInflightWrites": 1,
+    "projectionProgressEvents": 26,
+    "projectionBatchP50": 9,
+    "projectionBatchP95": 9
+  },
+  "conclusion": {
+    "chosenConcurrency": 1,
+    "overlappingWritesObserved": false
+  }
+}
