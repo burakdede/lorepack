@@ -37,6 +37,16 @@ interface CloudflareDatabaseInfo {
   readonly name: string;
 }
 
+export interface ResolvedCloudflareTargetResources {
+  readonly receipt: ReturnType<typeof readCloudflareTargetReceipt>;
+  readonly endpoint: string;
+  readonly catalogDb: ProjectionMigrationDatabaseLike &
+    D1CatalogDatabaseLike &
+    D1QueryDatabaseLike &
+    D1DatabaseLike;
+  readonly objects: R2BucketLike;
+}
+
 export interface CloudflareResolverAdapter extends CloudflareTargetAdapter {
   listDatabases(): Promise<readonly CloudflareDatabaseInfo[]>;
   openCatalogDatabase(
@@ -59,6 +69,23 @@ export async function resolveCloudflareTargetWithAdapter(
   projectRoot: string,
   adapter: CloudflareResolverAdapter,
 ): Promise<DeploymentTarget> {
+  const resolved = await resolveCloudflareResourcesWithAdapter(projectRoot, adapter);
+  return createCloudflareDeploymentTarget({
+    projectId: resolved.receipt.project,
+    endpoint: resolved.endpoint,
+    workerName: resolved.receipt.workerName,
+    catalogDatabaseName: resolved.receipt.catalogDatabaseName,
+    objectsBucketName: resolved.receipt.objectsBucketName,
+    catalogDb: resolved.catalogDb,
+    objects: resolved.objects,
+    publicBuildId: async () => await readPublicBuildId(resolved.receipt.workerName),
+  });
+}
+
+export async function resolveCloudflareResourcesWithAdapter(
+  projectRoot: string,
+  adapter: CloudflareResolverAdapter,
+): Promise<ResolvedCloudflareTargetResources> {
   const receipt = readCloudflareTargetReceipt(projectRoot);
   const detection = await adapter.detect();
   if (!detection.installed) {
@@ -120,16 +147,12 @@ export async function resolveCloudflareTargetWithAdapter(
     );
   }
 
-  return createCloudflareDeploymentTarget({
-    projectId: receipt.project,
+  return {
+    receipt,
     endpoint: `https://${receipt.workerName}.workers.dev/mcp`,
-    workerName: receipt.workerName,
-    catalogDatabaseName: receipt.catalogDatabaseName,
-    objectsBucketName: receipt.objectsBucketName,
     catalogDb: adapter.openCatalogDatabase(receipt.catalogDatabaseName),
     objects: adapter.openObjectsBucket(receipt.objectsBucketName),
-    publicBuildId: async () => await readPublicBuildId(receipt.workerName),
-  });
+  };
 }
 
 export function createWranglerDeployAdapter(): CloudflareResolverAdapter {

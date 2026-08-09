@@ -1,8 +1,14 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { count, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
+import { planRemoteRetention } from '@lorepack/deploy-cloudflare';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { openStateStore } from '../services/builds.js';
+import {
+  type CloudflareResolverAdapter,
+  createWranglerDeployAdapter,
+  resolveCloudflareResourcesWithAdapter,
+} from '../services/cloudflare-target.js';
 import {
   applyRetention,
   DEFAULT_KEEP_PREVIOUS,
@@ -10,7 +16,11 @@ import {
   renderRetentionPlan,
 } from '../services/retention.js';
 
-export function pruneCommand(): CommandDefinition {
+export interface PruneCommandOptions {
+  readonly cloudflareAdapter?: CloudflareResolverAdapter;
+}
+
+export function pruneCommand(options: PruneCommandOptions = {}): CommandDefinition {
   return {
     name: 'prune',
     description: 'Remove old builds, keeping the active one and the previous five.',
@@ -19,9 +29,21 @@ export function pruneCommand(): CommandDefinition {
         flags: '--keep <count>',
         description: `previous builds to keep (default ${DEFAULT_KEEP_PREVIOUS})`,
       },
+      { flags: '--target <target>', description: 'plan cleanup for a remote deployment target' },
       { flags: '--yes', description: 'apply the plan instead of only printing it' },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
+      const targetName =
+        typeof flags.target === 'string' && flags.target.trim() !== '' ? flags.target.trim() : null;
+      if (targetName !== null) {
+        return await pruneRemote(
+          targetName,
+          flags.yes === true,
+          parseKeep(flags.keep),
+          context.options.cwd,
+          options.cloudflareAdapter,
+        );
+      }
       const config = loadConfig({ cwd: context.options.cwd });
       const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
       const state = openStateStore(loreDirectory);
@@ -79,4 +101,64 @@ function parseKeep(raw: unknown): number {
     });
   }
   return value;
+}
+
+async function pruneRemote(
+  targetName: string,
+  apply: boolean,
+  keep: number,
+  cwd: string,
+  cloudflareAdapter: CloudflareResolverAdapter | undefined,
+): Promise<CommandResult> {
+  if (targetName !== 'cloudflare') {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown prune target ${targetName}.`, {
+      remediation: 'Use `cloudflare`. Additional remote prune targets are not implemented in v0.1.',
+      subject: targetName,
+    });
+  }
+  if (apply) {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Remote cleanup apply is not implemented yet.', {
+      remediation:
+        'Run `lore prune --target cloudflare` without `--yes` to inspect the cleanup plan for now.',
+      subject: 'cloudflare',
+    });
+  }
+
+  const config = loadConfig({ cwd });
+  const resolved = await resolveCloudflareResourcesWithAdapter(
+    config.projectRoot,
+    cloudflareAdapter ?? createWranglerDeployAdapter(),
+  );
+  const plan = await planRemoteRetention(resolved.catalogDb, resolved.receipt.project, keep);
+  return {
+    human: renderRemoteRetentionPlan(plan),
+    json: {
+      target: 'cloudflare',
+      applied: false,
+      ...plan,
+    },
+  };
+}
+
+function renderRemoteRetentionPlan(plan: {
+  readonly keep: readonly string[];
+  readonly remove: readonly string[];
+  readonly archiveKeysToRemove: readonly string[];
+  readonly objectKeysToRemove: readonly string[];
+}): string {
+  if (plan.remove.length === 0) {
+    return `Nothing to remove remotely. ${count(plan.keep.length, 'build')} retained.`;
+  }
+
+  const lines = [
+    `Cloudflare cleanup plan: removing ${count(plan.remove.length, 'remote build')}, keeping ${plan.keep.length}:`,
+    '',
+  ];
+  for (const buildId of plan.remove) lines.push(`  - ${buildId}`);
+  lines.push('');
+  lines.push(`  ${count(plan.archiveKeysToRemove.length, 'build archive')}`);
+  lines.push(`  ${count(plan.objectKeysToRemove.length, 'unreferenced object')}`);
+  lines.push('');
+  lines.push('Nothing was removed. Re-run with --yes once remote cleanup apply exists.');
+  return lines.join('\n');
 }

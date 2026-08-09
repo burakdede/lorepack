@@ -5,6 +5,7 @@ import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@l
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { rollbackCommand } from '../src/commands/activate.js';
+import { pruneCommand } from '../src/commands/prune.js';
 import { runBuild } from '../src/services/build.js';
 import type { CloudflareResolverAdapter } from '../src/services/cloudflare-target.js';
 import { readActiveBuild } from '../src/services/project.js';
@@ -613,6 +614,194 @@ describe('lore prune', () => {
       const result = await lore(['prune', '--yes']);
       expect(result.stdout).toContain('Nothing to remove');
       expect(existsSync(join(root, '.lore', 'builds'))).toBe(true);
+    });
+  });
+
+  it('plans Cloudflare cleanup from verified remote history and excludes projected-only builds', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      const db = new DatabaseSync(':memory:');
+      writeCloudflareReceipt(temp.root);
+
+      db.exec(`
+        CREATE TABLE active_build (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          build_id TEXT,
+          generation INTEGER NOT NULL
+        );
+        INSERT INTO active_build (id, build_id, generation)
+        VALUES (1, 'lore_${'f'.repeat(64)}', 4);
+        CREATE TABLE projected_builds (
+          project_id TEXT NOT NULL,
+          build_id TEXT NOT NULL,
+          build_schema_version INTEGER NOT NULL,
+          compiler_version TEXT NOT NULL,
+          projection_schema_version INTEGER NOT NULL,
+          projected_at TEXT NOT NULL,
+          verified_at TEXT,
+          activated_at TEXT,
+          PRIMARY KEY (project_id, build_id)
+        );
+        CREATE TABLE artifacts (
+          id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          build_id TEXT NOT NULL,
+          source_id TEXT,
+          relative_path TEXT NOT NULL,
+          display_path TEXT NOT NULL,
+          media_type TEXT NOT NULL,
+          byte_size INTEGER,
+          content_hash TEXT,
+          parser_id TEXT,
+          parser_version TEXT,
+          title TEXT,
+          status TEXT NOT NULL,
+          authority INTEGER NOT NULL,
+          object_hash TEXT NOT NULL,
+          metadata_json TEXT,
+          PRIMARY KEY (project_id, build_id, id)
+        );
+      `);
+
+      for (const [buildId, projectedAt, verifiedAt] of [
+        [`lore_${'9'.repeat(64)}`, '2026-08-09T12:07:00.000Z', null],
+        [`lore_${'f'.repeat(64)}`, '2026-08-09T12:06:00.000Z', '2026-08-09T12:06:30.000Z'],
+        [`lore_${'e'.repeat(64)}`, '2026-08-09T12:05:00.000Z', '2026-08-09T12:05:30.000Z'],
+        [`lore_${'d'.repeat(64)}`, '2026-08-09T12:04:00.000Z', '2026-08-09T12:04:30.000Z'],
+        [`lore_${'c'.repeat(64)}`, '2026-08-09T12:03:00.000Z', '2026-08-09T12:03:30.000Z'],
+        [`lore_${'b'.repeat(64)}`, '2026-08-09T12:02:00.000Z', '2026-08-09T12:02:30.000Z'],
+        [`lore_${'a'.repeat(64)}`, '2026-08-09T12:01:00.000Z', '2026-08-09T12:01:30.000Z'],
+        [`lore_${'0'.repeat(64)}`, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z'],
+      ] as const) {
+        db.prepare(
+          `INSERT INTO projected_builds
+            (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run('demo', buildId, 1, '0.1.0', 4, projectedAt, verifiedAt, verifiedAt);
+      }
+
+      db.prepare(
+        `INSERT INTO artifacts
+          (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size, content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        'keep-shared',
+        'demo',
+        `lore_${'a'.repeat(64)}`,
+        'keep.md',
+        'keep.md',
+        'keep.md',
+        'text/markdown',
+        10,
+        '1'.repeat(64),
+        'markdown',
+        '1.0.0',
+        'Keep',
+        'active',
+        50,
+        'shared'.padEnd(64, 's'),
+        '{}',
+      );
+      db.prepare(
+        `INSERT INTO artifacts
+          (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size, content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        'remove-shared',
+        'demo',
+        `lore_${'0'.repeat(64)}`,
+        'remove-shared.md',
+        'remove-shared.md',
+        'remove-shared.md',
+        'text/markdown',
+        10,
+        '2'.repeat(64),
+        'markdown',
+        '1.0.0',
+        'Remove shared',
+        'active',
+        50,
+        'shared'.padEnd(64, 's'),
+        '{}',
+      );
+      db.prepare(
+        `INSERT INTO artifacts
+          (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size, content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        'remove-unique',
+        'demo',
+        `lore_${'9'.repeat(64)}`,
+        'remove-unique.md',
+        'remove-unique.md',
+        'remove-unique.md',
+        'text/markdown',
+        10,
+        '3'.repeat(64),
+        'markdown',
+        '1.0.0',
+        'Remove unique',
+        'active',
+        50,
+        'unique'.padEnd(64, 'u'),
+        '{}',
+      );
+
+      const result = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare'], {
+        commands: [
+          pruneCommand({
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
+          }),
+        ],
+      });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain(
+        'Cloudflare cleanup plan: removing 2 remote builds, keeping 6',
+      );
+      expect(result.stdout).toContain(`lore_${'9'.repeat(64)}`);
+      expect(result.stdout).toContain(`lore_${'0'.repeat(64)}`);
+      expect(result.stdout).toContain('2 build archives');
+      expect(result.stdout).toContain('1 unreferenced object');
+
+      const jsonResult = await run(
+        ['--json', '--cwd', temp.root, 'prune', '--target', 'cloudflare'],
+        {
+          commands: [pruneCommand({ cloudflareAdapter: fakeCloudflareRollbackAdapter(db) })],
+        },
+      );
+      const parsed = JSON.parse(jsonResult.stdout) as {
+        target: string;
+        applied: boolean;
+        keep: string[];
+        remove: string[];
+        objectKeysToRemove: string[];
+      };
+      expect(parsed.target).toBe('cloudflare');
+      expect(parsed.applied).toBe(false);
+      expect(parsed.keep).toHaveLength(6);
+      expect(parsed.remove).toEqual([`lore_${'9'.repeat(64)}`, `lore_${'0'.repeat(64)}`]);
+      expect(parsed.objectKeysToRemove).toEqual([
+        `demo/objects/sha256/${'unique'.padEnd(64, 'u').slice(0, 2)}/${'unique'.padEnd(64, 'u').slice(2, 4)}/${'unique'.padEnd(64, 'u').slice(4)}`,
+      ]);
+      db.close();
+    });
+  });
+
+  it('refuses --yes for Cloudflare cleanup until remote apply exists', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      writeCloudflareReceipt(temp.root);
+      const db = new DatabaseSync(':memory:');
+      const result = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'], {
+        commands: [
+          pruneCommand({
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
+          }),
+        ],
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('Remote cleanup apply is not implemented yet.');
+      db.close();
     });
   });
 });
