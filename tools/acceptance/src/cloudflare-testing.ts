@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 const REQUIRED_ENV_VARS = [
   'CLOUDFLARE_API_TOKEN',
@@ -30,7 +30,10 @@ export function cloudflareArtifactDirectory(
   const value = env.LORE_CF_ARTIFACT_DIR;
   if (value === undefined) return null;
   const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
+  if (trimmed === '') return null;
+  if (isAbsolute(trimmed)) return trimmed;
+  const base = env.GITHUB_WORKSPACE?.trim() || process.cwd();
+  return resolve(base, trimmed);
 }
 
 export function writeCloudflareArtifactSummary(
