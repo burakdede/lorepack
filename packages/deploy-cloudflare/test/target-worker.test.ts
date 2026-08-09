@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { type Capability, hashBytes, SCHEMA_VERSION } from '@lorepack/core';
+import { DEFAULT_MAX_REQUEST_BYTES } from '@lorepack/runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createCloudflareDeploymentTarget,
@@ -360,6 +361,89 @@ afterEach(() => {
 });
 
 describe('Cloudflare public candidate visibility, issue 89', () => {
+  it('refuses an oversized request body on the deployed Worker path', async () => {
+    const fixture = createProjectFixture();
+    const activeDirectory = createBuild(
+      fixture.projectRoot,
+      ACTIVE_BUILD,
+      'activeword only appears in the active build',
+      'activeword',
+    );
+
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: ACTIVE_BUILD,
+      buildDirectory: activeDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
+    });
+    const receipt = await target.apply(plan);
+    await target.activate(receipt);
+
+    const worker = createCloudflareWorkerFromBindings({
+      CATALOG_DB: fixture.projection,
+      OBJECTS: fixture.bucket,
+      PROJECT_ID: PROJECT,
+    });
+
+    const oversized = 'x'.repeat(DEFAULT_MAX_REQUEST_BYTES + 1);
+    const declared = await worker.fetch(
+      new Request('https://worker.example/v1/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': String(DEFAULT_MAX_REQUEST_BYTES + 100),
+        },
+        body: JSON.stringify({
+          query: oversized,
+          limit: 10,
+          includeArchived: false,
+          debug: false,
+        }),
+      }),
+    );
+    expect(declared.status).toBe(413);
+    expect(await declared.json()).toMatchObject({
+      error: {
+        code: 'LORE_E_LIMIT_EXCEEDED',
+      },
+    });
+
+    const lied = await worker.fetch(
+      new Request('https://worker.example/v1/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': '10',
+        },
+        body: JSON.stringify({
+          query: oversized,
+          limit: 10,
+          includeArchived: false,
+          debug: false,
+        }),
+      }),
+    );
+    expect(lied.status).toBe(413);
+    expect(await lied.json()).toMatchObject({
+      error: {
+        code: 'LORE_E_LIMIT_EXCEEDED',
+      },
+    });
+
+    const build = await worker.fetch(new Request('https://worker.example/v1/build'));
+    expect((await build.json()) as { buildId: string }).toMatchObject({
+      buildId: ACTIVE_BUILD,
+    });
+
+    await worker.close();
+  });
+
   it('refuses a projected build whose projection schema is newer than the Worker runtime', async () => {
     const fixture = createProjectFixture();
     const activeDirectory = createBuild(
