@@ -144,7 +144,49 @@ function writeCloudflareReceipt(root: string): void {
   );
 }
 
-function fakeCloudflareRollbackAdapter(db: DatabaseSync): CloudflareResolverAdapter {
+interface FakeCloudflareObjectsBucket {
+  readonly deletedKeys: string[];
+  seed(key: string, value?: Uint8Array): void;
+}
+
+function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObjectsBucket'] extends (
+  ...args: never[]
+) => infer T
+  ? T & FakeCloudflareObjectsBucket
+  : never {
+  const objects = new Map<string, Uint8Array>();
+  const deletedKeys: string[] = [];
+  return {
+    deletedKeys,
+    seed(key: string, value: Uint8Array = new Uint8Array([1])) {
+      objects.set(key, value);
+    },
+    async put(key: string, value: Uint8Array) {
+      objects.set(key, value);
+    },
+    async get(key: string) {
+      const value = objects.get(key);
+      if (value === undefined) return null;
+      return {
+        arrayBuffer: async () =>
+          value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer,
+      };
+    },
+    async head(key: string) {
+      return objects.has(key) ? {} : null;
+    },
+    async delete(key: string) {
+      if (!objects.has(key)) return;
+      objects.delete(key);
+      deletedKeys.push(key);
+    },
+  };
+}
+
+function fakeCloudflareRollbackAdapter(
+  db: DatabaseSync,
+  objectsBucket = createFakeCloudflareObjectsBucket(),
+): CloudflareResolverAdapter {
   const catalog = new SqliteCloudflareDatabase(db);
   return {
     detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
@@ -156,16 +198,196 @@ function fakeCloudflareRollbackAdapter(db: DatabaseSync): CloudflareResolverAdap
     }),
     listDatabases: async () => [{ name: 'demo-catalog' }],
     openCatalogDatabase: () => catalog,
-    openObjectsBucket: () => ({
-      async put() {},
-      async get() {
-        return null;
-      },
-      async head() {
-        return null;
-      },
-    }),
+    openObjectsBucket: () => objectsBucket,
   };
+}
+
+function seedRemoteCleanupFixture(
+  db: DatabaseSync,
+  objects = createFakeCloudflareObjectsBucket(),
+): {
+  readonly db: DatabaseSync;
+  readonly objects: FakeCloudflareObjectsBucket;
+  readonly archiveKey: string;
+  readonly objectKey: string;
+} {
+  db.exec(`
+    CREATE TABLE active_build (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      build_id TEXT,
+      generation INTEGER NOT NULL
+    );
+    INSERT INTO active_build (id, build_id, generation)
+    VALUES (1, 'lore_${'b'.repeat(64)}', 4);
+    CREATE TABLE projected_builds (
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      build_schema_version INTEGER NOT NULL,
+      compiler_version TEXT NOT NULL,
+      projection_schema_version INTEGER NOT NULL,
+      projected_at TEXT NOT NULL,
+      verified_at TEXT,
+      activated_at TEXT,
+      PRIMARY KEY (project_id, build_id)
+    );
+    CREATE TABLE build_manifests (
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      PRIMARY KEY (project_id, build_id)
+    );
+    CREATE TABLE build_warnings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      class TEXT NOT NULL,
+      path TEXT,
+      message TEXT NOT NULL
+    );
+    CREATE TABLE artifacts (
+      id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      source_id TEXT,
+      relative_path TEXT NOT NULL,
+      display_path TEXT NOT NULL,
+      media_type TEXT NOT NULL,
+      byte_size INTEGER,
+      content_hash TEXT,
+      parser_id TEXT,
+      parser_version TEXT,
+      title TEXT,
+      status TEXT NOT NULL,
+      authority INTEGER NOT NULL,
+      object_hash TEXT NOT NULL,
+      metadata_json TEXT,
+      PRIMARY KEY (project_id, build_id, id)
+    );
+    CREATE TABLE supersessions (
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      artifact_id TEXT NOT NULL,
+      superseded_id TEXT NOT NULL,
+      PRIMARY KEY (project_id, build_id, artifact_id, superseded_id)
+    );
+    CREATE TABLE nodes (
+      id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      artifact_id TEXT NOT NULL,
+      parent_id TEXT,
+      kind TEXT NOT NULL,
+      ordinal INTEGER NOT NULL,
+      title TEXT,
+      text TEXT,
+      heading_path TEXT NOT NULL,
+      line_start INTEGER,
+      line_end INTEGER,
+      metadata_json TEXT,
+      revision_hash TEXT,
+      PRIMARY KEY (project_id, build_id, id)
+    );
+    CREATE TABLE chunks (
+      id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      artifact_id TEXT NOT NULL,
+      node_ids TEXT NOT NULL,
+      heading_path TEXT NOT NULL,
+      text TEXT NOT NULL,
+      estimated_tokens INTEGER NOT NULL,
+      relative_path TEXT NOT NULL,
+      line_start INTEGER,
+      line_end INTEGER,
+      page INTEGER,
+      revision_hash TEXT,
+      PRIMARY KEY (project_id, build_id, id)
+    );
+    CREATE VIRTUAL TABLE chunks_fts USING fts5(
+      project_id UNINDEXED,
+      build_id UNINDEXED,
+      chunk_id UNINDEXED,
+      artifact_id UNINDEXED,
+      status,
+      authority,
+      path,
+      title,
+      heading,
+      body
+    );
+    CREATE TABLE tables (
+      id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      artifact_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sheet TEXT,
+      sql_name TEXT NOT NULL,
+      row_count INTEGER NOT NULL,
+      relative_path TEXT NOT NULL,
+      line_start INTEGER,
+      line_end INTEGER,
+      cell_range TEXT,
+      metadata_json TEXT,
+      PRIMARY KEY (project_id, build_id, id)
+    );
+    CREATE TABLE table_columns (
+      project_id TEXT NOT NULL,
+      build_id TEXT NOT NULL,
+      table_id TEXT NOT NULL,
+      ordinal INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      sql_name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      nullable INTEGER NOT NULL,
+      null_count INTEGER NOT NULL,
+      distinct_estimate INTEGER NOT NULL,
+      distinct_is_exact INTEGER NOT NULL,
+      min_value TEXT,
+      max_value TEXT,
+      PRIMARY KEY (project_id, build_id, table_id, ordinal)
+    );
+    INSERT INTO projected_builds
+      (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
+    VALUES
+      ('demo', 'lore_${'c'.repeat(64)}', 1, '0.1.0', 4, '2026-08-09T12:02:00.000Z', NULL, NULL),
+      ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 4, '2026-08-09T12:01:00.000Z', '2026-08-09T12:01:30.000Z', '2026-08-09T12:01:30.000Z'),
+      ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 4, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z', '2026-08-09T12:00:30.000Z');
+    INSERT INTO build_manifests (project_id, build_id, manifest_json)
+    VALUES ('demo', 'lore_${'c'.repeat(64)}', '{"build":"remove"}');
+    INSERT INTO build_warnings (project_id, build_id, code, class, path, message)
+    VALUES ('demo', 'lore_${'c'.repeat(64)}', 'warn', 'parser', 'remove.md', 'warning');
+    INSERT INTO artifacts
+      (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size, content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+    VALUES
+      ('remove-artifact', 'demo', 'lore_${'c'.repeat(64)}', 'remove.md', 'remove.md', 'remove.md', 'text/markdown', 10, '${'3'.repeat(64)}', 'markdown', '1.0.0', 'Remove unique', 'active', 50, '${'unique'.padEnd(64, 'u')}', '{}'),
+      ('keep-artifact', 'demo', 'lore_${'a'.repeat(64)}', 'keep.md', 'keep.md', 'keep.md', 'text/markdown', 10, '${'1'.repeat(64)}', 'markdown', '1.0.0', 'Keep', 'active', 50, '${'shared'.padEnd(64, 's')}', '{}');
+    INSERT INTO supersessions (project_id, build_id, artifact_id, superseded_id)
+    VALUES ('demo', 'lore_${'c'.repeat(64)}', 'remove-artifact', 'older');
+    INSERT INTO nodes
+      (id, project_id, build_id, artifact_id, parent_id, kind, ordinal, title, text, heading_path, line_start, line_end, metadata_json, revision_hash)
+    VALUES ('node-remove', 'demo', 'lore_${'c'.repeat(64)}', 'remove-artifact', NULL, 'paragraph', 0, 'Title', 'Body', '[]', 1, 1, '{}', '${'r'.repeat(64)}');
+    INSERT INTO chunks
+      (id, project_id, build_id, artifact_id, node_ids, heading_path, text, estimated_tokens, relative_path, line_start, line_end, page, revision_hash)
+    VALUES ('chunk-remove', 'demo', 'lore_${'c'.repeat(64)}', 'remove-artifact', '["node-remove"]', '[]', 'Body', 3, 'remove.md', 1, 1, NULL, '${'r'.repeat(64)}');
+    INSERT INTO chunks_fts
+      (project_id, build_id, chunk_id, artifact_id, status, authority, path, title, heading, body)
+    VALUES ('demo', 'lore_${'c'.repeat(64)}', 'chunk-remove', 'remove-artifact', 'active', '50', 'remove.md', 'Remove unique', 'Heading', 'Body');
+    INSERT INTO tables
+      (id, project_id, build_id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range, metadata_json)
+    VALUES ('table-remove', 'demo', 'lore_${'c'.repeat(64)}', 'remove-artifact', 'Budget', 'Sheet1', 'projected_demo_remove', 1, 'remove.csv', 1, 2, 'A1:B2', '{}');
+    INSERT INTO table_columns
+      (project_id, build_id, table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
+    VALUES ('demo', 'lore_${'c'.repeat(64)}', 'table-remove', 0, 'amount', 'amount', 'TEXT', 0, 0, 1, 1, '1', '1');
+    CREATE TABLE projected_demo_remove (amount TEXT NOT NULL);
+  `);
+
+  const archiveKey = `demo/builds/lore_${'c'.repeat(64)}/archive.lorepack`;
+  const objectKey = `demo/objects/sha256/${'unique'.padEnd(64, 'u').slice(0, 2)}/${'unique'.padEnd(64, 'u').slice(2, 4)}/${'unique'.padEnd(64, 'u').slice(4)}`;
+  objects.seed(archiveKey);
+  objects.seed(objectKey);
+  return { db, objects, archiveKey, objectKey };
 }
 
 describe('lore builds', () => {
@@ -787,21 +1009,53 @@ describe('lore prune', () => {
     });
   });
 
-  it('refuses --yes for Cloudflare cleanup until remote apply exists', async () => {
+  it('applies Cloudflare cleanup and reports exact D1 and R2 removals', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
       writeCloudflareReceipt(temp.root);
-      const db = new DatabaseSync(':memory:');
+      const humanFixture = seedRemoteCleanupFixture(new DatabaseSync(':memory:'));
+
       const result = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'], {
         commands: [
           pruneCommand({
-            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(humanFixture.db, humanFixture.objects),
           }),
         ],
       });
 
-      expect(result.code).toBe(1);
-      expect(result.stderr).toContain('Remote cleanup apply is not implemented yet.');
-      db.close();
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Cloudflare cleanup applied: removed 1 remote build, kept 2.');
+      expect(result.stdout).toContain('1 projected build');
+      expect(result.stdout).toContain('1 build archive and 1 unreferenced object.');
+      expect(result.stdout).toContain('Dropped 1 physical table.');
+      expect(humanFixture.objects.deletedKeys).toEqual([
+        humanFixture.archiveKey,
+        humanFixture.objectKey,
+      ]);
+
+      const jsonFixture = seedRemoteCleanupFixture(new DatabaseSync(':memory:'));
+      const jsonResult = await run(
+        ['--json', '--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'],
+        {
+          commands: [
+            pruneCommand({
+              cloudflareAdapter: fakeCloudflareRollbackAdapter(jsonFixture.db, jsonFixture.objects),
+            }),
+          ],
+        },
+      );
+      const parsed = JSON.parse(jsonResult.stdout) as {
+        applied: boolean;
+        remove: string[];
+        d1: { physicalTablesDropped: string[] };
+        r2: { archiveKeysRemoved: string[]; objectKeysRemoved: string[] };
+      };
+      expect(parsed.applied).toBe(true);
+      expect(parsed.remove).toEqual([`lore_${'c'.repeat(64)}`]);
+      expect(parsed.d1.physicalTablesDropped).toEqual(['projected_demo_remove']);
+      expect(parsed.r2.archiveKeysRemoved).toEqual([jsonFixture.archiveKey]);
+      expect(parsed.r2.objectKeysRemoved).toEqual([jsonFixture.objectKey]);
+      humanFixture.db.close();
+      jsonFixture.db.close();
     });
   });
 });
