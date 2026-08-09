@@ -1,7 +1,11 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { count, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
-import { planRemoteRetention } from '@lorepack/deploy-cloudflare';
+import {
+  applyRemoteRetention,
+  planRemoteRetention,
+  type RemoteRetentionApplyResult,
+} from '@lorepack/deploy-cloudflare';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { openStateStore } from '../services/builds.js';
 import {
@@ -116,26 +120,36 @@ async function pruneRemote(
       subject: targetName,
     });
   }
-  if (apply) {
-    throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Remote cleanup apply is not implemented yet.', {
-      remediation:
-        'Run `lore prune --target cloudflare` without `--yes` to inspect the cleanup plan for now.',
-      subject: 'cloudflare',
-    });
-  }
 
   const config = loadConfig({ cwd });
   const resolved = await resolveCloudflareResourcesWithAdapter(
     config.projectRoot,
     cloudflareAdapter ?? createWranglerDeployAdapter(),
   );
-  const plan = await planRemoteRetention(resolved.catalogDb, resolved.receipt.project, keep);
+  if (!apply) {
+    const plan = await planRemoteRetention(resolved.catalogDb, resolved.receipt.project, keep);
+    return {
+      human: renderRemoteRetentionPlan(plan),
+      json: {
+        target: 'cloudflare',
+        applied: false,
+        ...plan,
+      },
+    };
+  }
+
+  const result = await applyRemoteRetention(
+    resolved.catalogDb,
+    resolved.objects,
+    resolved.receipt.project,
+    keep,
+  );
   return {
-    human: renderRemoteRetentionPlan(plan),
+    human: renderRemoteRetentionApplyResult(result),
     json: {
       target: 'cloudflare',
-      applied: false,
-      ...plan,
+      applied: true,
+      ...result,
     },
   };
 }
@@ -159,6 +173,40 @@ function renderRemoteRetentionPlan(plan: {
   lines.push(`  ${count(plan.archiveKeysToRemove.length, 'build archive')}`);
   lines.push(`  ${count(plan.objectKeysToRemove.length, 'unreferenced object')}`);
   lines.push('');
-  lines.push('Nothing was removed. Re-run with --yes once remote cleanup apply exists.');
+  lines.push('Nothing was removed. Re-run with --yes to apply.');
   return lines.join('\n');
+}
+
+function renderRemoteRetentionApplyResult(result: RemoteRetentionApplyResult): string {
+  if (result.remove.length === 0) {
+    return `Nothing to remove remotely. ${count(result.keep.length, 'build')} retained.`;
+  }
+
+  const lines = [
+    `Cloudflare cleanup applied: removed ${count(result.remove.length, 'remote build')}, kept ${result.keep.length}.`,
+    '',
+    `D1 rows removed: ${renderD1Counts(result)}`,
+    `R2 objects removed: ${count(result.r2.archiveKeysRemoved.length, 'build archive')} and ${count(result.r2.objectKeysRemoved.length, 'unreferenced object')}.`,
+  ];
+
+  if (result.d1.physicalTablesDropped.length > 0) {
+    lines.push(`Dropped ${count(result.d1.physicalTablesDropped.length, 'physical table')}.`);
+  }
+
+  return lines.join('\n');
+}
+
+function renderD1Counts(result: RemoteRetentionApplyResult): string {
+  return [
+    `${count(result.d1.projectedBuildsRemoved, 'projected build')}`,
+    `${count(result.d1.buildManifestsRemoved, 'manifest')}`,
+    `${count(result.d1.buildWarningsRemoved, 'warning')}`,
+    `${count(result.d1.artifactsRemoved, 'artifact')}`,
+    `${count(result.d1.supersessionsRemoved, 'supersession')}`,
+    `${count(result.d1.nodesRemoved, 'node')}`,
+    `${count(result.d1.chunksRemoved, 'chunk')}`,
+    `${count(result.d1.ftsRowsRemoved, 'fts row')}`,
+    `${count(result.d1.projectedTablesRemoved, 'projected table')}`,
+    `${count(result.d1.projectedTableColumnsRemoved, 'projected table column')}`,
+  ].join(', ');
 }

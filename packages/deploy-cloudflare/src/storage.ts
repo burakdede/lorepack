@@ -24,6 +24,7 @@ export interface R2BucketLike {
   put(key: string, value: Uint8Array): Promise<unknown>;
   get(key: string): Promise<R2ObjectBodyLike | null>;
   head(key: string): Promise<unknown | null>;
+  delete?(key: string): Promise<unknown>;
 }
 
 interface ActiveBuildRow {

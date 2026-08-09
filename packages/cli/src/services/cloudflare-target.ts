@@ -282,6 +282,10 @@ class WranglerR2Bucket implements R2BucketLike {
   async head(key: string): Promise<Record<string, never> | null> {
     return (await this.get(key)) === null ? null : {};
   }
+
+  async delete(key: string): Promise<void> {
+    await execWrangler(['r2', 'object', 'delete', `${this.#name}/${key}`, '--remote']);
+  }
 }
 
 function isDatabaseInfo(value: unknown): value is CloudflareDatabaseInfo {
