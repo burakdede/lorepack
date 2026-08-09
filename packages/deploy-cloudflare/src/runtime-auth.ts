@@ -28,6 +28,8 @@ export interface RuntimeTokenRecord {
   readonly expiresAt: string | null;
 }
 
+export type RuntimeTokenAuthorizer = (request: AuthorizationRequest) => Promise<boolean | string>;
+
 export async function storeRuntimeTokenHash(
   db: RuntimeAuthDatabaseLike,
   tokenHash: string,
@@ -91,7 +93,7 @@ export async function listRuntimeTokens(
 export function createRuntimeTokenAuthorizer(
   db: RuntimeAuthDatabaseLike,
   now: () => string = () => new Date().toISOString(),
-): (request: AuthorizationRequest) => Promise<boolean | string> {
+): RuntimeTokenAuthorizer {
   return async (request) => {
     const token = bearerTokenFrom(request.authorization);
     if (token === null) return 'This token is not valid for this build.';

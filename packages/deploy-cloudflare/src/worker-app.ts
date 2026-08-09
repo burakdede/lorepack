@@ -3,13 +3,18 @@ import { createMcpHttpHandler } from '@lorepack/mcp';
 import { type ApiOptions, createApiApp, createRuntime } from '@lorepack/runtime';
 import type { Hono } from 'hono';
 import {
+  type CloudflareAccessBindings,
+  type CloudflareAccessConfig,
+  createCloudflareRequestAuthorizer,
+  resolveCloudflareAccessConfigFromBindings,
+} from './access-auth.js';
+import {
   type D1CatalogDatabaseLike,
   type D1CatalogNamespace,
   D1CatalogStore,
   type D1CatalogStoreOptions,
 } from './catalog.js';
 import { assertProjectionReadable } from './projection-state.js';
-import { createRuntimeTokenAuthorizer } from './runtime-auth.js';
 import {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
@@ -45,6 +50,8 @@ export interface CloudflareBindings {
   readonly OBJECTS: R2BucketLike;
   readonly PROJECT_ID: string;
   readonly ALLOWED_ORIGINS?: string;
+  readonly CLOUDFLARE_ACCESS_TEAM_DOMAIN?: string;
+  readonly CLOUDFLARE_ACCESS_AUD?: string;
 }
 
 export interface CloudflareBoundWorkerOptions {
@@ -52,6 +59,7 @@ export interface CloudflareBoundWorkerOptions {
   readonly freshness?: () => Promise<SourceState>;
   readonly authorize?: ApiOptions['authorize'];
   readonly allowedOrigins?: readonly string[];
+  readonly access?: CloudflareAccessConfig;
   readonly comparer?: BuildComparer;
 }
 
@@ -116,14 +124,18 @@ function namespaceOf(bindings: CloudflareBindings, buildId: BuildId): D1CatalogN
 }
 
 export function createCloudflareWorkerFromBindings(
-  bindings: CloudflareBindings,
+  bindings: CloudflareBindings & CloudflareAccessBindings,
   options: CloudflareBoundWorkerOptions = {},
 ): CloudflareWorkerApp {
   const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB);
   const authMode = options.authMode ?? 'disabled';
+  const access = options.access ?? resolveCloudflareAccessConfigFromBindings(bindings);
   const authorize =
     options.authorize ??
-    (authMode === 'runtime-token' ? createRuntimeTokenAuthorizer(bindings.CATALOG_DB) : undefined);
+    createCloudflareRequestAuthorizer({
+      ...(access === undefined ? {} : { access }),
+      ...(authMode === 'runtime-token' ? { runtimeAuthDb: bindings.CATALOG_DB } : {}),
+    });
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(bindings.ALLOWED_ORIGINS);
   const runtime = createRuntime({
     provider,
