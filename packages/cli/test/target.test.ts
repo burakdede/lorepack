@@ -51,9 +51,39 @@ class SqliteTargetDatabase implements ProjectionMigrationDatabaseLike, RuntimeAu
   }
 }
 
-function createTargetAdapter() {
+function createTargetAdapter(
+  options: {
+    readonly catalogs?: readonly string[];
+    readonly buckets?: readonly string[];
+    readonly workers?: readonly string[];
+  } = {},
+) {
   const db = new DatabaseSync(':memory:');
   const catalog = new SqliteTargetDatabase(db);
+  const setup = createSetupAdapter(options);
+  const adapter = {
+    ...setup.adapter,
+    openCatalogDatabase: () => catalog,
+  };
+  return { db, adapter };
+}
+
+function createSetupAdapter(
+  options: {
+    readonly catalogs?: readonly string[];
+    readonly buckets?: readonly string[];
+    readonly workers?: readonly string[];
+    readonly failCatalogCreate?: string;
+    readonly failBucketCreate?: string;
+  } = {},
+) {
+  const state = {
+    catalogs: new Set(options.catalogs ?? []),
+    buckets: new Set(options.buckets ?? []),
+    workers: new Set(options.workers ?? []),
+    createdCatalogs: [] as string[],
+    createdBuckets: [] as string[],
+  };
   const adapter = {
     detect: async () => ({
       installed: true,
@@ -66,9 +96,31 @@ function createTargetAdapter() {
       accountName: 'Example Account',
       accountId: 'acct_123',
     }),
-    openCatalogDatabase: () => catalog,
+    inspectResources: async ({
+      workerName,
+      catalogDatabaseName,
+      objectsBucketName,
+    }: {
+      readonly workerName: string;
+      readonly catalogDatabaseName: string;
+      readonly objectsBucketName: string;
+    }) => ({
+      workerExists: state.workers.has(workerName),
+      catalogDatabaseExists: state.catalogs.has(catalogDatabaseName),
+      objectsBucketExists: state.buckets.has(objectsBucketName),
+    }),
+    createCatalogDatabase: async (name: string) => {
+      if (options.failCatalogCreate === name) throw new Error('catalog quota exceeded');
+      state.catalogs.add(name);
+      state.createdCatalogs.push(name);
+    },
+    createObjectsBucket: async (name: string) => {
+      if (options.failBucketCreate === name) throw new Error('bucket name conflict');
+      state.buckets.add(name);
+      state.createdBuckets.push(name);
+    },
   };
-  return { db, adapter };
+  return { adapter, state };
 }
 
 describe('lore target add cloudflare, issue 85', () => {
@@ -79,28 +131,16 @@ describe('lore target add cloudflare, issue 85', () => {
         const result = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--dry-run'], {
           commands: [
             targetCommand({
-              adapter: {
-                detect: async () => ({
-                  installed: true,
-                  version: '4.119.0',
-                  path: '/tmp/wrangler.js',
-                }),
-                whoami: async () => ({
-                  authenticated: true,
-                  email: 'dev@example.com',
-                  accountName: 'Example Account',
-                  accountId: 'acct_123',
-                }),
-              },
+              adapter: createSetupAdapter().adapter,
             }),
           ],
         });
 
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('Cloudflare target plan for Deploy Demo');
-        expect(result.stdout).toContain('Worker: deploy-demo-runtime');
-        expect(result.stdout).toContain('D1 catalog: deploy-demo-catalog');
-        expect(result.stdout).toContain('R2 objects: deploy-demo-objects');
+        expect(result.stdout).toContain('Worker: reserve deploy-demo-runtime for the first deploy');
+        expect(result.stdout).toContain('D1 catalog: create deploy-demo-catalog');
+        expect(result.stdout).toContain('R2 objects: create deploy-demo-objects');
         expect(result.stdout).toContain('docs/integrations/cloudflare-target-setup.md');
         expect(result.stdout).toContain('(dry run, nothing was changed)');
         expect(existsSync(`${temp.root}/.lore/targets/cloudflare.json`)).toBe(false);
@@ -158,19 +198,10 @@ describe('lore target add cloudflare, issue 85', () => {
           {
             commands: [
               targetCommand({
-                adapter: {
-                  detect: async () => ({
-                    installed: true,
-                    version: '4.119.0',
-                    path: '/tmp/wrangler.js',
-                  }),
-                  whoami: async () => ({
-                    authenticated: true,
-                    email: 'dev@example.com',
-                    accountName: 'Example Account',
-                    accountId: 'acct_123',
-                  }),
-                },
+                adapter: createSetupAdapter({
+                  catalogs: ['demo-catalog'],
+                  buckets: ['demo-objects'],
+                }).adapter,
                 now: () => new Date('2026-08-08T15:00:00.000Z'),
               }),
             ],
@@ -221,16 +252,12 @@ describe('lore target add cloudflare, issue 85', () => {
           '--objects-bucket',
           'demo-objects',
         ];
+        const { adapter } = createSetupAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
         const command = targetCommand({
-          adapter: {
-            detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
-            whoami: async () => ({
-              authenticated: true,
-              email: 'dev@example.com',
-              accountName: 'Example Account',
-              accountId: 'acct_123',
-            }),
-          },
+          adapter,
           now: () => new Date('2026-08-08T15:00:00.000Z'),
         });
 
@@ -254,16 +281,12 @@ describe('lore target add cloudflare, issue 85', () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
       async (temp) => {
+        const { adapter } = createSetupAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
         const command = targetCommand({
-          adapter: {
-            detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
-            whoami: async () => ({
-              authenticated: true,
-              email: 'dev@example.com',
-              accountName: 'Example Account',
-              accountId: 'acct_123',
-            }),
-          },
+          adapter,
           now: () => new Date('2026-08-08T15:00:00.000Z'),
         });
         await run(
@@ -299,34 +322,109 @@ describe('lore target add cloudflare, issue 85', () => {
     );
   });
 
-  it('refuses a non-dry-run setup without explicit existing-resource identifiers', async () => {
+  it('provisions deterministic D1 and R2 resources when no explicit identifiers are supplied', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter, state } = createSetupAdapter();
+        const result = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
+          commands: [
+            targetCommand({
+              adapter,
+              now: () => new Date('2026-08-09T11:00:00.000Z'),
+            }),
+          ],
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('D1 catalog: create deploy-demo-catalog');
+        expect(result.stdout).toContain('R2 objects: create deploy-demo-objects');
+        expect(state.createdCatalogs).toEqual(['deploy-demo-catalog']);
+        expect(state.createdBuckets).toEqual(['deploy-demo-objects']);
+
+        const receipt = JSON.parse(
+          readFileSync(`${temp.root}/.lore/targets/cloudflare.json`, 'utf8'),
+        ) as CloudflareTargetReceipt;
+        expect(receipt.accountId).toBe('acct_123');
+        expect(receipt.workerName).toBe('deploy-demo-runtime');
+        expect(receipt.catalogDatabaseName).toBe('deploy-demo-catalog');
+        expect(receipt.objectsBucketName).toBe('deploy-demo-objects');
+      },
+    );
+  });
+
+  it('fails clearly when deterministic names are already in use before the first receipt', async () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
       async (temp) => {
         const result = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
           commands: [
             targetCommand({
-              adapter: {
-                detect: async () => ({
-                  installed: true,
-                  version: '4.119.0',
-                  path: '/tmp/wrangler.js',
-                }),
-                whoami: async () => ({
-                  authenticated: true,
-                  email: 'dev@example.com',
-                  accountName: 'Example Account',
-                  accountId: 'acct_123',
-                }),
-              },
+              adapter: createSetupAdapter({
+                catalogs: ['deploy-demo-catalog'],
+              }).adapter,
             }),
           ],
         });
 
         expect(result.code).toBe(5);
         expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
-        expect(result.stderr).toContain('--account-id');
-        expect(result.stderr).toContain('--worker');
+        expect(result.stderr).toContain(
+          'deterministic Cloudflare resource names are already in use',
+        );
+        expect(result.stderr).toContain('Connect those resources explicitly');
+      },
+    );
+  });
+
+  it('reports remote drift when the receipt points at resources that no longer exist', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter, state } = createSetupAdapter();
+        const command = targetCommand({
+          adapter,
+          now: () => new Date('2026-08-09T11:00:00.000Z'),
+        });
+        const first = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
+          commands: [command],
+        });
+        expect(first.code).toBe(0);
+
+        state.buckets.delete('deploy-demo-objects');
+
+        const drift = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
+          commands: [command],
+        });
+
+        expect(drift.code).toBe(5);
+        expect(drift.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
+        expect(drift.stderr).toContain('remote resources that are missing');
+        expect(drift.stderr).toContain('R2 objects');
+      },
+    );
+  });
+
+  it('wraps provisioning failures as actionable target setup errors', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const result = await run(['--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'], {
+          commands: [
+            targetCommand({
+              adapter: createSetupAdapter({
+                failBucketCreate: 'deploy-demo-objects',
+              }).adapter,
+            }),
+          ],
+        });
+
+        expect(result.code).toBe(5);
+        expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
+        expect(result.stderr).toContain(
+          'Cloudflare resource provisioning failed during target setup',
+        );
+        expect(result.stderr).toContain('Check the token permissions');
       },
     );
   });
@@ -337,7 +435,10 @@ describe('lore target token cloudflare, issue 90', () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
       async (temp) => {
-        const { db, adapter } = createTargetAdapter();
+        const { db, adapter } = createTargetAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
         const command = targetCommand({
           adapter,
           now: () => new Date('2026-08-09T10:00:00.000Z'),
@@ -400,7 +501,10 @@ describe('lore target token cloudflare, issue 90', () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
       async (temp) => {
-        const { db, adapter } = createTargetAdapter();
+        const { db, adapter } = createTargetAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+        });
         let now = '2026-08-09T10:00:00.000Z';
         const command = targetCommand({
           adapter,
