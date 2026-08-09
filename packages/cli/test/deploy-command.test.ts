@@ -183,6 +183,14 @@ function fakeCloudflareAdapter(
   };
 }
 
+function normalizeDeployOutput(root: string, text: string): string {
+  const fromPlan = text.includes('Plan for ') ? text.slice(text.indexOf('Plan for ')) : text;
+  return fromPlan
+    .replaceAll(root, '<PROJECT_ROOT>')
+    .replaceAll(/lore_[0-9a-f]{64}/g, 'lore_<BUILD_ID>')
+    .replaceAll(/cloudflare-[0-9a-f]{12}/g, 'cloudflare-<RECEIPT_ID>');
+}
+
 describe('lore deploy command, issue 91', () => {
   it('builds implicitly, prints the local and remote plan, and deploys with --yes', async () => {
     await withTempProject(
@@ -480,15 +488,83 @@ describe('lore deploy command, issue 91', () => {
         );
 
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('Target: cloudflare / personal');
-        expect(result.stdout).toContain('= Worker deployed-runtime');
-        expect(result.stdout).toContain('= D1 deployed-catalog');
-        expect(result.stdout).toContain('= R2 deployed-objects');
-        expect(result.stdout).toContain('+ 1 artifact');
-        expect(result.stdout).toContain('+ 0 chunks');
-        expect(result.stdout).toContain('+ 0 table rows');
-        expect(result.stdout).toContain('current none');
-        expect(result.stdout).toContain('Dry run only. Nothing remote was changed.');
+        expect(normalizeDeployOutput(temp.root, result.stdout)).toBe(
+          [
+            'Plan for first build',
+            '',
+            'Artifacts',
+            '  + 1 added',
+            '  ~ 0 changed',
+            '  - 0 removed',
+            '  = 0 reused',
+            '',
+            '  + docs/a.md',
+            '',
+            'Lock',
+            '  ~ lore.lock absent -> created',
+            '',
+            'Expected work',
+            '  1 artifact to process: 1 parsed, 0 reused from cache',
+            '  about 3 chunks rebuilt',
+            '',
+            'Target: cloudflare / personal',
+            'Build:  lore_<BUILD_ID>',
+            '',
+            'Resources',
+            '  = Worker deployed-runtime',
+            '  = D1 deployed-catalog',
+            '  = R2 deployed-objects',
+            '',
+            'Projection',
+            '  + 1 artifact',
+            '  ~ 0 artifacts',
+            '  = 0 artifacts reused by content hash',
+            '  + 0 chunks',
+            '  + 0 table rows',
+            '  ~ about 0 projected D1 bytes',
+            '',
+            'Activation',
+            '  current none',
+            '  next    lore_<BUILD_ID>',
+            '',
+            'Dry run only. Nothing remote was changed.',
+            'Receipt id: cloudflare-<RECEIPT_ID>',
+            '',
+          ].join('\n'),
+        );
+      },
+    );
+  });
+
+  it('emits the receipt as json while keeping the plan on stderr under --json', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        writeCloudflareReceipt(temp.root);
+        vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
+
+        const result = await run(
+          ['--json', '--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--dry-run'],
+          {
+            commands: [deployCommand({ cloudflareAdapter: fakeCloudflareAdapter() })],
+          },
+        );
+
+        const receipt = JSON.parse(result.stdout) as DeploymentReceipt;
+        expect(result.code).toBe(0);
+        expect(receipt).toMatchObject({
+          formatVersion: 1,
+          receiptId: expect.stringMatching(/^cloudflare-[0-9a-f]{12}$/),
+          target: 'cloudflare',
+          project: 'deployed',
+          buildId: expect.stringMatching(/^lore_[0-9a-f]{64}$/),
+          endpoint: 'https://deployed-runtime.workers.dev/mcp',
+          state: 'planned',
+        });
+        expect(result.stdout).not.toContain('Target: cloudflare / personal');
+        expect(result.stdout).not.toContain('Dry run only. Nothing remote was changed.');
+        expect(result.stderr).toContain('Discovering');
+        expect(result.stderr).toContain('Validating');
       },
     );
   });
