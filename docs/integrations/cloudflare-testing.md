@@ -40,6 +40,10 @@ When `LORE_CF_ARTIFACT_DIR` is set, the credentialed smoke writes machine-readab
 logs, deployment receipts, and a remote summary into that directory so CI can upload them as
 artifacts even when the run later fails during verification or teardown.
 
+Even when credentials are absent and the credentialed smoke skips, the acceptance tests now
+write summary JSON files into `LORE_CF_ARTIFACT_DIR` so CI still uploads a visible Cloudflare
+artifact explaining that the run was a skip rather than a pass.
+
 ## Token scopes
 
 The least-privilege token shape for the current Phase 6 integration path matches the setup and
