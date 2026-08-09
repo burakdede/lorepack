@@ -45,6 +45,7 @@ export interface ProjectTableDataOptions {
   readonly buildDirectory: string;
   readonly retryAttempts?: number;
   readonly retryDelayMs?: number;
+  readonly progressIntervalMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly onProgress?: ProjectionWriteOptions['onProgress'];
 }

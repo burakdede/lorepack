@@ -6,7 +6,7 @@ import { collectBuildMembers, collectObjects, writeArchive } from '@lorepack/bac
 import { hashBytes, LoreError } from '@lorepack/core';
 import { r2ArchiveKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
-import { withUploadProgressHeartbeat } from './upload-progress.js';
+import { withProgressHeartbeat } from './upload-progress.js';
 
 interface BuildReferenceRow {
   readonly object_hash: string;
@@ -69,7 +69,7 @@ export async function uploadProjectArchive(
 
   await withRetries(
     () =>
-      withUploadProgressHeartbeat(
+      withProgressHeartbeat(
         options.progressIntervalMs ?? 1000,
         () => {
           options.onProgress?.({

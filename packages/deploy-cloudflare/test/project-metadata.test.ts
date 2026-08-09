@@ -47,14 +47,25 @@ const WARNINGS: readonly BuildWarning[] = [
 class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
   readonly #db: DatabaseSync;
   readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
+  readonly #runDelayMs: number;
 
-  constructor(db: DatabaseSync, beforeRun?: (query: string, bindings: readonly unknown[]) => void) {
+  constructor(
+    db: DatabaseSync,
+    beforeRun?: (query: string, bindings: readonly unknown[]) => void,
+    runDelayMs = 0,
+  ) {
     this.#db = db;
     this.#beforeRun = beforeRun;
+    this.#runDelayMs = runDelayMs;
   }
 
   prepare(query: string): ProjectionMigrationStatementLike {
-    return new SqliteProjectionStatementWithHook(this.#db, query, this.#beforeRun);
+    return new SqliteProjectionStatementWithHook(
+      this.#db,
+      query,
+      this.#beforeRun,
+      this.#runDelayMs,
+    );
   }
 }
 
@@ -62,16 +73,19 @@ class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementL
   readonly #db: DatabaseSync;
   readonly #query: string;
   readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
+  readonly #runDelayMs: number;
   #bindings: readonly unknown[] = [];
 
   constructor(
     db: DatabaseSync,
     query: string,
     beforeRun?: (query: string, bindings: readonly unknown[]) => void,
+    runDelayMs = 0,
   ) {
     this.#db = db;
     this.#query = query;
     this.#beforeRun = beforeRun;
+    this.#runDelayMs = runDelayMs;
   }
 
   bind(...values: unknown[]): ProjectionMigrationStatementLike {
@@ -81,6 +95,9 @@ class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementL
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
     this.#beforeRun?.(this.#query, this.#bindings);
+    if (this.#runDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.#runDelayMs));
+    }
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
@@ -391,6 +408,35 @@ describe('projectBuildMetadata, issue 87', () => {
       projectedWarnings: 1,
       projectedSupersessions: 1,
     });
+    expect(updates.at(-1)).toEqual({
+      completedBatches: 11,
+      totalBatches: 11,
+      detail: 'insert supersession contracted:guides/rollback.md',
+    });
+  });
+
+  it('emits repeated progress updates during a slow metadata batch', async () => {
+    const buildDirectory = makeBuildDirectory();
+    const projection = trackDatabase(new DatabaseSync(':memory:'));
+    await runProjectionMigrations(
+      new SqliteProjectionDatabase(projection),
+      () => '2026-08-08T12:00:00.000Z',
+    );
+
+    const updates: Array<{ completedBatches: number; totalBatches: number; detail: string }> = [];
+
+    await projectBuildMetadata({
+      db: new SqliteProjectionDatabase(projection, undefined, 90),
+      projectId: PROJECT,
+      buildDirectory,
+      projectedAt: '2026-08-08T13:00:00.000Z',
+      progressIntervalMs: 25,
+      onProgress: (update) => {
+        updates.push(update);
+      },
+    });
+
+    expect(updates.filter((update) => update.completedBatches === 0)).toHaveLength(3);
     expect(updates.at(-1)).toEqual({
       completedBatches: 11,
       totalBatches: 11,

@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { hashBytes, LoreError, objectKey } from '@lorepack/core';
 import { r2ObjectKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
-import { withUploadProgressHeartbeat } from './upload-progress.js';
+import { withProgressHeartbeat } from './upload-progress.js';
 
 interface BuildArtifactRow {
   readonly object_hash: string;
@@ -89,7 +89,7 @@ export async function uploadProjectObjects(
       const bytes = readLocalObject(options.objectsDirectory, hash);
       await withRetries(
         () =>
-          withUploadProgressHeartbeat(
+          withProgressHeartbeat(
             options.progressIntervalMs ?? 1000,
             () => {
               options.onProgress?.({
