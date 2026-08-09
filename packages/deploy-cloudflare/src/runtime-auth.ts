@@ -13,6 +13,7 @@ interface RuntimeTokenRow {
   readonly tokenHash: string;
 }
 
+export const RUNTIME_TOKEN_PREFIX = 'lore_rt_' as const;
 export const RUNTIME_TOKENS_TABLE = `CREATE TABLE IF NOT EXISTS runtime_tokens (
   token_hash TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
@@ -55,6 +56,7 @@ export function createRuntimeTokenAuthorizer(
   return async (request) => {
     const token = bearerTokenFrom(request.authorization);
     if (token === null) return 'This token is not valid for this build.';
+    if (!token.startsWith(RUNTIME_TOKEN_PREFIX)) return 'This token is not valid for this build.';
     const candidate = await hashRuntimeToken(token);
     const hashes = await readRuntimeTokenHashes(db);
     if (hashes.length === 0) return 'This token is not valid for this build.';

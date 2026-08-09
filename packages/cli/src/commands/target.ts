@@ -9,6 +9,7 @@ import {
   hasRuntimeToken,
   type ProjectionMigrationDatabaseLike,
   type ProjectionMigrationStatementLike,
+  RUNTIME_TOKEN_PREFIX,
   type RuntimeAuthDatabaseLike,
   revokeRuntimeTokens,
   runProjectionMigrations,
@@ -660,7 +661,7 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
 }
 
 function issueRuntimeToken(): string {
-  return `lore_rt_${randomBytes(24).toString('hex')}`;
+  return `${RUNTIME_TOKEN_PREFIX}${randomBytes(24).toString('hex')}`;
 }
 
 async function execWrangler(args: readonly string[]): Promise<{ readonly stdout: string }> {

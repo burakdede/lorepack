@@ -4,6 +4,7 @@ import {
   createRuntimeTokenAuthorizer,
   hashRuntimeToken,
   hasRuntimeToken,
+  RUNTIME_TOKEN_PREFIX,
   type RuntimeAuthDatabaseLike,
   type RuntimeAuthStatementLike,
   revokeRuntimeTokens,
@@ -67,7 +68,7 @@ afterEach(() => {
 describe('runtime token auth, issue 90', () => {
   it('stores only the hash and authorizes the matching bearer token', async () => {
     const { db, auth } = openRuntimeDatabase();
-    const token = 'lore_rt_test_token';
+    const token = `${RUNTIME_TOKEN_PREFIX}test_token`;
 
     await storeRuntimeTokenHash(auth, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
 
@@ -95,7 +96,7 @@ describe('runtime token auth, issue 90', () => {
 
   it('rejects missing or invalid bearer tokens with one non-enumerating message', async () => {
     const { auth } = openRuntimeDatabase();
-    const token = 'lore_rt_test_token';
+    const token = `${RUNTIME_TOKEN_PREFIX}test_token`;
     await storeRuntimeTokenHash(auth, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
     const authorize = createRuntimeTokenAuthorizer(auth);
 
@@ -118,10 +119,29 @@ describe('runtime token auth, issue 90', () => {
     ).toBe('This token is not valid for this build.');
   });
 
+  it('rejects a deployment credential even if its hash is stored remotely', async () => {
+    const { auth } = openRuntimeDatabase();
+    const deploymentCredential = 'cf_api_token_for_deploy';
+    await storeRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken(deploymentCredential),
+      '2026-08-09T10:00:00.000Z',
+    );
+
+    const authorize = createRuntimeTokenAuthorizer(auth);
+    expect(
+      await authorize({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `Bearer ${deploymentCredential}`,
+      }),
+    ).toBe('This token is not valid for this build.');
+  });
+
   it('rotates by replacement and revokes by deletion', async () => {
     const { db, auth } = openRuntimeDatabase();
-    const first = await hashRuntimeToken('lore_rt_first');
-    const second = await hashRuntimeToken('lore_rt_second');
+    const first = await hashRuntimeToken(`${RUNTIME_TOKEN_PREFIX}first`);
+    const second = await hashRuntimeToken(`${RUNTIME_TOKEN_PREFIX}second`);
 
     await storeRuntimeTokenHash(auth, first, '2026-08-09T10:00:00.000Z');
     await storeRuntimeTokenHash(auth, second, '2026-08-09T10:05:00.000Z');
