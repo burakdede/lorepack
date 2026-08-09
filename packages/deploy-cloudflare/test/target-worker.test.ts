@@ -360,6 +360,69 @@ afterEach(() => {
 });
 
 describe('Cloudflare public candidate visibility, issue 89', () => {
+  it('refuses a projected build whose projection schema is newer than the Worker runtime', async () => {
+    const fixture = createProjectFixture();
+    const activeDirectory = createBuild(
+      fixture.projectRoot,
+      ACTIVE_BUILD,
+      'activeword only appears in the active build',
+      'activeword',
+    );
+
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+    });
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: ACTIVE_BUILD,
+      buildDirectory: activeDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
+    });
+    const receipt = await target.apply(plan);
+    await target.activate(receipt);
+
+    fixture.projection.raw
+      .prepare(
+        'UPDATE projected_builds SET projection_schema_version = ? WHERE project_id = ? AND build_id = ?',
+      )
+      .run(999, PROJECT, ACTIVE_BUILD);
+
+    const worker = createCloudflareWorkerFromBindings({
+      CATALOG_DB: fixture.projection,
+      OBJECTS: fixture.bucket,
+      PROJECT_ID: PROJECT,
+    });
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/v1/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: 'activeword',
+          limit: 10,
+          includeArchived: false,
+          debug: false,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(
+      (await response.json()) as {
+        error: { code: string; message: string; remediation?: string };
+      },
+    ).toMatchObject({
+      error: {
+        code: 'LORE_E_SCHEMA_MISMATCH',
+      },
+    });
+
+    await worker.close();
+  });
+
   it('keeps a projected candidate invisible until activation and confirms activation through /v1/build', async () => {
     const fixture = createProjectFixture();
     const activeDirectory = createBuild(
