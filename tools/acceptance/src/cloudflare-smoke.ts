@@ -108,54 +108,12 @@ export async function provisionCloudflareSmokeTarget(
     NO_D1_WARNING: 'true',
   } as Readonly<Record<string, string>>;
 
-  await runWrangler(['d1', 'create', names.catalogDatabaseName], wranglerEnv);
-  const databaseId = await lookupD1DatabaseId(names.catalogDatabaseName, wranglerEnv);
-  await runWrangler(['r2', 'bucket', 'create', names.objectsBucketName], wranglerEnv);
-
   const configPath = join(WORKER_ROOT, `.wrangler-acceptance-${names.workerName}.jsonc`);
-  writeFileSync(
-    configPath,
-    `${JSON.stringify(
-      {
-        $schema: './node_modules/wrangler/config-schema.json',
-        name: names.workerName,
-        main: 'src/worker.ts',
-        compatibility_date: COMPATIBILITY_DATE,
-        compatibility_flags: ['enable_request_signal'],
-        account_id: env.accountId,
-        workers_dev: true,
-        vars: {
-          PROJECT_ID: projectName,
-        },
-        d1_databases: [
-          {
-            binding: 'CATALOG_DB',
-            database_name: names.catalogDatabaseName,
-            database_id: databaseId,
-            remote: true,
-          },
-        ],
-        r2_buckets: [
-          {
-            binding: 'OBJECTS',
-            bucket_name: names.objectsBucketName,
-            remote: true,
-          },
-        ],
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  );
-
-  await runWrangler(['deploy', '--config', configPath], wranglerEnv, WORKER_ROOT);
-
   return {
     accountId: env.accountId,
     workerName: names.workerName,
     catalogDatabaseName: names.catalogDatabaseName,
-    catalogDatabaseId: databaseId,
+    catalogDatabaseId: '',
     objectsBucketName: names.objectsBucketName,
     configPath,
     endpointBase: `https://${names.workerName}.workers.dev`,
@@ -318,25 +276,22 @@ export async function buildProject(project: CloudflareSmokeProject): Promise<Bui
 export async function addCloudflareTarget(
   project: CloudflareSmokeProject,
   target: CloudflareSmokeTarget,
-): Promise<void> {
-  const result = await project.lore([
-    '--json',
-    'target',
-    'add',
-    'cloudflare',
-    '--yes',
-    '--account-id',
-    target.accountId,
-    '--worker',
-    target.workerName,
-    '--catalog-db',
-    target.catalogDatabaseName,
-    '--objects-bucket',
-    target.objectsBucketName,
-  ]);
+): Promise<CloudflareSmokeTarget> {
+  const result = await project.lore(
+    ['--json', 'target', 'add', 'cloudflare', '--yes'],
+    target.wranglerEnv,
+  );
   if (result.code !== 0) {
     throw new Error(`lore target add cloudflare failed:\n${result.stderr}`);
   }
+
+  const databaseId = await lookupD1DatabaseId(target.catalogDatabaseName, target.wranglerEnv);
+  const configuredTarget = {
+    ...target,
+    catalogDatabaseId: databaseId,
+  };
+  await deployAcceptanceWorker(configuredTarget, project.projectName);
+  return configuredTarget;
 }
 
 export async function deployCloudflareTarget(
@@ -552,6 +507,49 @@ async function lookupD1DatabaseId(
     throw new Error(`Could not find D1 database ${name} in wrangler d1 list output.`);
   }
   return match.id;
+}
+
+async function deployAcceptanceWorker(
+  target: CloudflareSmokeTarget,
+  projectName: string,
+): Promise<void> {
+  writeFileSync(
+    target.configPath,
+    `${JSON.stringify(
+      {
+        $schema: './node_modules/wrangler/config-schema.json',
+        name: target.workerName,
+        main: 'src/worker.ts',
+        compatibility_date: COMPATIBILITY_DATE,
+        compatibility_flags: ['enable_request_signal'],
+        account_id: target.accountId,
+        workers_dev: true,
+        vars: {
+          PROJECT_ID: projectName,
+        },
+        d1_databases: [
+          {
+            binding: 'CATALOG_DB',
+            database_name: target.catalogDatabaseName,
+            database_id: target.catalogDatabaseId,
+            remote: true,
+          },
+        ],
+        r2_buckets: [
+          {
+            binding: 'OBJECTS',
+            bucket_name: target.objectsBucketName,
+            remote: true,
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+
+  await runWrangler(['deploy', '--config', target.configPath], target.wranglerEnv, WORKER_ROOT);
 }
 
 function parseD1DatabaseInfo(value: unknown): D1DatabaseInfo | null {
