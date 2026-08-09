@@ -4,6 +4,7 @@ import { PHASE_2 } from './phases/phase-2.js';
 import { PHASE_3 } from './phases/phase-3.js';
 import { PHASE_4 } from './phases/phase-4.js';
 import { PHASE_5 } from './phases/phase-5.js';
+import { PHASE_6 } from './phases/phase-6.js';
 import type { PhaseDefinition } from './types.js';
 
 /**
@@ -17,6 +18,7 @@ export const PHASES: readonly PhaseDefinition[] = [
   PHASE_3,
   PHASE_4,
   PHASE_5,
+  PHASE_6,
 ];
 
 export function phaseDefinition(phase: number): PhaseDefinition | null {
