@@ -181,7 +181,10 @@ export async function teardownCloudflareSmokeTarget(
 
   for (const key of remoteObjectKeys(projectRoot, projectName, buildIds)) {
     try {
-      await runWrangler(remoteR2ObjectDeleteArgs(target.objectsBucketName, key), target.wranglerEnv);
+      await runWrangler(
+        remoteR2ObjectDeleteArgs(target.objectsBucketName, key),
+        target.wranglerEnv,
+      );
     } catch (error) {
       failures.push(`delete object ${key}: ${messageOf(error)}`);
     }
