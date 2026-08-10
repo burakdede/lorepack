@@ -16,6 +16,7 @@ class FakeR2Bucket {
   putFailures = 0;
   putDelayMs = 0;
   getEmptyResponses = 0;
+  putBlocker?: Promise<void>;
 
   async put(key: string, value: Uint8Array): Promise<void> {
     if (this.putFailures > 0) {
@@ -27,6 +28,7 @@ class FakeR2Bucket {
     if (this.putDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.putDelayMs));
     }
+    await this.putBlocker;
     this.objects.set(key, new Uint8Array(value));
   }
 
@@ -233,10 +235,13 @@ describe('uploadProjectArchive, issue 88', () => {
   it('emits repeated progress updates during a slow archive upload', async () => {
     const fixture = makeBuildDirectory('rollback body');
     const bucket = new FakeR2Bucket();
-    bucket.putDelayMs = 90;
+    let resolveUpload: (() => void) | undefined;
+    bucket.putBlocker = new Promise<void>((resolve) => {
+      resolveUpload = resolve;
+    });
     const updates: { completedBytes: number; totalBytes: number; detail: string }[] = [];
 
-    const result = await uploadProjectArchive({
+    const resultPromise = uploadProjectArchive({
       bucket,
       projectId: PROJECT,
       buildId: BUILD,
@@ -245,13 +250,18 @@ describe('uploadProjectArchive, issue 88', () => {
       progressIntervalMs: 25,
       onProgress: (update) => {
         updates.push(update);
+        if (updates.filter((entry) => entry.detail === 'archive upload in progress').length === 3) {
+          resolveUpload?.();
+        }
       },
     });
 
+    const result = await resultPromise;
+
     expect(result.uploaded).toBe(true);
-    expect(updates.filter((update) => update.detail === 'archive upload in progress')).toHaveLength(
-      3,
-    );
+    expect(
+      updates.filter((update) => update.detail === 'archive upload in progress').length,
+    ).toBeGreaterThanOrEqual(3);
     expect(updates.at(-1)).toMatchObject({
       completedBytes: result.sizeBytes,
       totalBytes: result.sizeBytes,

@@ -48,15 +48,18 @@ class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
   readonly #db: DatabaseSync;
   readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
   readonly #runDelayMs: number;
+  readonly #runBlocker?: (query: string) => Promise<void> | undefined;
 
   constructor(
     db: DatabaseSync,
     beforeRun?: (query: string, bindings: readonly unknown[]) => void,
     runDelayMs = 0,
+    runBlocker?: (query: string) => Promise<void> | undefined,
   ) {
     this.#db = db;
     this.#beforeRun = beforeRun;
     this.#runDelayMs = runDelayMs;
+    this.#runBlocker = runBlocker;
   }
 
   prepare(query: string): ProjectionMigrationStatementLike {
@@ -65,6 +68,7 @@ class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
       query,
       this.#beforeRun,
       this.#runDelayMs,
+      this.#runBlocker,
     );
   }
 }
@@ -74,6 +78,7 @@ class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementL
   readonly #query: string;
   readonly #beforeRun?: (query: string, bindings: readonly unknown[]) => void;
   readonly #runDelayMs: number;
+  readonly #runBlocker?: (query: string) => Promise<void> | undefined;
   #bindings: readonly unknown[] = [];
 
   constructor(
@@ -81,11 +86,13 @@ class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementL
     query: string,
     beforeRun?: (query: string, bindings: readonly unknown[]) => void,
     runDelayMs = 0,
+    runBlocker?: (query: string) => Promise<void> | undefined,
   ) {
     this.#db = db;
     this.#query = query;
     this.#beforeRun = beforeRun;
     this.#runDelayMs = runDelayMs;
+    this.#runBlocker = runBlocker;
   }
 
   bind(...values: unknown[]): ProjectionMigrationStatementLike {
@@ -98,6 +105,7 @@ class SqliteProjectionStatementWithHook implements ProjectionMigrationStatementL
     if (this.#runDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.#runDelayMs));
     }
+    await this.#runBlocker?.(this.#query);
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
@@ -423,20 +431,33 @@ describe('projectBuildMetadata, issue 87', () => {
       () => '2026-08-08T12:00:00.000Z',
     );
 
+    let resolveBatch: (() => void) | undefined;
+    const batchBlocker = new Promise<void>((resolve) => {
+      resolveBatch = resolve;
+    });
     const updates: Array<{ completedBatches: number; totalBatches: number; detail: string }> = [];
 
-    await projectBuildMetadata({
-      db: new SqliteProjectionDatabase(projection, undefined, 90),
+    const resultPromise = projectBuildMetadata({
+      db: new SqliteProjectionDatabase(projection, undefined, 0, (query) => {
+        return query === 'BEGIN IMMEDIATE' ? undefined : batchBlocker;
+      }),
       projectId: PROJECT,
       buildDirectory,
       projectedAt: '2026-08-08T13:00:00.000Z',
       progressIntervalMs: 25,
       onProgress: (update) => {
         updates.push(update);
+        if (updates.filter((entry) => entry.completedBatches === 0).length === 3) {
+          resolveBatch?.();
+        }
       },
     });
 
-    expect(updates.filter((update) => update.completedBatches === 0)).toHaveLength(3);
+    await resultPromise;
+
+    expect(updates.filter((update) => update.completedBatches === 0).length).toBeGreaterThanOrEqual(
+      3,
+    );
     expect(updates.at(-1)).toEqual({
       completedBatches: 11,
       totalBatches: 11,

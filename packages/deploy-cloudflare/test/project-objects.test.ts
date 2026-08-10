@@ -13,6 +13,7 @@ class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
   putFailures = new Map<string, number>();
   putDelayMs = 0;
+  putBlocker?: Promise<void>;
 
   async put(key: string, value: Uint8Array): Promise<void> {
     const failures = this.putFailures.get(key) ?? 0;
@@ -25,6 +26,7 @@ class FakeR2Bucket {
     if (this.putDelayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.putDelayMs));
     }
+    await this.putBlocker;
     this.objects.set(key, new Uint8Array(value));
   }
 
@@ -198,7 +200,10 @@ describe('uploadProjectObjects, issue 88', () => {
       'contracted:guides/rollback.md': 'rollback body',
     });
     const bucket = new FakeR2Bucket();
-    bucket.putDelayMs = 90;
+    let resolveUpload: (() => void) | undefined;
+    bucket.putBlocker = new Promise<void>((resolve) => {
+      resolveUpload = resolve;
+    });
     const updates: {
       completedBytes: number;
       totalBytes: number;
@@ -208,7 +213,7 @@ describe('uploadProjectObjects, issue 88', () => {
       skippedObjects: number;
     }[] = [];
 
-    const result = await uploadProjectObjects({
+    const resultPromise = uploadProjectObjects({
       bucket,
       projectId: PROJECT,
       buildDirectory: fixture.buildDirectory,
@@ -216,8 +221,21 @@ describe('uploadProjectObjects, issue 88', () => {
       progressIntervalMs: 25,
       onProgress: (update) => {
         updates.push(update);
+        if (
+          updates.filter(
+            (entry) =>
+              entry.completedBytes === 0 &&
+              entry.completedObjects === 0 &&
+              entry.uploadedObjects === 0 &&
+              entry.skippedObjects === 0,
+          ).length === 3
+        ) {
+          resolveUpload?.();
+        }
       },
     });
+
+    const result = await resultPromise;
 
     expect(result).toEqual({
       referencedObjects: 1,
@@ -232,8 +250,8 @@ describe('uploadProjectObjects, issue 88', () => {
           update.completedObjects === 0 &&
           update.uploadedObjects === 0 &&
           update.skippedObjects === 0,
-      ),
-    ).toHaveLength(3);
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
     expect(updates.at(-1)).toMatchObject({
       completedObjects: 1,
       totalObjects: 1,
