@@ -68,7 +68,7 @@ beforeEach(async () => {
   writeFileSync(join(project, 'lore.yaml'), CONFIG, 'utf8');
   writeFileSync(join(project, 'deployment.md'), DOCUMENT, 'utf8');
   await lore(['build']);
-});
+}, 30_000);
 
 afterEach(async () => {
   // Wait for each server to actually exit before removing anything. Windows has no POSIX

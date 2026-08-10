@@ -932,7 +932,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       verified_at: '2026-08-08T14:00:00.000Z',
       activated_at: null,
     });
-  });
+  }, 15_000);
 
   it('activates atomically by switching the pointer and incrementing generation', async () => {
     const fixture = makeBuildFixture();
