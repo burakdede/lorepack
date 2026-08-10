@@ -181,10 +181,7 @@ export async function teardownCloudflareSmokeTarget(
 
   for (const key of remoteObjectKeys(projectRoot, projectName, buildIds)) {
     try {
-      await runWrangler(
-        ['r2', 'object', 'delete', `${target.objectsBucketName}/${key}`],
-        target.wranglerEnv,
-      );
+      await runWrangler(remoteR2ObjectDeleteArgs(target.objectsBucketName, key), target.wranglerEnv);
     } catch (error) {
       failures.push(`delete object ${key}: ${messageOf(error)}`);
     }
@@ -197,7 +194,7 @@ export async function teardownCloudflareSmokeTarget(
   }
 
   try {
-    await runWrangler(['r2', 'bucket', 'delete', target.objectsBucketName], target.wranglerEnv);
+    await deleteCloudflareBucket(target.objectsBucketName, target.wranglerEnv);
   } catch (error) {
     if (!isMissingCloudflareBucketError(error)) {
       failures.push(`delete bucket ${target.objectsBucketName}: ${messageOf(error)}`);
@@ -750,11 +747,23 @@ export function cloudflareWorkerDeleteUrl(accountId: string, workerName: string)
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`;
 }
 
+export function remoteR2ObjectDeleteArgs(
+  bucketName: string,
+  key: string,
+): readonly [string, string, string, string, string] {
+  return ['r2', 'object', 'delete', `${bucketName}/${key}`, '--remote'];
+}
+
 export function isMissingCloudflareBucketError(error: unknown): boolean {
   const message = messageOf(error);
   return (
     message.includes('The specified bucket does not exist.') && message.includes('[code: 10006]')
   );
+}
+
+export function isNonEmptyCloudflareBucketError(error: unknown): boolean {
+  const message = messageOf(error);
+  return message.includes('is not empty') && message.includes('[code: 10008]');
 }
 
 export function isMissingCloudflareD1Error(error: unknown): boolean {
@@ -844,6 +853,27 @@ function authHeaders(token: string | null): Record<string, string> {
 
 function runtimeTokenEnv(token: string | null): Readonly<Record<string, string>> {
   return token === null ? {} : { LORE_REMOTE_BEARER_TOKEN: token };
+}
+
+async function deleteCloudflareBucket(
+  bucketName: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const attempts = 5;
+  let lastFailure: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await runWrangler(['r2', 'bucket', 'delete', bucketName], env);
+      return;
+    } catch (error) {
+      lastFailure = error;
+      if (!isNonEmptyCloudflareBucketError(error) || attempt >= attempts) {
+        throw error;
+      }
+      await sleep(1_000 * attempt);
+    }
+  }
+  throw lastFailure instanceof Error ? lastFailure : new Error(String(lastFailure));
 }
 
 async function deleteCloudflareWorker(target: CloudflareSmokeTarget): Promise<void> {

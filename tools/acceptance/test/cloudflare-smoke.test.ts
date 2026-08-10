@@ -16,11 +16,13 @@ import {
   deployCloudflareTargetExpectFailureAfterProject,
   isMissingCloudflareBucketError,
   isMissingCloudflareD1Error,
+  isNonEmptyCloudflareBucketError,
   issueCloudflareRuntimeToken,
   parseCloudflareTargetReceipt,
   parseWranglerDeploymentInfo,
   provisionCloudflareSmokeTarget,
   readRemoteContext,
+  remoteR2ObjectDeleteArgs,
   resumeCloudflareTarget,
   rollbackCloudflareTarget,
   smokeProjectName,
@@ -132,6 +134,26 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     ).toBe(false);
   });
 
+  it('recognizes the Cloudflare non-empty bucket response used for retryable teardown', () => {
+    expect(
+      isNonEmptyCloudflareBucketError(
+        new Error(
+          [
+            'wrangler r2 bucket delete lorepack-ci-demo-objects exited 1',
+            'A request to the Cloudflare API (/accounts/demo/r2/buckets/lorepack-ci-demo-objects) failed.',
+            '',
+            '  The bucket you tried to delete (lorepack-ci-demo-objects) is not empty (account demo). [code: 10008]',
+          ].join('\n'),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isNonEmptyCloudflareBucketError(
+        new Error('wrangler r2 bucket delete failed for another reason'),
+      ),
+    ).toBe(false);
+  });
+
   it('treats the Cloudflare D1 already-missing response as a tolerated teardown case', () => {
     expect(
       isMissingCloudflareD1Error(
@@ -146,6 +168,21 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     expect(
       isMissingCloudflareD1Error(new Error('wrangler d1 delete failed for another reason')),
     ).toBe(false);
+  });
+
+  it('deletes R2 objects against the remote bucket during teardown', () => {
+    expect(
+      remoteR2ObjectDeleteArgs(
+        'lorepack-ci-demo-objects',
+        'lorepack-ci-demo/builds/lore_demo/archive.lorepack',
+      ),
+    ).toEqual([
+      'r2',
+      'object',
+      'delete',
+      'lorepack-ci-demo-objects/lorepack-ci-demo/builds/lore_demo/archive.lorepack',
+      '--remote',
+    ]);
   });
 
   it('depends on the built CLI binary', () => {
