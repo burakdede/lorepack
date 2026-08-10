@@ -1,5 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { EXIT_CODES } from '@lorepack/core';
 import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
@@ -413,7 +414,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         const denied = await project.lore(['deploy', 'cloudflare', '--no-build', '--yes'], {
           LORE_REMOTE_BEARER_TOKEN: runtimeToken,
         });
-        expect(denied.code).toBe(1);
+        expect(denied.code).toBe(EXIT_CODES.REMOTE);
         expect(denied.stderr).toContain('LORE_E_CAPABILITY_LOSS');
         expect(denied.stderr).toContain('semantic-search');
         expect(denied.stderr).toContain('--allow-capability-loss semantic-search');

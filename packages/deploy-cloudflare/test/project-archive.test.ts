@@ -15,6 +15,7 @@ class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
   putFailures = 0;
   putDelayMs = 0;
+  getEmptyResponses = 0;
 
   async put(key: string, value: Uint8Array): Promise<void> {
     if (this.putFailures > 0) {
@@ -32,6 +33,12 @@ class FakeR2Bucket {
   async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
     const value = this.objects.get(key);
     if (value === undefined) return null;
+    if (this.getEmptyResponses > 0) {
+      this.getEmptyResponses -= 1;
+      return {
+        arrayBuffer: async () => new ArrayBuffer(0),
+      };
+    }
     return {
       arrayBuffer: async () =>
         value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer,
@@ -201,6 +208,26 @@ describe('uploadProjectArchive, issue 88', () => {
 
     expect(result.uploaded).toBe(true);
     expect(bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
+  });
+
+  it('retries a transient empty read during remote archive verification', async () => {
+    const fixture = makeBuildDirectory('rollback body');
+    const bucket = new FakeR2Bucket();
+    bucket.getEmptyResponses = 1;
+
+    const result = await uploadProjectArchive({
+      bucket,
+      projectId: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      objectsDirectory: fixture.objectsDirectory,
+      retryDelayMs: 0,
+      sleep: async () => {},
+    });
+
+    expect(result.uploaded).toBe(true);
+    expect(bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
+    expect(bucket.getEmptyResponses).toBe(0);
   });
 
   it('emits repeated progress updates during a slow archive upload', async () => {
