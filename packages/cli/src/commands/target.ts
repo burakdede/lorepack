@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { LoreError, loadConfig, writeFileAtomic } from '@lorepack/core';
@@ -25,6 +26,7 @@ import { targetsDirectory } from '../services/config-resolve.js';
 const execFileAsync = promisify(execFile);
 const CLOUDFLARE_CAPABILITIES = ['lexical-search', 'structured-context', 'table-query'] as const;
 const CLOUDFLARE_SETUP_DOC = 'docs/integrations/cloudflare-target-setup.md' as const;
+const WRANGLER_REMOTE_D1_RETRY_LIMIT = 3;
 const WRANGLER_BIN = join(
   import.meta.dirname,
   '..',
@@ -36,6 +38,7 @@ const WRANGLER_BIN = join(
   'bin',
   'wrangler.js',
 );
+const WRANGLER_D1_TRANSACTION_CONTROL = new Set(['begin immediate', 'commit', 'rollback']);
 
 export interface CloudflareTargetReceipt {
   readonly formatVersion: 1;
@@ -1025,23 +1028,26 @@ function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt
 
 class WranglerCatalogDatabase implements ProjectionMigrationDatabaseLike, RuntimeAuthDatabaseLike {
   readonly #name: string;
+  readonly #transaction = new WranglerD1TransactionBatch();
 
   constructor(name: string) {
     this.#name = name;
   }
 
   prepare(query: string): WranglerStatement {
-    return new WranglerStatement(this.#name, query);
+    return new WranglerStatement(this.#name, this.#transaction, query);
   }
 }
 
 class WranglerStatement implements ProjectionMigrationStatementLike {
   readonly #databaseName: string;
+  readonly #transaction: WranglerD1TransactionBatch;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
 
-  constructor(databaseName: string, query: string) {
+  constructor(databaseName: string, transaction: WranglerD1TransactionBatch, query: string) {
     this.#databaseName = databaseName;
+    this.#transaction = transaction;
     this.#query = query;
   }
 
@@ -1051,18 +1057,116 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const control = wranglerD1TransactionControl(this.#query);
+    if (control === 'begin') {
+      this.#transaction.begin();
+      return {};
+    }
+    if (control === 'rollback') {
+      this.#transaction.rollback();
+      return {};
+    }
+    if (control === 'commit') {
+      const flushed = this.#transaction.commit();
+      if (flushed === null) return {};
+      const { stdout } = await execWranglerSqlFile(this.#databaseName, flushed);
+      return { results: readD1Results<T>(parseWranglerJson(stdout)) };
+    }
+
+    const mode = wranglerD1ExecutionMode(this.#query);
     const rendered = renderSql(this.#query, this.#bindings);
-    const { stdout } = await execWrangler([
-      'd1',
-      'execute',
-      this.#databaseName,
-      '--remote',
-      '--json',
-      '--command',
-      rendered,
-    ]);
-    return { results: readD1Results<T>(JSON.parse(stdout) as unknown) };
+    if (mode === 'file' && this.#transaction.active) {
+      this.#transaction.stage(rendered);
+      return {};
+    }
+    if (mode === 'command' && this.#transaction.active) {
+      const flushed = this.#transaction.flush();
+      if (flushed !== null) {
+        await execWranglerSqlFile(this.#databaseName, flushed);
+      }
+    }
+    const { stdout } =
+      mode === 'file'
+        ? await execWranglerSqlFile(this.#databaseName, rendered)
+        : await execWrangler([
+            'd1',
+            'execute',
+            this.#databaseName,
+            '--remote',
+            '--json',
+            '--command',
+            rendered,
+          ]);
+    return { results: readD1Results<T>(parseWranglerJson(stdout)) };
   }
+}
+
+export function isWranglerD1TransactionControl(query: string): boolean {
+  return wranglerD1TransactionControl(query) !== null;
+}
+
+export function wranglerD1ExecutionMode(query: string): 'skip' | 'command' | 'file' {
+  if (wranglerD1TransactionControl(query) !== null) return 'skip';
+  return isWranglerD1ReadQuery(query) ? 'command' : 'file';
+}
+
+export class WranglerD1TransactionBatch {
+  #statements: string[] | null = null;
+
+  get active(): boolean {
+    return this.#statements !== null;
+  }
+
+  begin(): void {
+    this.#statements = [];
+  }
+
+  stage(sql: string): void {
+    if (this.#statements === null) return;
+    this.#statements.push(sql);
+  }
+
+  flush(): string | null {
+    const statements = this.#statements;
+    if (statements === null || statements.length === 0) return null;
+    this.#statements = [];
+    return renderWranglerSqlBatch(statements);
+  }
+
+  commit(): string | null {
+    const flushed = this.flush();
+    this.#statements = null;
+    return flushed;
+  }
+
+  rollback(): void {
+    this.#statements = null;
+  }
+}
+
+export function renderWranglerSqlBatch(statements: readonly string[]): string {
+  return statements.map(terminateSql).join('\n');
+}
+
+export function isRetryableWranglerRemoteD1Failure(text: string): boolean {
+  return text.includes('fetch failed');
+}
+
+function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'rollback' | null {
+  const normalized = query.trim().toLowerCase();
+  if (!WRANGLER_D1_TRANSACTION_CONTROL.has(normalized)) return null;
+  if (normalized === 'begin immediate') return 'begin';
+  if (normalized === 'commit') return 'commit';
+  return 'rollback';
+}
+
+function isWranglerD1ReadQuery(query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  return (
+    normalized.startsWith('select') ||
+    normalized.startsWith('pragma') ||
+    normalized.startsWith('with')
+  );
 }
 
 function issueRuntimeToken(): string {
@@ -1070,13 +1174,48 @@ function issueRuntimeToken(): string {
 }
 
 async function execWrangler(args: readonly string[]): Promise<{ readonly stdout: string }> {
-  const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
-    cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
-    env: { ...process.env, NO_D1_WARNING: 'true' },
-    encoding: 'utf8',
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  return { stdout };
+  const attempts = isWranglerRemoteD1Execute(args) ? WRANGLER_REMOTE_D1_RETRY_LIMIT : 1;
+  let lastFailure: Error | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
+        cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
+        env: { ...process.env, NO_D1_WARNING: 'true' },
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { stdout };
+    } catch (cause) {
+      const failure = wranglerExecFailure(cause);
+      lastFailure = failure;
+      if (attempt >= attempts || !isRetryableWranglerRemoteD1Failure(failure.message)) {
+        throw failure;
+      }
+      await sleep(250 * attempt);
+    }
+  }
+  throw lastFailure ?? new Error('Wrangler execution failed without an error message.');
+}
+
+async function execWranglerSqlFile(
+  databaseName: string,
+  sql: string,
+): Promise<{ readonly stdout: string }> {
+  const path = tempPath('lore-target-d1-execute-', 'statement.sql');
+  try {
+    writeFileSync(path, sql, 'utf8');
+    return await execWrangler([
+      'd1',
+      'execute',
+      databaseName,
+      '--remote',
+      '--json',
+      '--file',
+      path,
+    ]);
+  } finally {
+    rmSync(path, { force: true });
+  }
 }
 
 async function wranglerD1Exists(name: string): Promise<boolean> {
@@ -1118,6 +1257,20 @@ function readD1Results<T>(raw: unknown): readonly T[] {
   return readResultsArray<T>(raw) ?? [];
 }
 
+function isWranglerRemoteD1Execute(args: readonly string[]): boolean {
+  return args[0] === 'd1' && args[1] === 'execute' && args.includes('--remote');
+}
+
+export function parseWranglerJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout) as unknown;
+  } catch (error) {
+    const start = findWranglerJsonStart(stdout);
+    if (start === null) throw error;
+    return JSON.parse(stdout.slice(start)) as unknown;
+  }
+}
+
 function readResultsArray<T>(raw: unknown): readonly T[] | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const value = raw as { readonly results?: readonly T[]; readonly result?: readonly T[] };
@@ -1148,6 +1301,24 @@ function renderSql(query: string, bindings: readonly unknown[]): string {
   return rendered;
 }
 
+function findWranglerJsonStart(stdout: string): number | null {
+  const objectStart = stdout.indexOf('{');
+  const arrayStart = stdout.indexOf('[');
+  if (objectStart === -1 && arrayStart === -1) return null;
+  if (objectStart === -1) return arrayStart;
+  if (arrayStart === -1) return objectStart;
+  return Math.min(objectStart, arrayStart);
+}
+
+function terminateSql(sql: string): string {
+  return sql.trimEnd().endsWith(';') ? sql : `${sql};`;
+}
+
+function tempPath(prefix: string, filename: string): string {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  return join(directory, filename);
+}
+
 function literalFor(value: unknown): string {
   if (value === null) return 'NULL';
   if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`;
@@ -1160,4 +1331,22 @@ function literalFor(value: unknown): string {
       remediation: 'Fix the Cloudflare CLI adapter so it writes only scalar SQLite values.',
     },
   );
+}
+
+function wranglerExecFailure(cause: unknown): Error {
+  const failure = cause as {
+    readonly message?: string;
+    readonly stdout?: string | Buffer;
+    readonly stderr?: string | Buffer;
+  };
+  const stdout = failure.stdout === undefined ? '' : String(failure.stdout);
+  const stderr = failure.stderr === undefined ? '' : String(failure.stderr);
+  const message = [failure.message ?? 'Wrangler execution failed.', stderr, stdout]
+    .filter((part) => part.trim() !== '')
+    .join('\n');
+  return new Error(message);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

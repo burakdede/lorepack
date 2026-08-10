@@ -158,37 +158,44 @@ async function verifyRemoteArchive(
   key: string,
   expected: string,
 ): Promise<void> {
-  const object = await withRetries(
-    () => bucket.get(key),
-    defaultRetryPolicy(),
-    `read uploaded archive ${key}`,
-    key,
-  );
-  if (object === null) {
-    throw new LoreError(
-      'LORE_E_OBJECT_CORRUPT',
-      `Uploaded archive ${key} was not readable from remote storage.`,
-      {
-        remediation: 'Deploy again. If this recurs, the remote object store is not durable.',
-        subject: key,
-      },
+  const retry = defaultRetryPolicy();
+  let lastFailure: LoreError | null = null;
+  for (let attempt = 1; attempt <= retry.attempts; attempt += 1) {
+    const object = await withRetries(
+      () => bucket.get(key),
+      retry,
+      `read uploaded archive ${key}`,
+      key,
     );
+    if (object === null) {
+      lastFailure = new LoreError(
+        'LORE_E_OBJECT_CORRUPT',
+        `Uploaded archive ${key} was not readable from remote storage.`,
+        {
+          remediation: 'Deploy again. If this recurs, the remote object store is not durable.',
+          subject: key,
+        },
+      );
+    } else {
+      const bytes = new Uint8Array(await object.arrayBuffer());
+      const actual = hashBytes(bytes);
+      if (actual === expected) return;
+      lastFailure = new LoreError(
+        'LORE_E_OBJECT_CORRUPT',
+        `Uploaded archive ${key} failed remote verification.`,
+        {
+          remediation:
+            'Deploy again so the archive is uploaded cleanly. If this recurs, the remote bucket contents are damaged.',
+          subject: key,
+          details: { expected, actual },
+        },
+      );
+    }
+    if (attempt < retry.attempts) {
+      await retry.sleep(retry.delayMs);
+    }
   }
-
-  const bytes = new Uint8Array(await object.arrayBuffer());
-  const actual = hashBytes(bytes);
-  if (actual !== expected) {
-    throw new LoreError(
-      'LORE_E_OBJECT_CORRUPT',
-      `Uploaded archive ${key} failed remote verification.`,
-      {
-        remediation:
-          'Deploy again so the archive is uploaded cleanly. If this recurs, the remote bucket contents are damaged.',
-        subject: key,
-        details: { expected, actual },
-      },
-    );
-  }
+  throw lastFailure ?? new Error('Archive verification failed without an error.');
 }
 
 function withCleanup<T>(directory: string, body: () => Promise<T>): Promise<T> {

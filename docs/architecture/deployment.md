@@ -102,6 +102,13 @@ It measures the current projection path with delayed write statements and record
 in-flight D1 writes observed. The recorded result is `maxInflightWrites: 1`, which is the
 evidence behind keeping the write path serial while D1 remains single-threaded.
 
+The CLI's Wrangler-backed D1 adapter executes remote D1 statements from temporary `.sql` files
+instead of passing projected SQL through Wrangler's `--command` flag. It also does **not**
+forward explicit transaction control statements such as `BEGIN IMMEDIATE`, `COMMIT`, or
+`ROLLBACK` to remote D1. Cloudflare D1 already wraps each remote statement in its own
+transaction, so sending those statements through Wrangler fails before projection can begin.
+Serial writes still hold because Lorepack awaits each statement in order.
+
 If a later change proposes parallel D1 projection writes, it must replace that artifact with a
 new measurement and update this section. Until then, higher concurrency would be an optimization
 before measured need.

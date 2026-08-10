@@ -16,10 +16,12 @@ import {
 import {
   type CloudflareTargetAdapter,
   createWranglerAdapter,
+  isRetryableWranglerRemoteD1Failure,
   readCloudflareTargetReceipt,
 } from '../commands/target.js';
 
 const execFileAsync = promisify(execFile);
+const WRANGLER_REMOTE_D1_RETRY_LIMIT = 3;
 const WRANGLER_BIN = join(
   import.meta.dirname,
   '..',
@@ -60,6 +62,13 @@ interface WranglerD1ExecuteResponse {
   readonly result?: readonly Record<string, unknown>[];
   readonly success?: boolean;
 }
+
+interface WranglerExecResult {
+  readonly stdout: string;
+  readonly missingObject?: boolean;
+}
+
+const WRANGLER_D1_TRANSACTION_CONTROL = new Set(['begin immediate', 'commit', 'rollback']);
 
 export async function resolveCloudflareTarget(projectRoot: string): Promise<DeploymentTarget> {
   return await resolveCloudflareTargetWithAdapter(projectRoot, createWranglerDeployAdapter());
@@ -160,7 +169,7 @@ export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
     ...createWranglerAdapter(),
     async listDatabases(): Promise<readonly CloudflareDatabaseInfo[]> {
       const { stdout } = await execWrangler(['d1', 'list', '--json']);
-      const parsed = JSON.parse(stdout) as unknown;
+      const parsed = parseWranglerJson(stdout);
       if (!Array.isArray(parsed) || !parsed.every(isDatabaseInfo)) {
         throw new LoreError(
           'LORE_E_TARGET_NOT_CONFIGURED',
@@ -191,23 +200,26 @@ class WranglerCatalogDatabase
     D1DatabaseLike
 {
   readonly #name: string;
+  readonly #transaction = new WranglerD1TransactionBatch();
 
   constructor(name: string) {
     this.#name = name;
   }
 
   prepare(query: string): WranglerStatement {
-    return new WranglerStatement(this.#name, query);
+    return new WranglerStatement(this.#name, this.#transaction, query);
   }
 }
 
 class WranglerStatement implements ProjectionMigrationStatementLike {
   readonly #databaseName: string;
+  readonly #transaction: WranglerD1TransactionBatch;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
 
-  constructor(databaseName: string, query: string) {
+  constructor(databaseName: string, transaction: WranglerD1TransactionBatch, query: string) {
     this.#databaseName = databaseName;
+    this.#transaction = transaction;
     this.#query = query;
   }
 
@@ -217,23 +229,117 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
+    const control = wranglerD1TransactionControl(this.#query);
+    if (control === 'begin') {
+      this.#transaction.begin();
+      return {};
+    }
+    if (control === 'rollback') {
+      this.#transaction.rollback();
+      return {};
+    }
+    if (control === 'commit') {
+      const flushed = this.#transaction.commit();
+      if (flushed === null) return {};
+      const { stdout } = await execWranglerSqlFile(this.#databaseName, flushed);
+      return { results: readD1Results<T>(parseWranglerJson(stdout)) };
+    }
+
+    const mode = wranglerD1ExecutionMode(this.#query);
     const rendered = renderSql(this.#query, this.#bindings);
-    const { stdout } = await execWrangler([
-      'd1',
-      'execute',
-      this.#databaseName,
-      '--remote',
-      '--json',
-      '--command',
-      rendered,
-    ]);
-    return { results: readD1Results<T>(JSON.parse(stdout) as unknown) };
+    if (mode === 'file' && this.#transaction.active) {
+      this.#transaction.stage(rendered);
+      return {};
+    }
+    if (mode === 'command' && this.#transaction.active) {
+      const flushed = this.#transaction.flush();
+      if (flushed !== null) {
+        await execWranglerSqlFile(this.#databaseName, flushed);
+      }
+    }
+    const { stdout } =
+      mode === 'file'
+        ? await execWranglerSqlFile(this.#databaseName, rendered)
+        : await execWrangler([
+            'd1',
+            'execute',
+            this.#databaseName,
+            '--remote',
+            '--json',
+            '--command',
+            rendered,
+          ]);
+    return { results: readD1Results<T>(parseWranglerJson(stdout)) };
   }
 
   async first<T = Record<string, unknown>>(): Promise<T | null> {
     const results = await this.run<T>();
     return (results.results?.[0] as T | undefined) ?? null;
   }
+}
+
+export function isWranglerD1TransactionControl(query: string): boolean {
+  return wranglerD1TransactionControl(query) !== null;
+}
+
+export function wranglerD1ExecutionMode(query: string): 'skip' | 'command' | 'file' {
+  if (wranglerD1TransactionControl(query) !== null) return 'skip';
+  return isWranglerD1ReadQuery(query) ? 'command' : 'file';
+}
+
+export class WranglerD1TransactionBatch {
+  #statements: string[] | null = null;
+
+  get active(): boolean {
+    return this.#statements !== null;
+  }
+
+  begin(): void {
+    this.#statements = [];
+  }
+
+  stage(sql: string): void {
+    if (this.#statements === null) return;
+    this.#statements.push(sql);
+  }
+
+  flush(): string | null {
+    const statements = this.#statements;
+    if (statements === null || statements.length === 0) return null;
+    this.#statements = [];
+    return renderWranglerSqlBatch(statements);
+  }
+
+  commit(): string | null {
+    const flushed = this.flush();
+    this.#statements = null;
+    return flushed;
+  }
+
+  rollback(): void {
+    this.#statements = null;
+  }
+}
+
+export function renderWranglerSqlBatch(statements: readonly string[]): string {
+  return statements.map(terminateSql).join('\n');
+}
+
+function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'rollback' | null {
+  const normalized = query.trim().toLowerCase();
+  if (!WRANGLER_D1_TRANSACTION_CONTROL.has(normalized)) return null;
+  if (normalized === 'begin immediate') return 'begin';
+  if (normalized === 'commit') return 'commit';
+  return 'rollback';
+}
+
+function isWranglerD1ReadQuery(query: string): boolean {
+  const normalized = query.trim().toLowerCase();
+  return (
+    normalized.startsWith('select') ||
+    normalized.startsWith('pragma') ||
+    normalized.startsWith('with')
+  );
 }
 
 class WranglerR2Bucket implements R2BucketLike {
@@ -264,10 +370,11 @@ class WranglerR2Bucket implements R2BucketLike {
   async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
     const temp = tempPath('lore-r2-get-');
     try {
-      await execWrangler(
+      const result = await execWrangler(
         ['r2', 'object', 'get', `${this.#name}/${key}`, '--remote', '--file', temp],
         true,
       );
+      if (result.missingObject === true) return null;
       if (!readableFileExists(temp)) return null;
       const body = readFileSync(temp);
       return {
@@ -315,6 +422,16 @@ function readResultsArray<T>(raw: unknown): readonly T[] | null {
   return null;
 }
 
+export function parseWranglerJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout) as unknown;
+  } catch (error) {
+    const start = findWranglerJsonStart(stdout);
+    if (start === null) throw error;
+    return JSON.parse(stdout.slice(start)) as unknown;
+  }
+}
+
 function renderSql(query: string, bindings: readonly unknown[]): string {
   let index = 0;
   const rendered = query.replace(/\?/g, () => {
@@ -335,6 +452,15 @@ function renderSql(query: string, bindings: readonly unknown[]): string {
     });
   }
   return rendered;
+}
+
+function findWranglerJsonStart(stdout: string): number | null {
+  const objectStart = stdout.indexOf('{');
+  const arrayStart = stdout.indexOf('[');
+  if (objectStart === -1 && arrayStart === -1) return null;
+  if (objectStart === -1) return arrayStart;
+  if (arrayStart === -1) return objectStart;
+  return Math.min(objectStart, arrayStart);
 }
 
 function literalFor(value: unknown): string {
@@ -358,39 +484,117 @@ function literalFor(value: unknown): string {
   );
 }
 
+function terminateSql(sql: string): string {
+  return sql.trimEnd().endsWith(';') ? sql : `${sql};`;
+}
+
+function isWranglerRemoteD1Execute(args: readonly string[]): boolean {
+  return args[0] === 'd1' && args[1] === 'execute' && args.includes('--remote');
+}
+
+function wranglerExecFailure(cause: unknown): Error {
+  const failure = cause as {
+    readonly message?: string;
+    readonly stdout?: string | Buffer;
+    readonly stderr?: string | Buffer;
+  };
+  const stdout = failure.stdout === undefined ? '' : String(failure.stdout);
+  const stderr = failure.stderr === undefined ? '' : String(failure.stderr);
+  const message = [failure.message ?? 'Wrangler execution failed.', stderr, stdout]
+    .filter((part) => part.trim() !== '')
+    .join('\n');
+  return new Error(message);
+}
+
+export function isWranglerMissingObjectFailure(text: string): boolean {
+  return (
+    text.includes('No such object') ||
+    text.includes('The specified key does not exist') ||
+    text.includes('Not Found')
+  );
+}
+
+export function isRetryableWranglerRemoteR2Failure(text: string): boolean {
+  return (
+    text.includes("Unable to resolve Cloudflare's API hostname") || text.includes('fetch failed')
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function execWrangler(
   args: readonly string[],
   allowMissingObject = false,
-): Promise<{ readonly stdout: string }> {
-  try {
-    const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
-      cwd: WRANGLER_CWD,
-      env: { ...process.env, NO_D1_WARNING: 'true' },
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    return { stdout };
-  } catch (cause) {
-    const message = String(
-      (cause as { stderr?: string; message?: string }).stderr ??
-        (cause as { message?: string }).message ??
-        '',
-    );
-    if (
-      allowMissingObject &&
-      (message.includes('No such object') ||
-        message.includes('The specified key does not exist') ||
-        message.includes('Not Found'))
-    ) {
-      return { stdout: '' };
+): Promise<WranglerExecResult> {
+  const attempts =
+    isWranglerRemoteD1Execute(args) || isWranglerRemoteR2ObjectCommand(args)
+      ? WRANGLER_REMOTE_D1_RETRY_LIMIT
+      : 1;
+  let lastFailure: Error | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
+        cwd: WRANGLER_CWD,
+        env: { ...process.env, NO_D1_WARNING: 'true' },
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { stdout };
+    } catch (cause) {
+      const failure = wranglerExecFailure(cause);
+      lastFailure = failure;
+      if (allowMissingObject && isWranglerMissingObjectFailure(failure.message)) {
+        return { stdout: '', missingObject: true };
+      }
+      if (attempt >= attempts || !isRetryableWranglerRemoteWranglerFailure(args, failure.message)) {
+        throw failure;
+      }
+      await sleep(250 * attempt);
     }
-    throw cause;
+  }
+  throw lastFailure ?? new Error('Wrangler execution failed without an error message.');
+}
+
+async function execWranglerSqlFile(
+  databaseName: string,
+  sql: string,
+): Promise<{ readonly stdout: string }> {
+  const path = tempPath('lore-d1-execute-', 'statement.sql');
+  try {
+    writeFileSync(path, sql, 'utf8');
+    return await execWrangler([
+      'd1',
+      'execute',
+      databaseName,
+      '--remote',
+      '--json',
+      '--file',
+      path,
+    ]);
+  } finally {
+    rmSync(path, { force: true });
   }
 }
 
-function tempPath(prefix: string): string {
+function tempPath(prefix: string, filename = 'object.bin'): string {
   const directory = mkdtempSync(join(tmpdir(), prefix));
-  return join(directory, 'object.bin');
+  return join(directory, filename);
+}
+
+function isWranglerRemoteR2ObjectCommand(args: readonly string[]): boolean {
+  return args[0] === 'r2' && args[1] === 'object' && args.includes('--remote');
+}
+
+function isRetryableWranglerRemoteWranglerFailure(args: readonly string[], text: string): boolean {
+  if (isWranglerRemoteD1Execute(args)) {
+    return isRetryableWranglerRemoteD1Failure(text);
+  }
+  if (isWranglerRemoteR2ObjectCommand(args)) {
+    return isRetryableWranglerRemoteR2Failure(text);
+  }
+  return false;
 }
 
 function readableFileExists(path: string): boolean {
