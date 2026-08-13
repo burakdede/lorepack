@@ -30,7 +30,7 @@
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
     "check:counted-nouns": "node scripts/check-counted-nouns.mjs",
-    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:arch && pnpm test && pnpm test:security && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:no-conflict-claims && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm check:docs-images && pnpm check:docs-links && pnpm check:templates && pnpm check:license-policy && pnpm check:supply-chain && pnpm check:verify-parity && pnpm schemas:check && pnpm probe:fts5 && pnpm acceptance:docs:check && pnpm cli:docs:check && pnpm demo:readme:check",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:arch && pnpm test && pnpm test:security && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:no-conflict-claims && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm check:docs-images && pnpm check:docs-links && pnpm check:templates && pnpm check:license-policy && pnpm check:supply-chain && pnpm check:release-policy && pnpm check:verify-parity && pnpm schemas:check && pnpm probe:fts5 && pnpm acceptance:docs:check && pnpm cli:docs:check && pnpm demo:readme:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
@@ -54,6 +54,8 @@
     "check:templates": "node scripts/check-templates.mjs",
     "check:license-policy": "node scripts/check-license-policy.mjs",
     "check:supply-chain": "node scripts/check-supply-chain.mjs",
+    "check:release-policy": "node scripts/check-release-policy.mjs",
+    "check:changeset-policy": "node scripts/check-changeset-policy.mjs",
     "supply-chain:report": "node scripts/check-supply-chain.mjs --write"
   },
   "devDependencies": {

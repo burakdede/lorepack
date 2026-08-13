@@ -42,12 +42,63 @@ For dependencies, the health report reads npm registry `dist.attestations.proven
 for exact production direct dependencies. Missing attestations are reported by package name, not
 silently ignored.
 
+## Versioning Policy
+
+Changesets owns package version changes and package changelog entries. All publishable
+`@lorepack/*` packages move together for v0.1 through the fixed Changesets group in
+[`.changeset/config.json`](../../.changeset/config.json). Keeping the package versions aligned
+keeps the compatibility story simple while the public surface is still settling.
+
+Package versions do not define build compatibility on their own:
+
+- `formatVersion` is the sealed `.lorepack` archive contract. A breaking archive change raises
+  `formatVersion`, even if package versions also move.
+- `schemaVersion` is the catalog schema inside a build. A new package can read an older schema
+  only when code explicitly supports that schema.
+- package versions describe npm artifacts and changelogs. They are the delivery vehicle, not the
+  build identity or archive identity.
+
+Release candidates publish to the npm `next` dist tag. Stable releases publish to `latest`.
+
 ## Release artifacts
 
-The release workflow is manual because the v0.1 release process still cuts GitHub releases
-explicitly. It requires the existing release tag as input, regenerates the reports, uploads
-them as a workflow artifact, then attaches both files to that GitHub release with `gh release
-upload --clobber`.
+The release workflow is manual and dry-runnable. It requires the target version, npm channel
+(`latest` or `next`), a `dry_run` flag and, for stable publishing, the green reference-machine
+performance report URL from issue #101. Before any publish-side effect, it verifies that the
+required CI, clean-install, security, Cloudflare, Studio and benchmark check-runs completed
+successfully for the exact release commit.
+
+A dry run performs the same install, verification, Changesets versioning, build, SBOM
+generation, example package creation and npm tarball packing, then uploads the artifacts without
+committing, tagging, creating a GitHub release or publishing to npm.
+
+A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
+publishes packages with npm provenance through `pnpm changeset publish --tag <channel>`.
+
+The GitHub release receives:
+
+- `reports/dependency-health.json`;
+- `reports/sbom.cyclonedx.json`;
+- `examples/product-research/product-research.lorepack`.
+
+## Release Checklist
+
+The operational checklist lives in [`../release-checklist.md`](../release-checklist.md). It
+covers dry-run execution, client trust prompts, Cloudflare acceptance, the demo script,
+release-candidate publishing on `next`, stable publishing on `latest`, and post-release smoke
+checks.
+
+## Rollback and Deprecation
+
+A bad release is handled by pointer and registry actions, not by recompiling a build:
+
+1. Move npm dist tags back to the last known-good version with `npm dist-tag add`.
+2. Deprecate the bad package versions with `npm deprecate`, naming the replacement version.
+3. Mark the GitHub release as problematic and link the fix or rollback PR.
+4. If a bad `.lorepack` example was attached, attach a corrected artifact to the follow-up
+   release instead of mutating build identity.
+5. Use `lore activate` or `lore rollback` for affected local projects and Cloudflare target
+   activation rollback for projected runtimes.
 
 ## SBOM
 

@@ -94,6 +94,18 @@ jobs:
       - name: Supply-chain policy, audit, licenses, SBOM and provenance
         run: pnpm check:supply-chain
 
+      - name: Release automation policy
+        run: pnpm check:release-policy
+
+      - name: Changeset or explicit no-release marker
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=50 origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=50 origin "refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr-${{ github.event.pull_request.number }}"
+          export CHANGESET_HEAD_REF="origin/pr-${{ github.event.pull_request.number }}"
+          pnpm check:changeset-policy
+
       # These steps and `pnpm verify` are one list. This is what says so.
       - name: CI and `pnpm verify` run the same checks
         run: pnpm check:verify-parity
