@@ -89,3 +89,8 @@ lore connect --snippet
 prints the exact JSON to paste and changes nothing. An adapter that guessed at an
 unrecognized configuration shape is how a working setup becomes a broken one, so it does not
 guess.
+
+## Verified against
+
+Claude Code 2.1.220, MCP protocol 2026-07-28, verified 2026-08-03. Local version smoke saw
+Claude Code 2.1.228 on 2026-08-13.

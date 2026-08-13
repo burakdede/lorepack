@@ -133,3 +133,7 @@ lore connect vscode --snippet
 ```
 
 prints the exact JSON to paste and changes nothing.
+
+## Verified against
+
+VS Code 1.132.0 commit `df53daab`, MCP protocol 2026-07-28, verified 2026-08-05.

@@ -79,6 +79,9 @@ jobs:
       - name: Every documentation image is referenced and tracked
         run: pnpm check:docs-images
 
+      - name: Every local documentation link resolves
+        run: pnpm check:docs-links
+
       # These steps and `pnpm verify` are one list. This is what says so.
       - name: CI and `pnpm verify` run the same checks
         run: pnpm check:verify-parity
@@ -91,6 +94,9 @@ jobs:
 
       - name: The acceptance checklist matches the scenario catalogue
         run: pnpm acceptance:docs:check
+
+      - name: The CLI reference matches the command definitions
+        run: pnpm cli:docs:check
 
       - name: Upload test results
         if: always()
