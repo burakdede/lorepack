@@ -191,3 +191,8 @@ resources are still visible, and reports drift if the receipt no longer matches 
 The Worker resource is still created by the first successful deploy rather than by target setup.
 That is why reruns treat an undeployed Worker name as valid while still insisting that the D1
 database and R2 bucket exist remotely.
+
+## Verified against
+
+Cloudflare token and permissions docs on 2026-08-08, Cloudflare Access path on 2026-08-09,
+Wrangler package 4.119.0 on 2026-08-13.

@@ -162,3 +162,8 @@ when the environment variable is present.
 
 Those artifacts are what make a skipped run visibly different from a failing or passing one,
 and what let a later session audit the exact remote state transitions that were observed.
+
+## Verified against
+
+Credentialed Cloudflare acceptance smoke in CI as of 2026-08-09, with current local Wrangler
+package 4.119.0 confirmed on 2026-08-13.

@@ -123,3 +123,8 @@ lore connect codex --snippet
 ```
 
 prints the exact TOML to paste and changes nothing.
+
+## Verified against
+
+`codex-cli` 0.146.1, MCP protocol 2026-07-28, verified 2026-08-05. Local version smoke saw
+`codex-cli` 0.147.0 on 2026-08-13.
