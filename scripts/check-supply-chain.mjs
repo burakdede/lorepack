@@ -96,13 +96,17 @@ function runPnpm(args) {
     return run(process.execPath, [npmExecPath, ...args]);
   }
   if (npmExecPath !== undefined) {
-    return run(npmExecPath, args);
+    return run(npmExecPath, args, { shell: process.platform === 'win32' });
   }
-  return run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args);
+  return run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args, {
+    shell: process.platform === 'win32',
+  });
 }
 
 function runNpm(args) {
-  return run(process.platform === 'win32' ? 'npm.cmd' : 'npm', args);
+  return run(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, {
+    shell: process.platform === 'win32',
+  });
 }
 
 function npmView(name) {
