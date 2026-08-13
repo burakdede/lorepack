@@ -1,0 +1,1335 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:00000000-0000-4000-8000-000000000099",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "lorepack",
+      "version": "0.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "@biomejs/biome",
+      "version": "2.5.6",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.5.8"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-11T08:57:57.925Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@changesets/cli",
+      "version": "2.31.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-11T12:09:29.967Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@fontsource/ibm-plex-mono",
+      "version": "5.2.6",
+      "licenses": [
+        {
+          "expression": "OFL-1.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "5.3.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-19T03:39:57.977Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@fontsource/ibm-plex-sans",
+      "version": "5.2.6",
+      "licenses": [
+        {
+          "expression": "OFL-1.1"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "5.3.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-19T03:39:58.382Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@hono/node-server",
+      "version": "2.0.12",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.1.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-04T03:16:10.138Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@modelcontextprotocol/client",
+      "version": "2.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-27T23:55:22.113Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@modelcontextprotocol/hono",
+      "version": "2.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-27T23:55:16.925Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@modelcontextprotocol/node",
+      "version": "2.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-27T23:55:17.622Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@modelcontextprotocol/server",
+      "version": "2.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-27T23:55:22.239Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@playwright/test",
+      "version": "1.62.1 || ^1.62.1",
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "1.62.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T05:40:24.484Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@tanstack/react-query",
+      "version": "5.90.2",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "5.101.4"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-21T13:04:07.544Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@testing-library/jest-dom",
+      "version": "6.9.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "7.0.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-09T23:44:33.598Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@testing-library/react",
+      "version": "16.3.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "16.3.2"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-01-19T10:59:08.185Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@testing-library/user-event",
+      "version": "14.6.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "14.6.4"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-11T23:24:11.884Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/hast",
+      "version": "3.0.4",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.0.5"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-09T11:00:14.068Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/mdast",
+      "version": "4.0.4",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.0.4"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-05-14T07:35:37.616Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/node",
+      "version": "24.13.3",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "26.2.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-07T17:52:06.875Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/picomatch",
+      "version": "4.0.2",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.0.3"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-04-03T00:13:45.392Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/react",
+      "version": "19.2.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "19.2.18"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-30T21:54:03.456Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/react-dom",
+      "version": "19.2.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "19.2.4"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-30T21:53:05.684Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/sax",
+      "version": "^1.2.7",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "1.2.7"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2023-11-07T16:00:17.624Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/unist",
+      "version": "3.0.3",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.0.3"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-08-15T02:19:24.090Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/yauzl",
+      "version": "^3.4.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.4.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-06-13T17:37:45.293Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/yazl",
+      "version": "^3.3.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.3.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-04-07T22:11:34.726Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@vitejs/plugin-react",
+      "version": "5.0.4",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "6.0.5"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-30T10:12:02.149Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "axe-core",
+      "version": "4.11.0",
+      "licenses": [
+        {
+          "expression": "MPL-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.13.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-06T14:09:34.211Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "chokidar",
+      "version": "5.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "5.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2025-11-25T23:28:06.854Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "commander",
+      "version": "15.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "15.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-05-29T09:16:23.076Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "csv-parse",
+      "version": "7.0.2",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "7.0.2"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-02T20:18:06.960Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "hono",
+      "version": "4.12.34",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.13.2"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T11:55:37.169Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jose",
+      "version": "6.2.7",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "6.2.8"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-03T12:01:12.001Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jsdom",
+      "version": "27.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "30.0.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-29T04:18:42.378Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jsonc-parser",
+      "version": "3.3.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.3.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-06-16T22:19:13.250Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mammoth",
+      "version": "1.12.0",
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "1.12.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-09T14:13:02.962Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "mdast-util-from-markdown",
+      "version": "2.0.2",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.0.3"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-02-21T13:23:13.849Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "pdfjs-dist",
+      "version": "6.2.108",
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "6.2.108"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-28T19:51:33.809Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "picomatch",
+      "version": "4.0.5",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.0.5"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-02T16:47:23.026Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "react",
+      "version": "19.2.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "19.2.8"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T16:32:50.945Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "react-dom",
+      "version": "19.2.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "19.2.8"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T16:33:41.687Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "react-router",
+      "version": "7.18.2",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "8.3.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-07T16:34:10.918Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rehype-parse",
+      "version": "9.0.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "9.0.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-09-27T15:08:49.297Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "remark-frontmatter",
+      "version": "5.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "5.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2023-09-18T11:12:38.246Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "remark-gfm",
+      "version": "4.0.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.0.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2025-02-10T12:43:10.735Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "remark-parse",
+      "version": "11.0.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "11.0.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2023-09-18T09:42:28.170Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sax",
+      "version": "1.6.1",
+      "licenses": [
+        {
+          "expression": "BlueOak-1.0.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "1.6.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-07-24T18:50:24.821Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "smol-toml",
+      "version": "1.7.1",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "1.8.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-11T19:09:15.153Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "typescript",
+      "version": "7.0.2",
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "7.0.2"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T08:33:43.580Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "unified",
+      "version": "11.0.5",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "11.0.5"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-06-19T12:33:43.464Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "vite",
+      "version": "7.1.9",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "8.2.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-06T13:47:48.588Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "vitest",
+      "version": "4.1.10",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.1.10"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-11T23:45:21.455Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "wrangler",
+      "version": "4.119.0",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.123.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T16:09:16.089Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "yaml",
+      "version": "2.9.0",
+      "licenses": [
+        {
+          "expression": "ISC"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "2.9.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-05-11T10:16:24.045Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "yauzl",
+      "version": "3.4.0",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.4.0"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-06-07T12:57:28.373Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "yazl",
+      "version": "3.3.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "3.3.1"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-11-23T13:22:38.473Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "zod",
+      "version": "4.4.3",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "4.4.3"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-13T21:12:28.600Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "present"
+        }
+      ]
+    }
+  ]
+}

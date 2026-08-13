@@ -37,5 +37,9 @@
     "@lorepack/test-support": "workspace:*",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

@@ -449,5 +449,5 @@ describe('projectTableData, issue 258', () => {
       subject: expect.stringMatching(/^t_products_[0-9a-f]{16}$/),
       remediation: expect.stringContaining('Reduce the table width'),
     });
-  }, 15_000);
+  });
 });

@@ -36,5 +36,9 @@
   "devDependencies": {
     "@lorepack/test-support": "workspace:*",
     "@types/picomatch": "4.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

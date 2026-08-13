@@ -12,6 +12,7 @@
       "!**/studio-dist",
       "!**/*.tsbuildinfo",
       "!**/coverage",
+      "!reports",
       "!schemas",
       "!fixtures/expected"
     ]

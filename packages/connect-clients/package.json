@@ -32,5 +32,9 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/connect-clients"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
