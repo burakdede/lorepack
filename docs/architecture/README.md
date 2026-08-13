@@ -8,6 +8,7 @@ Lorepack has four planes. Keeping them separate is how the build remains the sou
 | Runtime | Read-only projection of one immutable build | [`serving.md`](serving.md), [`retrieval.md`](retrieval.md), [`local-storage.md`](local-storage.md) |
 | Control | CLI, Studio and local lifecycle operations | [`cli.md`](cli.md), [`studio.md`](studio.md), [`watch.md`](watch.md) |
 | Deployment | Remote projection and target receipts | [`deployment.md`](deployment.md), [`adr-cloudflare-worker-stateless.md`](adr-cloudflare-worker-stateless.md) |
+| Security | Threat model, security surfaces and pre-release review | [`threat-model.md`](threat-model.md), [`security.md`](security.md), [`security-review.md`](security-review.md) |
 
 ## Dependency rules
 

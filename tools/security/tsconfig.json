@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["test/**/*"],
+  "references": [
+    {
+      "path": "../../packages/cli"
+    }
+  ]
+}

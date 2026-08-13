@@ -20,6 +20,16 @@ You can expect an acknowledgement within a few days and an assessment of whether
 report is accepted, with an indication of timeline. Reporters are credited in the advisory
 unless they prefer otherwise.
 
+## Disclosure policy
+
+Accepted vulnerabilities are handled through coordinated disclosure. Fixes are prepared in a
+private advisory, released as soon as practical, and then disclosed publicly with impact,
+affected versions, mitigations and credit. If a report is already public or actively exploited,
+the fix may be published before the full advisory text is complete.
+
+Do not disclose a private report until the fix and advisory are public, unless we have agreed
+on another date in writing.
+
 ## Where the risk lives
 
 Areas most relevant to security reports, so you know what is in scope:
