@@ -43,6 +43,8 @@ export interface ContractOptions {
   readonly activateAnother?: () => Promise<string>;
 }
 
+const CONTRACT_TIMEOUT_MS = 30_000;
+
 /**
  * Runs the suite. Call it inside a test file:
  *
@@ -62,30 +64,34 @@ export function runRuntimeContract(options: ContractOptions): void {
     }
 
     describe('the response envelope', () => {
-      it('stamps a full build id and a valid source state on every capability', async () => {
-        await withFixture(async ({ runtime, knownArtifactId, matchingQuery }) => {
-          const responses = [
-            await runtime.describeBuild(),
-            await runtime.search({
-              query: matchingQuery,
-              limit: 5,
-              includeArchived: false,
-              debug: false,
-            }),
-            await runtime.contextForTask({
-              task: matchingQuery,
-              includeArchived: false,
-              allowUnsupportedBudget: false,
-            }),
-            await runtime.readSource({ artifactId: knownArtifactId }),
-          ];
+      it(
+        'stamps a full build id and a valid source state on every capability',
+        async () => {
+          await withFixture(async ({ runtime, knownArtifactId, matchingQuery }) => {
+            const responses = [
+              await runtime.describeBuild(),
+              await runtime.search({
+                query: matchingQuery,
+                limit: 5,
+                includeArchived: false,
+                debug: false,
+              }),
+              await runtime.contextForTask({
+                task: matchingQuery,
+                includeArchived: false,
+                allowUnsupportedBudget: false,
+              }),
+              await runtime.readSource({ artifactId: knownArtifactId }),
+            ];
 
-          for (const response of responses) {
-            expect(response.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
-            expect(['clean', 'dirty', 'unknown']).toContain(response.sourceState);
-          }
-        });
-      });
+            for (const response of responses) {
+              expect(response.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
+              expect(['clean', 'dirty', 'unknown']).toContain(response.sourceState);
+            }
+          });
+        },
+        CONTRACT_TIMEOUT_MS,
+      );
 
       it('reports the same build across capabilities called back to back', async () => {
         await withFixture(async ({ runtime, matchingQuery }) => {
