@@ -91,8 +91,12 @@ function run(command, args, options = {}) {
 }
 
 function runPnpm(args) {
-  if (process.env.npm_execpath !== undefined) {
-    return run(process.execPath, [process.env.npm_execpath, ...args]);
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath?.endsWith('.cjs') === true || npmExecPath?.endsWith('.js') === true) {
+    return run(process.execPath, [npmExecPath, ...args]);
+  }
+  if (npmExecPath !== undefined) {
+    return run(npmExecPath, args);
   }
   return run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args);
 }
