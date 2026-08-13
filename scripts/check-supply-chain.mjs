@@ -90,13 +90,24 @@ function run(command, args, options = {}) {
   });
 }
 
+function runPnpm(args) {
+  if (process.env.npm_execpath !== undefined) {
+    return run(process.execPath, [process.env.npm_execpath, ...args]);
+  }
+  return run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args);
+}
+
+function runNpm(args) {
+  return run(process.platform === 'win32' ? 'npm.cmd' : 'npm', args);
+}
+
 function npmView(name) {
-  return JSON.parse(run('npm', ['view', name, 'version', 'time', 'license', 'dist', '--json']));
+  return JSON.parse(runNpm(['view', name, 'version', 'time', 'license', 'dist', '--json']));
 }
 
 function auditJson() {
   try {
-    const stdout = run('pnpm', ['audit', '--prod', '--audit-level', 'moderate', '--json']);
+    const stdout = runPnpm(['audit', '--prod', '--audit-level', 'moderate', '--json']);
     return JSON.parse(stdout);
   } catch (error) {
     const stdout = error.stdout?.toString() ?? '';
@@ -106,7 +117,7 @@ function auditJson() {
 }
 
 function licenseInventory() {
-  return JSON.parse(run('pnpm', ['licenses', 'list', '--prod', '--json']));
+  return JSON.parse(runPnpm(['licenses', 'list', '--prod', '--json']));
 }
 
 function packageLicenseMap(licenses) {
