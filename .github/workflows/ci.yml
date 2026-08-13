@@ -56,6 +56,9 @@ jobs:
 
       - run: pnpm test
 
+      - name: Consolidated security suite
+        run: pnpm test:security
+
       - run: pnpm check:no-native
 
       - run: pnpm check:no-em-dash

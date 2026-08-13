@@ -363,6 +363,15 @@ importers:
 
   tools/phase-gate: {}
 
+  tools/security:
+    devDependencies:
+      '@lorepack/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@lorepack/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+
   tools/studio-e2e:
     devDependencies:
       '@playwright/test':
@@ -1801,6 +1810,7 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}

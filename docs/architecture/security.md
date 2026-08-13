@@ -3,6 +3,11 @@
 Architecture section 20.9 names the classes a release must be tested against. This is the map
 from each of them to the test that holds it, so a gap is visible rather than assumed.
 
+The release gate is `pnpm test:security`. It runs the offline privacy-default proof and a
+coverage index that names every class below, then CI runs the same command as its own step.
+The threat model is in [`threat-model.md`](threat-model.md), and the current pre-release review
+is in [`security-review.md`](security-review.md).
+
 Two levels, and the distinction matters. A **unit** test proves a control does what it says. An
 **end-to-end** test proves the control is *reached* by a request arriving at the real API over a
 real build. A validator nobody calls passes every test it has, so the second is not a
@@ -67,12 +72,29 @@ That is checked by **registration rather than by HTTP method**, because
 `POST /v1/tables/:id/query` is a read: a SQL statement does not belong in a URL. A method-based
 check would either exclude the query route or admit a genuine write that happened to be a `GET`.
 
+## Privacy defaults
+
+`tools/security/test/privacy-defaults.test.ts` blocks `fetch` and Node socket connection
+attempts inside a real `lore build` invocation. The fixture includes an external URL and a
+script tag, so the test proves the core build path treats source content as bytes and never
+executes or fetches it. There is no telemetry path in the compiler, and the test would fail if
+one were added through Node's standard network path.
+
+## Remote runtime authentication
+
+`packages/deploy-cloudflare/test/runtime-auth.test.ts`,
+`packages/deploy-cloudflare/test/access-auth.test.ts` and
+`packages/deploy-cloudflare/test/worker-app.test.ts` cover the remote projection boundary.
+Missing bearer tokens, malformed bearer tokens, deployment credentials, expired rotated tokens
+and rejected Cloudflare Access JWTs fail before a build is read. Rejected token material is not
+echoed in the Worker 401 response.
+
 ## What is not covered here
 
 - **Cross-platform runs of these suites.** `verify` runs on macOS, Windows and Linux in CI, so
   they execute everywhere; what is untested is any platform-specific escape, such as an NTFS
   alternate data stream.
-- **A deployed runtime.** Everything above is the local boundary. Phase 6 adds a remote one, and
-  #86 carries the criterion that no administrative route exists in the Worker.
-- **Authentication.** There is none locally, by design: the server binds loopback and serves one
-  project. Bearer auth for the remote surface is #90.
+- **Live credentialed Cloudflare drift.** The checked-in remote auth and Worker tests run
+  locally without credentials. The credentialed Cloudflare smoke remains the live-account proof.
+- **Local authentication.** There is none locally, by design: the server binds loopback and
+  serves one project. Browser-origin checks protect the local write surface.

@@ -41,6 +41,9 @@
       "path": "tools/contract"
     },
     {
+      "path": "tools/security"
+    },
+    {
       "path": "apps/studio"
     }
   ]
