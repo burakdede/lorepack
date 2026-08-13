@@ -162,11 +162,7 @@ function daysBetween(a, b) {
 }
 
 function newestRegistryDate(view) {
-  return Object.entries(view.time ?? {})
-    .filter(([version]) => !['created', 'modified'].includes(version))
-    .map(([, date]) => date)
-    .sort()
-    .at(-1);
+  return view.version === undefined ? undefined : view.time?.[view.version];
 }
 
 function pinnedPublishDate(view, specifiers) {

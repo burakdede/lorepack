@@ -37,6 +37,10 @@ const OUTSIDE_VERIFY = new Map([
   ['test:e2e', 'its own job: it needs a browser, which not every contributor has installed'],
   ['bench', 'reported, never enforced, so it cannot gate anything'],
   ['bench:retrieval', 'reported, never enforced'],
+  [
+    'check:changeset-policy',
+    'pull-request-only gate: commit history is meaningful before merge, not on main',
+  ],
 ]);
 
 /** The `verify` script is one string of `pnpm a && pnpm b`, so every mention is a command. */

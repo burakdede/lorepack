@@ -3,28 +3,44 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing GitHub release tag to receive supply-chain artifacts
+      version:
+        description: Version Changesets should write, such as 0.1.0 or 0.1.0-rc.1
         required: true
         type: string
-      publish:
-        description: Publish npm packages after all checks pass
+      channel:
+        description: npm dist tag
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - next
+      dry_run:
+        description: Run every release step except commit, tag, GitHub release and npm publish
         required: true
         type: boolean
-        default: false
+        default: true
+      performance_report_url:
+        description: URL of the green reference-machine performance report
+        required: false
+        type: string
 
 env:
   NODE_VERSION: '24.18.1'
+  RELEASE_COMMIT: ${{ github.sha }}
 
 jobs:
   release:
-    name: release artifacts and optional npm publish
+    name: changesets release
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
+      actions: read
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -36,33 +52,143 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Verify required release gates on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          required_checks=(
+            "verify (ubuntu-latest)"
+            "verify (windows-latest)"
+            "verify (macos-latest)"
+            "acceptance (ubuntu-latest)"
+            "acceptance (windows-latest)"
+            "acceptance (macos-latest)"
+            "clean install (ubuntu-latest)"
+            "clean install (windows-latest)"
+            "clean install (macos-latest)"
+            "cloudflare acceptance (ubuntu-latest)"
+            "studio e2e (ubuntu-latest)"
+            "benchmarks (reported, not enforced)"
+          )
+          for name in "${required_checks[@]}"; do
+            conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/check-runs" \
+              --paginate \
+              --jq ".check_runs[] | select(.name == \"$name\" and .status == \"completed\") | .conclusion" \
+              | head -n 1)"
+            if [ "$conclusion" != "success" ]; then
+              echo "::error::required release gate '$name' is not green for $RELEASE_COMMIT"
+              exit 1
+            fi
+          done
+
+      - name: Require the reference-machine performance report for stable publish
+        if: ${{ !inputs.dry_run && inputs.channel == 'latest' }}
+        run: |
+          if [ -z "${{ inputs.performance_report_url }}" ]; then
+            echo "::error::stable publish requires the green issue #101 performance report URL"
+            exit 1
+          fi
+
       - run: pnpm verify
+
+      - name: Apply Changesets version
+        run: |
+          pnpm changeset version
+          node - <<'NODE'
+          const { readdirSync, readFileSync, writeFileSync } = require('node:fs');
+          const { join } = require('node:path');
+          const version = process.env.RELEASE_VERSION;
+          const manifests = [
+            'package.json',
+            ...readdirSync('packages').map((name) => `packages/${name}/package.json`),
+          ];
+          for (const manifest of manifests) {
+            const path = join(process.cwd(), manifest);
+            const data = JSON.parse(readFileSync(path, 'utf8'));
+            if (data.private === true && manifest !== 'package.json') continue;
+            data.version = version;
+            writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          }
+          NODE
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+
+      - run: pnpm build
 
       - name: Generate dependency health report and CycloneDX SBOM
         run: pnpm supply-chain:report
 
-      - name: Upload supply-chain artifacts
+      - name: Build example .lorepack artifact
+        run: |
+          node packages/cli/dist/entry.js --cwd examples/product-research build
+          node packages/cli/dist/entry.js --cwd examples/product-research pack --out product-research.lorepack
+
+      - name: Pack npm tarballs for dry-run and release review
+        run: pnpm -r --filter './packages/*' pack --pack-destination release-artifacts/npm
+
+      - name: Prepare GitHub release notes
+        run: |
+          mkdir -p release-artifacts
+          {
+            echo "# v${{ inputs.version }}"
+            echo
+            echo "Released from ${RELEASE_COMMIT}."
+            echo
+            echo "## Package changelogs"
+            for changelog in packages/*/CHANGELOG.md; do
+              [ -f "$changelog" ] || continue
+              echo
+              echo "### ${changelog%/CHANGELOG.md}"
+              sed -n '1,120p' "$changelog"
+            done
+          } > release-artifacts/release-notes.md
+
+      - name: Upload dry-run release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: supply-chain
+          name: release-dry-run
           path: |
+            release-artifacts/npm/*.tgz
             reports/dependency-health.json
             reports/sbom.cyclonedx.json
+            examples/product-research/product-research.lorepack
+            release-artifacts/release-notes.md
           if-no-files-found: error
           retention-days: 90
 
-      - name: Attach supply-chain artifacts to GitHub release
+      - name: Stop before side effects during dry run
+        if: ${{ inputs.dry_run }}
+        run: |
+          git diff --exit-code -- . ':(exclude)reports/dependency-health.json' ':(exclude)reports/sbom.cyclonedx.json' || true
+          echo "dry run complete: no commit, tag, GitHub release or npm publish was created"
+
+      - name: Commit version and generated release artifacts
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .changeset package.json packages/*/package.json reports/dependency-health.json reports/sbom.cyclonedx.json
+          git add packages/*/CHANGELOG.md 2>/dev/null || true
+          git commit -m "Release v${{ inputs.version }}"
+          git tag "v${{ inputs.version }}"
+          git push origin HEAD:main --follow-tags
+
+      - name: Create GitHub release with SBOM and example artifact
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ inputs.tag }}" >/dev/null
-          gh release upload "${{ inputs.tag }}" \
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --notes-file release-artifacts/release-notes.md \
             reports/dependency-health.json \
             reports/sbom.cyclonedx.json \
-            --clobber
+            examples/product-research/product-research.lorepack
 
       - name: Publish npm packages with provenance
-        if: ${{ inputs.publish }}
+        if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm changeset publish
+        run: pnpm changeset publish --tag "${{ inputs.channel }}"
