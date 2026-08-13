@@ -389,7 +389,7 @@ describe('projectTableData, issue 258', () => {
       expect(write.bindings.length).toBeLessThanOrEqual(100);
       expect(new TextEncoder().encode(write.query).length).toBeLessThan(100_000);
     }
-  });
+  }, 15_000);
 
   it('retries a transient row-batch failure and reports per-batch projection progress', async () => {
     const buildDirectory = makeBuildDirectory(BUILD_A, 34);

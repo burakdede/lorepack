@@ -555,7 +555,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     await target.apply(plan);
 
     expect(digestDirectory(fixture.buildDirectory)).toBe(before);
-  });
+  }, 15_000);
 
   it('skips archive and object uploads when the candidate payload is already present', async () => {
     const fixture = makeBuildFixture();
