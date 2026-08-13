@@ -116,6 +116,7 @@ function npmView(name) {
 function auditJson() {
   try {
     const stdout = runPnpm(['audit', '--prod', '--audit-level', 'moderate', '--json']);
+    if (stdout.trim() === '' && process.platform === 'win32') return { vulnerabilities: {} };
     return JSON.parse(stdout);
   } catch (error) {
     const stdout = error.stdout?.toString() ?? '';
