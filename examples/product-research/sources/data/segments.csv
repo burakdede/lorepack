@@ -1,0 +1,4 @@
+segment,need,priority
+agentic-coding-teams,repeatable context for coding agents,high
+research-teams,auditable source bundles,medium
+solo-builders,zero-setup local workflows,medium

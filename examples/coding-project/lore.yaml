@@ -1,0 +1,16 @@
+version: 1
+name: coding-project
+sources:
+  - ./sources
+strictRules: true
+rules:
+  - match: "adr/**"
+    authority: 95
+  - match: "notes/drafts/**"
+    status: draft
+    authority: 35
+  - match: "notes/current/**"
+    status: active
+    authority: 80
+context:
+  defaultProfile: coding
