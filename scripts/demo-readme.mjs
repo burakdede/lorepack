@@ -61,8 +61,8 @@ try {
   const rendered = renderTranscript(transcript);
   const target = join(ROOT, 'docs', 'demo-transcript.md');
   if (check) {
-    const current = readFileSync(target, 'utf8');
-    if (current !== rendered) {
+    const current = normalizeNewlines(readFileSync(target, 'utf8'));
+    if (current !== normalizeNewlines(rendered)) {
       console.error('demo: docs/demo-transcript.md is stale.');
       console.error('Run `pnpm demo:readme` and commit the result.');
       process.exit(1);
@@ -170,9 +170,7 @@ function renderTranscript(entries) {
 
 function normalizeCommand(command) {
   return command.map((value) =>
-    value
-      .replaceAll(/lore_[0-9a-f]{64}/g, 'lore_<build-id>')
-      .replaceAll(/.*lore-demo-[^/\s]+/g, '<demo-workspace>'),
+    normalizeDemoPaths(value).replaceAll(/lore_[0-9a-f]{64}/g, 'lore_<build-id>'),
   );
 }
 
@@ -189,11 +187,29 @@ function trimOutput(value) {
 }
 
 function normalizeOutput(value) {
-  return value
+  return normalizeNewlines(value)
     .replaceAll(/lore_[0-9a-f]{64}/g, 'lore_<build-id>')
     .replaceAll(/lore_[0-9a-f]{13}/g, 'lore_<build-prefix>')
     .replaceAll(/lore_[0-9a-f]{13} -> candidate/g, 'lore_<build-prefix> -> candidate')
-    .replaceAll(/\/[^ \n]*lore-demo-[^ \n]*/g, '<demo-workspace>')
+    .replaceAll(/[A-Z]:[\\/][^ \n]*lore-demo-[^ \n]*/gi, normalizeDemoPathMatch)
+    .replaceAll(/[\\/][^ \n]*lore-demo-[^ \n]*/g, normalizeDemoPathMatch)
     .replaceAll(/Activated in \d+ ms\./g, 'Activated in <elapsed> ms.')
     .replaceAll(/\s+\d+ms/g, ' <elapsed>ms');
+}
+
+function normalizeNewlines(value) {
+  return value.replaceAll(/\r\n?/g, '\n');
+}
+
+function normalizeDemoPaths(value) {
+  return value
+    .replaceAll(/[A-Z]:[\\/][^\s]*lore-demo-[^\s]*/gi, normalizeDemoPathMatch)
+    .replaceAll(/[\\/][^\s]*lore-demo-[^\s]*/g, normalizeDemoPathMatch);
+}
+
+function normalizeDemoPathMatch(value) {
+  const normalized = value.replaceAll('\\', '/');
+  const marker = normalized.match(/lore-demo-[^/]+/);
+  if (!marker) return normalized;
+  return `<demo-workspace>${normalized.slice((marker.index ?? 0) + marker[0].length)}`;
 }
