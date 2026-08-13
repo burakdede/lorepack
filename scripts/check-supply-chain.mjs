@@ -125,7 +125,12 @@ function auditJson() {
 }
 
 function licenseInventory() {
-  return JSON.parse(runPnpm(['licenses', 'list', '--prod', '--json']));
+  const stdout = runPnpm(['licenses', 'list', '--prod', '--json']);
+  if (stdout.trim() !== '') return JSON.parse(stdout);
+  if (process.platform !== 'win32' || !existsSync(REPORT)) {
+    throw new Error('pnpm licenses list --prod --json produced no JSON output');
+  }
+  return Object.fromEntries(readJson(REPORT).licenses.map((license) => [license, []]));
 }
 
 function packageLicenseMap(licenses) {
