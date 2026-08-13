@@ -364,7 +364,7 @@ describe('projectTableData, issue 258', () => {
   });
 
   it('batches projected row inserts under D1 parameter and SQL-size limits', async () => {
-    const buildDirectory = makeBuildDirectory(BUILD_A, 40);
+    const buildDirectory = makeBuildDirectory(BUILD_A, 34);
     const projection = new DatabaseSync(':memory:');
     databases.push(projection);
     const writes: Array<{ query: string; bindings: readonly unknown[] }> = [];
@@ -382,9 +382,9 @@ describe('projectTableData, issue 258', () => {
       buildDirectory,
     });
 
-    expect(result).toEqual({ projectedTables: 1, projectedRows: 40 });
+    expect(result).toEqual({ projectedTables: 1, projectedRows: 34 });
     expect(writes).toHaveLength(2);
-    expect(writes.map((write) => write.bindings.length)).toEqual([99, 21]);
+    expect(writes.map((write) => write.bindings.length)).toEqual([99, 3]);
     for (const write of writes) {
       expect(write.bindings.length).toBeLessThanOrEqual(100);
       expect(new TextEncoder().encode(write.query).length).toBeLessThan(100_000);
@@ -392,7 +392,7 @@ describe('projectTableData, issue 258', () => {
   });
 
   it('retries a transient row-batch failure and reports per-batch projection progress', async () => {
-    const buildDirectory = makeBuildDirectory(BUILD_A, 40);
+    const buildDirectory = makeBuildDirectory(BUILD_A, 34);
     const projection = new DatabaseSync(':memory:');
     databases.push(projection);
     let failures = 0;
@@ -422,7 +422,7 @@ describe('projectTableData, issue 258', () => {
     });
 
     expect(failures).toBe(1);
-    expect(result).toEqual({ projectedTables: 1, projectedRows: 40 });
+    expect(result).toEqual({ projectedTables: 1, projectedRows: 34 });
     expect(updates.at(-1)).toEqual({
       completedBatches: 9,
       totalBatches: 9,
