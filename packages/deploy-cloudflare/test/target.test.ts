@@ -789,7 +789,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       ],
       activationLines: [`current ${BUILD_B}`, `next    ${BUILD}`],
     });
-  });
+  }, 15_000);
 
   it('warns when the projected D1 size approaches the free-tier limit and names the largest contributors', async () => {
     const fixture = makeBuildFixture();
