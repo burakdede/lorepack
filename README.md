@@ -162,6 +162,7 @@ matrix installs with lifecycle scripts suppressed and then runs the product.
 | Working agreement for contributors and agents | [`AGENTS.md`](AGENTS.md) |
 | Full architecture specification | [`Lorepack_Local_First_MVP_Architecture_Final.md`](Lorepack_Local_First_MVP_Architecture_Final.md) |
 | How to contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Governance and release authority | [`GOVERNANCE.md`](GOVERNANCE.md) |
 | Reporting a vulnerability | [`SECURITY.md`](SECURITY.md) |
 | Start page for the docs | [`docs/README.md`](docs/README.md) |
 | Package format specification | [`docs/package-format/README.md`](docs/package-format/README.md) |

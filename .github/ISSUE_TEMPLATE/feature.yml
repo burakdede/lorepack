@@ -30,3 +30,14 @@ body:
     id: alternatives
     attributes:
       label: Alternatives considered
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and Node version
+      description: Required only for local, filesystem, shell or client-specific proposals.
+  - type: textarea
+    id: doctor
+    attributes:
+      label: lore doctor --json
+      description: Paste this when the proposal depends on local environment behaviour.
+      render: json

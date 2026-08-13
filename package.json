@@ -29,7 +29,7 @@
     "check:no-native": "node scripts/check-no-native.mjs",
     "check:no-em-dash": "node scripts/check-no-em-dash.mjs",
     "check:counted-nouns": "node scripts/check-counted-nouns.mjs",
-    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:arch && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:no-conflict-claims && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm check:docs-images && pnpm check:docs-links && pnpm check:verify-parity && pnpm schemas:check && pnpm probe:fts5 && pnpm acceptance:docs:check && pnpm cli:docs:check && pnpm demo:readme:check",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:arch && pnpm test && pnpm check:no-native && pnpm check:no-em-dash && pnpm check:no-conflict-claims && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:studio-bundle && pnpm check:sources-tracked && pnpm check:docs-images && pnpm check:docs-links && pnpm check:templates && pnpm check:license-policy && pnpm check:verify-parity && pnpm schemas:check && pnpm probe:fts5 && pnpm acceptance:docs:check && pnpm cli:docs:check && pnpm demo:readme:check",
     "test:arch": "vitest run --project arch",
     "schemas:generate": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs",
     "schemas:check": "pnpm --filter @lorepack/core build && node scripts/generate-schemas.mjs --check",
@@ -49,7 +49,9 @@
     "check:docs-images": "node scripts/check-docs-images.mjs",
     "check:docs-links": "node scripts/check-docs-links.mjs",
     "check:verify-parity": "node scripts/check-verify-parity.mjs",
-    "check:no-conflict-claims": "node scripts/check-no-conflict-claims.mjs"
+    "check:no-conflict-claims": "node scripts/check-no-conflict-claims.mjs",
+    "check:templates": "node scripts/check-templates.mjs",
+    "check:license-policy": "node scripts/check-license-policy.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
