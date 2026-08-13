@@ -91,6 +91,9 @@ jobs:
       - name: Package manifests follow the Apache-2.0 policy
         run: pnpm check:license-policy
 
+      - name: Supply-chain policy, audit, licenses, SBOM and provenance
+        run: pnpm check:supply-chain
+
       # These steps and `pnpm verify` are one list. This is what says so.
       - name: CI and `pnpm verify` run the same checks
         run: pnpm check:verify-parity

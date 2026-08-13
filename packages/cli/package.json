@@ -36,7 +36,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "chokidar": "5.0.0",
     "commander": "15.0.0",
-    "hono": "4.12.33"
+    "hono": "4.12.34"
   },
   "repository": {
     "type": "git",
@@ -48,5 +48,9 @@
   },
   "devDependencies": {
     "@lorepack/test-support": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
