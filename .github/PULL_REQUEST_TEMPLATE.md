@@ -14,7 +14,7 @@ Closes #
 - [ ] Every acceptance criterion on the issue is satisfied (not most)
 - [ ] Tests added at every applicable level (unit / integration / e2e / contract / determinism / cross-platform / security / manual)
 - [ ] Documentation updated in this PR; README still accurate
-- [ ] `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test` pass locally
+- [ ] `pnpm verify` passes locally, or every skipped check is named above
 - [ ] Commits are small and cohesive, rebased on `origin/main`, with no AI attribution
 - [ ] Handoff comment posted on the issue and board status updated
 

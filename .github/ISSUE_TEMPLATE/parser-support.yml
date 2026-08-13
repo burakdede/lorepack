@@ -25,6 +25,18 @@ body:
       label: Actual result
       description: Include `lore inspect <path>` output and any parser warnings.
     validations: {required: true}
+  - type: input
+    id: platform
+    attributes:
+      label: Platform and Node version
+      description: Include your OS and `node --version`. Lorepack supports >=24.15 <25.
+    validations: {required: true}
+  - type: textarea
+    id: doctor
+    attributes:
+      label: lore doctor --json
+      description: Paste the output if available.
+      render: json
   - type: checkboxes
     id: fixture
     attributes:
