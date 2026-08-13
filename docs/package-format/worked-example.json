@@ -1,0 +1,64 @@
+{
+  "memberHashes": {
+    "artifactHash": "d58268482a2f2b3aeb7315d103a966b12aab19167812556927eb88db14d2e6e9",
+    "nodeHash": "f83d9a9e0769d0b945c0647254562f1f5b56f9abc31ed68f4de298c58b430583",
+    "chunkHash": "df18c7d79cd7ac81a70b1cce1b03547b59992677dccce924a8af535f1f7ceac1",
+    "objectHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "buildIdInputs": {
+    "formatVersion": 1,
+    "schemaVersion": 3,
+    "compilerVersion": "0.1.0",
+    "canonicalizationVersion": 1,
+    "normalizationVersion": 1,
+    "effectiveConfig": {
+      "context": {
+        "defaultProfile": "chat"
+      },
+      "name": "format-example",
+      "package": {
+        "includeOriginals": false
+      },
+      "rules": [],
+      "sources": ["docs"]
+    },
+    "parserVersions": {
+      "markdown": "0.1.0"
+    },
+    "ruleResolution": [],
+    "embeddingProfile": null,
+    "canonicalRoots": {
+      "artifacts": "079ad2ea51cbc12584dfe1672584243e2fa055fab2e739f30bb2c1f931b74299",
+      "nodes": "5e859f1d865445d1a6905a6f567c6b2d28653f832e42507281f1e5c7e85fac40",
+      "chunks": "b10be89d652fbc808dfc3735895ece949a72deb85bf392e8db0bb789317b44b7",
+      "tables": "6147507c64cd6a7a994c52db8ded2c2d12e58b743e8a2f1a0cb4769d0163bd32",
+      "objects": "c85c0ccae35c81fe1faaeb4c90d781c19bd31ace89544968b5b331dc0dcb9cca"
+    }
+  },
+  "manifest": {
+    "formatVersion": 1,
+    "buildId": "lore_7109c946e90daf364dacd1699d807a84a2785df75bf1541ef57d9dcf67af184e",
+    "projectName": "format-example",
+    "compilerVersion": "0.1.0",
+    "schemaVersion": 3,
+    "configurationHash": "19ac4ebcb9d88663cf2e6d1fae9e4a7156fbce08f5007fc0f952dd1cb793abcd",
+    "sourceFingerprint": "8b0ce64ce5c2d5a5a84e93124e1d2df082b0c210fa1a7d3bd436f4bf5ef712dc",
+    "canonicalRoots": {
+      "artifacts": "079ad2ea51cbc12584dfe1672584243e2fa055fab2e739f30bb2c1f931b74299",
+      "nodes": "5e859f1d865445d1a6905a6f567c6b2d28653f832e42507281f1e5c7e85fac40",
+      "chunks": "b10be89d652fbc808dfc3735895ece949a72deb85bf392e8db0bb789317b44b7",
+      "tables": "6147507c64cd6a7a994c52db8ded2c2d12e58b743e8a2f1a0cb4769d0163bd32",
+      "objects": "c85c0ccae35c81fe1faaeb4c90d781c19bd31ace89544968b5b331dc0dcb9cca"
+    },
+    "capabilities": ["lexical-search", "structured-context"],
+    "counts": {
+      "artifacts": 1,
+      "nodes": 1,
+      "chunks": 1,
+      "tables": 0,
+      "tableRows": 0
+    },
+    "warnings": [],
+    "exclusions": []
+  }
+}
