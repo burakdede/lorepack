@@ -171,7 +171,7 @@ lore pack --out "<demo-workspace>/product-research.lorepack"
 ```
 
 ```text
-Wrote <demo-workspace>
+Wrote <demo-workspace>/product-research.lorepack
   9 members, including the checksum index.
 ```
 
@@ -182,7 +182,7 @@ lore pack --verify "<demo-workspace>/product-research.lorepack"
 ```
 
 ```text
-<demo-workspace> is intact. 9 members verified.
+<demo-workspace>/product-research.lorepack is intact. 9 members verified.
 ```
 
 ## coding-context: coding-project
