@@ -24,6 +24,13 @@ const ALLOWED_LICENSES = new Set([
   '(MIT OR GPL-3.0-or-later)',
 ]);
 const STALE_AFTER_DAYS = 548;
+const EMPTY_AUDIT_VULNERABILITIES = {
+  info: 0,
+  low: 0,
+  moderate: 0,
+  high: 0,
+  critical: 0,
+};
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -116,7 +123,9 @@ function npmView(name) {
 function auditJson() {
   try {
     const stdout = runPnpm(['audit', '--prod', '--audit-level', 'moderate', '--json']);
-    if (stdout.trim() === '' && process.platform === 'win32') return { vulnerabilities: {} };
+    if (stdout.trim() === '' && process.platform === 'win32') {
+      return { metadata: { vulnerabilities: EMPTY_AUDIT_VULNERABILITIES } };
+    }
     return JSON.parse(stdout);
   } catch (error) {
     const stdout = error.stdout?.toString() ?? '';
