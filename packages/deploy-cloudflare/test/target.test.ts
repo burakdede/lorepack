@@ -555,7 +555,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     await target.apply(plan);
 
     expect(digestDirectory(fixture.buildDirectory)).toBe(before);
-  }, 15_000);
+  });
 
   it('skips archive and object uploads when the candidate payload is already present', async () => {
     const fixture = makeBuildFixture();
@@ -789,7 +789,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       ],
       activationLines: [`current ${BUILD_B}`, `next    ${BUILD}`],
     });
-  }, 15_000);
+  });
 
   it('warns when the projected D1 size approaches the free-tier limit and names the largest contributors', async () => {
     const fixture = makeBuildFixture();
@@ -932,7 +932,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       verified_at: '2026-08-08T14:00:00.000Z',
       activated_at: null,
     });
-  }, 15_000);
+  });
 
   it('activates atomically by switching the pointer and incrementing generation', async () => {
     const fixture = makeBuildFixture();
@@ -1141,7 +1141,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       build_id: expect.stringMatching(/^lore_[ab]{64}$/),
       generation: 8,
     });
-  }, 15_000);
+  });
 
   it('resumes from transfer state without re-uploading the archive', async () => {
     const fixture = makeBuildFixture();
