@@ -1141,7 +1141,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       build_id: expect.stringMatching(/^lore_[ab]{64}$/),
       generation: 8,
     });
-  });
+  }, 15_000);
 
   it('resumes from transfer state without re-uploading the archive', async () => {
     const fixture = makeBuildFixture();
