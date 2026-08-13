@@ -1,0 +1,19 @@
+version: 1
+name: product-research
+sources:
+  - ./sources
+strictRules: true
+rules:
+  - match: "archive/**"
+    status: archived
+    authority: 20
+  - match: "research/current/**"
+    status: active
+    authority: 90
+  - match: "research/current/positioning.md"
+    supersedes:
+      - "archive/old-positioning.md"
+  - match: "data/**"
+    authority: 80
+context:
+  defaultProfile: chat

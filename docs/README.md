@@ -5,7 +5,7 @@ Start here, then take the one-hop path that matches the job.
 | Job | Start |
 |---|---|
 | Install and try Lorepack | [`../README.md`](../README.md) |
-| Run the two-command quick start | [`../README.md#the-two-commands`](../README.md#the-two-commands) |
+| Run the two-command quick start | [`../README.md#try-the-lifecycle`](../README.md#try-the-lifecycle) |
 | Understand the build lifecycle | [`architecture/README.md`](architecture/README.md) |
 | Connect an AI client or deployment target | [`integrations/`](integrations/) |
 | Check supported platforms and limits | [`compatibility/README.md`](compatibility/README.md) |
