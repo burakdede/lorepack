@@ -33,7 +33,8 @@ claims unless the linked doc says so.
 | Incremental rebuild after editing one document | development-machine benchmark | 139 ms | [`benchmarks/phase-1-dev-machine.json`](../../benchmarks/phase-1-dev-machine.json) |
 | Warm search p95 | development-machine benchmark | 2.61 ms | [`benchmarks/phase-1-dev-machine.json`](../../benchmarks/phase-1-dev-machine.json) |
 | Fingerprint at 2,500 files | envelope benchmark | 916 ms p95 | [`benchmarks/envelope/reference-2026-08-05.json`](../../benchmarks/envelope/reference-2026-08-05.json) |
-| Single-document incremental rebuild at 2,500 files | envelope benchmark | 5,632 ms p95 | [`benchmarks/envelope/reference-2026-08-05.json`](../../benchmarks/envelope/reference-2026-08-05.json), tracked by issue `#245` |
+| Single-document incremental rebuild at 2,500 files | envelope benchmark | 5,632 ms p95, reported only | [`benchmarks/envelope/reference-2026-08-05.json`](../../benchmarks/envelope/reference-2026-08-05.json), see `#245` decision in [`docs/architecture/build-orchestration.md`](../architecture/build-orchestration.md) |
+| Byte envelope, 2,500 files and 1.005 GiB | envelope benchmark | see committed run | [`benchmarks/envelope/byte-envelope-2026-08-14.json`](../../benchmarks/envelope/byte-envelope-2026-08-14.json), measured on a Darwin arm64 development machine and not a reference gate |
 | Retrieval at Phase 2 envelope | retrieval benchmark | see committed run | [`benchmarks/retrieval/phase-2-envelope-dev-machine.json`](../../benchmarks/retrieval/phase-2-envelope-dev-machine.json) |
 | Cloudflare projection concurrency | remote projection benchmark | see committed run | [`benchmarks/cloudflare/projection-concurrency-2026-08-09.json`](../../benchmarks/cloudflare/projection-concurrency-2026-08-09.json) |
 

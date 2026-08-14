@@ -140,7 +140,7 @@ Same machine, 2,500 files and 39,010 chunks, in
 | Gate (section 5.5) | Target | Measured p95 |
 |---|---|---|
 | Fingerprint at 2,500 files | < 4,000 ms | 916 ms |
-| Single-document incremental rebuild | < 2,000 ms | **5,632 ms** |
+| Single-document incremental rebuild | reported only at envelope | **5,632 ms** |
 
 Deciding *what changed* across 2,500 files costs under a second. What costs is what happens
 after: sealing writes a whole new build database, because a build is immutable and
@@ -149,6 +149,26 @@ them.
 
 That is a design question rather than a slow function, and it is #245. Making it fast by
 mutating the previous build in place would trade invariant 4 for the number.
+
+### Phase 7 gate decision, 2026-08-14
+
+The v0.1 decision is to keep the immutable build model and narrow the sub-2 s incremental
+rebuild gate. The sub-2 s claim now applies to the lifecycle benchmark corpus, where it is
+measured at 139 ms, not to the full 2,500-file envelope. At the envelope, release readiness
+requires publishing p50 and p95 with the corpus description and reference-machine metadata,
+and documentation must not advertise sub-2 s envelope rebuilds.
+
+The rejected optimisation is copying the previous build database and patching it. It may be a
+valid post-v0.1 design, but only if canonical roots are recomputed and determinism still passes
+from different absolute paths, with shuffled enumeration, on Windows and POSIX. Taking that on
+for v0.1 would be a storage-format change, not a benchmark tweak.
+
+The byte-envelope run added for #245 is
+`benchmarks/envelope/byte-envelope-2026-08-14.json`. It uses 2,500 files and 1.005 GiB of source
+text on a Darwin arm64 development machine. That corpus intentionally proves the byte side of
+the envelope, but it produces 387,110 chunks, so it is not also a 50,000-chunk retrieval
+envelope. Read the byte and chunk runs together rather than treating either as the whole
+product envelope.
 
 One trap worth knowing before writing any corpus generator: **chunks do not merge across
 headings**, so a corpus's chunk count tracks its heading count and not its byte count. A first

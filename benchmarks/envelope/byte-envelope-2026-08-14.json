@@ -1,0 +1,35 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. The reference machine and the gates are backlog issue #101.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGb": 32,
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "files": 2500,
+    "bytesPerFile": 430000,
+    "totalBytes": 1078706470,
+    "totalGb": 1.005,
+    "artifacts": 2500,
+    "chunks": 387110,
+    "atFileEnvelope": true,
+    "atByteEnvelope": true
+  },
+  "measurements": {
+    "fullBuildMs": 407595,
+    "noopRebuildP50Ms": 6039.72,
+    "noopRebuildP95Ms": 6039.72,
+    "incrementalRebuildP50Ms": 68307.17,
+    "incrementalRebuildP95Ms": 68307.17,
+    "samples": 1
+  },
+  "referenceGates": {
+    "fingerprintP95Ms": 4000,
+    "lifecycleIncrementalRebuildMs": 2000
+  },
+  "envelopeIncrementalRebuildPolicy": "reported-only"
+}
