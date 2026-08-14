@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const CHANGESET_CHECK = join(REPO_ROOT, 'scripts', 'check-changeset-policy.mjs');
 const RELEASE_CHECK = join(REPO_ROOT, 'scripts', 'check-release-policy.mjs');
+const PERFORMANCE_CHECK = join(REPO_ROOT, 'scripts', 'check-performance-report.mjs');
 
 describe('changeset policy', () => {
   let root: string;
@@ -167,6 +168,12 @@ describe('release policy', () => {
     writeFileSync(join(root, '.github', 'workflows', 'release.yml'), releaseWorkflow());
 
     expect(run(RELEASE_CHECK, root).status).toBe(0);
+  });
+});
+
+describe('performance report policy', () => {
+  it('accepts the checked-in v0.1 performance report', () => {
+    expect(run(PERFORMANCE_CHECK, REPO_ROOT).status).toBe(0);
   });
 });
 

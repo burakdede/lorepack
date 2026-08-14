@@ -442,7 +442,9 @@ These are product limits and release gates, not claims that underlying SQLite ca
 
 On a documented reference machine with 8 modern CPU cores, 16 GB RAM, and local NVMe storage:
 
-- authoritative source fingerprint over the full 1 GB / 2,500-file envelope: p95 below 4 s;
+- authoritative source fingerprint over the 2,500-file file-count envelope: p95 below 4 s;
+- authoritative source fingerprint at the true 1 GB byte envelope: measured and published
+  with p50 and p95, with no sub-4 s v0.1 claim;
 - warm lexical search over 50,000 chunks: p95 below 250 ms;
 - `lore_context_for_task` without semantic retrieval: p95 below 1.5 s;
 - an incremental rebuild of one changed ten-page text document in the lifecycle benchmark
@@ -456,6 +458,9 @@ These are benchmark gates to measure before release. They must not be advertised
 The envelope incremental-rebuild target was narrowed on 2026-08-14 after the first envelope
 measurement showed the original sub-2 s number required a copied-and-patched catalog design that
 does not belong in v0.1.
+The true byte-envelope fingerprint target was also narrowed on 2026-08-14 after the 1.005 GiB
+measurement missed the original sub-4 s number; issue `#302` owns either earning that claim or
+keeping it out of v0.1 documentation.
 
 ### 5.6 Future semantic adapter envelope
 

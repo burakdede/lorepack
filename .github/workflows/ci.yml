@@ -97,6 +97,9 @@ jobs:
       - name: Release automation policy
         run: pnpm check:release-policy
 
+      - name: Performance report claims match measurements
+        run: pnpm check:performance-report
+
       - name: Changeset or explicit no-release marker
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
