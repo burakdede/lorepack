@@ -26,6 +26,7 @@ import {
   resumeCloudflareTarget,
   rollbackCloudflareTarget,
   smokeProjectName,
+  staleCloudflareD1DatabaseNames,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
 } from '../src/cloudflare-smoke.js';
@@ -114,6 +115,35 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     );
   });
 
+  it('selects only stale CI D1 catalog databases for cleanup', () => {
+    expect(
+      staleCloudflareD1DatabaseNames(
+        [
+          { name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' },
+          { name: 'lorepack-ci-101-1-cloudflare-acceptance-catalog' },
+          { name: 'lorepack-ci-101-2-cloudflare-acceptance-catalog' },
+          { name: 'lorepack-ci-102-1-cloudflare-acceptance-catalog' },
+          { name: 'lorepack-ci-100-cloudflare-acceptance-catalog' },
+          { name: 'other-ci-100-1-cloudflare-acceptance-catalog' },
+          { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
+        ],
+        { testPrefix: 'lorepack-ci', runId: '101', runAttempt: '2' },
+      ),
+    ).toEqual([
+      'lorepack-ci-100-1-cloudflare-acceptance-catalog',
+      'lorepack-ci-101-1-cloudflare-acceptance-catalog',
+    ]);
+  });
+
+  it('does not select D1 databases for manual runs without CI metadata', () => {
+    expect(
+      staleCloudflareD1DatabaseNames(
+        [{ name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' }],
+        { testPrefix: 'lorepack-ci', runId: null, runAttempt: null },
+      ),
+    ).toEqual([]);
+  });
+
   it('treats the Cloudflare R2 already-missing response as a tolerated teardown case', () => {
     expect(
       isMissingCloudflareBucketError(
@@ -187,6 +217,39 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
 
   it('depends on the built CLI binary', () => {
     expect(existsSync(BINARY), `${BINARY} is missing. Run \`pnpm build\` first.`).toBe(true);
+  });
+
+  it('includes stdout and stderr when target setup fails', async () => {
+    const project = {
+      root: '/tmp/lorepack-cloudflare-smoke',
+      projectName: 'Cloudflare Acceptance',
+      cleanup() {},
+      lore: async () => ({
+        code: EXIT_CODES.USER,
+        stderr: '',
+        stdout: JSON.stringify({
+          error: {
+            code: 'LORE_E_TARGET_NOT_CONFIGURED',
+            message: 'Cloudflare resource provisioning failed during target setup.',
+            causes: ['bucket name conflict'],
+          },
+        }),
+      }),
+    };
+
+    await expect(
+      addCloudflareTarget(project, {
+        accountId: 'acct_123',
+        workerName: 'demo-runtime',
+        catalogDatabaseName: 'demo-catalog',
+        catalogDatabaseId: 'db_123',
+        objectsBucketName: 'demo-objects',
+        configPath: '/tmp/wrangler.jsonc',
+        endpointBase: 'https://demo-runtime.workers.dev',
+        wranglerEnv: {},
+        runtimeToken: null,
+      }),
+    ).rejects.toThrow(/stdout:[\s\S]*bucket name conflict/);
   });
 
   const missing = missingCloudflareTestingEnv(process.env);
