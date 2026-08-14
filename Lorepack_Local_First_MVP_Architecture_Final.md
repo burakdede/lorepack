@@ -445,11 +445,17 @@ On a documented reference machine with 8 modern CPU cores, 16 GB RAM, and local 
 - authoritative source fingerprint over the full 1 GB / 2,500-file envelope: p95 below 4 s;
 - warm lexical search over 50,000 chunks: p95 below 250 ms;
 - `lore_context_for_task` without semantic retrieval: p95 below 1.5 s;
-- an incremental rebuild of one changed ten-page text document: below 2 s after the file is stable;
+- an incremental rebuild of one changed ten-page text document in the lifecycle benchmark
+  corpus: below 2 s after the file is stable;
+- an incremental rebuild at the 2,500-file / 50,000-chunk envelope: measured and published
+  with p50 and p95, with no sub-2 s v0.1 claim;
 - the CLI emits visible progress at least once per second during long operations;
 - cancellation leaves the previously active build intact.
 
 These are benchmark gates to measure before release. They must not be advertised until achieved.
+The envelope incremental-rebuild target was narrowed on 2026-08-14 after the first envelope
+measurement showed the original sub-2 s number required a copied-and-patched catalog design that
+does not belong in v0.1.
 
 ### 5.6 Future semantic adapter envelope
 

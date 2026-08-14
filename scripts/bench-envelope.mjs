@@ -12,7 +12,7 @@
  * gigabytes, which is worth paying deliberately and not on every push.
  *
  *   pnpm bench:envelope
- *   node scripts/bench-envelope.mjs --files 2500 --bytes-per-file 400000 --out benchmarks/envelope.json
+ *   node scripts/bench-envelope.mjs --files 2500 --bytes-per-file 430000 --out benchmarks/envelope.json
  *
  * Results are **reported, not enforced**. The reference machine and the release gates are
  * backlog issue #101 (Phase 7); every number here is labelled provisional and carries the
@@ -35,9 +35,10 @@ const FILES = argument('files', 2500);
 /**
  * Bytes per document, defaulting well below the 1 GB envelope.
  *
- * 400 KB across 2,500 files is a gigabyte, and writing a gigabyte of fixtures to a developer
+ * 430 KB across 2,500 files reaches the 1 GiB byte envelope once headings and body text are
+ * included, and writing that many fixtures to a developer
  * machine on a whim is rude. The default is a tenth of that, which measures the **file-count**
- * half of the envelope honestly and says so; pass `--bytes-per-file 400000` for the full one.
+ * half of the envelope honestly and says so; pass `--bytes-per-file 430000` for the full one.
  * The report records what was actually written rather than what was intended, so a partial run
  * cannot be mistaken for a full one.
  */
@@ -171,11 +172,12 @@ try {
       incrementalRebuildP95Ms: percentile(incrementalSamples, 0.95),
       samples: REBUILD_SAMPLES,
     },
-    /** Section 5.5, restated so the distance to each is visible without looking it up. */
+    /** Section 5.5, restated so the distance to each numeric gate is visible without looking it up. */
     referenceGates: {
       fingerprintP95Ms: 4000,
-      incrementalRebuildMs: 2000,
+      lifecycleIncrementalRebuildMs: 2000,
     },
+    envelopeIncrementalRebuildPolicy: 'reported-only',
   };
 
   const outIndex = process.argv.indexOf('--out');
