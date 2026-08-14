@@ -1,0 +1,104 @@
+{
+  "release": "v0.1",
+  "date": "2026-08-14",
+  "status": "green-with-narrowed-claims",
+  "referenceMachines": [
+    {
+      "id": "linux-dev-reference",
+      "role": "primary numeric gates",
+      "platform": "linux",
+      "arch": "x64",
+      "cpu": "AMD Ryzen 9 3900X 12-Core Processor",
+      "cores": 24,
+      "memoryGb": 31,
+      "storage": "local SSD class storage, exact model not captured in historical artifact",
+      "node": "24.18.1"
+    },
+    {
+      "id": "darwin-byte-envelope",
+      "role": "true byte-envelope stress run",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M1 Pro",
+      "cores": 10,
+      "memoryGb": 32,
+      "storage": "local APFS SSD",
+      "node": "24.18.1"
+    }
+  ],
+  "gates": [
+    {
+      "id": "fingerprint-file-envelope",
+      "status": "pass",
+      "scope": "2,500 files, 0.096 GiB, 39,010 chunks",
+      "targetP95Ms": 4000,
+      "p50Ms": 857.76,
+      "p95Ms": 915.68,
+      "evidence": "benchmarks/envelope/reference-2026-08-05.json"
+    },
+    {
+      "id": "fingerprint-byte-envelope",
+      "status": "reported-only",
+      "scope": "2,500 files, 1.005 GiB, 387,110 chunks",
+      "targetP95Ms": null,
+      "p50Ms": 6039.72,
+      "p95Ms": 6039.72,
+      "evidence": "benchmarks/envelope/byte-envelope-2026-08-14.json",
+      "followUp": 302
+    },
+    {
+      "id": "warm-lexical-search",
+      "status": "pass",
+      "scope": "50,000 chunks, 2,000 documents, 30 iterations, 5 queries",
+      "targetP95Ms": 250,
+      "p50Ms": 18.77,
+      "p95Ms": 21.45,
+      "evidence": "benchmarks/retrieval/phase-2-envelope-dev-machine.json"
+    },
+    {
+      "id": "context-for-task",
+      "status": "pass",
+      "scope": "50,000 chunks, lexical context bundle without semantic retrieval",
+      "targetP95Ms": 1500,
+      "p50Ms": 58.92,
+      "p95Ms": 199.96,
+      "evidence": "benchmarks/retrieval/phase-2-envelope-dev-machine.json"
+    },
+    {
+      "id": "lifecycle-incremental-rebuild",
+      "status": "pass",
+      "scope": "60 documents, one changed ten-page document, 59 reused artifacts",
+      "targetP95Ms": 2000,
+      "p50Ms": 139,
+      "p95Ms": 139,
+      "evidence": "benchmarks/phase-1-dev-machine.json"
+    },
+    {
+      "id": "envelope-incremental-rebuild",
+      "status": "reported-only",
+      "scope": "2,500 files, 39,010 chunks, one changed document",
+      "targetP95Ms": null,
+      "p50Ms": 4561.24,
+      "p95Ms": 5631.62,
+      "evidence": "benchmarks/envelope/reference-2026-08-05.json",
+      "followUp": 245
+    }
+  ],
+  "behaviouralGates": [
+    {
+      "id": "progress-on-long-operations",
+      "status": "pass",
+      "evidence": "packages/core/test/progress.test.ts"
+    },
+    {
+      "id": "cancellation-preserves-active-build",
+      "status": "pass",
+      "evidence": "packages/cli/test/build.test.ts"
+    },
+    {
+      "id": "ctrl-c-acceptance",
+      "status": "pass",
+      "evidence": "tools/acceptance/src/scenarios/cancellation.ts"
+    }
+  ]
+}

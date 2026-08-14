@@ -38,8 +38,9 @@ claims unless the linked doc says so.
 | Retrieval at Phase 2 envelope | retrieval benchmark | see committed run | [`benchmarks/retrieval/phase-2-envelope-dev-machine.json`](../../benchmarks/retrieval/phase-2-envelope-dev-machine.json) |
 | Cloudflare projection concurrency | remote projection benchmark | see committed run | [`benchmarks/cloudflare/projection-concurrency-2026-08-09.json`](../../benchmarks/cloudflare/projection-concurrency-2026-08-09.json) |
 
-Reference-machine release gates are owned by issue `#101`. Do not turn the development-machine
-numbers into product claims.
+The v0.1 release-gate report is [`performance-v0.1.md`](performance-v0.1.md). It is the source
+for which performance numbers are claims, which are reported-only measurements, and which
+follow-up issue owns any missed historical gate.
 
 ## Target capability matrix
 
