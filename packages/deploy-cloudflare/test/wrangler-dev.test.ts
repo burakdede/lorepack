@@ -410,5 +410,5 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       }),
     ];
     expect(writes.map((response) => response.status)).toEqual([404, 404]);
-  }, 20_000);
+  });
 });
