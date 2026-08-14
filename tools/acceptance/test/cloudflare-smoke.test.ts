@@ -5,12 +5,15 @@ import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
 import {
+  activeCloudflareWorkerName,
   addCloudflareTarget,
   addResumeMutationToken,
   addSemanticSearchCapability,
   buildProject,
   callRemoteMcpTool,
+  cloudflareR2BucketListUrl,
   cloudflareWorkerDeleteUrl,
+  cloudflareWorkerListUrl,
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
@@ -27,6 +30,8 @@ import {
   rollbackCloudflareTarget,
   smokeProjectName,
   staleCloudflareD1DatabaseNames,
+  staleCloudflareR2BucketNames,
+  staleCloudflareWorkerNames,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
 } from '../src/cloudflare-smoke.js';
@@ -40,6 +45,33 @@ const UNIQUE_QUERY = 'phase6-rollback-token';
 const RESUME_MUTATION_QUERY = 'phase6-resume-mutation-token';
 const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
 const RECEIPTS_DIRECTORY = '.lore/receipts';
+const STALE_CI_ENV = { testPrefix: 'lorepack-ci', runId: '101', runAttempt: '2' };
+const MANUAL_CI_ENV = { testPrefix: 'lorepack-ci', runId: null, runAttempt: null };
+const WORKERS_FOR_STALE_CLEANUP = [
+  { name: 'lorepack-ci-acceptance-runtime' },
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
+  { name: 'lorepack-ci-101-1-cloudflare-acceptance-runtime' },
+  { name: 'lorepack-ci-101-2-cloudflare-acceptance-runtime' },
+  { name: 'lorepack-ci-102-1-cloudflare-acceptance-runtime' },
+  { name: 'lorepack-ci-cloudflare-acceptance-runtime' },
+  { name: 'other-ci-100-1-cloudflare-acceptance-runtime' },
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' },
+];
+const MANUAL_WORKERS_FOR_STALE_CLEANUP = [
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
+];
+const R2_BUCKETS_FOR_STALE_CLEANUP = [
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
+  { name: 'lorepack-ci-101-1-cloudflare-acceptance-objects' },
+  { name: 'lorepack-ci-101-2-cloudflare-acceptance-objects' },
+  { name: 'lorepack-ci-102-1-cloudflare-acceptance-objects' },
+  { name: 'lorepack-ci-100-cloudflare-acceptance-objects' },
+  { name: 'other-ci-100-1-cloudflare-acceptance-objects' },
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
+];
+const MANUAL_R2_BUCKETS_FOR_STALE_CLEANUP = [
+  { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
+];
 
 describe('the credentialed Cloudflare smoke, issue 93', () => {
   it('builds a per-run unique project name when the Cloudflare environment is configured', () => {
@@ -115,6 +147,35 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     );
   });
 
+  it('builds the direct Cloudflare Worker list URL from the account id', () => {
+    expect(cloudflareWorkerListUrl('de1984edb8b3db5f67105c1bc99d1dca')).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/workers/scripts',
+    );
+  });
+
+  it('builds the direct Cloudflare R2 bucket list URL from the account id', () => {
+    expect(cloudflareR2BucketListUrl('de1984edb8b3db5f67105c1bc99d1dca')).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/r2/buckets',
+    );
+  });
+
+  it('uses one singleton Worker name for credentialed acceptance', () => {
+    expect(activeCloudflareWorkerName({ testPrefix: 'lorepack-ci' })).toBe(
+      'lorepack-ci-acceptance-runtime',
+    );
+  });
+
+  it('selects only stale CI Workers and never the singleton Worker for cleanup', () => {
+    expect(staleCloudflareWorkerNames(WORKERS_FOR_STALE_CLEANUP, STALE_CI_ENV)).toEqual([
+      'lorepack-ci-100-1-cloudflare-acceptance-runtime',
+      'lorepack-ci-101-1-cloudflare-acceptance-runtime',
+    ]);
+  });
+
+  it('does not select Workers for manual runs without CI metadata', () => {
+    expect(staleCloudflareWorkerNames(MANUAL_WORKERS_FOR_STALE_CLEANUP, MANUAL_CI_ENV)).toEqual([]);
+  });
+
   it('selects only stale CI D1 catalog databases for cleanup', () => {
     expect(
       staleCloudflareD1DatabaseNames(
@@ -141,6 +202,19 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         [{ name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' }],
         { testPrefix: 'lorepack-ci', runId: null, runAttempt: null },
       ),
+    ).toEqual([]);
+  });
+
+  it('selects only stale CI R2 object buckets for cleanup', () => {
+    expect(staleCloudflareR2BucketNames(R2_BUCKETS_FOR_STALE_CLEANUP, STALE_CI_ENV)).toEqual([
+      'lorepack-ci-100-1-cloudflare-acceptance-objects',
+      'lorepack-ci-101-1-cloudflare-acceptance-objects',
+    ]);
+  });
+
+  it('does not select R2 buckets for manual runs without CI metadata', () => {
+    expect(
+      staleCloudflareR2BucketNames(MANUAL_R2_BUCKETS_FOR_STALE_CLEANUP, MANUAL_CI_ENV),
     ).toEqual([]);
   });
 
