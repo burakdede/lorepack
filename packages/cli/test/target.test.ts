@@ -429,6 +429,33 @@ describe('lore target add cloudflare, issue 85', () => {
       },
     );
   });
+
+  it('reports the underlying provisioning cause in json output', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const result = await run(
+          ['--json', '--cwd', temp.root, 'target', 'add', 'cloudflare', '--yes'],
+          {
+            commands: [
+              targetCommand({
+                adapter: createSetupAdapter({
+                  failBucketCreate: 'deploy-demo-objects',
+                }).adapter,
+              }),
+            ],
+          },
+        );
+
+        expect(result.code).toBe(5);
+        const payload = JSON.parse(result.stdout) as {
+          readonly error?: { readonly causes?: readonly string[] };
+        };
+        expect(payload.error?.causes).toContain('bucket name conflict');
+        expect(result.stderr).toBe('');
+      },
+    );
+  });
 });
 
 describe('lore target token cloudflare, issue 90', () => {

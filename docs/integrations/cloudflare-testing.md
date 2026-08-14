@@ -72,6 +72,12 @@ These are enough for the present contract because the Phase 6 path needs one Wor
 database, and one R2 bucket. It does not need Zones, Pages, KV, Queues, Durable Objects,
 Vectorize, or AI permissions.
 
+The credentialed smoke also lists D1 databases and deletes stale catalog databases whose names
+match `LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-catalog`. This is deliberately limited to
+older CI run ids or earlier attempts for the same run, so it does not delete the current run or a
+newer parallel run. The cleanup exists because leaked D1 databases can exhaust the account quota
+before `lore target add cloudflare` reaches the deploy path.
+
 ## Shared corpus and acceptance shape
 
 The remote-versus-local acceptance path must reuse the mixed corpus from
@@ -149,6 +155,11 @@ benchmark-scale storage churn.
 The final `#93` suite must delete every created Cloudflare resource at the end of the run,
 even after a failed assertion, so a credentialed CI run does not leak Workers, D1 databases,
 or R2 buckets.
+
+Before provisioning a new target, the smoke also reclaims stale D1 catalog databases left by
+older CI runs under the same `LORE_CF_TEST_PREFIX`. Manual runs without `GITHUB_RUN_ID` and
+`GITHUB_RUN_ATTEMPT` do not perform this stale cleanup, because the harness cannot distinguish
+old manual resources from resources a person is still inspecting.
 
 CI artifacts for that suite must include:
 

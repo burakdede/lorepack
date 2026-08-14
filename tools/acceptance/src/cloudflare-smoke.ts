@@ -130,6 +130,8 @@ export async function provisionCloudflareSmokeTarget(
     NO_D1_WARNING: 'true',
   } as Readonly<Record<string, string>>;
 
+  await cleanupStaleCloudflareD1Databases(env, wranglerEnv);
+
   const configPath = join(WORKER_ROOT, `.wrangler-acceptance-${names.workerName}.jsonc`);
   return {
     accountId: env.accountId,
@@ -335,7 +337,7 @@ export async function addCloudflareTarget(
     target.wranglerEnv,
   );
   if (result.code !== 0) {
-    throw new Error(`lore target add cloudflare failed:\n${result.stderr}`);
+    throw new Error(`lore target add cloudflare failed:\n${commandFailureOutput(result)}`);
   }
 
   const receipt = parseCloudflareTargetReceipt(result.stdout);
@@ -361,6 +363,14 @@ export async function addCloudflareTarget(
     ...configuredTarget,
     endpointBase: deployed.endpointBase,
   };
+}
+
+function commandFailureOutput(result: CommandOutput): string {
+  return [
+    `exit code: ${result.code}`,
+    result.stderr.trim() === '' ? 'stderr: <empty>' : `stderr:\n${result.stderr.trimEnd()}`,
+    result.stdout.trim() === '' ? 'stdout: <empty>' : `stdout:\n${result.stdout.trimEnd()}`,
+  ].join('\n');
 }
 
 export async function deployCloudflareTarget(
@@ -627,6 +637,60 @@ function parseD1DatabaseInfo(value: unknown): D1DatabaseInfo | null {
   return name === null || id === null ? null : { name, id };
 }
 
+export function staleCloudflareD1DatabaseNames(
+  databases: readonly { readonly name: string }[],
+  env: {
+    readonly testPrefix: string;
+    readonly runId: string | null;
+    readonly runAttempt: string | null;
+  },
+): readonly string[] {
+  if (env.runId === null || env.runAttempt === null) return [];
+  const prefix = sanitizeName(env.testPrefix);
+  const currentRun = BigInt(env.runId);
+  const currentAttempt = BigInt(env.runAttempt);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-catalog$`);
+  return databases
+    .filter(({ name }) => {
+      const match = pattern.exec(name);
+      if (match === null || match[1] === undefined || match[2] === undefined) return false;
+      const run = BigInt(match[1]);
+      const attempt = BigInt(match[2]);
+      return run < currentRun || (run === currentRun && attempt < currentAttempt);
+    })
+    .map(({ name }) => name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+async function cleanupStaleCloudflareD1Databases(
+  env: ReturnType<typeof readCloudflareTestingEnv>,
+  wranglerEnv: Readonly<Record<string, string>>,
+): Promise<void> {
+  const listed = await runWrangler(['d1', 'list', '--json'], wranglerEnv);
+  const databases = parseD1DatabaseList(listed.stdout);
+  for (const name of staleCloudflareD1DatabaseNames(databases, env)) {
+    try {
+      await runWrangler(['d1', 'delete', name, '--skip-confirmation'], wranglerEnv);
+    } catch (error) {
+      if (!isMissingCloudflareD1Error(error)) throw error;
+    }
+  }
+}
+
+function parseD1DatabaseList(raw: string): readonly D1DatabaseInfo[] {
+  const payload = JSON.parse(raw) as unknown;
+  const rows = Array.isArray(payload)
+    ? payload
+    : typeof payload === 'object' &&
+        payload !== null &&
+        Array.isArray((payload as { readonly result?: unknown }).result)
+      ? (payload as { readonly result: unknown[] }).result
+      : [];
+  return rows
+    .map((row) => parseD1DatabaseInfo(row))
+    .filter((row): row is D1DatabaseInfo => row !== null);
+}
+
 async function runWrangler(
   args: readonly string[],
   env: Readonly<Record<string, string>>,
@@ -779,6 +843,10 @@ function sanitizeName(value: string): string {
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/--+/g, '-');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function withSuffix(base: string, suffix: string, limit: number): string {
