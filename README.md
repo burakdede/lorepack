@@ -2,10 +2,18 @@
 
 **Build, version, and deploy the context your AI depends on.**
 
+Lorepack turns the files a team already trusts, such as runbooks, requirements, spreadsheets,
+architecture notes, specs and source-adjacent documents, into a versioned context package an AI
+client can read with citations.
+
+The important part is not the search box. The important part is that context gets the same
+lifecycle discipline as code and infrastructure: plan it, build it, inspect it, activate it,
+diff it, deploy it and roll it back.
+
 Lorepack compiles a directory of documents, spreadsheets and project artifacts into an
-**immutable, content-addressed build** that can be inspected, diffed, deployed, activated
-and rolled back, then read by chat models and coding agents over MCP, HTTP, or a bounded
-export.
+**immutable, content-addressed build**. That build can be inspected, diffed, deployed,
+activated and rolled back, then read by chat models and coding agents over MCP, HTTP, or a
+bounded export.
 
 Think *Git and Terraform for AI context*. It is not another local RAG server: retrieval is
 a runtime capability, the build lifecycle is the product.
@@ -15,7 +23,42 @@ source artifacts → plan → deterministic build → immutable version
                  → validate → activate atomically → diff / roll back
 ```
 
-## Try The Lifecycle
+## Why Lorepack exists
+
+AI clients usually receive project context in one of three fragile ways:
+
+1. a person pastes documents into a chat;
+2. a tool searches a mutable folder or index at runtime;
+3. a vector database stores chunks that are hard to inspect, diff or roll back.
+
+Those can help a model find text, but they do not answer the release-engineering questions:
+
+- Which exact documents did the AI see?
+- Which files were excluded, and why?
+- Did this spreadsheet remain a table, or was it flattened into prose?
+- What changed between the context used yesterday and the context active today?
+- Can a bad context update be rolled back without rebuilding?
+- Can a remote runtime prove it is serving the same build the local machine inspected?
+
+Lorepack exists for those questions. The build is the source of truth. Retrieval, MCP, HTTP,
+Studio and Cloudflare deployment are projections of that build.
+
+## How it differs from RAG, MCP wrappers and vector databases
+
+| Existing category | What it is good at | What it usually does not solve | What Lorepack adds |
+|---|---|---|---|
+| RAG server | Search documents at runtime and pass matching chunks to a model. | Release lifecycle, reproducible build identity, activation, rollback and inspectable exclusions. | A deterministic context build that can be validated before any runtime serves it. |
+| MCP document-search tool | Let an AI client call a search or read tool. | A stable context artifact, build diffs, deployment parity and lifecycle controls. | MCP is one read-only serving surface over an immutable build. |
+| Vector database | Store and search embeddings at scale. | Provenance-first build semantics, source parsing rules, table structure and rollback of context versions. | Optional future semantic projections can hang off the build, but the build stays canonical. |
+| File watcher or folder indexer | Keep a local index close to the source tree. | Deterministic identity across machines and a safe active-version pointer. | Source files are inputs, not the live serving database. |
+
+Lorepack is not claiming search is unimportant. It ships lexical retrieval with provenance in
+v0.1. The difference is ownership: search reads from a sealed build, and a sealed build is the
+thing you inspect, deploy and roll back.
+
+For a deeper explanation, see [Core concepts](docs/concepts.md).
+
+## Try the lifecycle
 
 ```bash
 lore dev ./project-context     # discover, build, serve, watch, and print where everything is
@@ -159,6 +202,7 @@ matrix installs with lifecycle scripts suppressed and then runs the product.
 
 | | |
 |---|---|
+| What Lorepack is and how it differs from adjacent tools | [`docs/concepts.md`](docs/concepts.md) |
 | Working agreement for contributors and agents | [`AGENTS.md`](AGENTS.md) |
 | Full architecture specification | [`Lorepack_Local_First_MVP_Architecture_Final.md`](Lorepack_Local_First_MVP_Architecture_Final.md) |
 | How to contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
