@@ -242,7 +242,6 @@ importers:
       '@modelcontextprotocol/server':
         specifier: 2.0.0
         version: 2.0.0
-    devDependencies:
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -319,6 +318,9 @@ importers:
       hono:
         specifier: 4.12.34
         version: 4.12.34
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*

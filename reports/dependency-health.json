@@ -1407,7 +1407,8 @@
       "references": [
         "package.json:devDependencies",
         "packages/core/package.json:dependencies",
-        "packages/mcp/package.json:devDependencies"
+        "packages/mcp/package.json:dependencies",
+        "packages/runtime/package.json:dependencies"
       ],
       "latestVersion": "4.4.3",
       "pinnedPublishedAt": "2026-05-04T07:06:40.819Z",

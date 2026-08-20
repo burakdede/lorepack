@@ -43,7 +43,7 @@ emulator still starts without downloading anything at install time.
 
 | Package | Dependency | Version | Why this one |
 |---|---|---|---|
-| core | `zod` | 4.4.3 | Schema definitions and the source of the published JSON Schemas. Zod 4 emits draft-2020-12 natively through `z.toJSONSchema`, which is the dialect MCP requires, so there is no second schema representation to keep in sync. |
+| core, mcp, runtime | `zod` | 4.4.3 | Schema definitions, request validation and the source of the published JSON Schemas. Zod 4 emits draft-2020-12 natively through `z.toJSONSchema`, which is the dialect MCP requires, so there is no second schema representation to keep in sync. |
 | core, compiler, parsers | `yaml` | 2.9.0 | `lore.yaml`, `lore.lock` and frontmatter. Preserves comments and gives real error positions, which is what makes a configuration error actionable. `JSON.parse` cannot read the format users write. |
 | compiler | `picomatch` | 4.0.5 | Glob matching for `include`, `exclude` and `.loreignore`. Dependency-free, and it implements the gitignore semantics users already expect. |
 | parsers | `unified`, `remark-parse`, `remark-gfm`, `remark-frontmatter`, `mdast-util-from-markdown` | 11.x / 11.0.0 / 4.0.1 / 5.0.0 / 2.0.2 | Markdown to a structured tree with positions. Structure before models (invariant 8) needs headings, lists and tables as nodes with line ranges, which a regex splitter cannot produce. The remark ecosystem is the reference implementation of CommonMark plus GFM in JavaScript. |

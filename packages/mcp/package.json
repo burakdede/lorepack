@@ -27,15 +27,13 @@
     "@lorepack/runtime": "workspace:*",
     "@modelcontextprotocol/hono": "2.0.0",
     "@modelcontextprotocol/node": "2.0.0",
-    "@modelcontextprotocol/server": "2.0.0"
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.4.3"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/mcp"
-  },
-  "devDependencies": {
-    "zod": "4.4.3"
   },
   "publishConfig": {
     "access": "public",
