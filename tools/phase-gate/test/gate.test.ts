@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PHASE_0 } from '../src/phases/phase-0.js';
 import { PHASE_1 } from '../src/phases/phase-1.js';
 import { PHASE_6 } from '../src/phases/phase-6.js';
+import { PHASE_7 } from '../src/phases/phase-7.js';
 import { PHASES, phaseDefinition } from '../src/registry.js';
 import { checkCriterion, checkPhase, formatReport, type RunOptions } from '../src/run.js';
 import { type Criterion, EXIT } from '../src/types.js';
@@ -308,7 +310,7 @@ describe('report', () => {
 describe('phase 0 definition', () => {
   it('is registered and retrievable by number', () => {
     expect(phaseDefinition(0)).toBe(PHASE_0);
-    expect(phaseDefinition(7)).toBeNull();
+    expect(phaseDefinition(8)).toBeNull();
     expect(PHASES).toContain(PHASE_0);
   });
 
@@ -413,7 +415,6 @@ describe('phase 1 definition', () => {
 describe('phase 6 definition', () => {
   it('is registered and retrievable by number', () => {
     expect(phaseDefinition(6)).toBe(PHASE_6);
-    expect(phaseDefinition(7)).toBeNull();
     expect(PHASES).toContain(PHASE_6);
   });
 
@@ -449,5 +450,62 @@ describe('phase 6 definition', () => {
     const audit = PHASE_6.criteria.find((criterion) => criterion.id === 'forward-audit');
     expect(audit?.kind === 'audit' && audit.nextEpic).toBe(8);
     expect(audit?.kind === 'audit' && audit.marker).toBe('Phase 7 audit');
+  });
+});
+
+describe('phase 7 definition', () => {
+  it('is registered and retrievable by number', () => {
+    expect(phaseDefinition(7)).toBe(PHASE_7);
+    expect(phaseDefinition(8)).toBeNull();
+    expect(PHASES).toContain(PHASE_7);
+  });
+
+  it('covers the release-readiness promises rather than pretending publish already happened', () => {
+    const ids = PHASE_7.criteria.map((criterion) => criterion.id);
+    for (const required of [
+      'issues-ready',
+      'success-matrix',
+      'release-docs',
+      'release-workflow',
+      'supply-chain',
+      'release-policy',
+      'performance-report',
+      'clean-install',
+      'acceptance-docs',
+      'cli-docs',
+      'readme-demo',
+      'phase-8-audit',
+    ]) {
+      expect(ids, `missing criterion: ${required}`).toContain(required);
+    }
+  });
+
+  it('gives every criterion a unique id and keeps publish completion on #102', () => {
+    const ids = PHASE_7.criteria.map((criterion) => criterion.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const criterion of PHASE_7.criteria) {
+      expect(criterion.promise.length, criterion.id).toBeGreaterThan(20);
+      expect(criterion.promise.endsWith('.'), criterion.id).toBe(true);
+    }
+
+    const issues = PHASE_7.criteria.find((criterion) => criterion.id === 'issues-ready');
+    expect(issues?.kind === 'issues' && issues.milestone).toBe('P7 Hardening & v0.1');
+    expect(issues?.kind === 'issues' && issues.allowOpen).toContain(102);
+
+    const audit = PHASE_7.criteria.find((criterion) => criterion.id === 'phase-8-audit');
+    expect(audit?.kind === 'audit' && audit.nextEpic).toBe(110);
+    expect(audit?.kind === 'audit' && audit.marker).toBe('Phase 8 audit');
+  });
+
+  it('runs every registered phase from the main phase-gates workflow', () => {
+    const workflow = readFileSync(`${REPO_ROOT}.github/workflows/phase-gates.yml`, 'utf8');
+    const match = workflow.match(/fromJSON\('\[([\d,\s]+)\]'\)/);
+    expect(match?.[1]).toBeDefined();
+    const workflowPhases = match?.[1]
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value));
+
+    expect(workflowPhases).toEqual(PHASES.map((phase) => phase.phase));
   });
 });
