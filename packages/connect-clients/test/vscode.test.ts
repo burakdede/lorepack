@@ -95,7 +95,7 @@ const fixture: ConnectorFixture = {
   unrelatedSetting: (text) => document(text).otherSetting === true,
   seedImpostor: (root) => write(root, IMPOSTOR),
   serverNames: (text) => Object.keys(document(text).servers ?? {}),
-  entry: (text, name) => (document(text).servers ?? {})[name],
+  entry: (text, name) => document(text).servers?.[name],
 };
 
 beforeEach(() => {

@@ -59,7 +59,7 @@ const fixture: ConnectorFixture = {
   seedImpostor: (root) =>
     write(root, { mcpServers: { lorepack: { type: 'stdio', command: 'someone-elses' } } }),
   serverNames: (text) => Object.keys(parsed(text).mcpServers ?? {}),
-  entry: (text, name) => (parsed(text).mcpServers ?? {})[name],
+  entry: (text, name) => parsed(text).mcpServers?.[name],
 };
 
 beforeEach(() => {

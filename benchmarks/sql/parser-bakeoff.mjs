@@ -63,7 +63,7 @@ for (const [name, sql] of HOSTILE) {
   const r = classify(sql);
   const verdict = r.ok
     ? r.count > 1 || r.types !== 'select'
-      ? 'VISIBLE ' + r.types + ' x' + r.count
+      ? `VISIBLE ${r.types} x${r.count}`
       : '*** ACCEPTED AS SINGLE SELECT ***'
     : 'rejected';
   console.log(String(name).padEnd(24), verdict);
