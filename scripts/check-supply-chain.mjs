@@ -24,6 +24,8 @@ const ALLOWED_LICENSES = new Set([
   '(MIT OR GPL-3.0-or-later)',
 ]);
 const STALE_AFTER_DAYS = 548;
+const REPORT_DATE = '2026-08-20';
+const REPORT_DATE_TIME = `${REPORT_DATE}T00:00:00.000Z`;
 const EMPTY_AUDIT_VULNERABILITIES = {
   info: 0,
   low: 0,
@@ -203,9 +205,7 @@ function healthReport() {
     const latestReleaseAt = newestRegistryDate(view);
     const pinnedPublishedAt = pinnedPublishDate(view, dependency.specifiers);
     const daysSinceLastRelease =
-      latestReleaseAt === undefined
-        ? null
-        : daysBetween('2026-08-14T00:00:00.000Z', latestReleaseAt);
+      latestReleaseAt === undefined ? null : daysBetween(REPORT_DATE_TIME, latestReleaseAt);
     return {
       name: dependency.name,
       specifiers: dependency.specifiers,
@@ -230,7 +230,7 @@ function healthReport() {
   });
   return {
     schemaVersion: 1,
-    policyDate: '2026-08-14',
+    policyDate: REPORT_DATE,
     staleAfterDays: STALE_AFTER_DAYS,
     audit: {
       command: 'pnpm audit --prod --audit-level moderate --json',

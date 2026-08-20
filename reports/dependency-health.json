@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyDate": "2026-08-14",
+  "policyDate": "2026-08-20",
   "staleAfterDays": 548,
   "audit": {
     "command": "pnpm audit --prod --audit-level moderate --json",
@@ -56,9 +56,9 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "2.5.8",
+      "latestVersion": "2.5.9",
       "pinnedPublishedAt": "2026-07-28T09:53:25.098Z",
-      "latestReleaseAt": "2026-08-11T08:57:57.925Z",
+      "latestReleaseAt": "2026-08-17T23:02:19.132Z",
       "daysSinceLastRelease": 2,
       "license": "MIT OR Apache-2.0",
       "provenance": {
@@ -80,10 +80,10 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "3.0.0",
+      "latestVersion": "3.0.1",
       "pinnedPublishedAt": "2026-07-15T12:05:20.881Z",
-      "latestReleaseAt": "2026-08-11T12:09:29.967Z",
-      "daysSinceLastRelease": 2,
+      "latestReleaseAt": "2026-08-19T05:46:48.961Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -107,7 +107,7 @@
       "latestVersion": "5.3.0",
       "pinnedPublishedAt": "2025-06-08T01:32:09.899Z",
       "latestReleaseAt": "2026-07-19T03:39:57.977Z",
-      "daysSinceLastRelease": 25,
+      "daysSinceLastRelease": 31,
       "license": "OFL-1.1",
       "provenance": {
         "status": "present",
@@ -132,7 +132,7 @@
       "latestVersion": "5.3.0",
       "pinnedPublishedAt": "2025-06-08T01:32:10.416Z",
       "latestReleaseAt": "2026-07-19T03:39:58.382Z",
-      "daysSinceLastRelease": 25,
+      "daysSinceLastRelease": 31,
       "license": "OFL-1.1",
       "provenance": {
         "status": "present",
@@ -157,7 +157,7 @@
       "latestVersion": "2.1.1",
       "pinnedPublishedAt": "2026-07-26T05:02:01.126Z",
       "latestReleaseAt": "2026-08-14T01:14:02.732Z",
-      "daysSinceLastRelease": -1,
+      "daysSinceLastRelease": 5,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -184,7 +184,7 @@
       "latestVersion": "2.0.0",
       "pinnedPublishedAt": "2026-07-27T23:55:22.113Z",
       "latestReleaseAt": "2026-07-27T23:55:22.113Z",
-      "daysSinceLastRelease": 17,
+      "daysSinceLastRelease": 23,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -209,7 +209,7 @@
       "latestVersion": "2.0.0",
       "pinnedPublishedAt": "2026-07-27T23:55:16.925Z",
       "latestReleaseAt": "2026-07-27T23:55:16.925Z",
-      "daysSinceLastRelease": 17,
+      "daysSinceLastRelease": 23,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -234,7 +234,7 @@
       "latestVersion": "2.0.0",
       "pinnedPublishedAt": "2026-07-27T23:55:17.622Z",
       "latestReleaseAt": "2026-07-27T23:55:17.622Z",
-      "daysSinceLastRelease": 17,
+      "daysSinceLastRelease": 23,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -262,7 +262,7 @@
       "latestVersion": "2.0.0",
       "pinnedPublishedAt": "2026-07-27T23:55:22.239Z",
       "latestReleaseAt": "2026-07-27T23:55:22.239Z",
-      "daysSinceLastRelease": 17,
+      "daysSinceLastRelease": 23,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -289,7 +289,7 @@
       "latestVersion": "1.62.1",
       "pinnedPublishedAt": "2026-07-30T16:36:55.324Z",
       "latestReleaseAt": "2026-07-30T16:36:55.324Z",
-      "daysSinceLastRelease": 14,
+      "daysSinceLastRelease": 20,
       "license": "Apache-2.0",
       "provenance": {
         "status": "not-required",
@@ -313,7 +313,7 @@
       "latestVersion": "5.101.4",
       "pinnedPublishedAt": "2025-09-23T07:38:15.625Z",
       "latestReleaseAt": "2026-07-21T13:04:07.544Z",
-      "daysSinceLastRelease": 23,
+      "daysSinceLastRelease": 29,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -338,7 +338,7 @@
       "latestVersion": "7.0.1",
       "pinnedPublishedAt": "2025-10-01T20:04:22.720Z",
       "latestReleaseAt": "2026-08-09T23:44:33.598Z",
-      "daysSinceLastRelease": 4,
+      "daysSinceLastRelease": 10,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -362,7 +362,7 @@
       "latestVersion": "16.3.2",
       "pinnedPublishedAt": "2025-04-02T17:03:38.791Z",
       "latestReleaseAt": "2026-01-19T10:59:08.185Z",
-      "daysSinceLastRelease": 206,
+      "daysSinceLastRelease": 212,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -383,10 +383,10 @@
       "references": [
         "apps/studio/package.json:devDependencies"
       ],
-      "latestVersion": "14.6.4",
+      "latestVersion": "14.6.5",
       "pinnedPublishedAt": "2025-01-21T17:35:55.574Z",
-      "latestReleaseAt": "2026-08-11T23:24:11.884Z",
-      "daysSinceLastRelease": 2,
+      "latestReleaseAt": "2026-08-18T03:30:41.325Z",
+      "daysSinceLastRelease": 1,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -410,7 +410,7 @@
       "latestVersion": "3.0.5",
       "pinnedPublishedAt": "2024-01-30T22:06:19.288Z",
       "latestReleaseAt": "2026-07-09T11:00:14.068Z",
-      "daysSinceLastRelease": 35,
+      "daysSinceLastRelease": 41,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -434,7 +434,7 @@
       "latestVersion": "4.0.4",
       "pinnedPublishedAt": "2024-05-14T07:35:37.616Z",
       "latestReleaseAt": "2024-05-14T07:35:37.616Z",
-      "daysSinceLastRelease": 821,
+      "daysSinceLastRelease": 827,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -460,7 +460,7 @@
       "latestVersion": "26.2.0",
       "pinnedPublishedAt": "2026-07-08T06:48:03.261Z",
       "latestReleaseAt": "2026-08-07T17:52:06.875Z",
-      "daysSinceLastRelease": 6,
+      "daysSinceLastRelease": 12,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -484,7 +484,7 @@
       "latestVersion": "4.0.3",
       "pinnedPublishedAt": "2025-07-28T21:34:58.153Z",
       "latestReleaseAt": "2026-04-03T00:13:45.392Z",
-      "daysSinceLastRelease": 132,
+      "daysSinceLastRelease": 138,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -508,7 +508,7 @@
       "latestVersion": "19.2.18",
       "pinnedPublishedAt": "2025-10-01T22:02:20.305Z",
       "latestReleaseAt": "2026-07-30T21:54:03.456Z",
-      "daysSinceLastRelease": 14,
+      "daysSinceLastRelease": 20,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -532,7 +532,7 @@
       "latestVersion": "19.2.4",
       "pinnedPublishedAt": "2025-10-01T22:02:31.509Z",
       "latestReleaseAt": "2026-07-30T21:53:05.684Z",
-      "daysSinceLastRelease": 14,
+      "daysSinceLastRelease": 20,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -556,7 +556,7 @@
       "latestVersion": "1.2.7",
       "pinnedPublishedAt": null,
       "latestReleaseAt": "2023-11-07T16:00:17.624Z",
-      "daysSinceLastRelease": 1010,
+      "daysSinceLastRelease": 1016,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -582,7 +582,7 @@
       "latestVersion": "3.0.3",
       "pinnedPublishedAt": "2024-08-15T02:19:16.553Z",
       "latestReleaseAt": "2024-08-15T02:19:16.553Z",
-      "daysSinceLastRelease": 728,
+      "daysSinceLastRelease": 734,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -609,7 +609,7 @@
       "latestVersion": "3.4.0",
       "pinnedPublishedAt": null,
       "latestReleaseAt": "2026-06-13T17:37:45.293Z",
-      "daysSinceLastRelease": 61,
+      "daysSinceLastRelease": 67,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -634,7 +634,7 @@
       "latestVersion": "3.3.1",
       "pinnedPublishedAt": null,
       "latestReleaseAt": "2026-04-07T22:11:34.726Z",
-      "daysSinceLastRelease": 128,
+      "daysSinceLastRelease": 134,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -655,10 +655,10 @@
       "references": [
         "apps/studio/package.json:devDependencies"
       ],
-      "latestVersion": "6.0.5",
+      "latestVersion": "6.1.0",
       "pinnedPublishedAt": "2025-09-27T14:07:37.572Z",
-      "latestReleaseAt": "2026-07-30T10:12:02.149Z",
-      "daysSinceLastRelease": 14,
+      "latestReleaseAt": "2026-08-20T02:49:46.306Z",
+      "daysSinceLastRelease": -1,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -682,7 +682,7 @@
       "latestVersion": "4.13.0",
       "pinnedPublishedAt": "2025-10-09T16:39:18.813Z",
       "latestReleaseAt": "2026-08-05T16:53:07.262Z",
-      "daysSinceLastRelease": 8,
+      "daysSinceLastRelease": 14,
       "license": "MPL-2.0",
       "provenance": {
         "status": "not-required",
@@ -706,7 +706,7 @@
       "latestVersion": "5.0.0",
       "pinnedPublishedAt": "2025-11-25T23:28:06.854Z",
       "latestReleaseAt": "2025-11-25T23:28:06.854Z",
-      "daysSinceLastRelease": 261,
+      "daysSinceLastRelease": 267,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -731,7 +731,7 @@
       "latestVersion": "15.0.0",
       "pinnedPublishedAt": "2026-05-29T09:16:23.076Z",
       "latestReleaseAt": "2026-05-29T09:16:23.076Z",
-      "daysSinceLastRelease": 76,
+      "daysSinceLastRelease": 82,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -755,7 +755,7 @@
       "latestVersion": "7.0.2",
       "pinnedPublishedAt": "2026-08-02T20:18:06.960Z",
       "latestReleaseAt": "2026-08-02T20:18:06.960Z",
-      "daysSinceLastRelease": 11,
+      "daysSinceLastRelease": 17,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -779,15 +779,15 @@
         "packages/deploy-cloudflare/package.json:dependencies",
         "packages/runtime/package.json:dependencies"
       ],
-      "latestVersion": "4.13.2",
+      "latestVersion": "4.13.3",
       "pinnedPublishedAt": "2026-08-03T02:36:40.543Z",
-      "latestReleaseAt": "2026-08-13T11:55:37.169Z",
-      "daysSinceLastRelease": 0,
+      "latestReleaseAt": "2026-08-18T10:56:09.752Z",
+      "daysSinceLastRelease": 1,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/hono@4.13.2"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/hono@4.13.3"
       },
       "health": {
         "status": "current"
@@ -804,15 +804,15 @@
       "references": [
         "packages/deploy-cloudflare/package.json:dependencies"
       ],
-      "latestVersion": "6.2.8",
+      "latestVersion": "6.2.9",
       "pinnedPublishedAt": "2026-08-01T16:18:16.876Z",
-      "latestReleaseAt": "2026-08-03T12:01:12.001Z",
-      "daysSinceLastRelease": 10,
+      "latestReleaseAt": "2026-08-15T08:46:00.512Z",
+      "daysSinceLastRelease": 4,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/jose@6.2.8"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/jose@6.2.9"
       },
       "health": {
         "status": "current"
@@ -832,7 +832,7 @@
       "latestVersion": "30.0.1",
       "pinnedPublishedAt": "2025-09-13T04:43:54.808Z",
       "latestReleaseAt": "2026-07-29T04:18:42.378Z",
-      "daysSinceLastRelease": 15,
+      "daysSinceLastRelease": 21,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -856,7 +856,7 @@
       "latestVersion": "3.3.1",
       "pinnedPublishedAt": "2024-06-24T21:12:45.445Z",
       "latestReleaseAt": "2024-06-24T21:12:45.445Z",
-      "daysSinceLastRelease": 780,
+      "daysSinceLastRelease": 786,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -882,7 +882,7 @@
       "latestVersion": "1.12.1",
       "pinnedPublishedAt": "2026-03-12T21:40:09.129Z",
       "latestReleaseAt": "2026-08-09T14:13:02.962Z",
-      "daysSinceLastRelease": 4,
+      "daysSinceLastRelease": 10,
       "license": "BSD-2-Clause",
       "provenance": {
         "status": "missing",
@@ -906,7 +906,7 @@
       "latestVersion": "2.0.3",
       "pinnedPublishedAt": "2024-10-25T15:03:17.078Z",
       "latestReleaseAt": "2026-02-21T13:23:13.849Z",
-      "daysSinceLastRelease": 173,
+      "daysSinceLastRelease": 179,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -930,7 +930,7 @@
       "latestVersion": "6.2.108",
       "pinnedPublishedAt": "2026-07-28T19:51:33.809Z",
       "latestReleaseAt": "2026-07-28T19:51:33.809Z",
-      "daysSinceLastRelease": 16,
+      "daysSinceLastRelease": 22,
       "license": "Apache-2.0",
       "provenance": {
         "status": "present",
@@ -955,7 +955,7 @@
       "latestVersion": "4.0.5",
       "pinnedPublishedAt": "2026-07-02T16:47:23.026Z",
       "latestReleaseAt": "2026-07-02T16:47:23.026Z",
-      "daysSinceLastRelease": 42,
+      "daysSinceLastRelease": 48,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -979,7 +979,7 @@
       "latestVersion": "19.2.8",
       "pinnedPublishedAt": "2025-10-01T21:38:32.757Z",
       "latestReleaseAt": "2026-07-21T15:41:28.716Z",
-      "daysSinceLastRelease": 23,
+      "daysSinceLastRelease": 29,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -1004,7 +1004,7 @@
       "latestVersion": "19.2.8",
       "pinnedPublishedAt": "2025-10-01T21:38:42.388Z",
       "latestReleaseAt": "2026-07-21T15:41:41.267Z",
-      "daysSinceLastRelease": 23,
+      "daysSinceLastRelease": 29,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -1029,7 +1029,7 @@
       "latestVersion": "8.3.0",
       "pinnedPublishedAt": "2026-07-28T21:53:08.425Z",
       "latestReleaseAt": "2026-07-22T15:04:41.794Z",
-      "daysSinceLastRelease": 22,
+      "daysSinceLastRelease": 28,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -1054,7 +1054,7 @@
       "latestVersion": "9.0.1",
       "pinnedPublishedAt": "2024-09-27T15:08:49.297Z",
       "latestReleaseAt": "2024-09-27T15:08:49.297Z",
-      "daysSinceLastRelease": 685,
+      "daysSinceLastRelease": 691,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1080,7 +1080,7 @@
       "latestVersion": "5.0.0",
       "pinnedPublishedAt": "2023-09-18T11:12:38.246Z",
       "latestReleaseAt": "2023-09-18T11:12:38.246Z",
-      "daysSinceLastRelease": 1060,
+      "daysSinceLastRelease": 1066,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1106,7 +1106,7 @@
       "latestVersion": "4.0.1",
       "pinnedPublishedAt": "2025-02-10T12:43:10.735Z",
       "latestReleaseAt": "2025-02-10T12:43:10.735Z",
-      "daysSinceLastRelease": 549,
+      "daysSinceLastRelease": 555,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1132,7 +1132,7 @@
       "latestVersion": "11.0.0",
       "pinnedPublishedAt": "2023-09-18T09:42:28.170Z",
       "latestReleaseAt": "2023-09-18T09:42:28.170Z",
-      "daysSinceLastRelease": 1060,
+      "daysSinceLastRelease": 1066,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1158,7 +1158,7 @@
       "latestVersion": "1.6.1",
       "pinnedPublishedAt": "2026-07-24T18:50:24.821Z",
       "latestReleaseAt": "2026-07-24T18:50:24.821Z",
-      "daysSinceLastRelease": 20,
+      "daysSinceLastRelease": 26,
       "license": "BlueOak-1.0.0",
       "provenance": {
         "status": "missing",
@@ -1182,7 +1182,7 @@
       "latestVersion": "1.8.0",
       "pinnedPublishedAt": "2026-07-26T08:34:54.252Z",
       "latestReleaseAt": "2026-08-11T19:09:15.153Z",
-      "daysSinceLastRelease": 2,
+      "daysSinceLastRelease": 8,
       "license": "BSD-3-Clause",
       "provenance": {
         "status": "present",
@@ -1207,7 +1207,7 @@
       "latestVersion": "7.0.2",
       "pinnedPublishedAt": "2026-07-08T15:55:18.431Z",
       "latestReleaseAt": "2026-07-08T15:55:18.431Z",
-      "daysSinceLastRelease": 36,
+      "daysSinceLastRelease": 42,
       "license": "Apache-2.0",
       "provenance": {
         "status": "not-required",
@@ -1231,7 +1231,7 @@
       "latestVersion": "11.0.5",
       "pinnedPublishedAt": "2024-06-19T12:33:43.464Z",
       "latestReleaseAt": "2024-06-19T12:33:43.464Z",
-      "daysSinceLastRelease": 785,
+      "daysSinceLastRelease": 791,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1254,10 +1254,10 @@
       "references": [
         "apps/studio/package.json:devDependencies"
       ],
-      "latestVersion": "8.2.1",
+      "latestVersion": "8.2.2",
       "pinnedPublishedAt": "2025-10-03T00:43:27.811Z",
-      "latestReleaseAt": "2026-08-06T13:47:48.588Z",
-      "daysSinceLastRelease": 7,
+      "latestReleaseAt": "2026-08-20T04:14:39.107Z",
+      "daysSinceLastRelease": -1,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -1278,10 +1278,10 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "4.1.10",
+      "latestVersion": "4.1.11",
       "pinnedPublishedAt": "2026-07-06T06:44:42.684Z",
-      "latestReleaseAt": "2026-07-06T06:44:42.684Z",
-      "daysSinceLastRelease": 38,
+      "latestReleaseAt": "2026-08-18T14:27:07.240Z",
+      "daysSinceLastRelease": 1,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -1302,10 +1302,10 @@
       "references": [
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
-      "latestVersion": "4.123.0",
+      "latestVersion": "4.124.0",
       "pinnedPublishedAt": "2026-08-05T12:31:36.536Z",
-      "latestReleaseAt": "2026-08-13T16:09:16.089Z",
-      "daysSinceLastRelease": 0,
+      "latestReleaseAt": "2026-08-18T12:56:55.160Z",
+      "daysSinceLastRelease": 1,
       "license": "MIT OR Apache-2.0",
       "provenance": {
         "status": "not-required",
@@ -1331,7 +1331,7 @@
       "latestVersion": "2.9.0",
       "pinnedPublishedAt": "2026-05-11T10:16:24.045Z",
       "latestReleaseAt": "2026-05-11T10:16:24.045Z",
-      "daysSinceLastRelease": 94,
+      "daysSinceLastRelease": 100,
       "license": "ISC",
       "provenance": {
         "status": "missing",
@@ -1356,7 +1356,7 @@
       "latestVersion": "3.4.0",
       "pinnedPublishedAt": "2026-06-07T12:57:28.373Z",
       "latestReleaseAt": "2026-06-07T12:57:28.373Z",
-      "daysSinceLastRelease": 67,
+      "daysSinceLastRelease": 73,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1383,7 +1383,7 @@
       "latestVersion": "3.3.1",
       "pinnedPublishedAt": "2024-11-23T13:22:38.473Z",
       "latestReleaseAt": "2024-11-23T13:22:38.473Z",
-      "daysSinceLastRelease": 628,
+      "daysSinceLastRelease": 634,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1412,7 +1412,7 @@
       "latestVersion": "4.4.3",
       "pinnedPublishedAt": "2026-05-04T07:06:40.819Z",
       "latestReleaseAt": "2026-05-04T07:06:40.819Z",
-      "daysSinceLastRelease": 101,
+      "daysSinceLastRelease": 107,
       "license": "MIT",
       "provenance": {
         "status": "present",
