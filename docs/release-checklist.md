@@ -6,6 +6,8 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 
 - Confirm the release issue links the PRs being shipped and every handoff is current.
 - Confirm `main` is the intended release commit and all required checks are green there.
+- Confirm the repository has an `NPM_TOKEN` secret with publish access for every
+  `@lorepack/*` package.
 - Confirm the performance report for issue #101 is green before a stable `latest` release.
 - Confirm the v0.1 success matrix in
   [`compatibility/v0.1-success-matrix.md`](compatibility/v0.1-success-matrix.md) is current.

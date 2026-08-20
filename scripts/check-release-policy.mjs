@@ -48,6 +48,9 @@ if (!RELEASE.includes('pnpm changeset publish --tag')) {
   problems.push('release.yml must publish with an explicit npm dist tag');
 }
 if (!RELEASE.includes('NPM_TOKEN')) problems.push('release.yml must use NPM_TOKEN for publish');
+if (!RELEASE.includes('Require npm publish token for real release')) {
+  problems.push('release.yml must check NPM_TOKEN before real release side effects');
+}
 if (!RELEASE.includes('id-token: write')) {
   problems.push('release.yml must grant id-token: write for npm provenance');
 }
@@ -68,6 +71,18 @@ if (!RELEASE.includes('stable publish requires the green issue #101 performance 
 }
 if (!RELEASE.includes('pack --pack-destination')) {
   problems.push('release.yml dry runs must create package tarballs without publishing');
+}
+
+const tokenPreflight = RELEASE.indexOf('Require npm publish token for real release');
+for (const sideEffect of [
+  'Commit version and generated release artifacts',
+  'Create GitHub release with SBOM and example artifact',
+  'Publish npm packages with provenance',
+]) {
+  const sideEffectIndex = RELEASE.indexOf(sideEffect);
+  if (tokenPreflight === -1 || sideEffectIndex === -1 || tokenPreflight > sideEffectIndex) {
+    problems.push(`release.yml must check NPM_TOKEN before ${sideEffect}`);
+  }
 }
 
 for (const check of REQUIRED) {
