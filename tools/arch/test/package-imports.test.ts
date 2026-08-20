@@ -1,5 +1,5 @@
-import { builtinModules } from 'node:module';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 

@@ -27,7 +27,7 @@ vi.mock('@lorepack/parsers', async (importOriginal) => {
   return {
     ...actual,
     parserFor: (input: { mediaType: string; relativePath: string }) =>
-      injected !== null && injected.supports(input) ? injected : actual.parserFor(input),
+      injected?.supports(input) ? injected : actual.parserFor(input),
   };
 });
 

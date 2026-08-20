@@ -179,7 +179,7 @@ await parseXml(zip, found.get(target), {
           value = Number(vbuf);
           kind = 'number';
         }
-        sample.push(`${cur.ref}=${kind}:${JSON.stringify(value)}${fbuf ? ' F:' + fbuf : ''}`);
+        sample.push(`${cur.ref}=${kind}:${JSON.stringify(value)}${fbuf ? ` F:${fbuf}` : ''}`);
       }
       cur = null;
     }
