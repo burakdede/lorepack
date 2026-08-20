@@ -27,6 +27,10 @@ if (problems.length === 0) {
   const envelope = readJson('benchmarks/envelope/reference-2026-08-05.json');
   const byteEnvelope = readJson('benchmarks/envelope/byte-envelope-2026-08-14.json');
 
+  if (byteEnvelope.machine?.storage !== 'local APFS SSD') {
+    problems.push('byte-envelope benchmark must record the storage class');
+  }
+
   const expected = new Map([
     ['fingerprint-file-envelope', envelope.measurements.noopRebuildP95Ms],
     ['fingerprint-byte-envelope', byteEnvelope.measurements.noopRebuildP95Ms],
