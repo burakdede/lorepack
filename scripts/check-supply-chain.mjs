@@ -160,7 +160,7 @@ function packageLicenseMap(licenses) {
 }
 
 function daysBetween(a, b) {
-  return Math.floor((Date.parse(a) - Date.parse(b)) / 86_400_000);
+  return Math.max(0, Math.floor((Date.parse(a) - Date.parse(b)) / 86_400_000));
 }
 
 function newestRegistryDate(view) {
