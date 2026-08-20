@@ -23,11 +23,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.5.8"
+          "value": "2.5.9"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-11T08:57:57.925Z"
+          "value": "2026-08-17T23:02:19.132Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -47,11 +47,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "3.0.0"
+          "value": "3.0.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-11T12:09:29.967Z"
+          "value": "2026-08-19T05:46:48.961Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -335,11 +335,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "14.6.4"
+          "value": "14.6.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-11T23:24:11.884Z"
+          "value": "2026-08-18T03:30:41.325Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -599,11 +599,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "6.0.5"
+          "value": "6.1.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-07-30T10:12:02.149Z"
+          "value": "2026-08-20T02:49:46.306Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -719,11 +719,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.13.2"
+          "value": "4.13.3"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-13T11:55:37.169Z"
+          "value": "2026-08-18T10:56:09.752Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -743,11 +743,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "6.2.8"
+          "value": "6.2.9"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-03T12:01:12.001Z"
+          "value": "2026-08-15T08:46:00.512Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1175,11 +1175,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "8.2.1"
+          "value": "8.2.2"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-06T13:47:48.588Z"
+          "value": "2026-08-20T04:14:39.107Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1199,11 +1199,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.1.10"
+          "value": "4.1.11"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-07-06T06:44:42.684Z"
+          "value": "2026-08-18T14:27:07.240Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1223,11 +1223,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.123.0"
+          "value": "4.124.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-13T16:09:16.089Z"
+          "value": "2026-08-18T12:56:55.160Z"
         },
         {
           "name": "lorepack:provenanceStatus",

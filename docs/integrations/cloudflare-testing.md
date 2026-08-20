@@ -24,9 +24,10 @@ Optional CI metadata:
 
 When CI metadata is present, the harness derives a per-run resource prefix by appending those
 numeric values. It prepends that prefix to the smoke project name before
-`lore target add cloudflare`, so the CLI's own deterministic default names stay aligned with the
-acceptance harness. That keeps parallel runs from colliding while preserving a stable human-owned
-prefix for manual cleanup and dashboard inspection.
+`lore target add cloudflare`, so the CLI's own deterministic D1 and R2 names stay aligned with
+the acceptance harness. Worker scripts are different: CI always deploys one singleton Worker
+named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`. The checked-in GitHub Actions job is serialized
+with a `cloudflare-acceptance` concurrency group so two CI runs do not race on that Worker.
 
 Example:
 
@@ -36,7 +37,8 @@ GITHUB_RUN_ID=12345
 GITHUB_RUN_ATTEMPT=2
 ```
 
-This becomes the resource prefix `lorepack-ci-12345-2`.
+This becomes the storage resource prefix `lorepack-ci-12345-2`, while the active Worker name is
+`lorepack-ci-acceptance-runtime`.
 
 When `LORE_CF_ARTIFACT_DIR` is set, the credentialed smoke writes machine-readable command
 logs, deployment receipts, and a remote summary into that directory so CI can upload them as
@@ -72,11 +74,15 @@ These are enough for the present contract because the Phase 6 path needs one Wor
 database, and one R2 bucket. It does not need Zones, Pages, KV, Queues, Durable Objects,
 Vectorize, or AI permissions.
 
-The credentialed smoke also lists D1 databases and deletes stale catalog databases whose names
-match `LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-catalog`. This is deliberately limited to
-older CI run ids or earlier attempts for the same run, so it does not delete the current run or a
-newer parallel run. The cleanup exists because leaked D1 databases can exhaust the account quota
-before `lore target add cloudflare` reaches the deploy path.
+The credentialed smoke also lists Workers, D1 databases and R2 buckets before provisioning. It
+deletes stale CI resources whose names match
+`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-runtime`,
+`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-catalog`, or
+`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-objects`. This is deliberately limited to older CI
+run ids or earlier attempts for the same run, so it does not delete the current run, a newer run,
+the singleton Worker, or resources outside the configured prefix. The cleanup exists because
+leaked resources can exhaust account quota before `lore target add cloudflare` reaches the deploy
+path.
 
 ## Shared corpus and acceptance shape
 
@@ -119,8 +125,9 @@ The checked-in gates today are:
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
   runtime plus target resources, runs `lore target add cloudflare` in automatic provisioning
-  mode so the command itself creates the D1 database and R2 bucket, then deploys the checked-in
-  Worker package, runs `lore target token cloudflare`, runs
+  mode so the command itself creates the D1 database and R2 bucket, rewrites the non-secret
+  target receipt to the singleton CI Worker, then deploys the checked-in Worker package, runs
+  `lore target token cloudflare`, runs
   `lore deploy cloudflare`, edits the mixed corpus, runs a second `lore deploy cloudflare`,
   proves unauthenticated REST and MCP requests are rejected while the issued runtime token
   succeeds, then verifies the public build id and read surface before and after
@@ -139,9 +146,9 @@ The broader Phase 2 contract-suite and CI artifact cases are still open work on 
 
 ## Cost expectations
 
-The current expected remote footprint per integration run is:
+The current expected remote footprint during one integration scenario is:
 
-- one Worker script
+- at most one active Worker script named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`
 - one D1 database
 - one R2 bucket
 - one projected mixed corpus build
@@ -156,10 +163,23 @@ The final `#93` suite must delete every created Cloudflare resource at the end o
 even after a failed assertion, so a credentialed CI run does not leak Workers, D1 databases,
 or R2 buckets.
 
-Before provisioning a new target, the smoke also reclaims stale D1 catalog databases left by
-older CI runs under the same `LORE_CF_TEST_PREFIX`. Manual runs without `GITHUB_RUN_ID` and
-`GITHUB_RUN_ATTEMPT` do not perform this stale cleanup, because the harness cannot distinguish
-old manual resources from resources a person is still inspecting.
+Before provisioning a new target, the smoke also reclaims stale Workers, D1 catalog databases and
+R2 object buckets left by older CI runs under the same `LORE_CF_TEST_PREFIX`. Manual runs without
+`GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT` do not perform this stale cleanup, because the harness
+cannot distinguish old manual resources from resources a person is still inspecting.
+
+Manual cleanup and inspection should use the same prefix filter. The intended steady state after a
+CI run is zero active Workers. During a scenario there must be no more than one, the singleton
+Worker:
+
+```bash
+pnpm --filter @lorepack/deploy-cloudflare exec wrangler d1 list --json
+pnpm --filter @lorepack/deploy-cloudflare exec wrangler r2 bucket list
+```
+
+For Workers, inspect the Cloudflare account's Workers list and remove only scripts under
+`LORE_CF_TEST_PREFIX` that match the old per-run `...-runtime` pattern. Do not remove manually
+named resources or production targets.
 
 CI artifacts for that suite must include:
 

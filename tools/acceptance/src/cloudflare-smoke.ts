@@ -70,6 +70,14 @@ interface D1DatabaseInfo {
   readonly id: string;
 }
 
+interface CloudflareWorkerInfo {
+  readonly name: string;
+}
+
+interface R2BucketInfo {
+  readonly name: string;
+}
+
 interface CloudflareTargetReceiptJson {
   readonly accountId: string;
   readonly workerName: string;
@@ -121,7 +129,7 @@ export async function provisionCloudflareSmokeTarget(
   projectName: string,
 ): Promise<CloudflareSmokeTarget> {
   const env = readCloudflareTestingEnv(process.env);
-  const names = resourceNamesFor(projectName);
+  const names = resourceNamesFor(projectName, env);
   const wranglerEnv = {
     ...process.env,
     CLOUDFLARE_API_TOKEN: env.apiToken,
@@ -130,7 +138,9 @@ export async function provisionCloudflareSmokeTarget(
     NO_D1_WARNING: 'true',
   } as Readonly<Record<string, string>>;
 
+  await cleanupStaleCloudflareWorkers(env, wranglerEnv);
   await cleanupStaleCloudflareD1Databases(env, wranglerEnv);
+  await cleanupStaleCloudflareR2Buckets(env, wranglerEnv);
 
   const configPath = join(WORKER_ROOT, `.wrangler-acceptance-${names.workerName}.jsonc`);
   return {
@@ -341,14 +351,19 @@ export async function addCloudflareTarget(
   }
 
   const receipt = parseCloudflareTargetReceipt(result.stdout);
+  const singletonReceipt = writeCloudflareSingletonWorkerReceipt(
+    project.root,
+    receipt,
+    target.workerName,
+  );
   const configuredNames = {
     ...target,
-    accountId: receipt.accountId,
-    workerName: receipt.workerName,
-    catalogDatabaseName: receipt.catalogDatabaseName,
-    objectsBucketName: receipt.objectsBucketName,
-    configPath: join(WORKER_ROOT, `.wrangler-acceptance-${receipt.workerName}.jsonc`),
-    endpointBase: `https://${receipt.workerName}.workers.dev`,
+    accountId: singletonReceipt.accountId,
+    workerName: singletonReceipt.workerName,
+    catalogDatabaseName: singletonReceipt.catalogDatabaseName,
+    objectsBucketName: singletonReceipt.objectsBucketName,
+    configPath: join(WORKER_ROOT, `.wrangler-acceptance-${singletonReceipt.workerName}.jsonc`),
+    endpointBase: `https://${singletonReceipt.workerName}.workers.dev`,
   };
   const databaseId = await lookupD1DatabaseId(
     configuredNames.catalogDatabaseName,
@@ -537,16 +552,35 @@ export function addResumeMutationToken(projectRoot: string, buildId: BuildId, to
   }
 }
 
-function resourceNamesFor(projectName: string): {
+function resourceNamesFor(
+  projectName: string,
+  env: { readonly testPrefix: string },
+): {
   readonly workerName: string;
   readonly catalogDatabaseName: string;
   readonly objectsBucketName: string;
 } {
   return {
-    workerName: withSuffix(projectName, 'runtime', 63),
+    workerName: activeCloudflareWorkerName(env),
     catalogDatabaseName: withSuffix(projectName, 'catalog', 63),
     objectsBucketName: withSuffix(projectName, 'objects', 63),
   };
+}
+
+export function activeCloudflareWorkerName(env: { readonly testPrefix: string }): string {
+  return withSuffix(sanitizeName(env.testPrefix), 'acceptance-runtime', 63);
+}
+
+function writeCloudflareSingletonWorkerReceipt(
+  projectRoot: string,
+  receipt: CloudflareTargetReceiptJson,
+  workerName: string,
+): CloudflareTargetReceiptJson {
+  const path = join(projectRoot, '.lore', 'targets', 'cloudflare.json');
+  const fullReceipt = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const patched = { ...receipt, workerName };
+  writeFileSync(path, `${JSON.stringify({ ...fullReceipt, workerName }, null, 2)}\n`, 'utf8');
+  return patched;
 }
 
 function listReceiptIds(projectRoot: string): readonly string[] {
@@ -662,6 +696,68 @@ export function staleCloudflareD1DatabaseNames(
     .sort((a, b) => a.localeCompare(b));
 }
 
+export function staleCloudflareWorkerNames(
+  workers: readonly { readonly name: string }[],
+  env: {
+    readonly testPrefix: string;
+    readonly runId: string | null;
+    readonly runAttempt: string | null;
+  },
+): readonly string[] {
+  if (env.runId === null || env.runAttempt === null) return [];
+  const prefix = sanitizeName(env.testPrefix);
+  const singleton = activeCloudflareWorkerName(env);
+  const currentRun = BigInt(env.runId);
+  const currentAttempt = BigInt(env.runAttempt);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-runtime$`);
+  return workers
+    .filter(({ name }) => {
+      if (name === singleton) return false;
+      const match = pattern.exec(name);
+      if (match === null || match[1] === undefined || match[2] === undefined) return false;
+      const run = BigInt(match[1]);
+      const attempt = BigInt(match[2]);
+      return run < currentRun || (run === currentRun && attempt < currentAttempt);
+    })
+    .map(({ name }) => name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+export function staleCloudflareR2BucketNames(
+  buckets: readonly { readonly name: string }[],
+  env: {
+    readonly testPrefix: string;
+    readonly runId: string | null;
+    readonly runAttempt: string | null;
+  },
+): readonly string[] {
+  if (env.runId === null || env.runAttempt === null) return [];
+  const prefix = sanitizeName(env.testPrefix);
+  const currentRun = BigInt(env.runId);
+  const currentAttempt = BigInt(env.runAttempt);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-objects$`);
+  return buckets
+    .filter(({ name }) => {
+      const match = pattern.exec(name);
+      if (match === null || match[1] === undefined || match[2] === undefined) return false;
+      const run = BigInt(match[1]);
+      const attempt = BigInt(match[2]);
+      return run < currentRun || (run === currentRun && attempt < currentAttempt);
+    })
+    .map(({ name }) => name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+async function cleanupStaleCloudflareWorkers(
+  env: ReturnType<typeof readCloudflareTestingEnv>,
+  wranglerEnv: Readonly<Record<string, string>>,
+): Promise<void> {
+  const workers = await listCloudflareWorkers(env.accountId, wranglerEnv);
+  for (const name of staleCloudflareWorkerNames(workers, env)) {
+    await deleteCloudflareWorkerByName(env.accountId, name, wranglerEnv);
+  }
+}
+
 async function cleanupStaleCloudflareD1Databases(
   env: ReturnType<typeof readCloudflareTestingEnv>,
   wranglerEnv: Readonly<Record<string, string>>,
@@ -673,6 +769,20 @@ async function cleanupStaleCloudflareD1Databases(
       await runWrangler(['d1', 'delete', name, '--skip-confirmation'], wranglerEnv);
     } catch (error) {
       if (!isMissingCloudflareD1Error(error)) throw error;
+    }
+  }
+}
+
+async function cleanupStaleCloudflareR2Buckets(
+  env: ReturnType<typeof readCloudflareTestingEnv>,
+  wranglerEnv: Readonly<Record<string, string>>,
+): Promise<void> {
+  const buckets = await listCloudflareR2Buckets(env.accountId, wranglerEnv);
+  for (const name of staleCloudflareR2BucketNames(buckets, env)) {
+    try {
+      await deleteCloudflareBucket(name, wranglerEnv);
+    } catch (error) {
+      if (!isMissingCloudflareBucketError(error)) throw error;
     }
   }
 }
@@ -689,6 +799,79 @@ function parseD1DatabaseList(raw: string): readonly D1DatabaseInfo[] {
   return rows
     .map((row) => parseD1DatabaseInfo(row))
     .filter((row): row is D1DatabaseInfo => row !== null);
+}
+
+async function listCloudflareWorkers(
+  accountId: string,
+  env: Readonly<Record<string, string>>,
+): Promise<readonly CloudflareWorkerInfo[]> {
+  const apiToken = env.CLOUDFLARE_API_TOKEN;
+  if (typeof apiToken !== 'string' || apiToken.trim() === '') {
+    throw new Error('CLOUDFLARE_API_TOKEN is required to list Cloudflare Worker scripts.');
+  }
+  const response = await fetch(cloudflareWorkerListUrl(accountId), {
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Cloudflare API Worker list failed with ${response.status}: ${body.trim() === '' ? '(empty response body)' : body}`,
+    );
+  }
+  const payload = (await response.json()) as unknown;
+  const rows =
+    typeof payload === 'object' &&
+    payload !== null &&
+    Array.isArray((payload as { readonly result?: unknown }).result)
+      ? (payload as { readonly result: unknown[] }).result
+      : [];
+  return rows
+    .map((row) => parseNamedResource(row))
+    .filter((row): row is CloudflareWorkerInfo => row !== null);
+}
+
+async function listCloudflareR2Buckets(
+  accountId: string,
+  env: Readonly<Record<string, string>>,
+): Promise<readonly R2BucketInfo[]> {
+  const apiToken = env.CLOUDFLARE_API_TOKEN;
+  if (typeof apiToken !== 'string' || apiToken.trim() === '') {
+    throw new Error('CLOUDFLARE_API_TOKEN is required to list Cloudflare R2 buckets.');
+  }
+  const response = await fetch(cloudflareR2BucketListUrl(accountId), {
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(
+      `Cloudflare API R2 bucket list failed with ${response.status}: ${body.trim() === '' ? '(empty response body)' : body}`,
+    );
+  }
+  const payload = (await response.json()) as unknown;
+  const rows =
+    typeof payload === 'object' &&
+    payload !== null &&
+    Array.isArray((payload as { readonly result?: unknown }).result)
+      ? (payload as { readonly result: unknown[] }).result
+      : [];
+  return rows
+    .map((row) => parseNamedResource(row))
+    .filter((row): row is R2BucketInfo => row !== null);
+}
+
+function parseNamedResource(value: unknown): { readonly name: string } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const row = value as Record<string, unknown>;
+  const name = [row.name, row.id].find(
+    (candidate): candidate is string => typeof candidate === 'string' && candidate.trim() !== '',
+  );
+  return name === undefined ? null : { name };
 }
 
 async function runWrangler(
@@ -812,6 +995,14 @@ export function parseWranglerDeploymentInfo(
 
 export function cloudflareWorkerDeleteUrl(accountId: string, workerName: string): string {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`;
+}
+
+export function cloudflareWorkerListUrl(accountId: string): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts`;
+}
+
+export function cloudflareR2BucketListUrl(accountId: string): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets`;
 }
 
 export function remoteR2ObjectDeleteArgs(
@@ -948,12 +1139,20 @@ async function deleteCloudflareBucket(
 }
 
 async function deleteCloudflareWorker(target: CloudflareSmokeTarget): Promise<void> {
-  const apiToken = target.wranglerEnv.CLOUDFLARE_API_TOKEN;
+  await deleteCloudflareWorkerByName(target.accountId, target.workerName, target.wranglerEnv);
+}
+
+async function deleteCloudflareWorkerByName(
+  accountId: string,
+  workerName: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const apiToken = env.CLOUDFLARE_API_TOKEN;
   if (typeof apiToken !== 'string' || apiToken.trim() === '') {
     throw new Error('CLOUDFLARE_API_TOKEN is required to delete the Cloudflare Worker script.');
   }
 
-  const url = new URL(cloudflareWorkerDeleteUrl(target.accountId, target.workerName));
+  const url = new URL(cloudflareWorkerDeleteUrl(accountId, workerName));
   url.searchParams.set('force', 'true');
   const response = await fetch(url, {
     method: 'DELETE',
