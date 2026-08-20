@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // The pictures in the documentation, regenerated from a real build rather than pasted in once.
 //
-// Every image under `docs/images/` comes out of this script: a demo project is built, a real
-// `lore dev` serves it, the CLI transcripts are captured by running the actual commands, and
-// Studio is photographed in the browser the end-to-end suite already uses.
+// The CLI and Studio screenshots under `docs/images/` come out of this script: a demo project
+// is built, a real `lore dev` serves it, the CLI transcripts are captured by running the
+// actual commands, and Studio is photographed in the browser the end-to-end suite already uses.
 //
 // The reason it is a script and not a folder of hand-taken screenshots is section 8 of
 // AGENTS.md: documentation is part of the change. A screenshot nobody can regenerate becomes
