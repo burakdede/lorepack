@@ -508,4 +508,15 @@ describe('phase 7 definition', () => {
 
     expect(workflowPhases).toEqual(PHASES.map((phase) => phase.phase));
   });
+
+  it('prepares the browser before running phase checks that can execute Studio e2e', () => {
+    const workflow = readFileSync(`${REPO_ROOT}.github/workflows/phase-gates.yml`, 'utf8');
+    const cacheIndex = workflow.indexOf('name: Cache the browser');
+    const installIndex = workflow.indexOf('pnpm exec playwright install --with-deps chromium');
+    const verifyIndex = workflow.indexOf('name: Verify the phase against its executable criteria');
+
+    expect(cacheIndex).toBeGreaterThan(-1);
+    expect(installIndex).toBeGreaterThan(cacheIndex);
+    expect(verifyIndex).toBeGreaterThan(installIndex);
+  });
 });
