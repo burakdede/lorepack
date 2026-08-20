@@ -658,7 +658,7 @@
       "latestVersion": "6.1.0",
       "pinnedPublishedAt": "2025-09-27T14:07:37.572Z",
       "latestReleaseAt": "2026-08-20T02:49:46.306Z",
-      "daysSinceLastRelease": -1,
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -1257,7 +1257,7 @@
       "latestVersion": "8.2.2",
       "pinnedPublishedAt": "2025-10-03T00:43:27.811Z",
       "latestReleaseAt": "2026-08-20T04:14:39.107Z",
-      "daysSinceLastRelease": -1,
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -1302,10 +1302,10 @@
       "references": [
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
-      "latestVersion": "4.124.0",
+      "latestVersion": "4.125.0",
       "pinnedPublishedAt": "2026-08-05T12:31:36.536Z",
-      "latestReleaseAt": "2026-08-18T12:56:55.160Z",
-      "daysSinceLastRelease": 1,
+      "latestReleaseAt": "2026-08-20T17:39:00.731Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT OR Apache-2.0",
       "provenance": {
         "status": "not-required",

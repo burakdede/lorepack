@@ -1223,11 +1223,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.124.0"
+          "value": "4.125.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-08-18T12:56:55.160Z"
+          "value": "2026-08-20T17:39:00.731Z"
         },
         {
           "name": "lorepack:provenanceStatus",
