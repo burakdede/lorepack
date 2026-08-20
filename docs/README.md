@@ -1,17 +1,33 @@
 # Lorepack docs
 
-Start here, then take the one-hop path that matches the job.
+Start here, then take the path that matches the job. The README is the public front door.
+This directory holds the institutional-grade details: command references, architecture notes,
+integration guides, compatibility evidence, package format and release checks.
 
-| Job | Start |
+## Reader paths
+
+| Reader | Start with | Then use |
 |---|---|
-| Install and try Lorepack | [`../README.md`](../README.md) |
-| Run the two-command quick start | [`../README.md#try-the-lifecycle`](../README.md#try-the-lifecycle) |
-| Understand the build lifecycle | [`architecture/README.md`](architecture/README.md) |
-| Connect an AI client or deployment target | [`integrations/`](integrations/) |
-| Check supported platforms and limits | [`compatibility/README.md`](compatibility/README.md) |
-| Look up every command and flag | [`cli-reference.md`](cli-reference.md) |
-| Contribute or pick up a backlog task | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
-| Inspect the package format | [`package-format/README.md`](package-format/README.md) |
+| Evaluator | [`../README.md`](../README.md) | [`concepts.md`](concepts.md), [`studio-tour.md`](studio-tour.md), [`demo-transcript.md`](demo-transcript.md) |
+| User | [`../README.md#try-the-lifecycle`](../README.md#try-the-lifecycle) | [`integrations/`](integrations/), [`compatibility/README.md`](compatibility/README.md) |
+| Technical operator | [`cli-reference.md`](cli-reference.md) | [`package-format/README.md`](package-format/README.md), [`release-checklist.md`](release-checklist.md) |
+| Integrator | [`integrations/mcp.md`](integrations/mcp.md) | [`architecture/serving.md`](architecture/serving.md), [`architecture/deployment.md`](architecture/deployment.md) |
+| Contributor | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | [`architecture/README.md`](architecture/README.md), [`architecture/testing.md`](architecture/testing.md), [`../AGENTS.md`](../AGENTS.md) |
+
+## What lives where
+
+| Need | Document |
+|---|---|
+| What Lorepack is, why it exists and how it differs from RAG, MCP wrappers and vector databases | [`concepts.md`](concepts.md) |
+| The two-command quick start and honest v0.1 limits | [`../README.md`](../README.md) |
+| Every command and option | [`cli-reference.md`](cli-reference.md) |
+| Architecture map and package boundaries | [`architecture/README.md`](architecture/README.md) |
+| Build lifecycle and deterministic identity | [`architecture/build-orchestration.md`](architecture/build-orchestration.md), [`architecture/build-identity.md`](architecture/build-identity.md) |
+| Runtime, MCP and HTTP serving | [`architecture/serving.md`](architecture/serving.md), [`integrations/mcp.md`](integrations/mcp.md) |
+| Retrieval and context packing | [`architecture/retrieval.md`](architecture/retrieval.md) |
+| Package format and schemas | [`package-format/README.md`](package-format/README.md) |
+| Supported platforms, integrations and performance evidence | [`compatibility/README.md`](compatibility/README.md), [`compatibility/performance-v0.1.md`](compatibility/performance-v0.1.md) |
+| Security and threat boundaries | [`architecture/security.md`](architecture/security.md), [`architecture/threat-model.md`](architecture/threat-model.md) |
 
 Generated and checked docs:
 
