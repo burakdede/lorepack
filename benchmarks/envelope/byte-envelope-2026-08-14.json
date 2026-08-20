@@ -7,6 +7,7 @@
     "cpu": "Apple M1 Pro",
     "cores": 10,
     "memoryGb": 32,
+    "storage": "local APFS SSD",
     "node": "24.18.1"
   },
   "corpus": {
