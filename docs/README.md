@@ -33,13 +33,15 @@ Generated and checked docs:
 
 - [`testing/acceptance.md`](testing/acceptance.md) is generated from the acceptance scenarios.
 - [`cli-reference.md`](cli-reference.md) is generated from the CLI command definitions.
-- [`images/`](images/) contains generated pictures captured from real CLI and Studio output.
+- [`images/`](images/) contains generated pictures captured from real CLI and Studio output,
+  plus small hand-maintained SVG diagrams for the lifecycle and architecture boundary.
 
 ## The pictures are generated, not pasted
 
 `scripts/capture-docs.mjs` builds a demo project, runs the real commands, starts a real
-`lore dev`, and photographs Studio in the browser. Nothing under `docs/images/` is taken by
-hand.
+`lore dev`, and photographs Studio in the browser. The CLI and Studio screenshots under
+`docs/images/` are regenerated from the product rather than taken by hand. The conceptual SVG
+diagrams in the same folder are maintained as text.
 
 ```bash
 pnpm exec playwright install chromium   # once

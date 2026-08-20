@@ -19,6 +19,8 @@ Lorepack does four things:
 
 The build is the source of truth. Everything else is a projection of that build.
 
+![Lorepack lifecycle: source artifacts flow through plan, build, validate and activate into an immutable build, then read-only runtimes serve it](images/lorepack-lifecycle.svg)
+
 ## A practical example
 
 Imagine a team has these files:
@@ -93,6 +95,8 @@ Those deferrals are deliberate. v0.1 protects the build model first.
 | Folder indexer | "Can I keep a local index fresh?" | Freshness does not prove reproducibility or safe activation. | Source files are inputs. The active serving database is a sealed build. |
 
 These tools can be useful. Lorepack is focused on the missing lifecycle around AI context.
+
+![Lorepack architecture: compiler creates one immutable build, local and remote runtimes are projections, and AI clients cross only a read-only boundary](images/lorepack-architecture.svg)
 
 ## The build lifecycle
 

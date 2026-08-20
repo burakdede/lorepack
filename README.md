@@ -23,6 +23,8 @@ source artifacts → plan → deterministic build → immutable version
                  → validate → activate atomically → diff / roll back
 ```
 
+![Lorepack lifecycle: source artifacts flow through plan, build, validate and activate into an immutable build, then read-only runtimes serve it](docs/images/lorepack-lifecycle.svg)
+
 ## Why Lorepack exists
 
 AI clients usually receive project context in one of three fragile ways:
@@ -57,6 +59,8 @@ v0.1. The difference is ownership: search reads from a sealed build, and a seale
 thing you inspect, deploy and roll back.
 
 For a deeper explanation, see [Core concepts](docs/concepts.md).
+
+![Lorepack architecture: compiler creates one immutable build, local and remote runtimes are projections, and AI clients cross only a read-only boundary](docs/images/lorepack-architecture.svg)
 
 ## Try the lifecycle
 
