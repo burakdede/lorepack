@@ -274,6 +274,37 @@ function cyclonedxFromReport(report) {
   };
 }
 
+/**
+ * The registry's latest-version fields are a snapshot, not package identity.
+ *
+ * npm can publish a new release, or attach an attestation, while this check is running. Those
+ * changes must not make a committed report fail an otherwise clean build. The fields below are
+ * the contract the report must keep current: the audit result, dependency inventory, licences
+ * and pinned package identity. The volatile registry observation fields remain useful in the
+ * report, but are deliberately not used as a byte-for-byte freshness key.
+ */
+export function stableReportView(report) {
+  return {
+    schemaVersion: report.schemaVersion,
+    policyDate: report.policyDate,
+    staleAfterDays: report.staleAfterDays,
+    audit: report.audit,
+    licenses: report.licenses,
+    dependencies: report.dependencies.map((dependency) => ({
+      name: dependency.name,
+      specifiers: dependency.specifiers,
+      dependencyTypes: dependency.dependencyTypes,
+      references: dependency.references,
+      pinnedPublishedAt: dependency.pinnedPublishedAt,
+      license: dependency.license,
+    })),
+  };
+}
+
+export function reportsMatch(current, committed) {
+  return JSON.stringify(stableReportView(current)) === JSON.stringify(stableReportView(committed));
+}
+
 function checkPublishConfig(problems) {
   for (const manifestPath of workspaceManifests()) {
     const manifest = readJson(manifestPath);
@@ -328,9 +359,8 @@ function checkReportFresh(report, problems) {
     problems.push('reports/dependency-health.json is missing; run pnpm supply-chain:report');
     return;
   }
-  const current = readFileSync(REPORT, 'utf8');
-  const expected = `${JSON.stringify(report, null, 2)}\n`;
-  if (current !== expected) {
+  const committed = readJson(REPORT);
+  if (!reportsMatch(report, committed)) {
     problems.push('reports/dependency-health.json is stale; run pnpm supply-chain:report');
   }
 }
@@ -340,11 +370,26 @@ function checkSbomFresh(report, problems) {
     problems.push('reports/sbom.cyclonedx.json is missing; run pnpm supply-chain:report');
     return;
   }
-  const current = readFileSync(SBOM, 'utf8');
-  const expected = `${JSON.stringify(cyclonedxFromReport(report), null, 2)}\n`;
-  if (current !== expected) {
+  const committed = readJson(SBOM);
+  if (!sbomsMatch(cyclonedxFromReport(report), committed)) {
     problems.push('reports/sbom.cyclonedx.json is stale; run pnpm supply-chain:report');
   }
+}
+
+function sbomsMatch(current, committed) {
+  const stableProperties = (component) =>
+    (component.properties ?? []).filter(
+      (property) =>
+        property.name !== 'lorepack:latestVersion' && property.name !== 'lorepack:latestReleaseAt',
+    );
+  const stable = (bom) => ({
+    ...bom,
+    components: bom.components.map((component) => ({
+      ...component,
+      properties: stableProperties(component),
+    })),
+  });
+  return JSON.stringify(stable(current)) === JSON.stringify(stable(committed));
 }
 
 function main() {
