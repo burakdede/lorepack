@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { reportsMatch } from '../../../scripts/check-supply-chain.mjs';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const CHANGESET_CHECK = join(REPO_ROOT, 'scripts', 'check-changeset-policy.mjs');
@@ -176,6 +177,81 @@ describe('performance report policy', () => {
     expect(run(PERFORMANCE_CHECK, REPO_ROOT).status).toBe(0);
   });
 });
+
+describe('supply-chain report freshness', () => {
+  it('ignores volatile registry observations but preserves the security contract', () => {
+    const report = dependencyReport();
+    const newerRegistrySnapshot = {
+      ...report,
+      dependencies: [
+        {
+          ...report.dependencies[0],
+          latestVersion: '2.0.0',
+          latestReleaseAt: '2026-09-04T00:00:00.000Z',
+          provenance: {
+            status: 'present',
+            predicateType: 'https://slsa.dev/provenance/v1',
+            url: 'https://registry.npmjs.org/attestations/example@2.0.0',
+          },
+        },
+      ],
+    };
+
+    expect(reportsMatch(newerRegistrySnapshot, report)).toBe(true);
+  });
+
+  it('rejects a changed audit result or dependency inventory', () => {
+    const report = dependencyReport();
+    expect(
+      reportsMatch(
+        {
+          ...report,
+          audit: { vulnerabilities: { moderate: 1 } },
+        },
+        report,
+      ),
+    ).toBe(false);
+    expect(
+      reportsMatch(
+        {
+          ...report,
+          dependencies: [{ ...report.dependencies[0], specifiers: ['2.0.0'] }],
+        },
+        report,
+      ),
+    ).toBe(false);
+  });
+});
+
+function dependencyReport() {
+  return {
+    schemaVersion: 1,
+    policyDate: '2026-08-20',
+    staleAfterDays: 548,
+    audit: { vulnerabilities: { moderate: 0 } },
+    licenses: ['MIT'],
+    provenance: { checked: 1, missing: [], notChecked: [] },
+    dependencies: [
+      {
+        name: 'example',
+        specifiers: ['1.0.0'],
+        dependencyTypes: ['dependencies'],
+        references: ['packages/example/package.json:dependencies'],
+        pinnedPublishedAt: '2026-01-01T00:00:00.000Z',
+        latestVersion: '1.0.0',
+        latestReleaseAt: '2026-01-01T00:00:00.000Z',
+        daysSinceLastRelease: 231,
+        license: 'MIT',
+        provenance: {
+          status: 'present',
+          predicateType: 'https://slsa.dev/provenance/v1',
+          url: null,
+        },
+        health: { status: 'current' },
+      },
+    ],
+  };
+}
 
 function run(script: string, root: string, env: NodeJS.ProcessEnv = {}) {
   try {

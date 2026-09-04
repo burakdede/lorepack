@@ -28,3 +28,4 @@ allowBuilds:
 # check pass on a real install rather than only after someone deletes the directory.
 overrides:
   '@napi-rs/canvas': '-'
+  '@xmldom/xmldom': '0.8.15'
