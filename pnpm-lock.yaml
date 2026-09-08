@@ -112,7 +112,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.12
-        version: 2.0.12(hono@4.12.34)
+        version: 2.0.12(hono@4.13.7)
       '@lorepack/backend-local':
         specifier: workspace:*
         version: link:../backend-local
@@ -147,8 +147,8 @@ importers:
         specifier: 15.0.0
         version: 15.0.0
       hono:
-        specifier: 4.12.34
-        version: 4.12.34
+        specifier: 4.13.7
+        version: 4.13.7
     devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*
@@ -219,8 +219,8 @@ importers:
         specifier: workspace:*
         version: link:../runtime
       hono:
-        specifier: 4.12.34
-        version: 4.12.34
+        specifier: 4.13.7
+        version: 4.13.7
       jose:
         specifier: 6.2.7
         version: 6.2.7
@@ -239,10 +239,10 @@ importers:
         version: link:../runtime
       '@modelcontextprotocol/hono':
         specifier: 2.0.0
-        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)
       '@modelcontextprotocol/node':
         specifier: 2.0.0
-        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)
       '@modelcontextprotocol/server':
         specifier: 2.0.0
         version: 2.0.0
@@ -320,8 +320,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       hono:
-        specifier: 4.12.34
-        version: 4.12.34
+        specifier: 4.13.7
+        version: 4.13.7
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -2160,8 +2160,8 @@ packages:
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
 
-  hono@4.12.34:
-    resolution: {integrity: sha512-GqXJqY/xJkJmuloTrnV1ZEXG3fqte+VjkUqoRNZXcrUidiUOP4fMSIHHY4tsqZBK++kVyWmt/AAfSUuy57/eSA==}
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
     engines: {node: '>=16.9.0'}
 
   html-encoding-sniffer@4.0.0:
@@ -3776,13 +3776,13 @@ snapshots:
 
   '@fontsource/ibm-plex-sans@5.2.6': {}
 
-  '@hono/node-server@1.19.17(hono@4.12.34)':
+  '@hono/node-server@1.19.17(hono@4.13.7)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.7
 
-  '@hono/node-server@2.0.12(hono@4.12.34)':
+  '@hono/node-server@2.0.12(hono@4.13.7)':
     dependencies:
-      hono: 4.12.34
+      hono: 4.13.7
 
   '@img/colour@1.1.0': {}
 
@@ -3951,17 +3951,17 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@modelcontextprotocol/hono@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)':
+  '@modelcontextprotocol/hono@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)':
     dependencies:
       '@modelcontextprotocol/server': 2.0.0
-      hono: 4.12.34
+      hono: 4.13.7
 
-  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.12.34)':
+  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.12.34)
+      '@hono/node-server': 1.19.17(hono@4.13.7)
       '@modelcontextprotocol/server': 2.0.0
     optionalDependencies:
-      hono: 4.12.34
+      hono: 4.13.7
 
   '@modelcontextprotocol/server@2.0.0':
     dependencies:
@@ -4739,7 +4739,7 @@ snapshots:
       property-information: 7.2.0
       space-separated-tokens: 2.0.2
 
-  hono@4.12.34: {}
+  hono@4.13.7: {}
 
   html-encoding-sniffer@4.0.0:
     dependencies:

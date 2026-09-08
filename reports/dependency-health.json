@@ -793,7 +793,7 @@
     {
       "name": "hono",
       "specifiers": [
-        "4.12.34"
+        "4.13.7"
       ],
       "dependencyTypes": [
         "dependencies"
@@ -804,7 +804,7 @@
         "packages/runtime/package.json:dependencies"
       ],
       "latestVersion": "4.13.7",
-      "pinnedPublishedAt": "2026-08-03T02:36:40.543Z",
+      "pinnedPublishedAt": "2026-09-04T19:18:07.204Z",
       "latestReleaseAt": "2026-09-04T19:18:07.204Z",
       "daysSinceLastRelease": 0,
       "license": "MIT",
