@@ -162,12 +162,76 @@ async function checkIssues(
 
   const allowed = new Set(criterion.allowOpen ?? []);
   const unexpected = open.filter((issue) => !allowed.has(issue.number));
-  if (unexpected.length === 0) return { ...base, outcome: 'passed' };
-  return {
-    ...base,
-    outcome: 'failed',
-    detail: `still open: ${unexpected.map((i) => `#${i.number} ${i.title}`).join('; ')}`,
-  };
+  if (unexpected.length > 0) {
+    return {
+      ...base,
+      outcome: 'failed',
+      detail: `still open: ${unexpected.map((i) => `#${i.number} ${i.title}`).join('; ')}`,
+    };
+  }
+
+  for (const number of criterion.requireOpen ?? []) {
+    const required = await execute(
+      'gh',
+      [
+        'issue',
+        'view',
+        String(number),
+        '--repo',
+        'burakdede/lorepack',
+        '--json',
+        'number,title,state',
+      ],
+      60_000,
+      options.repoRoot,
+    );
+    if (required.code !== 0) {
+      return {
+        ...base,
+        outcome: 'unverified',
+        detail: `gh could not verify required open issue #${number}: ${
+          (required.stderr || 'no output').trim().split('\n')[0]
+        }`,
+      };
+    }
+
+    let issue: unknown;
+    try {
+      issue = JSON.parse(required.stdout) as unknown;
+    } catch {
+      return {
+        ...base,
+        outcome: 'unverified',
+        detail: `gh returned output that is not JSON for required issue #${number}`,
+      };
+    }
+
+    if (
+      issue === null ||
+      typeof issue !== 'object' ||
+      !('number' in issue) ||
+      !('state' in issue) ||
+      typeof issue.number !== 'number' ||
+      typeof issue.state !== 'string'
+    ) {
+      return {
+        ...base,
+        outcome: 'unverified',
+        detail: `gh returned malformed issue data for required issue #${number}`,
+      };
+    }
+
+    const title = 'title' in issue && typeof issue.title === 'string' ? issue.title : undefined;
+    if (issue.number !== number || issue.state !== 'OPEN') {
+      return {
+        ...base,
+        outcome: 'failed',
+        detail: `required issue #${number} is not open${title ? `: ${title}` : ''}`,
+      };
+    }
+  }
+
+  return { ...base, outcome: 'passed' };
 }
 
 /**
