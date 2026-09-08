@@ -21,6 +21,7 @@ export const PHASE_7: PhaseDefinition = {
         'Phase 7 has no open implementation work except the release issue and the epic while the real publish is pending.',
       milestone: 'P7 Hardening & v0.1',
       allowOpen: [8, 102, 310],
+      requireOpen: [102],
     },
     {
       id: 'success-matrix',

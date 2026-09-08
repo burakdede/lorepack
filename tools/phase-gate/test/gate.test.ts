@@ -153,6 +153,69 @@ describe('issues criterion', () => {
     expect(result.outcome).toBe('passed');
   });
 
+  it('requires configured issues to remain open', async () => {
+    const result = await checkCriterion(
+      { ...criterion, requireOpen: [102] } as Criterion,
+      options({
+        execute: async (_command, args) =>
+          args[1] === 'list'
+            ? { code: 0, stdout: '[]', stderr: '' }
+            : {
+                code: 0,
+                stdout: JSON.stringify({ number: 102, title: 'Release', state: 'OPEN' }),
+                stderr: '',
+              },
+      }),
+    );
+    expect(result.outcome).toBe('passed');
+  });
+
+  it('fails when a required issue is closed', async () => {
+    const result = await checkCriterion(
+      { ...criterion, requireOpen: [102] } as Criterion,
+      options({
+        execute: async (_command, args) =>
+          args[1] === 'list'
+            ? { code: 0, stdout: '[]', stderr: '' }
+            : {
+                code: 0,
+                stdout: JSON.stringify({ number: 102, title: 'Release', state: 'CLOSED' }),
+                stderr: '',
+              },
+      }),
+    );
+    expect(result.outcome).toBe('failed');
+    expect(result.detail).toContain('required issue #102 is not open');
+  });
+
+  it('reports unverified when a required issue cannot be read', async () => {
+    const result = await checkCriterion(
+      { ...criterion, requireOpen: [102] } as Criterion,
+      options({
+        execute: async (_command, args) =>
+          args[1] === 'list'
+            ? { code: 0, stdout: '[]', stderr: '' }
+            : { code: 1, stdout: '', stderr: 'permission denied' },
+      }),
+    );
+    expect(result.outcome).toBe('unverified');
+    expect(result.detail).toContain('required open issue #102');
+  });
+
+  it('reports unverified when required issue data is malformed', async () => {
+    const result = await checkCriterion(
+      { ...criterion, requireOpen: [102] } as Criterion,
+      options({
+        execute: async (_command, args) =>
+          args[1] === 'list'
+            ? { code: 0, stdout: '[]', stderr: '' }
+            : { code: 0, stdout: JSON.stringify({ state: 'OPEN' }), stderr: '' },
+      }),
+    );
+    expect(result.outcome).toBe('unverified');
+    expect(result.detail).toContain('malformed issue data');
+  });
+
   it('reports unverified, never passed, when gh is unavailable', async () => {
     const result = await checkCriterion(
       criterion,
@@ -491,6 +554,7 @@ describe('phase 7 definition', () => {
     const issues = PHASE_7.criteria.find((criterion) => criterion.id === 'issues-ready');
     expect(issues?.kind === 'issues' && issues.milestone).toBe('P7 Hardening & v0.1');
     expect(issues?.kind === 'issues' && issues.allowOpen).toContain(102);
+    expect(issues?.kind === 'issues' && issues.requireOpen).toContain(102);
 
     const audit = PHASE_7.criteria.find((criterion) => criterion.id === 'phase-8-audit');
     expect(audit?.kind === 'audit' && audit.nextEpic).toBe(110);

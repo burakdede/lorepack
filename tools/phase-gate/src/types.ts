@@ -41,6 +41,8 @@ export interface IssuesCriterion extends BaseCriterion {
   readonly milestone: string;
   /** Issues expected to remain open, such as the epic itself while work continues. */
   readonly allowOpen?: readonly number[];
+  /** Issues that must remain open until their external completion evidence exists. */
+  readonly requireOpen?: readonly number[];
 }
 
 /**

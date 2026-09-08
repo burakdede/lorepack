@@ -5,6 +5,7 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 ## Before Dispatch
 
 - Confirm the release issue links the PRs being shipped and every handoff is current.
+- Keep release issue `#102` open until the publish and post-publish evidence are complete.
 - Confirm `main` is the intended release commit and all required checks are green there.
 - Confirm the repository has an `NPM_TOKEN` secret with publish access for every
   `@lorepack/*` package.
