@@ -46,6 +46,10 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 4. Verify npm shows provenance for each published package.
 5. Install from npm using the selected channel and run the smoke commands again.
 
+The `Public registry smoke` workflow runs this public install check automatically after a
+GitHub release is published. It can also be rerun manually with the published version, and
+its matrix summary records the version, runner platform and Node version that were tested.
+
 ## Rollback
 
 If a release is bad:

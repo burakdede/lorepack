@@ -74,6 +74,8 @@ committing, tagging, creating a GitHub release or publishing to npm.
 
 A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
 publishes packages with npm provenance through `pnpm changeset publish --tag <channel>`.
+The `Public registry smoke` workflow then installs the published CLI from npm on Ubuntu,
+Windows and macOS and exercises the shipped binary without installing the workspace.
 
 The GitHub release receives:
 

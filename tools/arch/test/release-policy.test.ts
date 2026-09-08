@@ -148,6 +148,10 @@ describe('release policy', () => {
         'deprecate',
       ].join('\n'),
     );
+    writeFileSync(
+      join(root, '.github', 'workflows', 'public-registry-smoke.yml'),
+      publicRegistryWorkflow(),
+    );
   });
 
   afterEach(() => {
@@ -311,5 +315,22 @@ function releaseWorkflow(): string {
     'cloudflare acceptance (ubuntu-latest)',
     'studio e2e (ubuntu-latest)',
     'benchmarks (reported, not enforced)',
+  ].join('\n');
+}
+
+function publicRegistryWorkflow(): string {
+  return [
+    'release:',
+    'types: [published]',
+    'workflow_dispatch:',
+    'ubuntu-latest',
+    'windows-latest',
+    'macos-latest',
+    'npm view',
+    'seq 1 30',
+    'sleep 10',
+    'npm install --global --ignore-scripts',
+    'scripts/public-registry-smoke.mjs',
+    'GITHUB_STEP_SUMMARY',
   ].join('\n');
 }

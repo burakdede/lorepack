@@ -4,6 +4,10 @@ import { join } from 'node:path';
 
 const ROOT = process.env.LOREPACK_ROOT ?? join(import.meta.dirname, '..');
 const RELEASE = readFileSync(join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+const PUBLIC_SMOKE = readFileSync(
+  join(ROOT, '.github', 'workflows', 'public-registry-smoke.yml'),
+  'utf8',
+);
 const CHANGESETS = readFileSync(join(ROOT, '.changeset', 'config.json'), 'utf8');
 const SUPPLY_CHAIN = readFileSync(
   join(ROOT, 'docs', 'architecture', 'release-supply-chain.md'),
@@ -71,6 +75,25 @@ if (!RELEASE.includes('stable publish requires the green issue #101 performance 
 }
 if (!RELEASE.includes('pack --pack-destination')) {
   problems.push('release.yml dry runs must create package tarballs without publishing');
+}
+
+for (const phrase of [
+  'release:',
+  'types: [published]',
+  'workflow_dispatch:',
+  'ubuntu-latest',
+  'windows-latest',
+  'macos-latest',
+  'npm view',
+  'seq 1 30',
+  'sleep 10',
+  'npm install --global --ignore-scripts',
+  'scripts/public-registry-smoke.mjs',
+  'GITHUB_STEP_SUMMARY',
+]) {
+  if (!PUBLIC_SMOKE.includes(phrase)) {
+    problems.push(`public-registry-smoke.yml lacks ${phrase}`);
+  }
 }
 
 const tokenPreflight = RELEASE.indexOf('Require npm publish token for real release');
