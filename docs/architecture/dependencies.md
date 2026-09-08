@@ -135,6 +135,7 @@ provenance when two candidates are otherwise equivalent.
 | `unified` | Shared parser pipeline for Markdown and HTML. | Replace if the parser stack stops being maintained together. |
 | `vite` | Studio build tooling. | Replace if it adds install-time surprises or cannot keep the bundle deterministic. |
 | `vitest` | Unit and integration test runner. | Replace if it cannot run the workspace projects on all supported platforms. |
+| `@vitest/coverage-v8` | V8 coverage provider for the configured Vitest report. It is pinned to Vitest 4.1.10 because Vitest loads coverage providers as separate packages, and keeping the versions aligned makes the local coverage command reproducible. | Replace if Vitest changes its coverage-provider contract or if the provider adds native code or install hooks. |
 | `wrangler` | Contributor-only Cloudflare deployment and smoke tooling. | Keep isolated from published packages; replace if Cloudflare CLI syntax changes incompatibly. |
 | `yaml` | `lore.yaml`, lockfile and frontmatter parsing. | Replace if it stops preserving actionable error locations. |
 | `yauzl` | ZIP reader for `.lorepack` and XLSX. | Replace only with an equally low-level pure-JS ZIP reader. |
