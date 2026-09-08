@@ -21,6 +21,13 @@ Steps, in order:
 
 Test results and coverage upload as artifacts on every run, including failures.
 
+## Local coverage
+
+Run `mise exec -- pnpm test:unit --coverage` under the supported Node 24 runtime. Vitest writes
+the text summary and JSON report to `coverage/`; the directory is local output and is not
+committed. The coverage provider is pinned to the same version as Vitest in the workspace so
+this command exercises the configured report path rather than failing during startup.
+
 ## `commit-hygiene.yml`
 
 Runs on pull requests only. Rejects AI attribution trailers and footers, and an em dash in
