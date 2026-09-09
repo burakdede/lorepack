@@ -20,6 +20,14 @@ const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}
 const BUILD_A = buildId('a');
 const BUILD_B = buildId('b');
 
+function denyRename(): never {
+  throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+}
+
+function sealWithPermissionDenied(candidate: { readonly path: string }, destination: string) {
+  return sealCandidateDirectory(candidate, destination, { rename: denyRename });
+}
+
 function summary(id: BuildId, state = 'verified', createdAt = '2026-07-31T10:00:00Z') {
   return {
     buildId: id,
@@ -112,6 +120,19 @@ describe('candidate build directories', () => {
       // The original is untouched and the duplicate candidate is gone.
       expect(readFileSync(join(destination, 'manifest.json'), 'utf8')).toBe('{"n":1}');
       expect(existsSync(second.path)).toBe(false);
+    });
+  });
+
+  it('does not turn a permission failure into a missing sealed build', async () => {
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      const candidate = createCandidateDirectory(lore);
+      writeFileSync(join(candidate.path, 'manifest.json'), '{}', 'utf8');
+      const destination = join(lore, 'builds', BUILD_A);
+
+      expect(() => sealWithPermissionDenied(candidate, destination)).toThrowError(LoreError);
+      expect(existsSync(candidate.path)).toBe(true);
+      expect(existsSync(destination)).toBe(false);
     });
   });
 });
