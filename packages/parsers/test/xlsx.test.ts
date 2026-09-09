@@ -12,6 +12,8 @@ import {
   type WorkbookSpec,
 } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import yauzl from 'yauzl';
+import yazl from 'yazl';
 import { XLSX_LIMITS, xlsxParser } from '../src/xlsx/parser.js';
 
 /**
@@ -40,6 +42,49 @@ async function parseBytes(bytes: Uint8Array, relativePath = 'book.xlsx'): Promis
   })) as ParsedArtifact;
 }
 
+async function withDuplicatePart(bytes: Uint8Array, partName: string): Promise<Uint8Array> {
+  const parts = await new Promise<Array<{ name: string; bytes: Uint8Array }>>((resolve, reject) => {
+    yauzl.fromBuffer(Buffer.from(bytes), { lazyEntries: true }, (error, zip) => {
+      if (error !== null || zip === undefined) {
+        reject(error ?? new Error('Could not open XLSX fixture.'));
+        return;
+      }
+      const found: Array<{ name: string; bytes: Uint8Array }> = [];
+      zip.on('error', reject);
+      zip.on('end', () => resolve(found));
+      zip.on('entry', (entry) => {
+        zip.openReadStream(entry, (streamError, stream) => {
+          if (streamError !== null || stream === undefined) {
+            reject(streamError ?? new Error(`Could not read ${entry.fileName}.`));
+            return;
+          }
+          const chunks: Buffer[] = [];
+          stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+          stream.on('error', reject);
+          stream.on('end', () => {
+            found.push({ name: entry.fileName, bytes: new Uint8Array(Buffer.concat(chunks)) });
+            zip.readEntry();
+          });
+        });
+      });
+      zip.readEntry();
+    });
+  });
+  const duplicate = parts.find((part) => part.name === partName);
+  if (duplicate === undefined) throw new Error(`XLSX fixture has no ${partName}.`);
+
+  const zip = new yazl.ZipFile();
+  zip.addBuffer(Buffer.from(duplicate.bytes), duplicate.name);
+  for (const part of parts) zip.addBuffer(Buffer.from(part.bytes), part.name);
+  zip.end();
+  const output: Buffer[] = [];
+  return await new Promise<Uint8Array>((resolve, reject) => {
+    zip.outputStream.on('data', (chunk: Buffer) => output.push(chunk));
+    zip.outputStream.on('error', reject);
+    zip.outputStream.on('end', () => resolve(new Uint8Array(Buffer.concat(output))));
+  });
+}
+
 const tableOf = (parsed: ParsedArtifact, sheet?: string): ParsedTable => {
   const table =
     sheet === undefined ? parsed.tables?.[0] : parsed.tables?.find((one) => one.sheet === sheet);
@@ -65,6 +110,14 @@ const SIMPLE: WorkbookSpec = {
 };
 
 describe('a workbook becomes typed tables', () => {
+  it('rejects duplicate XML parts instead of selecting one by archive order', async () => {
+    const duplicate = await withDuplicatePart(await makeXlsx(SIMPLE), 'xl/workbook.xml');
+
+    await expect(parseBytes(duplicate)).rejects.toMatchObject<Partial<LoreError>>({
+      code: 'LORE_E_UNSUPPORTED_FORMAT',
+    });
+  });
+
   it('reads a sheet into a table with its columns and rows', async () => {
     const table = tableOf(await parse(SIMPLE));
     expect(table.name).toBe('Orders');

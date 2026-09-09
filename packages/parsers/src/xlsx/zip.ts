@@ -97,6 +97,20 @@ function listEntries(zip: ZipFile, displayPath: string): Promise<Map<string, Ent
         );
         return;
       }
+      if (found.has(entry.fileName)) {
+        reject(
+          new LoreError(
+            'LORE_E_UNSUPPORTED_FORMAT',
+            `${displayPath} contains duplicate package part ${entry.fileName}.`,
+            {
+              remediation: 'The workbook package is ambiguous. Open and re-save it in Excel.',
+              path: displayPath,
+            },
+          ),
+        );
+        zip.close();
+        return;
+      }
       // Entry names are used only as map keys and compared against fixed strings. They are
       // never joined onto a filesystem path, so a `../../` name is inert rather than a
       // traversal: nothing here writes a file.
