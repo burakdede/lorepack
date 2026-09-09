@@ -13,6 +13,7 @@ import {
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const DOC = join(REPO_ROOT, 'docs', 'integrations', 'cloudflare-testing.md');
+const CI = join(REPO_ROOT, '.github', 'workflows', 'ci.yml');
 
 describe('the Cloudflare testing environment contract, issue 93', () => {
   it('defines a stable required environment set', () => {
@@ -102,6 +103,11 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     expect(text).toContain('release-candidate environment');
     expect(text).toContain('skips with an explicit message');
     expect(text).toContain('CI artifacts');
+  });
+
+  it('bounds the credentialed CI job so a remote hang cannot hold the gate forever', () => {
+    const text = readFileSync(CI, 'utf8');
+    expect(text).toMatch(/cloudflare-acceptance:\n[\s\S]*?timeout-minutes: 35/);
   });
 
   const missing = missingCloudflareTestingEnv(process.env);

@@ -167,6 +167,7 @@ jobs:
   cloudflare-acceptance:
     name: cloudflare acceptance (ubuntu-latest)
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     concurrency:
       group: cloudflare-acceptance
       cancel-in-progress: false
