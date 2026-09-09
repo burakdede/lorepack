@@ -13,10 +13,10 @@ reproduction before the fix.
 
 | Evidence | Result |
 |---|---|
-| `main` revision | `6f50835` |
+| `main` revision | `bda508d` |
 | Local `mise exec -- pnpm verify` | 2,008 passed, 2 skipped on macOS arm64 with Node 24.18.1 |
-| Main CI | Run `34402158002`, post-merge verification for `6f50835` |
-| Phase gates | Run `34402158015`, post-merge phase verification for `6f50835` |
+| Main CI | Run `34406545590`, post-merge verification for `bda508d` |
+| Phase gates | Run `34406545577`, post-merge phase verification for `bda508d` |
 | Production dependency audit | No known vulnerabilities |
 | Secret scan | Gitleaks found no leaks |
 
