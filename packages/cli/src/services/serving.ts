@@ -78,148 +78,165 @@ export interface RunningServer {
   readonly close: () => Promise<void>;
 }
 
-export async function startServing(options: ServingOptions): Promise<RunningServer> {
+export interface ServingDependencies {
+  readonly createBackend?: typeof createLocalRuntimeBackend;
+  readonly listen?: typeof listen;
+}
+
+export async function startServing(
+  options: ServingOptions,
+  dependencies: ServingDependencies = {},
+): Promise<RunningServer> {
   const revalidator = createRevalidator({
     config: options.config,
     intervalMs: options.revalidateIntervalMs ?? DEFAULT_REVALIDATE_INTERVAL_MS,
   });
   const freshness = options.freshness ?? (() => revalidator.freshness());
 
-  const backend = createLocalRuntimeBackend({
+  const backend = (dependencies.createBackend ?? createLocalRuntimeBackend)({
     projectRoot: options.config.projectRoot,
     // Freshness is an annotation and never fails a read: a server that refused to answer
     // because the source tree moved would be useless (#147).
     freshness,
   });
 
-  const active = await backend.provider.current();
-  if (active === null) {
-    backend.close();
-    throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
-      remediation: 'Run `lore build` first.',
-    });
-  }
-
-  const runtime = createRuntime(backend);
-  // One handler for the process, built once: it constructs a fresh server per request
-  // internally, which is what the stateless model asks for, and holds the machinery that
-  // would otherwise be rebuilt on every call.
-  const startedAt = new Date().toISOString();
-  // Filled in by `listen` below, which is where the port stops being a request and becomes
-  // a fact. Diagnostics reads it through a closure rather than being constructed twice.
-  let boundPort = options.port;
-
-  const comparer = createLocalComparer(options.config.projectRoot);
-  const mcp = createMcpHttpHandler(runtime, comparer);
-  // Absent when the package was installed without built assets, which is a broken install
-  // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
-  const serveStudio = options.studio === true && studioIsBuilt();
-  const app = createApiApp({
-    runtime,
-    currentBuild: () => backend.provider.current(),
-    freshness,
-    mcpHandler: (request) => mcp.fetch(request),
-    // Reads of the **active build**, so any server can answer them: they change nothing and
-    // they touch no source file. `lore serve` offering them is the same promise it already
-    // makes about `/v1/search`.
-    exportBundle: async (request) => {
-      const bundle = await runtime.contextForTask(
-        request as Parameters<typeof runtime.contextForTask>[0],
-      );
-      // The same renderer `lore export` uses, so "copy as export" is byte-identical rather
-      // than merely similar. A parity test asserts it.
-      return renderBundleMarkdown(bundle, {
-        projectName: options.config.config.name,
-        moreCommand: `lore export --task ${JSON.stringify(bundle.task)} --profile deep`,
-        sourceState: bundle.sourceState,
+  try {
+    const active = await backend.provider.current();
+    if (active === null) {
+      throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
+        remediation: 'Run `lore build` first.',
       });
-    },
-    sources: async () => {
-      const handle = await backend.provider.acquire();
-      try {
-        const scope = await backend.open(handle);
-        return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
-      } finally {
-        handle.release();
-      }
-    },
-    warnings: createWarningsEndpoint(async () => {
-      // Acquired and released like any other read, so a warnings request cannot pin a build
-      // open after it stops being active.
-      const handle = await backend.provider.acquire();
-      try {
-        const scope = await backend.open(handle);
-        const manifest = await scope.catalog.manifest();
-        return {
-          buildId: manifest.buildId,
-          warnings: manifest.warnings,
-          ...(manifest.exclusions === undefined ? {} : { exclusions: manifest.exclusions }),
-        };
-      } finally {
-        handle.release();
-      }
-    }),
-    ...(serveStudio
-      ? {
-          assets: createStudioAssets(),
-          allowLoopbackOrigin: true,
-          // The one Studio read that is **not** a read of the build: planning walks the
-          // source tree. `lore serve` promises never to rebuild and has no business reading
-          // sources, so this belongs to `lore dev` alone.
-          plan: createPlanEndpoint(options.config),
-          // Reads the machine rather than the build: SQLite controls, the watcher, the
-          // process serving this request. The port is passed as a function because it is
-          // chosen by binding, which has not happened yet at this line.
-          diagnostics: createDiagnosticsEndpoint({
-            config: options.config,
-            host: options.host,
-            port: () => boundPort,
-            startedAt,
-            ...(options.watchStatus === undefined ? {} : { watchStatus: options.watchStatus }),
-          }),
-          // The only writes in this API, and they exist only here. `lore serve` promises to
-          // be read-only, so it passes no actions and simply does not have these routes.
-          localActions: {
-            builds: createBuildsEndpoint(options.config),
-            diff: (from, to) => comparer.compare(from, to),
-            activate: createActivateEndpoint(options.config),
-            rollback: createRollbackEndpoint(options.config),
-            pack: async (request) => {
-              const asked = request as { build?: string; out?: string };
-              return packBuild(options.config, { build: asked.build, out: asked.out });
-            },
-          },
+    }
+
+    const runtime = createRuntime(backend);
+    // One handler for the process, built once: it constructs a fresh server per request
+    // internally, which is what the stateless model asks for, and holds the machinery that
+    // would otherwise be rebuilt on every call.
+    const startedAt = new Date().toISOString();
+    // Filled in by `listen` below, which is where the port stops being a request and becomes
+    // a fact. Diagnostics reads it through a closure rather than being constructed twice.
+    let boundPort = options.port;
+
+    const comparer = createLocalComparer(options.config.projectRoot);
+    const mcp = createMcpHttpHandler(runtime, comparer);
+    // Absent when the package was installed without built assets, which is a broken install
+    // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
+    const serveStudio = options.studio === true && studioIsBuilt();
+    const app = createApiApp({
+      runtime,
+      currentBuild: () => backend.provider.current(),
+      freshness,
+      mcpHandler: (request) => mcp.fetch(request),
+      // Reads of the **active build**, so any server can answer them: they change nothing and
+      // they touch no source file. `lore serve` offering them is the same promise it already
+      // makes about `/v1/search`.
+      exportBundle: async (request) => {
+        const bundle = await runtime.contextForTask(
+          request as Parameters<typeof runtime.contextForTask>[0],
+        );
+        // The same renderer `lore export` uses, so "copy as export" is byte-identical rather
+        // than merely similar. A parity test asserts it.
+        return renderBundleMarkdown(bundle, {
+          projectName: options.config.config.name,
+          moreCommand: `lore export --task ${JSON.stringify(bundle.task)} --profile deep`,
+          sourceState: bundle.sourceState,
+        });
+      },
+      sources: async () => {
+        const handle = await backend.provider.acquire();
+        try {
+          const scope = await backend.open(handle);
+          return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
+        } finally {
+          handle.release();
         }
-      : {}),
-  });
+      },
+      warnings: createWarningsEndpoint(async () => {
+        // Acquired and released like any other read, so a warnings request cannot pin a build
+        // open after it stops being active.
+        const handle = await backend.provider.acquire();
+        try {
+          const scope = await backend.open(handle);
+          const manifest = await scope.catalog.manifest();
+          return {
+            buildId: manifest.buildId,
+            warnings: manifest.warnings,
+            ...(manifest.exclusions === undefined ? {} : { exclusions: manifest.exclusions }),
+          };
+        } finally {
+          handle.release();
+        }
+      }),
+      ...(serveStudio
+        ? {
+            assets: createStudioAssets(),
+            allowLoopbackOrigin: true,
+            // The one Studio read that is **not** a read of the build: planning walks the
+            // source tree. `lore serve` promises never to rebuild and has no business reading
+            // sources, so this belongs to `lore dev` alone.
+            plan: createPlanEndpoint(options.config),
+            // Reads the machine rather than the build: SQLite controls, the watcher, the
+            // process serving this request. The port is passed as a function because it is
+            // chosen by binding, which has not happened yet at this line.
+            diagnostics: createDiagnosticsEndpoint({
+              config: options.config,
+              host: options.host,
+              port: () => boundPort,
+              startedAt,
+              ...(options.watchStatus === undefined ? {} : { watchStatus: options.watchStatus }),
+            }),
+            // The only writes in this API, and they exist only here. `lore serve` promises to
+            // be read-only, so it passes no actions and simply does not have these routes.
+            localActions: {
+              builds: createBuildsEndpoint(options.config),
+              diff: (from, to) => comparer.compare(from, to),
+              activate: createActivateEndpoint(options.config),
+              rollback: createRollbackEndpoint(options.config),
+              pack: async (request) => {
+                const asked = request as { build?: string; out?: string };
+                return packBuild(options.config, { build: asked.build, out: asked.out });
+              },
+            },
+          }
+        : {}),
+    });
 
-  if (!isLoopback(options.host)) {
-    // Architecture 15.3: binding beyond loopback is possible and never accidental.
-    options.warn(
-      `Warning: binding to ${options.host} exposes this build to your network. It is read-only, and it is still your documents.\n`,
+    if (!isLoopback(options.host)) {
+      // Architecture 15.3: binding beyond loopback is possible and never accidental.
+      options.warn(
+        `Warning: binding to ${options.host} exposes this build to your network. It is read-only, and it is still your documents.\n`,
+      );
+    }
+
+    const server = await (dependencies.listen ?? listen)(
+      app.fetch,
+      options.host,
+      options.port,
+      options.warn,
     );
+    boundPort = server.port;
+
+    let closed = false;
+    return {
+      url: `http://${options.host}:${server.port}`,
+      port: server.port,
+      buildId: active.buildId,
+      studio: serveStudio,
+      close: async () => {
+        if (closed) return;
+        closed = true;
+        // Order matters: `close()` stops new connections and waits for in-flight requests,
+        // and only then are the databases released. Releasing first would let a request in
+        // flight read a closed handle.
+        await server.close();
+        await mcp.close();
+        backend.close();
+      },
+    };
+  } catch (error) {
+    backend.close();
+    throw error;
   }
-
-  const server = await listen(app.fetch, options.host, options.port, options.warn);
-  boundPort = server.port;
-
-  let closed = false;
-  return {
-    url: `http://${options.host}:${server.port}`,
-    port: server.port,
-    buildId: active.buildId,
-    studio: serveStudio,
-    close: async () => {
-      if (closed) return;
-      closed = true;
-      // Order matters: `close()` stops new connections and waits for in-flight requests,
-      // and only then are the databases released. Releasing first would let a request in
-      // flight read a closed handle.
-      await server.close();
-      await mcp.close();
-      backend.close();
-    },
-  };
 }
 
 interface Listening {
