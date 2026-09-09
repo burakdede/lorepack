@@ -73,18 +73,18 @@ acceptance lane, including the resume scenario that previously failed with API c
 Each item must end as direct test evidence, a confirmed defect with a child issue, or an
 explicit external blocker.
 
-| Risk | Required observation |
-|---|---|
-| Malformed documents and archives | Build fails with a typed diagnostic, leaves no active corruption and does not ingest executable content |
-| Oversized inputs and responses | The documented envelope is enforced, output stays bounded and the failure identifies the limit |
-| Path traversal and symlink escape | No source or output operation escapes the project or target namespace |
-| Cancellation | A real process interruption leaves the active build and committed build history unchanged |
-| Concurrent reads and activation | In-flight requests finish on their captured build and later requests see one complete build |
-| SQL boundary | Injection, multi-statement, write and unknown-table attempts are rejected without leaking database details |
-| Provenance | Search, context, export, source reads and table rows preserve complete locators |
-| Archive integrity | Pack and unpack preserve checksums, required members and deterministic content |
-| Retry and resume | Transient transfer failures recover without duplicate corruption; resume does not re-upload verified state |
-| Clean installation | The published package path requires no native add-on, install hook, model, account or compiler toolchain |
+| Risk | Required observation | Direct evidence |
+|---|---|---|
+| Malformed documents and archives | Build fails with a typed diagnostic, leaves no active corruption and does not ingest executable content | Parser corruption cases in `packages/parsers/test/{docx,pdf,html,markdown,text,xlsx}.test.ts`; compiler validation and damaged-build tests |
+| Oversized inputs and responses | The documented envelope is enforced, output stays bounded and the failure identifies the limit | Source, artifact and file-count limits in `packages/compiler/test/discover.test.ts`; CSV, PDF and chunk limits in parser/compiler tests; context budget and SQL row/byte limits in `packages/runtime/test/context.test.ts` and `packages/backend-local/test/sql-surface.test.ts` |
+| Path traversal and symlink escape | No source or output operation escapes the project or target namespace | Symlink cases in `packages/compiler/test/discover.test.ts`; object-hash validation in `packages/backend-local/test/storage.test.ts`; archive-relative path checks in `packages/backend-local/test/archive.test.ts` |
+| Cancellation | A real process interruption leaves the active build and committed build history unchanged | Real process and typed cancellation cases in `packages/cli/test/cancellation.test.ts`, `packages/cli/test/async-parser.test.ts` and acceptance runner cancellation tests |
+| Concurrent reads and activation | In-flight requests finish on their captured build and later requests see one complete build | Build capture, scope identity and reader-drain cases in `packages/runtime/test/runtime.test.ts` and `packages/cli/test/runtime-local.test.ts` |
+| SQL boundary | Injection, multi-statement, write and unknown-table attempts are rejected without leaking database details | Tokenizer, authorizer, bounded execution and redaction cases in `packages/backend-local/test/sql-surface.test.ts`, `sqlite.test.ts` and `packages/cli/test/security.e2e.test.ts` |
+| Provenance | Search, context, export, source reads and table rows preserve complete locators | Runtime, retrieval, source-read, table and MCP contract tests in `packages/runtime/test`, `packages/cli/test/retrieval.test.ts`, `table-description.test.ts`, and `tools/contract/test/mcp.test.ts` |
+| Archive integrity | Pack and unpack preserve checksums, required members and deterministic content | Archive round-trip, checksum, duplicate-member and required-member cases in `packages/backend-local/test/archive.test.ts` and `packages/cli/test/pack.test.ts` |
+| Retry and resume | Transient transfer failures recover without duplicate corruption; resume does not re-upload verified state | Cloudflare retry classifier and resume scenarios in `packages/cli/test/cloudflare-target.test.ts` and `tools/acceptance/test/cloudflare-smoke.test.ts`; credentialed acceptance in PR #377 run `34398631920` |
+| Clean installation | The published package path requires no native add-on, install hook, model, account or compiler toolchain | Clean-install jobs for macOS, Ubuntu and Windows in PR #377 run `34398631920`; supply-chain and no-native checks in `pnpm verify` |
 
 ## Known unverified or external evidence
 
@@ -96,6 +96,9 @@ explicit external blocker.
 - The current three-client trust-prompt refresh remains incomplete because VS Code is not
   installed in the audit environment. Existing dated client records remain documented as
   historical evidence.
+- Studio's screen-reader announcements and reduced-motion behavior remain manual checks in
+  `docs/architecture/studio.md`; the audit environment has no signed-off human verification
+  for those prompts.
 - Credentialed Cloudflare behavior is exercised by the CI acceptance lane. A local run
   without the required account is not equivalent evidence and must remain visibly skipped.
 
