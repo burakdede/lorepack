@@ -1,5 +1,13 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -499,6 +507,93 @@ describe('shutting down', () => {
     },
     120_000,
   );
+});
+
+describe('cancelling a real build process', () => {
+  it('leaves the active build intact and releases the build lock', async () => {
+    const started = await dev();
+    const before = (
+      (await (await fetch(`http://127.0.0.1:${started.port}/v1/build`)).json()) as {
+        buildId: string;
+      }
+    ).buildId;
+
+    started.child.kill('SIGTERM');
+    await new Promise<void>((resolve) => started.child.once('exit', () => resolve()));
+
+    for (let index = 0; index < 2_400; index += 1) {
+      writeFileSync(
+        join(project, 'docs', `cancel-${index}.md`),
+        `# Cancellation ${index}\n\n${'content '.repeat(80)}\n`,
+        'utf8',
+      );
+    }
+
+    const child = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'build'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    running.push(child);
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
+
+    const deadline = Date.now() + 90_000;
+    while (!stderr.includes('Parsing') && child.exitCode === null && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(
+      child.exitCode,
+      `the build exited before its parsing stage. stdout:\n${stdout}\nstderr:\n${stderr}`,
+    ).toBeNull();
+
+    child.kill(CAN_SIGNAL_GRACEFULLY ? 'SIGINT' : 'SIGTERM');
+    const code = await new Promise<number>((resolve) => {
+      const give = setTimeout(() => resolve(-1), 60_000);
+      child.once('exit', (value) => {
+        clearTimeout(give);
+        resolve(value ?? 0);
+      });
+    });
+
+    if (CAN_SIGNAL_GRACEFULLY) {
+      expect(code).not.toBe(0);
+      expect(JSON.parse(stdout) as { error: { code: string } }).toMatchObject({
+        error: { code: 'LORE_E_CANCELLED' },
+      });
+    }
+
+    const status = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'status'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let statusOutput = '';
+    status.stdout?.on('data', (chunk: Buffer) => {
+      statusOutput += chunk.toString('utf8');
+    });
+    const statusCode = await new Promise<number>((resolve) => {
+      status.once('exit', (value) => resolve(value ?? 0));
+    });
+    expect(statusCode).toBe(0);
+    expect((JSON.parse(statusOutput) as { activeBuildId: string }).activeBuildId).toBe(before);
+
+    const next = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'build'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let nextOutput = '';
+    next.stdout?.on('data', (chunk: Buffer) => {
+      nextOutput += chunk.toString('utf8');
+    });
+    const nextCode = await new Promise<number>((resolve) => {
+      next.once('exit', (value) => resolve(value ?? 0));
+    });
+    expect(nextCode).toBe(0);
+    expect((JSON.parse(nextOutput) as { buildId: string }).buildId).not.toBe(before);
+    expect(readdirSync(join(project, '.lore', 'tmp'), { withFileTypes: true })).toHaveLength(0);
+  }, 180_000);
 });
 
 describe('the session receipt', () => {
