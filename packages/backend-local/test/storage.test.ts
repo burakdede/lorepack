@@ -19,6 +19,8 @@ const STATE_MIGRATIONS = join(ROOT, 'state');
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;
 const BUILD_A = buildId('a');
 const BUILD_B = buildId('b');
+const LIVE_OWNER = { ownerPid: 999_004, isProcessAlive: () => true };
+const REPLACEMENT_OPTIONS = { waitMs: 100, pollIntervalMs: 5, isProcessAlive: () => false };
 
 function denyRename(): never {
   throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
@@ -510,7 +512,7 @@ describe('ProjectLock', () => {
     });
   });
 
-  it('reclaims a lock held far longer than the staleness window', async () => {
+  it('does not reclaim an old lock whose owner is still alive', async () => {
     await withTempProject({}, async (project) => {
       const path = project.path('.lore/lock');
       let clock = 1_000_000;
@@ -529,8 +531,24 @@ describe('ProjectLock', () => {
         staleAfterMs: 5 * 60_000,
         isProcessAlive: () => true,
       });
-      await expect(later.acquire()).resolves.toBeUndefined();
-      later.release();
+      await expect(later.acquire()).rejects.toThrowError(/holds the project lock/);
+      holder.release();
+    });
+  });
+
+  it('does not release a lock that another owner reclaimed', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      const original = new ProjectLock(path, LIVE_OWNER);
+      await original.acquire();
+
+      const replacement = new ProjectLock(path, REPLACEMENT_OPTIONS);
+      await replacement.acquire();
+
+      original.release();
+      expect(replacement.held).toBe(true);
+      expect(existsSync(path)).toBe(true);
+      replacement.release();
     });
   });
 

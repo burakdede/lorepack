@@ -88,11 +88,14 @@ cost without benefit; older builds close as soon as they drain.
 ## Project lock
 
 Builds and activation serialise on `.lore/lock`, created with `mkdir`, which is atomic
-everywhere we support. The record inside names the owning pid and when it was taken.
+everywhere we support. The record inside names the owning pid, when it was taken and a
+unique ownership token.
 
-A lock is reclaimed when its owner is no longer running, or when it is older than the
-staleness window. A lock held by a live, recent process is never reclaimed: the caller
-waits and then fails with `LORE_E_LOCK_HELD` naming the pid and how to recover.
+A lock is reclaimed when its owner is no longer running. An unreadable lock record is
+reclaimed only after the staleness window. A lock held by a live process is never reclaimed
+because a build can legitimately run longer than that window: the caller waits and then
+fails with `LORE_E_LOCK_HELD` naming the pid and how to recover. The ownership token also
+prevents a former holder from removing a replacement lock during cleanup.
 
 Two deliberate details. The owner pid is injectable, so the reclamation paths can be tested
 as a genuinely different process rather than approximated. The wait deadline uses wall
