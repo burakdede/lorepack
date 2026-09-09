@@ -182,6 +182,19 @@ describe('the scale envelope', () => {
     expect(parsed.warnings.map((one) => one.code)).toContain('pdf-large-document');
     expect(textOf(parsed)).toContain('Page 1 content');
   }, 120_000);
+
+  it('refuses a document above the hard page cap with a typed diagnostic', async () => {
+    const pages = Array.from({ length: PDF_LIMITS.maxPages + 1 }, () => ({
+      lines: ['Page content'],
+    }));
+    const failure = await parse(pages).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(LoreError);
+    const error = failure as LoreError;
+    expect(error.code).toBe('LORE_E_UNSUPPORTED_FORMAT');
+    expect(error.message).toContain(`${PDF_LIMITS.maxPages} page cap`);
+    expect(error.remediation).toContain('Split the document');
+  }, 120_000);
 });
 
 describe('determinism', () => {
