@@ -15,6 +15,16 @@ export class FileObjectStore implements ObjectStore {
   }
 
   #pathFor(hash: string): string {
+    if (!/^[0-9a-f]{64}$/.test(hash)) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'Object hashes must be 64 lowercase hexadecimal characters.',
+        {
+          remediation: 'Pass the sha256 object hash recorded by the build.',
+          subject: hash,
+        },
+      );
+    }
     return join(this.#root, ...objectKey(hash).split('/'));
   }
 

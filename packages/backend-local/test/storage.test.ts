@@ -139,6 +139,20 @@ describe('FileObjectStore', () => {
     });
   });
 
+  it('rejects malformed hashes before inspecting paths outside the object root', async () => {
+    await withTempProject({}, async (project) => {
+      const store = new FileObjectStore(project.path('objects'));
+      writeFileSync(project.path('escape.txt'), 'not an object', 'utf8');
+
+      await expect(store.get('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+        code: 'LORE_E_INVALID_ARGUMENT',
+      });
+      await expect(store.has('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+        code: 'LORE_E_INVALID_ARGUMENT',
+      });
+    });
+  });
+
   it('deduplicates identical content without rewriting', async () => {
     await withTempProject({}, async (project) => {
       const store = new FileObjectStore(project.path('objects'));
