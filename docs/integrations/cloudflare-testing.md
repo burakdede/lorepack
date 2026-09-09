@@ -28,6 +28,9 @@ numeric values. It prepends that prefix to the smoke project name before
 the acceptance harness. Worker scripts are different: CI always deploys one singleton Worker
 named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`. The checked-in GitHub Actions job is serialized
 with a `cloudflare-acceptance` concurrency group so two CI runs do not race on that Worker.
+The job has a 35-minute workflow timeout. This is longer than the normal credentialed smoke,
+which is measured in minutes, while bounding a hung remote operation and preserving the
+diagnostic artifact upload path.
 
 Example:
 
