@@ -13,10 +13,10 @@ reproduction before the fix.
 
 | Evidence | Result |
 |---|---|
-| `main` revision | `8b40dd1` |
+| `main` revision | `1c5aa13` |
 | Local `mise exec -- pnpm verify` | 2,001 passed, 2 skipped on the pre-cancellation audit baseline `3801524` |
-| Main CI | Run `34374144636`, passed on `8b40dd1` |
-| Phase gates | Run `34374144597`, all eight phase jobs passed |
+| Main CI | Run `34380220454`, all jobs passed on `1c5aa13` |
+| Phase gates | Run `34380220428`, all eight phase jobs passed |
 | Production dependency audit | No known vulnerabilities |
 | Secret scan | Gitleaks found no leaks |
 
@@ -38,6 +38,11 @@ requiring review.
 | Seal permission failures were treated as duplicate destinations | Regression in `packages/backend-local/test/storage.test.ts`; an injected `EPERM` or `EACCES` during sealing could report success and let the build proceed without a sealed directory | Fixed in [#362](https://github.com/burakdede/lorepack/pull/362), merged as `26f72b9`; post-merge cross-platform CI and all phase gates passed |
 | The real-process cancellation test required a nonzero Windows exit code | PR [#366](https://github.com/burakdede/lorepack/pull/366) initially exposed that Node reports the Windows hard-termination path as code 0, even though the process was interrupted during parsing | Fixed in [#366](https://github.com/burakdede/lorepack/pull/366), merged as `8b40dd1`; Windows safety invariants and POSIX typed cancellation are now asserted separately, with post-merge CI and all phase gates passed |
 | The Windows Wrangler smoke test had an insufficient per-test timeout | Post-merge CI run `34364832045` timed out the real local D1 and R2 smoke after the global 60-second Vitest limit | Fixed in [#364](https://github.com/burakdede/lorepack/pull/364), merged as `3801524`; the corrected Windows test, post-merge CI and all phase gates passed |
+
+The PDF hard page-cap boundary is now directly covered by [#369](https://github.com/burakdede/lorepack/pull/369),
+which merged as `1c5aa13`. A generated 5,001-page PDF must fail with the typed unsupported-format
+diagnostic and split-document remediation. This closes the previously untested hard-cap branch
+without changing the documented limit.
 
 The eight findings above were fixed in separate issue-linked pull requests. The merged
 revision's full CI and phase gates are the current evidence that the fixes did not regress
