@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fsyncDirectory, LoreError } from '@lorepack/core';
 
@@ -10,6 +10,10 @@ import { fsyncDirectory, LoreError } from '@lorepack/core';
 
 export interface CandidateDirectory {
   readonly path: string;
+}
+
+export interface SealDependencies {
+  readonly rename?: typeof renameSync;
 }
 
 /**
@@ -35,15 +39,16 @@ export function discardCandidateDirectory(candidate: CandidateDirectory): void {
 export function sealCandidateDirectory(
   candidate: CandidateDirectory,
   destination: string,
+  dependencies: SealDependencies = {},
 ): { sealed: boolean } {
   const parent = dirname(destination);
   mkdirSync(parent, { recursive: true });
   fsyncDirectory(candidate.path);
 
   try {
-    renameSync(candidate.path, destination);
+    (dependencies.rename ?? renameSync)(candidate.path, destination);
   } catch (cause) {
-    if (isAlreadyExists(cause)) {
+    if (isAlreadyExists(cause, destination)) {
       discardCandidateDirectory(candidate);
       return { sealed: false };
     }
@@ -56,8 +61,10 @@ export function sealCandidateDirectory(
   return { sealed: true };
 }
 
-function isAlreadyExists(cause: unknown): boolean {
+function isAlreadyExists(cause: unknown, destination: string): boolean {
   const code = (cause as { code?: string } | null)?.code;
-  // POSIX reports ENOTEMPTY or EEXIST; Windows reports EPERM or EACCES for the same case.
-  return code === 'ENOTEMPTY' || code === 'EEXIST' || code === 'EPERM' || code === 'EACCES';
+  if (code === 'ENOTEMPTY' || code === 'EEXIST') return true;
+  // Windows can report EPERM or EACCES when rename targets an existing directory. Those
+  // codes also describe a missing but unwritable destination, which must remain a failure.
+  return (code === 'EPERM' || code === 'EACCES') && existsSync(destination);
 }

@@ -17,6 +17,7 @@ export {
   type CandidateDirectory,
   createCandidateDirectory,
   discardCandidateDirectory,
+  type SealDependencies,
   sealCandidateDirectory,
 } from './atomic.js';
 export {
