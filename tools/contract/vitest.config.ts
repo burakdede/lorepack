@@ -7,5 +7,12 @@ import { defineConfig } from 'vitest/config';
  * guarantee is for is worse than no suite (learned in Phase 1).
  */
 export default defineConfig({
-  test: { name: 'contract', include: ['test/**/*.test.ts'], testTimeout: 120_000 },
+  test: {
+    name: 'contract',
+    include: ['test/**/*.test.ts'],
+    testTimeout: 120_000,
+    fileParallelism: false,
+    maxWorkers: 1,
+    sequence: { groupOrder: 4 },
+  },
 });
