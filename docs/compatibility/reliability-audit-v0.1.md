@@ -13,10 +13,10 @@ reproduction before the fix.
 
 | Evidence | Result |
 |---|---|
-| `main` revision | `d5c5828` |
+| `main` revision | `49413ce` |
 | Local `mise exec -- pnpm verify` | 2,001 passed, 2 skipped |
-| Main CI | Run `34349649663`, passed on `d5c5828` |
-| Phase gates | Run `34349649657`, all eight phase jobs passed |
+| Main CI | Run `34357052016`, passed on `49413ce` |
+| Phase gates | Run `34357052038`, all eight phase jobs passed |
 | Production dependency audit | No known vulnerabilities |
 | Secret scan | Gitleaks found no leaks |
 
@@ -34,8 +34,9 @@ requiring review.
 | Local object-store paths accepted traversal-shaped hashes | Regression in `packages/backend-local/test/storage.test.ts`; the pre-fix read reached a sentinel outside the object root | Fixed in [#352](https://github.com/burakdede/lorepack/pull/352), merged as `c87fd29` |
 | Duplicate XLSX ZIP parts were silently selected by archive order | Regression in `packages/parsers/test/xlsx.test.ts`; the pre-fix parser accepted a duplicated `xl/workbook.xml` | Fixed in [#354](https://github.com/burakdede/lorepack/pull/354), merged as `bcf8f35` |
 | Windows verification timed out when process-heavy projects ran concurrently | Post-merge CI `34346328504` failed 10 tests after 505.75 seconds, including MCP stdio, `lore serve`, client verification and Cloudflare target tests | Fixed in [#356](https://github.com/burakdede/lorepack/pull/356), merged as `d5c5828`; post-fix Windows test and acceptance phases passed |
+| Serving startup leaked the local backend when setup or port binding failed | Regression in `packages/cli/test/serving-startup.test.ts`; an injected startup failure previously returned without calling backend cleanup | Fixed in [#359](https://github.com/burakdede/lorepack/pull/359), merged as `49413ce`; post-merge cross-platform CI and all phase gates passed |
 
-The four findings above were fixed in separate issue-linked pull requests. The merged
+The five findings above were fixed in separate issue-linked pull requests. The merged
 revision's full CI and phase gates are the current evidence that the fixes did not regress
 the delivered matrix.
 
@@ -46,7 +47,7 @@ the delivered matrix.
 | P0, core foundation | Errors, canonical data, hashing, configuration, atomic files, locks and progress | `packages/core/test`, `tools/arch/test`, schema checks and the phase 0 gate | Baseline covered; review cancellation and cleanup invariants |
 | P1, lifecycle vertical slice | Discovery, ignore rules, path safety, parsers, build identity, object storage, sealing, activation, rollback and CLI verbs | `packages/compiler/test`, `packages/parsers/test`, `packages/backend-local/test`, `packages/cli/test`, acceptance scenarios and phase 1 gate | Four boundary findings fixed; review malformed input and interrupted builds |
 | P2, runtime and AI interfaces | Local runtime, ranking, context budgets, provenance, freshness, REST, MCP stdio, Streamable HTTP, export and SDK | `packages/runtime/test`, `packages/mcp/test`, `packages/sdk/test`, `tools/contract/test`, `packages/cli/test`, acceptance scenarios and phase 2 gate | Baseline covered; review mixed-build and bounded-output behavior |
-| P3, two-command local product | `lore dev`, watcher behavior, configuration resolution, client connection plans and local serving | `packages/cli/test`, `packages/connect-clients/test`, acceptance scenarios and phase 3 gate | Windows process contention fixed; review process shutdown and editor-save races |
+| P3, two-command local product | `lore dev`, watcher behavior, configuration resolution, client connection plans and local serving | `packages/cli/test`, `packages/connect-clients/test`, acceptance scenarios and phase 3 gate | Windows process contention and serving startup cleanup fixed; review process shutdown and editor-save races |
 | P4, Studio inspector | HTTP-only data access, five routes, plan-and-confirm writes, keyboard access, contrast and bundle budget | `apps/studio/test`, `tools/studio-e2e`, runtime HTTP tests, acceptance scenarios and phase 4 gate | Baseline covered; review stale UI state and destructive-action confirmation |
 | P5, mixed artifacts and tables | HTML, PDF, DOCX, CSV and XLSX parsing, tables, read-only SQL, rules, ranking and client adapters | `packages/parsers/test`, `packages/backend-local/test`, `packages/runtime/test`, `packages/connect-clients/test`, security tests, acceptance scenarios and phase 5 gate | XLSX duplicate-part finding fixed; review malformed and oversized artifact behavior |
 | P6, Cloudflare projection | Target receipts, capability checks, Worker routes, D1 and R2 projection, candidate verification, atomic activation, rollback and resume | `packages/deploy-cloudflare/test`, `tools/acceptance/test`, credentialed Cloudflare CI lane and phase 6 gate | CI covered; local credentialed reproduction remains environment-dependent |
