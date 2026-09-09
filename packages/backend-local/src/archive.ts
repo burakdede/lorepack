@@ -221,6 +221,20 @@ export function readArchive(path: string): Promise<Map<string, Uint8Array>> {
           zipfile.readEntry();
           return;
         }
+        if (members.has(entry.fileName)) {
+          reject(
+            new LoreError(
+              'LORE_E_OBJECT_CORRUPT',
+              `${entry.fileName} appears more than once in ${path}.`,
+              {
+                remediation: 'The archive contains duplicate members. Pack the build again.',
+                subject: entry.fileName,
+              },
+            ),
+          );
+          zipfile.close();
+          return;
+        }
         // A member whose compressed payload is damaged fails here, inside inflate. It is
         // corruption like any checksum mismatch, so it is reported as corruption naming
         // the member rather than as an unexplained internal error.
