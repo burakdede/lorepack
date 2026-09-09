@@ -4,6 +4,8 @@ This matrix is the support contract for v0.1 unless a later phase narrows it thr
 issue. Performance numbers below are linked to committed measurements and are not release-gate
 claims unless the linked doc says so.
 
+The delivered-epic reliability scope and evidence plan is [`reliability-audit-v0.1.md`](reliability-audit-v0.1.md).
+
 ## Platform matrix
 
 | Area | Supported | Verification |
