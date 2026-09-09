@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isRetryableWranglerRemoteD1Failure } from '../src/commands/target.js';
 import {
   isRetryableWranglerRemoteR2Failure,
   isWranglerD1TransactionControl,
@@ -87,6 +88,13 @@ describe('the Wrangler-backed Cloudflare D1 adapter, issue 280', () => {
     expect(isWranglerMissingObjectFailure('The specified key does not exist.')).toBe(true);
     expect(isWranglerMissingObjectFailure('No such object')).toBe(true);
     expect(isWranglerMissingObjectFailure('fetch failed')).toBe(false);
+  });
+
+  it('retries Cloudflare D1 internal errors', () => {
+    expect(
+      isRetryableWranglerRemoteD1Failure('internal error; reference = e_example [code: 7500]'),
+    ).toBe(true);
+    expect(isRetryableWranglerRemoteD1Failure('permission denied [code: 10000]')).toBe(false);
   });
 
   it('retries transient remote R2 hostname-resolution failures', () => {

@@ -1149,7 +1149,7 @@ export function renderWranglerSqlBatch(statements: readonly string[]): string {
 }
 
 export function isRetryableWranglerRemoteD1Failure(text: string): boolean {
-  return text.includes('fetch failed');
+  return text.includes('fetch failed') || /\bcode\b[^\d]*7500\b/.test(text);
 }
 
 function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'rollback' | null {
