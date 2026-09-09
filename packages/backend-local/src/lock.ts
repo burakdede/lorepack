@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { LoreError } from '@lorepack/core';
@@ -35,6 +36,7 @@ interface LockRecord {
   readonly pid: number;
   readonly acquiredAt: number;
   readonly hostname: string;
+  readonly token: string;
 }
 
 /**
@@ -70,6 +72,7 @@ export class ProjectLock {
   readonly #recordPath: string;
   readonly #options: Required<LockOptions>;
   #held = false;
+  #ownerToken: string | null = null;
 
   constructor(lockPath: string, options: LockOptions = {}) {
     this.#directory = lockPath;
@@ -97,13 +100,16 @@ export class ProjectLock {
       if ((cause as { code?: string }).code !== 'EEXIST') throw cause;
       return false;
     }
+    const token = randomUUID();
     const record: LockRecord = {
       pid: this.#options.ownerPid,
       acquiredAt: this.#options.now(),
       hostname: process.env.HOSTNAME ?? 'unknown',
+      token,
     };
     writeFileSync(this.#recordPath, JSON.stringify(record), 'utf8');
     this.#held = true;
+    this.#ownerToken = token;
     return true;
   }
 
@@ -128,8 +134,7 @@ export class ProjectLock {
     }
     // A lock this process already holds is a genuine conflict, not a stale one.
     if (owner.pid === this.#options.ownerPid) return false;
-    if (!this.#options.isProcessAlive(owner.pid)) return true;
-    return this.#options.now() - owner.acquiredAt > this.#options.staleAfterMs;
+    return !this.#options.isProcessAlive(owner.pid);
   }
 
   async acquire(): Promise<void> {
@@ -176,8 +181,12 @@ export class ProjectLock {
 
   release(): void {
     if (!this.#held) return;
-    rmSync(this.#directory, { recursive: true, force: true });
+    const owner = this.#readOwner();
+    if (owner?.token === this.#ownerToken) {
+      rmSync(this.#directory, { recursive: true, force: true });
+    }
     this.#held = false;
+    this.#ownerToken = null;
   }
 
   /** Runs the callback under the lock, releasing it even when the callback throws. */
