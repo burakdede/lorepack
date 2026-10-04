@@ -13,6 +13,7 @@
  *
  *   pnpm bench:envelope
  *   node scripts/bench-envelope.mjs --files 2500 --bytes-per-file 430000 --out benchmarks/envelope.json
+ *   node scripts/bench-envelope.mjs --files 2500 --profile --out benchmarks/envelope-profile.json
  *
  * Results are **reported, not enforced**. The reference machine and the release gates are
  * backlog issue #101 (Phase 7); every number here is labelled provisional and carries the
@@ -44,6 +45,7 @@ const FILES = argument('files', 2500);
  */
 const BYTES_PER_FILE = argument('bytes-per-file', 40_000);
 const REBUILD_SAMPLES = argument('rebuild-samples', 5);
+const PROFILE = process.argv.includes('--profile');
 
 function percentile(samples, fraction) {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -95,18 +97,37 @@ try {
     writeFileSync(join(root, 'docs', `doc-${String(index).padStart(5, '0')}.md`), text, 'utf8');
   }
 
-  const build = (overrides = {}) =>
-    runBuild({
-      config: loadConfig({ cwd: root }),
-      progress: new ProgressBus(),
-      // The envelope is the *supported* size, so measuring it means measuring the path a user
-      // on a project this size actually takes, flag and all.
-      allowLargeProject: true,
-      ...overrides,
+  const phaseSamples = [];
+  const build = async (label, overrides = {}) => {
+    const progress = new ProgressBus();
+    const started = new Map();
+    const phases = {};
+    const unsubscribe = progress.subscribe((event) => {
+      if (!PROFILE) return;
+      if (event.type === 'stage-started') started.set(event.stage, event.at);
+      if (event.type === 'stage-finished') {
+        const stageStarted = started.get(event.stage);
+        if (stageStarted !== undefined) phases[event.stage] = event.at - stageStarted;
+      }
     });
+    try {
+      const result = await runBuild({
+        config: loadConfig({ cwd: root }),
+        progress,
+        // The envelope is the supported size, so measuring it means measuring the path a user
+        // on a project this size actually takes, flag and all.
+        allowLargeProject: true,
+        ...overrides,
+      });
+      if (PROFILE) phaseSamples.push({ label, ...phases });
+      return result;
+    } finally {
+      unsubscribe();
+    }
+  };
 
   const coldStart = performance.now();
-  const cold = await build();
+  const cold = await build('cold');
   const coldMs = performance.now() - coldStart;
 
   /**
@@ -119,7 +140,7 @@ try {
   const noopSamples = [];
   for (let index = 0; index < REBUILD_SAMPLES; index += 1) {
     const started = performance.now();
-    await build();
+    await build(`noop-${index}`);
     noopSamples.push(performance.now() - started);
   }
 
@@ -132,7 +153,7 @@ try {
       'utf8',
     );
     const started = performance.now();
-    const rebuilt = await build();
+    const rebuilt = await build(`incremental-${index}`);
     incrementalSamples.push(performance.now() - started);
     if (rebuilt.reusedArtifacts < FILES - 1) {
       console.warn(
@@ -178,6 +199,22 @@ try {
       lifecycleIncrementalRebuildMs: 2000,
     },
     envelopeIncrementalRebuildPolicy: 'reported-only',
+    ...(PROFILE
+      ? {
+          phaseProfile: {
+            stageMeaning: {
+              discovering: 'source enumeration and ignore evaluation',
+              fingerprinting: 'source reads, content hashes and text classification',
+              parsing: 'parse, normalize and chunk work, including cache checks',
+              indexing: 'catalog SQLite migration and catalog writes',
+              validating: 'candidate integrity and contract checks',
+              sealing: 'atomic candidate directory seal',
+              activating: 'active build pointer update',
+            },
+            samples: phaseSamples,
+          },
+        }
+      : {}),
   };
 
   const outIndex = process.argv.indexOf('--out');

@@ -163,6 +163,26 @@ valid post-v0.1 design, but only if canonical roots are recomputed and determini
 from different absolute paths, with shuffled enumeration, on Windows and POSIX. Taking that on
 for v0.1 would be a storage-format change, not a benchmark tweak.
 
+### Phase profile, 2026-10-04
+
+Issue `#385` added an opt-in phase profile to `scripts/bench-envelope.mjs`. The run used 2,500
+Markdown files, 40,000 requested bytes per file, 39,010 chunks, three no-op samples and three
+single-file incremental samples on the Apple M1 Pro development machine. The raw artifact is
+[`benchmarks/envelope/profile-2026-10-04.json`](../../benchmarks/envelope/profile-2026-10-04.json).
+
+The cold build spent 81,558 ms in parsing, normalization and chunking, compared with 2,152 ms
+in catalog indexing and 1,436 ms in validation. Incremental samples spent 499 to 533 ms in the
+parse stage, 2,082 to 2,271 ms indexing the candidate catalog and 1,108 to 1,265 ms validating
+it. Discovery and fingerprinting stayed below 210 ms in every sample. This identifies two
+different costs: parser work dominates the first build, while immutable catalog rewrite and
+validation dominate the incremental rebuild.
+
+The post-v0.1 decision is to defer a storage architecture change and keep the envelope
+incremental result reported-only. Copying or patching a previous catalog could reduce the
+indexing cost, but it would need a new immutable-candidate design plus determinism tests across
+absolute paths, enumeration order, Windows and POSIX. The lifecycle claim remains limited to
+the 60-document corpus until that architecture work is independently designed and measured.
+
 The byte-envelope run added for #245 is
 `benchmarks/envelope/byte-envelope-2026-08-14.json`. It uses 2,500 files and 1.005 GiB of source
 text on a Darwin arm64 development machine. That corpus intentionally proves the byte side of
