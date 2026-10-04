@@ -119,6 +119,10 @@
   color: var(--text-muted);
 }
 
+.command-value code::before {
+  content: none;
+}
+
 .command-copy {
   font-family: var(--font-sans);
   font-size: var(--text-xs);

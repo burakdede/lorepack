@@ -70,6 +70,9 @@
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%2367676f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --shadow-overlay: 0 16px 48px -12px rgb(24 24 27 / 0.28), 0 2px 8px rgb(24 24 27 / 0.08);
   --shadow-panel: 0 1px 2px rgb(24 24 27 / 0.04);
+  /* The code well: dark in both themes, because a command reads as a terminal line. */
+  --code-bg: #18181b;
+  --code-text: #e4e4e7;
 
   /* The only colours in the interface. Three state scales, nothing else. */
   --state-ok: #15753a;
@@ -89,6 +92,9 @@
   --text-base: 14px;
   --text-lg: 16px;
   --text-xl: 22px;
+  /* One use: the active build id on Overview, the largest type because everything is relative
+     to it. */
+  --text-display: 26px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -130,6 +136,8 @@
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%238e8e97' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --shadow-overlay: 0 24px 64px -16px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
   --shadow-panel: none;
+  --code-bg: #0a0a0c;
+  --code-text: #e4e4e7;
 
   --state-ok: #5fd28a;
   --state-warn: #f2b84b;

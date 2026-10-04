@@ -9,7 +9,9 @@ const ROOT = join(import.meta.dirname, '..', 'packages', 'cli', 'studio-dist');
 
 // Generous enough that ordinary work does not trip it, tight enough that a UI framework or an
 // icon set arriving by accident does.
-const BUDGETS = { '.js': 420, '.css': 40, total: 700 };
+// CSS raised from 40 to 48 kB in #399, deliberately: the launchpad (Connect panel, source
+// reader, request equivalents) added about 3 kB of authored styles and no dependency.
+const BUDGETS = { '.js': 420, '.css': 48, total: 700 };
 
 if (!existsSync(ROOT)) {
   console.error(

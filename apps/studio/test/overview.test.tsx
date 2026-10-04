@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Overview } from '../src/routes/Overview.js';
 
@@ -195,5 +196,88 @@ describe('what this route must not become', () => {
     const value = screen.getByText('184');
     expect(value.tagName).toBe('DD');
     expect(value.closest('dl')).not.toBeNull();
+  });
+});
+
+describe('getting a developer from `lore dev` to a connected client', () => {
+  const CLIENTS = [
+    {
+      id: 'claude-code',
+      title: 'Claude Code',
+      installed: true,
+      version: '2.1.0',
+      supported: true,
+      configured: false,
+      ownedByLorepack: false,
+    },
+    {
+      id: 'codex',
+      title: 'Codex',
+      installed: true,
+      supported: true,
+      configured: true,
+      ownedByLorepack: true,
+    },
+    {
+      id: 'vscode',
+      title: 'VS Code',
+      installed: false,
+      supported: true,
+      configured: false,
+      ownedByLorepack: false,
+    },
+  ];
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).includes('/v1/diagnostics')
+          ? new Response(JSON.stringify({ clients: CLIENTS }), { status: 200 })
+          : String(url).includes('/v1/plan')
+            ? new Response(
+                JSON.stringify({
+                  artifacts: { added: 1, changed: 0, removed: 0, reused: 5 },
+                  lock: { changed: false },
+                }),
+                { status: 200 },
+              )
+            : new Response(JSON.stringify({ total: 0, groups: [] }), { status: 200 }),
+      ),
+    );
+  });
+
+  it('shows the endpoints this process serves, on the address Studio is open at', async () => {
+    renderRoute();
+    await waitFor(() => expect(screen.getByText('184')).toBeInTheDocument());
+
+    const origin = window.location.origin;
+    expect(screen.getByText(`${origin}/mcp`)).toBeInTheDocument();
+    expect(screen.getByText(`${origin}/v1`)).toBeInTheDocument();
+    expect(screen.getByText('lore mcp')).toBeInTheDocument();
+  });
+
+  it('offers a connect command only for a client that is installed and not yet connected', async () => {
+    renderRoute();
+    await waitFor(() => expect(screen.getByText('lore connect claude-code')).toBeInTheDocument());
+
+    // Running it for a connected client changes nothing, and for a missing one it only fails.
+    expect(screen.queryByText('lore connect codex')).not.toBeInTheDocument();
+    expect(screen.queryByText('lore connect vscode')).not.toBeInTheDocument();
+    expect(screen.getByText('not installed')).toBeInTheDocument();
+  });
+
+  it('counts connected clients in the next step, and plans a rebuild from it', async () => {
+    renderRoute();
+    await waitFor(() => expect(screen.getByText('1 connected')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Open Playground' })).toHaveAttribute(
+      'href',
+      '#/playground',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Preview a rebuild' }));
+    // The step and the panel are one action, so the panel shows the plan it asked for.
+    await waitFor(() => expect(screen.getByText('Reused')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Plan a rebuild' })).not.toBeInTheDocument();
   });
 });

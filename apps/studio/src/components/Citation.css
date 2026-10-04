@@ -69,3 +69,15 @@
     opacity: 1;
   }
 }
+
+/* The path is the link: it reads as provenance first and as a control on hover. */
+.citation-link {
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 150ms var(--ease-out);
+}
+
+.citation-link:hover {
+  text-decoration-color: currentColor;
+}

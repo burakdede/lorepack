@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Citation } from '../components/Citation.js';
+import { Equivalents } from '../components/Equivalents.js';
 import {
   Adjacent,
   Badge,
@@ -12,6 +13,7 @@ import {
   RouteHeader,
 } from '../components/primitives.js';
 import { client, type DisplayableError, toDisplayable } from '../lib/api.js';
+import { serverOrigin, tableQueryEquivalents } from '../lib/equivalents.js';
 import { useHashParam } from '../lib/location.js';
 import './Tables.css';
 
@@ -294,6 +296,9 @@ function QueryConsole({
       </form>
 
       {ran === null ? null : <ConsoleResult query={result} />}
+      {ran === null ? null : (
+        <Equivalents forms={tableQueryEquivalents(tableId, ran, serverOrigin())} />
+      )}
     </section>
   );
 }

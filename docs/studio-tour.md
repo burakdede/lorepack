@@ -18,8 +18,11 @@ For the design rules and accessibility review, see
 
 ## Overview
 
-The active build and source state lead the page. The rest is evidence about a
-sealed build.
+The active build and source state lead the page. Three next steps follow: try a
+task, connect a client, and preview the next build. The Connect panel lists the
+MCP and HTTP endpoints this process serves and one `lore connect` command for
+each installed client that is not yet connected. The MCP URL is also one click
+away in the sidebar.
 
 ![Studio Overview](images/studio-overview.png)
 
@@ -32,10 +35,19 @@ no parser could read are different decisions, and both are named.
 
 ![Studio Sources, showing what was excluded and why](images/studio-excluded.png)
 
+Choosing a file shows its **stored text**: exactly what the build holds and
+what `lore_read_source` returns to a model, with line numbers. Every citation
+elsewhere in Studio links here, with its lines marked.
+
+![Studio source reader, with a cited passage marked](images/studio-reader.png)
+
 ## Context Playground
 
 The passages a model would receive for a task, each with provenance, and every
-omission with the reason it was left out.
+omission with the reason it was left out. **Use it anywhere** shows the same
+request as a `lore export` command, a `curl` call and an MCP `tools/call`, so
+a request tried here can be pasted into a terminal, a script or an agent. The
+Tables console and the source reader offer the same panel.
 
 ![Studio Context Playground](images/studio-playground.png)
 

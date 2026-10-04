@@ -128,14 +128,17 @@ path.
 `lore dev` prints a Studio URL: six routes served from static files by the same process that
 serves the API, on the same port, with no toolchain and no network. A sidebar names the active
 build and whether its sources are still fresh; light and dark themes follow your system unless
-you pick one.
+you pick one. Overview is the starting point: the MCP and HTTP endpoints to give your agent, and
+the `lore connect` command for each client installed on your machine.
 
 ![Lore Studio Overview](docs/images/studio-overview.png)
 
 The Playground answers the question that matters most before you trust any of this: **what would
 a model actually receive for this task, and what was left out.** Every passage carries its
 provenance, every omission carries its reason, and a ranking heuristic is labelled as one
-rather than presented as a score of truth.
+rather than presented as a score of truth. Every citation opens the stored text with its lines
+marked, and every request can be copied as the equivalent `lore` command, `curl` call or MCP
+tool call, so nothing tried in Studio has to be retyped to be used elsewhere.
 
 ![Lore Studio Context Playground](docs/images/studio-playground.png)
 

@@ -68,3 +68,33 @@ describe('a citation reads as separate words', () => {
     expect(formatCitation(locator)).toBe('orders.xlsx · Q3 · B2:F40');
   });
 });
+
+describe('a citation is a way to the source', () => {
+  it('links to its artifact and lines in Studio', () => {
+    const locator: Locator = {
+      artifactId: 'p:docs/runbook.md',
+      relativePath: 'docs/runbook.md',
+      lineStart: 9,
+      lineEnd: 11,
+    };
+    render(<Citation locator={locator} />);
+
+    expect(screen.getByRole('link', { name: 'docs/runbook.md' })).toHaveAttribute(
+      'href',
+      '#/sources?artifact=p%3Adocs%2Frunbook.md&lines=9-11',
+    );
+    // Linking adds no text: the citation still reads exactly as it copies.
+    expect(rendered()).toBe(formatCitation(locator));
+  });
+
+  it('stays text when it cannot name an artifact, or describes the open source', () => {
+    const { unmount } = render(<Citation locator={{ relativePath: 'notes.md' }} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <Citation locator={{ artifactId: 'p:notes.md', relativePath: 'notes.md' }} link={false} />,
+    );
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+});

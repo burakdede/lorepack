@@ -4,6 +4,7 @@ import {
   Adjacent,
   Badge,
   Command,
+  CopyValue,
   Empty,
   Fact,
   Facts,
@@ -13,6 +14,9 @@ import {
   toneForFreshness,
 } from '../components/primitives.js';
 import { client, toDisplayable } from '../lib/api.js';
+import { type Client, fetchDiagnostics } from '../lib/diagnostics.js';
+import { serverOrigin } from '../lib/equivalents.js';
+import { fetchWarnings, WARNINGS_KEY, type Warning } from '../lib/warnings.js';
 import './Overview.css';
 
 /**
@@ -28,21 +32,11 @@ import './Overview.css';
  * weight goes to source state, which is the only thing here that moves under the reader.
  */
 
-interface Warning {
-  readonly code: string;
-  readonly message: string;
-  readonly path?: string;
-}
-
-interface WarningGroup {
-  readonly class: string;
-  readonly count: number;
-  readonly warnings: readonly Warning[];
-}
-
 const INTRO = 'The build your AI reads right now, and whether its sources still match it.';
 
 export function Overview(): React.JSX.Element {
+  // Lifted, so the "plan the next build" step and the panel's own button are one action.
+  const [planAsked, setPlanAsked] = useState(false);
   const build = useQuery({
     queryKey: ['build'],
     queryFn: ({ signal }) => client.describeBuild(signal),
@@ -116,24 +110,34 @@ export function Overview(): React.JSX.Element {
         </p>
       </div>
 
+      <NextSteps
+        onPlan={() => {
+          setPlanAsked(true);
+          focusPanel('next-build');
+        }}
+      />
+
       <div className="overview-grid">
-        <div className="panel overview-build">
-          <h2 className="section-heading">contents</h2>
-          <Facts>
-            <Fact label="Project">{data.projectName}</Fact>
-            <Fact label="Artifacts">{data.counts.artifacts.toLocaleString()}</Fact>
-            <Fact label="Nodes">{data.counts.nodes.toLocaleString()}</Fact>
-            <Fact label="Chunks">{data.counts.chunks.toLocaleString()}</Fact>
-            {data.counts.tables > 0 && (
-              <Fact label="Tables">
-                {`${data.counts.tables.toLocaleString()} (${data.counts.tableRows.toLocaleString()} rows)`}
-              </Fact>
-            )}
-          </Facts>
+        <div className="overview-main">
+          <ConnectPanel />
+          <div className="panel overview-build">
+            <h2 className="section-heading">contents</h2>
+            <Facts>
+              <Fact label="Project">{data.projectName}</Fact>
+              <Fact label="Artifacts">{data.counts.artifacts.toLocaleString()}</Fact>
+              <Fact label="Nodes">{data.counts.nodes.toLocaleString()}</Fact>
+              <Fact label="Chunks">{data.counts.chunks.toLocaleString()}</Fact>
+              {data.counts.tables > 0 && (
+                <Fact label="Tables">
+                  {`${data.counts.tables.toLocaleString()} (${data.counts.tableRows.toLocaleString()} rows)`}
+                </Fact>
+              )}
+            </Facts>
+          </div>
         </div>
 
         <div className="overview-side">
-          <PlanPanel />
+          <PlanPanel asked={planAsked} onAsk={() => setPlanAsked(true)} />
           <Warnings count={data.warningCount} />
         </div>
       </div>
@@ -172,12 +176,8 @@ function BuildId({
 
 function Warnings({ count }: { readonly count: number }): React.JSX.Element | null {
   const warnings = useQuery({
-    queryKey: ['warnings'],
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/v1/warnings', { signal });
-      if (!response.ok) throw new Error('Warnings are not available from this server.');
-      return (await response.json()) as { total: number; groups: readonly WarningGroup[] };
-    },
+    queryKey: WARNINGS_KEY,
+    queryFn: fetchWarnings,
     // Nothing to fetch when the build recorded none, which is the common case.
     enabled: count > 0,
   });
@@ -250,8 +250,13 @@ function withoutPath(warning: Warning): string {
  * every few seconds to keep a panel warm would make the inspector the most expensive thing
  * running on the machine.
  */
-function PlanPanel(): React.JSX.Element {
-  const [asked, setAsked] = useState(false);
+function PlanPanel({
+  asked,
+  onAsk,
+}: {
+  readonly asked: boolean;
+  readonly onAsk: () => void;
+}): React.JSX.Element {
   const plan = useQuery({
     queryKey: ['plan'],
     queryFn: async ({ signal }) => {
@@ -267,12 +272,12 @@ function PlanPanel(): React.JSX.Element {
   });
 
   return (
-    <div className="panel">
+    <div className="panel" id="next-build" tabIndex={-1}>
       <h2 className="section-heading">next build</h2>
       {!asked ? (
         <div className="plan-idle">
           <p className="prose">Planning reads every source file, so it runs when you ask.</p>
-          <button type="button" className="action" onClick={() => setAsked(true)}>
+          <button type="button" className="action" onClick={onAsk}>
             Plan a rebuild
           </button>
         </div>
@@ -297,6 +302,165 @@ function PlanPanel(): React.JSX.Element {
             </button>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/** Moves focus to a panel, so a step that points somewhere also takes a keyboard there. */
+function focusPanel(id: string): void {
+  window.requestAnimationFrame(() => {
+    const target = document.getElementById(id);
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    target?.focus({ preventScroll: true });
+  });
+}
+
+/**
+ * The client list, from the doctor report.
+ *
+ * Read defensively: a server too old to report clients answers without the field, and the
+ * panel then says nothing is detected rather than failing the whole route.
+ */
+function useClients(): { readonly clients: readonly Client[]; readonly pending: boolean } {
+  const report = useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: fetchDiagnostics,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+  });
+  const clients = Array.isArray(report.data?.clients) ? report.data.clients : [];
+  return { clients, pending: report.isPending };
+}
+
+/**
+ * Three things a developer does after `lore dev`, each one action away. Live where the state
+ * is knowable: the connect step says how many clients already read this build.
+ */
+function NextSteps({ onPlan }: { readonly onPlan: () => void }): React.JSX.Element {
+  const { clients, pending } = useClients();
+  const connected = clients.filter((client) => client.configured).length;
+
+  return (
+    <section className="next-steps" aria-label="Next steps">
+      <div className="next-step">
+        <h2 className="next-step-title">Ask the build a question</h2>
+        <p className="next-step-text prose">
+          Assemble the context a model would receive for a task, then copy it as a CLI, HTTP or MCP
+          call.
+        </p>
+        <a className="action action-small" href="#/playground">
+          Open Playground
+        </a>
+      </div>
+      <div className="next-step">
+        <h2 className="next-step-title">
+          {'Connect an AI client '}
+          {!pending && (
+            <Badge tone={connected > 0 ? 'ok' : 'idle'}>
+              {connected > 0 ? `${connected} connected` : 'none connected'}
+            </Badge>
+          )}
+        </h2>
+        <p className="next-step-text prose">
+          Point an MCP client at this build. It reads, and can never build, deploy or edit.
+        </p>
+        <button type="button" className="action action-small" onClick={() => focusPanel('connect')}>
+          Show how to connect
+        </button>
+      </div>
+      <div className="next-step">
+        <h2 className="next-step-title">Preview the next build</h2>
+        <p className="next-step-text prose">
+          See what a rebuild would add, change or remove before anything is compiled.
+        </p>
+        <button type="button" className="action action-small" onClick={onPlan}>
+          Preview a rebuild
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Everything needed to point a client at this build: the endpoints this process serves, and
+ * the one command per installed client that wires it up.
+ *
+ * Studio shows the commands and never runs them. `lore connect` edits a client's own
+ * configuration, which is the user's to approve in a terminal, not a browser's to do.
+ */
+function ConnectPanel(): React.JSX.Element {
+  const origin = serverOrigin();
+  const { clients, pending } = useClients();
+  const toWire = clients.filter((client) => client.installed && !client.configured);
+
+  return (
+    <div className="panel connect" id="connect" tabIndex={-1}>
+      <h2 className="section-heading">connect your AI</h2>
+      <p className="section-note prose">
+        This process serves the active build read-only, over MCP and HTTP, on the address Studio is
+        open at.
+      </p>
+      <dl className="endpoints">
+        <div className="endpoint">
+          <dt>MCP over HTTP</dt>
+          <dd>
+            <CopyValue value={`${origin}/mcp`} label="MCP endpoint" />
+          </dd>
+        </div>
+        <div className="endpoint">
+          <dt>MCP over stdio</dt>
+          <dd>
+            <Command value="lore mcp" />
+          </dd>
+        </div>
+        <div className="endpoint">
+          <dt>HTTP API</dt>
+          <dd>
+            <CopyValue value={`${origin}/v1`} label="HTTP API base URL" />
+          </dd>
+        </div>
+      </dl>
+
+      <h3 className="connect-heading">Clients on this machine</h3>
+      {pending ? (
+        <Loading label="Looking for installed clients." />
+      ) : clients.length === 0 ? (
+        <p className="connect-none prose">
+          No supported client was detected. Any MCP client can use the endpoints above.
+        </p>
+      ) : (
+        <ul className="client-list">
+          {clients.map((entry) => (
+            <li key={entry.id} className="client-row">
+              <span className="client-row-name">
+                {entry.version === undefined ? (
+                  entry.title
+                ) : (
+                  <Adjacent lead={entry.title} className="client-row-version">
+                    {entry.version}
+                  </Adjacent>
+                )}
+              </span>
+              <Badge tone={entry.configured ? 'ok' : 'idle'}>
+                {entry.installed
+                  ? entry.configured
+                    ? 'connected'
+                    : 'not connected'
+                  : 'not installed'}
+              </Badge>
+              {entry.configured && !entry.ownedByLorepack && (
+                // Someone wrote this entry by hand, so it is theirs; `lore disconnect` leaves it.
+                <span className="client-row-note">configured by hand</span>
+              )}
+              {toWire.includes(entry) && (
+                <span className="client-row-command">
+                  <Command value={`lore connect ${entry.id}`} />
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
