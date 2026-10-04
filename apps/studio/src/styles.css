@@ -43,105 +43,101 @@
   src: url("@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
 }
 
+/* Two peer themes. `index.html` resolves the reader's choice (system, light or dark) into
+ * `data-theme` before first paint, so there is exactly one dark definition and it cannot
+ * drift from a second copy inside a media query. */
 :root {
-  --bg: #f7f1e6;
-  --surface: #fffdf7;
-  --surface-raised: #f0e9dc;
-  --border-subtle: #e7dfd0;
-  --border: #d1c7b6;
-  --text-muted: #696d66;
-  --text-secondary: #41463d;
-  --text: #20231f;
+  color-scheme: light;
 
-  --zone-sage: #d9e8c8;
-  --zone-coral: #f2c7b9;
-  --zone-gold: #f3dfa1;
-  --zone-blue: #c8deea;
-  --zone-lilac: #d9d0e8;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-raised: #f4f4f5;
+  --surface-sunken: #f4f4f5;
+  --sidebar: #f3f4f6;
+  --border-subtle: #e7e7ea;
+  --border: #d4d4d8;
+  --text-muted: #67676f;
+  --text-secondary: #3f3f46;
+  --text: #18181b;
+
+  /* The selection and primary-action ink. Contrast does the work an accent would, so colour
+     stays reserved for state. */
+  --ink: #18181b;
+  --ink-text: #fafafa;
+  --ink-hover: #3f3f46;
+  --selected: #ebebee;
+  --overlay: rgb(24 24 27 / 0.32);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%2367676f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --shadow-overlay: 0 16px 48px -12px rgb(24 24 27 / 0.28), 0 2px 8px rgb(24 24 27 / 0.08);
+  --shadow-panel: 0 1px 2px rgb(24 24 27 / 0.04);
 
   /* The only colours in the interface. Three state scales, nothing else. */
-  --state-ok: #2f6b44;
-  --state-warn: #8a5b14;
-  --state-bad: #a33a2c;
+  --state-ok: #15753a;
+  --state-warn: #8f4a07;
+  --state-bad: #b42318;
   --state-idle: var(--text-muted);
 
-  /* Tinted backgrounds for badges, kept close to the surface so they read as a label rather
-     than an alert. */
-  --state-ok-bg: #eaf2ec;
-  --state-warn-bg: #f6efe0;
-  --state-bad-bg: #f7eae7;
+  --state-ok-bg: #e9f7ee;
+  --state-warn-bg: #fdf3e2;
+  --state-bad-bg: #fdecea;
 
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
 
-  --text-xs: 11px;
+  --text-xs: 11.5px;
   --text-sm: 12.5px;
   --text-base: 14px;
-  --text-lg: 17px;
-  --text-xl: 25px;
+  --text-lg: 16px;
+  --text-xl: 22px;
 
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  --space-10: 40px;
   --space-12: 48px;
 
-  --radius: 6px;
-  --radius-territory: 28px 54px 34px 64px;
-  --row-height: 30px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --row-height: 36px;
+  --sidebar-width: 248px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root[data-theme="dark"] {
-  --bg: #171916;
-  --surface: #20251f;
-  --surface-raised: #292e27;
-  --border-subtle: #30372e;
-  --border: #465043;
-  --text-muted: #918b81;
-  --text-secondary: #b8b2a8;
-  --text: #edeae3;
+  color-scheme: dark;
 
-  --zone-sage: #31442e;
-  --zone-coral: #4c3029;
-  --zone-gold: #4a3e1e;
-  --zone-blue: #263d48;
-  --zone-lilac: #3d344c;
+  --bg: #0f0f11;
+  --surface: #161618;
+  --surface-raised: #1f1f22;
+  --surface-sunken: #121214;
+  --sidebar: #0d0e12;
+  --border-subtle: #242427;
+  --border: #36363b;
+  --text-muted: #8e8e97;
+  --text-secondary: #b8b8bf;
+  --text: #ededef;
 
-  --state-ok: #7fc79a;
-  --state-warn: #dba94f;
-  --state-bad: #e89484;
+  --ink: #ededef;
+  --ink-text: #111113;
+  --ink-hover: #c9c9cf;
+  --selected: #26262a;
+  --overlay: rgb(0 0 0 / 0.56);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%238e8e97' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --shadow-overlay: 0 24px 64px -16px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
+  --shadow-panel: none;
 
-  --state-ok-bg: #1b2a20;
-  --state-warn-bg: #2b2417;
-  --state-bad-bg: #2d1e1a;
-}
+  --state-ok: #5fd28a;
+  --state-warn: #f2b84b;
+  --state-bad: #ff8a80;
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141311;
-    --surface: #1c1b18;
-    --border-subtle: #26241f;
-    --border: #332f29;
-    --text-muted: #918b81;
-    --text-secondary: #b8b2a8;
-    --text: #edeae3;
-
-    --zone-sage: #31442e;
-    --zone-coral: #4c3029;
-    --zone-gold: #4a3e1e;
-    --zone-blue: #263d48;
-    --zone-lilac: #3d344c;
-
-    --state-ok: #7fc79a;
-    --state-warn: #dba94f;
-    --state-bad: #e89484;
-
-    --state-ok-bg: #1b2a20;
-    --state-warn-bg: #2b2417;
-    --state-bad-bg: #2d1e1a;
-  }
+  --state-ok-bg: #10261a;
+  --state-warn-bg: #2a1f0a;
+  --state-bad-bg: #2d1414;
 }
 
 *,
@@ -150,15 +146,27 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+  scrollbar-color: var(--border) transparent;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   font-size: var(--text-base);
-  line-height: 1.55;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--text);
+  color: var(--bg);
 }
 
 .prose {
@@ -172,11 +180,13 @@ h3 {
   font-weight: 600;
   margin: 0;
   letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: 30px;
-  line-height: 1.1;
+  font-size: var(--text-xl);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
 h2 {
@@ -185,29 +195,33 @@ h2 {
 
 a {
   color: inherit;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
 }
 
 code,
 pre,
-table,
+.mono {
+  font-family: var(--font-mono);
+}
+
 input,
 select,
 textarea,
-button,
-.mono {
-  font-family: var(--font-mono);
+button {
+  font: inherit;
+  color: inherit;
+}
+
+code {
+  font-size: 0.92em;
 }
 
 /* One visible focus treatment, everywhere. Not removed anywhere. */
 :focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
-  border-radius: 1px;
-}
-
-button {
-  font: inherit;
-  color: inherit;
+  border-radius: var(--radius-sm);
 }
 
 /* Motion is limited to state and focus changes plus the single build-change transition. */

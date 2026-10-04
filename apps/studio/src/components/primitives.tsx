@@ -9,6 +9,30 @@ import './primitives.css';
  * purpose-built pieces than to enforce on top of a general one.
  */
 
+/**
+ * The top of every route: its title, one sentence on the question it answers, and the
+ * actions that belong to the whole page rather than to one row.
+ */
+export function RouteHeader({
+  title,
+  intro,
+  actions,
+}: {
+  readonly title: string;
+  readonly intro?: string;
+  readonly actions?: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="route-header">
+      <div>
+        <h1 className="route-title">{title}</h1>
+        {intro !== undefined && <p className="route-intro prose">{intro}</p>}
+      </div>
+      {actions !== undefined && <div className="route-actions">{actions}</div>}
+    </div>
+  );
+}
+
 /** The three state scales from the design document. There are no other colours. */
 export type Tone = 'ok' | 'warn' | 'bad' | 'idle';
 

@@ -4,7 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- No external request at runtime: fonts, styles and scripts are all bundled. -->
-    <title>Lorepack Studio</title>
+    <title>Lore Studio</title>
+    <!-- Resolves the theme before first paint, so a dark-mode reader never sees a white
+         flash while the bundle loads. `src/lib/theme.ts` owns the same key and logic. -->
+    <script>
+      (() => {
+        var choice = 'system';
+        try {
+          choice = localStorage.getItem('lore-studio-theme') || 'system';
+        } catch {
+          // Storage blocked: follow the system.
+        }
+        var dark =
+          choice === 'dark' ||
+          (choice !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
