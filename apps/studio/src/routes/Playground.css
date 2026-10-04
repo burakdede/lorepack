@@ -255,3 +255,11 @@
     grid-column: auto;
   }
 }
+
+.search-equivalents {
+  margin-bottom: var(--space-4);
+}
+
+.search-equivalents .equivalents {
+  margin-top: 0;
+}

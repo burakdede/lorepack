@@ -2,6 +2,7 @@ import type { ContextBundle, ContextItem, OmittedItem } from '@lorepack/sdk';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Citation } from '../components/Citation.js';
+import { Equivalents } from '../components/Equivalents.js';
 import {
   Badge,
   Empty,
@@ -12,6 +13,7 @@ import {
   RouteHeader,
 } from '../components/primitives.js';
 import { client, toDisplayable } from '../lib/api.js';
+import { contextEquivalents, searchEquivalents, serverOrigin } from '../lib/equivalents.js';
 import './Playground.css';
 
 /**
@@ -90,7 +92,11 @@ function ContextTab(): React.JSX.Element {
     ...(budget.trim() === '' ? {} : { budget: Number(budget) }),
   });
 
-  const run = useMutation({ mutationFn: () => client.contextForTask(request()) });
+  // The request travels with the result, so "Use it anywhere" shows what produced the bundle
+  // on screen rather than whatever the form says now.
+  const run = useMutation({
+    mutationFn: (sent: ReturnType<typeof request>) => client.contextForTask(sent),
+  });
 
   const copyExport = useMutation({
     mutationFn: async () => {
@@ -124,7 +130,7 @@ function ContextTab(): React.JSX.Element {
         className="task-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (task.trim() !== '' && !budgetError) run.mutate();
+          if (task.trim() !== '' && !budgetError) run.mutate(request());
         }}
       >
         <label className="task-field">
@@ -188,6 +194,11 @@ function ContextTab(): React.JSX.Element {
       {run.data !== undefined && (
         <>
           <Accounting bundle={run.data} />
+          {run.variables !== undefined && (
+            <div className="section">
+              <Equivalents forms={contextEquivalents(run.variables, serverOrigin())} />
+            </div>
+          )}
 
           {/* The reserve, first, because that is where it is in the bundle and in what
               `lore export` writes. Leaving it off screen was #199: a reader saw nine of
@@ -456,7 +467,9 @@ function Omissions({
 /** Search, with the ranking breakdown this route exists to expose. */
 function SearchTab(): React.JSX.Element {
   const [query, setQuery] = useState('');
-  const run = useMutation({ mutationFn: () => client.search({ query, debug: true }) });
+  const run = useMutation({
+    mutationFn: (sent: { query: string; debug: boolean }) => client.search(sent),
+  });
 
   return (
     <>
@@ -464,7 +477,7 @@ function SearchTab(): React.JSX.Element {
         className="task-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (query.trim() !== '') run.mutate();
+          if (query.trim() !== '') run.mutate({ query, debug: true });
         }}
       >
         <label className="task-field">
@@ -494,6 +507,11 @@ function SearchTab(): React.JSX.Element {
           <p className="section-note prose">
             {`${run.data.hits.length} of ${run.data.totalIndexedChunks.toLocaleString()} indexed chunks. Relevance orders results and is not a measure of correctness or confidence.`}
           </p>
+          {run.variables !== undefined && (
+            <div className="search-equivalents">
+              <Equivalents forms={searchEquivalents(run.variables, serverOrigin())} />
+            </div>
+          )}
           {run.data.hits.length === 0 ? (
             <Empty title="No chunk matches those terms." />
           ) : (
