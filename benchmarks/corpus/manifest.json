@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "name": "lorepack-mixed-artifact-corpus",
+  "created": "2026-10-04",
+  "purpose": "Decision-grade mixed-format benchmark inputs. These are measured as ordinary files, not parser unit-test objects.",
+  "provenancePolicy": "Checked-in repository artifacts are Apache-2.0 project material. Generated binary fixtures are produced by scripts/generate-corpus-fixtures.mjs from the repository-owned fixture specification.",
+  "artifacts": [
+    {
+      "path": "fixtures/documents/markdown/product-strategy.md",
+      "format": "markdown",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "aefaee5d1f8a0275a829e992818e8e4fa1c7a8ea2e260a3639730214541e56ca",
+      "bytes": 531
+    },
+    {
+      "path": "fixtures/documents/html/documentation-page.html",
+      "format": "html",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "1757da4f52797b17b9bf144838eeaa926b0fac08842ab06710dda196ad6e6e20",
+      "bytes": 1504
+    },
+    {
+      "path": "examples/product-research/sources/data/segments.csv",
+      "format": "csv",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "4725d30cb49cd2c2467112e75e2f7a5233fcc60c33a7ff17d0f12bf6da51f558",
+      "bytes": 180
+    },
+    {
+      "path": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+      "format": "docx",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "80e41f1a4a59a18eb286c7a889411cd78dd2350b97f9c19d28881e551df792b7",
+      "bytes": 330544
+    },
+    {
+      "path": "benchmarks/corpus/generated/release-notes.pdf",
+      "format": "pdf",
+      "kind": "generated-repository-fixture",
+      "generator": "scripts/generate-corpus-fixtures.mjs",
+      "sha256": "0053274daee7bd004619e5497737b475e26844461e46fef0da2868fb121a3b85",
+      "bytes": 976
+    },
+    {
+      "path": "benchmarks/corpus/generated/environments.xlsx",
+      "format": "xlsx",
+      "kind": "generated-repository-fixture",
+      "generator": "scripts/generate-corpus-fixtures.mjs",
+      "sha256": "727186d6b41dbf8503d2d2307af000a60eec5c0382f184be15bd5d881bdf863c",
+      "bytes": 2195
+    },
+    {
+      "path": "examples/coding-project/sources/notes/current/sync-worker.md",
+      "format": "markdown",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "0d9abe96fb3ab0b437597698b221376e60856604054e1961c9f72f6b192e6d9a",
+      "bytes": 345
+    },
+    {
+      "path": "packages/runtime/src/runtime.ts",
+      "format": "source-code",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "0a56a194ad647d6b914c28169e50c017179d477ab841e43b90241e6e85760242",
+      "bytes": 11403
+    },
+    {
+      "path": "benchmarks/corpus/text/operations.txt",
+      "format": "text",
+      "kind": "checked-in-repository-artifact",
+      "sha256": "55c3f2836098db6eb901be2f0c8b2e6b4379adbac0bed80c19454f57f271a474",
+      "bytes": 188
+    }
+  ],
+  "tiers": {
+    "small": {
+      "packs": 1,
+      "artifacts": 9,
+      "description": "One mixed project pack covering every supported format."
+    },
+    "medium": {
+      "packs": 10,
+      "artifacts": 90,
+      "description": "Ten deterministic copies of the mixed pack with path-local metadata."
+    },
+    "large": {
+      "packs": 40,
+      "artifacts": 360,
+      "description": "Forty deterministic copies of the mixed pack for scale trend evidence."
+    }
+  }
+}

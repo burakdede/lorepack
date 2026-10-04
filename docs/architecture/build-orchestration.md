@@ -195,3 +195,24 @@ headings**, so a corpus's chunk count tracks its heading count and not its byte 
 version of this generator wrote 40 KB as roughly 230 tiny sections and produced 583,620 chunks
 from 2,500 files: eleven times the envelope's chunk figure at a tenth of its byte figure, which
 measures a corpus nobody has.
+
+### Mixed-format corpus, 2026-10-04
+
+Issue `#332` adds a versioned mixed-format corpus at
+[`benchmarks/corpus/manifest.json`](../../benchmarks/corpus/manifest.json). The base pack contains
+checked-in Markdown, plain text, HTML, CSV, DOCX and source files, plus deterministic PDF and XLSX
+fixtures. Every input has a checksum and provenance. The benchmark measures the files through the
+ordinary build and runtime paths, including table queries, rather than invoking parser functions
+directly.
+
+The raw result is
+[`benchmarks/corpus/results-2026-10-04.json`](../../benchmarks/corpus/results-2026-10-04.json).
+On the Apple M1 Pro development machine, the large tier reached 360 artifacts, 13.93 MB, 36,280
+nodes, 8,520 chunks and 80 tables. Its build p95 was 16,940.55 ms, incremental rebuild p95 was
+879.81 ms, peak RSS was 768.97 MiB, warm search p95 was 11.81 ms, context assembly p95 was 43.70
+ms and table query p95 was 95.18 ms. The small and medium tiers are included in the raw artifact
+to show the trend.
+
+These tiers repeat repository-owned mixed-format packs with deterministic path-local text. They
+prove parser coverage and a reproducible scale trend, but they do not claim to represent an
+industry corpus. The external same-workload retrieval comparison belongs to issue `#386`.

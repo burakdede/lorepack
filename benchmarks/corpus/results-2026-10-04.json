@@ -1,0 +1,87 @@
+{
+  "provisional": true,
+  "reportedNotEnforced": true,
+  "generatedAt": "2026-10-04",
+  "corpusManifest": "benchmarks/corpus/manifest.json",
+  "limitation": "The medium and large tiers repeat repository-owned mixed-format packs with deterministic path-local text. They establish scale trends and parser coverage, not a representative industry corpus. A public industry baseline remains issue 386.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGiB": 32,
+    "node": "24.18.1"
+  },
+  "samples": {
+    "build": 3,
+    "incremental": 3,
+    "warmSearch": 30,
+    "contextBundle": 20,
+    "tableQuery": 20
+  },
+  "tiers": [
+    {
+      "tier": "small",
+      "packs": 1,
+      "corpus": {
+        "artifacts": 9,
+        "bytes": 348188,
+        "nodes": 907,
+        "chunks": 213,
+        "tables": 2,
+        "tableRows": 7
+      },
+      "peakRssMiB": 386.58,
+      "measurements": {
+        "buildMs": { "p50": 550.52, "p95": 820.68, "samples": 3 },
+        "incrementalMs": { "p50": 109.81, "p95": 119.01, "samples": 3 },
+        "incrementalReusedArtifacts": { "min": 6, "max": 6 },
+        "warmSearchMs": { "p50": 2.98, "p95": 5.38, "samples": 30 },
+        "contextBundleMs": { "p50": 7.01, "p95": 7.67, "samples": 20 },
+        "tableQueryMs": { "p50": 95.53, "p95": 110.59, "samples": 20 }
+      }
+    },
+    {
+      "tier": "medium",
+      "packs": 10,
+      "corpus": {
+        "artifacts": 90,
+        "bytes": 3481880,
+        "nodes": 9070,
+        "chunks": 2130,
+        "tables": 20,
+        "tableRows": 70
+      },
+      "peakRssMiB": 608.92,
+      "measurements": {
+        "buildMs": { "p50": 3844.05, "p95": 4334.57, "samples": 3 },
+        "incrementalMs": { "p50": 253.4, "p95": 270.07, "samples": 3 },
+        "incrementalReusedArtifacts": { "min": 69, "max": 69 },
+        "warmSearchMs": { "p50": 5.23, "p95": 5.88, "samples": 30 },
+        "contextBundleMs": { "p50": 25.33, "p95": 26.38, "samples": 20 },
+        "tableQueryMs": { "p50": 88.17, "p95": 99.31, "samples": 20 }
+      }
+    },
+    {
+      "tier": "large",
+      "packs": 40,
+      "corpus": {
+        "artifacts": 360,
+        "bytes": 13927550,
+        "nodes": 36280,
+        "chunks": 8520,
+        "tables": 80,
+        "tableRows": 280
+      },
+      "peakRssMiB": 768.97,
+      "measurements": {
+        "buildMs": { "p50": 14900.04, "p95": 16940.55, "samples": 3 },
+        "incrementalMs": { "p50": 878.16, "p95": 879.81, "samples": 3 },
+        "incrementalReusedArtifacts": { "min": 279, "max": 279 },
+        "warmSearchMs": { "p50": 10.82, "p95": 11.81, "samples": 30 },
+        "contextBundleMs": { "p50": 41.13, "p95": 43.7, "samples": 20 },
+        "tableQueryMs": { "p50": 92.15, "p95": 95.18, "samples": 20 }
+      }
+    }
+  ]
+}
