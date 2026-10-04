@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Citation } from '../components/Citation.js';
+import { Equivalents } from '../components/Equivalents.js';
 import {
   Adjacent,
   Badge,
@@ -13,6 +14,7 @@ import {
   toneForStatus,
 } from '../components/primitives.js';
 import { fetchSources, type SourceArtifact, toDisplayable } from '../lib/api.js';
+import { type LineRange, readSourceEquivalents, serverOrigin } from '../lib/equivalents.js';
 import { useHashParam } from '../lib/location.js';
 import './Sources.css';
 
@@ -52,6 +54,7 @@ export function Sources(): React.JSX.Element {
   const [filter, setFilter] = useState('');
   // The command palette opens this route on one artifact with `?artifact=`.
   const linked = useHashParam('artifact');
+  const linkedLines = useHashParam('lines');
   const [selected, setSelected] = useState<string | null>(linked);
   useEffect(() => {
     if (linked !== null) {
@@ -182,6 +185,14 @@ export function Sources(): React.JSX.Element {
           )}
         </div>
       )}
+
+      {view === 'indexed' && detail !== null && (
+        <SourceReader
+          key={detail.artifactId}
+          artifact={detail}
+          range={linked === detail.artifactId ? parseLines(linkedLines) : null}
+        />
+      )}
     </section>
   );
 }
@@ -271,7 +282,10 @@ function ArtifactDetail({ artifact }: { readonly artifact: Artifact }): React.JS
       <h2 className="detail-title">{artifact.displayPath.split('/').pop()}</h2>
       {/* The shared citation, so provenance looks the same here as it does in the Playground
           and in search results. */}
-      <Citation locator={{ relativePath: artifact.displayPath, artifactId: artifact.artifactId }} />
+      <Citation
+        locator={{ relativePath: artifact.displayPath, artifactId: artifact.artifactId }}
+        link={false}
+      />
       <Facts>
         {artifact.title !== null && (
           <Fact label="Title" mono={false}>
@@ -456,4 +470,117 @@ function formatBytes(bytes: number): string {
 function sampleWorthShowing(exclusion: { pattern: string; sample: readonly string[] }): string[] {
   const pattern = exclusion.pattern.replace(/\/$/, '');
   return exclusion.sample.filter((path) => path.replace(/\/$/, '') !== pattern);
+}
+
+/** `lines=11-13` from a citation link, or nothing when the parameter is absent or malformed. */
+function parseLines(value: string | null): LineRange | null {
+  const match = /^(\d+)-(\d+)$/.exec(value ?? '');
+  if (match === null) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  return start >= 1 && end >= start ? { start, end } : null;
+}
+
+interface SourceRead {
+  readonly text: string;
+  readonly truncated: boolean;
+}
+
+/**
+ * The text this build stored for one file, as `lore_read_source` returns it to a model.
+ *
+ * This is the answer to "what does my AI actually see of this document", which a file on
+ * disk cannot give once it has changed since the build. A citation opens here with its
+ * lines marked, so following provenance ends at the passage rather than at a file name.
+ */
+function SourceReader({
+  artifact,
+  range,
+}: {
+  readonly artifact: Artifact;
+  readonly range: LineRange | null;
+}): React.JSX.Element {
+  const read = useQuery({
+    queryKey: ['source', artifact.artifactId],
+    queryFn: async ({ signal }): Promise<SourceRead> => {
+      const response = await fetch(`/v1/sources/${encodeURIComponent(artifact.artifactId)}`, {
+        signal,
+      });
+      const parsed = (await response.json()) as Partial<SourceRead>;
+      if (!response.ok) throw parsed;
+      if (typeof parsed.text !== 'string') throw new Error('This server cannot read a source.');
+      return { text: parsed.text, truncated: parsed.truncated === true };
+    },
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  const frame = useRef<HTMLDivElement>(null);
+  const section = useRef<HTMLElement>(null);
+
+  // A linked range is the reason the reader opened, so it is brought into view: the page to
+  // the reader, and the reader to the first marked line.
+  useEffect(() => {
+    if (range === null || read.data === undefined) return;
+    section.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    const line = frame.current?.querySelector<HTMLElement>(`[data-line="${range.start}"]`);
+    if (line !== null && line !== undefined && frame.current !== null) {
+      frame.current.scrollTop = Math.max(line.offsetTop - 48, 0);
+    }
+  }, [range, read.data]);
+
+  const lines = read.data?.text.split('\n') ?? [];
+
+  return (
+    <section className="reader" ref={section} aria-label={`Stored text of ${artifact.displayPath}`}>
+      <div className="reader-head">
+        <h2 className="reader-title">Stored text</h2>
+        <p className="reader-note prose">
+          {range === null
+            ? 'Exactly what this build holds for the file, which is what a model reads.'
+            : `Lines ${range.start}-${range.end} are the cited passage.`}
+        </p>
+      </div>
+      {read.isPending ? (
+        <Loading label="Reading the stored text." />
+      ) : read.isError ? (
+        <Failure {...toDisplayable(read.error)} />
+      ) : (
+        <>
+          {/* Focusable, so a keyboard can scroll a long document (WCAG 2.1.1). */}
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must take focus */}
+          <div className="reader-frame" ref={frame} tabIndex={0}>
+            <pre className="reader-text">
+              {lines.map((line, index) => {
+                const number = index + 1;
+                const marked = range !== null && number >= range.start && number <= range.end;
+                return (
+                  // Lines are positions in an immutable text, so the number is the identity.
+                  <span
+                    key={number}
+                    data-line={number}
+                    className={marked ? 'reader-line reader-line-marked' : 'reader-line'}
+                  >
+                    <span className="reader-number" aria-hidden="true">
+                      {number}
+                    </span>
+                    <span className="reader-content">{`${line}\n`}</span>
+                  </span>
+                );
+              })}
+            </pre>
+          </div>
+          {read.data.truncated && (
+            <p className="reader-note prose">
+              Truncated at the read limit, exactly as a model receives it. Read a line range to see
+              the rest.
+            </p>
+          )}
+          <Equivalents
+            forms={readSourceEquivalents(artifact.artifactId, range, serverOrigin())}
+            label="Read it anywhere"
+          />
+        </>
+      )}
+    </section>
+  );
 }

@@ -57,7 +57,29 @@ function formatRange(locator: Locator): string | null {
     : `${locator.lineStart}-${locator.lineEnd}`;
 }
 
-export function Citation({ locator }: { readonly locator: Locator }): React.JSX.Element {
+/**
+ * Where a citation leads: the Sources route, open on its artifact, with its lines marked.
+ *
+ * Only when the locator names an artifact; a path alone cannot be resolved to a source in
+ * this build, so it stays text rather than becoming a link that might lead nowhere.
+ */
+export function citationHref(locator: Locator): string | null {
+  if (locator.artifactId === undefined) return null;
+  const query = new URLSearchParams({ artifact: locator.artifactId });
+  if (locator.lineStart !== undefined) {
+    query.set('lines', `${locator.lineStart}-${locator.lineEnd ?? locator.lineStart}`);
+  }
+  return `#/sources?${query.toString()}`;
+}
+
+export function Citation({
+  locator,
+  link = true,
+}: {
+  readonly locator: Locator;
+  /** Off where the citation already describes the open source, so it does not link to itself. */
+  readonly link?: boolean;
+}): React.JSX.Element {
   const text = formatCitation(locator);
   const [copied, setCopied] = useState(false);
 
@@ -71,10 +93,18 @@ export function Citation({ locator }: { readonly locator: Locator }): React.JSX.
   const path = locator.relativePath ?? locator.artifactId;
   const headings = locator.headingPath ?? [];
   const range = formatRange(locator);
+  const href = link ? citationHref(locator) : null;
 
   return (
     <span className="citation">
-      {path !== undefined && <span className="citation-path">{path}</span>}
+      {path !== undefined &&
+        (href === null ? (
+          <span className="citation-path">{path}</span>
+        ) : (
+          <a className="citation-path citation-link" href={href} title="Open this source in Studio">
+            {path}
+          </a>
+        ))}
       {locator.sheet !== undefined && (
         <>
           <Separator />

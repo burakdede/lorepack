@@ -266,3 +266,60 @@ describe('read-only, per architecture 15.6', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 });
+
+describe('the text a model reads', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const target = String(url);
+        if (target.startsWith('/v1/sources/')) {
+          return new Response(
+            JSON.stringify({ text: '# Runbook\n\nStep one.\nStep two.\n', truncated: false }),
+            { status: 200 },
+          );
+        }
+        if (target.includes('/v1/sources')) {
+          return new Response(JSON.stringify({ buildId: 'lore_x', artifacts: ARTIFACTS }), {
+            status: 200,
+          });
+        }
+        return new Response(JSON.stringify(EXCLUDED), { status: 200 });
+      }),
+    );
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    window.location.hash = '';
+  });
+
+  it('opens on the artifact a citation names, with the cited lines marked', async () => {
+    window.location.hash = '#/sources?artifact=p%3Adocs%2Frunbook.md&lines=3-4';
+    renderRoute();
+
+    const reader = await screen.findByRole('region', { name: 'Stored text of docs/runbook.md' });
+    await waitFor(() => expect(reader.querySelector('[data-line="3"]')).not.toBeNull());
+
+    const marked = [...reader.querySelectorAll('.reader-line-marked')].map((line) =>
+      line.getAttribute('data-line'),
+    );
+    expect(marked).toEqual(['3', '4']);
+    expect(screen.getByText('Lines 3-4 are the cited passage.')).toBeInTheDocument();
+    // And the same read, for use outside Studio, carries the range.
+    expect(screen.getByRole('region', { name: 'Read it anywhere' })).toHaveTextContent(
+      'lineStart=3&lineEnd=4',
+    );
+  });
+
+  it('keeps the gutter out of the text, so a copied passage is the document', async () => {
+    window.location.hash = '#/sources?artifact=p%3Adocs%2Frunbook.md';
+    renderRoute();
+
+    const reader = await screen.findByRole('region', { name: 'Stored text of docs/runbook.md' });
+    await waitFor(() => expect(reader.querySelector('[data-line="1"]')).not.toBeNull());
+    for (const number of reader.querySelectorAll('.reader-number')) {
+      expect(number).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+});
