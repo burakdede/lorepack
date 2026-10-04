@@ -93,6 +93,25 @@ describe('lore build', () => {
     });
   });
 
+  it('does not record or activate a build when sealing reports no destination', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const first = await build(root);
+      writeFileSync(join(root, 'a.md'), '# A\n\nDifferent text.', 'utf8');
+
+      await expect(
+        build(root, {
+          seal: () => ({ sealed: false }),
+        }),
+      ).rejects.toMatchObject({ code: 'LORE_E_INTERNAL' });
+
+      expect(buildsIn(root)).toEqual([first.buildId]);
+      await expect(build(root, { activate: false })).resolves.toMatchObject({
+        buildId: expect.not.stringMatching(first.buildId),
+        created: true,
+      });
+    });
+  });
+
   it('creates a new build when a source changes, leaving the old one intact', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root) => {
       const first = await build(root);
