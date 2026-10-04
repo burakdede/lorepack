@@ -134,3 +134,19 @@
 .clients-hint {
   margin-top: var(--space-3);
 }
+
+.checks {
+  border-top: 1px solid var(--text);
+  border-radius: var(--radius-territory);
+  padding: var(--space-3) var(--space-5);
+  background: var(--zone-coral);
+}
+
+.check {
+  border-bottom-color: rgba(32, 35, 31, 0.2);
+}
+
+.panel {
+  border-top: 8px solid var(--text);
+  padding-top: var(--space-4);
+}

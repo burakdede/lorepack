@@ -11,13 +11,13 @@
   <text x="20" y="117" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  0/6                             0ms</text>
   <text x="20" y="138" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  6/6 files                       done</text>
   <text x="20" y="159" fill="#c9c9c9" font-weight="400" xml:space="preserve">Project team-context</text>
-  <text x="20" y="180" fill="#c9c9c9" font-weight="400" xml:space="preserve">Active build lore_2fbbce0df75f (0s ago)</text>
+  <text x="20" y="180" fill="#c9c9c9" font-weight="400" xml:space="preserve">Active build lore_15bfe29fde4a (0s ago)</text>
   <text x="20" y="201" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="222" fill="#9a9a9a" font-weight="400" xml:space="preserve">Sources are clean. 6 artifacts, decided by content hash.</text>
   <text x="20" y="243" fill="#9a9a9a" font-weight="400" xml:space="preserve">1 warning in the active build.</text>
   <text x="20" y="264" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="285" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lore inspect exclusions</text>
-  <text x="20" y="306" fill="#9a9a9a" font-weight="400" xml:space="preserve">4 paths removed by 4 rules in lore_2fbbce0df75f</text>
+  <text x="20" y="306" fill="#9a9a9a" font-weight="400" xml:space="preserve">4 paths removed by 4 rules in lore_15bfe29fde4a</text>
   <text x="20" y="327" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="348" fill="#9a9a9a" font-weight="400" xml:space="preserve">.gitignore  1 path, from .loreignore</text>
   <text x="20" y="369" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>

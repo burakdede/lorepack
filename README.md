@@ -125,20 +125,31 @@ path.
 
 ## Studio
 
-`lore dev` prints a Studio URL: six routes served from static files by the same process that
-serves the API, on the same port, with no toolchain and no network.
+`lore dev` prints a Studio URL: six developer-focused routes served from static files by the
+same process that serves the API, on the same port, with no toolchain and no network. The
+redesigned interface treats the build as an atlas: sources, context, tables, versions and
+diagnostics are territories around one immutable active build.
 
-![Studio Context Playground](docs/images/studio-playground.png)
+![Lore Studio Overview](docs/images/studio-overview.png)
 
-The Playground answers the question that matters most before you trust any of this: **what
-would a model actually receive for this task, and what was left out.** Every passage carries
-its provenance, every omission carries its reason, and a ranking heuristic is labelled as one
+The Playground answers the question that matters most before you trust any of this: **what would
+a model actually receive for this task, and what was left out.** Every passage carries its
+provenance, every omission carries its reason, and a ranking heuristic is labelled as one
 rather than presented as a score of truth.
 
-The other five are Overview, Sources, Tables, Versions and Diagnostics. Tables appears only
-when the build has one, and its console runs a read-only `SELECT` through the same validator and
-the same limits as the tool a model calls. [Take the tour](docs/studio-tour.md), with a
-screenshot of each.
+![Lore Studio Sources](docs/images/studio-sources.png)
+
+![Lore Studio Context Playground](docs/images/studio-playground.png)
+
+![Lore Studio Tables](docs/images/studio-tables.png)
+
+![Lore Studio Versions](docs/images/studio-versions.png)
+
+![Lore Studio Diagnostics](docs/images/studio-diagnostics.png)
+
+Tables appears only when the build has one, and its console runs a read-only `SELECT` through
+the same validator and limits as the tool a model calls. [Take the full tour](docs/studio-tour.md),
+including the excluded-source view.
 
 Studio is read-mostly. The only routes that change anything exist solely under `lore dev`, and
 they refuse any browser origin that is not a loopback literal.

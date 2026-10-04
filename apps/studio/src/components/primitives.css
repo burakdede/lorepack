@@ -115,7 +115,7 @@
 
 .failure {
   border: 1px solid var(--border);
-  border-left: 2px solid var(--state-bad);
+  border-left: 1px solid var(--state-bad);
   border-radius: var(--radius);
   padding: var(--space-3) var(--space-4);
   max-width: 68ch;
@@ -189,4 +189,42 @@
 .table-scroll {
   overflow-x: auto;
   max-width: 100%;
+}
+
+/* Atlas layer: evidence stays flat, while route-level emphasis gets a territory edge. */
+.badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.command code,
+.task-input,
+.task-select,
+.filter-input,
+.console-input,
+.compare-field select {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.empty {
+  padding: var(--space-8) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-territory);
+  background: var(--zone-blue);
+}
+
+.failure {
+  border-color: var(--border);
+  border-left-width: 1px;
+  border-radius: var(--radius-territory);
+  background: var(--zone-coral);
+}
+
+.loading {
+  padding: var(--space-8) 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }

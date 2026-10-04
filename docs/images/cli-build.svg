@@ -28,7 +28,7 @@
   <text x="20" y="474" fill="#9a9a9a" font-weight="400" xml:space="preserve">Sealing         1                               done</text>
   <text x="20" y="495" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activating      0                               0ms</text>
   <text x="20" y="516" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activating      1                               done</text>
-  <text x="20" y="537" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_2fbbce0df75faf159051db553338ed1e86456a5abb26bb86c470ace130ccd255</text>
+  <text x="20" y="537" fill="#c9c9c9" font-weight="400" xml:space="preserve">Build lore_15bfe29fde4a49b554d8606966d11f104a2f8cfdc9e56bcd674db5407edca685</text>
   <text x="20" y="558" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
   <text x="20" y="579" fill="#9a9a9a" font-weight="400" xml:space="preserve">  6 artifacts</text>
   <text x="20" y="600" fill="#9a9a9a" font-weight="400" xml:space="preserve">  38 nodes</text>
@@ -36,6 +36,6 @@
   <text x="20" y="642" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 table, 3 rows</text>
   <text x="20" y="663" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 warning</text>
   <text x="20" y="684" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="705" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 123 ms.</text>
+  <text x="20" y="705" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 214 ms.</text>
   </g>
 </svg>

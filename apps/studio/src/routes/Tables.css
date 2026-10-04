@@ -209,3 +209,29 @@
   color: var(--text-muted);
   margin: 0 0 var(--space-2);
 }
+
+.tables {
+  gap: var(--space-8);
+}
+
+.tables-list {
+  padding: var(--space-4);
+  border-radius: 24px 42px 22px 48px;
+  background: var(--zone-gold);
+}
+
+.tables-item-on {
+  border-left-color: var(--text);
+  background: var(--surface);
+}
+
+.tables-detail {
+  padding: var(--space-2) 0;
+}
+
+.console {
+  border-top: 1px solid var(--text);
+  border-radius: var(--radius-territory);
+  padding: var(--space-5);
+  background: var(--zone-lilac);
+}

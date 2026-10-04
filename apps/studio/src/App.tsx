@@ -5,7 +5,7 @@ import { Badge, toneForFreshness } from './components/primitives.js';
 import { client } from './lib/api.js';
 
 /**
- * The shell: a persistent build header, five routes, and nothing else.
+ * The shell: a persistent build header, a route rail, and nothing else.
  *
  * The header is the anchor of the whole interface rather than a breadcrumb. Everything on
  * every route is relative to one immutable, content-addressed build, and architecture 4.10
@@ -55,6 +55,7 @@ export function App(): React.JSX.Element {
               end={route.end}
               className={({ isActive }) => (isActive ? 'nav-link nav-link-active' : 'nav-link')}
             >
+              <span className="nav-dot" aria-hidden="true" />
               {route.label}
             </NavLink>
           ),
@@ -83,9 +84,11 @@ function BuildHeader(): React.JSX.Element {
     <header className="header">
       <div className="header-project">
         <span className="header-name">{data?.projectName ?? 'Lorepack'}</span>
+        <span className="header-context">Studio / local build atlas</span>
       </div>
 
       <div className="header-build">
+        <span className="header-label">ACTIVE BUILD</span>
         {data === undefined ? (
           <span className="header-id header-id-pending">reading build</span>
         ) : (

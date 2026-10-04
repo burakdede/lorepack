@@ -1,4 +1,4 @@
-/* The shell. Values from docs/architecture/studio-design.md. */
+/* The persistent field instrument around every Studio route. */
 
 .app {
   min-height: 100vh;
@@ -6,15 +6,74 @@
   flex-direction: column;
 }
 
+.header-project {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.header-context,
+.header-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8c1b0;
+}
+
+.header-label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--zone-gold);
+}
+
+.header-build {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--zone-blue);
+  vertical-align: 1px;
+}
+
+.nav-link:nth-child(2) .nav-dot {
+  background: var(--zone-sage);
+}
+.nav-link:nth-child(3) .nav-dot {
+  background: var(--zone-gold);
+}
+.nav-link:nth-child(4) .nav-dot {
+  background: var(--zone-coral);
+}
+.nav-link:nth-child(5) .nav-dot {
+  background: var(--zone-lilac);
+}
+.nav-link:nth-child(6) .nav-dot {
+  background: var(--zone-blue);
+}
+
+.nav-link-active .nav-dot {
+  background: var(--text);
+}
+
 /* The anchor. Everything below is relative to the build named here, so it is always present
    and never scrolls away. */
 .header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-6);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1.5fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 18px var(--space-8);
+  border-bottom: 1px solid #3e493b;
+  background: var(--text);
+  color: var(--bg);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -24,8 +83,18 @@
 .header-name {
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: var(--text-base);
-  color: var(--text);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--bg);
+}
+
+.header-name::before {
+  content: "LORE / ";
+  color: var(--zone-gold);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  margin-right: var(--space-2);
 }
 
 .header-build {
@@ -40,13 +109,13 @@
   font-size: var(--text-xl);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
-  color: var(--text);
+  color: var(--bg);
   animation: build-settle 150ms ease-out;
 }
 
 .header-id-pending {
   font-size: var(--text-base);
-  color: var(--text-muted);
+  color: #b8c1b0;
   animation: none;
 }
 
@@ -64,19 +133,20 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-3);
+  justify-content: flex-end;
 }
 
 .header-capabilities {
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  color: #b8c1b0;
 }
 
 .nav {
   display: flex;
-  gap: var(--space-1);
-  padding: 0 var(--space-6);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg);
+  gap: var(--space-2);
+  padding: 0 var(--space-8);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
   position: sticky;
   top: 53px;
   z-index: 1;
@@ -88,33 +158,56 @@
 .nav-link {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: none;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 2px solid transparent;
+  padding: 14px var(--space-2) 12px;
+  border-bottom: 3px solid transparent;
   margin-bottom: -1px;
   white-space: nowrap;
 }
 
 .nav-link:hover {
-  color: var(--text-secondary);
+  color: var(--text);
 }
 
 .nav-link-active {
   color: var(--text);
   font-weight: 500;
-  border-bottom-color: var(--text);
+  border-bottom-color: var(--zone-coral);
+  background: var(--zone-coral);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+  border-radius: 5px 5px 0 0;
 }
 
 .main {
   flex: 1;
-  padding: var(--space-6);
-  max-width: 1100px;
+  padding: 52px var(--space-8) 80px;
+  max-width: 1360px;
   width: 100%;
+  margin: 0 auto;
+  position: relative;
+  overflow-x: clip;
+}
+
+.main::before {
+  content: "";
+  position: absolute;
+  width: 260px;
+  height: 150px;
+  right: 0;
+  top: 24px;
+  border-radius: 47% 53% 58% 42%;
+  background: var(--zone-sage);
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: -1;
 }
 
 .route-title {
-  margin-bottom: var(--space-4);
+  margin-bottom: 10px;
+  max-width: 18ch;
+  letter-spacing: -0.04em;
 }
 
 .section {
@@ -125,12 +218,12 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--text-muted);
-  text-transform: lowercase;
-  letter-spacing: 0.02em;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   margin: 0 0 var(--space-3);
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 2px solid var(--text);
 }
 
 .visually-hidden {
@@ -153,6 +246,29 @@
   .main {
     padding-left: var(--space-4);
     padding-right: var(--space-4);
+  }
+  .header {
+    grid-template-columns: 1fr auto;
+    gap: var(--space-3);
+  }
+  .header-build {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .header-state {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .main {
+    padding-top: 32px;
+  }
+  .header-project {
+    flex-direction: column;
+    gap: 0;
+    align-items: flex-start;
+  }
+  .header-context {
+    font-size: 10px;
   }
   .header-id {
     font-size: var(--text-lg);

@@ -176,3 +176,23 @@
   text-align: right;
   color: var(--text-secondary);
 }
+
+.task-form {
+  padding: var(--space-5);
+  border-radius: var(--radius-territory);
+  background: var(--zone-coral);
+}
+
+.item {
+  border-left: 1px solid var(--zone-sage);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+}
+
+.item:nth-child(2n) {
+  border-left-color: var(--zone-lilac);
+}
+
+.section-note {
+  max-width: 68ch;
+}
