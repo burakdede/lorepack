@@ -6,6 +6,7 @@ import { CommandPalette } from './components/CommandPalette.js';
 import { Icon, type IconName, Mark } from './components/Icon.js';
 import { Badge, toneForFreshness } from './components/primitives.js';
 import { client } from './lib/api.js';
+import { serverOrigin } from './lib/equivalents.js';
 import { announceLocation } from './lib/location.js';
 import { type ThemeChoice, useTheme } from './lib/theme.js';
 
@@ -143,6 +144,7 @@ export function App(): React.JSX.Element {
         </nav>
 
         <div className="sidebar-foot">
+          <McpEndpoint />
           <fieldset className="theme-switch">
             <legend className="visually-hidden">Theme</legend>
             {THEMES.map((theme) => (
@@ -234,6 +236,32 @@ function BuildIdentity(): React.JSX.Element {
         {data === undefined ? '' : `Active build ${data.shortBuildId}, sources ${data.sourceState}`}
       </span>
     </div>
+  );
+}
+
+/**
+ * The MCP endpoint, one click from any route, because "what URL do I give my agent" is the
+ * question a developer has most often and should never need to navigate for.
+ */
+function McpEndpoint(): React.JSX.Element {
+  const url = `${serverOrigin()}/mcp`;
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="mcp-endpoint"
+      title={url}
+      aria-label={copied ? 'Copied MCP endpoint' : `Copy MCP endpoint ${url}`}
+      onClick={() => {
+        void navigator.clipboard?.writeText(url).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        });
+      }}
+    >
+      <Icon name={copied ? 'check' : 'copy'} />
+      <span>{copied ? 'Copied' : 'MCP URL'}</span>
+    </button>
   );
 }
 

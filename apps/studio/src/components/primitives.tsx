@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import './primitives.css';
 
 /**
@@ -111,19 +112,51 @@ export function Fact({
 
 /** Copy that is meant to be run, so it is selectable and copyable rather than illustrative. */
 export function Command({ value }: { readonly value: string }): React.JSX.Element {
+  const [copied, copy] = useCopied(value);
   return (
     <span className="command">
       <code>{value}</code>
       <button
         type="button"
         className="command-copy"
-        onClick={() => void navigator.clipboard?.writeText(value)}
+        onClick={copy}
         aria-label={`Copy command ${value}`}
       >
-        copy
+        {copied ? 'copied' : 'copy'}
       </button>
     </span>
   );
+}
+
+/** A value to paste somewhere else, such as an endpoint URL. Not a command, so no prompt. */
+export function CopyValue({
+  value,
+  label,
+}: {
+  readonly value: string;
+  readonly label: string;
+}): React.JSX.Element {
+  const [copied, copy] = useCopied(value);
+  return (
+    <span className="command command-value">
+      <code>{value}</code>
+      <button type="button" className="command-copy" onClick={copy} aria-label={`Copy ${label}`}>
+        {copied ? 'copied' : 'copy'}
+      </button>
+    </span>
+  );
+}
+
+/** Copies, then says so for a moment, so a click on "copy" is never a silent guess. */
+function useCopied(value: string): readonly [boolean, () => void] {
+  const [copied, setCopied] = useState(false);
+  const copy = (): void => {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    });
+  };
+  return [copied, copy] as const;
 }
 
 /**

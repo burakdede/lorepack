@@ -145,7 +145,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 @keyframes palette-rise {
