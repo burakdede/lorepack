@@ -1,0 +1,106 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. The reference machine and the gates are backlog issue #101.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGb": 32,
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "files": 2500,
+    "bytesPerFile": 40000,
+    "totalBytes": 102568500,
+    "totalGb": 0.096,
+    "artifacts": 2500,
+    "chunks": 39010,
+    "atFileEnvelope": true,
+    "atByteEnvelope": false
+  },
+  "measurements": {
+    "fullBuildMs": 85621,
+    "noopRebuildP50Ms": 826.67,
+    "noopRebuildP95Ms": 1587.99,
+    "incrementalRebuildP50Ms": 4307.12,
+    "incrementalRebuildP95Ms": 4543.88,
+    "samples": 3
+  },
+  "referenceGates": {
+    "fingerprintP95Ms": 4000,
+    "lifecycleIncrementalRebuildMs": 2000
+  },
+  "envelopeIncrementalRebuildPolicy": "reported-only",
+  "phaseProfile": {
+    "stageMeaning": {
+      "discovering": "source enumeration and ignore evaluation",
+      "fingerprinting": "source reads, content hashes and text classification",
+      "parsing": "parse, normalize and chunk work, including cache checks",
+      "indexing": "catalog SQLite migration and catalog writes",
+      "validating": "candidate integrity and contract checks",
+      "sealing": "atomic candidate directory seal",
+      "activating": "active build pointer update"
+    },
+    "samples": [
+      {
+        "label": "cold",
+        "discovering": 63,
+        "fingerprinting": 141,
+        "parsing": 81558,
+        "indexing": 2152,
+        "validating": 1436,
+        "sealing": 8,
+        "activating": 1
+      },
+      {
+        "label": "noop-0",
+        "discovering": 59,
+        "fingerprinting": 159,
+        "parsing": 1264
+      },
+      {
+        "label": "noop-1",
+        "discovering": 64,
+        "fingerprinting": 162,
+        "parsing": 502
+      },
+      {
+        "label": "noop-2",
+        "discovering": 62,
+        "fingerprinting": 149,
+        "parsing": 464
+      },
+      {
+        "label": "incremental-0",
+        "discovering": 62,
+        "fingerprinting": 207,
+        "parsing": 533,
+        "indexing": 2084,
+        "validating": 1109,
+        "sealing": 9,
+        "activating": 1
+      },
+      {
+        "label": "incremental-1",
+        "discovering": 57,
+        "fingerprinting": 134,
+        "parsing": 499,
+        "indexing": 2271,
+        "validating": 1265,
+        "sealing": 12,
+        "activating": 0
+      },
+      {
+        "label": "incremental-2",
+        "discovering": 54,
+        "fingerprinting": 128,
+        "parsing": 515,
+        "indexing": 2082,
+        "validating": 1108,
+        "sealing": 5,
+        "activating": 0
+      }
+    ]
+  }
+}

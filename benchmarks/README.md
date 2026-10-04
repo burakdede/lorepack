@@ -23,6 +23,8 @@ Envelope build measurements live under `benchmarks/envelope/`.
 - `byte-envelope-2026-08-14.json` measures 2,500 files and 1.005 GiB of source text. It exceeds
   the byte envelope, but also produces 387,110 chunks, so use it for byte stress and not as a
   retrieval-envelope substitute.
+- `profile-2026-10-04.json` records the phase timings for a 2,500-file run. Generate the same
+  shape with `node scripts/bench-envelope.mjs --files 2500 --profile --out <path>`.
 
 The #245 decision is documented in `docs/architecture/build-orchestration.md`: v0.1 keeps
 immutable build sealing, narrows the sub-2 s incremental rebuild claim to the lifecycle
