@@ -204,6 +204,8 @@ function healthReport() {
     const view = npmView(dependency.name);
     const latestReleaseAt = newestRegistryDate(view);
     const pinnedPublishedAt = pinnedPublishDate(view, dependency.specifiers);
+    const pinned = pinnedSpecifier(dependency.specifiers);
+    const licenseView = pinned === null ? view : npmView(`${dependency.name}@${pinned}`);
     const daysSinceLastRelease =
       latestReleaseAt === undefined ? null : daysBetween(REPORT_DATE_TIME, latestReleaseAt);
     return {
@@ -215,7 +217,7 @@ function healthReport() {
       pinnedPublishedAt,
       latestReleaseAt: latestReleaseAt ?? null,
       daysSinceLastRelease,
-      license: licenseByPackage.get(dependency.name) ?? view.license ?? 'unknown',
+      license: licenseView.license ?? licenseByPackage.get(dependency.name) ?? 'unknown',
       provenance: provenanceStatus(view, dependency),
       health:
         daysSinceLastRelease !== null && daysSinceLastRelease > STALE_AFTER_DAYS
@@ -290,19 +292,36 @@ export function stableReportView(report) {
     staleAfterDays: report.staleAfterDays,
     audit: report.audit,
     licenses: report.licenses,
-    dependencies: report.dependencies.map((dependency) => ({
-      name: dependency.name,
-      specifiers: dependency.specifiers,
-      dependencyTypes: dependency.dependencyTypes,
-      references: dependency.references,
-      pinnedPublishedAt: dependency.pinnedPublishedAt,
-      license: dependency.license,
-    })),
+    dependencies: report.dependencies
+      .map((dependency) => ({
+        name: dependency.name,
+        specifiers: dependency.specifiers,
+        dependencyTypes: dependency.dependencyTypes,
+        references: dependency.references,
+        license: dependency.license,
+      }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
   };
 }
 
 export function reportsMatch(current, committed) {
-  return JSON.stringify(stableReportView(current)) === JSON.stringify(stableReportView(committed));
+  return canonicalJson(stableReportView(current)) === canonicalJson(stableReportView(committed));
+}
+
+function canonicalValue(value) {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+function canonicalJson(value) {
+  return JSON.stringify(canonicalValue(value));
 }
 
 function checkPublishConfig(problems) {
@@ -376,7 +395,7 @@ function checkSbomFresh(report, problems) {
   }
 }
 
-function sbomsMatch(current, committed) {
+export function sbomsMatch(current, committed) {
   const stableProperties = (component) =>
     (component.properties ?? []).filter(
       (property) =>
@@ -384,12 +403,14 @@ function sbomsMatch(current, committed) {
     );
   const stable = (bom) => ({
     ...bom,
-    components: bom.components.map((component) => ({
-      ...component,
-      properties: stableProperties(component),
-    })),
+    components: bom.components
+      .map((component) => ({
+        ...component,
+        properties: stableProperties(component),
+      }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
   });
-  return JSON.stringify(stable(current)) === JSON.stringify(stable(committed));
+  return canonicalJson(stable(current)) === canonicalJson(stable(committed));
 }
 
 function main() {
