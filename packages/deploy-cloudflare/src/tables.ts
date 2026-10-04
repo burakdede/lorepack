@@ -2,6 +2,7 @@ import {
   type ColumnTypeName,
   LoreError,
   type StoredTableDescription,
+  TABLE_QUERY_LIMITS,
   type TableQueryRequest,
   type TableQueryResult,
   type TableStore,
@@ -136,9 +137,28 @@ export class D1TableStore implements TableStore {
       });
     }
 
-    assertQueryTargetsOnly(request.sql, resolved.table.sql_name);
-    const rows = await this.#run<Record<string, unknown>>(request.sql);
-    const limited = request.limit === undefined ? rows : rows.slice(0, request.limit);
+    const sql = request.sql.trim().replace(/;\s*$/, '');
+    assertQueryTargetsOnly(sql, resolved.table.sql_name);
+    const limit = boundedLimit(request.limit);
+    // D1 returns every matching row before JavaScript can slice it. Wrap the caller's
+    // statement so the database itself stops at the shared limit plus one row, preserving
+    // the distinction between a complete result and an explicitly truncated one.
+    const rows = await this.#run<Record<string, unknown>>(
+      `SELECT * FROM (${sql}) LIMIT ${String(limit + 1)}`,
+    );
+    const truncated = rows.length > limit;
+    const limited = truncated ? rows.slice(0, limit) : rows;
+    const serializedBytes = new TextEncoder().encode(JSON.stringify(limited)).byteLength;
+    if (serializedBytes > TABLE_QUERY_LIMITS.maxBytes) {
+      throw new LoreError(
+        'LORE_E_LIMIT_EXCEEDED',
+        `The result is ${Math.round(serializedBytes / 1024).toLocaleString('en-US')} KB, above the ${String(TABLE_QUERY_LIMITS.maxBytes / 1_000_000)} MB a single response may carry.`,
+        {
+          remediation:
+            'Select fewer columns, reduce the row limit, or aggregate the table. The build was not modified.',
+        },
+      );
+    }
     const columns =
       limited.length === 0
         ? []
@@ -150,7 +170,7 @@ export class D1TableStore implements TableStore {
       columns,
       rows: limited.map((row) => relabelRow(row, resolved.columns)),
       rowCount: limited.length,
-      truncated: limited.length < rows.length,
+      truncated,
       locator: tableLocator(resolved.table),
     } as TableQueryResult;
   }
@@ -182,6 +202,11 @@ export class D1TableStore implements TableStore {
       .run<T>();
     return result.results ?? [];
   }
+}
+
+function boundedLimit(requested: number | undefined): number {
+  if (requested === undefined) return TABLE_QUERY_LIMITS.defaultRows;
+  return Math.max(1, Math.min(requested, TABLE_QUERY_LIMITS.maxRows));
 }
 
 function assertIdentifier(name: string): string {

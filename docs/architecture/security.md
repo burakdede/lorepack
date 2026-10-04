@@ -29,6 +29,14 @@ duplication of the first.
 | A statement above 100,000 characters | The request schema, before anything is parsed |
 | A runaway recursive CTE | A five-second deadline, enforced by killing the child process |
 
+The Cloudflare table adapter applies the same table-query contract before D1 runs the caller's
+statement: 100 rows by default, 10,000 rows maximum, and a 1 MB serialized response ceiling.
+It wraps the statement in an outer `LIMIT` and asks for one extra row, so truncation is known
+without materializing the whole table in the Worker. The local adapter enforces the same shared
+constants in its isolated SQLite process. Regression coverage is in
+`packages/deploy-cloudflare/test/project-table-data.test.ts` and
+`packages/backend-local/test/sql-surface.test.ts`.
+
 **Each case pins the rule that refused it**, not merely that something did. Written first
 without that, the suite passed with the multi-statement tokenizer disabled outright, because
 the authorizer caught the second statement too. Defence in depth is why that is comfortable and

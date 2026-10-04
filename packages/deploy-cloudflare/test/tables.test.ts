@@ -138,11 +138,23 @@ ORDER BY ordinal`,
     ].slice(0, Number(limit)),
   );
 
-  db.handlers.set('SELECT c_0_sku, c_1_available FROM t_products_active', () => [
-    { c_0_sku: 'A-1', c_1_available: 1 },
-    { c_0_sku: 'A-2', c_1_available: 0 },
-    { c_0_sku: 'A-3', c_1_available: 1 },
-  ]);
+  db.handlers.set(
+    'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 3',
+    () => [
+      { c_0_sku: 'A-1', c_1_available: 1 },
+      { c_0_sku: 'A-2', c_1_available: 0 },
+      { c_0_sku: 'A-3', c_1_available: 1 },
+    ],
+  );
+
+  db.handlers.set(
+    'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 101',
+    () => [
+      { c_0_sku: 'A-1', c_1_available: 1 },
+      { c_0_sku: 'A-2', c_1_available: 0 },
+      { c_0_sku: 'A-3', c_1_available: 1 },
+    ],
+  );
 }
 
 describe('D1TableStore', () => {
@@ -235,7 +247,7 @@ ORDER BY name, id`,
     }
   });
 
-  it('returns relabelled rows for the resolved physical table and truncates client-side', async () => {
+  it('returns relabelled rows for the resolved physical table and truncates in D1', async () => {
     const db = new FakeD1Database();
     installTableHandlers(db);
 
@@ -261,7 +273,7 @@ ORDER BY name, id`,
       },
     });
     expect(db.calls.at(-1)).toEqual({
-      query: 'SELECT c_0_sku, c_1_available FROM t_products_active',
+      query: 'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 3',
       bindings: [],
     });
   });
