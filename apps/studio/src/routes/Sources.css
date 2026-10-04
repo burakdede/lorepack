@@ -197,3 +197,31 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+.sources-toolbar {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 24px 48px 20px 42px;
+  background: var(--zone-sage);
+}
+
+.artifacts th,
+.artifacts td {
+  padding-left: var(--space-2);
+}
+
+.artifacts th {
+  padding-top: var(--space-2);
+}
+
+.artifact-row-selected {
+  background: var(--zone-blue);
+}
+
+.artifact-detail {
+  border-left: 0;
+  border-top: 1px solid var(--text);
+  border-radius: var(--radius-territory);
+  padding: var(--space-5);
+  background: var(--zone-blue);
+}

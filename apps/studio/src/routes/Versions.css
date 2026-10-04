@@ -164,6 +164,34 @@
   padding-top: var(--space-4);
 }
 
+.builds th[scope="col"] {
+  padding-top: var(--space-2);
+}
+
+.build-row-active {
+  background: var(--zone-sage);
+}
+
+.build-row-active .build-actions {
+  background: var(--zone-sage);
+}
+
+.outcome {
+  border-left-width: 1px;
+  border-radius: var(--radius-territory);
+  background: var(--zone-sage);
+}
+
+.confirm {
+  border: 0;
+  border-radius: var(--radius-territory);
+  background: var(--zone-gold);
+}
+
+.compare {
+  border-top: 8px solid var(--text);
+}
+
 .compare-controls {
   display: flex;
   gap: var(--space-4);

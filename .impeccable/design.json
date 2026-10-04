@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "product": "Lore Studio",
+  "mode": "code-led",
+  "direction": {
+    "name": "Build atlas",
+    "seed": "f072aaf0",
+    "assignedConcept": "a zoo and gardens guide map",
+    "translation": "Flat organic zones map the active build, sources, context, versions, and diagnostics without decorative illustration."
+  },
+  "tokens": {
+    "color": {
+      "paper": "#f7f1e6",
+      "surface": "#fffdf7",
+      "ink": "#20231f",
+      "mutedInk": "#6c7067",
+      "rule": "#d8d2c4",
+      "sage": "#d9e8c8",
+      "coral": "#f2c7b9",
+      "gold": "#f3dfa1",
+      "blue": "#c8deea",
+      "lilac": "#d9d0e8"
+    },
+    "type": {
+      "sans": "IBM Plex Sans",
+      "mono": "IBM Plex Mono"
+    },
+    "shape": {
+      "controlRadius": "6px",
+      "territoryRadius": "28px 54px 34px 64px"
+    }
+  },
+  "routes": ["overview", "sources", "playground", "tables", "versions", "diagnostics"],
+  "constraints": [
+    "Preserve existing API and data behavior",
+    "Keep provenance visible",
+    "No gradients or glass effects",
+    "Support keyboard navigation, dark mode, and reduced motion",
+    "Keep the interface read-mostly"
+  ]
+}

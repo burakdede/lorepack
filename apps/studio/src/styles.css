@@ -44,15 +44,20 @@
 }
 
 :root {
-  /* Warm neutrals. The blue-grey that ships as a framework default is the clearest tell of
-     an untouched starter, so this ramp is deliberately warm. */
-  --bg: #fcfcfb;
-  --surface: #f6f5f2;
-  --border-subtle: #eae7e1;
-  --border: #d9d5cd;
-  --text-muted: #6e6960;
-  --text-secondary: #4a453d;
-  --text: #1a1815;
+  --bg: #f7f1e6;
+  --surface: #fffdf7;
+  --surface-raised: #f0e9dc;
+  --border-subtle: #e7dfd0;
+  --border: #d1c7b6;
+  --text-muted: #696d66;
+  --text-secondary: #41463d;
+  --text: #20231f;
+
+  --zone-sage: #d9e8c8;
+  --zone-coral: #f2c7b9;
+  --zone-gold: #f3dfa1;
+  --zone-blue: #c8deea;
+  --zone-lilac: #d9d0e8;
 
   /* The only colours in the interface. Three state scales, nothing else. */
   --state-ok: #2f6b44;
@@ -73,7 +78,7 @@
   --text-sm: 12.5px;
   --text-base: 14px;
   --text-lg: 17px;
-  --text-xl: 22px;
+  --text-xl: 25px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -83,18 +88,26 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  --radius: 3px;
+  --radius: 6px;
+  --radius-territory: 28px 54px 34px 64px;
   --row-height: 30px;
 }
 
 :root[data-theme="dark"] {
-  --bg: #141311;
-  --surface: #1c1b18;
-  --border-subtle: #26241f;
-  --border: #332f29;
+  --bg: #171916;
+  --surface: #20251f;
+  --surface-raised: #292e27;
+  --border-subtle: #30372e;
+  --border: #465043;
   --text-muted: #918b81;
   --text-secondary: #b8b2a8;
   --text: #edeae3;
+
+  --zone-sage: #31442e;
+  --zone-coral: #4c3029;
+  --zone-gold: #4a3e1e;
+  --zone-blue: #263d48;
+  --zone-lilac: #3d344c;
 
   --state-ok: #7fc79a;
   --state-warn: #dba94f;
@@ -114,6 +127,12 @@
     --text-muted: #918b81;
     --text-secondary: #b8b2a8;
     --text: #edeae3;
+
+    --zone-sage: #31442e;
+    --zone-coral: #4c3029;
+    --zone-gold: #4a3e1e;
+    --zone-blue: #263d48;
+    --zone-lilac: #3d344c;
 
     --state-ok: #7fc79a;
     --state-warn: #dba94f;
@@ -135,16 +154,13 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  /* Monospace is the primary interface voice, because this product's content is
-     overwhelmingly identifiers. Prose opts into sans, not the other way round. */
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.55;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Prose opts in. */
 .prose {
   font-family: var(--font-sans);
 }
@@ -159,7 +175,8 @@ h3 {
 }
 
 h1 {
-  font-size: var(--text-lg);
+  font-size: 30px;
+  line-height: 1.1;
 }
 
 h2 {
@@ -168,6 +185,17 @@ h2 {
 
 a {
   color: inherit;
+}
+
+code,
+pre,
+table,
+input,
+select,
+textarea,
+button,
+.mono {
+  font-family: var(--font-mono);
 }
 
 /* One visible focus treatment, everywhere. Not removed anywhere. */

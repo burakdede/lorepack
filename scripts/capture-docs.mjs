@@ -343,7 +343,7 @@ async function main() {
     // The exclusions view, which is the half of Sources that gets buried.
     await page.goto(`${url}/#/sources`);
     await page.getByRole('button', { name: /excluded \d+/ }).click();
-    await page.locator('.artifacts').first().waitFor();
+    await page.locator('.artifacts, .excluded-caption, .empty').first().waitFor();
     await shoot('studio-excluded.png');
 
     await browser.close();

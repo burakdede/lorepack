@@ -9,7 +9,7 @@
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border-subtle);
-  border-left: 2px solid var(--state-ok);
+  border-left: 1px solid var(--state-ok);
   border-radius: var(--radius);
   margin-bottom: var(--space-8);
 }
@@ -121,4 +121,38 @@
   cursor: default;
   background: var(--bg);
   border-color: var(--border-subtle);
+}
+
+.state-banner {
+  padding: var(--space-6);
+  border: 1px solid var(--text);
+  border-left-width: 1px;
+  border-radius: var(--radius-territory);
+  background: var(--zone-sage);
+  margin-bottom: var(--space-12);
+}
+
+.state-banner-dirty {
+  background: var(--zone-gold);
+}
+
+.state-line {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.warning-groups {
+  gap: var(--space-6);
+}
+
+.warning-group {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-idle {
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-territory);
+  background: var(--zone-gold);
 }
