@@ -41,6 +41,7 @@
     "bench": "pnpm build && node scripts/bench.mjs",
     "bench:retrieval": "pnpm build && node scripts/bench-retrieval.mjs",
     "bench:corpus": "pnpm build && node scripts/bench-corpus.mjs",
+    "bench:comparison": "pnpm build && node scripts/bench-retrieval-comparison.mjs",
     "bench:envelope": "pnpm build && node scripts/bench-envelope.mjs",
     "bench:cloudflare-projection": "pnpm build && node scripts/bench-cloudflare-projection.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",

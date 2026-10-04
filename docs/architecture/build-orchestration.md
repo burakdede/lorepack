@@ -201,16 +201,17 @@ measures a corpus nobody has.
 Issue `#332` adds a versioned mixed-format corpus at
 [`benchmarks/corpus/manifest.json`](../../benchmarks/corpus/manifest.json). The base pack contains
 checked-in Markdown, plain text, HTML, CSV, DOCX and source files, plus deterministic PDF and XLSX
-fixtures. Every input has a checksum and provenance. The benchmark measures the files through the
-ordinary build and runtime paths, including table queries, rather than invoking parser functions
-directly.
+fixtures. Every input has a checksum and provenance. The fixed query workload is in
+[`benchmarks/corpus/queries.json`](../../benchmarks/corpus/queries.json). The benchmark measures
+the files through the ordinary build and runtime paths, including table queries, rather than
+invoking parser functions directly.
 
 The raw result is
 [`benchmarks/corpus/results-2026-10-04.json`](../../benchmarks/corpus/results-2026-10-04.json).
 On the Apple M1 Pro development machine, the large tier reached 360 artifacts, 13.93 MB, 36,280
-nodes, 8,520 chunks and 80 tables. Its build p95 was 16,940.55 ms, incremental rebuild p95 was
-879.81 ms, peak RSS was 768.97 MiB, warm search p95 was 11.81 ms, context assembly p95 was 43.70
-ms and table query p95 was 95.18 ms. The small and medium tiers are included in the raw artifact
+nodes, 8,520 chunks and 80 tables. Its build p95 was 13,135.33 ms, incremental rebuild p95 was
+905.46 ms, peak RSS was 728.97 MiB, warm search p95 was 11.67 ms, context assembly p95 was 63.21
+ms and table query p95 was 98.07 ms. The small and medium tiers are included in the raw artifact
 to show the trend.
 
 These tiers repeat repository-owned mixed-format packs with deterministic path-local text. They

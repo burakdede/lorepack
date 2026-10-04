@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { cpus, tmpdir, totalmem } from 'node:os';
 import { dirname, extname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createLocalRuntimeBackend } from '../packages/backend-local/dist/index.js';
 import { runBuild } from '../packages/cli/dist/services/build.js';
 import { loadConfig, ProgressBus } from '../packages/core/dist/index.js';
@@ -29,6 +30,7 @@ import { createRuntime } from '../packages/runtime/dist/index.js';
 const REPO = join(import.meta.dirname, '..');
 const MANIFEST_PATH = join(REPO, 'benchmarks/corpus/manifest.json');
 const MANIFEST = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
+const WORKLOAD = JSON.parse(readFileSync(join(REPO, 'benchmarks/corpus/queries.json'), 'utf8'));
 const SAMPLES = 3;
 const QUERY_ITERATIONS = 30;
 const CONTEXT_ITERATIONS = 20;
@@ -156,7 +158,7 @@ async function measureTier(name) {
     for (let index = 0; index < QUERY_ITERATIONS; index += 1) {
       const started = performance.now();
       await runtime.search({
-        query: 'rollback deployment access',
+        query: WORKLOAD.searchQueries[index % WORKLOAD.searchQueries.length],
         limit: 10,
         includeArchived: false,
         debug: false,
@@ -166,7 +168,7 @@ async function measureTier(name) {
     for (let index = 0; index < CONTEXT_ITERATIONS; index += 1) {
       const started = performance.now();
       await runtime.contextForTask({
-        task: 'How does a deployment rollback work?',
+        task: WORKLOAD.contextTasks[index % WORKLOAD.contextTasks.length],
         includeArchived: false,
       });
       contextSamples.push(performance.now() - started);
@@ -176,7 +178,7 @@ async function measureTier(name) {
         const started = performance.now();
         await runtime.queryTable({
           tableId: firstTable.tableId,
-          sql: `SELECT * FROM ${firstTable.sqlName}`,
+          sql: WORKLOAD.tableQuery.replace('<described-sql-name>', firstTable.sqlName),
           limit: 100,
         });
         tableSamples.push(performance.now() - started);
@@ -233,48 +235,53 @@ async function measureTier(name) {
   }
 }
 
-for (const artifact of MANIFEST.artifacts) {
-  const path = join(REPO, artifact.path);
-  if (sha256(path) !== artifact.sha256)
-    throw new Error(`Corpus checksum mismatch: ${artifact.path}`);
-  if (statSync(path).size !== artifact.bytes)
-    throw new Error(`Corpus byte count mismatch: ${artifact.path}`);
+export { buildAt, MANIFEST, WORKLOAD, writeProject };
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  for (const artifact of MANIFEST.artifacts) {
+    const path = join(REPO, artifact.path);
+    if (sha256(path) !== artifact.sha256)
+      throw new Error(`Corpus checksum mismatch: ${artifact.path}`);
+    if (statSync(path).size !== artifact.bytes)
+      throw new Error(`Corpus byte count mismatch: ${artifact.path}`);
+  }
+
+  const results = [];
+  for (const tier of tiers) results.push(await measureTier(tier));
+
+  const report = {
+    provisional: true,
+    reportedNotEnforced: true,
+    generatedAt: '2026-10-04',
+    corpusManifest: relative(REPO, MANIFEST_PATH),
+    queryWorkload: 'benchmarks/corpus/queries.json',
+    limitation:
+      'The medium and large tiers repeat repository-owned mixed-format packs with deterministic path-local text. They establish scale trends and parser coverage, not a representative industry corpus. A public industry baseline remains issue 386.',
+    machine: {
+      platform: process.platform,
+      arch: process.arch,
+      cpu: cpus()[0]?.model ?? 'unknown',
+      cores: cpus().length,
+      memoryGiB: Math.round((totalmem() / 1024 ** 3) * 10) / 10,
+      node: process.versions.node,
+    },
+    samples: {
+      build: SAMPLES,
+      incremental: SAMPLES,
+      warmSearch: QUERY_ITERATIONS,
+      contextBundle: CONTEXT_ITERATIONS,
+      tableQuery: TABLE_ITERATIONS,
+    },
+    tiers: results,
+  };
+
+  const serialized = `${JSON.stringify(report, null, 2)}\n`;
+  const outputIndex = process.argv.indexOf('--out');
+  if (outputIndex !== -1 && process.argv[outputIndex + 1] !== undefined) {
+    const output = process.argv[outputIndex + 1];
+    mkdirSync(dirname(output), { recursive: true });
+    writeFileSync(output, serialized, 'utf8');
+    console.log(`Wrote ${output}`);
+  }
+  console.log(serialized);
 }
-
-const results = [];
-for (const tier of tiers) results.push(await measureTier(tier));
-
-const report = {
-  provisional: true,
-  reportedNotEnforced: true,
-  generatedAt: '2026-10-04',
-  corpusManifest: relative(REPO, MANIFEST_PATH),
-  limitation:
-    'The medium and large tiers repeat repository-owned mixed-format packs with deterministic path-local text. They establish scale trends and parser coverage, not a representative industry corpus. A public industry baseline remains issue 386.',
-  machine: {
-    platform: process.platform,
-    arch: process.arch,
-    cpu: cpus()[0]?.model ?? 'unknown',
-    cores: cpus().length,
-    memoryGiB: Math.round((totalmem() / 1024 ** 3) * 10) / 10,
-    node: process.versions.node,
-  },
-  samples: {
-    build: SAMPLES,
-    incremental: SAMPLES,
-    warmSearch: QUERY_ITERATIONS,
-    contextBundle: CONTEXT_ITERATIONS,
-    tableQuery: TABLE_ITERATIONS,
-  },
-  tiers: results,
-};
-
-const serialized = `${JSON.stringify(report, null, 2)}\n`;
-const outputIndex = process.argv.indexOf('--out');
-if (outputIndex !== -1 && process.argv[outputIndex + 1] !== undefined) {
-  const output = process.argv[outputIndex + 1];
-  mkdirSync(dirname(output), { recursive: true });
-  writeFileSync(output, serialized, 'utf8');
-  console.log(`Wrote ${output}`);
-}
-console.log(serialized);

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "searchQueries": ["rollback deployment access", "release rollback", "access policy"],
+  "contextTasks": [
+    "How does a deployment rollback work?",
+    "What is the access policy for a project?"
+  ],
+  "tableQuery": "SELECT * FROM <described-sql-name>",
+  "semantics": "Search and context requests are read-only lexical workloads. The table query is filled with the SQL name returned by describeTable and is bounded to 100 rows."
+}
