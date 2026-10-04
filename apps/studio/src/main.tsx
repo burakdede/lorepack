@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createHashRouter, RouterProvider } from 'react-router';
 import { App } from './App.js';
+import { RouteError } from './components/RouteError.js';
 import { Diagnostics } from './routes/Diagnostics.js';
 import { Overview } from './routes/Overview.js';
 import { Playground } from './routes/Playground.js';
@@ -23,16 +24,19 @@ const router = createHashRouter([
   {
     path: '/',
     element: <App />,
+    // The shell's own fallback; each child carries one too, so a failing route keeps the
+    // sidebar instead of taking the whole app down.
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: <Overview /> },
-      { path: 'sources', element: <Sources /> },
+      { index: true, element: <Overview />, errorElement: <RouteError /> },
+      { path: 'sources', element: <Sources />, errorElement: <RouteError /> },
       // Registered unconditionally even though the nav link is conditional. A build with no
       // tables hides the link; a deep link to `#/tables` still has to answer, and it answers
       // with the route's own empty state rather than with a blank page.
-      { path: 'tables', element: <Tables /> },
-      { path: 'playground', element: <Playground /> },
-      { path: 'versions', element: <Versions /> },
-      { path: 'diagnostics', element: <Diagnostics /> },
+      { path: 'tables', element: <Tables />, errorElement: <RouteError /> },
+      { path: 'playground', element: <Playground />, errorElement: <RouteError /> },
+      { path: 'versions', element: <Versions />, errorElement: <RouteError /> },
+      { path: 'diagnostics', element: <Diagnostics />, errorElement: <RouteError /> },
     ],
   },
 ]);
