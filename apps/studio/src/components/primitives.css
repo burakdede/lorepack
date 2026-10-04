@@ -3,13 +3,27 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  font-family: var(--font-mono);
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
-  line-height: 1.6;
-  padding: 0 var(--space-1);
-  border-radius: var(--radius);
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 999px;
   border: 1px solid transparent;
   white-space: nowrap;
+}
+
+/* A dot beside the word, so state reads at a glance and still survives greyscale. */
+.badge-ok::before,
+.badge-warn::before,
+.badge-bad::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .badge-ok {
@@ -26,7 +40,16 @@
 }
 .badge-idle {
   color: var(--text-muted);
-  border-color: var(--border-subtle);
+  border-color: var(--border);
+}
+
+/* A bordered surface for one group of evidence. Used once per group, never nested. */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-5);
 }
 
 /* The aligned key-value block, echoing what `lore build` prints. Labels form a column the
@@ -34,9 +57,8 @@
 .facts {
   margin: 0;
   display: grid;
-  grid-template-columns: minmax(9rem, max-content) 1fr;
-  column-gap: var(--space-4);
-  row-gap: var(--space-1);
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  column-gap: var(--space-6);
   align-items: baseline;
 }
 
@@ -44,8 +66,18 @@
   display: contents;
 }
 
+.fact-label,
+.fact-value {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fact:last-child .fact-label,
+.fact:last-child .fact-value {
+  border-bottom: 0;
+}
+
 .fact-label {
-  font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
@@ -53,6 +85,7 @@
 .fact-value {
   margin: 0;
   font-family: var(--font-mono);
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   color: var(--text);
   overflow-wrap: anywhere;
@@ -60,47 +93,71 @@
 
 .fact-value.prose {
   font-family: var(--font-sans);
+  font-size: var(--text-base);
 }
 
 .command {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  overflow: hidden;
 }
 
 .command code {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 1px var(--space-2);
+  padding: 5px var(--space-3);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.command code::before {
+  content: "$ ";
+  color: var(--text-muted);
 }
 
 .command-copy {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--text-xs);
+  font-weight: 500;
   color: var(--text-muted);
-  background: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 0 var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
   cursor: pointer;
+  transition:
+    color 150ms var(--ease-out),
+    background-color 150ms var(--ease-out);
 }
 
 .command-copy:hover {
-  color: var(--text-secondary);
-  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.command .command-copy {
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
 }
 
 .empty {
-  padding: var(--space-8) 0;
-  max-width: 52ch;
+  padding: var(--space-10) var(--space-6);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  text-align: center;
 }
 
 .empty-title {
-  margin: 0 0 var(--space-2);
+  margin: 0 auto var(--space-2);
+  max-width: 52ch;
   font-size: var(--text-base);
+  font-weight: 500;
   color: var(--text);
 }
 
@@ -109,122 +166,275 @@
   font-size: var(--text-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  align-items: flex-start;
+  gap: var(--space-3);
+  align-items: center;
+  max-width: 52ch;
+  margin: 0 auto;
+}
+
+.empty-body p {
+  margin: 0;
 }
 
 .failure {
-  border: 1px solid var(--border);
-  border-left: 1px solid var(--state-bad);
-  border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4);
-  max-width: 68ch;
+  display: grid;
+  gap: var(--space-1);
+  max-width: 72ch;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--state-bad) 35%, var(--border-subtle));
+  border-radius: var(--radius-lg);
+  background: var(--state-bad-bg);
 }
 
 .failure-message {
   margin: 0;
   color: var(--text);
+  font-weight: 500;
 }
 
 .failure-code {
-  margin: var(--space-1) 0 0;
+  margin: 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  color: var(--state-bad);
 }
 
 .failure-remediation {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-1) 0 0;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: pre-wrap;
 }
 
 .loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   color: var(--text-muted);
   font-size: var(--text-sm);
   padding: var(--space-6) 0;
+  margin: 0;
+}
+
+/* A slow pulse on a dot, not a shimmer: it says "working" without pretending to know how far. */
+.loading::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: loading-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+  50% {
+    opacity: 0.25;
+  }
 }
 
 /* The one button shape in the product. Quiet by default, weighted by contrast when it
    carries a confirmed action, and never coloured: colour means state here. */
 .action {
-  font-family: var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-family: var(--font-sans);
   font-size: var(--text-sm);
-  color: var(--text-secondary);
-  background: var(--bg);
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 2px var(--space-2);
-  margin-left: var(--space-1);
+  box-shadow: var(--shadow-panel);
   cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
 }
 
 .action:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface);
+  background: var(--surface-raised);
+}
+
+.action:active:not(:disabled) {
+  transform: translateY(0.5px);
 }
 
 .action:disabled {
   color: var(--text-muted);
-  cursor: default;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 /* The confirmed action, weighted by contrast rather than by colour. Activation and rollback
    are pointer changes, and a red button would say something false about what they do. */
 .action-primary {
-  color: var(--bg);
-  background: var(--text);
-  border-color: var(--text);
+  color: var(--ink-text);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 .action-primary:hover:not(:disabled) {
-  color: var(--bg);
-  background: var(--text-secondary);
-  border-color: var(--text-secondary);
+  color: var(--ink-text);
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
 }
 
-/* Wide content scrolls inside its own box. A table that pushes the page sideways takes the
+.action-small {
+  height: 26px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* Text inputs and selects share one shape across routes. */
+.field-control {
+  height: 36px;
+  width: 100%;
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition:
+    border-color 150ms var(--ease-out),
+    box-shadow 150ms var(--ease-out);
+}
+
+.field-control::placeholder {
+  color: var(--text-muted);
+}
+
+.field-control:hover {
+  border-color: var(--text-muted);
+}
+
+.field-control:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 0;
+  border-color: var(--text);
+}
+
+.field-control[aria-invalid="true"] {
+  border-color: var(--state-bad);
+}
+
+select.field-control {
+  appearance: none;
+  padding-right: var(--space-8);
+  background-image: var(--chevron);
+  background-position: calc(100% - 10px) 50%;
+  background-size: 12px 12px;
+  background-repeat: no-repeat;
+}
+
+/* A segmented control: two or three peers chosen with one click. */
+.view-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.view-option {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.view-option:hover {
+  color: var(--text);
+}
+
+.view-option-active,
+.view-option-active:hover {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    var(--shadow-panel);
+}
+
+/* Data tables: one row height, hairline rules, a quiet header, mono where values are data. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.data-table th,
+.data-table td {
+  height: var(--row-height);
+  padding: 6px var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table thead th {
+  height: 34px;
+  font-weight: 500;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  white-space: nowrap;
+}
+
+.data-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.data-table tbody tr {
+  transition: background-color 120ms var(--ease-out);
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.data-table .numeric {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table caption {
+  caption-side: top;
+  text-align: left;
+}
+
+/* The frame a data table sits in, so its rules meet a border rather than the page. */
+.table-frame {
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+/* Wide content scrolls inside its own box. Positioned, so a visually hidden label inside a
+   cell is contained by the box instead of widening the document from outside it. A table that pushes the page sideways takes the
    navigation with it, which is how a layout that merely looks cramped becomes unusable. */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   max-width: 100%;
-}
-
-/* Atlas layer: evidence stays flat, while route-level emphasis gets a territory edge. */
-.badge {
-  padding: 2px 7px;
-  border-radius: 999px;
-  letter-spacing: 0.02em;
-}
-
-.command code,
-.task-input,
-.task-select,
-.filter-input,
-.console-input,
-.compare-field select {
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-.empty {
-  padding: var(--space-8) var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-territory);
-  background: var(--zone-blue);
-}
-
-.failure {
-  border-color: var(--border);
-  border-left-width: 1px;
-  border-radius: var(--radius-territory);
-  background: var(--zone-coral);
-}
-
-.loading {
-  padding: var(--space-8) 0;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }

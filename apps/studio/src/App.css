@@ -1,213 +1,294 @@
-/* The persistent field instrument around every Studio route. */
+/* The shell: a sidebar beside the route, folding into a top bar on narrow screens. */
 
 .app {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.header-project {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.header-context,
-.header-label {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #b8c1b0;
-}
-
-.header-label {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--zone-gold);
-}
-
-.header-build {
-  display: flex;
-  flex-direction: column;
-}
-
-.nav-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 7px;
-  border-radius: 50%;
-  background: var(--zone-blue);
-  vertical-align: 1px;
-}
-
-.nav-link:nth-child(2) .nav-dot {
-  background: var(--zone-sage);
-}
-.nav-link:nth-child(3) .nav-dot {
-  background: var(--zone-gold);
-}
-.nav-link:nth-child(4) .nav-dot {
-  background: var(--zone-coral);
-}
-.nav-link:nth-child(5) .nav-dot {
-  background: var(--zone-lilac);
-}
-.nav-link:nth-child(6) .nav-dot {
-  background: var(--zone-blue);
-}
-
-.nav-link-active .nav-dot {
-  background: var(--text);
-}
-
-/* The anchor. Everything below is relative to the build named here, so it is always present
-   and never scrolls away. */
-.header {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.8fr) minmax(16rem, 1.5fr) auto;
-  align-items: center;
-  gap: var(--space-6);
-  padding: 18px var(--space-8);
-  border-bottom: 1px solid #3e493b;
-  background: var(--text);
-  color: var(--bg);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+/* The sidebar's column is painted by the grid, so it runs the full height of a long route
+   while the sidebar itself stays pinned. */
+.app::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.sidebar {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
   position: sticky;
   top: 0;
-  z-index: 2;
-  flex-wrap: wrap;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  overflow-y: auto;
+}
+
+.main {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+}
+
+.sidebar-product {
+  font-weight: 600;
+  font-size: var(--text-base);
+  letter-spacing: -0.01em;
+}
+
+/* The anchor. Everything on every route is relative to the build named here. */
+.build-identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
 }
 
 .header-name {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 18px;
-  letter-spacing: -0.02em;
-  color: var(--bg);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.header-name::before {
-  content: "LORE / ";
-  color: var(--zone-gold);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.1em;
-  margin-right: var(--space-2);
-}
-
-.header-build {
-  flex: 1 1 auto;
+.build-identity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-/* The build id is the largest type in the interface, because it is the thing every other
-   number on screen is relative to. */
 .header-id {
   font-family: var(--font-mono);
-  font-size: var(--text-xl);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  color: var(--bg);
-  animation: build-settle 150ms ease-out;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: build-settle 600ms var(--ease-out);
 }
 
 .header-id-pending {
-  font-size: var(--text-base);
-  color: #b8c1b0;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: var(--text-muted);
   animation: none;
 }
 
 /* The one animated moment in the product: a rebuild landed and the world changed. */
 @keyframes build-settle {
   from {
-    opacity: 0.35;
-  }
-  to {
-    opacity: 1;
+    opacity: 0.25;
+    filter: blur(2px);
   }
 }
 
-.header-state {
+.build-identity-state {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.header-capabilities {
+.build-identity-note {
   font-size: var(--text-xs);
-  color: #b8c1b0;
+  color: var(--text-muted);
+}
+
+.icon-button {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.icon-button:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.search-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.search-trigger:hover {
+  border-color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+.search-trigger-label {
+  flex: 1;
 }
 
 .nav {
   display: flex;
-  gap: var(--space-2);
-  padding: 0 var(--space-8);
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  position: sticky;
-  top: 53px;
-  z-index: 1;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 2px;
 }
 
-/* No accent colour. The active section is marked by weight and a rule, which is enough and
-   keeps colour meaning state and only state. */
 .nav-link {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
   color: var(--text-secondary);
+  font-size: var(--text-base);
   text-decoration: none;
-  padding: 14px var(--space-2) 12px;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
   white-space: nowrap;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.nav-link .icon {
+  flex: none;
+  color: var(--text-muted);
+  transition: color 150ms var(--ease-out);
 }
 
 .nav-link:hover {
+  background: var(--surface-raised);
   color: var(--text);
 }
 
-.nav-link-active {
+/* Selection is carried by contrast and weight, so colour keeps meaning state only. */
+.nav-link-active,
+.nav-link-active:hover {
+  background: var(--surface);
   color: var(--text);
   font-weight: 500;
-  border-bottom-color: var(--zone-coral);
-  background: var(--zone-coral);
-  padding-left: var(--space-3);
-  padding-right: var(--space-3);
-  border-radius: 5px 5px 0 0;
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-panel);
+}
+
+.nav-link-active .icon {
+  color: var(--text);
+}
+
+.sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-1);
+}
+
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.theme-option {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.theme-option:hover {
+  color: var(--text);
+}
+
+.theme-option-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    var(--shadow-panel);
+}
+
+.theme-option:focus-visible {
+  border-radius: 999px;
 }
 
 .main {
-  flex: 1;
-  padding: 52px var(--space-8) 80px;
-  max-width: 1360px;
+  min-width: 0;
   width: 100%;
-  margin: 0 auto;
-  position: relative;
-  overflow-x: clip;
+  max-width: 1240px;
+  padding: var(--space-8) var(--space-8) var(--space-12);
 }
 
-.main::before {
-  content: "";
-  position: absolute;
-  width: 260px;
-  height: 150px;
-  right: 0;
-  top: 24px;
-  border-radius: 47% 53% 58% 42%;
-  background: var(--zone-sage);
-  opacity: 0.72;
-  pointer-events: none;
-  z-index: -1;
+/* The route's own header: its title, one line on what it answers, and its actions. */
+.route-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
-.route-title {
-  margin-bottom: 10px;
-  max-width: 18ch;
-  letter-spacing: -0.04em;
+.route-intro {
+  margin: var(--space-1) 0 0;
+  max-width: 68ch;
+  color: var(--text-muted);
+}
+
+.route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: none;
 }
 
 .section {
@@ -215,15 +296,23 @@
 }
 
 .section-heading {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-2);
-  border-bottom: 2px solid var(--text);
+}
+
+/* Section headings are short lowercase labels in the markup, because the CLI and the tests
+   address them that way; on screen they read as sentence-case titles. */
+.section-heading::first-letter {
+  text-transform: uppercase;
+}
+
+.section-note {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  max-width: 72ch;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 .visually-hidden {
@@ -238,61 +327,137 @@
   border: 0;
 }
 
-/* Readable at 1280x720 without horizontal scrolling, and at 200% zoom, which is the same
-   requirement expressed twice. */
-@media (max-width: 720px) {
-  .header,
-  .nav,
-  .main {
-    padding-left: var(--space-4);
-    padding-right: var(--space-4);
-  }
-  .header {
-    grid-template-columns: 1fr auto;
-    gap: var(--space-3);
-  }
-  .header-build {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-  .header-state {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .main {
-    padding-top: 32px;
-  }
-  .header-project {
-    flex-direction: column;
-    gap: 0;
-    align-items: flex-start;
-  }
-  .header-context {
-    font-size: 10px;
-  }
-  .header-id {
-    font-size: var(--text-lg);
-  }
-}
-
 /* Visible only when focused, which is the whole point: keyboard users get a way past the
-   header and navigation without it being furniture for everyone else. */
+   sidebar without it being furniture for everyone else. */
 .skip-link {
-  position: absolute;
+  position: fixed;
   left: var(--space-4);
   top: -3rem;
-  z-index: 3;
-  font-family: var(--font-mono);
+  z-index: 60;
   font-size: var(--text-sm);
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--ink);
+  color: var(--ink-text);
   border-radius: var(--radius);
   padding: var(--space-2) var(--space-3);
   text-decoration: none;
-  transition: top 90ms linear;
+  transition: top 120ms var(--ease-out);
 }
 
 .skip-link:focus {
-  top: var(--space-2);
+  top: var(--space-3);
+}
+
+/* Narrow screens and 200% zoom: the sidebar becomes a top bar, and the sections a row that
+   scrolls inside itself rather than pushing the page sideways. */
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .app::before {
+    display: none;
+  }
+
+  .main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .sidebar {
+    position: sticky;
+    z-index: 10;
+    height: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "identity search foot"
+      "nav nav nav";
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-4) 0;
+    background: var(--sidebar);
+    border-bottom: 1px solid var(--border-subtle);
+    overflow: visible;
+  }
+
+  .sidebar-brand {
+    display: none;
+  }
+
+  .build-identity {
+    grid-area: identity;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0 var(--space-3);
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    min-width: 0;
+  }
+
+  .header-name {
+    display: none;
+  }
+
+  .build-identity-note {
+    display: none;
+  }
+
+  .search-trigger {
+    grid-area: search;
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .search-trigger .search-trigger-label,
+  .search-trigger .search-trigger-key {
+    display: none;
+  }
+
+  .sidebar-foot {
+    grid-area: foot;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav {
+    grid-area: nav;
+    flex-direction: row;
+    gap: var(--space-1);
+    margin: 0 calc(-1 * var(--space-4));
+    padding: 0 var(--space-4) var(--space-2);
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* A fade on the trailing edge says the row continues past the screen. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+
+  .nav-link {
+    height: 32px;
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .main {
+    padding: var(--space-6) var(--space-4) var(--space-10);
+  }
+
+  .route-header {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .theme-option {
+    width: 26px;
+  }
+
+  .nav-link .icon {
+    display: none;
+  }
 }

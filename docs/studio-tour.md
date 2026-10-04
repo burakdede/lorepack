@@ -62,6 +62,20 @@ the watcher, port, process, and configured clients.
 
 ![Studio Diagnostics](images/studio-diagnostics.png)
 
+## Command palette
+
+<kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> on Windows and Linux), or **Jump to** in the
+sidebar, opens one index of every route, indexed source, table, and the theme
+and copy actions. Arrow keys move, Enter opens, Escape returns focus to where
+it was.
+
+![Studio command palette](images/studio-palette.png)
+
+## Themes
+
+The switch at the foot of the sidebar chooses system, light, or dark. The
+choice is stored per browser; with storage blocked, Studio follows the system.
+
 ## What Studio will not do
 
 It is read-mostly. There is no server-side build button, no source editing,

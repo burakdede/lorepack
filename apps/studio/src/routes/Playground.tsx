@@ -2,7 +2,15 @@ import type { ContextBundle, ContextItem, OmittedItem } from '@lorepack/sdk';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Citation } from '../components/Citation.js';
-import { Badge, Empty, Fact, Facts, Failure, Loading } from '../components/primitives.js';
+import {
+  Badge,
+  Empty,
+  Fact,
+  Facts,
+  Failure,
+  Loading,
+  RouteHeader,
+} from '../components/primitives.js';
 import { client, toDisplayable } from '../lib/api.js';
 import './Playground.css';
 
@@ -36,12 +44,15 @@ export function Playground(): React.JSX.Element {
 
   return (
     <section>
-      <h1 className="route-title">Playground</h1>
+      <RouteHeader
+        title="Playground"
+        intro="Assemble the context a model would receive for a task, and see exactly what was left out and why."
+      />
 
       {/* Search is a tab inside this route, not a sixth section. Architecture 15.5 is
           explicit, and the reason is that a query and a task are the same question asked at
           two levels of assembly. */}
-      <div className="view-switch" role="tablist" aria-label="What to run">
+      <div className="view-switch playground-tabs" role="tablist" aria-label="What to run">
         <button
           type="button"
           role="tab"
@@ -120,7 +131,7 @@ function ContextTab(): React.JSX.Element {
           <span className="field-label">Task</span>
           <input
             type="text"
-            className="task-input"
+            className="field-control task-input"
             placeholder="how do I roll back a release"
             value={task}
             onChange={(event) => setTask(event.target.value)}
@@ -130,7 +141,7 @@ function ContextTab(): React.JSX.Element {
         <label className="task-field task-field-narrow">
           <span className="field-label">Profile</span>
           <select
-            className="task-select"
+            className="field-control task-select"
             value={profile}
             onChange={(event) => setProfile(event.target.value as Profile)}
           >
@@ -147,7 +158,7 @@ function ContextTab(): React.JSX.Element {
           <input
             type="text"
             inputMode="numeric"
-            className="task-input"
+            className="field-control task-input"
             placeholder="profile default"
             value={budget}
             onChange={(event) => setBudget(event.target.value)}
@@ -156,7 +167,11 @@ function ContextTab(): React.JSX.Element {
           />
         </label>
 
-        <button type="submit" className="action" disabled={task.trim() === '' || budgetError}>
+        <button
+          type="submit"
+          className="action action-primary task-submit"
+          disabled={task.trim() === '' || budgetError}
+        >
           Assemble
         </button>
       </form>
@@ -252,15 +267,14 @@ function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.E
     .reduce((sum, item) => sum + item.estimatedTokens, 0);
 
   return (
-    <div className="section">
+    <div className="section panel">
       <h2 className="section-heading">budget</h2>
       <p className="section-note prose">
         Every figure is a conservative estimate, not an exact token count.
       </p>
+      <BudgetTape bundle={bundle} cut={omittedByBudget} />
       <Facts>
         <Fact label="Profile">{bundle.profile}</Fact>
-        <Fact label="Budget">{bundle.budget.toLocaleString()}</Fact>
-        <Fact label="Used">{bundle.estimatedTokens.toLocaleString()}</Fact>
         {/* Named for what it bought, not just its size. "Reserved 468" beside "Selected 9"
             read as a budget line with nothing in it, because the passages it paid for were
             the ones missing from the page (#199). */}
@@ -280,6 +294,65 @@ function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.E
           <Fact label="Cut for budget">{omittedByBudget.toLocaleString()}</Fact>
         )}
       </Facts>
+    </div>
+  );
+}
+
+/**
+ * The budget as a fixed-length tape, drawn to scale: the orientation reserve first, then the
+ * selections, then whatever is left. It is accounting, not a score, so it measures tokens and
+ * nothing else, and the exact figures sit in the facts beneath it.
+ *
+ * The summary line above it is the only place the budget and the amount used are written,
+ * so it is read aloud; the drawn track is hidden, because it repeats that line.
+ */
+function BudgetTape({
+  bundle,
+  cut,
+}: {
+  readonly bundle: ContextBundle;
+  readonly cut: number;
+}): React.JSX.Element {
+  const share = (tokens: number): string =>
+    `${Math.max(0, Math.min(100, (tokens / Math.max(bundle.budget, 1)) * 100))}%`;
+  const selected = Math.max(bundle.estimatedTokens - bundle.reservedTokens, 0);
+  const free = Math.max(bundle.budget - bundle.estimatedTokens, 0);
+
+  return (
+    <div className="tape">
+      <p className="tape-summary">
+        <span className="tape-used">{bundle.estimatedTokens.toLocaleString()}</span>
+        {' of '}
+        <span className="tape-budget">{bundle.budget.toLocaleString()}</span>
+        {' estimated tokens used'}
+      </p>
+      <div className="tape-track" aria-hidden="true">
+        <span
+          className="tape-segment tape-reserved"
+          style={{ width: share(bundle.reservedTokens) }}
+        />
+        <span className="tape-segment tape-selected" style={{ width: share(selected) }} />
+      </div>
+      <div className="tape-legend" aria-hidden="true">
+        <span className="tape-key">
+          <span className="tape-swatch tape-reserved" />
+          {`orientation ${bundle.reservedTokens.toLocaleString()}`}
+        </span>
+        <span className="tape-key">
+          <span className="tape-swatch tape-selected" />
+          {`selections ${selected.toLocaleString()}`}
+        </span>
+        <span className="tape-key">
+          <span className="tape-swatch tape-free" />
+          {`unused ${free.toLocaleString()}`}
+        </span>
+        {cut > 0 && (
+          <span className="tape-key">
+            <span className="tape-swatch tape-cut" />
+            {`fell off the end ${cut.toLocaleString()}`}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -352,28 +425,30 @@ function Omissions({
   return (
     <div className="section">
       <h2 className="section-heading">omitted</h2>
-      <table className="artifacts">
-        <thead>
-          <tr>
-            <th scope="col">where</th>
-            <th scope="col">why</th>
-            <th scope="col" className="numeric">
-              est
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.chunkId} className="artifact-row">
-              <td>
-                <Citation locator={item.locator} />
-              </td>
-              <td className="omitted-reason prose">{REASONS[item.reason] ?? item.reason}</td>
-              <td className="numeric">{item.estimatedTokens.toLocaleString()}</td>
+      <div className="table-frame table-scroll">
+        <table className="data-table omissions">
+          <thead>
+            <tr>
+              <th scope="col">where</th>
+              <th scope="col">why</th>
+              <th scope="col" className="numeric">
+                est
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.chunkId} className="artifact-row">
+                <td>
+                  <Citation locator={item.locator} />
+                </td>
+                <td className="omitted-reason prose">{REASONS[item.reason] ?? item.reason}</td>
+                <td className="numeric">{item.estimatedTokens.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -396,13 +471,17 @@ function SearchTab(): React.JSX.Element {
           <span className="field-label">Query</span>
           <input
             type="search"
-            className="task-input"
+            className="field-control task-input"
             placeholder="rollback"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-        <button type="submit" className="action" disabled={query.trim() === ''}>
+        <button
+          type="submit"
+          className="action action-primary task-submit"
+          disabled={query.trim() === ''}
+        >
           Search
         </button>
       </form>

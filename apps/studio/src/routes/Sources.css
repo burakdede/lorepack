@@ -1,227 +1,191 @@
-/* Sources. Tables and one row height, per docs/architecture/studio-design.md. */
+/* Sources: the indexed list beside one file's detail, with exclusions a peer, not a footnote. */
 
 .sources-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
   flex-wrap: wrap;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
-/* Indexed and excluded are peers, so the control that chooses between them looks like a
-   choice rather than like a filter applied to one of them. */
-.view-switch {
-  display: inline-flex;
-  margin: 0;
-  padding: 0;
-  min-inline-size: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.view-option {
+.view-count {
+  margin-left: 2px;
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  background: var(--bg);
-  border: 0;
-  border-right: 1px solid var(--border);
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
 }
 
-.view-option:last-child {
-  border-right: 0;
-}
-
-.view-option:hover {
+.view-option-active .view-count {
   color: var(--text-secondary);
-  background: var(--surface);
 }
 
-/* Selected by weight and surface, not by colour. Colour means state in this interface. */
-.view-option-active {
-  color: var(--text);
-  background: var(--surface);
-  font-weight: 500;
+.filter {
+  flex: 0 1 300px;
+  min-width: 180px;
 }
 
 .filter-input {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-1) var(--space-2);
-  min-width: 18ch;
-}
-
-.filter-input::placeholder {
-  color: var(--text-muted);
+  height: 34px;
 }
 
 .sources-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
-}
-
-@media (min-width: 900px) {
-  .sources-split:has(.artifact-detail) {
-    grid-template-columns: minmax(0, 1fr) 22rem;
-  }
-}
-
-.artifacts {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.artifacts th {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-weight: 400;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  padding: 0 var(--space-3) var(--space-2) 0;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: var(--space-5);
+  align-items: start;
 }
 
 .artifacts td {
-  padding: 0 var(--space-3) 0 0;
-  border-bottom: 1px solid var(--border-subtle);
-  height: var(--row-height);
-  vertical-align: middle;
+  font-family: var(--font-mono);
 }
 
-.artifacts .numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  width: 1%;
-  white-space: nowrap;
-  color: var(--text-muted);
+/* A path wraps at its slashes on a phone rather than mid-word; past that the table scrolls. */
+.artifacts td:first-child {
+  min-width: 16rem;
 }
 
-.artifact-row:hover {
-  background: var(--surface);
+.artifact-row-selected,
+.artifact-row-selected:hover {
+  background: var(--selected);
 }
 
-.artifact-row-selected {
-  background: var(--surface);
-}
-
+/* The whole path is the control, so the hit area is the row's first cell rather than a
+   few pixels of underlined text. */
 .artifact-path {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--text);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
   text-align: left;
+  cursor: pointer;
   overflow-wrap: anywhere;
 }
 
 .artifact-path:hover {
   text-decoration: underline;
-  text-underline-offset: 2px;
+}
+
+.artifact-row-selected .artifact-path {
+  font-weight: 500;
+}
+
+.artifact-detail,
+.detail-hint {
+  position: sticky;
+  top: var(--space-6);
 }
 
 .artifact-detail {
-  border-left: 1px solid var(--border-subtle);
-  padding-left: var(--space-6);
-  align-self: start;
-  position: sticky;
-  top: 110px;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  min-width: 0;
 }
 
-.artifact-detail .section-heading {
+.detail-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: 500;
   overflow-wrap: anywhere;
-  text-transform: none;
+}
+
+.detail-hint {
+  margin: 0;
+  padding: var(--space-6) var(--space-5);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 
 .artifact-detail .facts {
-  margin-top: var(--space-4);
-  grid-template-columns: minmax(6rem, max-content) 1fr;
-}
-
-.excluded-path {
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
-
-.excluded-class {
-  display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--state-warn);
-  margin-right: var(--space-2);
-}
-
-.excluded-message {
-  color: var(--text-muted);
-}
-
-@media (max-width: 899px) {
-  .artifact-detail {
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-    padding-left: 0;
-    padding-top: var(--space-4);
-    position: static;
-  }
+  grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr);
 }
 
 .excluded-caption {
-  caption-side: top;
-  text-align: left;
+  padding: var(--space-3) var(--space-3) var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
-  font-size: var(--text-xs);
-  padding-bottom: var(--space-2);
-  max-width: 82ch;
+  max-width: 80ch;
+}
+
+p.excluded-caption {
+  padding: 0;
+}
+
+.excluded-block + .excluded-block,
+.excluded-block + .excluded-caption,
+.excluded-caption + .excluded-block {
+  margin-top: var(--space-5);
+}
+
+.excluded-path,
+.excluded-source,
+.excluded-sample {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .excluded-source {
   color: var(--text-muted);
 }
 
+.excluded-sample {
+  color: var(--text-secondary);
+}
+
 .sample-list {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.sample-list .prose {
   color: var(--text-muted);
+}
+
+.excluded-class {
+  display: inline-block;
+  margin-right: 2px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  color: var(--state-warn);
+  background: var(--state-warn-bg);
+  border-radius: var(--radius-sm);
 }
 
-.sources-toolbar {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
-  border-radius: 24px 48px 20px 42px;
-  background: var(--zone-sage);
+.excluded-message {
+  color: var(--text-secondary);
 }
 
-.artifacts th,
-.artifacts td {
-  padding-left: var(--space-2);
+@media (max-width: 1080px) {
+  .sources-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .artifact-detail,
+  .detail-hint {
+    position: static;
+  }
+
+  .detail-hint {
+    display: none;
+  }
 }
 
-.artifacts th {
-  padding-top: var(--space-2);
-}
-
-.artifact-row-selected {
-  background: var(--zone-blue);
-}
-
-.artifact-detail {
-  border-left: 0;
-  border-top: 1px solid var(--text);
-  border-radius: var(--radius-territory);
-  padding: var(--space-5);
-  background: var(--zone-blue);
+@media (max-width: 560px) {
+  .filter {
+    flex-basis: 100%;
+  }
 }

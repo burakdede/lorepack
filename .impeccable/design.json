@@ -1,41 +1,888 @@
 {
-  "version": 1,
-  "product": "Lore Studio",
-  "mode": "code-led",
-  "direction": {
-    "name": "Build atlas",
-    "seed": "f072aaf0",
-    "assignedConcept": "a zoo and gardens guide map",
-    "translation": "Flat organic zones map the active build, sources, context, versions, and diagnostics without decorative illustration."
-  },
-  "tokens": {
-    "color": {
-      "paper": "#f7f1e6",
-      "surface": "#fffdf7",
-      "ink": "#20231f",
-      "mutedInk": "#6c7067",
-      "rule": "#d8d2c4",
-      "sage": "#d9e8c8",
-      "coral": "#f2c7b9",
-      "gold": "#f3dfa1",
-      "blue": "#c8deea",
-      "lilac": "#d9d0e8"
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-05T00:00:00Z",
+  "title": "Design System: Lore Studio",
+  "extensions": {
+    "colorMeta": {
+      "bg": {
+        "role": "neutral",
+        "displayName": "Chalk Ground",
+        "canonical": "#fafafa",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Clean Sheet",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised Tint",
+        "canonical": "#f4f4f5",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface-sunken": {
+        "role": "neutral",
+        "displayName": "Sunken Tint",
+        "canonical": "#f4f4f5",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Shell Zinc",
+        "canonical": "#f3f4f6",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "border-subtle": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e7e7ea",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Control Line",
+        "canonical": "#d4d4d8",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Pewter",
+        "canonical": "#67676f",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "#3f3f46",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "#18181b",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Ink",
+        "canonical": "#18181b",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      },
+      "ink-hover": {
+        "role": "primary",
+        "displayName": "Ink Hover",
+        "canonical": "#3f3f46",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "Selection Wash",
+        "canonical": "#ebebee",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "overlay": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "rgb(24 24 27 / 0.32)",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "state-ok": {
+        "role": "state",
+        "displayName": "Fresh Green",
+        "canonical": "#15753a",
+        "tonalRamp": [
+          "#10261a",
+          "#0f4d27",
+          "#15753a",
+          "#1f9a50",
+          "#5fd28a",
+          "#9fe3b8",
+          "#c9f0d6",
+          "#e9f7ee"
+        ]
+      },
+      "state-warn": {
+        "role": "state",
+        "displayName": "Stale Amber",
+        "canonical": "#8f4a07",
+        "tonalRamp": [
+          "#2a1f0a",
+          "#5c3205",
+          "#8f4a07",
+          "#b86a12",
+          "#f2b84b",
+          "#f7d38c",
+          "#fbe6bf",
+          "#fdf3e2"
+        ]
+      },
+      "state-bad": {
+        "role": "state",
+        "displayName": "Fault Red",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "#2d1414",
+          "#6e1610",
+          "#b42318",
+          "#d9483b",
+          "#ff8a80",
+          "#ffb3ab",
+          "#fbd3cf",
+          "#fdecea"
+        ]
+      },
+      "bg-dark": {
+        "role": "neutral",
+        "displayName": "Chalk Ground (dark)",
+        "canonical": "#0f0f11",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Clean Sheet (dark)",
+        "canonical": "#161618",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface-raised-dark": {
+        "role": "neutral",
+        "displayName": "Raised Tint (dark)",
+        "canonical": "#1f1f22",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "surface-sunken-dark": {
+        "role": "neutral",
+        "displayName": "Sunken Tint (dark)",
+        "canonical": "#121214",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "sidebar-dark": {
+        "role": "neutral",
+        "displayName": "Shell Zinc (dark)",
+        "canonical": "#0d0e12",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "border-subtle-dark": {
+        "role": "neutral",
+        "displayName": "Hairline (dark)",
+        "canonical": "#242427",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "border-dark": {
+        "role": "neutral",
+        "displayName": "Control Line (dark)",
+        "canonical": "#36363b",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text-muted-dark": {
+        "role": "neutral",
+        "displayName": "Pewter (dark)",
+        "canonical": "#8e8e97",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text-secondary-dark": {
+        "role": "neutral",
+        "displayName": "Slate (dark)",
+        "canonical": "#b8b8bf",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "text-dark": {
+        "role": "neutral",
+        "displayName": "Graphite (dark)",
+        "canonical": "#ededef",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "ink-dark": {
+        "role": "primary",
+        "displayName": "Ink (dark)",
+        "canonical": "#ededef",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      },
+      "ink-hover-dark": {
+        "role": "primary",
+        "displayName": "Ink Hover (dark)",
+        "canonical": "#c9c9cf",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      },
+      "selected-dark": {
+        "role": "neutral",
+        "displayName": "Selection Wash (dark)",
+        "canonical": "#26262a",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "overlay-dark": {
+        "role": "neutral",
+        "displayName": "Scrim (dark)",
+        "canonical": "rgb(0 0 0 / 0.56)",
+        "tonalRamp": [
+          "#0f0f11",
+          "#161618",
+          "#1f1f22",
+          "#36363b",
+          "#67676f",
+          "#b8b8bf",
+          "#e7e7ea",
+          "#fafafa"
+        ]
+      },
+      "state-ok-dark": {
+        "role": "state",
+        "displayName": "Fresh Green (dark)",
+        "canonical": "#5fd28a",
+        "tonalRamp": [
+          "#10261a",
+          "#0f4d27",
+          "#15753a",
+          "#1f9a50",
+          "#5fd28a",
+          "#9fe3b8",
+          "#c9f0d6",
+          "#e9f7ee"
+        ]
+      },
+      "state-warn-dark": {
+        "role": "state",
+        "displayName": "Stale Amber (dark)",
+        "canonical": "#f2b84b",
+        "tonalRamp": [
+          "#2a1f0a",
+          "#5c3205",
+          "#8f4a07",
+          "#b86a12",
+          "#f2b84b",
+          "#f7d38c",
+          "#fbe6bf",
+          "#fdf3e2"
+        ]
+      },
+      "state-bad-dark": {
+        "role": "state",
+        "displayName": "Fault Red (dark)",
+        "canonical": "#ff8a80",
+        "tonalRamp": [
+          "#2d1414",
+          "#6e1610",
+          "#b42318",
+          "#d9483b",
+          "#ff8a80",
+          "#ffb3ab",
+          "#fbd3cf",
+          "#fdecea"
+        ]
+      },
+      "state-ok-bg": {
+        "role": "state",
+        "displayName": "Fresh Green Tint",
+        "canonical": "#e9f7ee",
+        "tonalRamp": [
+          "#10261a",
+          "#0f4d27",
+          "#15753a",
+          "#1f9a50",
+          "#5fd28a",
+          "#9fe3b8",
+          "#c9f0d6",
+          "#e9f7ee"
+        ]
+      },
+      "state-ok-bg-dark": {
+        "role": "state",
+        "displayName": "Fresh Green Tint (dark)",
+        "canonical": "#10261a",
+        "tonalRamp": [
+          "#10261a",
+          "#0f4d27",
+          "#15753a",
+          "#1f9a50",
+          "#5fd28a",
+          "#9fe3b8",
+          "#c9f0d6",
+          "#e9f7ee"
+        ]
+      },
+      "state-warn-bg": {
+        "role": "state",
+        "displayName": "Stale Amber Tint",
+        "canonical": "#fdf3e2",
+        "tonalRamp": [
+          "#2a1f0a",
+          "#5c3205",
+          "#8f4a07",
+          "#b86a12",
+          "#f2b84b",
+          "#f7d38c",
+          "#fbe6bf",
+          "#fdf3e2"
+        ]
+      },
+      "state-warn-bg-dark": {
+        "role": "state",
+        "displayName": "Stale Amber Tint (dark)",
+        "canonical": "#2a1f0a",
+        "tonalRamp": [
+          "#2a1f0a",
+          "#5c3205",
+          "#8f4a07",
+          "#b86a12",
+          "#f2b84b",
+          "#f7d38c",
+          "#fbe6bf",
+          "#fdf3e2"
+        ]
+      },
+      "state-bad-bg": {
+        "role": "state",
+        "displayName": "Fault Red Tint",
+        "canonical": "#fdecea",
+        "tonalRamp": [
+          "#2d1414",
+          "#6e1610",
+          "#b42318",
+          "#d9483b",
+          "#ff8a80",
+          "#ffb3ab",
+          "#fbd3cf",
+          "#fdecea"
+        ]
+      },
+      "state-bad-bg-dark": {
+        "role": "state",
+        "displayName": "Fault Red Tint (dark)",
+        "canonical": "#2d1414",
+        "tonalRamp": [
+          "#2d1414",
+          "#6e1610",
+          "#b42318",
+          "#d9483b",
+          "#ff8a80",
+          "#ffb3ab",
+          "#fbd3cf",
+          "#fdecea"
+        ]
+      },
+      "ink-text": {
+        "role": "primary",
+        "displayName": "Ink Text",
+        "canonical": "#fafafa",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      },
+      "ink-text-dark": {
+        "role": "primary",
+        "displayName": "Ink Text (dark)",
+        "canonical": "#111113",
+        "tonalRamp": [
+          "#18181b",
+          "#27272a",
+          "#3f3f46",
+          "#52525b",
+          "#71717a",
+          "#a1a1aa",
+          "#d4d4d8",
+          "#fafafa"
+        ]
+      }
     },
-    "type": {
-      "sans": "IBM Plex Sans",
-      "mono": "IBM Plex Mono"
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Route title",
+        "purpose": "One per route, in the route header."
+      },
+      "title": {
+        "displayName": "Section heading",
+        "purpose": "Section headings and the product name; rendered sentence case."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose, nav links, inputs. Tabular figures on by default."
+      },
+      "body-sm": {
+        "displayName": "Body small",
+        "purpose": "Table cells, buttons, notes, citations."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, field labels, table headers, palette groups, legends. Never uppercase."
+      },
+      "input-lg": {
+        "displayName": "Palette query",
+        "purpose": "The command palette input only."
+      },
+      "mono-id": {
+        "displayName": "Build id",
+        "purpose": "The active build id in the sidebar."
+      },
+      "mono-data": {
+        "displayName": "Mono data",
+        "purpose": "Fact values, paths, ranges, SQL, numeric columns."
+      }
     },
-    "shape": {
-      "controlRadius": "6px",
-      "territoryRadius": "28px 54px 34px 64px"
+    "shadows": [
+      {
+        "name": "shadow-panel",
+        "value": "0 1px 2px rgb(24 24 27 / 0.04)",
+        "dark": "none",
+        "purpose": "Contact shadow on resting surfaces in light theme; removed in dark."
+      },
+      {
+        "name": "shadow-overlay",
+        "value": "0 16px 48px -12px rgb(24 24 27 / 0.28), 0 2px 8px rgb(24 24 27 / 0.08)",
+        "dark": "0 24px 64px -16px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4)",
+        "purpose": "Command palette and version confirmation only."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 2px solid var(--text); outline-offset: 2px",
+        "purpose": "The one focus treatment, everywhere; inputs use offset 0 plus an ink border."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The only easing curve."
+      },
+      {
+        "name": "state-change",
+        "value": "150ms",
+        "purpose": "Hover, selection and border changes on controls and nav. Row hover and copy reveal use 120ms."
+      },
+      {
+        "name": "palette-rise",
+        "value": "180ms; from opacity 0, translateY(-6px) scale(0.985)",
+        "purpose": "Command palette reveal; scrim fades in 160ms."
+      },
+      {
+        "name": "confirm-in",
+        "value": "200ms; from translateY(4px), no opacity",
+        "purpose": "Confirmations move and never fade."
+      },
+      {
+        "name": "build-settle",
+        "value": "600ms; from opacity 0.25, blur(2px)",
+        "purpose": "The build id settles when a rebuild lands; the one unprompted motion."
+      },
+      {
+        "name": "loading-pulse",
+        "value": "1.2s ease-in-out infinite; dot to opacity 0.25",
+        "purpose": "Indeterminate loading; no shimmer."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "durations 0.01ms",
+        "purpose": "prefers-reduced-motion removes every animation and transition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "900px",
+        "purpose": "Sidebar folds into a sticky top bar; sections become a scrolling row."
+      },
+      {
+        "name": "phone",
+        "value": "480px",
+        "purpose": "Nav icons drop; theme options narrow."
+      }
+    ],
+    "layout": {
+      "sidebarWidth": "248px",
+      "mainMaxWidth": "1240px",
+      "rowHeight": "36px"
     }
   },
-  "routes": ["overview", "sources", "playground", "tables", "versions", "diagnostics"],
-  "constraints": [
-    "Preserve existing API and data behavior",
-    "Keep provenance visible",
-    "No gradients or glass effects",
-    "Support keyboard navigation, dark mode, and reduced motion",
-    "Keep the interface read-mostly"
-  ]
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "The one button shape: quiet surface, hairline control border, contrast on hover.",
+      "html": "<button class=\"ds-action\">Compare builds</button>",
+      "css": ".ds-action{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;font-family:var(--font-sans);font-size:12.5px;font-weight:500;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-panel);cursor:pointer;transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out),color 150ms var(--ease-out)}.ds-action:hover{background:var(--surface-raised)}.ds-action:active{transform:translateY(0.5px)}.ds-action:focus-visible{outline:2px solid var(--text);outline-offset:2px}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The confirmed action, weighted by ink contrast rather than colour.",
+      "html": "<button class=\"ds-action-primary\">Activate b3f9c2e1</button>",
+      "css": ".ds-action-primary{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;font-family:var(--font-sans);font-size:12.5px;font-weight:500;color:var(--ink-text);background:var(--ink);border:1px solid var(--ink);border-radius:8px;cursor:pointer;transition:background-color 150ms var(--ease-out),border-color 150ms var(--ease-out)}.ds-action-primary:hover{background:var(--ink-hover);border-color:var(--ink-hover)}.ds-action-primary:focus-visible{outline:2px solid var(--text);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Shared input and select shape across routes; ink outline on focus.",
+      "html": "<input class=\"ds-field\" placeholder=\"Filter paths\" />",
+      "css": ".ds-field{height:36px;width:280px;padding:0 12px;font-family:var(--font-sans);font-size:14px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;transition:border-color 150ms var(--ease-out)}.ds-field::placeholder{color:var(--text-muted)}.ds-field:hover{border-color:var(--text-muted)}.ds-field:focus-visible{outline:2px solid var(--text);outline-offset:0;border-color:var(--text)}"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Six sections with shell icons; the active one is a raised sheet with weight, not colour.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2.5\" y=\"2.5\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"9\" y=\"2.5\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"2.5\" y=\"9\" width=\"4.5\" height=\"4.5\" rx=\"1\"/><rect x=\"9\" y=\"9\" width=\"4.5\" height=\"4.5\" rx=\"1\"/></svg>Overview</a><a class=\"ds-nav-link\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9.5 1.75H4.25a1 1 0 0 0-1 1v10.5a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1V5Z\"/><path d=\"M9.5 1.75V5h3.25\"/><path d=\"M5.75 8.25h4.5M5.75 10.75h3\"/></svg>Sources</a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:224px;padding:12px;background:var(--sidebar)}.ds-nav-link{display:flex;align-items:center;gap:12px;height:34px;padding:0 12px;border-radius:8px;color:var(--text-secondary);font-family:var(--font-sans);font-size:14px;text-decoration:none;transition:background-color 150ms var(--ease-out),color 150ms var(--ease-out)}.ds-nav-link svg{color:var(--text-muted)}.ds-nav-link:hover{background:var(--surface-raised);color:var(--text)}.ds-nav-link-active,.ds-nav-link-active:hover{background:var(--surface);color:var(--text);font-weight:500;box-shadow:inset 0 0 0 1px var(--border-subtle),var(--shadow-panel)}.ds-nav-link-active svg{color:var(--text)}.ds-nav-link:focus-visible{outline:2px solid var(--text);outline-offset:2px}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-ok",
+      "description": "State pill with a dot beside the word; ok, warn, bad and idle.",
+      "html": "<span class=\"ds-badge ds-badge-ok\">fresh</span> <span class=\"ds-badge ds-badge-warn\">stale</span> <span class=\"ds-badge ds-badge-bad\">failed</span> <span class=\"ds-badge ds-badge-idle\">idle</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;font-family:var(--font-sans);font-size:11.5px;font-weight:500;line-height:1;border-radius:999px;border:1px solid transparent}.ds-badge-ok::before,.ds-badge-warn::before,.ds-badge-bad::before{content:\"\";width:6px;height:6px;border-radius:50%;background:currentColor}.ds-badge-ok{color:var(--state-ok);background:var(--state-ok-bg)}.ds-badge-warn{color:var(--state-warn);background:var(--state-warn-bg)}.ds-badge-bad{color:var(--state-bad);background:var(--state-bad-bg)}.ds-badge-idle{color:var(--text-muted);border-color:var(--border)}"
+    },
+    {
+      "name": "Facts Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "One bordered surface per group of evidence holding an aligned key-value list.",
+      "html": "<section class=\"ds-panel\"><dl class=\"ds-facts\"><dt>Build</dt><dd>b3f9c2e1a7d4</dd><dt>Artifacts</dt><dd>128</dd><dt>Compiler</dt><dd>0.1.0</dd></dl></section>",
+      "css": ".ds-panel{width:420px;background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;box-shadow:var(--shadow-panel);padding:20px}.ds-facts{margin:0;display:grid;grid-template-columns:minmax(8rem,max-content) minmax(0,1fr);column-gap:24px}.ds-facts dt,.ds-facts dd{margin:0;padding:7px 0;border-bottom:1px solid var(--border-subtle);font-size:12.5px}.ds-facts dt{font-family:var(--font-sans);color:var(--text-muted)}.ds-facts dd{font-family:var(--font-mono);color:var(--text);font-variant-numeric:tabular-nums}.ds-facts dt:nth-last-of-type(1),.ds-facts dd:last-child{border-bottom:0}"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "data-table-row",
+      "description": "Framed table: 36px rows, hairline rules, quiet sunken header, mono numerics.",
+      "html": "<div class=\"ds-table-frame\"><table class=\"ds-table\"><thead><tr><th>Path</th><th class=\"ds-num\">Chunks</th></tr></thead><tbody><tr><td>docs/intro.md</td><td class=\"ds-num\">12</td></tr><tr><td>data/plan.xlsx</td><td class=\"ds-num\">4</td></tr></tbody></table></div>",
+      "css": ".ds-table-frame{width:420px;background:var(--surface);border:1px solid var(--border-subtle);border-radius:12px;box-shadow:var(--shadow-panel);overflow:hidden}.ds-table{width:100%;border-collapse:collapse;font-size:12.5px}.ds-table th,.ds-table td{height:36px;padding:6px 12px;text-align:left;border-bottom:1px solid var(--border-subtle)}.ds-table td{font-family:var(--font-mono);color:var(--text)}.ds-table thead th{height:34px;font-family:var(--font-sans);font-weight:500;font-size:11.5px;color:var(--text-muted);background:var(--surface-sunken)}.ds-table tbody tr:last-child>*{border-bottom:0}.ds-table tbody tr{transition:background-color 120ms var(--ease-out)}.ds-table tbody tr:hover{background:var(--surface-sunken)}.ds-table .ds-num{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Command Palette",
+      "kind": "custom",
+      "refersTo": "palette",
+      "description": "Signature Cmd-K sheet: overlay shadow, 52px query row, grouped options, highlighted option in selection wash.",
+      "html": "<div class=\"ds-palette\"><div class=\"ds-palette-search\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><circle cx=\"7.25\" cy=\"7.25\" r=\"4.5\"/><path d=\"m10.5 10.5 3.25 3.25\"/></svg><input class=\"ds-palette-input\" placeholder=\"Jump to a route, source or table\" /></div><ul class=\"ds-palette-list\"><li class=\"ds-palette-group\">Sources</li><li class=\"ds-palette-option ds-palette-option-on\"><span class=\"ds-palette-label\">intro.md</span><span class=\"ds-palette-detail\">docs/intro.md</span></li><li class=\"ds-palette-option\"><span class=\"ds-palette-label\">plan.xlsx</span><span class=\"ds-palette-detail\">data/plan.xlsx</span></li></ul></div>",
+      "css": ".ds-palette{width:520px;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-overlay);overflow:hidden;animation:ds-rise 180ms var(--ease-out)}.ds-palette-search{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--border-subtle);color:var(--text-muted)}.ds-palette-input{flex:1;height:52px;border:0;background:transparent;font-family:var(--font-sans);font-size:16px;color:var(--text)}.ds-palette-input:focus-visible{outline:none}.ds-palette-list{list-style:none;margin:0;padding:8px}.ds-palette-group{padding:12px 8px 4px;font-size:11.5px;font-weight:500;color:var(--text-muted)}.ds-palette-option{display:flex;align-items:center;gap:12px;min-height:38px;padding:0 12px;border-radius:8px;color:var(--text-secondary);cursor:pointer}.ds-palette-option:hover,.ds-palette-option-on{background:var(--selected);color:var(--text)}.ds-palette-label{flex:1}.ds-palette-detail{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted)}@keyframes ds-rise{from{opacity:0;transform:translateY(-6px) scale(0.985)}}"
+    },
+    {
+      "name": "Budget Tape",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Playground's to-scale token accounting, drawn from elements with the exact figures beside it.",
+      "html": "<div class=\"ds-tape\"><div class=\"ds-tape-track\"><span class=\"ds-seg ds-reserved\" style=\"width:12%\"></span><span class=\"ds-seg ds-selected\" style=\"width:58%\"></span><span class=\"ds-seg ds-free\" style=\"width:30%\"></span></div><div class=\"ds-tape-legend\"><span>reserved 480</span><span>selected 2,320</span><span>free 1,200</span><span class=\"ds-tape-total\">4,000 tokens</span></div></div>",
+      "css": ".ds-tape{width:420px}.ds-tape-track{display:flex;height:10px;overflow:hidden;border-radius:999px;background:var(--surface-raised);box-shadow:inset 0 0 0 1px var(--border-subtle)}.ds-seg{height:100%}.ds-seg+.ds-seg{border-left:2px solid var(--surface)}.ds-reserved{background:var(--text-muted)}.ds-selected{background:var(--text)}.ds-free{background:var(--surface-raised);box-shadow:inset 0 0 0 1px var(--border)}.ds-tape-legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--text-secondary)}.ds-tape-total{margin-left:auto;color:var(--text-muted)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Developer Inspector",
+    "overview": "Lore Studio sits beside browser DevTools and a terminal without apology. It is a persistent sidebar, a quiet route header, and list and detail panes in which the evidence (paths, build ids, ranges, rows) is the content. Nothing on screen is decoration: a surface exists because it frames one group of evidence, and a mark of colour exists because something has a state.\n\nThe world is restrained neutral zinc in two peer themes, light and dark, each defined once and resolved before first paint. The sidebar sits on a second, slightly offset neutral so the shell reads as furniture and the route reads as the work. There is no accent hue. Selection, focus and the primary action are carried by ink contrast: near-black on light, near-white on dark. Green, amber and red appear only for state, and always beside a word.\n\nDensity is a developer's density: 14px body, 36px rows, 12.5px data in mono with tabular figures, aligned key-value facts that echo what `lore build` prints. Motion is limited to 120 to 200ms state changes, the palette rising, and the build id settling when a rebuild lands.",
+    "keyCharacteristics": [
+      "Neutral zinc, two peer themes, no accent token.",
+      "Colour encodes state only, always with a word or a dot beside it.",
+      "Hairline 1px borders; 8px controls, 12px panels, pills for status.",
+      "IBM Plex Sans for the interface, IBM Plex Mono for every id, path, number and query.",
+      "Authored 16px line icons at 1.5 stroke, in the shell only.",
+      "One animated moment of truth: the build id settles when a rebuild lands."
+    ],
+    "rules": [
+      {
+        "name": "The State-Only Colour Rule",
+        "body": "Green, amber and red mean state and nothing else. Every use sits beside a word, and badges add a 6px dot so state survives greyscale. A coloured surface is a state banner or a failure block, never emphasis.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink, Not Accent Rule",
+        "body": "There is no accent token, and the contrast test asserts it. Selection is a lighter or raised surface plus weight; the primary action is an ink fill; focus is a 2px ink outline. Activation and rollback are pointer changes, so they are never painted red.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Definition Rule",
+        "body": "Each theme is defined exactly once, on `:root` and `:root[data-theme=\"dark\"]`. There is no second dark copy inside a media query to drift.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Is Data Rule",
+        "body": "Anything a developer might copy, compare or grep (build ids, paths, hashes, commands, ranges, counts) is mono with tabular figures. Prose and labels never are.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Label Rule",
+        "body": "Labels are small, medium-weight, sentence case. No uppercase tracking, no labels above titles.",
+        "section": "typography"
+      },
+      {
+        "name": "The Scroll In Its Own Box Rule",
+        "body": "Wide content (tables, long paths) scrolls inside its own positioned frame. The page never scrolls sideways, at any width or at 200% zoom.",
+        "section": "layout"
+      },
+      {
+        "name": "The Only Overlays Lift Rule",
+        "body": "The soft offset overlay shadow belongs to the palette and the confirmation. Nothing else floats, and no surface nests inside another panel.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** carry selection, focus and the primary action with ink contrast and weight (the State-Only Colour Rule, the Ink, Not Accent Rule).",
+      "**Do** put every id, path, hash, command, range and count in IBM Plex Mono with tabular figures.",
+      "**Do** use 8px radius for controls and 12px for panels, with 1px hairlines.",
+      "**Do** keep state colour beside a word, and give badges their 6px dot.",
+      "**Do** time hover and selection changes at 150ms on `cubic-bezier(0.16, 1, 0.3, 1)`, and let reduced motion remove all of it.",
+      "**Do** let wide content scroll inside its own frame.",
+      "**Do** keep icons to the shell: authored 16px line icons at 1.5 stroke, each beside a word."
+    ],
+    "donts": [
+      "**Don't** introduce an accent hue, or colour a button to make it important.",
+      "**Don't** add inline SVG to route bodies: charts, gauges and scores drawn as bars are out. The budget tape is accounting with exact figures beside it.",
+      "**Don't** use stat tiles or metric cards; facts are an aligned key-value list.",
+      "**Don't** use decorative gradients or glass. The narrow-screen nav fade is a functional scroll cue, not ornament.",
+      "**Don't** put the overlay shadow on anything but the palette and a confirmation, and don't nest panels.",
+      "**Don't** fade a confirmation or any text a reader must read immediately; move it instead.",
+      "**Don't** use uppercase tracked labels or a label above a title.",
+      "**Don't** ship an unlabelled icon button."
+    ]
+  }
 }

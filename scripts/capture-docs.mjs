@@ -296,7 +296,11 @@ async function main() {
     const page = await browser.newPage({
       viewport: { width: 1512, height: 900 },
       deviceScaleFactor: 2,
-      colorScheme: 'dark',
+      // Light, because it reads on both a light and a dark GitHub page; a dark capture on a
+      // white README is a black slab.
+      colorScheme: 'light',
+      // The build id settles in with a short blur; a capture taken mid-settle is a blurred id.
+      reducedMotion: 'reduce',
     });
 
     const url = `http://127.0.0.1:${PORT}`;
@@ -325,6 +329,8 @@ async function main() {
     for (const shot of shots) {
       await page.goto(`${url}/${shot.route}`);
       await page.locator(shot.ready).first().waitFor();
+      // Sources is photographed with a file open, because the detail pane is half the route.
+      if (shot.route === '#/sources') await page.locator('.artifact-path').first().click();
       await shoot(shot.file);
     }
 
@@ -345,6 +351,14 @@ async function main() {
     await page.getByRole('button', { name: /excluded \d+/ }).click();
     await page.locator('.artifacts, .excluded-caption, .empty').first().waitFor();
     await shoot('studio-excluded.png');
+
+    // The command palette, opened the way a person opens it, mid-search.
+    await page.goto(`${url}/#/`);
+    await page.locator('.state-banner').waitFor();
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox').fill('eng');
+    await page.waitForTimeout(300);
+    await shoot('studio-palette.png');
 
     await browser.close();
   } finally {

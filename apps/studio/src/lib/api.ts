@@ -67,3 +67,33 @@ export function toDisplayable(error: unknown): DisplayableError {
   }
   return { message: String(error) };
 }
+
+/** One indexed artifact, as `GET /v1/sources` lists it. */
+export interface SourceArtifact {
+  readonly artifactId: string;
+  readonly relativePath: string;
+  readonly displayPath: string;
+  readonly title: string | null;
+  readonly status: string;
+  readonly authority: number;
+  readonly mediaType: string;
+  readonly objectHash: string;
+  readonly byteSize: number;
+  readonly parserId: string;
+  readonly chunkCount: number;
+  readonly nodeCount: number;
+}
+
+/**
+ * The artifact list, shared by the Sources route and the command palette under one query
+ * key, so opening the palette on Sources costs no second request.
+ */
+export async function fetchSources({
+  signal,
+}: {
+  readonly signal: AbortSignal;
+}): Promise<{ buildId: string; artifacts: readonly SourceArtifact[] }> {
+  const response = await fetch('/v1/sources', { signal });
+  if (!response.ok) throw new Error('This server does not list sources.');
+  return (await response.json()) as { buildId: string; artifacts: readonly SourceArtifact[] };
+}

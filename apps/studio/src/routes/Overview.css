@@ -1,33 +1,101 @@
-/* Overview. Values from docs/architecture/studio-design.md. No cards, no tiles, no charts. */
+/* Overview. Source state first, then the build's facts beside what a rebuild would change.
+   No tiles and no charts: these are facts about one immutable build, not metrics. */
 
-/* Source state gets the weight, because it is the question the route answers. Bordered on
-   one side rather than filled, so it reads as an annotation on the page and not an alert. */
-.state-banner {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
+/* The summary: the build id at the largest size in the product, its freshness, and its
+   provenance line. Everything else on the route is relative to it. */
+.summary {
+  display: grid;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-left: 1px solid var(--state-ok);
-  border-radius: var(--radius);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-5);
+  padding: var(--space-6);
 }
 
-.state-banner-dirty {
-  border-left-color: var(--state-warn);
+.summary-id .build-id > span:first-child {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.state-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .state-line {
   margin: 0;
-  flex: 1 1 24ch;
+  flex: 1 1 28ch;
   color: var(--text-secondary);
+}
+
+.summary-dirty {
+  border-color: color-mix(in srgb, var(--state-warn) 45%, var(--border-subtle));
+}
+
+.summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-1) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.overview-side {
+  display: grid;
+  gap: var(--space-5);
 }
 
 .build-id {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.capabilities {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.capability {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: var(--text-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.plan-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.plan-idle p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.plan-refresh {
+  margin-top: var(--space-3);
 }
 
 .warning-groups {
@@ -41,35 +109,42 @@
 
 .warning-group {
   display: grid;
-  grid-template-columns: 3rem 1fr;
+  grid-template-columns: auto 1fr;
   column-gap: var(--space-3);
   align-items: baseline;
 }
 
 .warning-count {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+  min-width: 2.25rem;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
   color: var(--state-warn);
+  background: var(--state-warn-bg);
+  border-radius: 999px;
 }
 
 .warning-class {
-  color: var(--text-secondary);
+  font-weight: 500;
+  color: var(--text);
 }
 
 .warning-list {
   grid-column: 2;
   list-style: none;
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   font-size: var(--text-sm);
 }
 
 .warning-path {
-  color: var(--text-secondary);
-  margin-right: var(--space-2);
+  font-family: var(--font-mono);
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .warning-message {
@@ -78,81 +153,10 @@
 
 .warning-more {
   color: var(--text-muted);
-  font-size: var(--text-xs);
 }
 
-.plan-idle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.plan-idle p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-
-.plan-refresh {
-  margin-top: var(--space-4);
-}
-
-/* No accent colour, so an action is a bordered control that darkens on hover. The interface
-   has few enough of them that they do not need to shout. */
-.action {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
-}
-
-.action:hover {
-  background: var(--surface);
-  border-color: var(--text-muted);
-}
-
-.action:disabled {
-  color: var(--text-muted);
-  cursor: default;
-  background: var(--bg);
-  border-color: var(--border-subtle);
-}
-
-.state-banner {
-  padding: var(--space-6);
-  border: 1px solid var(--text);
-  border-left-width: 1px;
-  border-radius: var(--radius-territory);
-  background: var(--zone-sage);
-  margin-bottom: var(--space-12);
-}
-
-.state-banner-dirty {
-  background: var(--zone-gold);
-}
-
-.state-line {
-  font-family: var(--font-sans);
-  font-size: var(--text-lg);
-  color: var(--text);
-}
-
-.warning-groups {
-  gap: var(--space-6);
-}
-
-.warning-group {
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.plan-idle {
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-territory);
-  background: var(--zone-gold);
+@media (max-width: 1080px) {
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

@@ -9,6 +9,7 @@ import {
   Facts,
   Failure,
   Loading,
+  RouteHeader,
   toneForFreshness,
 } from '../components/primitives.js';
 import { client, toDisplayable } from '../lib/api.js';
@@ -39,6 +40,8 @@ interface WarningGroup {
   readonly warnings: readonly Warning[];
 }
 
+const INTRO = 'The build your AI reads right now, and whether its sources still match it.';
+
 export function Overview(): React.JSX.Element {
   const build = useQuery({
     queryKey: ['build'],
@@ -55,7 +58,7 @@ export function Overview(): React.JSX.Element {
     if (shown.code === 'LORE_E_BUILD_NOT_FOUND') {
       return (
         <section>
-          <h1 className="route-title">Overview</h1>
+          <RouteHeader title="Overview" intro={INTRO} />
           <Empty title="This project has no build yet.">
             <p>Build it, and this page fills in.</p>
             <Command value="lore build" />
@@ -65,7 +68,7 @@ export function Overview(): React.JSX.Element {
     }
     return (
       <section>
-        <h1 className="route-title">Overview</h1>
+        <RouteHeader title="Overview" intro={INTRO} />
         <Failure {...shown} />
       </section>
     );
@@ -76,47 +79,64 @@ export function Overview(): React.JSX.Element {
 
   return (
     <section>
-      <h1 className="route-title">Overview</h1>
+      <RouteHeader title="Overview" intro={INTRO} />
 
-      {/* Source state first, and given the weight. It is the question this route exists to
-          answer and the only value on it that changes without the reader acting. */}
-      <div className={dirty ? 'state-banner state-banner-dirty' : 'state-banner'}>
-        <Badge tone={toneForFreshness(data.sourceState)}>{data.sourceState}</Badge>
-        <p className="state-line prose">
-          {data.sourceState === 'clean'
-            ? 'The sources match this build. Your AI is reading what is on disk.'
-            : data.sourceState === 'dirty'
-              ? 'The sources have changed since this build. Your AI is reading the older text.'
-              : 'Freshness could not be established, so this build is served as it is.'}
-        </p>
-        {dirty && <Command value="lore build" />}
-      </div>
-
-      <div className="section">
-        <h2 className="section-heading">build</h2>
-        <Facts>
-          <Fact label="Project">{data.projectName}</Fact>
-          <Fact label="Build">
-            <BuildId full={data.buildId} short={data.shortBuildId} />
-          </Fact>
+      {/* The build, and whether its sources still match it. Freshness leads the panel
+          because it is the question this route exists to answer and the only value here that
+          changes without the reader acting. */}
+      <div className={dirty ? 'panel summary summary-dirty' : 'panel summary'}>
+        <h2 className="visually-hidden">build</h2>
+        <div className="summary-id">
+          <BuildId full={data.buildId} short={data.shortBuildId} />
+        </div>
+        <div className="state-banner">
+          <Badge tone={toneForFreshness(data.sourceState)}>{data.sourceState}</Badge>
+          <p className="state-line prose">
+            {data.sourceState === 'clean'
+              ? 'The sources match this build. Your AI is reading what is on disk.'
+              : data.sourceState === 'dirty'
+                ? 'The sources have changed since this build. Your AI is reading the older text.'
+                : 'Freshness could not be established, so this build is served as it is.'}
+          </p>
+          {dirty && <Command value="lore build" />}
+        </div>
+        <p className="summary-meta">
           {data.createdAt !== undefined && (
-            <Fact label="Created">{new Date(data.createdAt).toLocaleString()}</Fact>
+            <span>{`Created ${new Date(data.createdAt).toLocaleString()}`}</span>
           )}
-          <Fact label="Artifacts">{data.counts.artifacts.toLocaleString()}</Fact>
-          <Fact label="Nodes">{data.counts.nodes.toLocaleString()}</Fact>
-          <Fact label="Chunks">{data.counts.chunks.toLocaleString()}</Fact>
-          {data.counts.tables > 0 && (
-            <Fact label="Tables">
-              {`${data.counts.tables.toLocaleString()} (${data.counts.tableRows.toLocaleString()} rows)`}
-            </Fact>
-          )}
-          <Fact label="Capabilities">{data.capabilities.join(' ')}</Fact>
-          <Fact label="Compiler">{data.compilerVersion}</Fact>
-        </Facts>
+          <span>{`Compiler ${data.compilerVersion}`}</span>
+          <span className="capabilities">
+            {data.capabilities.map((capability, index) => (
+              <span key={capability}>
+                {index > 0 && ' '}
+                <span className="capability">{capability}</span>
+              </span>
+            ))}
+          </span>
+        </p>
       </div>
 
-      <Warnings count={data.warningCount} />
-      <PlanPanel />
+      <div className="overview-grid">
+        <div className="panel overview-build">
+          <h2 className="section-heading">contents</h2>
+          <Facts>
+            <Fact label="Project">{data.projectName}</Fact>
+            <Fact label="Artifacts">{data.counts.artifacts.toLocaleString()}</Fact>
+            <Fact label="Nodes">{data.counts.nodes.toLocaleString()}</Fact>
+            <Fact label="Chunks">{data.counts.chunks.toLocaleString()}</Fact>
+            {data.counts.tables > 0 && (
+              <Fact label="Tables">
+                {`${data.counts.tables.toLocaleString()} (${data.counts.tableRows.toLocaleString()} rows)`}
+              </Fact>
+            )}
+          </Facts>
+        </div>
+
+        <div className="overview-side">
+          <PlanPanel />
+          <Warnings count={data.warningCount} />
+        </div>
+      </div>
     </section>
   );
 }
@@ -165,7 +185,7 @@ function Warnings({ count }: { readonly count: number }): React.JSX.Element | nu
   if (count === 0) return null;
 
   return (
-    <div className="section">
+    <div className="panel">
       <h2 className="section-heading">warnings</h2>
       {warnings.data === undefined ? (
         <Loading label="Reading warnings." />
@@ -247,7 +267,7 @@ function PlanPanel(): React.JSX.Element {
   });
 
   return (
-    <div className="section">
+    <div className="panel">
       <h2 className="section-heading">next build</h2>
       {!asked ? (
         <div className="plan-idle">
