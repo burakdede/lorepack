@@ -36,7 +36,7 @@ figures so a large build remains scannable.
 | `--bg` | `#F7F1E6` | `#171916` |
 | `--surface` | `#FFFDF7` | `#20251F` |
 | `--text` | `#20231F` | `#EDEAE3` |
-| `--text-muted` | `#6C7067` | `#918B81` |
+| `--text-muted` | `#696D66` | `#918B81` |
 | `--border` | `#D1C7B6` | `#465043` |
 | `--zone-sage` | `#D9E8C8` | `#31442E` |
 | `--zone-coral` | `#F2C7B9` | `#4C3029` |
