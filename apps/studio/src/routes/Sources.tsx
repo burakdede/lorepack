@@ -16,6 +16,7 @@ import {
 import { fetchSources, type SourceArtifact, toDisplayable } from '../lib/api.js';
 import { type LineRange, readSourceEquivalents, serverOrigin } from '../lib/equivalents.js';
 import { useHashParam } from '../lib/location.js';
+import { type Exclusion, fetchWarnings, WARNINGS_KEY } from '../lib/warnings.js';
 import './Sources.css';
 
 /**
@@ -35,14 +36,6 @@ interface Excluded {
   readonly message: string;
   readonly path?: string;
   readonly class: string;
-}
-
-/** What one ignore rule removed, grouped by the rule rather than listed per file. */
-interface Exclusion {
-  readonly pattern: string;
-  readonly source: string;
-  readonly count: number;
-  readonly sample: readonly string[];
 }
 
 type View = 'indexed' | 'excluded';
@@ -66,23 +59,15 @@ export function Sources(): React.JSX.Element {
   const sources = useQuery({ queryKey: ['sources'], queryFn: fetchSources });
 
   const excluded = useQuery({
-    queryKey: ['warnings'],
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/v1/warnings', { signal });
-      if (!response.ok) throw new Error('This server does not report warnings.');
-      const body = (await response.json()) as {
-        groups: readonly { class: string; warnings: readonly Excluded[] }[];
-        exclusions: readonly Exclusion[] | null;
-        excludedByRule: number | null;
-      };
-      return {
-        discovered: body.groups.flatMap((group) =>
-          group.warnings.map((w) => ({ ...w, class: group.class })),
-        ),
-        byRule: body.exclusions,
-        byRuleCount: body.excludedByRule,
-      };
-    },
+    queryKey: WARNINGS_KEY,
+    queryFn: fetchWarnings,
+    select: (report) => ({
+      discovered: report.groups.flatMap((group) =>
+        group.warnings.map((warning): Excluded => ({ ...warning, class: group.class })),
+      ),
+      byRule: report.exclusions,
+      byRuleCount: report.excludedByRule,
+    }),
   });
 
   const artifacts = sources.data?.artifacts ?? [];

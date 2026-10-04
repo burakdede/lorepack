@@ -16,6 +16,7 @@ import {
 import { client, toDisplayable } from '../lib/api.js';
 import { type Client, fetchDiagnostics } from '../lib/diagnostics.js';
 import { serverOrigin } from '../lib/equivalents.js';
+import { fetchWarnings, WARNINGS_KEY, type Warning } from '../lib/warnings.js';
 import './Overview.css';
 
 /**
@@ -30,18 +31,6 @@ import './Overview.css';
  * So the counts are an aligned key-value block echoing what `lore build` prints, and the
  * weight goes to source state, which is the only thing here that moves under the reader.
  */
-
-interface Warning {
-  readonly code: string;
-  readonly message: string;
-  readonly path?: string;
-}
-
-interface WarningGroup {
-  readonly class: string;
-  readonly count: number;
-  readonly warnings: readonly Warning[];
-}
 
 const INTRO = 'The build your AI reads right now, and whether its sources still match it.';
 
@@ -187,12 +176,8 @@ function BuildId({
 
 function Warnings({ count }: { readonly count: number }): React.JSX.Element | null {
   const warnings = useQuery({
-    queryKey: ['warnings'],
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/v1/warnings', { signal });
-      if (!response.ok) throw new Error('Warnings are not available from this server.');
-      return (await response.json()) as { total: number; groups: readonly WarningGroup[] };
-    },
+    queryKey: WARNINGS_KEY,
+    queryFn: fetchWarnings,
     // Nothing to fetch when the build recorded none, which is the common case.
     enabled: count > 0,
   });
