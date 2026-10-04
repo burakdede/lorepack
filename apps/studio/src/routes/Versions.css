@@ -74,8 +74,28 @@
   color: var(--text-muted);
 }
 
+/* Pinned to the frame's right edge, so the row's actions stay in view at any width and with
+   any font metrics, while the columns between scroll beneath them. */
 .build-actions {
+  position: sticky;
+  right: 0;
   text-align: right;
+  background: var(--surface);
+  box-shadow: -8px 0 8px -8px rgb(0 0 0 / 0.12);
+}
+
+.builds thead .build-actions-head {
+  position: sticky;
+  right: 0;
+}
+
+.build-row:hover .build-actions {
+  background: var(--surface-sunken);
+}
+
+.build-row-active .build-actions,
+.build-row-active:hover .build-actions {
+  background: var(--selected);
 }
 
 .build-actions .action + .action {
