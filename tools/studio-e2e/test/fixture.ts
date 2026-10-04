@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base } from '@playwright/test';
 import type { AxeResults } from 'axe-core';
+import { STUDIO_SETUP_TIMEOUT_MS } from './setup-budget.js';
 
 /**
  * A real project, a real `lore dev`, and the browser pointed at it.
@@ -100,6 +101,17 @@ function lore(project: string, args: readonly string[]): Promise<number> {
   });
 }
 
+async function setupStep(project: string, args: readonly string[]): Promise<void> {
+  try {
+    await lore(project, args);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`Studio E2E setup failed during lore ${args.join(' ')}: ${message}`, {
+      cause,
+    });
+  }
+}
+
 /** One project and one server for the whole run, because building per test is minutes. */
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   session: [
@@ -117,16 +129,16 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       mkdirSync(join(projectRoot, 'drafts'));
       writeFileSync(join(projectRoot, 'drafts', 'unfinished.md'), '# Unfinished\n', 'utf8');
 
-      await lore(projectRoot, ['init', '.']);
+      await setupStep(projectRoot, ['init', '.']);
       writeFileSync(join(projectRoot, '.loreignore'), 'drafts/\n', { flag: 'a' });
-      await lore(projectRoot, ['build']);
+      await setupStep(projectRoot, ['build']);
       // A second build, so Versions has a history to compare, activate and roll back.
       writeFileSync(
         join(projectRoot, 'docs', 'runbook.md'),
         `${RUNBOOK}\n## Change freeze\n\nNo deployments during a change freeze.\n`,
         'utf8',
       );
-      await lore(projectRoot, ['build']);
+      await setupStep(projectRoot, ['build']);
 
       const port = 43_190;
       const child = spawn(process.execPath, [BINARY, 'dev', projectRoot, '--port', String(port)], {
@@ -184,7 +196,7 @@ async function waitForServer(child: ChildProcess, port: number): Promise<string>
     output += chunk.toString('utf8');
   });
 
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + STUDIO_SETUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`lore dev exited ${child.exitCode}:\n${output}`);
@@ -197,7 +209,9 @@ async function waitForServer(child: ChildProcess, port: number): Promise<string>
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`lore dev never answered on ${port}:\n${output}`);
+  throw new Error(
+    `Studio E2E setup failed while waiting for lore dev on port ${port} after ${STUDIO_SETUP_TIMEOUT_MS / 1000}s:\n${output}`,
+  );
 }
 
 async function stop(child: ChildProcess): Promise<void> {

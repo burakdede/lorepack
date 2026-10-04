@@ -1,0 +1,1 @@
+export const STUDIO_SETUP_TIMEOUT_MS = 180_000;

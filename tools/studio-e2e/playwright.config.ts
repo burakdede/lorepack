@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { STUDIO_SETUP_TIMEOUT_MS } from './test/setup-budget.js';
 
 /**
  * Studio in a real browser, against a real `lore dev`.
@@ -17,7 +18,7 @@ export default defineConfig({
   // The fixture builds a project and starts a server per worker, so each file gets its own.
   fullyParallel: false,
   workers: 1,
-  timeout: 120_000,
+  timeout: STUDIO_SETUP_TIMEOUT_MS,
   expect: { timeout: 15_000 },
   reporter: process.env.CI === undefined ? [['list']] : [['list'], ['html', { open: 'never' }]],
   use: {
