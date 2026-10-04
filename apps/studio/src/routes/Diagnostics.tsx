@@ -7,6 +7,7 @@ import {
   Facts,
   Failure,
   Loading,
+  RouteHeader,
   toneForCheck,
 } from '../components/primitives.js';
 import { toDisplayable } from '../lib/api.js';
@@ -78,6 +79,9 @@ interface Report {
   }[];
 }
 
+const INTRO =
+  'The doctor checks, the running session, its environment, and which AI clients are connected.';
+
 export function Diagnostics(): React.JSX.Element {
   const report = useQuery({
     queryKey: ['diagnostics'],
@@ -96,7 +100,7 @@ export function Diagnostics(): React.JSX.Element {
   if (report.isError) {
     return (
       <section>
-        <h1 className="route-title">Diagnostics</h1>
+        <RouteHeader title="Diagnostics" intro={INTRO} />
         <Failure {...toDisplayable(report.error)} />
       </section>
     );
@@ -106,17 +110,20 @@ export function Diagnostics(): React.JSX.Element {
 
   return (
     <section>
-      <div className="route-header">
-        <h1 className="route-title">Diagnostics</h1>
-        <button
-          type="button"
-          className="action"
-          disabled={report.isFetching}
-          onClick={() => void report.refetch()}
-        >
-          {report.isFetching ? 'Running' : 'Re-run checks'}
-        </button>
-      </div>
+      <RouteHeader
+        title="Diagnostics"
+        intro={INTRO}
+        actions={
+          <button
+            type="button"
+            className="action"
+            disabled={report.isFetching}
+            onClick={() => void report.refetch()}
+          >
+            {report.isFetching ? 'Running' : 'Re-run checks'}
+          </button>
+        }
+      />
 
       {/* Counted, never scored. "2 failed" is a number a person can act on; a percentage of
           checks passed is one they cannot. */}
@@ -125,8 +132,10 @@ export function Diagnostics(): React.JSX.Element {
       </p>
 
       <Checks checks={data.doctor.checks} />
-      <Session session={data.session} />
-      <Environment environment={data.environment} />
+      <div className="diagnostics-grid">
+        <Session session={data.session} />
+        <Environment environment={data.environment} />
+      </div>
       <Clients clients={data.clients} />
     </section>
   );
@@ -248,34 +257,36 @@ function Clients({ clients }: { readonly clients: Report['clients'] }): React.JS
   return (
     <section className="panel">
       <h2 className="section-heading">Clients</h2>
-      <table className="clients">
-        <thead>
-          <tr>
-            <th scope="col">client</th>
-            <th scope="col">installed</th>
-            <th scope="col">connected</th>
-            <th scope="col">configuration</th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((entry) => (
-            <tr key={entry.id}>
-              <th scope="row" className="client-name">
-                {entry.version === undefined ? (
-                  entry.title
-                ) : (
-                  <Adjacent lead={entry.title} className="client-version">
-                    {entry.version}
-                  </Adjacent>
-                )}
-              </th>
-              <td>{entry.installed ? 'yes' : 'no'}</td>
-              <td>{describeConnection(entry)}</td>
-              <td className="client-path">{entry.configPath ?? '(none)'}</td>
+      <div className="table-frame table-scroll">
+        <table className="data-table clients">
+          <thead>
+            <tr>
+              <th scope="col">client</th>
+              <th scope="col">installed</th>
+              <th scope="col">connected</th>
+              <th scope="col">configuration</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {clients.map((entry) => (
+              <tr key={entry.id}>
+                <th scope="row" className="client-name">
+                  {entry.version === undefined ? (
+                    entry.title
+                  ) : (
+                    <Adjacent lead={entry.title} className="client-version">
+                      {entry.version}
+                    </Adjacent>
+                  )}
+                </th>
+                <td>{entry.installed ? 'yes' : 'no'}</td>
+                <td>{describeConnection(entry)}</td>
+                <td className="client-path">{entry.configPath ?? '(none)'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {/*
         One command per client that is installed and not yet wired up.
 

@@ -1,8 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Citation } from '../components/Citation.js';
-import { Adjacent, Badge, Empty, Fact, Facts, Failure, Loading } from '../components/primitives.js';
+import {
+  Adjacent,
+  Badge,
+  Empty,
+  Fact,
+  Facts,
+  Failure,
+  Loading,
+  RouteHeader,
+} from '../components/primitives.js';
 import { client, type DisplayableError, toDisplayable } from '../lib/api.js';
+import { useHashParam } from '../lib/location.js';
 import './Tables.css';
 
 /**
@@ -44,7 +54,12 @@ interface Column {
 }
 
 export function Tables(): React.JSX.Element {
-  const [selected, setSelected] = useState<string | null>(null);
+  // The command palette opens this route on one table with `?table=`.
+  const linked = useHashParam('table');
+  const [selected, setSelected] = useState<string | null>(linked);
+  useEffect(() => {
+    if (linked !== null) setSelected(linked);
+  }, [linked]);
 
   const tables = useQuery({
     queryKey: ['tables'],
@@ -58,7 +73,10 @@ export function Tables(): React.JSX.Element {
   // while it is failing, and when it is empty. The browser suite waits on it.
   const titled = (body: React.ReactNode): React.JSX.Element => (
     <>
-      <h1 className="route-title">Tables</h1>
+      <RouteHeader
+        title="Tables"
+        intro="Typed tables imported from CSV and spreadsheet sources, with a read-only SQL console."
+      />
       {body}
     </>
   );
@@ -80,6 +98,7 @@ export function Tables(): React.JSX.Element {
   return titled(
     <section className="tables" aria-label="Typed tables">
       <nav className="tables-list" aria-label="Tables in this build">
+        <p className="tables-list-heading">{`${list.length} ${list.length === 1 ? 'table' : 'tables'}`}</p>
         <ul>
           {list.map((table: TableSummary) => (
             <li key={table.tableId}>
@@ -115,23 +134,25 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
 
   return (
     <div className="tables-detail">
-      <h2 className="tables-title">{table.name}</h2>
+      <div className="panel tables-summary">
+        <h2 className="tables-title">{table.name}</h2>
 
-      <Facts>
-        <Fact label="Rows">{table.rowCount.toLocaleString('en-US')}</Fact>
-        <Fact label="Columns">{columns.length}</Fact>
-        {/* The name a query addresses. Nothing else in the interface shows it. */}
-        <Fact label="SQL name">{table.sqlName}</Fact>
-        <Fact label="Source">
-          <Citation locator={table.locator} />
-        </Fact>
-      </Facts>
+        <Facts>
+          <Fact label="Rows">{table.rowCount.toLocaleString('en-US')}</Fact>
+          <Fact label="Columns">{columns.length}</Fact>
+          {/* The name a query addresses. Nothing else in the interface shows it. */}
+          <Fact label="SQL name">{table.sqlName}</Fact>
+          <Fact label="Source">
+            <Citation locator={table.locator} />
+          </Fact>
+        </Facts>
+      </div>
 
       <h3 className="tables-heading">Schema</h3>
-      <div className="table-scroll">
+      <div className="table-frame table-scroll">
         {/* Named, because three tables appear on this page and a screen reader listing them
             as "table, table, table" is no better than none. */}
-        <table className="tables-schema" aria-label={`${table.name} schema`}>
+        <table className="data-table tables-schema" aria-label={`${table.name} schema`}>
           <thead>
             <tr>
               <th scope="col">column</th>
@@ -250,19 +271,19 @@ function QueryConsole({
         </label>
         <textarea
           id="console-sql"
-          className="console-input"
+          className="field-control console-input"
           value={sql}
           spellCheck={false}
           rows={4}
           onChange={(event) => setSql(event.target.value)}
         />
         <div className="console-actions">
-          <button type="submit" className="console-run">
+          <button type="submit" className="action action-primary console-run">
             Run query
           </button>
           <button
             type="button"
-            className="console-reset"
+            className="action console-reset"
             onClick={() => {
               setSql(starting);
             }}
@@ -329,8 +350,8 @@ function Grid({
   if (rows.length === 0) return <p className="tables-note prose">No rows.</p>;
 
   return (
-    <div className="table-scroll">
-      <table className="tables-grid" aria-label={label}>
+    <div className="table-frame table-scroll">
+      <table className="data-table tables-grid" aria-label={label}>
         <thead>
           <tr>
             {columns.map((column) => (

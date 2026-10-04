@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Badge, Empty, Failure, Loading } from '../components/primitives.js';
+import { Badge, Empty, Failure, Loading, RouteHeader } from '../components/primitives.js';
 import { toDisplayable } from '../lib/api.js';
 import './Versions.css';
 
@@ -87,6 +87,9 @@ const VERBS = {
   pack: { imperative: 'Pack', past: 'Packed' },
 } as const;
 
+const INTRO =
+  'Every immutable build of this project. Compare any two, activate one, roll back, or pack one into an archive.';
+
 export function Versions(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<Pending | null>(null);
@@ -127,7 +130,7 @@ export function Versions(): React.JSX.Element {
   if (history.isError) {
     return (
       <section>
-        <h1 className="route-title">Versions</h1>
+        <RouteHeader title="Versions" intro={INTRO} />
         <Failure {...toDisplayable(history.error)} />
       </section>
     );
@@ -144,7 +147,22 @@ export function Versions(): React.JSX.Element {
 
   return (
     <section>
-      <h1 className="route-title">Versions</h1>
+      <RouteHeader
+        title="Versions"
+        intro={INTRO}
+        actions={
+          rollbackTarget === null ? undefined : (
+            <button
+              type="button"
+              className="action"
+              disabled={act.isPending}
+              onClick={() => start({ kind: 'rollback', build: rollbackTarget })}
+            >
+              Roll back
+            </button>
+          )
+        }
+      />
 
       {outcome !== null && (
         <p className="outcome" role="status">
@@ -172,19 +190,8 @@ export function Versions(): React.JSX.Element {
           />
 
           {rollbackTarget !== null && (
-            <p className="rollback-line">
-              <button
-                type="button"
-                className="action"
-                disabled={act.isPending}
-                onClick={() => start({ kind: 'rollback', build: rollbackTarget })}
-              >
-                Roll back
-              </button>
-              <span className="prose">
-                Returns to the previous verified build. A pointer change, so nothing is recompiled
-                and this build stays exactly where it is.
-              </span>
+            <p className="rollback-line prose">
+              {`Roll back returns to the previous verified build, ${shorten(rollbackTarget)}. It is a pointer change, so nothing is recompiled and the current build stays exactly where it is.`}
             </p>
           )}
         </>
@@ -228,8 +235,8 @@ function BuildTable({
     // The table scrolls inside its own box rather than pushing the page sideways. At 200%
     // zoom a build id, a timestamp and three actions do not fit on one line however the
     // columns are trimmed, and a page that scrolls horizontally loses the navigation too.
-    <div className="table-scroll">
-      <table className="builds">
+    <div className="table-frame table-scroll">
+      <table className="data-table builds">
         <caption className="visually-hidden">Every build in this project, newest first</caption>
         <thead>
           <tr>
@@ -276,7 +283,7 @@ function BuildTable({
               <td className="build-actions">
                 <button
                   type="button"
-                  className="action"
+                  className="action action-small"
                   onClick={() => onCompare(build.buildId)}
                   aria-label={`Compare ${shorten(build.buildId)}`}
                 >
@@ -285,7 +292,7 @@ function BuildTable({
                 {!build.active && isActivatable(build.state) && (
                   <button
                     type="button"
-                    className="action"
+                    className="action action-small"
                     disabled={busy}
                     aria-label={`Activate ${shorten(build.buildId)}`}
                     onClick={() => onAct({ kind: 'activate', build: build.buildId })}
@@ -298,7 +305,7 @@ function BuildTable({
                 {isActivatable(build.state) && (
                   <button
                     type="button"
-                    className="action"
+                    className="action action-small"
                     disabled={busy}
                     aria-label={`Pack ${shorten(build.buildId)}`}
                     onClick={() => onAct({ kind: 'pack', build: build.buildId })}
@@ -357,7 +364,7 @@ function Confirmation({
     >
       {/* Focusable so opening the panel lands the reader on it rather than leaving them at
           the button they pressed, six rows up. */}
-      <h2 className="section-heading" id="confirm-heading" ref={heading} tabIndex={-1}>
+      <h2 className="confirm-heading" id="confirm-heading" ref={heading} tabIndex={-1}>
         {label}
       </h2>
 
@@ -443,7 +450,11 @@ function Compare({
       <div className="compare-controls">
         <label className="compare-field">
           <span>from</span>
-          <select value={from} onChange={(event) => onSelect({ from: event.target.value, to })}>
+          <select
+            className="field-control"
+            value={from}
+            onChange={(event) => onSelect({ from: event.target.value, to })}
+          >
             {builds.map((build) => (
               <option key={build.buildId} value={build.buildId}>
                 {shorten(build.buildId)}
@@ -453,7 +464,11 @@ function Compare({
         </label>
         <label className="compare-field">
           <span>to</span>
-          <select value={to} onChange={(event) => onSelect({ from, to: event.target.value })}>
+          <select
+            className="field-control"
+            value={to}
+            onChange={(event) => onSelect({ from, to: event.target.value })}
+          >
             {builds.map((build) => (
               <option key={build.buildId} value={build.buildId}>
                 {shorten(build.buildId)}

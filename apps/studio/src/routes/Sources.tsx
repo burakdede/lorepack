@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Citation } from '../components/Citation.js';
 import {
   Adjacent,
@@ -9,9 +9,11 @@ import {
   Facts,
   Failure,
   Loading,
+  RouteHeader,
   toneForStatus,
 } from '../components/primitives.js';
-import { toDisplayable } from '../lib/api.js';
+import { fetchSources, type SourceArtifact, toDisplayable } from '../lib/api.js';
+import { useHashParam } from '../lib/location.js';
 import './Sources.css';
 
 /**
@@ -24,20 +26,7 @@ import './Sources.css';
  * a list and its appendix.
  */
 
-interface Artifact {
-  readonly artifactId: string;
-  readonly relativePath: string;
-  readonly displayPath: string;
-  readonly title: string | null;
-  readonly status: string;
-  readonly authority: number;
-  readonly mediaType: string;
-  readonly objectHash: string;
-  readonly byteSize: number;
-  readonly parserId: string;
-  readonly chunkCount: number;
-  readonly nodeCount: number;
-}
+type Artifact = SourceArtifact;
 
 interface Excluded {
   readonly code: string;
@@ -56,19 +45,22 @@ interface Exclusion {
 
 type View = 'indexed' | 'excluded';
 
+const INTRO = 'Every file this build indexed, and every file it left out, with the reason.';
+
 export function Sources(): React.JSX.Element {
   const [view, setView] = useState<View>('indexed');
   const [filter, setFilter] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  // The command palette opens this route on one artifact with `?artifact=`.
+  const linked = useHashParam('artifact');
+  const [selected, setSelected] = useState<string | null>(linked);
+  useEffect(() => {
+    if (linked !== null) {
+      setView('indexed');
+      setSelected(linked);
+    }
+  }, [linked]);
 
-  const sources = useQuery({
-    queryKey: ['sources'],
-    queryFn: async ({ signal }) => {
-      const response = await fetch('/v1/sources', { signal });
-      if (!response.ok) throw new Error('This server does not list sources.');
-      return (await response.json()) as { buildId: string; artifacts: readonly Artifact[] };
-    },
-  });
+  const sources = useQuery({ queryKey: ['sources'], queryFn: fetchSources });
 
   const excluded = useQuery({
     queryKey: ['warnings'],
@@ -107,7 +99,7 @@ export function Sources(): React.JSX.Element {
   if (sources.isError) {
     return (
       <section>
-        <h1 className="route-title">Sources</h1>
+        <RouteHeader title="Sources" intro={INTRO} />
         <Failure {...toDisplayable(sources.error)} />
       </section>
     );
@@ -122,7 +114,7 @@ export function Sources(): React.JSX.Element {
 
   return (
     <section>
-      <h1 className="route-title">Sources</h1>
+      <RouteHeader title="Sources" intro={INTRO} />
 
       {/* Indexed and excluded as peers. Choosing between them is one control, not an
           expansion, so neither is the other's footnote. */}
@@ -138,7 +130,8 @@ export function Sources(): React.JSX.Element {
             aria-pressed={view === 'indexed'}
             onClick={() => setView('indexed')}
           >
-            {`indexed ${artifacts.length}`}
+            {'indexed '}
+            <span className="view-count">{artifacts.length}</span>
           </button>
           <button
             type="button"
@@ -146,7 +139,8 @@ export function Sources(): React.JSX.Element {
             aria-pressed={view === 'excluded'}
             onClick={() => setView('excluded')}
           >
-            {`excluded ${excludedCount}`}
+            {'excluded '}
+            <span className="view-count">{excludedCount}</span>
           </button>
         </fieldset>
 
@@ -155,8 +149,8 @@ export function Sources(): React.JSX.Element {
             <span className="visually-hidden">Filter by path or status</span>
             <input
               type="search"
-              className="filter-input"
-              placeholder="path or status"
+              className="field-control filter-input"
+              placeholder="Filter by path or status"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
             />
@@ -179,7 +173,13 @@ export function Sources(): React.JSX.Element {
             onSelect={setSelected}
             total={artifacts.length}
           />
-          {detail !== null && <ArtifactDetail artifact={detail} />}
+          {detail === null ? (
+            <p className="detail-hint prose">
+              Choose a file to see its parser, size, node count and content hash.
+            </p>
+          ) : (
+            <ArtifactDetail artifact={detail} />
+          )}
         </div>
       )}
     </section>
@@ -215,57 +215,60 @@ function ArtifactTable({
   }
 
   return (
-    <table className="artifacts">
-      <caption className="visually-hidden">
-        {`${artifacts.length} of ${total} indexed files`}
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">path</th>
-          <th scope="col">status</th>
-          <th scope="col" className="numeric">
-            authority
-          </th>
-          <th scope="col" className="numeric">
-            chunks
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {artifacts.map((artifact) => (
-          <tr
-            key={artifact.artifactId}
-            className={
-              artifact.artifactId === selected
-                ? 'artifact-row artifact-row-selected'
-                : 'artifact-row'
-            }
-          >
-            <td>
-              <button
-                type="button"
-                className="artifact-path"
-                onClick={() => onSelect(artifact.artifactId)}
-              >
-                {artifact.displayPath}
-              </button>
-            </td>
-            <td>
-              <Badge tone={toneForStatus(artifact.status)}>{artifact.status}</Badge>
-            </td>
-            <td className="numeric">{artifact.authority}</td>
-            <td className="numeric">{artifact.chunkCount.toLocaleString()}</td>
+    <div className="table-frame table-scroll">
+      <table className="data-table artifacts">
+        <caption className="visually-hidden">
+          {`${artifacts.length} of ${total} indexed files`}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">path</th>
+            <th scope="col">status</th>
+            <th scope="col" className="numeric">
+              authority
+            </th>
+            <th scope="col" className="numeric">
+              chunks
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {artifacts.map((artifact) => (
+            <tr
+              key={artifact.artifactId}
+              className={
+                artifact.artifactId === selected
+                  ? 'artifact-row artifact-row-selected'
+                  : 'artifact-row'
+              }
+            >
+              <td>
+                <button
+                  type="button"
+                  className="artifact-path"
+                  onClick={() => onSelect(artifact.artifactId)}
+                >
+                  {artifact.displayPath}
+                </button>
+              </td>
+              <td>
+                <Badge tone={toneForStatus(artifact.status)}>{artifact.status}</Badge>
+              </td>
+              <td className="numeric">{artifact.authority}</td>
+              <td className="numeric">{artifact.chunkCount.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 function ArtifactDetail({ artifact }: { readonly artifact: Artifact }): React.JSX.Element {
   return (
     <aside className="artifact-detail" aria-label={`Details for ${artifact.displayPath}`}>
-      <h2 className="section-heading">{artifact.displayPath}</h2>
+      {/* The file name as the title; the full path is in the citation right beneath it. */}
+      <h2 className="detail-title">{artifact.displayPath.split('/').pop()}</h2>
       {/* The shared citation, so provenance looks the same here as it does in the Playground
           and in search results. */}
       <Citation locator={{ relativePath: artifact.displayPath, artifactId: artifact.artifactId }} />
@@ -338,43 +341,45 @@ function ExcludedList({
           broadly takes a whole folder out of every answer without producing a warning, and
           that is the case a person opens this view to find. */}
       {byRule !== null && byRule.length > 0 && (
-        <table className="artifacts">
-          <caption className="excluded-caption prose">
-            Removed by an ignore rule before anything was read. Grouped by the rule, because one
-            line of configuration is one decision however many files it covers.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">rule</th>
-              <th scope="col">from</th>
-              <th scope="col" className="numeric">
-                paths
-              </th>
-              <th scope="col">for example</th>
-            </tr>
-          </thead>
-          <tbody>
-            {byRule.map((exclusion) => (
-              <tr key={`${exclusion.source}-${exclusion.pattern}`} className="artifact-row">
-                <td className="excluded-path">{exclusion.pattern}</td>
-                <td className="excluded-source">{exclusion.source}</td>
-                <td className="numeric">{exclusion.count.toLocaleString()}</td>
-                <td className="excluded-sample">
-                  <ul className="sample-list">
-                    {sampleWorthShowing(exclusion).map((path) => (
-                      <li key={path}>{path}</li>
-                    ))}
-                    {exclusion.count > exclusion.sample.length && (
-                      <li className="prose">
-                        {`and ${(exclusion.count - exclusion.sample.length).toLocaleString()} more`}
-                      </li>
-                    )}
-                  </ul>
-                </td>
+        <div className="table-frame table-scroll excluded-block">
+          <table className="data-table artifacts">
+            <caption className="excluded-caption prose">
+              Removed by an ignore rule before anything was read. Grouped by the rule, because one
+              line of configuration is one decision however many files it covers.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">rule</th>
+                <th scope="col">from</th>
+                <th scope="col" className="numeric">
+                  paths
+                </th>
+                <th scope="col">for example</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {byRule.map((exclusion) => (
+                <tr key={`${exclusion.source}-${exclusion.pattern}`} className="artifact-row">
+                  <td className="excluded-path">{exclusion.pattern}</td>
+                  <td className="excluded-source">{exclusion.source}</td>
+                  <td className="numeric">{exclusion.count.toLocaleString()}</td>
+                  <td className="excluded-sample">
+                    <ul className="sample-list">
+                      {sampleWorthShowing(exclusion).map((path) => (
+                        <li key={path}>{path}</li>
+                      ))}
+                      {exclusion.count > exclusion.sample.length && (
+                        <li className="prose">
+                          {`and ${(exclusion.count - exclusion.sample.length).toLocaleString()} more`}
+                        </li>
+                      )}
+                    </ul>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {byRule === null && (
@@ -385,36 +390,38 @@ function ExcludedList({
       )}
 
       {entries.length > 0 && (
-        <table className="artifacts">
-          <caption className="excluded-caption prose">
-            Found by the walk and not indexed, each with the reason it was skipped.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">path</th>
-              <th scope="col">reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr
-                key={`${entry.code}-${entry.path ?? ''}-${entry.message}`}
-                className="artifact-row"
-              >
-                <td className="excluded-path">{entry.path ?? '(no path)'}</td>
-                <td>
-                  <Adjacent
-                    lead={entry.class}
-                    leadClassName="excluded-class"
-                    className="excluded-message prose"
-                  >
-                    {withoutPath(entry)}
-                  </Adjacent>
-                </td>
+        <div className="table-frame table-scroll excluded-block">
+          <table className="data-table artifacts">
+            <caption className="excluded-caption prose">
+              Found by the walk and not indexed, each with the reason it was skipped.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">path</th>
+                <th scope="col">reason</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr
+                  key={`${entry.code}-${entry.path ?? ''}-${entry.message}`}
+                  className="artifact-row"
+                >
+                  <td className="excluded-path">{entry.path ?? '(no path)'}</td>
+                  <td>
+                    <Adjacent
+                      lead={entry.class}
+                      leadClassName="excluded-class"
+                      className="excluded-message prose"
+                    >
+                      {withoutPath(entry)}
+                    </Adjacent>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

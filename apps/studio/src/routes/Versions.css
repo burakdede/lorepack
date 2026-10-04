@@ -1,282 +1,237 @@
-/* Versions. The history is a table; the diff is typography. See docs/architecture/studio-design.md. */
+/* Versions: the history as a table, a confirmation that is itself a plan, and a comparison. */
 
-.builds {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
+.outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text);
+  background: var(--state-ok-bg);
+  border: 1px solid color-mix(in srgb, var(--state-ok) 25%, transparent);
+  border-radius: var(--radius-lg);
 }
 
-.builds th[scope="col"] {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-weight: 400;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  padding: 0 var(--space-3) var(--space-2) 0;
-  border-bottom: 1px solid var(--border);
+.outcome::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--state-ok);
+}
+
+.builds td {
   white-space: nowrap;
 }
 
-.builds td,
-.builds th[scope="row"] {
-  padding: 0 var(--space-3) 0 0;
-  border-bottom: 1px solid var(--border-subtle);
-  height: var(--row-height);
-  vertical-align: middle;
-  text-align: left;
-  font-weight: 400;
+/* Eight columns and three actions share 1280px with the sidebar, so the history runs denser
+   than other tables. */
+.builds th,
+.builds td {
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
 }
 
-.builds .numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  width: 1%;
-  white-space: nowrap;
-  color: var(--text-muted);
-}
-
-.build-row:hover {
-  background: var(--surface);
-}
-
-/* The live build is marked by a word and a rule down its left edge. The tint is the third
-   signal, never the only one. */
-.build-row-active {
-  background: var(--surface);
+/* The one column allowed to wrap, so the actions stay inside the frame at 1280. */
+.builds td.build-capabilities {
+  min-width: 8rem;
+  white-space: normal;
 }
 
 .build-id {
   font-family: var(--font-mono);
-  color: var(--text);
+  font-weight: 500;
   white-space: nowrap;
 }
 
+.build-row-active,
+.build-row-active:hover {
+  background: var(--selected);
+}
+
+/* A word, not only a row tint, so the live build survives greyscale. */
 .active-marker {
   display: inline-block;
-  font-size: var(--text-xs);
-  color: var(--state-ok);
   margin-right: var(--space-2);
+  padding: 1px 7px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-text);
+  background: var(--ink);
+  border-radius: 999px;
 }
 
-.build-created,
+.build-created {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
 .build-capabilities,
 .build-deployment {
-  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/**
- * The actions stay put while the rest of the row scrolls under them.
- *
- * `.main` is capped at 1100px and this table is wider than that, so the column that ended up
- * outside the scroll box was `actions`: on a route whose entire purpose is to activate and
- * roll back, `Activate` and `Pack` were past the right edge at every window width, and a
- * reader had to discover horizontal scrolling inside a table to find them (#210).
- *
- * Pinning rather than dropping a column, because `capabilities` is the cell that grows as
- * capabilities are added, so any fix that only narrows the table postpones the problem to the
- * phase that adds one.
- *
- * The background is set on the cell rather than inherited from the row: a sticky cell paints
- * over the cells it scrolls across, and without its own background the text underneath shows
- * through it.
- */
-.build-actions,
-.builds th[scope="col"]:last-child {
-  position: sticky;
-  right: 0;
-  background: var(--bg);
-  padding-left: var(--space-3);
-}
-
-.build-row-active .build-actions {
-  background: var(--surface);
 }
 
 .build-actions {
   text-align: right;
-  white-space: nowrap;
-  width: 1%;
+}
+
+.build-actions .action + .action {
+  margin-left: var(--space-1);
 }
 
 .rollback-line {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  margin: var(--space-3) 0 0;
+  max-width: 80ch;
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
-.rollback-line .action {
-  margin-left: 0;
-}
-
-.outcome {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--state-ok-bg);
-  border-left: 2px solid var(--state-ok);
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-4);
-  overflow-wrap: anywhere;
-}
-
+/* The confirmation: inline, framed in ink, holding the plan and the verb that carries it out. */
 .confirm {
   margin-top: var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-4);
+  padding: var(--space-5);
   background: var(--surface);
+  border: 1px solid var(--text);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  animation: confirm-in 200ms var(--ease-out);
 }
 
-.confirm .section-heading {
-  text-transform: none;
-  margin-top: 0;
+/* Movement only, never opacity: text mid-fade fails a contrast audit and reads as disabled. */
+@keyframes confirm-in {
+  from {
+    transform: translateY(4px);
+  }
 }
 
-.confirm .section-heading:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 3px;
+.confirm-heading {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 500;
+  margin-bottom: var(--space-3);
 }
 
 .confirm-plan {
-  margin: var(--space-3) 0;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+}
+
+.confirm-plan > p {
+  margin: 0 0 var(--space-3);
 }
 
 .confirm-actions {
   display: flex;
   gap: var(--space-2);
-  margin-top: var(--space-4);
-}
-
-.confirm-actions .action {
-  margin-left: 0;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .compare {
   margin-top: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-4);
-}
-
-.builds th[scope="col"] {
-  padding-top: var(--space-2);
-}
-
-.build-row-active {
-  background: var(--zone-sage);
-}
-
-.build-row-active .build-actions {
-  background: var(--zone-sage);
-}
-
-.outcome {
-  border-left-width: 1px;
-  border-radius: var(--radius-territory);
-  background: var(--zone-sage);
-}
-
-.confirm {
-  border: 0;
-  border-radius: var(--radius-territory);
-  background: var(--zone-gold);
-}
-
-.compare {
-  border-top: 8px solid var(--text);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
 }
 
 .compare-controls {
   display: flex;
-  gap: var(--space-4);
-  align-items: center;
   flex-wrap: wrap;
+  gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
 .compare-field {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-mono);
+  display: grid;
+  gap: 6px;
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .compare-field select {
+  width: 220px;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-1) var(--space-2);
 }
 
-/* The diff. Aligned markers in the left column, one line per change, and colour that only
-   reinforces the marker that is already there. */
+/* Flat columns split by hairlines, not cards inside the panel. */
 .diff {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4) 0;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-4);
+}
+
+.diff-identical,
+.diff-incompatible {
+  grid-column: 1 / -1;
+}
+
+.diff-identical {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.diff-incompatible {
+  padding: var(--space-4);
+  background: var(--state-warn-bg);
+  border-radius: var(--radius);
 }
 
 .diff-section {
-  margin-bottom: var(--space-4);
+  padding: 0 var(--space-4);
+  border-left: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.diff-section:first-of-type {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .diff-heading {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 400;
-  text-transform: lowercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .diff-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
 .diff-list li {
   display: flex;
-  gap: var(--space-2);
+  flex-wrap: nowrap;
   align-items: baseline;
-  line-height: 1.7;
+  gap: 0 var(--space-2);
   overflow-wrap: anywhere;
 }
 
-/* One character wide and never wrapping, so every path on the page starts at the same
-   column. This is the alignment the whole section depends on. */
+/* The marker carries the meaning; colour only reinforces it. */
 .diff-marker {
   flex: none;
   width: 1ch;
-  color: var(--text-muted);
+  font-weight: 600;
 }
 
-.diff-path {
-  color: var(--text);
-}
-
-.diff-note {
-  color: var(--text-muted);
-}
-
-.diff-added .diff-marker,
-.diff-added .diff-path {
+.diff-added .diff-marker {
   color: var(--state-ok);
 }
 
-.diff-removed .diff-marker,
-.diff-removed .diff-path {
+.diff-removed .diff-marker {
   color: var(--state-bad);
 }
 
@@ -284,25 +239,33 @@
   color: var(--state-warn);
 }
 
-.diff-none,
-.diff-identical {
+.diff-same {
   color: var(--text-muted);
+}
+
+.diff-path {
+  min-width: 0;
+}
+
+.diff-note {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.diff-none {
   margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
-.diff-incompatible {
-  border-left: 2px solid var(--state-warn);
-  padding-left: var(--space-3);
-  margin-bottom: var(--space-4);
-}
+@media (max-width: 560px) {
+  .compare-field,
+  .compare-field select {
+    width: 100%;
+  }
 
-@media (max-width: 899px) {
-  /* The two least load-bearing columns go first: capabilities repeat in the diff, and
-     deployment says the same thing on every row until Phase 6. */
-  .builds .build-capabilities,
-  .builds .build-deployment,
-  .builds th:nth-child(6),
-  .builds th:nth-child(7) {
-    display: none;
+  .compare-controls {
+    display: grid;
   }
 }

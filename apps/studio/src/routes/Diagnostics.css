@@ -1,62 +1,77 @@
-/* Diagnostics. A list of checks, deliberately. See docs/architecture/studio-design.md. */
-
-.route-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
+/* Diagnostics: `lore doctor`, rendered, then what only a running session knows. */
 
 .counts {
-  font-family: var(--font-mono);
+  margin: 0 0 var(--space-3);
   font-size: var(--text-sm);
-  color: var(--text-muted);
-  margin: 0 0 var(--space-6);
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .checks {
   list-style: none;
-  margin: 0;
+  margin: 0 0 var(--space-6);
   padding: 0;
-  border-top: 1px solid var(--border-subtle);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
 }
 
 .check {
-  padding: var(--space-3) 0;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  column-gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.check:last-child {
+  border-bottom: 0;
+}
+
+/* The badge sits in its own column so every title starts at the same x. */
 .check-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  display: contents;
+}
+
+.check-head .badge {
+  grid-column: 1;
+  justify-self: start;
+  align-self: start;
+  margin-top: 1px;
 }
 
 .check-title {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  grid-column: 2;
+  font-weight: 500;
   color: var(--text);
+}
+
+.check-detail,
+.check-remediation,
+.check-values {
+  grid-column: 2;
 }
 
 .check-detail {
-  margin: var(--space-1) 0 0;
+  margin: 2px 0 0;
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
-/* A remediation is something a person runs, so it is set as code, wraps rather than
-   truncates, and can be selected in one gesture. */
+/* Selectable and whole: a remediation is something a person runs. */
 .check-remediation {
   margin: var(--space-2) 0 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--surface);
-  border-left: 2px solid var(--border);
   padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  user-select: text;
 }
 
 .check-values {
@@ -66,87 +81,79 @@
   margin: var(--space-2) 0 0;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
-  color: var(--text-muted);
 }
 
 .check-value {
   display: flex;
-  gap: var(--space-1);
+  gap: 6px;
 }
 
-.check-value dt::after {
-  content: ":";
+.check-value dt {
+  color: var(--text-muted);
+}
+
+.check-value {
+  min-width: 0;
 }
 
 .check-value dd {
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.panel {
-  margin-top: var(--space-8);
-}
-
-.clients {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-  font-family: var(--font-mono);
-}
-
-.clients th[scope="col"] {
-  text-align: left;
-  font-weight: 400;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  padding: 0 var(--space-3) var(--space-2) 0;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-.clients td,
-.clients th[scope="row"] {
-  text-align: left;
-  font-weight: 400;
-  padding: 0 var(--space-3) 0 0;
-  border-bottom: 1px solid var(--border-subtle);
-  height: var(--row-height);
-  vertical-align: middle;
   color: var(--text-secondary);
 }
 
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+  margin-bottom: var(--space-6);
+}
+
 .client-name {
-  color: var(--text);
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .client-version {
-  margin-left: var(--space-2);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  font-weight: 400;
   color: var(--text-muted);
 }
 
 .client-path {
-  color: var(--text-muted);
+  min-width: 260px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 
 .clients-hint {
-  margin-top: var(--space-3);
+  margin: var(--space-3) 0 0;
 }
 
-.checks {
-  border-top: 1px solid var(--text);
-  border-radius: var(--radius-territory);
-  padding: var(--space-3) var(--space-5);
-  background: var(--zone-coral);
+@media (max-width: 1000px) {
+  .diagnostics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.check {
-  border-bottom-color: rgba(32, 35, 31, 0.2);
-}
+@media (max-width: 560px) {
+  .check {
+    grid-template-columns: minmax(0, 1fr);
+  }
 
-.panel {
-  border-top: 8px solid var(--text);
-  padding-top: var(--space-4);
+  .check-head .badge,
+  .check-title,
+  .check-detail,
+  .check-remediation,
+  .check-values {
+    grid-column: 1;
+  }
+
+  .check-title {
+    margin-top: var(--space-1);
+  }
 }
