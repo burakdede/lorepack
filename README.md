@@ -125,10 +125,10 @@ path.
 
 ## Studio
 
-`lore dev` prints a Studio URL: six developer-focused routes served from static files by the
-same process that serves the API, on the same port, with no toolchain and no network. The
-redesigned interface treats the build as an atlas: sources, context, tables, versions and
-diagnostics are territories around one immutable active build.
+`lore dev` prints a Studio URL: six routes served from static files by the same process that
+serves the API, on the same port, with no toolchain and no network. A sidebar names the active
+build and whether its sources are still fresh; light and dark themes follow your system unless
+you pick one.
 
 ![Lore Studio Overview](docs/images/studio-overview.png)
 
@@ -137,19 +137,20 @@ a model actually receive for this task, and what was left out.** Every passage c
 provenance, every omission carries its reason, and a ranking heuristic is labelled as one
 rather than presented as a score of truth.
 
-![Lore Studio Sources](docs/images/studio-sources.png)
-
 ![Lore Studio Context Playground](docs/images/studio-playground.png)
 
-![Lore Studio Tables](docs/images/studio-tables.png)
+Versions lists every immutable build. Activation and rollback show the diff first, name the
+build they act on, and are pointer changes that never recompile.
 
 ![Lore Studio Versions](docs/images/studio-versions.png)
 
-![Lore Studio Diagnostics](docs/images/studio-diagnostics.png)
+Press <kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> elsewhere) to jump to any route, source or table.
+
+![Lore Studio command palette](docs/images/studio-palette.png)
 
 Tables appears only when the build has one, and its console runs a read-only `SELECT` through
 the same validator and limits as the tool a model calls. [Take the full tour](docs/studio-tour.md),
-including the excluded-source view.
+including Sources, the excluded-source view, Tables and Diagnostics.
 
 Studio is read-mostly. The only routes that change anything exist solely under `lore dev`, and
 they refuse any browser origin that is not a loopback literal.
