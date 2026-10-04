@@ -32,7 +32,9 @@ benchmark corpus, and reports envelope rebuild latency instead of advertising an
 
 ## Mixed-format corpus
 
-`benchmarks/corpus/manifest.json` is the versioned input manifest for a real-format corpus. It
+`benchmarks/corpus/manifest.json` is the versioned input manifest for a real-format corpus, and
+`benchmarks/corpus/queries.json` fixes the search, context and table workload shared by the
+corpus and comparison harnesses. It
 covers Markdown, plain text, HTML, PDF, DOCX, CSV, XLSX and source code, with a SHA-256 checksum
 and provenance for every base artifact. The PDF and XLSX members are deterministic generated
 fixtures written by `scripts/generate-corpus-fixtures.mjs`; they are ordinary files at benchmark
@@ -50,3 +52,9 @@ count, bytes, nodes, chunks, table rows, peak RSS, build and incremental p50/p95
 context assembly and table-query latency. The medium and large tiers repeat the mixed pack with
 path-local text, so they are scale trend evidence rather than an industry corpus. Issue `#386`
 owns a same-workload retrieval comparison against an external baseline.
+
+The first comparison is deliberately a direct SQLite FTS5 index over the same normalized chunks:
+[`benchmarks/comparison/results-2026-10-04.json`](comparison/results-2026-10-04.json). It measures
+index-only cost separately from Lorepack's full build and labels the missing provenance, context,
+table and activation semantics. The interpretation is in
+[`docs/compatibility/retrieval-comparison-2026-10-04.md`](../docs/compatibility/retrieval-comparison-2026-10-04.md).

@@ -65,3 +65,11 @@ The full 1 GiB fingerprint gate is not advertised for v0.1 because the committed
 run missed the old 4,000 ms p95 target. Issue `#302` owns either bringing that measurement under
 the gate or keeping the claim removed. `pnpm check:performance-report` enforces that the report,
 release baseline and section 5.5 stay aligned with the committed measurements.
+
+## Comparable retrieval baseline
+
+The first same-workload comparison is documented in
+[`retrieval-comparison-2026-10-04.md`](retrieval-comparison-2026-10-04.md). It compares the full
+Lorepack local runtime with direct SQLite FTS5 over the same normalized chunks, and labels the
+index-only and semantic differences explicitly. The result is reported-only and does not change
+the v0.1 release gates.

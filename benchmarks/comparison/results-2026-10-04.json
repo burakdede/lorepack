@@ -1,0 +1,61 @@
+{
+  "provisional": true,
+  "reportedNotEnforced": true,
+  "generatedAt": "2026-10-04",
+  "corpusManifest": "benchmarks/corpus/manifest.json",
+  "queryWorkload": "benchmarks/corpus/queries.json",
+  "semantics": {
+    "baseline": "Direct SQLite FTS5 over Lorepack normalized chunks. It starts after parsing and chunking.",
+    "lorepack": "Full local runtime search and context assembly over the same sealed build.",
+    "tableAndBuildContract": "The baseline does not preserve build identity, SourceLocator objects, authority or status ranking, context omission reports, table structure, activation, or rollback."
+  },
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGiB": 32,
+    "node": "24.18.1",
+    "sqlite": "3.53.1"
+  },
+  "corpus": {
+    "packs": 40,
+    "artifacts": 360,
+    "bytes": 13927550,
+    "chunks": 8520,
+    "tables": 80,
+    "tableRows": 280,
+    "manifestArtifacts": 9
+  },
+  "samples": { "build": 3, "index": 3, "warmSearch": 30, "contextBundle": 20 },
+  "baselines": {
+    "lorepack": {
+      "indexBytes": 55160832,
+      "peakRssMiB": 729.09,
+      "buildMs": { "p50": 13493.46, "p95": 13846.57, "samples": 3 },
+      "coldSearchMs": 19.8,
+      "warmSearchMs": { "p50": 3.87, "p95": 12.78, "p99": 14.11, "samples": 30 },
+      "contextBundleMs": { "p50": 60.45, "p95": 70.47, "samples": 20 },
+      "topK": { "min": 1, "max": 2 }
+    },
+    "sqliteFts5": {
+      "machine": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M1 Pro",
+        "cores": 10,
+        "memoryGiB": 32,
+        "node": "24.18.1",
+        "sqlite": "3.53.1"
+      },
+      "indexBytes": 11628544,
+      "peakRssMiB": 74.78,
+      "indexMs": { "p50": 100.3, "p95": 105.16, "samples": 3 },
+      "coldSearchMs": 0.53,
+      "warmSearchMs": { "p50": 0.09, "p95": 0.29, "p99": 0.31, "samples": 30 },
+      "contextBundleMs": null,
+      "contextUnsupportedReason": "Direct FTS5 returns ranked rows only. It does not implement bounded context assembly or omission accounting.",
+      "topK": { "min": 0, "max": 10 }
+    }
+  }
+}

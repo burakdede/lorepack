@@ -3,6 +3,7 @@
   "reportedNotEnforced": true,
   "generatedAt": "2026-10-04",
   "corpusManifest": "benchmarks/corpus/manifest.json",
+  "queryWorkload": "benchmarks/corpus/queries.json",
   "limitation": "The medium and large tiers repeat repository-owned mixed-format packs with deterministic path-local text. They establish scale trends and parser coverage, not a representative industry corpus. A public industry baseline remains issue 386.",
   "machine": {
     "platform": "darwin",
@@ -31,14 +32,14 @@
         "tables": 2,
         "tableRows": 7
       },
-      "peakRssMiB": 386.58,
+      "peakRssMiB": 373.3,
       "measurements": {
-        "buildMs": { "p50": 550.52, "p95": 820.68, "samples": 3 },
-        "incrementalMs": { "p50": 109.81, "p95": 119.01, "samples": 3 },
+        "buildMs": { "p50": 432.96, "p95": 722.2, "samples": 3 },
+        "incrementalMs": { "p50": 98.27, "p95": 100.64, "samples": 3 },
         "incrementalReusedArtifacts": { "min": 6, "max": 6 },
-        "warmSearchMs": { "p50": 2.98, "p95": 5.38, "samples": 30 },
-        "contextBundleMs": { "p50": 7.01, "p95": 7.67, "samples": 20 },
-        "tableQueryMs": { "p50": 95.53, "p95": 110.59, "samples": 20 }
+        "warmSearchMs": { "p50": 0.67, "p95": 4.48, "samples": 30 },
+        "contextBundleMs": { "p50": 8.55, "p95": 10.03, "samples": 20 },
+        "tableQueryMs": { "p50": 95.84, "p95": 103.11, "samples": 20 }
       }
     },
     {
@@ -52,14 +53,14 @@
         "tables": 20,
         "tableRows": 70
       },
-      "peakRssMiB": 608.92,
+      "peakRssMiB": 590.23,
       "measurements": {
-        "buildMs": { "p50": 3844.05, "p95": 4334.57, "samples": 3 },
-        "incrementalMs": { "p50": 253.4, "p95": 270.07, "samples": 3 },
+        "buildMs": { "p50": 3309.56, "p95": 3360.38, "samples": 3 },
+        "incrementalMs": { "p50": 278.04, "p95": 281.84, "samples": 3 },
         "incrementalReusedArtifacts": { "min": 69, "max": 69 },
-        "warmSearchMs": { "p50": 5.23, "p95": 5.88, "samples": 30 },
-        "contextBundleMs": { "p50": 25.33, "p95": 26.38, "samples": 20 },
-        "tableQueryMs": { "p50": 88.17, "p95": 99.31, "samples": 20 }
+        "warmSearchMs": { "p50": 3.13, "p95": 6, "samples": 30 },
+        "contextBundleMs": { "p50": 33.35, "p95": 35.3, "samples": 20 },
+        "tableQueryMs": { "p50": 94.55, "p95": 102.27, "samples": 20 }
       }
     },
     {
@@ -73,14 +74,14 @@
         "tables": 80,
         "tableRows": 280
       },
-      "peakRssMiB": 768.97,
+      "peakRssMiB": 728.97,
       "measurements": {
-        "buildMs": { "p50": 14900.04, "p95": 16940.55, "samples": 3 },
-        "incrementalMs": { "p50": 878.16, "p95": 879.81, "samples": 3 },
+        "buildMs": { "p50": 12977.94, "p95": 13135.33, "samples": 3 },
+        "incrementalMs": { "p50": 884.55, "p95": 905.46, "samples": 3 },
         "incrementalReusedArtifacts": { "min": 279, "max": 279 },
-        "warmSearchMs": { "p50": 10.82, "p95": 11.81, "samples": 30 },
-        "contextBundleMs": { "p50": 41.13, "p95": 43.7, "samples": 20 },
-        "tableQueryMs": { "p50": 92.15, "p95": 95.18, "samples": 20 }
+        "warmSearchMs": { "p50": 3.26, "p95": 11.67, "samples": 30 },
+        "contextBundleMs": { "p50": 57.85, "p95": 63.21, "samples": 20 },
+        "tableQueryMs": { "p50": 94.62, "p95": 98.07, "samples": 20 }
       }
     }
   ]
