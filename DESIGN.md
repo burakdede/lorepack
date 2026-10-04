@@ -77,6 +77,11 @@ typography:
     fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "16px"
     fontWeight: 400
+  mono-display:
+    fontFamily: "IBM Plex Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "26px"
+    fontWeight: 500
+    letterSpacing: "-0.02em"
   mono-id:
     fontFamily: "IBM Plex Mono, ui-monospace, SF Mono, Menlo, Consolas, monospace"
     fontSize: "14px"
@@ -342,13 +347,22 @@ Sits in a 12px framed box. 36px rows with hairline rules, a 34px Sunken Tint hea
 Opened with Cmd-K or Ctrl-K. A 640px sheet, 14vh from the top, over the Scrim, with the overlay shadow. A 52px search row at 16px, grouped options at 38px with a 16px icon, label and mono detail; the highlighted option takes Selection Wash. A Sunken Tint footer carries key hints. The scrim fades in 160ms and the sheet rises 6px from 0.985 scale in 180ms.
 
 ### Budget Tape (signature)
-Playground's accounting drawn to scale: a 10px pill track, reserved tokens in Pewter, selected in Graphite, free space as Raised Tint with an inset line, segments split by a 2px surface gap, and the cut marked with a 1.5px dashed Stale Amber border. A mono legend with the exact figures sits beneath. Built from elements, not SVG.
+Playground's accounting drawn to scale, under a summary line that is the one place the budget and the tokens used are written (used at 22px mono). A 14px pill track, reserved tokens in Pewter, selected in Graphite, free space as Raised Tint with an inset line, segments split by a 2px surface gap, and the cut marked with a 1.5px dashed Stale Amber border. A mono legend with the exact figures sits beneath. Built from elements, not SVG.
 
 ### Confirmation
 Inline under the version it acts on: Clean Sheet, 1px ink frame, 12px radius, overlay shadow, a mono heading naming the build, the plan, and the actions behind a hairline. It enters by moving 4px over 200ms and never fades.
 
 ### Citation
-Path in mono 500, heading path in muted sans, range in muted tabular mono, real-space separators. Inline layout so it wraps on the baseline. The copy button appears on hover or focus, and always on touch.
+Path in mono 500, heading path in muted sans, range in muted tabular mono, real-space separators. Inline layout so it wraps on the baseline. The copy button appears on hover or focus, and always on touch. When the locator names an artifact, the path is a link to Sources with the cited lines marked, underlined in the border tone and in full ink on hover. It never links to the source already open.
+
+### Use It Anywhere (signature)
+Every request Studio makes, shown as the same request three ways: a `lore` CLI line, a `curl` call against this server, and the MCP `tools/call` params. A framed panel with a mono tab strip (CLI, HTTP, MCP), one Copy action, and a code well that is dark in both themes (`--code-bg`), because a command reads as a terminal line. A form with no exact equivalent is left out rather than approximated: table queries and source reads have no CLI tab. The code well is focusable, so a long line can be scrolled by keyboard.
+
+### Source Reader
+The stored text of one file, as a model reads it. A framed, focusable, 480px-tall scroller with a 4.5ch line-number gutter split by a hairline; each line is a two-column row so wrapped text stays beside its number. Cited lines take the Stale Amber wash with an amber number. The gutter is `user-select: none`, so a copied passage is the document.
+
+### Connect Panel and Next Steps
+Overview's launchpad. Next steps are three columns in one panel split by hairlines, never three cards, each a title, one sentence and a small action; the connect step carries a live count badge. The Connect panel lists the MCP and HTTP endpoints as copyable values (no `$` prompt) and `lore mcp` as a command, then one row per detected client with its state badge and a `lore connect` command only where it would do something.
 
 ## Do's and Don'ts
 

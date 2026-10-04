@@ -340,7 +340,15 @@ async function main() {
     await page.getByLabel('Task').fill('what is our data retention window for support transcripts');
     await page.getByRole('button', { name: 'Assemble' }).click();
     await page.locator('.item').first().waitFor();
+    // Scrolled to the request as CLI, HTTP and MCP, which is what a developer copies out.
+    await page.getByRole('region', { name: 'Use it anywhere' }).scrollIntoViewIfNeeded();
     await shoot('studio-playground.png');
+
+    // Following a citation to the stored text, with the cited lines marked.
+    await page.locator('.item .citation-link').first().click();
+    await page.locator('.reader-line-marked').first().waitFor();
+    await page.waitForTimeout(300);
+    await shoot('studio-reader.png');
 
     // The omissions table is deliberately not photographed. It only exists when something was
     // omitted, so capturing it would mean sizing the demo corpus to force an omission, and a
