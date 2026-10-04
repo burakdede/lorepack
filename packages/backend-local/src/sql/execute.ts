@@ -2,7 +2,7 @@ import { type ChildProcess, fork } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LoreError } from '@lorepack/core';
+import { LoreError, TABLE_QUERY_LIMITS } from '@lorepack/core';
 import { validateStatement } from './statement.js';
 
 /**
@@ -20,11 +20,7 @@ import { validateStatement } from './statement.js';
  */
 
 export const QUERY_LIMITS = {
-  /** Rows returned when the caller does not ask for fewer. */
-  defaultRows: 100,
-  maxRows: 10_000,
-  /** Serialized response bytes. A result nobody can read is not a useful answer. */
-  maxBytes: 1_000_000,
+  ...TABLE_QUERY_LIMITS,
   /** Wall clock. Past this the child is killed. */
   deadlineMs: 5_000,
   /** How long the child is given to open the build and report ready. */

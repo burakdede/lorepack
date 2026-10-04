@@ -15,3 +15,16 @@ export const RUNTIME_LIMITS = {
    */
   maxSourceReadCharacters: 200_000,
 } as const;
+
+/**
+ * Bounds for the read-only table query surface.
+ *
+ * These belong to the runtime contract rather than one storage adapter. A local SQLite
+ * process and a Cloudflare Worker must reject the same unbounded result shape, even though
+ * one can kill a child process and the other can only constrain the D1 statement.
+ */
+export const TABLE_QUERY_LIMITS = {
+  defaultRows: 100,
+  maxRows: 10_000,
+  maxBytes: 1_000_000,
+} as const;

@@ -15,6 +15,7 @@ security-affecting change before release.
 | Malformed PDF and Office inputs | `packages/parsers/test/pdf.test.ts`, `packages/parsers/test/docx.test.ts`, `packages/parsers/test/xlsx.test.ts` | Covered |
 | SQL injection and multi-statement attempts | `packages/cli/test/security.e2e.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
 | Oversized requests and responses | `packages/runtime/test/http.test.ts`, export/context budget tests | Covered |
+| Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
 | Localhost Origin validation | `packages/runtime/test/http.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
@@ -44,6 +45,7 @@ pnpm exec vitest run test/cloudflare-smoke.test.ts test/cloudflare-testing.test.
 | 2026-08-14 | `mise exec -- pnpm test:security` | Passed: 2 files, 14 tests |
 | 2026-08-14 | `mise exec -- pnpm verify` | Passed through `pnpm test:security`; then failed at `check:sources-tracked` because the new files were not staged yet |
 | 2026-08-14 | `mise exec -- pnpm check:sources-tracked && mise exec -- pnpm check:docs-images && mise exec -- pnpm check:docs-links && mise exec -- pnpm check:templates && mise exec -- pnpm check:license-policy && mise exec -- pnpm check:verify-parity && mise exec -- pnpm schemas:check && mise exec -- pnpm probe:fts5 && mise exec -- pnpm acceptance:docs:check && mise exec -- pnpm cli:docs:check && mise exec -- pnpm demo:readme:check` | Passed after staging the new files |
+| 2026-10-04 | `mise exec -- pnpm exec vitest run packages/deploy-cloudflare/test/tables.test.ts packages/deploy-cloudflare/test/project-table-data.test.ts` | Passed: 2 files, 11 tests; D1 SQL is bounded before JavaScript slicing and oversized serialized results are refused |
 
 ## Notes
 

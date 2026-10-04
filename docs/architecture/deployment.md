@@ -112,3 +112,11 @@ Serial writes still hold because Lorepack awaits each statement in order.
 If a later change proposes parallel D1 projection writes, it must replace that artifact with a
 new measurement and update this section. Until then, higher concurrency would be an optimization
 before measured need.
+
+## Cloudflare table-query bounds
+
+The Worker applies the shared table-query limits before D1 materializes a result: 100 rows by
+default, 10,000 rows maximum, and a 1 MB serialized response ceiling. `D1TableStore` wraps the
+validated single-table statement in an outer `LIMIT` and requests one extra row to preserve the
+`truncated` flag. Slicing an unbounded D1 result after `run()` would allow a model-facing request
+to allocate the whole table, so that implementation is deliberately not used.

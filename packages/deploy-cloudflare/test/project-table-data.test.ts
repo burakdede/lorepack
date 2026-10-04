@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { BuildManifest } from '@lorepack/core';
+import { type BuildManifest, TABLE_QUERY_LIMITS } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { projectTableData } from '../src/project-table-data.js';
 import {
@@ -273,6 +273,69 @@ afterEach(() => {
 });
 
 describe('projectTableData, issue 258', () => {
+  it('bounds D1 materialization before JavaScript slices the response', async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 150);
+    const projection = new DatabaseSync(':memory:');
+    databases.push(projection);
+    const queries: string[] = [];
+    const db = new SqliteProjectionDatabase(projection, (query) => {
+      if (query.startsWith('SELECT * FROM (SELECT')) queries.push(query);
+    });
+    await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
+    await projectTableData({ db, projectId: PROJECT, buildId: BUILD_A, buildDirectory });
+
+    const store = new D1TableStore(db, { projectId: PROJECT, buildId: BUILD_A });
+    const described = await store.describe(TABLE_ID);
+    const defaulted = await store.query({
+      tableId: TABLE_ID,
+      sql: `SELECT c_0_sku FROM ${described?.sqlName}`,
+    });
+    const requested = await store.query({
+      tableId: TABLE_ID,
+      sql: `SELECT c_0_sku FROM ${described?.sqlName}`,
+      limit: 2,
+    });
+    const clamped = await store.query({
+      tableId: TABLE_ID,
+      sql: `SELECT c_0_sku FROM ${described?.sqlName}`,
+      limit: TABLE_QUERY_LIMITS.maxRows + 1,
+    });
+
+    expect(defaulted.rowCount).toBe(TABLE_QUERY_LIMITS.defaultRows);
+    expect(defaulted.truncated).toBe(true);
+    expect(requested.rowCount).toBe(2);
+    expect(requested.truncated).toBe(true);
+    expect(clamped.rowCount).toBe(150);
+    expect(clamped.truncated).toBe(false);
+    expect(queries).toEqual([
+      expect.stringContaining(`LIMIT ${TABLE_QUERY_LIMITS.defaultRows + 1}`),
+      expect.stringContaining('LIMIT 3'),
+      expect.stringContaining(`LIMIT ${TABLE_QUERY_LIMITS.maxRows + 1}`),
+    ]);
+  });
+
+  it('rejects a bounded result whose serialized bytes still exceed the response budget', async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 1);
+    const projection = new DatabaseSync(':memory:');
+    databases.push(projection);
+    const db = new SqliteProjectionDatabase(projection);
+    await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
+    await projectTableData({ db, projectId: PROJECT, buildId: BUILD_A, buildDirectory });
+
+    const store = new D1TableStore(db, { projectId: PROJECT, buildId: BUILD_A });
+    const described = await store.describe(TABLE_ID);
+    projection
+      .prepare(`UPDATE ${described?.sqlName} SET c_0_sku = ?`)
+      .run('x'.repeat(TABLE_QUERY_LIMITS.maxBytes));
+
+    await expect(
+      store.query({
+        tableId: TABLE_ID,
+        sql: `SELECT c_0_sku FROM ${described?.sqlName}`,
+      }),
+    ).rejects.toMatchObject({ code: 'LORE_E_LIMIT_EXCEEDED' });
+  });
+
   it('projects table metadata and rows under build-scoped physical table names', async () => {
     const buildDirectory = makeBuildDirectory(BUILD_A, 3);
     const projection = new DatabaseSync(':memory:');

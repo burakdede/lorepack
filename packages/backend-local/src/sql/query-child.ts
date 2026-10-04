@@ -230,8 +230,9 @@ process.on('message', (message: Setup | Request) => {
     // Serialized size is checked here rather than by the caller, because the caller would
     // have to receive the rows to measure them, and receiving them is the cost being bounded.
     const serialized = JSON.stringify(kept);
-    if (serialized.length > request.maxBytes) {
-      send({ ok: false, kind: 'too-large', bytes: serialized.length });
+    const serializedBytes = new TextEncoder().encode(serialized).byteLength;
+    if (serializedBytes > request.maxBytes) {
+      send({ ok: false, kind: 'too-large', bytes: serializedBytes });
       return;
     }
 
