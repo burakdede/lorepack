@@ -29,3 +29,24 @@ Envelope build measurements live under `benchmarks/envelope/`.
 The #245 decision is documented in `docs/architecture/build-orchestration.md`: v0.1 keeps
 immutable build sealing, narrows the sub-2 s incremental rebuild claim to the lifecycle
 benchmark corpus, and reports envelope rebuild latency instead of advertising an unmet number.
+
+## Mixed-format corpus
+
+`benchmarks/corpus/manifest.json` is the versioned input manifest for a real-format corpus. It
+covers Markdown, plain text, HTML, PDF, DOCX, CSV, XLSX and source code, with a SHA-256 checksum
+and provenance for every base artifact. The PDF and XLSX members are deterministic generated
+fixtures written by `scripts/generate-corpus-fixtures.mjs`; they are ordinary files at benchmark
+time, not parser test objects.
+
+Run the three-tier measurement with:
+
+```sh
+pnpm bench:corpus -- --out benchmarks/corpus/results-<date>.json
+```
+
+The committed Apple M1 Pro result is
+[`benchmarks/corpus/results-2026-10-04.json`](corpus/results-2026-10-04.json). It records file
+count, bytes, nodes, chunks, table rows, peak RSS, build and incremental p50/p95, warm search,
+context assembly and table-query latency. The medium and large tiers repeat the mixed pack with
+path-local text, so they are scale trend evidence rather than an industry corpus. Issue `#386`
+owns a same-workload retrieval comparison against an external baseline.

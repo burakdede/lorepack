@@ -1,0 +1,4 @@
+Operations note
+
+The benchmark corpus includes plain text because text files are a separate parser path from
+Markdown. This note describes a rollback checklist without headings or markup.
