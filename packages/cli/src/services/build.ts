@@ -80,6 +80,7 @@ export interface BuildOptions {
   /** How long to wait for the project lock. Tests use a short wait; users get the default. */
   readonly lockWaitMs?: number;
   readonly now?: () => Date;
+  readonly seal?: typeof sealCandidateDirectory;
 }
 
 /**
@@ -510,7 +511,19 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
 
         await checkpoint(options.signal, { hasActiveBuild: active !== null });
         progress.start('sealing', 'Sealing');
-        sealCandidateDirectory(candidate, join(loreDirectory, 'builds', buildId));
+        const sealedResult = (options.seal ?? sealCandidateDirectory)(
+          candidate,
+          join(loreDirectory, 'builds', buildId),
+        );
+        if (!sealedResult.sealed && !isBuildReadable(loreDirectory, buildId)) {
+          throw new LoreError(
+            'LORE_E_INTERNAL',
+            `The build ${buildId} was not sealed and no readable destination exists.`,
+            {
+              remediation: 'Check the build directory permissions and build again.',
+            },
+          );
+        }
         sealed = true;
         progress.finish('sealing', 1);
       } finally {
