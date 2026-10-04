@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { reportsMatch } from '../../../scripts/check-supply-chain.mjs';
+import { reportsMatch, sbomsMatch } from '../../../scripts/check-supply-chain.mjs';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const CHANGESET_CHECK = join(REPO_ROOT, 'scripts', 'check-changeset-policy.mjs');
@@ -204,6 +204,21 @@ describe('supply-chain report freshness', () => {
     expect(reportsMatch(newerRegistrySnapshot, report)).toBe(true);
   });
 
+  it('ignores registry publish dates that can vary by registry replica', () => {
+    const report = dependencyReport();
+    const replicaSnapshot = {
+      ...report,
+      dependencies: [
+        {
+          ...report.dependencies[0],
+          pinnedPublishedAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+    };
+
+    expect(reportsMatch(replicaSnapshot, report)).toBe(true);
+  });
+
   it('rejects a changed audit result or dependency inventory', () => {
     const report = dependencyReport();
     expect(
@@ -224,6 +239,50 @@ describe('supply-chain report freshness', () => {
         report,
       ),
     ).toBe(false);
+  });
+
+  it('ignores object key order in report and SBOM snapshots', () => {
+    const report = {
+      ...dependencyReport(),
+      audit: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0 } },
+    };
+    const reorderedReport = {
+      ...report,
+      audit: { vulnerabilities: { critical: 0, high: 0, moderate: 0, low: 0, info: 0 } },
+    };
+    const sbom = {
+      components: [{ licenses: [{ expression: 'MIT' }], name: 'example' }],
+      metadata: { component: { name: 'lorepack' } },
+    };
+    const reorderedSbom = {
+      metadata: { component: { name: 'lorepack' } },
+      components: [{ name: 'example', licenses: [{ expression: 'MIT' }] }],
+    };
+
+    expect(reportsMatch(reorderedReport, report)).toBe(true);
+    expect(sbomsMatch(sbom, reorderedSbom)).toBe(true);
+  });
+
+  it('ignores dependency and SBOM component order', () => {
+    const report = dependencyReport();
+    const reorderedReport = {
+      ...report,
+      dependencies: [...report.dependencies].reverse(),
+    };
+    const sbom = {
+      components: [
+        { name: 'z-package', licenses: [{ expression: 'MIT' }] },
+        { name: 'a-package', licenses: [{ expression: 'MIT' }] },
+      ],
+      metadata: { component: { name: 'lorepack' } },
+    };
+    const reorderedSbom = {
+      ...sbom,
+      components: [...sbom.components].reverse(),
+    };
+
+    expect(reportsMatch(reorderedReport, report)).toBe(true);
+    expect(sbomsMatch(sbom, reorderedSbom)).toBe(true);
   });
 });
 
