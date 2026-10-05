@@ -64,6 +64,9 @@ export interface AssembleInput {
   readonly task: string;
   readonly profile: ContextProfile;
   readonly budget: number;
+  readonly candidateLimit?: number;
+  readonly candidateLimitHit?: boolean;
+  readonly candidateMatchMode?: 'all' | 'any';
   /** Ranked candidates, best first, already filtered for visibility. */
   readonly ranked: readonly RankedHit[];
   /**
@@ -84,6 +87,9 @@ type Assembled = Pick<
   | 'task'
   | 'profile'
   | 'budget'
+  | 'candidateLimit'
+  | 'candidateLimitHit'
+  | 'candidateMatchMode'
   | 'estimatedTokens'
   | 'reservedTokens'
   | 'overview'
@@ -165,6 +171,9 @@ export function assembleBundle(input: AssembleInput): Assembled {
     task: input.task,
     profile: input.profile,
     budget: input.budget,
+    candidateLimit: input.candidateLimit ?? Math.max(1, input.ranked.length),
+    candidateLimitHit: input.candidateLimitHit ?? false,
+    candidateMatchMode: input.candidateMatchMode ?? 'all',
     estimatedTokens: used,
     reservedTokens,
     overview,

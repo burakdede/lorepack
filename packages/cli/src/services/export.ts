@@ -38,7 +38,10 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
   }
   lines.push('');
   lines.push(
-    'Every passage below is quoted from a document in this project, with the file and lines it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.',
+    'Every passage below is quoted from a document in this project, with the file and source coordinate it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.',
+  );
+  lines.push(
+    `Search considered up to ${count(bundle.candidateLimit, 'candidate')} using ${bundle.candidateMatchMode}-term matching${bundle.candidateLimitHit ? ', and the candidate limit was reached' : ''}.`,
   );
   lines.push('');
 
@@ -85,10 +88,10 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
 
   lines.push('## What was left out', '');
   if (bundle.omitted.length === 0) {
-    lines.push('Nothing. Every passage that matched this task is above.', '');
+    lines.push('Nothing from the candidates considered was omitted.', '');
   } else {
     lines.push(
-      `${count(bundle.omitted.length, 'passage')} matched and did not fit, grouped by reason. Nothing was dropped silently.`,
+      `${count(bundle.omitted.length, 'passage')} considered candidates did not fit, grouped by reason. The report covers the candidates considered above.`,
       '',
     );
     for (const [reason, items] of groupByReason(bundle.omitted)) {

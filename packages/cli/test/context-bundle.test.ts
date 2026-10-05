@@ -33,8 +33,9 @@ const CORPUS = {
 async function bundleFor(
   task: string,
   overrides: Partial<Parameters<ReturnType<typeof createRuntime>['contextForTask']>[0]> = {},
+  corpus: Record<string, string> = CORPUS,
 ): Promise<ContextBundle> {
-  return withTempProject({ files: CORPUS }, async (project) => {
+  return withTempProject({ files: corpus }, async (project) => {
     await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
     const backend = createLocalRuntimeBackend({ projectRoot: project.root });
     try {
@@ -53,6 +54,23 @@ const included = (bundle: ContextBundle): string[] =>
   [...bundle.overview, ...bundle.selected].map((item) => item.locator.relativePath);
 
 describe('a task phrased as a sentence', () => {
+  it('discloses when the candidate cap limits coverage', async () => {
+    const corpus = {
+      'lore.yaml': CONFIG,
+      ...Object.fromEntries(
+        Array.from({ length: 501 }, (_, index) => [
+          `matches/${String(index).padStart(3, '0')}.md`,
+          `# Match ${String(index)}\n\nCoverage marker ${String(index)}.`,
+        ]),
+      ),
+    };
+    const bundle = await bundleFor('coverage marker', {}, corpus);
+
+    expect(bundle.candidateLimit).toBe(500);
+    expect(bundle.candidateLimitHit).toBe(true);
+    expect(bundle.candidateMatchMode).toBe('all');
+  });
+
   it('returns the documents that answer it', async () => {
     const bundle = await bundleFor('how do I roll back a release that went wrong');
 
