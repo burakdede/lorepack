@@ -15,7 +15,7 @@
 // an SVG of real captured bytes is dependency-free, scales, stays legible on a high-density
 // screen, and diffs as text so a review can see what the output became.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -202,6 +202,124 @@ function terminalSvg(title, blocks) {
 `;
 }
 
+/**
+ * The README demo: real command output, animated in a loop as an SVG.
+ *
+ * Each scene types its command, prints its output a line at a time, holds, and gives way to the
+ * next. It is CSS keyframes inside one SVG file, so GitHub renders it in an `<img>` with no
+ * script, it needs no recorder or encoder (invariant 7), it diffs as text, and it is
+ * regenerated from the product with everything else here. A reader who prefers reduced motion
+ * gets the search scene, still.
+ *
+ * Output is trimmed, never rewritten: `keep` drops lines (progress ticks, an absolute temp
+ * path) and long lines wrap at the frame. The full, untrimmed run is `docs/demo-transcript.md`.
+ */
+function animatedTerminalSvg(title, scenes, { columns = 92, still = 0 } = {}) {
+  const CHAR = 8.4;
+  const LINE = 21;
+  const PAD = 20;
+  const TOP = 34;
+  const TYPE_PER_CHAR = 0.045;
+  const LINE_DELAY = 0.07;
+  const HOLD = 3.2;
+  const FADE = 0.35;
+
+  const escaped = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const wrap = (line) => {
+    if (line.length <= columns) return [line];
+    const indent = line.match(/^\s*/)[0];
+    const parts = [];
+    let rest = line;
+    while (rest.length > columns) {
+      let cut = rest.lastIndexOf(' ', columns);
+      if (cut <= indent.length) cut = columns;
+      parts.push(rest.slice(0, cut));
+      rest = indent + rest.slice(cut).trimStart();
+    }
+    parts.push(rest);
+    return parts;
+  };
+
+  const prepared = scenes.map((scene) => ({
+    command: scene.command,
+    lines: scene.output
+      .replace(/\s+$/, '')
+      .split('\n')
+      .filter((line) => (scene.keep === undefined ? true : scene.keep(line)))
+      // No blank first or last line, and never two blank lines in a row.
+      .filter(
+        (line, index, all) => line.trim() !== '' || (index > 0 && all[index - 1].trim() !== ''),
+      )
+      .join('\n')
+      .trim()
+      .split('\n')
+      .flatMap(wrap),
+  }));
+
+  // One loop: every scene's window, in seconds, end to end.
+  let clock = 0;
+  const timed = prepared.map((scene) => {
+    const start = clock;
+    const typed = start + 0.4 + scene.command.length * TYPE_PER_CHAR;
+    const printed = typed + 0.35 + scene.lines.length * LINE_DELAY;
+    const end = printed + HOLD;
+    clock = end + FADE;
+    return { ...scene, start, typed, printed, end };
+  });
+  const total = clock;
+  const pct = (seconds) => `${((seconds / total) * 100).toFixed(3)}%`;
+
+  const rows = Math.max(...prepared.map((scene) => scene.lines.length + 1));
+  const width = Math.round((columns + 2) * CHAR + PAD * 2);
+  const height = TOP + PAD * 2 + rows * LINE;
+
+  const keyframes = [];
+  const groups = timed.map((scene, index) => {
+    const id = `s${index}`;
+    keyframes.push(
+      `@keyframes ${id}{0%,${pct(scene.start)}{opacity:0}${pct(scene.start + 0.01)},${pct(scene.end)}{opacity:1}${pct(scene.end + FADE)},100%{opacity:0}}`,
+    );
+    // The command is drawn at exactly CHAR per glyph (`textLength`), whatever monospace face
+    // the viewer has, so the mask that types it and the cursor land on the characters.
+    const promptWidth = 2 * CHAR;
+    const typedWidth = scene.command.length * CHAR;
+    keyframes.push(
+      `@keyframes ${id}t{0%,${pct(scene.start + 0.4)}{transform:translateX(0);animation-timing-function:steps(${scene.command.length},end)}${pct(scene.typed)},100%{transform:translateX(${typedWidth.toFixed(1)}px)}}`,
+    );
+    const y0 = PAD + TOP;
+    const output = scene.lines
+      .map((line, lineIndex) => {
+        const lineId = `${id}l${lineIndex}`;
+        const at = scene.typed + 0.35 + lineIndex * LINE_DELAY;
+        keyframes.push(
+          `@keyframes ${lineId}{0%,${pct(at)}{opacity:0}${pct(at + 0.01)},100%{opacity:1}}`,
+        );
+        const strong = /^\s*(Build|Studio|HTTP|MCP|Activated|Artifacts|\d+\.\s)/.test(line);
+        return `<text class="o${strong ? ' k' : ''}" style="animation-name:${lineId}" x="${PAD}" y="${y0 + (lineIndex + 1) * LINE}" xml:space="preserve">${escaped(line)}</text>`;
+      })
+      .join('');
+    return `<g class="sc${index === still ? ' still' : ''}" style="animation-name:${id}"><text x="${PAD}" y="${y0}" textLength="${((scene.command.length + 2) * CHAR).toFixed(1)}" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">${escaped(scene.command)}</tspan></text><g class="cv" style="animation-name:${id}t"><rect x="${(PAD + promptWidth).toFixed(1)}" y="${y0 - 15}" width="${(typedWidth + CHAR * 2).toFixed(1)}" height="20" fill="#141414"/><rect x="${(PAD + promptWidth).toFixed(1)}" y="${y0 - 14}" width="${CHAR.toFixed(1)}" height="18" fill="#e6e6e6"/></g>${output}</g>`;
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escaped(title)}">
+<style>
+.sc,.cv,.o{animation-duration:${total.toFixed(2)}s;animation-iteration-count:infinite;animation-fill-mode:both}
+.sc{opacity:0}.cv,.o{animation-timing-function:linear}
+.p{fill:#7d8590}.c{fill:#f0f0f0;font-weight:600}.o{fill:#9a9a9a}.k{fill:#d6d6d6}
+${keyframes.join('\n')}
+@media (prefers-reduced-motion:reduce){.sc,.cv,.o{animation:none}.sc{opacity:0}.sc.still{opacity:1}.cv{display:none}.o{opacity:1}}
+</style>
+<rect width="${width}" height="${height}" rx="8" fill="#141414"/>
+<circle cx="${PAD}" cy="20" r="5" fill="#ff5f57"/><circle cx="${PAD + 16}" cy="20" r="5" fill="#febc2e"/><circle cx="${PAD + 32}" cy="20" r="5" fill="#28c840"/>
+<text x="${PAD + 52}" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">${escaped(title)}</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+${groups.join('\n')}
+</g>
+</svg>
+`;
+}
+
 async function waitForServer(child) {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
@@ -263,13 +381,11 @@ async function main() {
       'utf8',
     );
 
+    const search = lore(project, ['search', 'how long do we keep support transcripts']);
     writeFileSync(
       join(IMAGES, 'cli-search.svg'),
       terminalSvg('every result carries where it came from', [
-        {
-          command: 'lore search "how long do we keep support transcripts"',
-          output: lore(project, ['search', 'how long do we keep support transcripts']),
-        },
+        { command: 'lore search "how long do we keep support transcripts"', output: search },
       ]),
       'utf8',
     );
@@ -281,11 +397,68 @@ async function main() {
       'utf8',
     );
     lore(project, ['build']);
+    const diff = lore(project, ['diff']);
+    // Rolled back in a copy, so the project Studio photographs keeps its newest build live.
+    const rolled = mkdtempSync(join(tmpdir(), 'lore-docs-rollback-'));
+    cpSync(project, rolled, { recursive: true });
+    const rollback = lore(rolled, ['rollback']);
+    rmSync(rolled, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
     child = spawn(process.execPath, [BINARY, 'dev', project, '--port', String(PORT)], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    let served = '';
+    child.stdout.on('data', (chunk) => {
+      served += chunk;
+    });
     await waitForServer(child);
+    const printed = Date.now() + 10_000;
+    while (!served.includes('Watching for changes') && Date.now() < printed) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const STAGE = /^(Discovering|Fingerprinting|Parsing|Indexing|Validating|Sealing|Activating)\s/;
+    writeFileSync(
+      join(IMAGES, 'demo.svg'),
+      animatedTerminalSvg(
+        'Lorepack: build, ask with citations, diff, roll back, serve',
+        [
+          { command: 'lore build', output: build, keep: (line) => !STAGE.test(line) },
+          {
+            command: 'lore search "how long do we keep support transcripts"',
+            output: search,
+            // The first hit, with its file, heading path and line.
+            keep: (() => {
+              let hits = 0;
+              return (line) => {
+                if (/^\s*\d+\.\s/.test(line)) hits += 1;
+                return hits <= 1;
+              };
+            })(),
+          },
+          {
+            command: 'lore diff',
+            output: diff,
+            keep: (() => {
+              let section = 'Build';
+              return (line) => {
+                if (/^[A-Z]/.test(line)) section = line.split(' ')[0];
+                return ['Build', 'Artifacts', 'Context'].includes(section);
+              };
+            })(),
+          },
+          { command: 'lore rollback', output: rollback },
+          {
+            command: `lore dev . --port ${PORT}`,
+            output: served.slice(0, served.indexOf('Watching for changes')),
+            // The stdio line names this run's absolute temp directory, which is noise here.
+            keep: (line) => !STAGE.test(line) && !line.startsWith('MCP stdio'),
+          },
+        ],
+        { still: 1 },
+      ),
+      'utf8',
+    );
 
     const { chromium } = await import('@playwright/test');
     const browser = await chromium.launch();

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="830" height="326" viewBox="0 0 830 326" role="img" aria-label="Lorepack: build, ask with citations, diff, roll back, serve">
+<style>
+.sc,.cv,.o{animation-duration:28.95s;animation-iteration-count:infinite;animation-fill-mode:both}
+.sc{opacity:0}.cv,.o{animation-timing-function:linear}
+.p{fill:#7d8590}.c{fill:#f0f0f0;font-weight:600}.o{fill:#9a9a9a}.k{fill:#d6d6d6}
+@keyframes s0{0%,0.000%{opacity:0}0.035%,17.375%{opacity:1}18.584%,100%{opacity:0}}
+@keyframes s0t{0%,1.382%{transform:translateX(0);animation-timing-function:steps(10,end)}2.936%,100%{transform:translateX(84.0px)}}
+@keyframes s0l0{0%,4.145%{opacity:0}4.180%,100%{opacity:1}}
+@keyframes s0l1{0%,4.387%{opacity:0}4.421%,100%{opacity:1}}
+@keyframes s0l2{0%,4.629%{opacity:0}4.663%,100%{opacity:1}}
+@keyframes s0l3{0%,4.870%{opacity:0}4.905%,100%{opacity:1}}
+@keyframes s0l4{0%,5.112%{opacity:0}5.147%,100%{opacity:1}}
+@keyframes s0l5{0%,5.354%{opacity:0}5.389%,100%{opacity:1}}
+@keyframes s0l6{0%,5.596%{opacity:0}5.630%,100%{opacity:1}}
+@keyframes s0l7{0%,5.838%{opacity:0}5.872%,100%{opacity:1}}
+@keyframes s0l8{0%,6.079%{opacity:0}6.114%,100%{opacity:1}}
+@keyframes s1{0%,18.584%{opacity:0}18.618%,41.917%{opacity:1}43.126%,100%{opacity:0}}
+@keyframes s1t{0%,19.965%{transform:translateX(0);animation-timing-function:steps(53,end)}28.204%,100%{transform:translateX(445.2px)}}
+@keyframes s1l0{0%,29.413%{opacity:0}29.447%,100%{opacity:1}}
+@keyframes s1l1{0%,29.655%{opacity:0}29.689%,100%{opacity:1}}
+@keyframes s1l2{0%,29.896%{opacity:0}29.931%,100%{opacity:1}}
+@keyframes s1l3{0%,30.138%{opacity:0}30.173%,100%{opacity:1}}
+@keyframes s1l4{0%,30.380%{opacity:0}30.415%,100%{opacity:1}}
+@keyframes s1l5{0%,30.622%{opacity:0}30.656%,100%{opacity:1}}
+@keyframes s2{0%,43.126%{opacity:0}43.161%,60.345%{opacity:1}61.554%,100%{opacity:0}}
+@keyframes s2t{0%,44.508%{transform:translateX(0);animation-timing-function:steps(9,end)}45.907%,100%{transform:translateX(75.6px)}}
+@keyframes s2l0{0%,47.116%{opacity:0}47.150%,100%{opacity:1}}
+@keyframes s2l1{0%,47.358%{opacity:0}47.392%,100%{opacity:1}}
+@keyframes s2l2{0%,47.599%{opacity:0}47.634%,100%{opacity:1}}
+@keyframes s2l3{0%,47.841%{opacity:0}47.876%,100%{opacity:1}}
+@keyframes s2l4{0%,48.083%{opacity:0}48.117%,100%{opacity:1}}
+@keyframes s2l5{0%,48.325%{opacity:0}48.359%,100%{opacity:1}}
+@keyframes s2l6{0%,48.566%{opacity:0}48.601%,100%{opacity:1}}
+@keyframes s2l7{0%,48.808%{opacity:0}48.843%,100%{opacity:1}}
+@keyframes s2l8{0%,49.050%{opacity:0}49.085%,100%{opacity:1}}
+@keyframes s3{0%,61.554%{opacity:0}61.589%,77.703%{opacity:1}78.912%,100%{opacity:0}}
+@keyframes s3t{0%,62.936%{transform:translateX(0);animation-timing-function:steps(13,end)}64.957%,100%{transform:translateX(109.2px)}}
+@keyframes s3l0{0%,66.166%{opacity:0}66.200%,100%{opacity:1}}
+@keyframes s3l1{0%,66.408%{opacity:0}66.442%,100%{opacity:1}}
+@keyframes s4{0%,78.912%{opacity:0}78.946%,98.791%{opacity:1}100.000%,100%{opacity:0}}
+@keyframes s4t{0%,80.294%{transform:translateX(0);animation-timing-function:steps(23,end)}83.869%,100%{transform:translateX(193.2px)}}
+@keyframes s4l0{0%,85.078%{opacity:0}85.112%,100%{opacity:1}}
+@keyframes s4l1{0%,85.320%{opacity:0}85.354%,100%{opacity:1}}
+@keyframes s4l2{0%,85.561%{opacity:0}85.596%,100%{opacity:1}}
+@keyframes s4l3{0%,85.803%{opacity:0}85.838%,100%{opacity:1}}
+@keyframes s4l4{0%,86.045%{opacity:0}86.079%,100%{opacity:1}}
+@keyframes s4l5{0%,86.287%{opacity:0}86.321%,100%{opacity:1}}
+@keyframes s4l6{0%,86.528%{opacity:0}86.563%,100%{opacity:1}}
+@keyframes s4l7{0%,86.770%{opacity:0}86.805%,100%{opacity:1}}
+@keyframes s4l8{0%,87.012%{opacity:0}87.047%,100%{opacity:1}}
+@keyframes s4l9{0%,87.254%{opacity:0}87.288%,100%{opacity:1}}
+@keyframes s4l10{0%,87.496%{opacity:0}87.530%,100%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.sc,.cv,.o{animation:none}.sc{opacity:0}.sc.still{opacity:1}.cv{display:none}.o{opacity:1}}
+</style>
+<rect width="830" height="326" rx="8" fill="#141414"/>
+<circle cx="20" cy="20" r="5" fill="#ff5f57"/><circle cx="36" cy="20" r="5" fill="#febc2e"/><circle cx="52" cy="20" r="5" fill="#28c840"/>
+<text x="72" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">Lorepack: build, ask with citations, diff, roll back, serve</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+<g class="sc" style="animation-name:s0"><text x="20" y="54" textLength="100.8" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">lore build</tspan></text><g class="cv" style="animation-name:s0t"><rect x="36.8" y="39" width="100.8" height="20" fill="#141414"/><rect x="36.8" y="40" width="8.4" height="18" fill="#e6e6e6"/></g><text class="o k" style="animation-name:s0l0" x="20" y="75" xml:space="preserve">Build lore_15bfe29fde4a49b554d8606966d11f104a2f8cfdc9e56bcd674db5407edca685</text><text class="o" style="animation-name:s0l1" x="20" y="96" xml:space="preserve"></text><text class="o" style="animation-name:s0l2" x="20" y="117" xml:space="preserve">  6 artifacts</text><text class="o" style="animation-name:s0l3" x="20" y="138" xml:space="preserve">  38 nodes</text><text class="o" style="animation-name:s0l4" x="20" y="159" xml:space="preserve">  14 chunks</text><text class="o" style="animation-name:s0l5" x="20" y="180" xml:space="preserve">  1 table, 3 rows</text><text class="o" style="animation-name:s0l6" x="20" y="201" xml:space="preserve">  1 warning</text><text class="o" style="animation-name:s0l7" x="20" y="222" xml:space="preserve"></text><text class="o k" style="animation-name:s0l8" x="20" y="243" xml:space="preserve">Activated in 236 ms.</text></g>
+<g class="sc still" style="animation-name:s1"><text x="20" y="54" textLength="462.0" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">lore search "how long do we keep support transcripts"</tspan></text><g class="cv" style="animation-name:s1t"><rect x="36.8" y="39" width="462.0" height="20" fill="#141414"/><rect x="36.8" y="40" width="8.4" height="18" fill="#e6e6e6"/></g><text class="o k" style="animation-name:s1l0" x="20" y="75" xml:space="preserve">Build lore_15bfe29fde4a (sources clean), 14 chunks indexed</text><text class="o" style="animation-name:s1l1" x="20" y="96" xml:space="preserve"></text><text class="o k" style="animation-name:s1l2" x="20" y="117" xml:space="preserve"> 1. context/engineering/retention.md:5</text><text class="o" style="animation-name:s1l3" x="20" y="138" xml:space="preserve">    Data retention &gt; Retention windows</text><text class="o" style="animation-name:s1l4" x="20" y="159" xml:space="preserve">    ... [Support] [transcripts] are kept for eighteen months. Deletion requests under GDPR</text><text class="o" style="animation-name:s1l5" x="20" y="180" xml:space="preserve">    article 17 are honoured within thirty days. The deletion ...</text></g>
+<g class="sc" style="animation-name:s2"><text x="20" y="54" textLength="92.4" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">lore diff</tspan></text><g class="cv" style="animation-name:s2t"><rect x="36.8" y="39" width="92.4" height="20" fill="#141414"/><rect x="36.8" y="40" width="8.4" height="18" fill="#e6e6e6"/></g><text class="o k" style="animation-name:s2l0" x="20" y="75" xml:space="preserve">Build lore_15bfe29fde4a -&gt; lore_e445acff996f</text><text class="o" style="animation-name:s2l1" x="20" y="96" xml:space="preserve"></text><text class="o k" style="animation-name:s2l2" x="20" y="117" xml:space="preserve">Artifacts</text><text class="o" style="animation-name:s2l3" x="20" y="138" xml:space="preserve">  ~ context/engineering/auth.md</text><text class="o" style="animation-name:s2l4" x="20" y="159" xml:space="preserve"></text><text class="o" style="animation-name:s2l5" x="20" y="180" xml:space="preserve">Context</text><text class="o" style="animation-name:s2l6" x="20" y="201" xml:space="preserve">  + 1 chunk</text><text class="o" style="animation-name:s2l7" x="20" y="222" xml:space="preserve">  ~ 0 chunks</text><text class="o" style="animation-name:s2l8" x="20" y="243" xml:space="preserve">  - 0 chunks</text></g>
+<g class="sc" style="animation-name:s3"><text x="20" y="54" textLength="126.0" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">lore rollback</tspan></text><g class="cv" style="animation-name:s3t"><rect x="36.8" y="39" width="126.0" height="20" fill="#141414"/><rect x="36.8" y="40" width="8.4" height="18" fill="#e6e6e6"/></g><text class="o" style="animation-name:s3l0" x="20" y="75" xml:space="preserve">Rolled back to lore_15bfe29fde4a49b554d8606966d11f104a2f8cfdc9e56bcd674db5407edca685</text><text class="o" style="animation-name:s3l1" x="20" y="96" xml:space="preserve">(generation 3).</text></g>
+<g class="sc" style="animation-name:s4"><text x="20" y="54" textLength="210.0" lengthAdjust="spacing" xml:space="preserve"><tspan class="p">$ </tspan><tspan class="c">lore dev . --port 43991</tspan></text><g class="cv" style="animation-name:s4t"><rect x="36.8" y="39" width="210.0" height="20" fill="#141414"/><rect x="36.8" y="40" width="8.4" height="18" fill="#e6e6e6"/></g><text class="o k" style="animation-name:s4l0" x="20" y="75" xml:space="preserve">Build           lore_e445acff996f</text><text class="o" style="animation-name:s4l1" x="20" y="96" xml:space="preserve">Reused          5 artifacts</text><text class="o" style="animation-name:s4l2" x="20" y="117" xml:space="preserve">Warnings        1 warning; run `lore inspect warnings`</text><text class="o k" style="animation-name:s4l3" x="20" y="138" xml:space="preserve">Studio          http://127.0.0.1:43991</text><text class="o k" style="animation-name:s4l4" x="20" y="159" xml:space="preserve">HTTP            http://127.0.0.1:43991/v1</text><text class="o k" style="animation-name:s4l5" x="20" y="180" xml:space="preserve">MCP HTTP        http://127.0.0.1:43991/mcp</text><text class="o" style="animation-name:s4l6" x="20" y="201" xml:space="preserve"></text><text class="o" style="animation-name:s4l7" x="20" y="222" xml:space="preserve">Connect now:</text><text class="o" style="animation-name:s4l8" x="20" y="243" xml:space="preserve">  lore connect claude-code</text><text class="o" style="animation-name:s4l9" x="20" y="264" xml:space="preserve">  lore connect codex</text><text class="o" style="animation-name:s4l10" x="20" y="285" xml:space="preserve">  lore connect vscode</text></g>
+</g>
+</svg>
