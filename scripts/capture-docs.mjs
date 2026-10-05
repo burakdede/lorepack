@@ -194,8 +194,8 @@ function terminalSvg(title, blocks) {
   <circle cx="${PAD}" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="${PAD + 16}" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="${PAD + 32}" cy="20" r="5" fill="#3a3a3a"/>
-  <text x="${PAD + 52}" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">${escaped(title)}</text>
-  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+  <text x="${PAD + 52}" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="12">${escaped(title)}</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="13">
   ${body}
   </g>
 </svg>
@@ -312,8 +312,8 @@ ${keyframes.join('\n')}
 </style>
 <rect width="${width}" height="${height}" rx="8" fill="#141414"/>
 <circle cx="${PAD}" cy="20" r="5" fill="#ff5f57"/><circle cx="${PAD + 16}" cy="20" r="5" fill="#febc2e"/><circle cx="${PAD + 32}" cy="20" r="5" fill="#28c840"/>
-<text x="${PAD + 52}" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">${escaped(title)}</text>
-<g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+<text x="${PAD + 52}" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="12">${escaped(title)}</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="13">
 ${groups.join('\n')}
 </g>
 </svg>
@@ -467,7 +467,9 @@ async function main() {
     // every row and at the floor the last of them is inside the table's own scroll box, which
     // is correct behaviour and a poor photograph of it.
     const page = await browser.newPage({
-      viewport: { width: 1512, height: 900 },
+      // 1280 is the narrowest width the layout is verified at, and the widest that keeps text
+      // legible once GitHub scales a picture to its 880px column.
+      viewport: { width: 1280, height: 800 },
       deviceScaleFactor: 2,
       // Light, because it reads on both a light and a dark GitHub page; a dark capture on a
       // white README is a black slab.
@@ -487,14 +489,21 @@ async function main() {
      * so the documentation and the tests are describing the same window.
      */
     const shoot = async (file) => {
+      // Never a picture of a loading state: fonts settled, and no placeholder anywhere on the
+      // page, including below the fold where a pane is still filling in.
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.querySelector('.loading') === null, null, {
+        timeout: 20_000,
+      });
       await page.screenshot({ path: join(IMAGES, file) });
       console.log(`capture-docs: ${file}`);
     };
 
     const shots = [
-      { file: 'studio-overview.png', route: '#/', ready: '.state-banner' },
+      // Overview waits for the client list, so the connect step shows its real count.
+      { file: 'studio-overview.png', route: '#/', ready: '.client-list, .connect-none' },
       { file: 'studio-sources.png', route: '#/sources', ready: '.artifacts' },
-      { file: 'studio-versions.png', route: '#/versions', ready: '.build-row' },
+      { file: 'studio-versions.png', route: '#/versions', ready: '.diff-section' },
       { file: 'studio-tables.png', route: '#/tables', ready: '.tables-schema' },
       { file: 'studio-diagnostics.png', route: '#/diagnostics', ready: '.checks' },
     ];
@@ -538,7 +547,7 @@ async function main() {
     await page.locator('.state-banner').waitFor();
     await page.keyboard.press('ControlOrMeta+k');
     await page.getByRole('combobox').fill('eng');
-    await page.waitForTimeout(300);
+    await page.getByRole('option').first().waitFor();
     await shoot('studio-palette.png');
 
     await browser.close();
