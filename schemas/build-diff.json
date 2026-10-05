@@ -233,6 +233,110 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "cellChanges": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "column": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "from": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "locator": {
+                  "additionalProperties": false,
+                  "description": "Exact location of content within a source artifact",
+                  "properties": {
+                    "artifactId": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "cellRange": {
+                      "type": "string"
+                    },
+                    "headingPath": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "lineEnd": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "lineStart": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "page": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "type": "integer"
+                    },
+                    "relativePath": {
+                      "description": "POSIX-style path relative to a source root",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "sheet": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "artifactId",
+                    "relativePath"
+                  ],
+                  "type": "object"
+                },
+                "row": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "row",
+                "column",
+                "from",
+                "to",
+                "locator"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "columnsAdded": {
             "items": {
               "type": "string"
@@ -284,7 +388,8 @@
           "rowsBefore",
           "rowsAfter",
           "columnsAdded",
-          "columnsRemoved"
+          "columnsRemoved",
+          "cellChanges"
         ],
         "type": "object"
       },

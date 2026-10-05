@@ -21,6 +21,7 @@ export {
   sealCandidateDirectory,
 } from './atomic.js';
 export {
+  assertIdentifier,
   decodeValue,
   describeStoredTable,
   listTableRows,

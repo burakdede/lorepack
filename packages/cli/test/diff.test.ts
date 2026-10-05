@@ -36,6 +36,7 @@ const BASE: BuildSnapshot = {
   formatVersion: 1,
   schemaVersion: 1,
   compilerVersion: '0.1.0',
+  configurationHash: 'c'.repeat(64),
   capabilities: ['lexical-search', 'structured-context'],
   canonicalRoots: { artifacts: 'a'.repeat(64), chunks: 'b'.repeat(64) },
   artifacts: [BASE_ARTIFACT],
@@ -159,6 +160,45 @@ describe('diff engine', () => {
     );
     expect(diff.canonicalRoots.find((root) => root.root === 'chunks')?.changed).toBe(true);
     expect(diff.canonicalRoots.find((root) => root.root === 'artifacts')?.changed).toBe(false);
+    expect(renderDiff(diff)).toContain('~ chunks');
+  });
+
+  it('reports changed table cells with their source locator', () => {
+    const table = {
+      tableId: 'p:rates.csv#table',
+      name: 'rates.csv',
+      rows: 1,
+      columns: ['rate'],
+      locator: { artifactId: 'p:rates.csv', relativePath: 'rates.csv', lineStart: 2, lineEnd: 2 },
+      cells: [{ row: 0, column: 'rate', value: 1 }],
+    } as const;
+    const changed = { ...table, cells: [{ ...table.cells[0], value: 2 }] };
+
+    const diff = diffBuilds(snapshot({ tables: [table] }), {
+      ...snapshot({ tables: [changed] }),
+      buildId: `lore_${'3'.repeat(64)}` as BuildId,
+    });
+    expect(diff.tables[0]?.cellChanges).toEqual([
+      { row: 0, column: 'rate', from: 1, to: 2, locator: table.locator },
+    ]);
+    expect(renderDiff(diff)).toContain('cell 0,rate 1 -> 2');
+  });
+
+  it('never calls different build ids identical when records happen to match', () => {
+    expect(diffBuilds(BASE, snapshot({})).identical).toBe(false);
+  });
+
+  it('reports compiler and configuration changes', () => {
+    const diff = diffBuilds(
+      BASE,
+      snapshot({ compilerVersion: '0.2.0', configurationHash: 'd'.repeat(64) }),
+    );
+    expect(diff.incompatibilities).toEqual([
+      { field: 'compilerVersion', from: '0.1.0', to: '0.2.0' },
+      { field: 'configurationHash', from: 'c'.repeat(64), to: 'd'.repeat(64) },
+    ]);
+    expect(renderDiff(diff)).toContain('compilerVersion 0.1.0 -> 0.2.0');
+    expect(renderDiff(diff)).toContain('configurationHash');
   });
 });
 
@@ -240,6 +280,19 @@ describe('lore diff', () => {
 
       const result = await lore(['diff']);
       expect(result.stdout).toContain('same content as');
+    });
+  });
+
+  it('reports a changed table value and its locator end to end', async () => {
+    await project({ 'rates.csv': 'name,rate\nbase,1\n' }, async (root, lore) => {
+      const first = await build(root);
+      writeFileSync(join(root, 'rates.csv'), 'name,rate\nbase,2\n', 'utf8');
+      const second = await build(root);
+
+      const result = await lore(['diff', first.buildId, second.buildId]);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('cell 0,rate 1 -> 2');
+      expect(result.stdout).toContain('at rates.csv');
     });
   });
 
