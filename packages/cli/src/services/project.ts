@@ -1,8 +1,14 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildMigrationsDirectory, loadMigrations, openReadOnly } from '@lorepack/backend-local';
 import type { PreviousBuild } from '@lorepack/compiler';
-import { assertBuildId, type BuildId, LORE_DIRECTORY, type LoadedConfig } from '@lorepack/core';
+import {
+  assertBuildId,
+  type BuildId,
+  buildManifestSchema,
+  LORE_DIRECTORY,
+  type LoadedConfig,
+} from '@lorepack/core';
 
 /**
  * Reads what the active build recorded, so a plan can compare against it.
@@ -117,6 +123,9 @@ function buildSchemaMatches(loreDirectory: string, buildId: BuildId): boolean {
 function readBuildCatalogOrThrow(loreDirectory: string, buildId: BuildId): PreviousBuild | null {
   const path = join(loreDirectory, 'builds', buildId, 'context.sqlite');
   if (!existsSync(path)) return null;
+  const manifest = buildManifestSchema.parse(
+    JSON.parse(readFileSync(join(loreDirectory, 'builds', buildId, 'manifest.json'), 'utf8')),
+  );
 
   const db = openReadOnly(path);
   try {
@@ -129,7 +138,9 @@ function readBuildCatalogOrThrow(loreDirectory: string, buildId: BuildId): Previ
       buildId,
       artifactHashes: new Map(rows.map((row) => [row.id, row.content_hash])),
       chunkCount: Number(chunks.n),
-      capabilities: ['lexical-search', 'structured-context'],
+      configurationHash: manifest.configurationHash,
+      tableCount: manifest.counts.tables,
+      capabilities: manifest.capabilities,
     };
   } finally {
     db.close();

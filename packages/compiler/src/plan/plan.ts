@@ -1,6 +1,8 @@
 import {
   type BuildId,
+  type Canonical,
   count,
+  hashCanonical,
   type LoadedConfig,
   type Lockfile,
   type Plan,
@@ -29,6 +31,8 @@ export interface PreviousBuild {
   readonly artifactHashes: ReadonlyMap<string, string>;
   readonly chunkCount: number;
   readonly capabilities: readonly string[];
+  readonly configurationHash?: string;
+  readonly tableCount?: number;
 }
 
 export interface PlanOptions {
@@ -67,8 +71,6 @@ export async function createPlan(options: PlanOptions): Promise<PlanResult> {
     fingerprint.artifacts,
     previous?.artifactHashes ?? new Map<string, string>(),
   );
-  const reused = fingerprint.artifacts.length - dirty.added.length - dirty.changed.length;
-
   const lock = compareLockfiles(options.previousLock, buildLockfile(options.lockInputs));
 
   // A parser or schema change invalidates every cached parse, so expected work is the
@@ -76,9 +78,30 @@ export async function createPlan(options: PlanOptions): Promise<PlanResult> {
   // fast rebuild and then take minutes.
   const lockInvalidatesEverything =
     lock.changed && lock.changes.some((change) => change.key !== 'lore.lock');
-  const parseCount = lockInvalidatesEverything
+  const tableArtifacts = fingerprint.artifacts.filter(isTableArtifact);
+  const tableArtifactIds = new Set(tableArtifacts.map((artifact) => artifact.artifactId));
+  const reused = fingerprint.artifacts.filter(
+    (artifact) =>
+      !lockInvalidatesEverything &&
+      !tableArtifactIds.has(artifact.artifactId) &&
+      !dirty.added.includes(artifact.artifactId) &&
+      !dirty.changed.includes(artifact.artifactId),
+  ).length;
+
+  const baseParseCount = lockInvalidatesEverything
     ? fingerprint.artifacts.length
     : dirty.added.length + dirty.changed.length;
+  const unchangedTableCount = tableArtifacts.filter(
+    (artifact) =>
+      !dirty.added.includes(artifact.artifactId) && !dirty.changed.includes(artifact.artifactId),
+  ).length;
+  const parseCount = baseParseCount + (lockInvalidatesEverything ? 0 : unchangedTableCount);
+
+  const configurationHash = hashCanonical(config.effective as unknown as Canonical);
+  const configurationChanged =
+    previous?.configurationHash !== undefined && previous.configurationHash !== configurationHash;
+  const tableCandidate = tableArtifacts.length > 0;
+  const tableImpactUnknown = tableCandidate || (previous?.tableCount ?? 0) > 0;
 
   const byId = new Map(fingerprint.artifacts.map((artifact) => [artifact.artifactId, artifact]));
   const pathOf = (artifactId: string): string =>
@@ -101,29 +124,56 @@ export async function createPlan(options: PlanOptions): Promise<PlanResult> {
         ...dirty.removed.map((id) => ({ path: pathOf(id), change: 'removed' as const })),
       ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     },
-    // Rules and tables arrive in Phase 5; the shape is fixed now so the plan schema does
-    // not change when they do.
     rules: [],
     tables: [],
     lock: { changed: lock.changed, changes: [...lock.changes] },
     capabilities: {
       current: (previous?.capabilities ?? []) as Plan['capabilities']['current'],
-      next: ['lexical-search', 'structured-context'],
+      next: [
+        'lexical-search',
+        'structured-context',
+        ...(tableCandidate ? (['table-query'] as const) : []),
+      ],
     },
     expectedWork: {
       parseArtifacts: parseCount,
-      reuseArtifacts: Math.max(0, fingerprint.artifacts.length - parseCount),
+      reuseArtifacts: Math.max(0, reused),
       rebuildChunks: parseCount === 0 ? 0 : estimateChunkWork(parseCount, previous),
     },
     // Both stages that can exclude a file, so the plan names every file the build will
     // leave out before the build runs, rather than only the ones decided by extension.
-    warnings: [...discovery.warnings, ...fingerprint.warnings].map((warning) => ({
+    warnings: [
+      ...discovery.warnings,
+      ...fingerprint.warnings,
+      ...(configurationChanged
+        ? [
+            {
+              code: 'configuration-change-unknown',
+              message:
+                'Configuration changed; detailed rule impact is unknown until the candidate is compiled.',
+            },
+          ]
+        : []),
+      ...(tableImpactUnknown
+        ? [
+            {
+              code: 'table-change-unknown',
+              message:
+                'Table changes are unknown until table-bearing artifacts are parsed; table artifacts are excluded from reuse estimates.',
+            },
+          ]
+        : []),
+    ].map((warning) => ({
       code: warning.code,
       message: warning.message,
     })),
   };
 
   return { plan, discovery, fingerprint };
+}
+
+function isTableArtifact(artifact: SourceFingerprint['artifacts'][number]): boolean {
+  return artifact.parserId === 'csv' || artifact.parserId === 'xlsx';
 }
 
 /**
@@ -163,6 +213,10 @@ export function renderPlan(plan: Plan): string {
       lines.push(`  ~ ${change.key} ${change.from ?? 'absent'} -> ${change.to ?? 'absent'}`);
     }
   }
+
+  lines.push('', 'Capabilities');
+  lines.push(`  current: ${plan.capabilities.current.join(', ') || 'none'}`);
+  lines.push(`  next: ${plan.capabilities.next.join(', ')}`);
 
   // Phrased as one total split two ways, because the build's parsing stage visits every
   // artifact and reports `3/3`. Saying "parse 1" here and showing "3/3" there described the

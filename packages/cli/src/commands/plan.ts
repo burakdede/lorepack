@@ -28,7 +28,12 @@ export function planCommand(): CommandDefinition {
 
         const hasChanges =
           plan.artifacts.added + plan.artifacts.changed + plan.artifacts.removed > 0 ||
-          plan.lock.changed;
+          plan.lock.changed ||
+          plan.rules.length > 0 ||
+          plan.tables.length > 0 ||
+          plan.warnings.some((warning) =>
+            ['configuration-change-unknown', 'table-change-unknown'].includes(warning.code),
+          );
 
         return {
           human: renderPlan(plan),

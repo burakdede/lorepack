@@ -7,10 +7,18 @@ const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
 
 async function project<T>(
   files: Record<string, string>,
-  body: (root: string, plan: (args?: string[]) => ReturnType<typeof run>) => Promise<T>,
+  body: (
+    root: string,
+    plan: (args?: string[]) => ReturnType<typeof run>,
+    build: () => ReturnType<typeof run>,
+  ) => Promise<T>,
 ): Promise<T> {
   return withTempProject({ files: { 'lore.yaml': CONFIG, ...files } }, async (temp) =>
-    body(temp.root, (args = []) => run(['--cwd', temp.root, 'plan', ...args])),
+    body(
+      temp.root,
+      (args = []) => run(['--cwd', temp.root, 'plan', ...args]),
+      () => run(['--cwd', temp.root, 'build']),
+    ),
   );
 }
 
@@ -108,6 +116,34 @@ describe('lore plan', () => {
       writeFileSync(`${root}/docs/b.md`, '# B', 'utf8');
       const second = await plan();
       expect(second.stdout).toContain('+ 2 added');
+    });
+  });
+
+  it('reports a configuration edit as unknown until compilation', async () => {
+    await project({ 'docs/a.md': '# A' }, async (root, plan, build) => {
+      expect((await build()).code).toBe(0);
+      writeFileSync(
+        `${root}/lore.yaml`,
+        `${CONFIG}rules:\n  - match: docs/**\n    status: draft\n`,
+        'utf8',
+      );
+
+      const result = await plan(['--exit-code']);
+      expect(result.code).toBe(2);
+      expect(result.stdout).toContain('Configuration changed');
+      expect(result.stdout).toContain('unknown until the candidate is compiled');
+    });
+  });
+
+  it('labels table changes unknown and does not reuse table artifacts', async () => {
+    await project({ 'data.csv': 'name\nAda\n' }, async (_root, plan, build) => {
+      expect((await build()).code).toBe(0);
+
+      const result = await plan(['--exit-code']);
+      expect(result.code).toBe(2);
+      expect(result.stdout).toContain('Table changes are unknown');
+      expect(result.stdout).toContain('table artifacts are excluded from reuse estimates');
+      expect(result.stdout).toContain('table-query');
     });
   });
 });
