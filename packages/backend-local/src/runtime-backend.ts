@@ -13,6 +13,7 @@ import {
   type CatalogSearchHit,
   type CatalogStore,
   type ColumnTypeName,
+  guardSingleTableQuery,
   LORE_DIRECTORY,
   LoreError,
   type RuntimeDeps,
@@ -35,6 +36,7 @@ import { loadMigrations } from './migrations.js';
 import { buildMigrationsDirectory, stateMigrationsDirectory } from './migrations-path.js';
 import { FileObjectStore } from './object-store.js';
 import { executeQuery } from './sql/execute.js';
+import { BUILD_SCHEMA_OBJECTS } from './sql/schema-names.js';
 import { restrictToTables } from './sqlite.js';
 import { LocalActiveBuildProvider, LocalStateStore } from './state-store.js';
 
@@ -232,12 +234,23 @@ class LocalTableStore implements TableStore {
       });
     }
 
+    const table = assertIdentifier(resolved.table.sql_name);
+    // Two layers. The guard refuses any statement that could name another object, which the
+    // authorizer alone does not: it is consulted for column reads, not for opening a table, so
+    // without the guard a query could learn that another table exists and how many rows it has
+    // (#406). The authorizer, in the child, stays the engine-level control for everything else.
+    const sql = guardSingleTableQuery(request.sql, {
+      table,
+      schemaNames: [...BUILD_SCHEMA_OBJECTS, ...physicalTableNames(this.#db)],
+      profile: 'local',
+    });
+
     const outcome = await executeQuery({
       databasePath: this.#databasePath,
       // One table, per query. The allowlist is not the build's tables: it is this table,
       // which is what makes "cannot read another table" true rather than merely intended.
-      allowedTables: [assertIdentifier(resolved.table.sql_name)],
-      sql: request.sql,
+      allowedTables: [table],
+      sql,
       limit: request.limit,
     });
 

@@ -2,13 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { LoreError, type ParsedTable } from '@lorepack/core';
+import { LoreError, type ParsedTable, validateStatement } from '@lorepack/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sqlNameFor, writeTables } from '../src/catalog/tables.js';
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { buildMigrationsDirectory } from '../src/migrations-path.js';
 import { executeQuery, QUERY_LIMITS } from '../src/sql/execute.js';
-import { validateStatement } from '../src/sql/statement.js';
 
 /**
  * The model-facing SQL surface, which is the highest-risk thing in the product.
@@ -234,6 +233,10 @@ describe('the authorizer, which is the control', () => {
     ]) {
       const error = await failure(sql);
       expect(error.code, sql).toBe('LORE_E_SQL_REJECTED');
+      // Pinned to the authorizer's own rule. `executeQuery` runs without the statement guard
+      // that the table store puts in front of it, so this is the only place the authorizer's
+      // refusal is observable; end to end, the guard refuses first (#406).
+      expect(error.message, sql).toMatch(/outside the table it was asked about/i);
     }
   });
 
@@ -247,6 +250,12 @@ describe('the authorizer, which is the control', () => {
     ]) {
       const error = await failure(sql);
       expect(error.code, sql).toBe('LORE_E_SQL_REJECTED');
+      // As above, the layer is pinned here because end to end the guard refuses first.
+      // `node:sqlite` is built without the CLI's file functions, so those fail as missing
+      // rather than as denied; the rest are refused by the authorizer's function allowlist.
+      expect(error.message, sql).toMatch(
+        /readfile|writefile/.test(sql) ? /no such function/i : /outside the table/i,
+      );
     }
   });
 

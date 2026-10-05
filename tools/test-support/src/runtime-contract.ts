@@ -314,6 +314,116 @@ export function runRuntimeContract(options: ContractOptions): void {
           expect(result.columns).toEqual(described.columns.map((column) => column.name));
         });
       });
+
+      /**
+       * One table, and nothing else, on every backend (#406, #407).
+       *
+       * A table query may read the one physical table its `tableId` resolves to. The local
+       * backend enforces that with a SQLite authorizer; a backend without one must still refuse
+       * every statement below, and a skipped case would hide exactly the backend that cannot.
+       * The targets are catalog tables both fixtures' databases contain, so each case is a real
+       * attempt to read something that exists, not a reference to a missing name.
+       *
+       * `T` is the allowed physical table and `C` one of its columns.
+       */
+      const HOSTILE: readonly (readonly [string, (t: string, c: string) => string])[] = [
+        ['a comma join', (t, c) => `SELECT ${c} FROM ${t}, chunks`],
+        ['a comment between JOIN and a name', (t, c) => `SELECT ${c} FROM ${t} JOIN/**/chunks`],
+        ['a double-quoted name', (t, c) => `SELECT ${c} FROM ${t} JOIN "chunks"`],
+        ['a backtick-quoted name', (t, c) => `SELECT ${c} FROM ${t} JOIN \`chunks\``],
+        ['a bracketed name', (t, c) => `SELECT ${c} FROM ${t} JOIN [chunks]`],
+        ['a string used as a table name', (t, c) => `SELECT ${c} FROM ${t}, 'chunks'`],
+        ['a schema-qualified name', (t, c) => `SELECT ${c} FROM ${t} JOIN main.chunks`],
+        ['the schema table', (t, c) => `SELECT ${c} FROM ${t}, sqlite_master`],
+        ['an eponymous virtual table', (t, c) => `SELECT ${c} FROM ${t}, pragma_table_list`],
+        ['a table-valued pragma function', (t, c) => `SELECT ${c} FROM ${t}, pragma_table_list()`],
+        [
+          'a scalar subquery reading another table',
+          (t, c) => `SELECT ${c}, (SELECT count(*) FROM artifacts) FROM ${t}`,
+        ],
+        [
+          'EXISTS over another table',
+          (t, c) => `SELECT ${c} FROM ${t} WHERE EXISTS (SELECT 1 FROM tables)`,
+        ],
+        [
+          'a UNION with another table',
+          (t, c) => `SELECT ${c} FROM ${t} UNION SELECT id FROM tables`,
+        ],
+        [
+          'an escape from the result wrapper',
+          (t, c) => `SELECT ${c} FROM ${t}) UNION SELECT id FROM tables WHERE (1=1`,
+        ],
+        ['an unterminated block comment', (t, c) => `SELECT ${c} FROM ${t} /*`],
+        ['an INSERT', (t, c) => `INSERT INTO ${t} (${c}) VALUES (1)`],
+        [
+          'a CTE ending in a DELETE',
+          (t, c) => `WITH x AS (SELECT ${c} FROM ${t}) DELETE FROM ${t}`,
+        ],
+        ['an extension load', (t, c) => `SELECT load_extension('x'), ${c} FROM ${t}`],
+        ['an engine introspection function', (t, c) => `SELECT sqlite_version(), ${c} FROM ${t}`],
+      ];
+
+      for (const [label, build] of HOSTILE) {
+        it(`refuses ${label}`, async () => {
+          await withTable(async ({ runtime, knownTableId }) => {
+            const described = await runtime.describeTable(knownTableId);
+            const column = described.columns[0]?.sqlName ?? 'rowid';
+            await expect(
+              runtime.queryTable({ tableId: knownTableId, sql: build(described.sqlName, column) }),
+            ).rejects.toMatchObject({
+              code: expect.stringMatching(/^LORE_E_(SQL_REJECTED|LIMIT_EXCEEDED)$/),
+            });
+          });
+        });
+      }
+
+      /**
+       * The same backends must still answer the SQL a model writes over its one table. A guard
+       * that refused these would be safe and useless, and the difference between backends would
+       * be a surprise rather than a documented subset.
+       */
+      const ORDINARY: readonly (readonly [string, (t: string, c: string) => string])[] = [
+        [
+          'a filter with grouping',
+          (t, c) => `SELECT ${c}, count(*) AS n FROM ${t} GROUP BY ${c} HAVING count(*) >= 1`,
+        ],
+        ['a qualified star', (t) => `SELECT ${t}.* FROM ${t}`],
+        ['an implicit alias', (t, c) => `SELECT a.${c} FROM ${t} a`],
+        ['an AS alias', (t, c) => `SELECT a.${c} AS value FROM ${t} AS a`],
+        ['a CTE over the table', (t, c) => `WITH x AS (SELECT ${c} FROM ${t}) SELECT ${c} FROM x`],
+        [
+          'IN over the same table',
+          (t, c) => `SELECT ${c} FROM ${t} WHERE ${c} IN (SELECT ${c} FROM ${t})`,
+        ],
+        [
+          'a window function',
+          (t, c) => `SELECT ${c}, row_number() OVER (ORDER BY ${c}) AS position FROM ${t}`,
+        ],
+        ['a cast', (t, c) => `SELECT CAST(${c} AS TEXT) AS text_value FROM ${t}`],
+        ['a collation', (t, c) => `SELECT ${c} FROM ${t} ORDER BY ${c} COLLATE NOCASE`],
+        [
+          'a UNION ALL of the same table',
+          (t, c) => `SELECT ${c} FROM ${t} UNION ALL SELECT ${c} FROM ${t}`,
+        ],
+        ['a string containing a doubled quote', (t, c) => `SELECT ${c}, 'it''s' AS note FROM ${t}`],
+        // Safe because comments are removed before the result wrapper is added, not because the
+        // comment is refused: a comment is whitespace to SQLite, and a model writes them.
+        ['a trailing line comment', (t, c) => `SELECT ${c} FROM ${t} -- the first column`],
+      ];
+
+      for (const [label, build] of ORDINARY) {
+        it(`answers ${label}`, async () => {
+          await withTable(async ({ runtime, knownTableId }) => {
+            const described = await runtime.describeTable(knownTableId);
+            const column = described.columns[0]?.sqlName ?? 'rowid';
+            const result = await runtime.queryTable({
+              tableId: knownTableId,
+              sql: build(described.sqlName, column),
+            });
+            expect(result.rowCount).toBeGreaterThan(0);
+          });
+        });
+      }
     });
 
     describe('determinism', () => {

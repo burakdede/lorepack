@@ -1,4 +1,4 @@
-import { LoreError } from '@lorepack/core';
+import { LoreError } from '../errors/index.js';
 
 /**
  * Statement-shape validation, by tokenizing rather than parsing.

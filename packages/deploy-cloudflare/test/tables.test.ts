@@ -130,6 +130,13 @@ ORDER BY ordinal`,
         : [],
   );
 
+  // What D1 reports for the schema, read per query by the statement guard (#406).
+  db.handlers.set('SELECT name FROM sqlite_master', () =>
+    ['tables', 'table_columns', 'runtime_tokens', 't_products_active', 't_products_candidate'].map(
+      (name) => ({ name }),
+    ),
+  );
+
   db.handlers.set('SELECT c_0_sku, c_1_available FROM t_products_active LIMIT ?', ([limit]) =>
     [
       { c_0_sku: 'A-1', c_1_available: 1 },
@@ -139,7 +146,7 @@ ORDER BY ordinal`,
   );
 
   db.handlers.set(
-    'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 3',
+    'SELECT * FROM (\nSELECT c_0_sku, c_1_available FROM t_products_active\n) LIMIT 3',
     () => [
       { c_0_sku: 'A-1', c_1_available: 1 },
       { c_0_sku: 'A-2', c_1_available: 0 },
@@ -148,7 +155,7 @@ ORDER BY ordinal`,
   );
 
   db.handlers.set(
-    'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 101',
+    'SELECT * FROM (\nSELECT c_0_sku, c_1_available FROM t_products_active\n) LIMIT 101',
     () => [
       { c_0_sku: 'A-1', c_1_available: 1 },
       { c_0_sku: 'A-2', c_1_available: 0 },
@@ -243,7 +250,10 @@ ORDER BY name, id`,
       expect.unreachable('should have rejected the query');
     } catch (error) {
       expect((error as LoreError).code).toBe('LORE_E_SQL_REJECTED');
-      expect((error as LoreError).message).toContain('outside the table');
+      // One message for every refusal, which never names what was refused (#406): naming it
+      // would confirm the other table exists.
+      expect((error as LoreError).message).not.toContain('t_products_candidate');
+      expect((error as LoreError).remediation ?? '').not.toContain('t_products_candidate');
     }
   });
 
@@ -273,7 +283,7 @@ ORDER BY name, id`,
       },
     });
     expect(db.calls.at(-1)).toEqual({
-      query: 'SELECT * FROM (SELECT c_0_sku, c_1_available FROM t_products_active) LIMIT 3',
+      query: 'SELECT * FROM (\nSELECT c_0_sku, c_1_available FROM t_products_active\n) LIMIT 3',
       bindings: [],
     });
   });

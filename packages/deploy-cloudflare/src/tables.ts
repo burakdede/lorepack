@@ -1,5 +1,6 @@
 import {
   type ColumnTypeName,
+  guardSingleTableQuery,
   LoreError,
   type StoredTableDescription,
   TABLE_QUERY_LIMITS,
@@ -17,8 +18,8 @@ import {
  *
  * This split is what keeps two builds of the same project simultaneously projectable without
  * making model-authored SQL responsible for namespacing. `describeTable()` returns the one
- * physical name the active build owns, and `queryTable()` refuses any statement that tries to
- * read some other table.
+ * physical name the active build owns, and `queryTable()` refuses any statement that could read
+ * some other object, through the shared statement guard in `@lorepack/core`.
  */
 
 interface D1PreparedStatementLike {
@@ -137,15 +138,35 @@ export class D1TableStore implements TableStore {
       });
     }
 
-    const sql = request.sql.trim().replace(/;\s*$/, '');
-    assertQueryTargetsOnly(sql, resolved.table.sql_name);
+    // The guard is the isolation control here (#406): D1 has no authorizer, and this database
+    // also holds the catalog, every build's tables and the runtime's own tokens. The names it
+    // must refuse are read per query, never cached, so a table projected after an earlier
+    // query cannot slip past; the guard also refuses anything shaped like a physical table.
+    const sql = guardSingleTableQuery(request.sql, {
+      table: resolved.table.sql_name,
+      schemaNames: await this.#schemaNames(),
+      profile: 'remote',
+      rowCount: resolved.table.row_count,
+    });
     const limit = boundedLimit(request.limit);
     // D1 returns every matching row before JavaScript can slice it. Wrap the caller's
     // statement so the database itself stops at the shared limit plus one row, preserving
-    // the distinction between a complete result and an explicitly truncated one.
-    const rows = await this.#run<Record<string, unknown>>(
-      `SELECT * FROM (${sql}) LIMIT ${String(limit + 1)}`,
-    );
+    // the distinction between a complete result and an explicitly truncated one. The guard
+    // returned it comment-free with balanced parentheses, and the newlines keep even a
+    // trailing line comment from reaching the closing parenthesis.
+    let rows: readonly Record<string, unknown>[];
+    try {
+      rows = await this.#run<Record<string, unknown>>(
+        `SELECT * FROM (\n${sql}\n) LIMIT ${String(limit + 1)}`,
+      );
+    } catch {
+      // D1's own message can quote table names, which is the information this path exists
+      // to withhold. The caller learns the statement failed and what to do, nothing else.
+      throw new LoreError('LORE_E_SQL_REJECTED', 'The query could not be run.', {
+        remediation:
+          'Check the SQL against `describeTable`: one SELECT over the table named in the request, using the `sqlName` it reports for the table and each column.',
+      });
+    }
     const truncated = rows.length > limit;
     const limited = truncated ? rows.slice(0, limit) : rows;
     const serializedBytes = new TextEncoder().encode(JSON.stringify(limited)).byteLength;
@@ -173,6 +194,22 @@ export class D1TableStore implements TableStore {
       truncated,
       locator: tableLocator(resolved.table),
     } as TableQueryResult;
+  }
+
+  /** Every object name in the database, read fresh. Failing to read them refuses the query. */
+  async #schemaNames(): Promise<readonly string[]> {
+    try {
+      const rows = await this.#run<{ name: string }>('SELECT name FROM sqlite_master');
+      return rows.map((row) => row.name);
+    } catch {
+      throw new LoreError(
+        'LORE_E_SQL_REJECTED',
+        'The query could not be checked, so it was not run.',
+        {
+          remediation: 'Retry the request. The table and the build were not modified.',
+        },
+      );
+    }
   }
 
   async #resolve(
@@ -270,41 +307,4 @@ function relabelRow(
       column === undefined ? value : decodeValue(value, column.type as ColumnTypeName);
   }
   return out;
-}
-
-function assertQueryTargetsOnly(sql: string, allowedTable: string): void {
-  const trimmed = sql.trim();
-  if (!/^(select|with)\b/i.test(trimmed)) {
-    throw new LoreError('LORE_E_SQL_REJECTED', 'Only read-only SELECT statements are allowed.', {
-      remediation: 'Use a single SELECT that reads the table described by `describeTable`.',
-    });
-  }
-
-  const matches = Array.from(
-    trimmed.matchAll(/\b(?:from|join)\s+([`"]?[a-z][a-z0-9_]{0,62}[`"]?)/gi),
-  );
-  if (matches.length === 0) {
-    throw new LoreError(
-      'LORE_E_SQL_REJECTED',
-      'The query does not name a table this build exposes.',
-      {
-        remediation:
-          'Call `describeTable` and use the `sqlName` it reports in the query `FROM` clause.',
-      },
-    );
-  }
-
-  for (const match of matches) {
-    const referenced = match[1]?.replace(/^[`"]|[`"]$/g, '') ?? '';
-    if (referenced !== allowedTable) {
-      throw new LoreError(
-        'LORE_E_SQL_REJECTED',
-        'The query touches something outside the table it was asked about.',
-        {
-          remediation:
-            'A Worker table query may read only the build-scoped physical table that `describeTable` returned for this `tableId`.',
-        },
-      );
-    }
-  }
 }

@@ -1,6 +1,6 @@
 import { constants, type DatabaseSync } from 'node:sqlite';
+import { bound, QUERY_FUNCTIONS } from '@lorepack/core';
 import { openReadOnly } from '../sqlite.js';
-import { bound } from './statement.js';
 
 /**
  * The child process that actually runs a model-authored query.
@@ -35,122 +35,6 @@ interface Setup {
   /** The physical tables this query may read. Nothing else in the build is visible. */
   readonly allowedTables: readonly string[];
 }
-
-/**
- * Functions a query may call.
- *
- * An allowlist rather than a denylist, because the interesting SQLite functions are the ones
- * nobody remembers to deny. `load_extension` is the obvious one and is already impossible
- * (`allowExtension: false`), but the general rule is what protects against the next one.
- *
- * This is deliberately generous about arithmetic, text and aggregation, which is what a person
- * querying a spreadsheet actually needs, and silent about anything touching the filesystem, the
- * clock or the database's own structure. A non-deterministic function such as `random()` is
- * excluded for a further reason: a query that returns different rows on each run cannot be
- * cited, and every result here carries provenance.
- */
-const ALLOWED_FUNCTIONS = new Set([
-  // Aggregates
-  'count',
-  'sum',
-  'total',
-  'avg',
-  'min',
-  'max',
-  'group_concat',
-  'string_agg',
-  // Text
-  'length',
-  'lower',
-  'upper',
-  'substr',
-  'substring',
-  'trim',
-  'ltrim',
-  'rtrim',
-  'replace',
-  'instr',
-  'printf',
-  'format',
-  'concat',
-  'concat_ws',
-  'char',
-  'unicode',
-  'hex',
-  'quote',
-  // Numeric
-  'abs',
-  'round',
-  'ceil',
-  'ceiling',
-  'floor',
-  'sign',
-  'sqrt',
-  'pow',
-  'power',
-  'exp',
-  'ln',
-  'log',
-  'log2',
-  'log10',
-  'mod',
-  'trunc',
-  'acos',
-  'asin',
-  'atan',
-  'atan2',
-  'cos',
-  'sin',
-  'tan',
-  'degrees',
-  'radians',
-  'pi',
-  // Null handling and typing
-  'coalesce',
-  'ifnull',
-  'nullif',
-  'iif',
-  'typeof',
-  'cast',
-  'likely',
-  'unlikely',
-  // Dates, over values in the row. `now` is refused below.
-  'date',
-  'time',
-  'datetime',
-  'julianday',
-  'unixepoch',
-  'strftime',
-  'timediff',
-  // JSON, which spreadsheet-derived text often holds
-  'json',
-  'json_array',
-  'json_array_length',
-  'json_extract',
-  'json_object',
-  'json_type',
-  'json_valid',
-  'json_quote',
-  'json_each',
-  'json_tree',
-  // Window functions
-  'row_number',
-  'rank',
-  'dense_rank',
-  'percent_rank',
-  'cume_dist',
-  'ntile',
-  'lag',
-  'lead',
-  'first_value',
-  'last_value',
-  'nth_value',
-  // Comparison helpers SQLite implements as functions
-  'like',
-  'glob',
-  'nvl',
-  'in',
-]);
 
 const send = process.send?.bind(process);
 if (send === undefined) throw new Error('The query engine must be started with an IPC channel.');
@@ -192,7 +76,7 @@ function install(setup: Setup): DatabaseSync {
         case constants.SQLITE_FUNCTION: {
           // arg2 carries the function name for this action code; arg1 is null.
           const name = (arg2 ?? arg1 ?? '').toLowerCase();
-          return ALLOWED_FUNCTIONS.has(name) ? constants.SQLITE_OK : constants.SQLITE_DENY;
+          return QUERY_FUNCTIONS.has(name) ? constants.SQLITE_OK : constants.SQLITE_DENY;
         }
         case constants.SQLITE_RECURSIVE:
           // Allowed, and bounded by the deadline rather than by refusal: a recursive CTE is a

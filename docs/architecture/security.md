@@ -16,18 +16,24 @@ duplication of the first.
 ## The read-only SQL surface
 
 `packages/cli/test/security.e2e.test.ts`, against the assembled API, plus
-`packages/backend-local/test/sql-surface.test.ts` for the tokenizer and authorizer directly.
+`packages/backend-local/test/sql-surface.test.ts` for the tokenizer and authorizer directly,
+`packages/core/test/sql-guard.test.ts` for the statement guard rule by rule, and the hostile cases
+in the shared runtime contract (`tools/test-support/src/runtime-contract.ts`), which every
+backend, local and Cloudflare, must pass.
 
 | Attempt | Refused by |
 |---|---|
 | `DELETE`, `UPDATE`, `DROP` | The statement shape check: only one SELECT |
 | A second statement, including one hidden behind a comment | The same, after comments are stripped |
 | `ATTACH` | The same, since it needs a second statement |
-| The build catalog, `schema_migrations`, `sqlite_schema`, pragma functions | The per-query authorizer, scoped to one physical table |
-| Another table in the same build | The same |
+| The build catalog, `schema_migrations`, `sqlite_schema`, pragma functions | The statement guard; locally also the per-query authorizer, scoped to one physical table |
+| Another table, named any way SQLite accepts (comma join, quoted, bracketed, schema-qualified, as a string literal, after `IN`) | The statement guard's row-source and name rules |
+| Learning that another table exists, or its row count (`count(*)`, `EXISTS`, a join that reads no column) | The statement guard. The authorizer alone permits these: it is consulted for column reads, not for opening a table |
+| A comment that swallows the result wrapper | The guard removes comments before wrapping |
 | `readfile`, `writefile` | They do not exist: `node:sqlite` is built without them |
 | A statement above 100,000 characters | The request schema, before anything is parsed |
-| A runaway recursive CTE | A five-second deadline, enforced by killing the child process |
+| A runaway recursive CTE | Locally, a five-second deadline enforced by killing the child process; remotely, refused, since D1 cannot be interrupted before its 30 second limit |
+| An aggregate used as a window, or a FROM clause multiplying past 5,000,000 rows | Remotely only, refused by the guard's cost bound |
 
 The Cloudflare table adapter applies the same table-query contract before D1 runs the caller's
 statement: 100 rows by default, 10,000 rows maximum, and a 1 MB serialized response ceiling.
@@ -36,6 +42,13 @@ without materializing the whole table in the Worker. The local adapter enforces 
 constants in its isolated SQLite process. Regression coverage is in
 `packages/deploy-cloudflare/test/project-table-data.test.ts` and
 `packages/backend-local/test/sql-surface.test.ts`.
+
+The statement guard (`packages/core/src/sql/guard.ts`) is the same code on both backends. On
+the Cloudflare Worker it is the isolation control, because D1 has no authorizer and the same
+database holds the catalog, every build's tables and the runtime's tokens; it reads the
+database's object names afresh for every query. Locally it is a second layer in front of the
+authorizer. Every refusal it makes is the same message, so a refusal cannot be used to probe
+which names exist, and D1's own error text, which can quote table names, is never returned.
 
 **Each case pins the rule that refused it**, not merely that something did. Written first
 without that, the suite passed with the multi-statement tokenizer disabled outright, because

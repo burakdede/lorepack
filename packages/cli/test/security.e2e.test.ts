@@ -149,19 +149,19 @@ describe('the SQL surface refuses everything but one read of one table', () => {
       'SELECT 1 -- x\n; DROP TABLE %TABLE%',
       /Only one statement/i,
     ],
-    ['the build catalog', 'SELECT * FROM tables', /outside the table it was asked about/i],
-    ['the migration record', 'SELECT * FROM schema_migrations', /outside the table/i],
-    ['the SQLite schema', 'SELECT name FROM sqlite_schema', /outside the table/i],
-    ['a pragma function', 'SELECT * FROM pragma_table_list', /outside the table/i],
-    // Refused because the function **does not exist**, not because an allowlist filtered it:
-    // `node:sqlite` is built without the CLI's filesystem functions, so there is nothing to
-    // permit or deny. Worth pinning as its own rule rather than folding into the authorizer's,
-    // because if a future SQLite build ever gained them this expectation would change and the
-    // authorizer would have to be the thing that stops them.
-    ['a file read', "SELECT readfile('/etc/passwd')", /no such function/i],
-    ['a file write', "SELECT writefile('/tmp/x', 'y')", /no such function/i],
+    // Refused by the statement guard, which runs before the authorizer and so is the rule a
+    // caller of the API meets (#406). The authorizer's own refusals, and the absence of the
+    // file functions from `node:sqlite`, are pinned where they are still observable, in
+    // `packages/backend-local/test/sql-surface.test.ts`, which calls the engine without the
+    // guard.
+    ['the build catalog', 'SELECT * FROM tables', /does not allow/i],
+    ['the migration record', 'SELECT * FROM schema_migrations', /does not allow/i],
+    ['the SQLite schema', 'SELECT name FROM sqlite_schema', /does not allow/i],
+    ['a pragma function', 'SELECT * FROM pragma_table_list', /does not allow/i],
+    ['a file read', "SELECT readfile('/etc/passwd')", /does not allow/i],
+    ['a file write', "SELECT writefile('/tmp/x', 'y')", /does not allow/i],
     ['an attach', "SELECT 1; ATTACH DATABASE '/tmp/x.db' AS x", /Only one statement/i],
-    ['a load_extension', "SELECT load_extension('x')", /outside the table/i],
+    ['a load_extension', "SELECT load_extension('x')", /does not allow/i],
   ] as const;
 
   for (const [what, template, rule] of rejected) {

@@ -120,3 +120,13 @@ default, 10,000 rows maximum, and a 1 MB serialized response ceiling. `D1TableSt
 validated single-table statement in an outer `LIMIT` and requests one extra row to preserve the
 `truncated` flag. Slicing an unbounded D1 result after `run()` would allow a model-facing request
 to allocate the whole table, so that implementation is deliberately not used.
+
+Before any of that, the statement goes through the shared statement guard with the `remote`
+profile (`docs/architecture/adr-sql-surface.md`, 2026-10-05 addendum). It is the only isolation
+control on this path: D1 offers no authorizer, and `CATALOG_DB` also holds the catalog, other
+builds' tables and `runtime_tokens`. The guard reads `sqlite_master` on every query and refuses
+the query if it cannot. It returns the statement without comments, and the wrapper puts it on its
+own lines, so nothing in the statement can reach the closing parenthesis. Because D1 cannot be
+interrupted before its own 30 second limit, the remote profile also refuses recursive common
+table expressions, `json_each` and `json_tree`, aggregates used as windows, and FROM clauses whose
+row product would exceed 5,000,000.

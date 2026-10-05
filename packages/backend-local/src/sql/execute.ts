@@ -2,8 +2,7 @@ import { type ChildProcess, fork } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LoreError, TABLE_QUERY_LIMITS } from '@lorepack/core';
-import { validateStatement } from './statement.js';
+import { LoreError, TABLE_QUERY_LIMITS, validateStatement } from '@lorepack/core';
 
 /**
  * Running one model-authored query, with a deadline that is actually enforceable.

@@ -107,4 +107,5 @@ export {
 } from './runtime/engine.js';
 export { RUNTIME_LIMITS, TABLE_QUERY_LIMITS } from './runtime/limits.js';
 export * from './schemas/index.js';
+export * from './sql/index.js';
 export { closestMatch, editDistance } from './text/closest.js';

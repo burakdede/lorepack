@@ -135,3 +135,45 @@ applied and read back to confirm SQLite did not silently clamp them.
 If SQLite gains a statement-shape API, or a maintained, permissively licensed, SQLite-specific
 parser appears that accepts everything SQLite accepts, this is worth revisiting. The tokenizer
 is small enough that replacing it is cheap; that is part of why it was chosen.
+
+## Addendum, 2026-10-05: one guard for both backends (#406, #407)
+
+**Status:** accepted.
+
+**Context.** The decision above rests on the SQLite authorizer as the control for meaning. Two
+findings changed what that covers. The Cloudflare Worker has no authorizer: D1 does not offer
+one, and its regular expression over `FROM`/`JOIN` missed comma joins, comments, quoted and
+bracketed names, schema qualification, eponymous virtual tables, and string literals used as
+table names, which SQLite accepts. The same D1 database holds the catalog, every build's tables
+and `runtime_tokens`. Locally, the authorizer is consulted for column reads, not for opening a
+table, so a query could still learn that another table exists and how many rows it has.
+
+**Decision.** A statement guard in `@lorepack/core` (`packages/core/src/sql/guard.ts`), run by
+both backends before execution. It is still not a parser. In a SELECT, SQLite resolves a table
+only where a row source is expected (after FROM, any JOIN, a comma in a FROM clause, IN without a
+parenthesis), so the guard tracks those positions and admits only the requested table, a common
+table expression the statement declared, or a subquery. Around that:
+
+- the shared lexer (`packages/core/src/sql/lexer.ts`) refuses anything it cannot classify,
+  including parameters and non-ASCII outside string literals;
+- no token of any kind may spell another object in the database or a reserved family;
+- a function call must be on the allowlist, which moved to `packages/core/src/sql/functions.ts`;
+- a qualifier must be the table or a declared alias;
+- comments are removed before the result wrapper is added;
+- every refusal is one identical message.
+
+**Remote only.** D1 cannot be interrupted before its 30 second limit, and one long query stalls
+every other reader of that database, so the `remote` profile also refuses recursive common
+table expressions, `json_each` and `json_tree`, aggregates used as windows, and FROM clauses whose
+row product would exceed 5,000,000. The local profile keeps these, because the five-second kill
+bounds them.
+
+**Consequences.**
+
+- The remote backend accepts a documented subset of what the local one accepts.
+- Both backends must pass the same hostile and ordinary cases in the shared runtime contract.
+- `packages/backend-local/src/sql/schema-names.ts` must list every fixed object a build migration
+  creates; a test fails when it does not.
+- The guard narrows the remote attack surface to what its rules allow, but it is not an
+  engine-level control. The durable fix is engine isolation for remote table data, for example
+  per-build storage whose only table is the one being queried, tracked separately.

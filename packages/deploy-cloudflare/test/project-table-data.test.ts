@@ -279,7 +279,8 @@ describe('projectTableData, issue 258', () => {
     databases.push(projection);
     const queries: string[] = [];
     const db = new SqliteProjectionDatabase(projection, (query) => {
-      if (query.startsWith('SELECT * FROM (SELECT')) queries.push(query);
+      // The caller's statement is wrapped on its own lines (#406), so match across the newline.
+      if (/^SELECT \* FROM \(\s*SELECT/.test(query)) queries.push(query);
     });
     await runProjectionMigrations(db, () => '2026-08-08T12:00:00.000Z');
     await projectTableData({ db, projectId: PROJECT, buildId: BUILD_A, buildDirectory });
