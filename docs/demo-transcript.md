@@ -227,7 +227,8 @@ lore export --task "How should the sync worker recover after a failed deploy?"
 Project **coding-project**, build `lore_<build-id>`.
 Profile **chat**, budget 24,000 estimated tokens, of which 291 estimated tokens used.
 
-Every passage below is quoted from a document in this project, with the file and lines it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.
+Every passage below is quoted from a document in this project, with the file and source coordinate it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.
+Search considered up to 500 candidates using any-term matching.
 
 ## Context
 
@@ -289,7 +290,7 @@ mutable source tree.
 
 ## What was left out
 
-Nothing. Every passage that matched this task is above.
+Nothing from the candidates considered was omitted.
 
 ## Getting more
 
