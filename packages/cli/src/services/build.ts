@@ -50,6 +50,7 @@ import {
   type ParsedTable,
   type ProgressBus,
   secretsFromEnv,
+  sha256Hex,
   writeFileAtomic,
 } from '@lorepack/core';
 import { parserFor } from '@lorepack/parsers';
@@ -226,6 +227,12 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           rules: ruleResolution.canonical as unknown as Canonical,
         });
 
+        const bytes = readStableSourceBytes(
+          discovered.absolutePath,
+          discovered.contentHash,
+          discovered.displayPath,
+        );
+
         // A hit still has to have its normalized body present: the object store and the
         // cache can be pruned independently, and reusing a parse whose body is gone would
         // produce a build that cannot answer a source read.
@@ -236,7 +243,6 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           continue;
         }
 
-        const bytes = new Uint8Array(readFileSync(discovered.absolutePath));
         let result: ParsedArtifact;
         try {
           // Awaited because a parser may be asynchronous: PDF and DOCX cannot be read any
@@ -563,6 +569,41 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       state.close();
     }
   });
+}
+
+/**
+ * Re-reads a source after fingerprinting and binds the bytes handed to the parser to that
+ * digest. A source can be edited between the fingerprint and parse stages, so trusting the
+ * first hash would record one set of bytes under another set's identity and poison the parse
+ * cache. One retry handles an in-flight save; a second mismatch fails the candidate.
+ */
+export function readStableSourceBytes(
+  absolutePath: string,
+  expectedHash: string,
+  displayPath: string,
+): Uint8Array {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(readFileSync(absolutePath));
+    } catch (cause) {
+      throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${displayPath} could not be read.`, {
+        remediation: 'Check the file permissions, or exclude it in .loreignore.',
+        path: displayPath,
+        cause,
+      });
+    }
+    if (sha256Hex(bytes) === expectedHash) return bytes;
+  }
+
+  throw new LoreError(
+    'LORE_E_STALE_SOURCES',
+    `${displayPath} changed while the build was reading it.`,
+    {
+      remediation: 'Save the source completely, then run `lore build` again.',
+      path: displayPath,
+    },
+  );
 }
 
 function canonicalRoots(
