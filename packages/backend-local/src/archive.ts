@@ -77,10 +77,27 @@ export function collectObjects(
       hash.slice(2, 4),
       hash.slice(4),
     );
-    if (!existsSync(path)) continue;
+    if (!existsSync(path)) {
+      throw new LoreError('LORE_E_OBJECT_CORRUPT', `Referenced object ${hash} is missing.`, {
+        remediation: 'Restore the object or rebuild the project before packing.',
+        subject: hash,
+      });
+    }
+    const bytes = new Uint8Array(readFileSync(path));
+    const actual = sha256Hex(bytes);
+    if (actual !== hash) {
+      throw new LoreError(
+        'LORE_E_OBJECT_CORRUPT',
+        `Referenced object ${hash} failed its checksum: found ${actual}.`,
+        {
+          remediation: 'Restore the object or rebuild the project before packing.',
+          subject: hash,
+        },
+      );
+    }
     members.push({
       path: `objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`,
-      bytes: new Uint8Array(readFileSync(path)),
+      bytes,
     });
   }
   return members;
