@@ -9,10 +9,10 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
+import { buildManifestSchema, loadConfig, ProgressBus, sha256Hex } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
-import { runBuild } from '../src/services/build.js';
+import { readStableSourceBytes, runBuild } from '../src/services/build.js';
 import { run } from './helpers.js';
 
 const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
@@ -40,6 +40,18 @@ function buildsIn(root: string): string[] {
 }
 
 describe('lore build', () => {
+  it('rejects source bytes that no longer match the fingerprint', async () => {
+    await project({ 'a.md': '# Original\n' }, async (root) => {
+      const original = new TextEncoder().encode('# Original\n');
+      writeFileSync(join(root, 'a.md'), '# Changed\n', 'utf8');
+
+      expect(() =>
+        readStableSourceBytes(join(root, 'a.md'), sha256Hex(original), 'a.md'),
+      ).toThrowError(expect.objectContaining({ code: 'LORE_E_STALE_SOURCES', path: 'a.md' }));
+      expect(existsSync(join(root, '.lore', 'cache'))).toBe(false);
+    });
+  });
+
   it('turns a directory into a verified, active build', async () => {
     await project(
       { 'docs/a.md': '# A\n\nAlpha text.', 'docs/b.md': '# B\n\nBeta text.' },
