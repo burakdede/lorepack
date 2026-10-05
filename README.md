@@ -1,251 +1,73 @@
 # Lorepack
 
-**Build, version, and deploy the context your AI depends on.**
+**Turn your project's documents and spreadsheets into a versioned context build that AI agents
+read over MCP, with a citation on every answer.**
 
-Lorepack turns the files a team already trusts, such as runbooks, requirements, spreadsheets,
-architecture notes, specs and source-adjacent documents, into a versioned context package an AI
-client can read with citations.
+Point Lorepack at a folder of runbooks, specs, spreadsheets and PDFs. It compiles them into an
+immutable build that Claude Code, Codex, VS Code or any MCP client can search and query, and
+every result names the file and lines it came from. Think Git for the context your AI depends
+on: see exactly what it reads, diff two versions, and roll back a bad update without
+rebuilding.
 
-The important part is not the search box. The important part is that context gets the same
-lifecycle discipline as code and infrastructure: plan it, build it, inspect it, activate it,
-diff it, deploy it and roll it back.
+> **Status:** pre-v0.1 and not yet on npm. Everything below runs today from source.
+> Progress is tracked on the [backlog](https://github.com/users/burakdede/projects/8).
 
-Lorepack compiles a directory of documents, spreadsheets and project artifacts into an
-**immutable, content-addressed build**. That build can be inspected, diffed, deployed,
-activated and rolled back, then read by chat models and coding agents over MCP, HTTP, or a
-bounded export.
+## Install
 
-Think *Git and Terraform for AI context*. It is not another local RAG server: retrieval is
-a runtime capability, the build lifecycle is the product.
-
-```text
-source artifacts → plan → deterministic build → immutable version
-                 → validate → activate atomically → diff / roll back
-```
-
-![Lorepack lifecycle: source artifacts flow through plan, build, validate and activate into an immutable build, then read-only runtimes serve it](docs/images/lorepack-lifecycle.svg)
-
-## Why Lorepack exists
-
-AI clients usually receive project context in one of three fragile ways:
-
-1. a person pastes documents into a chat;
-2. a tool searches a mutable folder or index at runtime;
-3. a vector database stores chunks that are hard to inspect, diff or roll back.
-
-Those can help a model find text, but they do not answer the release-engineering questions:
-
-- Which exact documents did the AI see?
-- Which files were excluded, and why?
-- Did this spreadsheet remain a table, or was it flattened into prose?
-- What changed between the context used yesterday and the context active today?
-- Can a bad context update be rolled back without rebuilding?
-- Can a remote runtime prove it is serving the same build the local machine inspected?
-
-Lorepack exists for those questions. The build is the source of truth. Retrieval, MCP, HTTP,
-Studio and Cloudflare deployment are projections of that build.
-
-## How it differs from RAG, MCP wrappers and vector databases
-
-| Existing category | What it is good at | What it usually does not solve | What Lorepack adds |
-|---|---|---|---|
-| RAG server | Search documents at runtime and pass matching chunks to a model. | Release lifecycle, reproducible build identity, activation, rollback and inspectable exclusions. | A deterministic context build that can be validated before any runtime serves it. |
-| MCP document-search tool | Let an AI client call a search or read tool. | A stable context artifact, build diffs, deployment parity and lifecycle controls. | MCP is one read-only serving surface over an immutable build. |
-| Vector database | Store and search embeddings at scale. | Provenance-first build semantics, source parsing rules, table structure and rollback of context versions. | Optional future semantic projections can hang off the build, but the build stays canonical. |
-| File watcher or folder indexer | Keep a local index close to the source tree. | Deterministic identity across machines and a safe active-version pointer. | Source files are inputs, not the live serving database. |
-
-Lorepack is not claiming search is unimportant. It ships lexical retrieval with provenance in
-v0.1. The difference is ownership: search reads from a sealed build, and a sealed build is the
-thing you inspect, deploy and roll back.
-
-For a deeper explanation, see [Core concepts](docs/concepts.md).
-
-![Lorepack architecture: compiler creates one immutable build, local and remote runtimes are projections, and AI clients cross only a read-only boundary](docs/images/lorepack-architecture.svg)
-
-## Try the lifecycle
+Requires Node.js 24.15 or later.
 
 ```bash
-lore dev ./project-context     # discover, build, serve, watch, and print where everything is
-lore connect claude-code       # configure an AI client, and prove it answers
+git clone https://github.com/burakdede/lorepack.git && cd lorepack
+corepack enable && pnpm install --frozen-lockfile && pnpm build
+alias lore="node $PWD/packages/cli/dist/entry.js"
 ```
 
-Those two commands are the quick start once the package is installed. From a clone today, use
-the built entry point:
+After the v0.1 release it is `npm install -g @lorepack/cli`. See
+[Getting started](docs/getting-started.md#install) for details.
+
+## Use it
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm build
-node packages/cli/dist/entry.js dev ./examples/product-research
-node packages/cli/dist/entry.js --cwd examples/product-research connect claude-code --dry-run
+lore dev ./my-docs          # build the folder, serve it over MCP and HTTP, rebuild on change
+lore connect claude-code    # or codex, or vscode: wire up your agent and check it answers
 ```
 
-The three-minute demo is a lifecycle, not a search box:
+![Lorepack in a terminal: build a folder, search it with citations, diff two builds, roll back, and serve it over MCP](docs/images/demo.svg)
 
-```bash
-pnpm demo:readme
-```
+## What you get
 
-That committed script copies the checked-in examples to a temp directory, runs the real CLI, and
-regenerates [`docs/demo-transcript.md`](docs/demo-transcript.md). CI runs
-`pnpm demo:readme:check`, so the transcript cannot drift.
+- **Answers with provenance.** Every result names its file, heading path and lines.
+  [How provenance works](docs/concepts.md#provenance-and-structure).
+- **Spreadsheets stay tables.** CSV and XLSX become typed tables an agent queries with
+  read-only SQL, never flattened into prose. [How tables are stored](docs/architecture/local-storage.md).
+- **Versioned context.** Builds are immutable and content-addressed: diff any two, activate
+  one, roll back without recompiling. [The build lifecycle](docs/concepts.md#the-build-lifecycle).
+- **Studio, a local inspector.** See what was indexed and what was left out, what a model
+  would receive for a task, and copy any request as a CLI, `curl` or MCP call.
+  [Take the tour](docs/studio-tour.md).
+- **Nothing else to install.** No Python, Docker, model download, API key or account.
+  [Requirements](docs/getting-started.md#requirements).
+- **Deploy when ready.** Project the same build to Cloudflare, verified before it goes live.
+  [Deployment](docs/architecture/deployment.md).
 
-The demo proves four steps:
+![Lore Studio, showing the active build, next steps, and the MCP endpoint to give an agent](docs/images/studio-overview.png)
 
-| Step | What happens | Command family |
-|---|---|---|
-| Start | inspect the plan, build and activate an immutable version | `lore plan`, `lore build` |
-| Change | edit a source and see exactly what will rebuild | `lore plan` |
-| Recover | diff builds, roll the active pointer back, never recompile | `lore diff`, `lore rollback` |
-| Deploy | produce and verify the portable artifact; remote deploy follows target setup | `lore pack`, then `lore target add cloudflare` and `lore deploy cloudflare` |
+## Learn more
 
-![lore init and lore build](docs/images/cli-build.svg)
+- [Getting started](docs/getting-started.md): install, the first build, and the full lifecycle
+- [Core concepts](docs/concepts.md): why the build is the product, and how Lorepack differs
+  from RAG servers and vector databases
+- Connecting a client: [Claude Code](docs/integrations/claude-code.md),
+  [Codex](docs/integrations/codex.md), [VS Code](docs/integrations/vscode.md), or
+  [any MCP client](docs/integrations/mcp.md)
+- [CLI reference](docs/cli-reference.md)
+- [Limitations](docs/limitations.md): what v0.1 does not do
+- [All documentation](docs/README.md)
 
-Everything the build decided is inspectable without re-running it, including the decisions
-that removed a file:
+## Contributing
 
-![lore status and lore inspect exclusions](docs/images/cli-inspect.svg)
-
-Every result carries the file, the heading path and the lines it came from. A result without
-one is a bug, not a style issue:
-
-![lore search, with provenance on every hit](docs/images/cli-search.svg)
-
-## Status
-
-**Pre-v0.1. Under active construction, not yet published.**
-
-Everything shown here runs today from a clone, and the images are generated from a real build by
-`pnpm docs:capture`, but no package has been released. Follow along in the
-[backlog](https://github.com/users/burakdede/projects/8).
-
-Working now: the local lifecycle, every parser below, typed tables with a read-only SQL
-surface, declared precedence rules, retrieval with provenance, MCP and HTTP serving, the
-`lore connect` flow for Claude Code, Codex and VS Code, Studio, and the Cloudflare projection
-path.
-
-## Studio
-
-`lore dev` prints a Studio URL: six routes served from static files by the same process that
-serves the API, on the same port, with no toolchain and no network. A sidebar names the active
-build and whether its sources are still fresh; light and dark themes follow your system unless
-you pick one. Overview is the starting point: the MCP and HTTP endpoints to give your agent, and
-the `lore connect` command for each client installed on your machine.
-
-![Lore Studio Overview](docs/images/studio-overview.png)
-
-The Playground answers the question that matters most before you trust any of this: **what would
-a model actually receive for this task, and what was left out.** Every passage carries its
-provenance, every omission carries its reason, and a ranking heuristic is labelled as one
-rather than presented as a score of truth. Every citation opens the stored text with its lines
-marked, and every request can be copied as the equivalent `lore` command, `curl` call or MCP
-tool call, so nothing tried in Studio has to be retyped to be used elsewhere.
-
-![Lore Studio Context Playground](docs/images/studio-playground.png)
-
-Versions lists every immutable build. Activation and rollback show the diff first, name the
-build they act on, and are pointer changes that never recompile.
-
-![Lore Studio Versions](docs/images/studio-versions.png)
-
-Press <kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> elsewhere) to jump to any route, source or table.
-
-![Lore Studio command palette](docs/images/studio-palette.png)
-
-Tables appears only when the build has one, and its console runs a read-only `SELECT` through
-the same validator and limits as the tool a model calls. [Take the full tour](docs/studio-tour.md),
-including Sources, the excluded-source view, Tables and Diagnostics.
-
-Studio is read-mostly. The only routes that change anything exist solely under `lore dev`, and
-they refuse any browser origin that is not a loopback literal.
-
-## Requirements
-
-Node.js `>=24.15 <25`, and that is the whole list. No Python, Docker, compiler toolchain,
-native add-on, model download, API key or account.
-
-The floor is 24.15 because that is the first release where `node:sqlite` exposes the
-authorizer and per-connection limits the read-only SQL surface depends on. Lorepack also
-needs SQLite compiled with FTS5, which every official Node build has; see
-[SQLite FTS5 availability](docs/compatibility/sqlite-fts5.md) for the verified matrix and
-what happens if yours does not.
-
-## Installation
-
-Two install paths are supported by the design:
-
-| Path | Use when | Commands |
-|---|---|---|
-| Published package | after v0.1 is released | `pnpm add -g lorepack` or the package-manager equivalent |
-| Source checkout | today, and for contributors | `pnpm install --frozen-lockfile && pnpm build` |
-
-The zero-surprise first run is tested, not promised: no Python, Docker, compiler toolchain,
-native add-on, post-install build, model download, API key or account. The clean-install CI
-matrix installs with lifecycle scripts suppressed and then runs the product.
-
-## Design commitments
-
-- **The build is the source of truth.** Every runtime is a projection of an immutable build.
-- **Deterministic.** Identical inputs produce an identical build ID on every OS.
-- **Provenance always.** Every result traces to a file, section, page, sheet or cell range.
-- **No surprises on first run.** No Python, Docker, compiler toolchain, native add-on,
-  model download, API key or account.
-- **Never invents truth.** Precedence between sources is declared by you, never guessed.
-
-## Limitations, honestly
-
-- **Markdown, HTML, DOCX, CSV, XLSX, text-layer PDF, plain text and source code.** A file with
-  an extension Lorepack does not know is named in the build's exclusions rather than silently
-  skipped. A scanned PDF is refused outright rather than indexed as an empty document: OCR is
-  out of scope for v0.1.
-- **A spreadsheet becomes a typed table, not prose**, queried with SQL rather than searched as
-  text. Types are inferred conservatively and refuse to be clever: `00123` stays text, a
-  19-digit id stays text, and `03/04/2026` stays text because the file never says which country
-  wrote it. Excel formulas are stored as text and never evaluated. A worksheet whose layout is
-  not a table is described and reported, never invented into one.
-- **The SQL surface is one read-only SELECT over one table**, run in a process that is killed on
-  a deadline, behind an authorizer that permits that table and nothing else in the build. It
-  cannot write, cannot reach another table, and cannot read the catalog.
-- **Lexical retrieval only.** BM25 with declared ranking hints. No embeddings in the default
-  install, and the score is presented as a ranking heuristic because that is what it is. The
-  Cloudflare target is lexical-only in v0.1.
-- **No screenshots, OCR or image understanding.** Scanned PDFs are refused rather than indexed
-  as empty content.
-- **No PPTX.** Presentation parsing is out of scope for v0.1.
-- **One project, one machine.** No tenancy, no accounts, no hosted control plane.
-- **The scale envelope is 2,500 files and 1 GB.** Past that Lorepack asks you to confirm and
-  says plainly that the behaviour is untested rather than unsupported.
-- **Precedence is declared, never detected.** Lorepack will not tell you which of two documents
-  is correct, and does not claim to have found a conflict.
-
-## Documentation
-
-| | |
-|---|---|
-| What Lorepack is and how it differs from adjacent tools | [`docs/concepts.md`](docs/concepts.md) |
-| Working agreement for contributors and agents | [`AGENTS.md`](AGENTS.md) |
-| Full architecture specification | [`Lorepack_Local_First_MVP_Architecture_Final.md`](Lorepack_Local_First_MVP_Architecture_Final.md) |
-| How to contribute | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
-| Governance and release authority | [`GOVERNANCE.md`](GOVERNANCE.md) |
-| Reporting a vulnerability | [`SECURITY.md`](SECURITY.md) |
-| Start page for the docs | [`docs/README.md`](docs/README.md) |
-| Package format specification | [`docs/package-format/README.md`](docs/package-format/README.md) |
-| Architecture map | [`docs/architecture/README.md`](docs/architecture/README.md) |
-| The generated `lore` command line reference | [`docs/cli-reference.md`](docs/cli-reference.md) |
-| Worked examples | [`examples/README.md`](examples/README.md) |
-| How a build is produced, and why the stage order matters | [`docs/architecture/build-orchestration.md`](docs/architecture/build-orchestration.md) |
-| What belongs in a build, and what does not | [`docs/architecture/discovery.md`](docs/architecture/discovery.md) |
-| How each format is read, and what is deliberately dropped | [`docs/architecture/parsers.md`](docs/architecture/parsers.md) |
-| Every security surface, and the test that holds it | [`docs/architecture/security.md`](docs/architecture/security.md) |
-| How a build is deployed, and which rules the orchestration enforces | [`docs/architecture/deployment.md`](docs/architecture/deployment.md) |
-| How a model reaches a build, over MCP and HTTP | [`docs/architecture/serving.md`](docs/architecture/serving.md) |
-| Studio: behaviour, the manual passes, and the design direction | [`docs/architecture/studio.md`](docs/architecture/studio.md) |
-| How typed tables are stored, named and queried | [`docs/architecture/local-storage.md`](docs/architecture/local-storage.md) |
-| A tour of Studio, one screenshot per route | [`docs/studio-tour.md`](docs/studio-tour.md) |
-| Why each dependency is here, with the checks it passed | [`docs/architecture/dependencies.md`](docs/architecture/dependencies.md) |
-| Connecting Claude Code | [`docs/integrations/claude-code.md`](docs/integrations/claude-code.md) |
-| Connecting Codex | [`docs/integrations/codex.md`](docs/integrations/codex.md) |
-| Connecting VS Code | [`docs/integrations/vscode.md`](docs/integrations/vscode.md) |
-| Generic MCP clients | [`docs/integrations/mcp.md`](docs/integrations/mcp.md) |
+Start with [CONTRIBUTING.md](CONTRIBUTING.md). Agents and contributors work to
+[AGENTS.md](AGENTS.md), and vulnerabilities go through [SECURITY.md](SECURITY.md).
 
 ## Licence
 
