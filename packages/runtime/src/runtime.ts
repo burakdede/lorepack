@@ -93,7 +93,7 @@ class PortedRuntime implements LoreRuntime {
         artifactId: request.artifactId,
       });
 
-      const ranked = rankCandidates(candidates, {
+      const ranked = rankCandidates(candidates.hits, {
         query: request.query,
         limit: request.limit,
         includeArchived: request.includeArchived,
@@ -150,9 +150,9 @@ class PortedRuntime implements LoreRuntime {
       });
       const superseded = await scope.catalog.supersededArtifacts();
 
-      const report = rankWithReport(candidates, {
+      const report = rankWithReport(candidates.hits, {
         query: request.task,
-        limit: candidates.length,
+        limit: candidates.hits.length,
         includeArchived: request.includeArchived,
         superseded,
       });
@@ -168,6 +168,9 @@ class PortedRuntime implements LoreRuntime {
           task: request.task,
           profile,
           budget,
+          candidateLimit: candidates.limit,
+          candidateLimitHit: candidates.hits.length >= candidates.limit,
+          candidateMatchMode: candidates.matchMode,
           ranked: report.kept,
           dropped: report.dropped,
           suppressed,
@@ -289,9 +292,19 @@ async function candidatesFor(
   scope: BuildScope,
   query: string,
   criteria: Omit<CatalogSearchCriteria, 'match'>,
-): Promise<readonly CatalogSearchHit[]> {
+): Promise<{
+  readonly hits: readonly CatalogSearchHit[];
+  readonly limit: number;
+  readonly matchMode: 'all' | 'any';
+}> {
   const precise = await scope.catalog.search(query, { ...criteria, match: 'all' });
-  if (precise.length > 0) return precise;
-  if (query.trim().split(/\s+/).length < 2) return precise;
-  return scope.catalog.search(query, { ...criteria, match: 'any' });
+  const limit = criteria.limit;
+  if (precise.length > 0 || query.trim().split(/\s+/).length < 2) {
+    return { hits: precise, limit, matchMode: 'all' };
+  }
+  return {
+    hits: await scope.catalog.search(query, { ...criteria, match: 'any' }),
+    limit,
+    matchMode: 'any',
+  };
 }

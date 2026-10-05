@@ -73,6 +73,9 @@ export interface ContextBundle {
   task: string;
   profile: ContextProfile;
   budget: number;
+  candidateLimit: number;
+  candidateLimitHit: boolean;
+  candidateMatchMode: 'all' | 'any';
   estimatedTokens: number;
   reservedTokens: number;
   overview: ContextItem[];

@@ -106,6 +106,21 @@
       "pattern": "^lore_[0-9a-f]{64}$",
       "type": "string"
     },
+    "candidateLimit": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "candidateLimitHit": {
+      "type": "boolean"
+    },
+    "candidateMatchMode": {
+      "enum": [
+        "all",
+        "any"
+      ],
+      "type": "string"
+    },
     "citations": {
       "items": {
         "additionalProperties": false,
@@ -481,6 +496,9 @@
     "task",
     "profile",
     "budget",
+    "candidateLimit",
+    "candidateLimitHit",
+    "candidateMatchMode",
     "estimatedTokens",
     "reservedTokens",
     "overview",

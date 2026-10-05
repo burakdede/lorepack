@@ -61,6 +61,8 @@ describe('the markdown a person pastes', () => {
       expect(text).toMatch(/build `lore_[0-9a-f]{64}`/);
       expect(text).toContain('Profile **chat**');
       expect(text).toContain('estimated tokens');
+      expect(text).toContain('Search considered up to');
+      expect(text).not.toContain('Every passage that matched this task is above');
       expect(text).toContain('## Context');
       expect(text).toContain('### guides/rollback.md');
       expect(text).toContain('## Citations');
