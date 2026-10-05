@@ -212,6 +212,8 @@
 }
 
 .diff-section:first-of-type {
+  /* Paths are the longest values in a diff, so they get two columns instead of breaking. */
+  grid-column: span 2;
   padding-left: 0;
   border-left: 0;
 }
@@ -287,5 +289,13 @@
 
   .compare-controls {
     display: grid;
+  }
+}
+
+/* Every row reads "local only" until a build is deployed, so it is the column that gives way
+   at the layout floor, before the actions have to scroll over it. */
+@media (max-width: 1400px) {
+  .builds .build-deployment {
+    display: none;
   }
 }

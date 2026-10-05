@@ -250,7 +250,9 @@ function BuildTable({
               chunks
             </th>
             <th scope="col">capabilities</th>
-            <th scope="col">deployment</th>
+            <th scope="col" className="build-deployment">
+              deployment
+            </th>
             <th scope="col" className="build-actions-head">
               <span className="visually-hidden">actions</span>
             </th>
