@@ -10,7 +10,7 @@
   padding: var(--space-6);
 }
 
-.summary-id .build-id > span:first-child {
+.summary-build-id > span:first-child {
   font-family: var(--font-mono);
   font-size: var(--text-display);
   font-weight: 500;
@@ -60,7 +60,9 @@
   gap: var(--space-5);
 }
 
-.build-id {
+/* Named for this route: a bare `.build-id` also matched the Versions table's row header and
+   turned that cell into a flex box, breaking the row. */
+.summary-build-id {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
