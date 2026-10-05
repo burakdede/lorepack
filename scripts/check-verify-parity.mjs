@@ -37,6 +37,7 @@ const OUTSIDE_VERIFY = new Map([
   ['test:e2e', 'its own job: it needs a browser, which not every contributor has installed'],
   ['bench', 'reported, never enforced, so it cannot gate anything'],
   ['bench:retrieval', 'reported, never enforced'],
+  ['bench:quality', 'quality baseline is enforced by its own benchmark command'],
   [
     'check:changeset-policy',
     'pull-request-only gate: commit history is meaningful before merge, not on main',

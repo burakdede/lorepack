@@ -6,5 +6,355 @@
     "What is the access policy for a project?"
   ],
   "tableQuery": "SELECT * FROM <described-sql-name>",
+  "qualityQueries": [
+    {
+      "id": "search-wedge",
+      "kind": "search",
+      "query": "wedge lifecycle",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/markdown/product-strategy.md",
+          "lineStart": 9,
+          "lineEnd": 9
+        }
+      ]
+    },
+    {
+      "id": "search-non-goals",
+      "kind": "search",
+      "query": "not chatbot vector database",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/markdown/product-strategy.md",
+          "lineStart": 21,
+          "lineEnd": 21
+        }
+      ]
+    },
+    {
+      "id": "search-rollback-pointer",
+      "kind": "search",
+      "query": "rollback pointer recompile",
+      "expected": [{ "artifact": "benchmarks/corpus/generated/release-notes.pdf", "page": 2 }]
+    },
+    {
+      "id": "search-immutable-build",
+      "kind": "search",
+      "query": "immutable build",
+      "expected": [{ "artifact": "benchmarks/corpus/generated/release-notes.pdf", "page": 1 }]
+    },
+    {
+      "id": "search-worker-stages",
+      "kind": "search",
+      "query": "worker stages candidate",
+      "expected": [
+        {
+          "artifact": "examples/coding-project/sources/notes/current/sync-worker.md",
+          "lineStart": 3,
+          "lineEnd": 9
+        }
+      ]
+    },
+    {
+      "id": "search-operations-rollback",
+      "kind": "search",
+      "query": "operations rollback",
+      "expected": [
+        { "artifact": "benchmarks/corpus/text/operations.txt", "lineStart": 1, "lineEnd": 9 }
+      ]
+    },
+    {
+      "id": "search-release-manager",
+      "kind": "search",
+      "query": "release manager",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 36,
+          "lineEnd": 53
+        }
+      ]
+    },
+    {
+      "id": "search-smoke-credentials",
+      "kind": "search",
+      "query": "credentials smoke tests",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 27,
+          "lineEnd": 30
+        }
+      ]
+    },
+    {
+      "id": "search-deployment-credentials",
+      "kind": "search",
+      "query": "deployment credentials",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 33,
+          "lineEnd": 33
+        }
+      ]
+    },
+    {
+      "id": "search-source-locator",
+      "kind": "search",
+      "query": "source locator",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["10. Canonical data model", "10.4 Chunk"]
+        }
+      ]
+    },
+    {
+      "id": "search-semantic-search",
+      "kind": "search",
+      "query": "semantic search",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["20. Testing and quality gates", "20.6 Adapter contract tests"]
+        }
+      ]
+    },
+    {
+      "id": "search-mcp-read-only",
+      "kind": "search",
+      "query": "MCP read only",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["14. AI-native interfaces and compatibility", "14.1 MCP tool surface"]
+        }
+      ]
+    },
+    {
+      "id": "search-config-precedence",
+      "kind": "search",
+      "query": "configuration precedence",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["6. Developer experience contract", "6.8 Configuration precedence"]
+        }
+      ]
+    },
+    {
+      "id": "search-csv-table",
+      "kind": "search",
+      "query": "table rows columns",
+      "expected": [
+        {
+          "artifact": "examples/product-research/sources/data/segments.csv",
+          "lineStart": 1,
+          "lineEnd": 5
+        }
+      ]
+    },
+    {
+      "id": "search-sync-activation",
+      "kind": "search",
+      "query": "sync activation",
+      "expected": [
+        {
+          "artifact": "examples/coding-project/sources/notes/current/sync-worker.md",
+          "lineStart": 14,
+          "lineEnd": 14
+        }
+      ]
+    },
+    {
+      "id": "context-rollback",
+      "kind": "context",
+      "query": "How does rollback change a pointer without recompiling?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 36,
+          "lineEnd": 53
+        }
+      ]
+    },
+    {
+      "id": "context-non-goals",
+      "kind": "context",
+      "query": "What are the product non-goals?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/markdown/product-strategy.md",
+          "lineStart": 21,
+          "lineEnd": 21
+        }
+      ]
+    },
+    {
+      "id": "context-worker",
+      "kind": "context",
+      "query": "How does the worker stage candidate data?",
+      "expected": [
+        {
+          "artifact": "examples/coding-project/sources/notes/current/sync-worker.md",
+          "lineStart": 3,
+          "lineEnd": 9
+        }
+      ]
+    },
+    {
+      "id": "context-operations",
+      "kind": "context",
+      "query": "What is the operational rollback procedure?",
+      "expected": [
+        { "artifact": "benchmarks/corpus/text/operations.txt", "lineStart": 1, "lineEnd": 9 }
+      ]
+    },
+    {
+      "id": "context-release-announcement",
+      "kind": "context",
+      "query": "Who announces a release rollback?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 36,
+          "lineEnd": 53
+        }
+      ]
+    },
+    {
+      "id": "context-before-deploy",
+      "kind": "context",
+      "query": "What should happen before deployment?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 27,
+          "lineEnd": 30
+        }
+      ]
+    },
+    {
+      "id": "context-credentials",
+      "kind": "context",
+      "query": "Where are deployment credentials configured?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 33,
+          "lineEnd": 33
+        }
+      ]
+    },
+    {
+      "id": "context-promise",
+      "kind": "context",
+      "query": "What is the product promise?",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["2. Product problem and contract", "2.2 Product promise"]
+        }
+      ]
+    },
+    {
+      "id": "context-config",
+      "kind": "context",
+      "query": "How does configuration precedence work?",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["6. Developer experience contract", "6.8 Configuration precedence"]
+        }
+      ]
+    },
+    {
+      "id": "context-mcp",
+      "kind": "context",
+      "query": "How does MCP stay read only?",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["14. AI-native interfaces and compatibility", "14.1 MCP tool surface"]
+        }
+      ]
+    },
+    {
+      "id": "context-release-notes",
+      "kind": "context",
+      "query": "What should happen before deployment?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 27,
+          "lineEnd": 30
+        }
+      ]
+    },
+    {
+      "id": "context-source-locator",
+      "kind": "context",
+      "query": "What is a source locator?",
+      "expected": [
+        {
+          "artifact": "Lorepack_Local_First_MVP_Architecture_Final.docx",
+          "lineStart": 1,
+          "lineEnd": 1,
+          "headingPath": ["10. Canonical data model", "10.4 Chunk"]
+        }
+      ]
+    },
+    {
+      "id": "context-activation",
+      "kind": "context",
+      "query": "How does sync activation work?",
+      "expected": [
+        {
+          "artifact": "examples/coding-project/sources/notes/current/sync-worker.md",
+          "lineStart": 3,
+          "lineEnd": 9
+        }
+      ]
+    },
+    {
+      "id": "context-lifecycle",
+      "kind": "context",
+      "query": "Why is the wedge the lifecycle rather than retrieval?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/markdown/product-strategy.md",
+          "lineStart": 9,
+          "lineEnd": 9
+        }
+      ]
+    },
+    {
+      "id": "context-deployment-rollback",
+      "kind": "context",
+      "query": "How does a deployment rollback work?",
+      "expected": [
+        {
+          "artifact": "fixtures/documents/html/documentation-page.html",
+          "lineStart": 36,
+          "lineEnd": 53
+        }
+      ]
+    }
+  ],
   "semantics": "Search and context requests are read-only lexical workloads. The table query is filled with the SQL name returned by describeTable and is bounded to 100 rows."
 }

@@ -58,3 +58,7 @@ The first comparison is deliberately a direct SQLite FTS5 index over the same no
 index-only cost separately from Lorepack's full build and labels the missing provenance, context,
 table and activation semantics. The interpretation is in
 [`docs/compatibility/retrieval-comparison-2026-10-04.md`](../docs/compatibility/retrieval-comparison-2026-10-04.md).
+
+Retrieval quality is measured separately from latency. The 30-question labelled baseline and
+its limits are documented in
+[`docs/compatibility/retrieval-quality-2026-10-05.md`](../docs/compatibility/retrieval-quality-2026-10-05.md).
