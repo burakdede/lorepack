@@ -166,6 +166,13 @@ Capabilities
   = lexical-search
   = structured-context
   = table-query
+
+Canonical roots
+  ~ artifacts
+  ~ chunks
+  ~ nodes
+  ~ objects
+  = tables
 ```
 
 ## recover: product-research
