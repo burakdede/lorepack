@@ -137,7 +137,8 @@ CREATE TABLE nodes (
   text TEXT,
   heading_path TEXT NOT NULL,
   line_start INTEGER,
-  line_end INTEGER
+  line_end INTEGER,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE TABLE tables (
   id TEXT NOT NULL,
