@@ -1,14 +1,23 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { LocalStateStore, openReadOnly, stateMigrationsDirectory } from '@lorepack/backend-local';
+import {
+  assertIdentifier,
+  decodeValue,
+  LocalStateStore,
+  openReadOnly,
+  stateMigrationsDirectory,
+  tableLocator,
+} from '@lorepack/backend-local';
 import type { BuildSnapshot } from '@lorepack/compiler';
 import {
   assertBuildId,
   type BuildId,
   type BuildSummary,
   buildManifestSchema,
+  type ColumnTypeName,
   count,
   LoreError,
+  type TableValue,
 } from '@lorepack/core';
 
 /**
@@ -138,11 +147,52 @@ export function readSnapshot(loreDirectory: string, buildId: BuildId): BuildSnap
       revision_hash: string;
     }>;
 
+    const tableRows = db
+      .prepare(
+        'SELECT id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range FROM tables ORDER BY id',
+      )
+      .all() as Array<{
+      id: string;
+      artifact_id: string;
+      name: string;
+      sheet: string | null;
+      sql_name: string;
+      row_count: number;
+      relative_path: string;
+      line_start: number | null;
+      line_end: number | null;
+      cell_range: string | null;
+    }>;
+    const tables = tableRows.map((table) => {
+      const columns = db
+        .prepare(
+          'SELECT ordinal, name, sql_name, type FROM table_columns WHERE table_id = ? ORDER BY ordinal',
+        )
+        .all(table.id) as Array<{ ordinal: number; name: string; sql_name: string; type: string }>;
+      const physical = assertIdentifier(table.sql_name);
+      const rows = db.prepare(`SELECT * FROM ${physical}`).all() as Array<Record<string, unknown>>;
+      return {
+        tableId: table.id,
+        name: table.name,
+        rows: table.row_count,
+        columns: columns.map((column) => column.name),
+        locator: tableLocator(table),
+        cells: rows.flatMap((row, rowIndex) =>
+          columns.map((column) => ({
+            row: rowIndex,
+            column: column.name,
+            value: decodeValue(row[column.sql_name], column.type as ColumnTypeName) as TableValue,
+          })),
+        ),
+      };
+    });
+
     return {
       buildId,
       formatVersion: manifest.formatVersion,
       schemaVersion: manifest.schemaVersion,
       compilerVersion: manifest.compilerVersion,
+      configurationHash: manifest.configurationHash,
       capabilities: manifest.capabilities,
       canonicalRoots: manifest.canonicalRoots,
       artifacts: artifacts.map((row) => ({
@@ -154,9 +204,7 @@ export function readSnapshot(loreDirectory: string, buildId: BuildId): BuildSnap
         supersedes: superseded.get(row.id) ?? [],
       })),
       chunks: chunks.map((row) => ({ id: row.id, revisionHash: row.revision_hash })),
-      // Tables arrive in Phase 5. The shape is fixed now so diff output does not change
-      // when they do.
-      tables: [],
+      tables,
     };
   } finally {
     db.close();

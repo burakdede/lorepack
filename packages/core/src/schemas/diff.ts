@@ -1,5 +1,23 @@
 import { z } from 'zod';
-import { buildIdSchema, canonicalPathSchema, capabilitySchema, sha256Schema } from './common.js';
+import {
+  buildIdSchema,
+  canonicalPathSchema,
+  capabilitySchema,
+  sha256Schema,
+  sourceLocatorSchema,
+} from './common.js';
+
+const tableValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+export const diffTableCellChangeSchema = z
+  .object({
+    row: z.int().nonnegative(),
+    column: z.string().min(1),
+    from: tableValueSchema,
+    to: tableValueSchema,
+    locator: sourceLocatorSchema,
+  })
+  .strict();
 
 /**
  * What `lore diff --json` returns.
@@ -39,6 +57,7 @@ export const diffTableChangeSchema = z
     rowsAfter: z.int().nonnegative().nullable(),
     columnsAdded: z.array(z.string()),
     columnsRemoved: z.array(z.string()),
+    cellChanges: z.array(diffTableCellChangeSchema),
   })
   .strict();
 

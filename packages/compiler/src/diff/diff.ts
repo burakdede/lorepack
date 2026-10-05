@@ -4,6 +4,8 @@ import {
   count,
   type DiffArtifactChange,
   type DiffRuleChange,
+  type SourceLocator,
+  type TableValue,
 } from '@lorepack/core';
 
 /**
@@ -35,6 +37,14 @@ export interface SnapshotTable {
   readonly name: string;
   readonly rows: number;
   readonly columns: readonly string[];
+  readonly locator: SourceLocator;
+  readonly cells: readonly SnapshotCell[];
+}
+
+export interface SnapshotCell {
+  readonly row: number;
+  readonly column: string;
+  readonly value: TableValue;
 }
 
 export interface BuildSnapshot {
@@ -42,6 +52,7 @@ export interface BuildSnapshot {
   readonly formatVersion: number;
   readonly schemaVersion: number;
   readonly compilerVersion: string;
+  readonly configurationHash: string;
   readonly capabilities: readonly string[];
   readonly canonicalRoots: Readonly<Record<string, string>>;
   readonly artifacts: readonly SnapshotArtifact[];
@@ -55,14 +66,7 @@ export function diffBuilds(from: BuildSnapshot, to: BuildSnapshot): BuildDiff {
   const rules = diffRules(from, to);
   const tables = diffTables(from, to);
 
-  const identical =
-    from.buildId === to.buildId ||
-    (artifacts.changes.length === 0 &&
-      rules.length === 0 &&
-      tables.length === 0 &&
-      chunks.added === 0 &&
-      chunks.changed === 0 &&
-      chunks.removed === 0);
+  const identical = from.buildId === to.buildId;
 
   return {
     formatVersion: 1,
@@ -98,6 +102,20 @@ function incompatibilities(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['i
       field: 'schemaVersion',
       from: String(from.schemaVersion),
       to: String(to.schemaVersion),
+    });
+  }
+  if (from.compilerVersion !== to.compilerVersion) {
+    found.push({
+      field: 'compilerVersion',
+      from: from.compilerVersion,
+      to: to.compilerVersion,
+    });
+  }
+  if (from.configurationHash !== to.configurationHash) {
+    found.push({
+      field: 'configurationHash',
+      from: from.configurationHash,
+      to: to.configurationHash,
     });
   }
   return found;
@@ -227,7 +245,8 @@ function diffTables(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['tables']
       previous !== undefined &&
       previous.rows === table.rows &&
       columnsAdded.length === 0 &&
-      columnsRemoved.length === 0
+      columnsRemoved.length === 0 &&
+      diffTableCells(previous, table).length === 0
     ) {
       continue;
     }
@@ -238,6 +257,7 @@ function diffTables(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['tables']
       rowsAfter: table.rows,
       columnsAdded,
       columnsRemoved,
+      cellChanges: diffTableCells(previous, table),
     });
   }
 
@@ -250,10 +270,33 @@ function diffTables(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['tables']
       rowsAfter: null,
       columnsAdded: [],
       columnsRemoved: [...table.columns].sort(),
+      cellChanges: [],
     });
   }
 
   return changes.sort((a, b) => (a.tableId < b.tableId ? -1 : 1));
+}
+
+function diffTableCells(
+  from: SnapshotTable | undefined,
+  to: SnapshotTable,
+): BuildDiff['tables'][number]['cellChanges'] {
+  if (from === undefined) return [];
+  const before = new Map(from.cells.map((cell) => [`${cell.row}:${cell.column}`, cell.value]));
+  const changes: BuildDiff['tables'][number]['cellChanges'] = [];
+  for (const cell of to.cells) {
+    const key = `${cell.row}:${cell.column}`;
+    const previous = before.get(key);
+    if (previous === cell.value) continue;
+    changes.push({
+      row: cell.row,
+      column: cell.column,
+      from: previous ?? null,
+      to: cell.value,
+      locator: to.locator,
+    });
+  }
+  return changes.sort((a, b) => a.row - b.row || a.column.localeCompare(b.column));
 }
 
 function diffCapabilities(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['capabilities'] {
@@ -330,12 +373,26 @@ export function renderDiff(diff: BuildDiff): string {
     if (table.columnsRemoved.length > 0) {
       lines.push(`    columns - ${table.columnsRemoved.join(', ')}`);
     }
+    for (const cell of table.cellChanges) {
+      lines.push(
+        `    cell ${cell.row},${cell.column} ${cell.from ?? 'none'} -> ${cell.to ?? 'none'}`,
+      );
+      const location = [cell.locator.relativePath, cell.locator.sheet, cell.locator.cellRange]
+        .filter((part): part is string => part !== undefined)
+        .join(' ');
+      lines.push(`      at ${location}`);
+    }
   }
 
   lines.push('', 'Capabilities');
   for (const capability of diff.capabilities) {
     const marker = capability.change === 'same' ? '=' : capability.change === 'added' ? '+' : '-';
     lines.push(`  ${marker} ${capability.capability}`);
+  }
+
+  lines.push('', 'Canonical roots');
+  for (const root of diff.canonicalRoots) {
+    lines.push(`  ${root.changed ? '~' : '='} ${root.root}`);
   }
 
   return lines.join('\n');
