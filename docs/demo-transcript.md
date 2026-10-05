@@ -31,9 +31,16 @@ Artifacts
 Lock
   ~ lore.lock absent -> created
 
+Capabilities
+  current: none
+  next: lexical-search, structured-context, table-query
+
 Expected work
   4 artifacts to process: 4 parsed, 0 reused from cache
   about 12 chunks rebuilt
+
+Warnings (1)
+  Table changes are unknown until table-bearing artifacts are parsed; table artifacts are excluded from reuse estimates.
 ```
 
 ## start: product-research
@@ -84,13 +91,20 @@ Artifacts
   + 0 added
   ~ 1 changed
   - 0 removed
-  = 3 reused
+  = 2 reused
 
   ~ research/current/positioning.md
 
+Capabilities
+  current: lexical-search, structured-context, table-query
+  next: lexical-search, structured-context, table-query
+
 Expected work
-  4 artifacts to process: 1 parsed, 3 reused from cache
+  4 artifacts to process: 2 parsed, 2 reused from cache
   about 6 chunks rebuilt
+
+Warnings (1)
+  Table changes are unknown until table-bearing artifacts are parsed; table artifacts are excluded from reuse estimates.
 ```
 
 ## change: product-research
