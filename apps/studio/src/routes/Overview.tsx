@@ -155,7 +155,7 @@ function BuildId({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   return (
-    <span className="build-id">
+    <span className="summary-build-id">
       <span title={full}>{short}</span>
       <button
         type="button"

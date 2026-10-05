@@ -85,6 +85,15 @@ For v0.1, it is also not:
 
 Those deferrals are deliberate. v0.1 protects the build model first.
 
+## Design commitments
+
+- **The build is the source of truth.** Every runtime is a projection of an immutable build.
+- **Deterministic.** Identical inputs produce an identical build ID on every OS.
+- **Provenance always.** Every result traces to a file, section, page, sheet or cell range.
+- **No surprises on first run.** No Python, Docker, compiler toolchain, native add-on,
+  model download, API key or account.
+- **Never invents truth.** Precedence between sources is declared by you, never guessed.
+
 ## Comparison with adjacent tools
 
 | Category | Primary question it answers | Where it stops | Lorepack boundary |
