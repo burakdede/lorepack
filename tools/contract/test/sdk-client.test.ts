@@ -31,6 +31,8 @@ const HIT: CatalogSearchHit = {
   displayPath: 'guides/a.md',
   headingPath: ['Guides'],
   page: null,
+  sheet: null,
+  cellRange: null,
   lineStart: 3,
   lineEnd: 4,
   status: 'active',
@@ -102,6 +104,9 @@ const catalog: CatalogStore = {
         title: null,
         text: 'the only node',
         headingPath: ['Guides'],
+        page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 3,
         lineEnd: 4,
       },
@@ -194,6 +199,10 @@ describe('every route has a typed method', () => {
     const ranged = await client.readSource('p:guides/a.md', { lineStart: 3, lineEnd: 4 });
     expect(ranged.text).toBe('the only node');
     expect(ranged.locator.lineStart).toBe(3);
+
+    await expect(client.readSource('p:guides/a.md', { page: 2 })).rejects.toMatchObject({
+      code: 'LORE_E_INVALID_ARGUMENT',
+    });
   });
 
   it('the table routes', async () => {

@@ -260,6 +260,9 @@ function locatorOf(hit: CatalogSearchHit): SourceLocator {
     artifactId: hit.artifactId,
     relativePath: hit.relativePath,
     ...(hit.headingPath.length === 0 ? {} : { headingPath: [...hit.headingPath] }),
+    ...(hit.page === null || hit.page <= 0 ? {} : { page: hit.page }),
+    ...(hit.sheet === null ? {} : { sheet: hit.sheet }),
+    ...(hit.cellRange === null ? {} : { cellRange: hit.cellRange }),
     ...(hit.lineStart === null || hit.lineStart <= 0 ? {} : { lineStart: hit.lineStart }),
     ...(hit.lineEnd === null || hit.lineEnd <= 0 ? {} : { lineEnd: hit.lineEnd }),
   };

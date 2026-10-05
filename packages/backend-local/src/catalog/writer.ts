@@ -227,6 +227,8 @@ export interface CatalogSearchHit {
   readonly excerpt: string;
   /** The page, for a format whose only coordinate is a page. Null for one with lines. */
   readonly page: number | null;
+  readonly sheet: string | null;
+  readonly cellRange: string | null;
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
   readonly status: string;
@@ -331,6 +333,8 @@ export function searchCatalog(
               c.line_start    AS lineStart,
               c.line_end      AS lineEnd,
               c.page          AS page,
+              json_extract(n.metadata, '$.sheet') AS sheet,
+              json_extract(n.metadata, '$.cellRange') AS cellRange,
               a.status        AS status,
               a.authority     AS authority,
               c.estimated_tokens AS estimatedTokens,
@@ -340,6 +344,7 @@ export function searchCatalog(
          FROM chunks_fts
          JOIN chunks    c ON c.id = chunks_fts.chunk_id
          JOIN artifacts a ON a.id = c.artifact_id
+         LEFT JOIN nodes n ON n.id = json_extract(c.node_ids, '$[0]')
         WHERE ${conditions.join(' AND ')}
         ORDER BY bm25
         LIMIT ?`,
@@ -355,6 +360,8 @@ export function searchCatalog(
     text: String(row.text),
     excerpt: String(row.excerpt),
     page: row.page === null || row.page === undefined ? null : Number(row.page),
+    sheet: row.sheet === null || row.sheet === undefined ? null : String(row.sheet),
+    cellRange: row.cellRange === null || row.cellRange === undefined ? null : String(row.cellRange),
     lineStart: row.lineStart === null ? null : Number(row.lineStart),
     lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     status: String(row.status),

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus, RUNTIME_LIMITS } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
-import { withTempProject } from '@lorepack/test-support';
+import { makePdf, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
@@ -58,6 +58,31 @@ async function withRuntime<T>(
       backend.close();
     }
   });
+}
+
+async function withPdfRuntime<T>(
+  body: (runtime: ReturnType<typeof createRuntime>) => Promise<T>,
+): Promise<T> {
+  return withTempProject(
+    {
+      files: {
+        ...CORPUS,
+        'contract.pdf': makePdf([
+          { lines: ['Support contract', 'Response times are measured in business hours.'] },
+          { lines: ['Escalation', 'A critical incident escalates after thirty minutes.'] },
+        ]),
+      },
+    },
+    async (project) => {
+      await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
+      const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+      try {
+        return await body(createRuntime(backend));
+      } finally {
+        backend.close();
+      }
+    },
+  );
 }
 
 describe('a line range means source lines', () => {
@@ -166,6 +191,16 @@ describe('addressing', () => {
           code: 'LORE_E_INVALID_ARGUMENT',
         },
       );
+    });
+  });
+
+  it('reads the page a PDF citation names from the sealed build', async () => {
+    await withPdfRuntime(async (runtime) => {
+      const result = await runtime.readSource({ path: 'contract.pdf', page: 2 });
+      expect(result.text).toContain('critical incident');
+      expect(result.locator.page).toBe(2);
+      expect(result.locator.lineStart).toBeUndefined();
+      expect(result.locator.lineEnd).toBeUndefined();
     });
   });
 });

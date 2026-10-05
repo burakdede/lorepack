@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { contextBundleSchema } from '@lorepack/core';
-import { withTempProject } from '@lorepack/test-support';
+import { makePdf, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { run } from './helpers.js';
 
@@ -35,6 +35,23 @@ async function exported<T>(
 }
 
 describe('the markdown a person pastes', () => {
+  it('renders a PDF page coordinate instead of an invented line', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (project) => {
+      writeFileSync(
+        join(project.root, 'contract.pdf'),
+        makePdf([
+          { lines: ['Support contract', 'Response times are measured in business hours.'] },
+          { lines: ['Escalation', 'A critical incident escalates after thirty minutes.'] },
+        ]),
+      );
+      await run(['--cwd', project.root, 'build']);
+      const result = await run(['--cwd', project.root, 'export', '--task', 'critical incident']);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('page 2');
+      expect(result.stdout).not.toContain('line 1');
+    });
+  });
+
   it('includes every element architecture 14.6 lists', async () => {
     await exported(['export', '--task', 'how do I roll back a release'], (result) => {
       expect(result.code).toBe(0);

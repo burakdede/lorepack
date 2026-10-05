@@ -415,6 +415,7 @@ export function createApiApp(options: ApiOptions): Hono {
       const query = context.req.query();
       return options.runtime.readSource({
         artifactId,
+        ...numeric('page', query.page),
         ...numeric('lineStart', query.lineStart),
         ...numeric('lineEnd', query.lineEnd),
         ...(query.headingPath === undefined
@@ -587,12 +588,15 @@ function statusFor(error: unknown): number {
   return 500;
 }
 
-function numeric(name: 'lineStart' | 'lineEnd', raw: string | undefined): Record<string, number> {
+function numeric(
+  name: 'page' | 'lineStart' | 'lineEnd',
+  raw: string | undefined,
+): Record<string, number> {
   if (raw === undefined) return {};
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1) {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `${name} must be a positive whole number.`, {
-      remediation: `Pass ${name} as a line number, for example ${name}=12.`,
+      remediation: `Pass ${name} as a positive whole number, for example ${name}=12.`,
       subject: raw,
     });
   }

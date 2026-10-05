@@ -122,6 +122,8 @@ class PortedRuntime implements LoreRuntime {
             artifactId: hit.artifactId,
             relativePath: hit.relativePath,
             ...(hit.headingPath.length === 0 ? {} : { headingPath: [...hit.headingPath] }),
+            ...(hit.sheet === null ? {} : { sheet: hit.sheet }),
+            ...(hit.cellRange === null ? {} : { cellRange: hit.cellRange }),
             // A page and a line range are alternatives, not companions: a format has one
             // coordinate or the other, and carrying an invented one alongside the real one
             // is what made a PDF citation read as line 1 (#241).

@@ -116,6 +116,7 @@ describe('a hit is cited by the coordinate its format has', () => {
 
       for (const item of everything) {
         if (!/\.pdf$/.test(item.locator.relativePath)) continue;
+        expect(item.locator.page).toBeGreaterThan(0);
         expect(item.locator.lineStart).toBeUndefined();
         expect(item.locator.lineEnd).toBeUndefined();
       }
@@ -124,6 +125,7 @@ describe('a hit is cited by the coordinate its format has', () => {
       // actually pastes into a conversation.
       for (const locator of bundle.citations) {
         if (!/\.pdf$/.test(locator.relativePath)) continue;
+        expect(locator.page).toBeGreaterThan(0);
         expect(locator.lineStart).toBeUndefined();
       }
     });

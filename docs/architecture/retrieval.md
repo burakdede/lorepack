@@ -61,9 +61,11 @@ The pieces, so a new format knows what to fill in:
 
 | Where | What it carries |
 |---|---|
-| `NodeBuilder.add({ page })` | A parser puts the page on the node's **locator**, not only in `metadata` |
+| `NodeBuilder.add({ page })` | A parser puts a PDF page on the node's **locator**, not only in `metadata` |
+| Node metadata | Spreadsheet sheet and cell range coordinates remain available to catalog adapters |
 | `Pending.lineStart` in the chunker | `null` for a format with no lines, never a default of 1 |
 | `chunks.page` | The first page a chunk covers, so a chunk spanning a break is cited at its start |
+| Catalog search rows | Spreadsheet sheet and cell range coordinates are joined from the source node |
 | `SearchHit.locator` | Whichever the chunk had; the two are alternatives, not companions |
 
 ## The score is a heuristic, not a verdict

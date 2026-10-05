@@ -142,7 +142,8 @@ LIMIT 1`,
 
   db.handlers.set(
     `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
-       heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd
+       heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd,
+       metadata_json AS metadataJson
 FROM nodes
 WHERE project_id = ? AND build_id = ? AND artifact_id = ?
 ORDER BY ordinal`,
@@ -159,6 +160,7 @@ ORDER BY ordinal`,
               headingPath: '["Rollback"]',
               lineStart: 1,
               lineEnd: 2,
+              metadataJson: '{}',
             },
           ]
         : [],
@@ -182,6 +184,8 @@ WHERE project_id = ? AND build_id = ?`,
               c.line_start AS lineStart,
               c.line_end AS lineEnd,
               c.page AS page,
+              json_extract(n.metadata_json, '$.sheet') AS sheet,
+              json_extract(n.metadata_json, '$.cellRange') AS cellRange,
               a.status AS status,
               a.authority AS authority,
               c.estimated_tokens AS estimatedTokens,
@@ -193,6 +197,9 @@ WHERE project_id = ? AND build_id = ?`,
            ON c.id = f.chunk_id AND c.project_id = f.project_id AND c.build_id = f.build_id
          JOIN artifacts a
            ON a.id = c.artifact_id AND a.project_id = c.project_id AND a.build_id = c.build_id
+         LEFT JOIN nodes n
+           ON n.id = json_extract(c.node_ids, '$[0]')
+          AND n.project_id = c.project_id AND n.build_id = c.build_id
         WHERE f.project_id = ? AND f.build_id = ? AND c.project_id = ? AND c.build_id = ? AND a.project_id = ? AND a.build_id = ? AND chunks_fts MATCH ?
         ORDER BY bm25
         LIMIT ?`,
@@ -208,6 +215,8 @@ WHERE project_id = ? AND build_id = ?`,
               text: 'To roll back a release, activate the previous build.',
               excerpt: 'To [rollback] a release',
               page: null,
+              sheet: null,
+              cellRange: null,
               lineStart: 1,
               lineEnd: 2,
               status: 'active',
@@ -272,6 +281,9 @@ describe('D1CatalogStore', () => {
         title: null,
         text: 'To roll back a release, activate the previous build.',
         headingPath: ['Rollback'],
+        page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 1,
         lineEnd: 2,
       },
@@ -296,6 +308,8 @@ describe('D1CatalogStore', () => {
         text: 'To roll back a release, activate the previous build.',
         excerpt: 'To [rollback] a release',
         page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 1,
         lineEnd: 2,
         status: 'active',
