@@ -53,7 +53,6 @@ export const pdfParser: ArtifactParser = {
         warnings.push({
           code: 'pdf-large-document',
           message: `This document has ${pageCount} pages, beyond the ${PDF_LIMITS.warnPages} the scale envelope covers. It was read in full; extraction time grows with the page count.`,
-          line: 1,
         });
       }
       if (pageCount > PDF_LIMITS.maxPages) {
@@ -100,7 +99,6 @@ export const pdfParser: ArtifactParser = {
         warnings.push({
           code: 'pdf-pages-without-text',
           message: `${pageCount - pagesWithText} of ${pageCount} pages have no text layer and contributed nothing. Optical character recognition is out of scope for v0.1.`,
-          line: 1,
         });
       }
 

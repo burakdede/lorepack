@@ -111,6 +111,7 @@ export class LoreClient {
     signal?: AbortSignal,
   ): Promise<SourceReadResult> {
     const query = new URLSearchParams();
+    if (options.page !== undefined) query.set('page', String(options.page));
     if (options.lineStart !== undefined) query.set('lineStart', String(options.lineStart));
     if (options.lineEnd !== undefined) query.set('lineEnd', String(options.lineEnd));
     if (options.headingPath !== undefined)

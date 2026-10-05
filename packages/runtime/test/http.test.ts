@@ -36,6 +36,9 @@ const HIT: CatalogSearchHit = {
   relativePath: 'guides/a.md',
   displayPath: 'guides/a.md',
   headingPath: ['Guides'],
+  page: null,
+  sheet: null,
+  cellRange: null,
   lineStart: 3,
   lineEnd: 4,
   status: 'active',
@@ -108,6 +111,9 @@ const catalog: CatalogStore = {
         title: null,
         text: 'the only node',
         headingPath: ['Guides'],
+        page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 3,
         lineEnd: 4,
       },
@@ -220,6 +226,9 @@ describe('the route list, architecture 14.5', () => {
     const body = (await ranged.json()) as { text: string; locator: { lineStart: number } };
     expect(body.text).toBe('the only node');
     expect(body.locator.lineStart).toBe(3);
+
+    const page = await appFor().request('/v1/sources/p%3Aguides%2Fa.md?page=2');
+    expect(page.status).toBe(400);
   });
 
   it('answers the table routes as a build without tables, until Phase 5', async () => {

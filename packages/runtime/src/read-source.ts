@@ -35,18 +35,10 @@ export async function readSourceFrom(
 ): Promise<ReadSourceOutcome> {
   const artifact = await resolveArtifact(scope, request);
   const wantsRange =
+    request.page !== undefined ||
     request.lineStart !== undefined ||
     request.lineEnd !== undefined ||
     (request.headingPath !== undefined && request.headingPath.length > 0);
-
-  if (request.page !== undefined) {
-    // Pages exist for PDFs, which arrive in Phase 5. Saying so is better than returning
-    // page one of a Markdown file and letting a model cite it.
-    throw new LoreError('LORE_E_INVALID_ARGUMENT', 'This build has no paginated artifacts.', {
-      remediation: 'Page addressing arrives with the PDF parser. Use a line or heading range.',
-      subject: artifact.displayPath,
-    });
-  }
 
   return wantsRange ? readRange(scope, artifact, request) : readWhole(scope, artifact);
 }
@@ -99,6 +91,7 @@ async function readWhole(scope: BuildScope, artifact: CatalogArtifact): Promise<
     locator: {
       artifactId: artifact.artifactId,
       relativePath: artifact.relativePath,
+      ...coordinateOf(nodes),
       ...(bounds === null ? {} : { lineStart: bounds.lineStart, lineEnd: bounds.lineEnd }),
     },
   };
@@ -153,12 +146,16 @@ async function readRange(
       artifactId: artifact.artifactId,
       relativePath: artifact.relativePath,
       ...(headingPath.length === 0 ? {} : { headingPath: [...headingPath] }),
+      ...coordinateOf(ordered),
       ...(span === null ? {} : { lineStart: span.lineStart, lineEnd: span.lineEnd }),
     },
   };
 }
 
 function matches(node: CatalogNode, request: SourceReadRequest): boolean {
+  if (request.page !== undefined) {
+    return node.page === request.page && node.text !== '';
+  }
   if (request.headingPath !== undefined && request.headingPath.length > 0) {
     const wanted = request.headingPath;
     const has =
@@ -175,6 +172,19 @@ function matches(node: CatalogNode, request: SourceReadRequest): boolean {
   const from = request.lineStart ?? 1;
   const to = request.lineEnd ?? Number.MAX_SAFE_INTEGER;
   return node.lineStart <= to && node.lineEnd >= from && node.text !== '';
+}
+
+function coordinateOf(nodes: readonly CatalogNode[]): Partial<SourceLocator> {
+  const pages = new Set(nodes.flatMap((node) => (node.page === null ? [] : [node.page])));
+  if (pages.size === 1) return { page: [...pages][0] };
+  const sheets = new Set(nodes.flatMap((node) => (node.sheet === null ? [] : [node.sheet])));
+  const ranges = new Set(
+    nodes.flatMap((node) => (node.cellRange === null ? [] : [node.cellRange])),
+  );
+  return {
+    ...(sheets.size === 1 ? { sheet: [...sheets][0] } : {}),
+    ...(ranges.size === 1 ? { cellRange: [...ranges][0] } : {}),
+  };
 }
 
 function sourceBounds(

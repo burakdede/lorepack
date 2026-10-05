@@ -138,7 +138,8 @@ class LocalCatalogStore implements CatalogStore {
     const rows = this.#db
       .prepare(
         `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
-                heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd
+                heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd,
+                metadata
            FROM nodes
           WHERE artifact_id = ?
           ORDER BY ordinal`,
@@ -153,6 +154,9 @@ class LocalCatalogStore implements CatalogStore {
       title: row.title === null ? null : String(row.title),
       text: row.text === null ? '' : String(row.text),
       headingPath: JSON.parse(String(row.headingPath)) as string[],
+      page: coordinateNumber(row.metadata, 'page'),
+      sheet: coordinateString(row.metadata, 'sheet'),
+      cellRange: coordinateString(row.metadata, 'cellRange'),
       lineStart: row.lineStart === null ? null : Number(row.lineStart),
       lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     }));
@@ -182,6 +186,24 @@ class LocalCatalogStore implements CatalogStore {
       status: hit.status as CatalogSearchHit['status'],
     }));
   }
+}
+
+function coordinateString(
+  metadata: string | number | null | undefined,
+  key: string,
+): string | null {
+  if (typeof metadata !== 'string') return null;
+  const value = (JSON.parse(metadata) as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function coordinateNumber(
+  metadata: string | number | null | undefined,
+  key: string,
+): number | null {
+  if (typeof metadata !== 'string') return null;
+  const value = (JSON.parse(metadata) as Record<string, unknown>)[key];
+  return typeof value === 'number' ? value : null;
 }
 
 /** Example rows in a `describeTable` response. A shape, not a preview of the data. */

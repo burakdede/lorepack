@@ -197,6 +197,7 @@ export interface TaskContextRequest {
 }
 
 export interface SourceReadOptions {
+  page?: number | undefined;
   lineStart?: number | undefined;
   lineEnd?: number | undefined;
   headingPath?: string[] | undefined;

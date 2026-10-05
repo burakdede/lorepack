@@ -43,6 +43,8 @@ export interface CatalogChunk {
    * made a PDF citation read as line 1 (#241).
    */
   readonly page: number | null;
+  readonly sheet: string | null;
+  readonly cellRange: string | null;
   /** Source coordinates, one-based. Null where the format has no lines. */
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
@@ -159,6 +161,9 @@ export interface CatalogNode {
   readonly title: string | null;
   readonly text: string;
   readonly headingPath: readonly string[];
+  readonly page: number | null;
+  readonly sheet: string | null;
+  readonly cellRange: string | null;
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
 }

@@ -158,6 +158,10 @@ function describeReason(reason: string): string {
 }
 
 function lineRange(locator: ContextBundle['citations'][number]): string {
+  if (locator.page !== undefined) return `page ${locator.page}`;
+  if (locator.sheet !== undefined || locator.cellRange !== undefined) {
+    return [locator.sheet, locator.cellRange].filter(Boolean).join(' ');
+  }
   if (locator.lineStart === undefined) return '';
   return locator.lineEnd === undefined || locator.lineEnd === locator.lineStart
     ? `line ${locator.lineStart}`

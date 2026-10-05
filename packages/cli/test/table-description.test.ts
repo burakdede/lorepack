@@ -97,6 +97,20 @@ describe('a table description carries where it came from', () => {
     });
   });
 
+  it('carries spreadsheet coordinates through lexical search', async () => {
+    await withProject(async ({ runtime }) => {
+      const result = await runtime.search({
+        query: 'A-1',
+        limit: 5,
+        includeArchived: false,
+        debug: false,
+      });
+      const hit = result.hits.find((one) => one.locator.relativePath === 'orders.xlsx');
+      expect(hit?.locator.sheet).toBe('Orders');
+      expect(hit?.locator.cellRange).toBe('A1:D4');
+    });
+  });
+
   it('invents neither a sheet nor a cell range for a CSV', async () => {
     await withProject(async ({ runtime }) => {
       const described = await runtime.describeTable(CSV_TABLE);

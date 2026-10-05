@@ -50,6 +50,7 @@ interface NodeRow {
   readonly title: string | null;
   readonly text: string | null;
   readonly headingPath: string;
+  readonly metadataJson: string;
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
 }
@@ -63,6 +64,8 @@ interface SearchRow {
   readonly text: string;
   readonly excerpt: string;
   readonly page: number | null;
+  readonly sheet: string | null;
+  readonly cellRange: string | null;
   readonly lineStart: number | null;
   readonly lineEnd: number | null;
   readonly status: string;
@@ -74,6 +77,16 @@ interface SearchRow {
 
 const MATCH_ALL = 'all';
 const MATCH_ANY = 'any';
+
+function coordinateString(metadata: string, key: string): string | null {
+  const value = (JSON.parse(metadata) as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function coordinateNumber(metadata: string, key: string): number | null {
+  const value = (JSON.parse(metadata) as Record<string, unknown>)[key];
+  return typeof value === 'number' ? value : null;
+}
 
 const COUNT_CHUNKS_QUERY = `SELECT count(*) AS count
 FROM chunks
@@ -106,7 +119,8 @@ WHERE project_id = ? AND build_id = ? AND (id = ? OR relative_path = ?)
 LIMIT 1`;
 
 const NODES_QUERY = `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
-       heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd
+       heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd,
+       metadata_json AS metadataJson
 FROM nodes
 WHERE project_id = ? AND build_id = ? AND artifact_id = ?
 ORDER BY ordinal`;
@@ -204,6 +218,9 @@ export class D1CatalogStore implements CatalogStore {
       title: row.title,
       text: row.text ?? '',
       headingPath: JSON.parse(row.headingPath) as string[],
+      page: coordinateNumber(row.metadataJson, 'page'),
+      sheet: coordinateString(row.metadataJson, 'sheet'),
+      cellRange: coordinateString(row.metadataJson, 'cellRange'),
       lineStart: row.lineStart === null ? null : Number(row.lineStart),
       lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
     }));
@@ -271,6 +288,8 @@ export class D1CatalogStore implements CatalogStore {
               c.line_start AS lineStart,
               c.line_end AS lineEnd,
               c.page AS page,
+              json_extract(n.metadata_json, '$.sheet') AS sheet,
+              json_extract(n.metadata_json, '$.cellRange') AS cellRange,
               a.status AS status,
               a.authority AS authority,
               c.estimated_tokens AS estimatedTokens,
@@ -282,6 +301,9 @@ export class D1CatalogStore implements CatalogStore {
            ON c.id = f.chunk_id AND c.project_id = f.project_id AND c.build_id = f.build_id
          JOIN artifacts a
            ON a.id = c.artifact_id AND a.project_id = c.project_id AND a.build_id = c.build_id
+         LEFT JOIN nodes n
+           ON n.id = json_extract(c.node_ids, '$[0]')
+          AND n.project_id = c.project_id AND n.build_id = c.build_id
         WHERE ${conditions.join(' AND ')}
         ORDER BY bm25
         LIMIT ?`,
@@ -297,6 +319,8 @@ export class D1CatalogStore implements CatalogStore {
       text: row.text,
       excerpt: row.excerpt,
       page: row.page === null ? null : Number(row.page),
+      sheet: row.sheet === null ? null : String(row.sheet),
+      cellRange: row.cellRange === null ? null : String(row.cellRange),
       lineStart: row.lineStart === null ? null : Number(row.lineStart),
       lineEnd: row.lineEnd === null ? null : Number(row.lineEnd),
       status: row.status as CatalogSearchHit['status'],
