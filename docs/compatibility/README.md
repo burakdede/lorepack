@@ -38,6 +38,7 @@ The delivered-epic reliability scope and evidence plan is [`reliability-audit-v0
 | Single-document incremental rebuild at 2,500 files | envelope benchmark | 5,632 ms p95, reported only | [`benchmarks/envelope/reference-2026-08-05.json`](../../benchmarks/envelope/reference-2026-08-05.json), see `#245` decision in [`docs/architecture/build-orchestration.md`](../architecture/build-orchestration.md) |
 | Byte envelope, 2,500 files and 1.005 GiB | envelope benchmark | see committed run | [`benchmarks/envelope/byte-envelope-2026-08-14.json`](../../benchmarks/envelope/byte-envelope-2026-08-14.json), measured on a Darwin arm64 development machine and not a reference gate |
 | Retrieval at Phase 2 envelope | retrieval benchmark | see committed run | [`benchmarks/retrieval/phase-2-envelope-dev-machine.json`](../../benchmarks/retrieval/phase-2-envelope-dev-machine.json) |
+| Lexical retrieval quality | 30 labelled mixed-format questions | 100% hit@1, 100% hit@5, 100% expected context locations cited | [`retrieval-quality-2026-10-05.md`](retrieval-quality-2026-10-05.md) |
 | Cloudflare projection concurrency | remote projection benchmark | see committed run | [`benchmarks/cloudflare/projection-concurrency-2026-08-09.json`](../../benchmarks/cloudflare/projection-concurrency-2026-08-09.json) |
 
 The v0.1 release-gate report is [`performance-v0.1.md`](performance-v0.1.md). It is the source

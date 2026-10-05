@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-10-05",
+  "corpusManifest": "benchmarks/corpus/manifest.json",
+  "queryWorkload": "benchmarks/corpus/queries.json",
+  "limitation": "This is lexical ranking quality on a repository-owned mixed-format corpus. It is not correctness, factuality, semantic relevance or an industry benchmark.",
+  "cases": 30,
+  "quality": {
+    "lexicalRankingQuality": true,
+    "search": {
+      "cases": 15,
+      "hitAt1": 1,
+      "hitAt5": 1
+    },
+    "contextForTask": {
+      "cases": 15,
+      "allExpectedCited": 1
+    }
+  },
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "24.18.1"
+  }
+}
