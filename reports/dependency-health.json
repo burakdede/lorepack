@@ -1328,9 +1328,9 @@
       "references": [
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
-      "latestVersion": "4.147.0",
+      "latestVersion": "4.148.0",
       "pinnedPublishedAt": "2026-08-05T12:31:36.536Z",
-      "latestReleaseAt": "2026-10-02T11:30:47.699Z",
+      "latestReleaseAt": "2026-10-06T18:33:23.820Z",
       "daysSinceLastRelease": 0,
       "license": "MIT OR Apache-2.0",
       "provenance": {
