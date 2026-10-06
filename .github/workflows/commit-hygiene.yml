@@ -2,6 +2,7 @@ name: Commit hygiene
 
 on:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   no-ai-attribution:
@@ -17,6 +18,8 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          HEAD="${HEAD:-$(git rev-parse HEAD)}"
+          BASE="${BASE:-$(git rev-parse "$HEAD^")}"
           # Matches attribution patterns only. A literal mention of the file CLAUDE.md is
           # legitimate and must not fail the build, so the bare product name is not matched.
           pattern='Co-Authored-By:|Co-authored-by:|Generated with|generated with \[|🤖'
@@ -31,6 +34,8 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          HEAD="${HEAD:-$(git rev-parse HEAD)}"
+          BASE="${BASE:-$(git rev-parse "$HEAD^")}"
           if git log --format='%B' "$BASE..$HEAD" | grep -P '\x{2014}'; then
             echo "::error::Commit messages must not contain an em dash (U+2014). See AGENTS.md section 8."
             exit 1
