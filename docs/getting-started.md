@@ -17,8 +17,14 @@ happens if your build lacks it.
 
 ## Install
 
-Lorepack is not on npm yet, so today you install it from source. Building from source also
-needs pnpm, which [Corepack](https://nodejs.org/api/corepack.html) ships with Node:
+The alpha is available from npm on the `next` channel:
+
+```bash
+npm install -g @lorepack/cli@next
+```
+
+To contribute or try unreleased changes, install from source. That path needs pnpm, which
+[Corepack](https://nodejs.org/api/corepack.html) ships with Node:
 
 ```bash
 git clone https://github.com/burakdede/lorepack.git
@@ -32,7 +38,7 @@ alias lore="node $PWD/packages/cli/dist/entry.js"
 The alias lasts for the current shell. Add it to your shell profile to keep it, or call
 `node packages/cli/dist/entry.js` directly.
 
-Once v0.1 is released, the install is one command:
+Once v0.1 is released, the stable install will be one command:
 
 ```bash
 npm install -g @lorepack/cli

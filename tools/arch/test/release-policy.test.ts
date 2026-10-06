@@ -148,6 +148,8 @@ describe('release policy', () => {
         'deprecate',
       ].join('\n'),
     );
+    writeFileSync(join(root, 'README.md'), 'npm install -g @lorepack/cli@next\n');
+    writeFileSync(join(root, 'docs', 'getting-started.md'), 'npm install -g @lorepack/cli@next\n');
     writeFileSync(
       join(root, '.github', 'workflows', 'public-registry-smoke.yml'),
       publicRegistryWorkflow(),
@@ -358,6 +360,12 @@ function releaseWorkflow(): string {
     'reports/sbom.cyclonedx.json',
     'stable publish requires the green issue #101 performance report URL',
     'pack --pack-destination',
+    'Alpha status',
+    'Cloudflare deploy is experimental',
+    '1 GiB scale envelope is untested',
+    'Approvals, evidence capture and semantic search are not in v0.1',
+    'docs/limitations.md',
+    'GHSA-c53f-24h5-74qj',
     'Require npm publish token for real release',
     'Commit version and generated release artifacts',
     'Create GitHub release with SBOM and example artifact',
