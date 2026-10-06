@@ -381,7 +381,7 @@ function releaseWorkflow(): string {
     'clean install (macos-latest)',
     'cloudflare acceptance (ubuntu-latest)',
     'studio e2e (ubuntu-latest)',
-    'benchmarks (reported, not enforced)',
+    'benchmarks (reported)',
   ].join('\n');
 }
 
