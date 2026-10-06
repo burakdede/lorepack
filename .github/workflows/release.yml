@@ -72,23 +72,40 @@ jobs:
             "studio e2e (ubuntu-latest)"
             "benchmarks (reported)"
           )
-          for attempt in $(seq 1 30); do
-            all_green=true
+          check_commit() {
+            local commit="$1"
+            local all_green=true
             for name in "${required_checks[@]}"; do
-              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/check-runs" \
+              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${commit}/check-runs" \
                 --paginate \
                 --jq ".check_runs[] | select(.name == \"$name\" and .status == \"completed\") | .conclusion" \
                 | head -n 1)"
               if [ "$conclusion" = "failure" ] || [ "$conclusion" = "cancelled" ] || [ "$conclusion" = "timed_out" ]; then
-                echo "::error::required release gate '$name' failed for $RELEASE_COMMIT"
-                exit 1
+                echo "::error::required release gate '$name' failed for $commit"
+                return 2
               fi
               if [ "$conclusion" != "success" ]; then
                 all_green=false
               fi
             done
-            if [ "$all_green" = true ]; then
+            [ "$all_green" = true ]
+          }
+          for attempt in $(seq 1 30); do
+            if check_commit "$RELEASE_COMMIT"; then
               exit 0
+            elif [ "$?" -eq 2 ]; then
+              exit 1
+            fi
+            pr_head="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/pulls" \
+              --jq '.[0].head.sha // empty' \
+              | head -n 1)"
+            if [ -n "$pr_head" ] && [ "$pr_head" != "$RELEASE_COMMIT" ]; then
+              if check_commit "$pr_head"; then
+                echo "using green checks from merged pull request head $pr_head"
+                exit 0
+              elif [ "$?" -eq 2 ]; then
+                exit 1
+              fi
             fi
             echo "waiting for required release gates on $RELEASE_COMMIT (attempt $attempt/30)"
             sleep 10
