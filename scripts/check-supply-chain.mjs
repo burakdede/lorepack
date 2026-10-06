@@ -20,6 +20,7 @@ const ALLOWED_LICENSES = new Set([
   'MIT OR Apache-2.0',
   'MPL-2.0',
   'OFL-1.1',
+  'Python-2.0',
   '(MIT AND Zlib)',
   '(MIT OR GPL-3.0-or-later)',
 ]);

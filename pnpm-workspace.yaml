@@ -29,3 +29,4 @@ allowBuilds:
 overrides:
   '@napi-rs/canvas': '-'
   '@xmldom/xmldom': '0.8.15'
+  'mammoth>argparse': '2.0.1'
