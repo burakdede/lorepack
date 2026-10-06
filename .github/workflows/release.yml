@@ -69,7 +69,7 @@ jobs:
             "clean install (macos-latest)"
             "cloudflare acceptance (ubuntu-latest)"
             "studio e2e (ubuntu-latest)"
-            "benchmarks (reported, not enforced)"
+            "benchmarks (reported)"
           )
           for name in "${required_checks[@]}"; do
             conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/check-runs" \
