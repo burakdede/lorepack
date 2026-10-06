@@ -172,7 +172,8 @@
     {
       "name": "@modelcontextprotocol/client",
       "specifiers": [
-        "2.0.0"
+        "2.0.0",
+        "2.2.0"
       ],
       "dependencyTypes": [
         "dependencies",
