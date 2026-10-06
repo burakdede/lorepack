@@ -249,6 +249,7 @@ jobs:
           git commit -m "Release v${{ inputs.version }} [no release]"
           release_branch="release/v${{ inputs.version }}"
           git push origin "HEAD:refs/heads/${release_branch}"
+          gh workflow run ci.yml --ref "$release_branch"
           pr_url="$(gh pr create \
             --base main \
             --head "$release_branch" \
