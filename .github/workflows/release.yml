@@ -72,16 +72,29 @@ jobs:
             "studio e2e (ubuntu-latest)"
             "benchmarks (reported)"
           )
-          for name in "${required_checks[@]}"; do
-            conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/check-runs" \
-              --paginate \
-              --jq ".check_runs[] | select(.name == \"$name\" and .status == \"completed\") | .conclusion" \
-              | head -n 1)"
-            if [ "$conclusion" != "success" ]; then
-              echo "::error::required release gate '$name' is not green for $RELEASE_COMMIT"
-              exit 1
+          for attempt in $(seq 1 30); do
+            all_green=true
+            for name in "${required_checks[@]}"; do
+              conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_COMMIT}/check-runs" \
+                --paginate \
+                --jq ".check_runs[] | select(.name == \"$name\" and .status == \"completed\") | .conclusion" \
+                | head -n 1)"
+              if [ "$conclusion" = "failure" ] || [ "$conclusion" = "cancelled" ] || [ "$conclusion" = "timed_out" ]; then
+                echo "::error::required release gate '$name' failed for $RELEASE_COMMIT"
+                exit 1
+              fi
+              if [ "$conclusion" != "success" ]; then
+                all_green=false
+              fi
+            done
+            if [ "$all_green" = true ]; then
+              exit 0
             fi
+            echo "waiting for required release gates on $RELEASE_COMMIT (attempt $attempt/30)"
+            sleep 10
           done
+          echo "::error::required release gates did not all finish for $RELEASE_COMMIT"
+          exit 1
 
       - name: Require the reference-machine performance report for stable publish
         if: ${{ !inputs.dry_run && inputs.channel == 'latest' }}
