@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
 import { readArchive, verifyArchive } from '@lorepack/backend-local';
-import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
+import { buildManifestSchema, loadConfig, objectKey, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
@@ -155,6 +156,36 @@ describe('lore pack', () => {
       const result = await lore(['pack', 'lore_ffffffff']);
       expect(result.code).toBe(1);
       expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
+    });
+  });
+
+  it.each(['missing', 'corrupt'] as const)('refuses a %s referenced object', async (failure) => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, ...CORPUS } }, async (temp) => {
+      const built = await runBuild({
+        config: loadConfig({ cwd: temp.root }),
+        progress: new ProgressBus(),
+      });
+      const db = new DatabaseSync(
+        join(temp.root, '.lore', 'builds', built.buildId, 'context.sqlite'),
+        {
+          readOnly: true,
+          allowExtension: false,
+          enableDoubleQuotedStringLiterals: false,
+        },
+      );
+      const { object_hash: hash } = db
+        .prepare('SELECT object_hash FROM artifacts LIMIT 1')
+        .get() as { object_hash: string };
+      db.close();
+
+      const object = join(temp.root, '.lore', 'objects', ...objectKey(hash).split('/'));
+      if (failure === 'missing') rmSync(object);
+      else writeFileSync(object, 'tampered');
+
+      const result = await run(['--cwd', temp.root, 'pack']);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_OBJECT_CORRUPT');
+      expect(result.stderr).toContain(hash);
     });
   });
 

@@ -193,6 +193,26 @@ describe('uploadProjectArchive, issue 88', () => {
     }
   });
 
+  it.each(['missing', 'corrupt'] as const)(
+    'fails when a referenced object is %s',
+    async (failure) => {
+      const fixture = makeBuildDirectory('rollback body');
+      const object = join(fixture.objectsDirectory, ...objectKey(fixture.hash).split('/'));
+      if (failure === 'missing') rmSync(object);
+      else writeFileSync(object, 'tampered');
+
+      await expect(
+        uploadProjectArchive({
+          bucket: new FakeR2Bucket(),
+          projectId: PROJECT,
+          buildId: BUILD,
+          buildDirectory: fixture.buildDirectory,
+          objectsDirectory: fixture.objectsDirectory,
+        }),
+      ).rejects.toMatchObject({ code: 'LORE_E_OBJECT_CORRUPT', subject: fixture.hash });
+    },
+  );
+
   it('retries a transient archive upload failure and eventually succeeds', async () => {
     const fixture = makeBuildDirectory('rollback body');
     const bucket = new FakeR2Bucket();
