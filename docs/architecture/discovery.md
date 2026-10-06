@@ -23,6 +23,18 @@ Patterns are gitignore-style, evaluated with picomatch:
 The always-on exclusions from architecture section 19.2 are applied first, then
 `.loreignore`.
 
+## Source roots are disjoint identities
+
+Each configured source root gets an ID from its canonical project-relative path, or from
+the project name when the root is `.`. Configuration loading rejects two roots that normalize
+to the same ID, such as `docs/a` and `docs-a`, because their artifacts would otherwise share
+an identity. It also rejects nested roots such as `docs` and `docs/nested`: a file below the
+nested root would be discovered twice with different source contexts.
+
+The failure is `LORE_E_CONFIG_INVALID` and names both roots. This is a configuration error,
+not a collision resolver. Choosing one root or renaming a root is explicit and keeps artifact
+identity deterministic.
+
 ### Why the trailing slash is called out
 
 It is the one rule that is easy to implement backwards, and doing so is quiet. Deciding
@@ -93,6 +105,11 @@ rendering them the same way.
 Warnings distinguish a **planned** format from an **unsupported** one. A user with a PDF
 should read "supported in a later release", not "unsupported": those are materially
 different statements, and only one of them is a reason to look for another tool.
+
+Filesystem failures are warnings too. If an entry disappears before `lstat`, a followed
+symlink cannot be resolved, or its target cannot be `stat`ed, discovery records an
+`unreadable` warning with the project-relative path. A path that was seen but could not be
+indexed is never silently lost.
 
 ### Unreadable bytes are decided while fingerprinting, not while parsing
 

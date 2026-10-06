@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, parse as parsePath, resolve } from 'node:path';
+import { dirname, isAbsolute, join, parse as parsePath, relative, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { LoreError } from '../errors/lore-error.js';
 import { toCanonical, toPosix } from '../paths/canonical.js';
@@ -211,8 +211,37 @@ function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource
     }
     seen.add(relativeRoot);
 
+    const sourceId = normalizeSourceId(relativeRoot === '.' ? config.name : relativeRoot);
+    const sameId = sources.find((source) => source.id === sourceId);
+    if (sameId !== undefined) {
+      throw new LoreError(
+        'LORE_E_CONFIG_INVALID',
+        `Source roots ${sameId.relativeRoot} and ${relativeRoot} resolve to the same source ID: ${sourceId}`,
+        {
+          remediation: 'Rename one source root so every source has a distinct normalized ID.',
+          path: CONFIG_FILENAME,
+          subject: sourceId,
+          details: { roots: [sameId.relativeRoot, relativeRoot] },
+        },
+      );
+    }
+
+    const overlapping = sources.find((source) => rootsOverlap(source.root, absolute));
+    if (overlapping !== undefined) {
+      throw new LoreError(
+        'LORE_E_CONFIG_INVALID',
+        `Source roots ${overlapping.relativeRoot} and ${relativeRoot} overlap.`,
+        {
+          remediation: 'Use non-overlapping source roots so each file is indexed once.',
+          path: CONFIG_FILENAME,
+          subject: relativeRoot,
+          details: { roots: [overlapping.relativeRoot, relativeRoot] },
+        },
+      );
+    }
+
     sources.push({
-      id: normalizeSourceId(relativeRoot === '.' ? config.name : relativeRoot),
+      id: sourceId,
       kind: statSync(absolute).isDirectory() ? 'directory' : 'file',
       root: absolute,
       relativeRoot,
@@ -220,6 +249,15 @@ function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource
   }
 
   return sources;
+}
+
+function rootsOverlap(left: string, right: string): boolean {
+  return isWithin(left, right) || isWithin(right, left);
+}
+
+function isWithin(root: string, candidate: string): boolean {
+  const path = toPosix(relative(root, candidate));
+  return path === '' || (path !== '..' && !path.startsWith('../') && !isAbsolute(path));
 }
 
 function buildEffective(
