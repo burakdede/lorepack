@@ -37,6 +37,7 @@ jobs:
       contents: write
       id-token: write
       actions: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -207,15 +208,27 @@ jobs:
 
       - name: Commit version and generated release artifacts
         if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .changeset package.json packages/*/package.json reports/dependency-health.json reports/sbom.cyclonedx.json
           git add packages/*/CHANGELOG.md 2>/dev/null || true
-          git commit -m "Release v${{ inputs.version }}"
-          git tag "v${{ inputs.version }}"
-          git push origin HEAD:main --follow-tags
+          git commit -m "Release v${{ inputs.version }} [no release]"
+          release_branch="release/v${{ inputs.version }}"
+          git push origin "HEAD:refs/heads/${release_branch}"
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$release_branch" \
+            --title "Release v${{ inputs.version }}" \
+            --body "Refs #455. This release PR records the generated package versions, changelogs and supply-chain evidence before publishing.")"
+          gh pr checks "$pr_url" --watch --fail-fast
+          gh pr merge "$pr_url" --squash --delete-branch=false
+          release_target="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
+          test -n "$release_target"
+          echo "RELEASE_TARGET=$release_target" >> "$GITHUB_ENV"
 
       - name: Create GitHub release with SBOM and example artifact
         if: ${{ !inputs.dry_run }}
@@ -227,6 +240,7 @@ jobs:
             release_options+=(--prerelease)
           fi
           gh release create "v${{ inputs.version }}" \
+            --target "$RELEASE_TARGET" \
             "${release_options[@]}" \
             --title "v${{ inputs.version }}" \
             --notes-file release-artifacts/release-notes.md \
