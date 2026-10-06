@@ -424,6 +424,22 @@ describe('symlinks', () => {
       expect(paths(discover({ config: following }))).toContain('linked/a.md');
     });
   });
+
+  it('warns when a followed symlink target cannot be resolved', async () => {
+    await withProject({ 'a.md': '# A' }, (root) => {
+      symlinkSync(join(root, 'missing.md'), join(root, 'broken.md'));
+      const config = loadConfig({ cwd: root });
+      const following = { ...config, effective: { ...config.effective, followSymlinks: true } };
+      const result = discover({ config: following });
+
+      expect(paths(result)).toEqual(['a.md']);
+      expect(result.warnings).toContainEqual({
+        code: 'unreadable',
+        path: 'broken.md',
+        message: 'broken.md could not be read.',
+      });
+    });
+  });
 });
 
 describe('case collisions', () => {

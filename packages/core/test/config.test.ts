@@ -149,6 +149,47 @@ describe('validation errors', () => {
       },
     );
   });
+
+  it('rejects source roots whose normalized ids collide', async () => {
+    await withProject(
+      {
+        'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./docs/a\n  - ./docs-a\n',
+        'docs/a/.keep': '',
+        'docs-a/.keep': '',
+      },
+      (root) => {
+        try {
+          loadConfig({ cwd: root });
+          expect.unreachable('should have thrown');
+        } catch (error) {
+          const loreError = error as LoreError;
+          expect(loreError.code).toBe('LORE_E_CONFIG_INVALID');
+          expect(loreError.message).toContain('docs/a');
+          expect(loreError.message).toContain('docs-a');
+        }
+      },
+    );
+  });
+
+  it('rejects overlapping source roots', async () => {
+    await withProject(
+      {
+        'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./docs\n  - ./docs/nested\n',
+        'docs/nested/.keep': '',
+      },
+      (root) => {
+        try {
+          loadConfig({ cwd: root });
+          expect.unreachable('should have thrown');
+        } catch (error) {
+          const loreError = error as LoreError;
+          expect(loreError.code).toBe('LORE_E_CONFIG_INVALID');
+          expect(loreError.message).toContain('docs');
+          expect(loreError.message).toContain('docs/nested');
+        }
+      },
+    );
+  });
 });
 
 describe('effective configuration', () => {
