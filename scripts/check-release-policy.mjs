@@ -78,6 +78,12 @@ if (!RELEASE.includes('stable publish requires the green issue #101 performance 
 if (!RELEASE.includes('pack --pack-destination')) {
   problems.push('release.yml dry runs must create package tarballs without publishing');
 }
+if (!RELEASE.includes('LOREPACK_VERSION')) {
+  problems.push('release.yml must stamp the requested version into release evidence');
+}
+if (!RELEASE.includes('CHANGELOG.md')) {
+  problems.push('release.yml must stamp the requested version into package changelogs');
+}
 
 for (const phrase of [
   'Alpha status',

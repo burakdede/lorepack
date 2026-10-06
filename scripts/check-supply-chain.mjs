@@ -261,7 +261,11 @@ function cyclonedxFromReport(report) {
     serialNumber: 'urn:uuid:00000000-0000-4000-8000-000000000099',
     version: 1,
     metadata: {
-      component: { type: 'application', name: 'lorepack', version: '0.0.0' },
+      component: {
+        type: 'application',
+        name: 'lorepack',
+        version: process.env.LOREPACK_VERSION ?? '0.0.0',
+      },
     },
     components: report.dependencies.map((dependency) => ({
       type: 'library',

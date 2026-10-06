@@ -109,6 +109,8 @@ jobs:
           const { readdirSync, readFileSync, writeFileSync } = require('node:fs');
           const { join } = require('node:path');
           const version = process.env.RELEASE_VERSION;
+          const stableVersion = version.split('-')[0];
+          const escapedStableVersion = stableVersion.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
           const manifests = [
             'package.json',
             ...readdirSync('packages').map((name) => `packages/${name}/package.json`),
@@ -120,6 +122,19 @@ jobs:
             data.version = version;
             writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
           }
+          const releaseHeading = new RegExp(`^## ${escapedStableVersion}$`, 'm');
+          for (const name of readdirSync('packages')) {
+            const path = join(process.cwd(), 'packages', name, 'CHANGELOG.md');
+            let changelog;
+            try {
+              changelog = readFileSync(path, 'utf8');
+            } catch {
+              continue;
+            }
+            if (releaseHeading.test(changelog)) {
+              writeFileSync(path, changelog.replace(releaseHeading, `## ${version}`));
+            }
+          }
           NODE
         env:
           RELEASE_VERSION: ${{ inputs.version }}
@@ -127,6 +142,8 @@ jobs:
       - run: pnpm build
 
       - name: Generate dependency health report and CycloneDX SBOM
+        env:
+          LOREPACK_VERSION: ${{ inputs.version }}
         run: pnpm supply-chain:report
 
       - name: Build example .lorepack artifact
@@ -147,7 +164,7 @@ jobs:
             echo
             release_version="${{ inputs.version }}"
             if printf '%s' "$release_version" | grep -q -- '-'; then
-              cat <<'EOF'
+              cat <<'EOF' | sed 's/^  //'
             ## Alpha status
 
             This is an alpha release. It is suitable for evaluation, but it is not a stable v0.1 release.

@@ -360,6 +360,8 @@ function releaseWorkflow(): string {
     'reports/sbom.cyclonedx.json',
     'stable publish requires the green issue #101 performance report URL',
     'pack --pack-destination',
+    'LOREPACK_VERSION',
+    'CHANGELOG.md',
     'Alpha status',
     'Cloudflare deploy is experimental',
     '1 GiB scale envelope is untested',
