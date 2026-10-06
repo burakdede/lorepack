@@ -222,7 +222,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          release_options=()
+          if printf '%s' "${{ inputs.version }}" | grep -q -- '-'; then
+            release_options+=(--prerelease)
+          fi
           gh release create "v${{ inputs.version }}" \
+            "${release_options[@]}" \
             --title "v${{ inputs.version }}" \
             --notes-file release-artifacts/release-notes.md \
             reports/dependency-health.json \
