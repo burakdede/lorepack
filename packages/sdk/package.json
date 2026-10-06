@@ -1,6 +1,6 @@
 {
   "name": "@lorepack/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.0",
   "description": "Typed HTTP client for a Lorepack runtime.",
   "license": "Apache-2.0",
   "type": "module",
