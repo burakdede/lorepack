@@ -356,6 +356,7 @@ function releaseWorkflow(): string {
     'check-runs',
     '$conclusion" != "success"',
     'gh release create',
+    '--prerelease',
     'examples/product-research/product-research.lorepack',
     'reports/sbom.cyclonedx.json',
     'stable publish requires the green issue #101 performance report URL',

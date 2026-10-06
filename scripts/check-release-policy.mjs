@@ -66,6 +66,9 @@ if (!RELEASE.includes('check-runs') || !RELEASE.includes('$conclusion" != "succe
 if (!RELEASE.includes('gh release create')) {
   problems.push('release.yml must create the GitHub release');
 }
+if (!RELEASE.includes('--prerelease')) {
+  problems.push('release.yml must mark prerelease versions as GitHub prereleases');
+}
 if (!RELEASE.includes('examples/product-research/product-research.lorepack')) {
   problems.push('release.yml must attach a .lorepack example artifact');
 }
