@@ -9,12 +9,20 @@ every result names the file and lines it came from. Think Git for the context yo
 on: see exactly what it reads, diff two versions, and roll back a bad update without
 rebuilding.
 
-> **Status:** pre-v0.1 and not yet on npm. Everything below runs today from source.
+> **Status:** the `next` npm channel contains the first alpha. Stable v0.1 is not released yet.
 > Progress is tracked on the [backlog](https://github.com/users/burakdede/projects/8).
 
 ## Install
 
 Requires Node.js 24.15 or later.
+
+For the alpha release:
+
+```bash
+npm install -g @lorepack/cli@next
+```
+
+The source install remains useful for contributors and for testing unreleased changes:
 
 ```bash
 git clone https://github.com/burakdede/lorepack.git && cd lorepack
@@ -22,8 +30,8 @@ corepack enable && pnpm install --frozen-lockfile && pnpm build
 alias lore="node $PWD/packages/cli/dist/entry.js"
 ```
 
-After the v0.1 release it is `npm install -g @lorepack/cli`. See
-[Getting started](docs/getting-started.md#install) for details.
+The stable install will be `npm install -g @lorepack/cli` after v0.1. See
+[Getting started](docs/getting-started.md#install) for details and alpha limitations.
 
 ## Use it
 

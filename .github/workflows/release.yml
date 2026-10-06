@@ -145,6 +145,21 @@ jobs:
             echo
             echo "Released from ${RELEASE_COMMIT}."
             echo
+            release_version="${{ inputs.version }}"
+            if printf '%s' "$release_version" | grep -q -- '-'; then
+              cat <<'EOF'
+            ## Alpha status
+
+            This is an alpha release. It is suitable for evaluation, but it is not a stable v0.1 release.
+
+            - Cloudflare deploy is experimental.
+            - The 1 GiB scale envelope is untested. See [issue #302](https://github.com/burakdede/lorepack/issues/302).
+            - Approvals, evidence capture and semantic search are not in v0.1.
+
+            Read the [limitations](https://github.com/burakdede/lorepack/blob/main/docs/limitations.md) and the [GHSA-c53f-24h5-74qj advisory](https://github.com/advisories/GHSA-c53f-24h5-74qj) before using this release.
+
+          EOF
+            fi
             echo "## Package changelogs"
             for changelog in packages/*/CHANGELOG.md; do
               [ -f "$changelog" ] || continue

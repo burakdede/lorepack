@@ -14,6 +14,8 @@ const SUPPLY_CHAIN = readFileSync(
   'utf8',
 );
 const CHECKLIST = readFileSync(join(ROOT, 'docs', 'release-checklist.md'), 'utf8');
+const README = readFileSync(join(ROOT, 'README.md'), 'utf8');
+const GETTING_STARTED = readFileSync(join(ROOT, 'docs', 'getting-started.md'), 'utf8');
 
 const REQUIRED = [
   'verify (ubuntu-latest)',
@@ -75,6 +77,26 @@ if (!RELEASE.includes('stable publish requires the green issue #101 performance 
 }
 if (!RELEASE.includes('pack --pack-destination')) {
   problems.push('release.yml dry runs must create package tarballs without publishing');
+}
+
+for (const phrase of [
+  'Alpha status',
+  'Cloudflare deploy is experimental',
+  '1 GiB scale envelope is untested',
+  'Approvals, evidence capture and semantic search are not in v0.1',
+  'docs/limitations.md',
+  'GHSA-c53f-24h5-74qj',
+]) {
+  if (!RELEASE.includes(phrase)) problems.push(`release.yml alpha notes lack ${phrase}`);
+}
+
+for (const [name, contents] of [
+  ['README.md', README],
+  ['docs/getting-started.md', GETTING_STARTED],
+]) {
+  if (!contents.includes('npm install -g @lorepack/cli@next')) {
+    problems.push(`${name} must document the alpha npm install command`);
+  }
 }
 
 for (const phrase of [
