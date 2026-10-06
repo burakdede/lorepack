@@ -248,23 +248,37 @@ jobs:
           git add packages/*/CHANGELOG.md 2>/dev/null || true
           git commit -m "Release v${{ inputs.version }} [no release]"
           release_branch="release/v${{ inputs.version }}"
+          release_head="$(git rev-parse HEAD)"
           git push origin "HEAD:refs/heads/${release_branch}"
-          gh workflow run ci.yml --ref "$release_branch"
           pr_url="$(gh pr create \
             --base main \
             --head "$release_branch" \
             --title "Release v${{ inputs.version }}" \
             --body "Refs #455. This release PR records the generated package versions, changelogs and supply-chain evidence before publishing.")"
-          for attempt in $(seq 1 30); do
-            check_count="$(gh pr view "$pr_url" --json statusCheckRollup --jq '.statusCheckRollup | length')"
-            if [ "$check_count" -gt 0 ]; then
-              break
-            fi
-            echo "waiting for release PR checks to appear (attempt $attempt/30)"
-            sleep 10
-          done
-          test "$check_count" -gt 0
-          gh pr checks "$pr_url" --watch --fail-fast
+          gh workflow run ci.yml --ref "$release_branch"
+          gh workflow run commit-hygiene.yml --ref "$release_branch"
+          wait_for_workflow() {
+            workflow="$1"
+            run_id=""
+            for attempt in $(seq 1 30); do
+              run_id="$(gh run list \
+                --workflow "$workflow" \
+                --branch "$release_branch" \
+                --event workflow_dispatch \
+                --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" | head -n 1)"
+              if [ -n "$run_id" ]; then
+                break
+              fi
+              echo "waiting for $workflow run (attempt $attempt/30)"
+              sleep 10
+            done
+            test -n "$run_id"
+            gh run watch "$run_id" --exit-status
+          }
+          wait_for_workflow ci.yml
+          wait_for_workflow commit-hygiene.yml
           gh pr merge "$pr_url" --squash --delete-branch=false
           release_target="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
           test -n "$release_target"
