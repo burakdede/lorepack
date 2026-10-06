@@ -254,6 +254,15 @@ jobs:
             --head "$release_branch" \
             --title "Release v${{ inputs.version }}" \
             --body "Refs #455. This release PR records the generated package versions, changelogs and supply-chain evidence before publishing.")"
+          for attempt in $(seq 1 30); do
+            check_count="$(gh pr view "$pr_url" --json statusCheckRollup --jq '.statusCheckRollup | length')"
+            if [ "$check_count" -gt 0 ]; then
+              break
+            fi
+            echo "waiting for release PR checks to appear (attempt $attempt/30)"
+            sleep 10
+          done
+          test "$check_count" -gt 0
           gh pr checks "$pr_url" --watch --fail-fast
           gh pr merge "$pr_url" --squash --delete-branch=false
           release_target="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
