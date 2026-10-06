@@ -8,6 +8,8 @@ const ROOT = join(import.meta.dirname, '..');
 const REPORT = join(ROOT, 'reports', 'dependency-health.json');
 const SBOM = join(ROOT, 'reports', 'sbom.cyclonedx.json');
 const DOC = join(ROOT, 'docs', 'architecture', 'dependencies.md');
+const APPLICATION_VERSION =
+  process.env.LOREPACK_VERSION ?? readJson(join(ROOT, 'package.json')).version;
 const WORKSPACE_DIRS = ['packages', 'apps', 'tools'];
 const ALLOWED_LICENSES = new Set([
   'Apache-2.0',
@@ -264,7 +266,7 @@ function cyclonedxFromReport(report) {
       component: {
         type: 'application',
         name: 'lorepack',
-        version: process.env.LOREPACK_VERSION ?? '0.0.0',
+        version: APPLICATION_VERSION,
       },
     },
     components: report.dependencies.map((dependency) => ({
