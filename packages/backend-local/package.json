@@ -1,6 +1,6 @@
 {
   "name": "@lorepack/backend-local",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.0",
   "description": "node:sqlite and filesystem storage adapters for Lorepack.",
   "license": "Apache-2.0",
   "type": "module",

@@ -7,7 +7,7 @@
     "component": {
       "type": "application",
       "name": "lorepack",
-      "version": "0.0.0"
+      "version": "0.1.0-alpha.0"
     }
   },
   "components": [
@@ -1247,11 +1247,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.147.0"
+          "value": "4.148.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-02T11:30:47.699Z"
+          "value": "2026-10-06T18:33:23.820Z"
         },
         {
           "name": "lorepack:provenanceStatus",
