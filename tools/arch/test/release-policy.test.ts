@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -194,6 +194,14 @@ describe('release policy', () => {
 
     expect(run(RELEASE_CHECK, root).status).toBe(0);
   });
+
+  it('requires an idempotent recovery path for an already-merged release', () => {
+    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+    expect(workflow).toContain('resume_existing:');
+    expect(workflow).toContain('Use the merged commit as the existing release target');
+    expect(workflow).toContain('existing $release_tag targets');
+    expect(workflow).toContain('gh release upload "$release_tag"');
+  });
 });
 
 describe('performance report policy', () => {
@@ -365,6 +373,7 @@ function releaseWorkflow(): string {
   return [
     'workflow_dispatch:',
     'dry_run:',
+    'resume_existing:',
     'channel:',
     'performance_report_url:',
     'pnpm changeset version',
@@ -374,6 +383,8 @@ function releaseWorkflow(): string {
     'check-runs',
     '$conclusion" != "success"',
     'gh release create',
+    'gh release upload',
+    'existing $release_tag targets',
     '--prerelease',
     'examples/product-research/product-research.lorepack',
     'reports/sbom.cyclonedx.json',
