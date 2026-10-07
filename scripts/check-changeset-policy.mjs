@@ -109,7 +109,11 @@ function fileAtComparisonHead(file) {
     return readFileSync(join(ROOT, file), 'utf8');
   }
   if (process.env.CHANGESET_HEAD_REF) {
-    return git(['show', `${process.env.CHANGESET_HEAD_REF}:${file}`]);
+    try {
+      return git(['show', `${process.env.CHANGESET_HEAD_REF}:${file}`]);
+    } catch {
+      return '';
+    }
   }
   return '';
 }
