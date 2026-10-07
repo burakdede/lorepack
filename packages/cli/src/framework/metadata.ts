@@ -1,3 +1,5 @@
+import { LoreError } from '@lorepack/core';
+
 export type CompletionValueKind =
   | 'value'
   | 'path'
@@ -55,16 +57,20 @@ export function validateCommandMetadata(definitions: readonly CommandMetadata[])
   const aliases = new Set<string>();
 
   for (const definition of definitions) {
-    if (definition.name.trim() === '') throw new Error('A command name cannot be empty.');
+    if (definition.name.trim() === '') {
+      throw metadataError('A command name cannot be empty.');
+    }
     if (names.has(definition.name)) {
-      throw new Error(`Duplicate command name: ${definition.name}.`);
+      throw metadataError(`Duplicate command name: ${definition.name}.`);
     }
     names.add(definition.name);
 
     for (const alias of definition.aliases ?? []) {
-      if (alias.trim() === '') throw new Error(`Empty alias for command ${definition.name}.`);
+      if (alias.trim() === '') {
+        throw metadataError(`Empty alias for command ${definition.name}.`);
+      }
       if (alias === definition.name || names.has(alias) || aliases.has(alias)) {
-        throw new Error(`Duplicate command or alias: ${alias}.`);
+        throw metadataError(`Duplicate command or alias: ${alias}.`);
       }
       aliases.add(alias);
     }
@@ -72,15 +78,27 @@ export function validateCommandMetadata(definitions: readonly CommandMetadata[])
     const flagNames = new Set<string>();
     for (const flag of definition.flags ?? []) {
       const parsed = flag.flags.match(/--?[a-zA-Z0-9][a-zA-Z0-9-]*/g) ?? [];
-      if (parsed.length === 0) throw new Error(`Invalid flag declaration: ${flag.flags}.`);
+      if (parsed.length === 0) {
+        throw metadataError(`Invalid flag declaration: ${flag.flags}.`);
+      }
       for (const name of parsed) {
-        if (flagNames.has(name)) throw new Error(`Duplicate flag ${name} on ${definition.name}.`);
+        if (flagNames.has(name)) {
+          throw metadataError(`Duplicate flag ${name} on ${definition.name}.`);
+        }
         flagNames.add(name);
       }
     }
   }
 
   for (const name of names) {
-    if (aliases.has(name)) throw new Error(`Command name is also an alias: ${name}.`);
+    if (aliases.has(name)) {
+      throw metadataError(`Command name is also an alias: ${name}.`);
+    }
   }
+}
+
+function metadataError(message: string): LoreError {
+  return new LoreError('LORE_E_INTERNAL', message, {
+    remediation: 'Fix the registered command metadata before starting the CLI.',
+  });
 }
