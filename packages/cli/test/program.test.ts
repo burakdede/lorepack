@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { EXIT_CODES } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import { validateCommandMetadata } from '../src/framework/metadata.js';
 import { fixtureCommands, run } from './helpers.js';
 
 const commands = fixtureCommands;
@@ -26,6 +27,40 @@ describe('help and version', () => {
     const result = await run(['--version'], { commands, version: '0.1.0' });
     expect(result.code).toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('0.1.0');
+  });
+});
+
+describe('command metadata', () => {
+  it('rejects duplicate command names and flags before registration', () => {
+    expect(() =>
+      validateCommandMetadata([
+        { name: 'same', description: 'one' },
+        { name: 'same', description: 'two' },
+      ]),
+    ).toThrow('Duplicate command name: same.');
+
+    expect(() =>
+      validateCommandMetadata([
+        {
+          name: 'build',
+          description: 'build',
+          flags: [{ flags: '--frozen, --frozen', description: 'duplicate' }],
+        },
+      ]),
+    ).toThrow('Duplicate flag --frozen on build.');
+  });
+
+  it('accepts completion metadata without requiring a provider', () => {
+    expect(() =>
+      validateCommandMetadata([
+        {
+          name: 'inspect',
+          description: 'inspect',
+          arguments: [{ name: 'subject', description: 'subject', values: ['build', 'sources'] }],
+          examples: [{ command: 'lore inspect build', description: 'show the active build' }],
+        },
+      ]),
+    ).not.toThrow();
   });
 });
 

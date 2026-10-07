@@ -8,6 +8,16 @@ export {
   type Streams,
 } from './framework/context.js';
 export {
+  type CommandArgumentDefinition,
+  type CommandExample,
+  type CommandFlagDefinition,
+  type CommandMetadata,
+  type CompletionContext,
+  type CompletionProvider,
+  type CompletionValueKind,
+  validateCommandMetadata,
+} from './framework/metadata.js';
+export {
   buildProgram,
   CLI_NAME,
   type CommandDefinition,
