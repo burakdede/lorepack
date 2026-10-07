@@ -363,6 +363,7 @@ function releaseWorkflow(): string {
     'pack --pack-destination',
     'LOREPACK_VERSION',
     'CHANGELOG.md',
+    'scripts/stamp-release-version.mjs',
     'Alpha status',
     'Cloudflare deploy is experimental',
     '1 GiB scale envelope is untested',

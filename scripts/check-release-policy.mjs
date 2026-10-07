@@ -87,6 +87,9 @@ if (!RELEASE.includes('LOREPACK_VERSION')) {
 if (!RELEASE.includes('CHANGELOG.md')) {
   problems.push('release.yml must stamp the requested version into package changelogs');
 }
+if (!RELEASE.includes('scripts/stamp-release-version.mjs')) {
+  problems.push('release.yml must use the tested release version stamping script');
+}
 
 for (const phrase of [
   'Alpha status',
