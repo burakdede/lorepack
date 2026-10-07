@@ -105,6 +105,24 @@ describe('changeset policy', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
+  it('ignores a Changeset deleted by a generated release commit', () => {
+    execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root });
+    execFileSync('git', ['checkout', '-b', 'release'], { cwd: root });
+    writeFileSync(
+      join(root, '.changeset', 'release.md'),
+      "---\n'@lorepack/cli': patch\n---\n\nRelease automation.\n",
+    );
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'Add release changeset'], { cwd: root });
+    execFileSync('git', ['rm', '.changeset/release.md'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'Release v0.1.0-alpha.0 [no release]'], { cwd: root });
+    execFileSync('git', ['update-ref', 'refs/remotes/origin/pr-100', 'HEAD'], { cwd: root });
+    execFileSync('git', ['checkout', 'main'], { cwd: root });
+
+    const result = run(CHANGESET_CHECK, root, { CHANGESET_HEAD_REF: 'origin/pr-100' });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
   it('rejects a change with neither changeset nor marker', () => {
     writeFileSync(join(root, 'docs.md'), 'Documentation only.\n');
 
