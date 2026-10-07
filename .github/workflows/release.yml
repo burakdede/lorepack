@@ -20,6 +20,11 @@ on:
         required: true
         type: boolean
         default: true
+      resume_existing:
+        description: Publish an already-versioned release commit after its release PR merged
+        required: true
+        type: boolean
+        default: false
       performance_report_url:
         description: URL of the green reference-machine performance report
         required: false
@@ -131,9 +136,18 @@ jobs:
             exit 1
           fi
 
+      - name: Restrict existing-release recovery to main
+        if: ${{ !inputs.dry_run && inputs.resume_existing }}
+        run: |
+          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
+            echo "::error::existing-release recovery must run from main"
+            exit 1
+          fi
+
       - run: pnpm verify
 
       - name: Apply Changesets version
+        if: ${{ !inputs.resume_existing }}
         run: pnpm changeset version && node scripts/stamp-release-version.mjs
         env:
           RELEASE_VERSION: ${{ inputs.version }}
@@ -205,7 +219,7 @@ jobs:
           echo "dry run complete: no commit, tag, GitHub release or npm publish was created"
 
       - name: Commit version and generated release artifacts
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && !inputs.resume_existing }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -252,6 +266,10 @@ jobs:
           test -n "$release_target"
           echo "RELEASE_TARGET=$release_target" >> "$GITHUB_ENV"
 
+      - name: Use the merged commit as the existing release target
+        if: ${{ !inputs.dry_run && inputs.resume_existing }}
+        run: echo "RELEASE_TARGET=${GITHUB_SHA}" >> "$GITHUB_ENV"
+
       - name: Create GitHub release with SBOM and example artifact
         if: ${{ !inputs.dry_run }}
         env:
@@ -261,14 +279,28 @@ jobs:
           if printf '%s' "${{ inputs.version }}" | grep -q -- '-'; then
             release_options+=(--prerelease)
           fi
-          gh release create "v${{ inputs.version }}" \
-            --target "$RELEASE_TARGET" \
-            "${release_options[@]}" \
-            --title "v${{ inputs.version }}" \
-            --notes-file release-artifacts/release-notes.md \
-            reports/dependency-health.json \
-            reports/sbom.cyclonedx.json \
-            examples/product-research/product-research.lorepack
+          release_tag="v${{ inputs.version }}"
+          if existing_release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" 2>/dev/null)"; then
+            existing_target="$(printf '%s' "$existing_release" | jq -r '.target_commitish')"
+            if [ "$existing_target" != "$RELEASE_TARGET" ]; then
+              echo "::error::existing $release_tag targets $existing_target, expected $RELEASE_TARGET"
+              exit 1
+            fi
+            gh release upload "$release_tag" \
+              reports/dependency-health.json \
+              reports/sbom.cyclonedx.json \
+              examples/product-research/product-research.lorepack \
+              --clobber
+          else
+            gh release create "$release_tag" \
+              --target "$RELEASE_TARGET" \
+              "${release_options[@]}" \
+              --title "$release_tag" \
+              --notes-file release-artifacts/release-notes.md \
+              reports/dependency-health.json \
+              reports/sbom.cyclonedx.json \
+              examples/product-research/product-research.lorepack
+          fi
 
       - name: Publish npm packages with provenance
         if: ${{ !inputs.dry_run }}
