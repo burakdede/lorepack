@@ -47,6 +47,12 @@ workflow uses the `next` or `latest` dist tag, so allow dist-tag management when
 that permission. After the publisher is verified, set each package to require two-factor
 authentication and disallow token-based publishing, then revoke obsolete automation tokens.
 
+Each package must exist in the npm registry before its Trusted Publisher can be configured.
+Bootstrap new packages once through npm staged publishing, then approve each staged
+placeholder with 2FA. The real release runs `scripts/preflight-npm-packages.mjs` before
+creating a release commit or GitHub release and reports every missing package without
+publishing anything.
+
 For dependencies, the health report reads npm registry `dist.attestations.provenance` metadata
 for exact production direct dependencies. Missing attestations are reported by package name, not
 silently ignored.

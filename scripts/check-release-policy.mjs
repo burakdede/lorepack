@@ -53,6 +53,9 @@ if (!RELEASE.includes('pnpm changeset version')) {
 if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
   problems.push('release.yml must publish packages with an explicit npm dist tag');
 }
+if (!RELEASE.includes('scripts/preflight-npm-packages.mjs')) {
+  problems.push('release.yml must preflight npm package bootstrap');
+}
 if (!RELEASE.includes('scripts/publish-packages.mjs')) {
   problems.push('release.yml must use the tested npm publisher');
 }
