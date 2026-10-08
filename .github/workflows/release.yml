@@ -160,11 +160,11 @@ jobs:
 
       - name: Build example .lorepack artifact
         run: |
-          node packages/cli/dist/entry.js --cwd examples/product-research build
-          node packages/cli/dist/entry.js --cwd examples/product-research pack --out product-research.lorepack
+          node packages/cli/dist/public-entry.js --cwd examples/product-research build
+          node packages/cli/dist/public-entry.js --cwd examples/product-research pack --out product-research.lorepack
 
       - name: Pack npm tarballs for dry-run and release review
-        run: pnpm -r --filter './packages/*' pack --pack-destination release-artifacts/npm
+        run: pnpm --filter @lorepack/cli pack --pack-destination release-artifacts/npm
 
       - name: Prepare GitHub release notes
         run: |

@@ -299,7 +299,7 @@ jobs:
           mkdir -p "$project/docs"
           printf '# Runbook\n\n## Rollback\n\nRun lorepack rollback.\n' > "$project/docs/a.md"
 
-          lorepack() { node packages/cli/dist/entry.js --cwd "$project" "$@"; }
+          lorepack() { node packages/cli/dist/public-entry.js --cwd "$project" "$@"; }
 
           lorepack init .
           lorepack build
@@ -312,7 +312,7 @@ jobs:
           " "$project/result.json"
 
       - name: The doctor agrees the environment is usable
-        run: node packages/cli/dist/entry.js doctor --ci
+        run: node packages/cli/dist/public-entry.js doctor --ci
 
       - name: Studio was built and stays within its budget
         run: pnpm check:studio-bundle

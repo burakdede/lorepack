@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/parsers",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Built-in artifact parsers for Lorepack.",
   "license": "Apache-2.0",
@@ -50,9 +51,5 @@
     "@types/unist": "3.0.3",
     "@types/yauzl": "^3.4.0",
     "yazl": "3.3.1"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

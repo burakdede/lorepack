@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
  * directory.
  */
 
-const BINARY = join(import.meta.dirname, '..', 'dist', 'entry.js');
+const BINARY = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
 const DOCUMENT =
   '# Runbook\n\n## Rolling back\n\nRun `lorepack rollback` to return to the previous build.\n';
 

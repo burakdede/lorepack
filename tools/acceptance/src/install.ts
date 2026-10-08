@@ -77,7 +77,10 @@ export function stageInstall(repoRoot: string, destination: string): StagedInsta
     symlinkSync(installed, target, process.platform === 'win32' ? 'junction' : 'dir');
   }
 
-  return { binary: join(modules, '@lorepack', 'cli', 'dist', 'entry.js'), root: destination };
+  return {
+    binary: join(modules, '@lorepack', 'cli', 'dist', 'public-entry.js'),
+    root: destination,
+  };
 }
 
 interface Manifest {

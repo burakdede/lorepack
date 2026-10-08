@@ -10,7 +10,7 @@
   },
   "packageManager": "pnpm@11.18.0",
   "scripts": {
-    "build": "tsc -b && pnpm build:studio",
+    "build": "tsc -b && pnpm build:studio && pnpm bundle:cli",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b",
     "lint": "biome check .",
@@ -47,6 +47,7 @@
     "bench:cloudflare-projection": "pnpm build && node scripts/bench-cloudflare-projection.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",
     "build:studio": "pnpm --filter @lorepack/studio build",
+    "bundle:cli": "node scripts/bundle-cli.mjs",
     "check:studio-bundle": "node scripts/check-studio-bundle.mjs",
     "test:e2e": "pnpm build && pnpm --filter @lorepack/studio-e2e test",
     "docs:capture": "pnpm build && node scripts/capture-docs.mjs",
@@ -65,6 +66,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@changesets/cli": "2.31.1",
+    "esbuild": "0.28.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "24.13.3",
     "@vitest/coverage-v8": "4.1.10",

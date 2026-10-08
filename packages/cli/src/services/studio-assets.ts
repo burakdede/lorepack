@@ -29,7 +29,10 @@ const MEDIA_TYPES: Record<string, string> = {
 
 /** Where `vite build` writes, relative to this module once compiled into `dist/`. */
 export function studioRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'studio-dist');
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const bundledPath = resolve(moduleDirectory, '..', 'studio-dist');
+  if (existsSync(join(bundledPath, 'index.html'))) return bundledPath;
+  return resolve(moduleDirectory, '..', '..', 'studio-dist');
 }
 
 export function studioIsBuilt(root: string = studioRoot()): boolean {

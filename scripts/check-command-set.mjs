@@ -20,12 +20,14 @@ import { promisify } from 'node:util';
 
 const execute = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const binary = join(root, 'packages', 'cli', 'dist', 'entry.js');
+const binary = join(root, 'packages', 'cli', 'dist', 'public-entry.js');
 const packageManifest = JSON.parse(
   readFileSync(join(root, 'packages', 'cli', 'package.json'), 'utf8'),
 );
 
-if (JSON.stringify(packageManifest.bin) !== JSON.stringify({ lorepack: './dist/entry.js' })) {
+if (
+  JSON.stringify(packageManifest.bin) !== JSON.stringify({ lorepack: './dist/public-entry.js' })
+) {
   console.error(
     'check:command-set: packages/cli/package.json must publish only the `lorepack` binary.',
   );

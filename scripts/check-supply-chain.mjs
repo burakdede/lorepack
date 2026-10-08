@@ -122,7 +122,8 @@ function runNpm(args) {
 }
 
 function npmView(name) {
-  return JSON.parse(runNpm(['view', name, 'version', 'time', 'license', 'dist', '--json']));
+  const value = JSON.parse(runNpm(['view', name, 'version', 'time', 'license', 'dist', '--json']));
+  return Array.isArray(value) ? (value[0] ?? {}) : value;
 }
 
 function auditJson() {

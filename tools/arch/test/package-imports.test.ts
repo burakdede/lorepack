@@ -28,7 +28,7 @@ describe('published package dependency declarations', () => {
         ...Object.keys(manifest.peerDependencies ?? {}),
       ]);
 
-      for (const file of javascriptFiles(join(packageDir, 'dist'))) {
+      for (const file of publishedJavaScriptFiles(packageDir, manifest.name)) {
         const source = readFileSync(file, 'utf8');
         for (const specifier of importSpecifiers(source)) {
           if (
@@ -76,6 +76,15 @@ function javascriptFiles(root: string): string[] {
     }
   }
   return files.sort();
+}
+
+function publishedJavaScriptFiles(packageDir: string, packageName: string | undefined): string[] {
+  if (packageName === '@lorepack/cli') {
+    return ['public-entry.js', 'public-index.js']
+      .map((file) => join(packageDir, 'dist', file))
+      .filter((file) => existsSync(file));
+  }
+  return javascriptFiles(join(packageDir, 'dist'));
 }
 
 function importSpecifiers(source: string): string[] {

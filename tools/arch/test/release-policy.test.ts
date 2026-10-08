@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { reportsMatch, sbomsMatch } from '../../../scripts/check-supply-chain.mjs';
-import { findMissingPackages, packageExists } from '../../../scripts/release-packages.mjs';
+import {
+  discoverPublishablePackages,
+  findMissingPackages,
+  packageExists,
+} from '../../../scripts/release-packages.mjs';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const CHANGESET_CHECK = join(REPO_ROOT, 'scripts', 'check-changeset-policy.mjs');
@@ -141,10 +145,7 @@ describe('release policy', () => {
     mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
     mkdirSync(join(root, '.changeset'), { recursive: true });
     mkdirSync(join(root, 'docs', 'architecture'), { recursive: true });
-    writeFileSync(
-      join(root, '.changeset', 'config.json'),
-      JSON.stringify({ fixed: [['@lorepack/*']] }),
-    );
+    writeFileSync(join(root, '.changeset', 'config.json'), JSON.stringify({ fixed: [] }));
     writeFileSync(
       join(root, 'docs', 'architecture', 'release-supply-chain.md'),
       [
@@ -234,6 +235,10 @@ describe('release policy', () => {
 
 describe('npm package preflight', () => {
   const packageJson = (name: string) => ({ directory: '/tmp/package', name });
+
+  it('discovers only the public CLI package', () => {
+    expect(discoverPublishablePackages().map(({ name }) => name)).toEqual(['@lorepack/cli']);
+  });
 
   it('accepts packages that exist in the registry', () => {
     expect(packageExists(packageJson('@lorepack/cli'), () => ({ status: 0 }))).toBe(true);

@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/runtime",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Portable context runtime capabilities and HTTP routes for Lorepack.",
   "license": "Apache-2.0",
@@ -34,9 +35,5 @@
   },
   "devDependencies": {
     "@lorepack/test-support": "workspace:*"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

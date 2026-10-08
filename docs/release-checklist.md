@@ -7,11 +7,11 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 - Confirm the release issue links the PRs being shipped and every handoff is current.
 - Keep release issue `#102` open until the publish and post-publish evidence are complete.
 - Confirm `main` is the intended release commit and all required checks are green there.
-- Confirm npm Trusted Publishing is configured for every `@lorepack/*` package with GitHub
-  Actions organization `burakdede`, repository `lorepack`, and workflow `release.yml`.
-- Before the first release, create each package once through npm staged publishing so its
+- Confirm npm Trusted Publishing is configured for `@lorepack/cli` with GitHub Actions
+  organization `burakdede`, repository `lorepack`, and workflow `release.yml`.
+- Before the first release, create `@lorepack/cli` once through npm staged publishing so its
   package settings exist. The real workflow runs a read-only registry preflight and stops if
-  any package is still missing.
+  the package is still missing.
 - Confirm the publisher is allowed to run direct `npm publish` and manage the `next` or `latest`
   dist tag. Do not add an `NPM_TOKEN` secret.
 - Confirm the performance report for issue #101 is green before a stable `latest` release.
@@ -45,10 +45,10 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 
 1. Dispatch `Release` with the same version and channel, with `dry_run: false`.
 2. Wait for the workflow to commit the version changes, tag `vX.Y.Z`, create the GitHub
-   release and publish packages through npm Trusted Publishing with provenance.
+   release and publish `@lorepack/cli` through npm Trusted Publishing with provenance.
 3. Verify the GitHub release contains the SBOM, dependency-health report and `.lorepack`
    example artifact.
-4. Verify npm shows provenance for each published package.
+4. Verify npm shows provenance for `@lorepack/cli`.
 5. Install from npm using the selected channel and run the smoke commands again.
 
 The `Public registry smoke` workflow runs this public install check automatically after a

@@ -11,6 +11,9 @@ Lorepack has four planes. Keeping them separate is how the build remains the sou
 | Security | Threat model, security surfaces and pre-release review | [`threat-model.md`](threat-model.md), [`security.md`](security.md), [`security-review.md`](security-review.md) |
 | Supply chain | Dependency policy, provenance and SBOM release checks | [`dependencies.md`](dependencies.md), [`release-supply-chain.md`](release-supply-chain.md) |
 
+The repository package boundaries and first-release public surface are documented in
+[`packages.md`](packages.md).
+
 ## Dependency rules
 
 The package graph is one-way:

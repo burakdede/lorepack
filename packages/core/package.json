@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/core",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Domain types, identifiers, rules, and build identity for Lorepack.",
   "license": "Apache-2.0",
@@ -41,9 +42,5 @@
   "dependencies": {
     "yaml": "2.9.0",
     "zod": "4.4.3"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

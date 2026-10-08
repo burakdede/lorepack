@@ -1,6 +1,6 @@
 # Repository layout
 
-One repository, ten publishable packages, one app. The layout mirrors architecture
+One repository, one public package, nine private implementation packages and one app. The layout mirrors architecture
 section 9 exactly, and the dependency direction in section 9.1 is enforced by a test
 rather than by convention (issue #11).
 
@@ -48,6 +48,9 @@ Architecture section 8.1 is explicit: do not add Turborepo, Nx, Bazel, or a remo
 until repository timings demonstrate the need. TypeScript project references already give
 incremental, dependency-ordered builds through `tsc -b`. Revisit only with a measurement.
 
+The package roles and the criteria for making an implementation package public are documented
+in [`packages.md`](packages.md).
+
 ## Toolchain
 
 | Concern | Tool | Why |
@@ -56,7 +59,7 @@ incremental, dependency-ordered builds through `tsc -b`. Revisit only with a mea
 | Format and lint | Biome | One binary, no plugin drift between formatter and linter |
 | Tests | Vitest | Same runner for Node packages and the Vite-based Studio |
 | Types and build | TypeScript project references | Dependency-ordered incremental builds without an orchestrator |
-| Versioning | Changesets | Per-package changelogs across ten publishable packages |
+| Versioning | Changesets | Release notes for the public CLI, with internal packages versioned independently when needed |
 | Node version | `.node-version` and `mise.toml` | Read by mise, fnm, nvm, volta, and `actions/setup-node` |
 
 ## Commands

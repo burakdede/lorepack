@@ -32,11 +32,11 @@ cd lorepack
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build
-alias lorepack="node $PWD/packages/cli/dist/entry.js"
+alias lorepack="node $PWD/packages/cli/dist/public-entry.js"
 ```
 
 The alias lasts for the current shell. Add it to your shell profile to keep it, or call
-`node packages/cli/dist/entry.js` directly.
+`node packages/cli/dist/public-entry.js` directly.
 
 Once v0.1 is released, the stable install will be one command:
 

@@ -7,14 +7,17 @@ import { LoreError } from '@lorepack/core';
  * Locates the SQL migrations that ship with this package.
  *
  * They live here, next to the code that runs them, and `files` in package.json publishes
- * them. That is the whole fix for #164: they used to sit at the repository root, which no
- * package ships, so every command worked from a checkout and none worked from an install.
+ * them. The bundled CLI copies them under its ignored `dist/` output because its single
+ * public entry point owns the package root at runtime. That is the whole fix for #164: they
+ * used to sit at the repository root, which no package ships, so every command worked from a
+ * checkout and none worked from an install.
  *
- * Resolution is anchored to the package root, one level above this module in both `src/`
- * and `dist/`, rather than walking upward until something matches. A walk found the
- * repository's copy from anywhere inside the tree, which is exactly why the missing asset
- * was invisible to every test. Anchoring means a packaging mistake fails here, in this
- * package, instead of climbing to the filesystem root and blaming the user's project.
+ * Resolution is anchored to the package root, one level above this module in the normal
+ * package layout, with one explicit bundled-CLI output path. It never walks upward until
+ * something matches. A walk found the repository's copy from anywhere inside the tree, which
+ * is exactly why the missing asset was invisible to every test. Anchoring means a packaging
+ * mistake fails here, in this package, instead of climbing to the filesystem root and blaming
+ * the user's project.
  *
  * `fileURLToPath` rather than `URL.pathname`: the latter yields `/C:/...` on Windows, which
  * no filesystem call accepts.
@@ -35,15 +38,17 @@ function packageRoot(): string {
  * prevent.
  */
 export function migrationsDirectory(set: MigrationSet): string {
-  const candidate = join(packageRoot(), 'migrations', set);
-  if (existsSync(candidate)) return candidate;
+  const primaryCandidate = join(packageRoot(), 'migrations', set);
+  const candidates = [primaryCandidate, join(packageRoot(), 'dist', 'migrations', set)];
+  const candidate = candidates.find((path) => existsSync(path));
+  if (candidate !== undefined) return candidate;
 
   throw new LoreError(
     'LORE_E_INTERNAL',
     `The bundled ${set} SQL migrations are missing from @lorepack/backend-local.`,
     {
       remediation: 'Reinstall Lorepack. This is a packaging fault, not a project problem.',
-      subject: candidate,
+      subject: primaryCandidate,
     },
   );
 }
