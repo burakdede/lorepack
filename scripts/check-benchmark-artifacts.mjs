@@ -55,6 +55,13 @@ function collectReports(files) {
         fail(`${relative(directory, path)} has an unknown evidence protocol version`);
       continue;
     }
+    if (report.protocol?.name === 'lorepack-research-pruning') {
+      if (report.protocol.version !== 1)
+        fail(`${relative(directory, path)} has an unknown pruning protocol version`);
+      if (report.quality?.exactTopK?.denominator === undefined)
+        fail(`${relative(directory, path)} has no exact top-k result denominator`);
+      continue;
+    }
     fail(`${relative(directory, path)} is not a supported benchmark artifact`);
   }
   return reports;

@@ -84,7 +84,13 @@ function collectReports(files) {
       if (document.protocol.version !== 1)
         fail(`${relative(root, path)} has an unknown usefulness protocol version`);
       reports.push({ report: document, path, pointer: '' });
+      continue;
     }
+    if (
+      document.protocol?.name !== 'lorepack-benchmark-evidence' &&
+      document.protocol?.name !== 'lorepack-research-pruning'
+    )
+      fail(`${relative(root, path)} is not a supported benchmark artifact`);
   }
   if (reports.length === 0) fail('No supported benchmark reports were found');
   return reports;
