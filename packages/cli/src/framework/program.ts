@@ -74,10 +74,16 @@ function packageVersion(): string {
       const manifest = JSON.parse(readFileSync(url, 'utf8')) as { version?: unknown };
       if (typeof manifest.version === 'string') return manifest.version;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw LoreError.from(error, 'LORE_E_INTERNAL');
+      }
     }
   }
-  throw new Error('The CLI package manifest could not be found.');
+  throw new LoreError(
+    'LORE_E_INTERNAL',
+    'The CLI package manifest could not be found.',
+    { remediation: 'Reinstall @lorepack/cli or run the CLI from a complete package.' },
+  );
 }
 
 export function buildProgram(
