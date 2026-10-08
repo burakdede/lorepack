@@ -1,0 +1,316 @@
+{
+  "protocol": {
+    "name": "lorepack-benchmark-evidence",
+    "version": 1
+  },
+  "generatedAt": "2026-10-08T20:16:44.155Z",
+  "identity": {
+    "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+    "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+    "workloadSha256": "218c9a880b4ab88b2068f984af1a874953c7ae2343ba46b1c4ec4f84270db607",
+    "scale": "small",
+    "profile": "mixed"
+  },
+  "corpus": {
+    "manifestPath": "benchmarks/corpus/manifest.json",
+    "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+    "scale": "small",
+    "profile": "mixed",
+    "artifacts": 9,
+    "bytes": 348720,
+    "chunks": 213,
+    "tables": 2
+  },
+  "workload": {
+    "path": "benchmarks/corpus/queries.json",
+    "sha256": "218c9a880b4ab88b2068f984af1a874953c7ae2343ba46b1c4ec4f84270db607",
+    "queryCount": 3,
+    "contextTaskCount": 2,
+    "tableQueryCount": 1
+  },
+  "sourceReports": [
+    {
+      "implementation": "lorepack-runtime",
+      "artifact": "comparison.json",
+      "pointer": "/protocolReports/lorepack",
+      "runner": "local",
+      "platform": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "implementation": "sqlite-fts5-direct",
+      "artifact": "comparison.json",
+      "pointer": "/protocolReports/sqliteFts5",
+      "runner": "local",
+      "platform": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "implementation": "rag-offline-lexical",
+      "artifact": "rag.json",
+      "pointer": "",
+      "runner": "local",
+      "platform": "darwin",
+      "arch": "arm64"
+    },
+    {
+      "implementation": "lorepack-usefulness-metrics",
+      "artifact": "usefulness.json",
+      "pointer": "",
+      "runner": "local",
+      "platform": "darwin",
+      "arch": "arm64"
+    }
+  ],
+  "comparison": {
+    "lorepack": {
+      "warmQueryP95Ms": 3.84,
+      "buildP95Ms": 716.64,
+      "contextAssemblyP95Ms": 11.59,
+      "hitAt1": 1,
+      "expectedLocationCoverage": 1
+    },
+    "sqliteFts5": {
+      "warmQueryP95Ms": 0.07,
+      "indexBuildP95Ms": 4.47,
+      "contextAssembly": "not-measured",
+      "hitAt1": 0.8,
+      "expectedLocationCoverage": 0.8
+    },
+    "offlineRag": {
+      "warmQueryP95Ms": 0.18,
+      "contextAssemblyP95Ms": 0.4,
+      "promptConstructionP95Ms": 0.02,
+      "hitAt1": 1,
+      "answerQuality": "not-measured",
+      "tokenAccounting": {
+        "status": "estimated",
+        "tokenizer": "rag-estimator-v1",
+        "model": null,
+        "inputTokens": 190,
+        "retrievedContextTokens": 9540,
+        "promptTokens": 10030,
+        "completionTokens": null,
+        "totalTokens": 10030
+      }
+    }
+  },
+  "usefulness": {
+    "provenance": {
+      "search": {
+        "numerator": 43,
+        "denominator": 43,
+        "ratio": 1,
+        "invalid": 0
+      },
+      "context": {
+        "numerator": 192,
+        "denominator": 192,
+        "ratio": 1,
+        "invalid": 0
+      },
+      "tableRows": {
+        "numerator": 4,
+        "denominator": 4,
+        "ratio": 1,
+        "invalid": 0
+      }
+    },
+    "contextBudget": {
+      "cases": 15,
+      "withinBudget": {
+        "numerator": 15,
+        "denominator": 15,
+        "ratio": 1
+      },
+      "selectedTokens": 35340,
+      "omittedItems": 1542,
+      "omittedByReason": {
+        "diversity": 1542
+      }
+    },
+    "changeReview": {
+      "added": {
+        "numerator": 0,
+        "denominator": 1,
+        "ratio": 0
+      },
+      "changed": {
+        "numerator": 1,
+        "denominator": 1,
+        "ratio": 1
+      },
+      "removed": {
+        "numerator": 0,
+        "denominator": 1,
+        "ratio": 0
+      },
+      "warnings": 1,
+      "contextDelta": 0
+    },
+    "rollback": {
+      "pointerChangeMs": 0.44,
+      "activeBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
+      "expectedBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
+      "restored": true,
+      "rebuiltBuilds": 0,
+      "rebuildAvoided": true
+    },
+    "buildReuse": {
+      "firstBuildMs": 650,
+      "secondBuildMs": 109,
+      "reusedArtifacts": 6,
+      "rebuiltArtifacts": 3
+    }
+  },
+  "claims": [
+    {
+      "id": "lorepack-provenance",
+      "statement": "Lorepack returns provenance-bearing search hits and context citations.",
+      "status": "quality-result",
+      "metric": "quality.provenance.coverage",
+      "denominator": "All search hits and context citations emitted by the Lorepack report",
+      "value": 1,
+      "units": "ratio",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "comparison.json",
+          "pointer": "/protocolReports/lorepack/quality/provenance/coverage"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "lorepack-labelled-retrieval",
+      "statement": "Lorepack reached the expected location at rank 1 for the labelled workload used here.",
+      "status": "quality-result",
+      "metric": "quality.search.hitAt1",
+      "denominator": "15 labelled retrieval cases",
+      "value": 1,
+      "units": "ratio",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "comparison.json",
+          "pointer": "/protocolReports/lorepack/quality/search/hitAt1"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "direct-fts5-latency",
+      "statement": "Direct SQLite FTS5 was faster for warm lexical lookup on this corpus and runner.",
+      "status": "measured",
+      "metric": "measurements.phases[name=warm-query].p95Ms",
+      "denominator": "30 warm-query samples on the shared workload",
+      "value": 0.07,
+      "units": "milliseconds",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "comparison.json",
+          "pointer": "/protocolReports/sqliteFts5/measurements/phases/2/p95Ms"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "lorepack-context-lifecycle",
+      "statement": "Lorepack measures bounded context assembly as a runtime lifecycle phase.",
+      "status": "measured",
+      "metric": "measurements.phases[name=context-assembly].p95Ms",
+      "denominator": "20 context-assembly samples",
+      "value": 11.59,
+      "units": "milliseconds",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "comparison.json",
+          "pointer": "/protocolReports/lorepack/measurements/phases/3/p95Ms"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "offline-rag-answer-quality",
+      "statement": "The offline RAG baseline does not measure model answer quality.",
+      "status": "not-measured",
+      "metric": "quality.answer.status",
+      "denominator": "15 prompt cases",
+      "value": "not-measured",
+      "units": "status",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "rag.json",
+          "pointer": "/quality/answer/status"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "lorepack-rollback",
+      "statement": "Lorepack restored the previous active build by pointer change without rebuilding it.",
+      "status": "measured",
+      "metric": "metrics.rollback",
+      "denominator": "One rollback scenario in the usefulness fixture",
+      "value": {
+        "pointerChangeMs": 0.44,
+        "restored": true,
+        "rebuiltBuilds": 0
+      },
+      "units": "milliseconds and boolean evidence",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "usefulness.json",
+          "pointer": "/metrics/rollback"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    }
+  ],
+  "limitations": [
+    "The checked-in corpus is repository-owned and synthetic in part. It is not an industry benchmark.",
+    "The workload is small and labelled for regression evidence, not a universal relevance test.",
+    "The direct FTS5 and offline RAG baselines share Lorepack-normalized chunks, so their index measurements exclude parsing and chunking.",
+    "The offline RAG report estimates tokens and does not call a model. Hosted model quality and cost are provider-dependent.",
+    "These reports do not establish semantic superiority, factual correctness or lower total system cost."
+  ],
+  "reproducibility": {
+    "commands": [
+      "pnpm install --frozen-lockfile",
+      "pnpm build",
+      "LORE_BENCH_PACKS=1 LORE_BENCH_SCALE=small LORE_BENCH_PROFILE=mixed node scripts/bench-retrieval-comparison.mjs --out comparison.json",
+      "LORE_BENCH_PACKS=1 LORE_BENCH_SCALE=small LORE_BENCH_PROFILE=mixed node scripts/bench-rag.mjs --out rag.json",
+      "LORE_BENCH_PACKS=1 LORE_BENCH_SCALE=small LORE_BENCH_PROFILE=mixed node scripts/bench-usefulness.mjs --out usefulness.json",
+      "node scripts/render-benchmark-evidence.mjs <artifact-directory> --json evidence.json --markdown evidence.md"
+    ],
+    "credentialsRequired": false
+  }
+}
