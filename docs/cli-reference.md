@@ -416,6 +416,24 @@ lorepack config <subject> [path]
 |---|---|
 | `--effective` | show every resolved value, not only what lore.yaml says |
 
+## `lorepack completion`
+
+Print shell completion for lorepack.
+
+```text
+lorepack completion <shell>
+```
+
+### Arguments
+
+| Name | Description |
+|---|---|
+| `<shell>` | one of bash, zsh, fish, powershell |
+
+### Flags
+
+None.
+
 ## `lorepack mcp`
 
 Serve the active build to an AI client over MCP on stdio.

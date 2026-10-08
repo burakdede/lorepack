@@ -12,7 +12,7 @@ Developers and AI-tool builders who run `lorepack dev` locally while inspecting 
 
 ## Product Purpose
 
-Lorepack compiles project documents and artifacts into immutable, inspectable builds. Lore Studio is the local browser inspector for one running build: it helps a developer understand what was compiled, what was excluded, what a model would receive, which versions exist, and why the local environment is healthy.
+Lorepack compiles project documents and artifacts into immutable, inspectable builds. Lorepack Studio is the local browser inspector for one running build: it helps a developer understand what was compiled, what was excluded, what a model would receive, which versions exist, and why the local environment is healthy.
 
 ## Positioning
 

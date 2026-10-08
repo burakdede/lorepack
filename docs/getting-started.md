@@ -60,6 +60,14 @@ their own guides:
 - [VS Code](integrations/vscode.md)
 - [Any MCP client](integrations/mcp.md)
 
+For command and option completion, evaluate the generated script for your shell:
+
+```bash
+eval "$(lorepack completion zsh)"
+```
+
+Use `bash`, `fish`, or `powershell` in place of `zsh` for the other supported shells.
+
 To try it without your own documents, point it at a checked-in example:
 
 ```bash

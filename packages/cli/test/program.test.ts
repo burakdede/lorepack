@@ -64,6 +64,16 @@ describe('command metadata', () => {
   });
 });
 
+describe('shell completion', () => {
+  it('prints a usable zsh completion script', async () => {
+    const result = await run(['completion', 'zsh']);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('compdef _lorepack lorepack');
+    expect(result.stdout).toContain('build');
+    expect(result.stdout).toContain('connect');
+  });
+});
+
 describe('unknown input', () => {
   it('rejects an unknown command with a typed error, not a stack trace', async () => {
     const result = await run(['nonsense'], { commands });

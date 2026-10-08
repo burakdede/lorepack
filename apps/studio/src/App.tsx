@@ -112,7 +112,7 @@ export function App(): React.JSX.Element {
       <header className="sidebar">
         <div className="sidebar-brand">
           <Mark />
-          <span className="sidebar-product">Lore Studio</span>
+          <span className="sidebar-product">Lorepack Studio</span>
         </div>
 
         <BuildIdentity />

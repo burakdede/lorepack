@@ -46,6 +46,11 @@ function renderShell(): void {
 }
 
 describe('the persistent build header', () => {
+  it('uses the public Lorepack Studio product name', () => {
+    renderShell();
+    expect(screen.getByText('Lorepack Studio')).toBeInTheDocument();
+  });
+
   it('names the build every route is relative to, and its freshness', async () => {
     renderShell();
 
