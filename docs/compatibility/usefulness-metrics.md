@@ -42,7 +42,7 @@ The 2026-10-08 local run used 9 artifacts, 213 chunks and 2 tables on Darwin arm
 - All 15 context bundles fit their budgets. 1,542 omitted candidates were reported, all with the
   `diversity` reason in this fixture.
 - One source artifact changed. The second build reused 6 artifacts and rebuilt 3.
-- Rollback pointer change took 0.56 ms in this run, restored the original build, and rebuilt 0
+- Rollback pointer change took 0.60 ms in this run, restored the original build, and rebuilt 0
   builds.
 
 These are fixture results, not universal guarantees or release gates. Run the command again on a
