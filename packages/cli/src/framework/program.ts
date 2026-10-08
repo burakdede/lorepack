@@ -8,6 +8,7 @@ import {
   type Streams,
 } from './context.js';
 import { exitAfterFlush } from './exit.js';
+import { type CommandMetadata, validateCommandMetadata } from './metadata.js';
 
 export const CLI_NAME = 'lorepack' as const;
 
@@ -27,11 +28,7 @@ export type CommandHandler = (
   context: CommandContext,
 ) => Promise<CommandResult | undefined> | CommandResult | undefined;
 
-export interface CommandDefinition {
-  readonly name: string;
-  readonly description: string;
-  readonly arguments?: readonly { name: string; description: string; required?: boolean }[];
-  readonly flags?: readonly { flags: string; description: string; defaultValue?: unknown }[];
+export interface CommandDefinition extends CommandMetadata {
   readonly handler: CommandHandler;
 }
 
@@ -72,6 +69,7 @@ export function buildProgram(
   options: RunOptions,
   hooks: ProgramHooks,
 ): Command {
+  validateCommandMetadata(definitions);
   const streams = options.streams ?? defaultStreams();
   const program = new Command()
     .name(CLI_NAME)
@@ -95,6 +93,7 @@ export function buildProgram(
 
   for (const definition of definitions) {
     const command = program.command(definition.name).description(definition.description);
+    for (const alias of definition.aliases ?? []) command.alias(alias);
     for (const argument of definition.arguments ?? []) {
       command.argument(
         argument.required === false ? `[${argument.name}]` : `<${argument.name}>`,
