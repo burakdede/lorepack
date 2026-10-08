@@ -16,6 +16,7 @@ const PHASES = new Set([
   'cold-query',
   'warm-query',
   'context-assembly',
+  'prompt-construction',
   'table-query',
   'model-generation',
 ]);
@@ -130,6 +131,58 @@ function validateTokens(tokens, problems) {
   }
 }
 
+function validateCostAccounting(cost, problems) {
+  if (cost === undefined) return;
+  const path = 'costAccounting';
+  unknownKeys(
+    cost,
+    new Set(['status', 'currency', 'pricingSource', 'inputUsd', 'outputUsd', 'totalUsd']),
+    path,
+    problems,
+  );
+  if (!['not-applicable', 'estimated', 'measured'].includes(cost.status))
+    problems.push(`${path}.status is invalid`);
+  for (const field of ['currency', 'pricingSource', 'inputUsd', 'outputUsd', 'totalUsd']) {
+    if (!(field in cost))
+      problems.push(`${path}.${field} is required, use null when not applicable`);
+  }
+  for (const field of ['inputUsd', 'outputUsd', 'totalUsd']) {
+    if (cost[field] !== null) finiteNonNegative(cost[field], `${path}.${field}`, problems);
+  }
+  if (cost.status === 'not-applicable') {
+    for (const field of ['currency', 'pricingSource', 'inputUsd', 'outputUsd', 'totalUsd']) {
+      if (cost[field] !== null)
+        problems.push(`${path}.${field} must be null when status is not-applicable`);
+    }
+  }
+}
+
+function validateAnswerQuality(answer, problems) {
+  if (answer === undefined) return;
+  const path = 'quality.answer';
+  unknownKeys(
+    answer,
+    new Set(['status', 'cases', 'citationCoverage', 'taskSuccess', 'reason']),
+    path,
+    problems,
+  );
+  if (!['measured', 'not-measured'].includes(answer.status))
+    problems.push(`${path}.status is invalid`);
+  nonNegative(answer.cases, `${path}.cases`, problems);
+  for (const field of ['citationCoverage', 'taskSuccess']) {
+    const metric = answer[field];
+    if (metric === undefined || metric === null || typeof metric !== 'object') {
+      problems.push(`${path}.${field} is required`);
+      continue;
+    }
+    unknownKeys(metric, new Set(['numerator', 'denominator']), `${path}.${field}`, problems);
+    nonNegative(metric.numerator, `${path}.${field}.numerator`, problems);
+    nonNegative(metric.denominator, `${path}.${field}.denominator`, problems);
+    if (metric.numerator > metric.denominator)
+      problems.push(`${path}.${field}.numerator exceeds denominator`);
+  }
+}
+
 export function validateBenchmarkReport(report) {
   const problems = [];
   if (report === null || typeof report !== 'object' || Array.isArray(report)) {
@@ -150,6 +203,7 @@ export function validateBenchmarkReport(report) {
       'tokenAccounting',
       'measurements',
       'quality',
+      'costAccounting',
       'resources',
       'configuration',
       'claims',
@@ -188,7 +242,14 @@ export function validateBenchmarkReport(report) {
   );
   unknownKeys(report.samples, new Set(['warmup', 'repetitions', 'timeoutMs']), 'samples', problems);
   unknownKeys(report.measurements, new Set(['phases']), 'measurements', problems);
-  unknownKeys(report.quality, new Set(['search', 'provenance', 'context']), 'quality', problems);
+  unknownKeys(
+    report.quality,
+    new Set(['search', 'provenance', 'context', 'answer']),
+    'quality',
+    problems,
+  );
+  validateAnswerQuality(report.quality?.answer, problems);
+  validateCostAccounting(report.costAccounting, problems);
   unknownKeys(
     report.resources,
     new Set(['indexBytes', 'peakRssMiB', 'topK']),
@@ -197,7 +258,24 @@ export function validateBenchmarkReport(report) {
   );
   unknownKeys(
     report.configuration,
-    new Set(['tokenizer', 'ranking', 'columns', 'normalization', 'sourceBoundary']),
+    new Set([
+      'tokenizer',
+      'ranking',
+      'columns',
+      'normalization',
+      'sourceBoundary',
+      'pipeline',
+      'retriever',
+      'chunking',
+      'topK',
+      'contextBudgetTokens',
+      'promptTemplate',
+      'mode',
+      'provider',
+      'model',
+      'embeddingModel',
+      'temperature',
+    ]),
     'configuration',
     problems,
   );

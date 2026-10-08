@@ -42,4 +42,27 @@ describe('benchmark protocol', () => {
       'measurements.phases[0].p95Ms must be at least p50Ms',
     );
   });
+
+  it('accepts answer quality and cost accounting for RAG reports', () => {
+    const report = structuredClone(sample);
+    report.quality = {
+      answer: {
+        status: 'not-measured',
+        cases: 2,
+        citationCoverage: { numerator: 0, denominator: 0 },
+        taskSuccess: { numerator: 0, denominator: 0 },
+        reason: 'Offline retrieval-only mode does not call a model.',
+      },
+    };
+    report.costAccounting = {
+      status: 'not-applicable',
+      currency: null,
+      pricingSource: null,
+      inputUsd: null,
+      outputUsd: null,
+      totalUsd: null,
+    };
+
+    expect(validateBenchmarkReport(report)).toEqual([]);
+  });
 });
