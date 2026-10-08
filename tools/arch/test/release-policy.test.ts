@@ -200,6 +200,8 @@ describe('release policy', () => {
     expect(workflow).toContain('resume_existing:');
     expect(workflow).toContain('Use the merged commit as the existing release target');
     expect(workflow).toContain('existing $release_tag targets');
+    expect(workflow).toContain('git merge-base --is-ancestor');
+    expect(workflow).toContain('gh release edit "$release_tag" --target "$RELEASE_TARGET"');
     expect(workflow).toContain('gh release upload "$release_tag"');
     expect(workflow).toContain('scripts/publish-packages.mjs --tag');
     expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
