@@ -29,7 +29,9 @@ const execute = promisify(execFile);
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const WORKER_ROOT = join(REPO_ROOT, 'packages', 'deploy-cloudflare');
 const WRANGLER_BIN = join(WORKER_ROOT, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
-const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'public-entry.js');
+// This smoke test exercises the workspace Cloudflare adapter, whose pinned
+// Wrangler dependency is intentionally not part of the public CLI bundle.
+const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const COMPATIBILITY_DATE = '2026-08-08';
 
 export interface CloudflareSmokeProject {

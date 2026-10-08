@@ -48,7 +48,7 @@ const BINARY = join(
   'packages',
   'cli',
   'dist',
-  'public-entry.js',
+  'entry.js',
 );
 const UNIQUE_QUERY = 'phase6-rollback-token';
 const RESUME_MUTATION_QUERY = 'phase6-resume-mutation-token';
