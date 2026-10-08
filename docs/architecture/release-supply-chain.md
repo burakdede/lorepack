@@ -35,10 +35,17 @@ Every publishable `@lorepack/*` package sets:
 ```
 
 The release workflow grants `id-token: write`, uses `actions/setup-node` with the npm registry,
-and publishes each package through `scripts/publish-packages.mjs`. The publisher checks the
-registry first so a retry skips versions already published, then invokes `npm publish
---provenance` for every missing version. npm provenance is therefore requested explicitly for
-every package publish.
+and publishes each package through `scripts/publish-packages.mjs` using npm Trusted Publishing.
+The publisher checks the registry first so a retry skips versions already published, then invokes
+`npm publish` for every missing version. npm obtains the provenance statement from GitHub's OIDC
+identity, so the workflow has no long-lived npm publish token.
+
+Before the first real release, configure Trusted Publishing in the npm settings for every
+publishable package. Select GitHub Actions and set organization `burakdede`, repository
+`lorepack`, workflow filename `release.yml`, and permission for direct `npm publish`. The
+workflow uses the `next` or `latest` dist tag, so allow dist-tag management when npm asks for
+that permission. After the publisher is verified, set each package to require two-factor
+authentication and disallow token-based publishing, then revoke obsolete automation tokens.
 
 For dependencies, the health report reads npm registry `dist.attestations.provenance` metadata
 for exact production direct dependencies. Missing attestations are reported by package name, not

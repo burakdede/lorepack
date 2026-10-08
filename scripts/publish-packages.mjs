@@ -49,10 +49,7 @@ for (const packageDir of packageDirs) {
     continue;
   }
 
-  const result = runNpm(
-    ['publish', '--access', 'public', '--tag', tag, '--provenance'],
-    packageDir,
-  );
+  const result = runNpm(['publish', '--access', 'public', '--tag', tag], packageDir);
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
   if (result.status !== 0) {

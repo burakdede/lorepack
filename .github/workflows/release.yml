@@ -126,15 +126,10 @@ jobs:
             exit 1
           fi
 
-      - name: Require npm publish token for real release
+      - name: Require npm Trusted Publishing for real release
         if: ${{ !inputs.dry_run }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::real release requires the NPM_TOKEN repository secret before any release side effects"
-            exit 1
-          fi
+          echo "real release uses GitHub OIDC for npm Trusted Publishing"
 
       - name: Restrict existing-release recovery to main
         if: ${{ !inputs.dry_run && inputs.resume_existing }}
@@ -306,8 +301,6 @@ jobs:
               examples/product-research/product-research.lorepack
           fi
 
-      - name: Publish npm packages with provenance
+      - name: Publish npm packages with Trusted Publishing
         if: ${{ !inputs.dry_run }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-packages.mjs --tag "${{ inputs.channel }}"
