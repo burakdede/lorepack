@@ -5,8 +5,8 @@
   },
   "provisional": true,
   "reportedNotEnforced": true,
-  "generatedAt": "2026-10-08T19:59:05.408Z",
-  "commitSha": "4261495b6162ef176f0d0b1721771fee2515092c",
+  "generatedAt": "2026-10-08T20:00:27.913Z",
+  "commitSha": "12a45bdeaa5d356b39369c9fb2bcda636d2984c9",
   "corpusManifest": "benchmarks/corpus/manifest.json",
   "queryWorkload": "benchmarks/corpus/queries.json",
   "semantics": {
@@ -44,9 +44,9 @@
         "name": "lorepack-benchmark",
         "version": 1
       },
-      "reportId": "lorepack-large-mixed-4261495b6162",
-      "generatedAt": "2026-10-08T19:59:05.407Z",
-      "commitSha": "4261495b6162ef176f0d0b1721771fee2515092c",
+      "reportId": "lorepack-large-mixed-12a45bdeaa5d",
+      "generatedAt": "2026-10-08T20:00:27.913Z",
+      "commitSha": "12a45bdeaa5d356b39369c9fb2bcda636d2984c9",
       "implementation": {
         "name": "lorepack-runtime",
         "version": "workspace"
@@ -96,29 +96,29 @@
         "phases": [
           {
             "name": "build",
-            "p50Ms": 13098.97,
-            "p95Ms": 13673.42,
+            "p50Ms": 13517.28,
+            "p95Ms": 14121.8,
             "samples": 3,
             "errorCount": 0
           },
           {
             "name": "cold-query",
-            "p50Ms": 14.503624999997555,
-            "p95Ms": 14.503624999997555,
+            "p50Ms": 19.54558299999917,
+            "p95Ms": 19.54558299999917,
             "samples": 1,
             "errorCount": 0
           },
           {
             "name": "warm-query",
-            "p50Ms": 3.72,
-            "p95Ms": 13.51,
+            "p50Ms": 3.65,
+            "p95Ms": 13.43,
             "samples": 30,
             "errorCount": 0
           },
           {
             "name": "context-assembly",
-            "p50Ms": 63.33,
-            "p95Ms": 70.58,
+            "p50Ms": 65.86,
+            "p95Ms": 72.25,
             "samples": 20,
             "errorCount": 0
           }
@@ -151,7 +151,7 @@
       },
       "resources": {
         "indexBytes": 55164928,
-        "peakRssMiB": 663.94,
+        "peakRssMiB": 697.95,
         "topK": {
           "min": 1,
           "max": 2
@@ -183,9 +183,9 @@
         "name": "lorepack-benchmark",
         "version": 1
       },
-      "reportId": "sqlite-fts5-large-mixed-4261495b6162",
-      "generatedAt": "2026-10-08T19:59:03.264Z",
-      "commitSha": "4261495b6162ef176f0d0b1721771fee2515092c",
+      "reportId": "sqlite-fts5-large-mixed-12a45bdeaa5d",
+      "generatedAt": "2026-10-08T20:00:25.689Z",
+      "commitSha": "12a45bdeaa5d356b39369c9fb2bcda636d2984c9",
       "implementation": {
         "name": "sqlite-fts5-direct",
         "version": "3.53.1"
@@ -235,15 +235,15 @@
         "phases": [
           {
             "name": "index-build",
-            "p50Ms": 103.67,
-            "p95Ms": 105.47,
+            "p50Ms": 102.26,
+            "p95Ms": 103.55,
             "samples": 3,
             "errorCount": 0
           },
           {
             "name": "cold-query",
-            "p50Ms": 0.41,
-            "p95Ms": 0.41,
+            "p50Ms": 0.38,
+            "p95Ms": 0.38,
             "samples": 1,
             "errorCount": 0
           },
@@ -302,7 +302,7 @@
       ],
       "resources": {
         "indexBytes": 11993088,
-        "peakRssMiB": 76.84,
+        "peakRssMiB": 76.73,
         "topK": {
           "min": 0,
           "max": 10
@@ -313,22 +313,22 @@
   "baselines": {
     "lorepack": {
       "indexBytes": 55164928,
-      "peakRssMiB": 663.94,
+      "peakRssMiB": 697.95,
       "buildMs": {
-        "p50": 13098.97,
-        "p95": 13673.42,
+        "p50": 13517.28,
+        "p95": 14121.8,
         "samples": 3
       },
-      "coldSearchMs": 14.5,
+      "coldSearchMs": 19.55,
       "warmSearchMs": {
-        "p50": 3.72,
-        "p95": 13.51,
-        "p99": 16.43,
+        "p50": 3.65,
+        "p95": 13.43,
+        "p99": 16.26,
         "samples": 30
       },
       "contextBundleMs": {
-        "p50": 63.33,
-        "p95": 70.58,
+        "p50": 65.86,
+        "p95": 72.25,
         "samples": 20
       },
       "topK": {
@@ -356,15 +356,15 @@
     },
     "sqliteFts5": {
       "indexBytes": 11993088,
-      "peakRssMiB": 76.84,
+      "peakRssMiB": 76.73,
       "indexMs": {
         "name": "index-build",
-        "p50Ms": 103.67,
-        "p95Ms": 105.47,
+        "p50Ms": 102.26,
+        "p95Ms": 103.55,
         "samples": 3,
         "errorCount": 0
       },
-      "coldSearchMs": 0.41,
+      "coldSearchMs": 0.38,
       "warmSearchMs": {
         "name": "warm-query",
         "p50Ms": 0.09,

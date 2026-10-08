@@ -24,12 +24,12 @@ same-machine comparison and are not release gates.
 
 | Measurement | Lorepack | Direct SQLite FTS5 |
 |---|---:|---:|
-| Build or index p95 | 13,673.42 ms full build | 105.47 ms index only |
-| Warm search p95 | 13.51 ms | 0.22 ms |
-| Cold search | 14.50 ms | 0.41 ms |
-| Context assembly p95 | 70.58 ms | not implemented |
+| Build or index p95 | 14,121.80 ms full build | 103.55 ms index only |
+| Warm search p95 | 13.43 ms | 0.22 ms |
+| Cold search | 19.55 ms | 0.38 ms |
+| Context assembly p95 | 72.25 ms | not implemented |
 | Index or build bytes | 55,164,928 | 11,993,088 |
-| Peak RSS | 663.94 MiB | 76.84 MiB |
+| Peak RSS | 697.95 MiB | 76.73 MiB |
 | Search hit@1 | 100% | 80% |
 | Search hit@5 | 100% | 80% |
 | Expected source-location coverage | 100% | 100% |
