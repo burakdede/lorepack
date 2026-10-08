@@ -7,8 +7,10 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 - Confirm the release issue links the PRs being shipped and every handoff is current.
 - Keep release issue `#102` open until the publish and post-publish evidence are complete.
 - Confirm `main` is the intended release commit and all required checks are green there.
-- Confirm the repository has an `NPM_TOKEN` secret with publish access for every
-  `@lorepack/*` package.
+- Confirm npm Trusted Publishing is configured for every `@lorepack/*` package with GitHub
+  Actions organization `burakdede`, repository `lorepack`, and workflow `release.yml`.
+- Confirm the publisher is allowed to run direct `npm publish` and manage the `next` or `latest`
+  dist tag. Do not add an `NPM_TOKEN` secret.
 - Confirm the performance report for issue #101 is green before a stable `latest` release.
 - Confirm the v0.1 success matrix in
   [`compatibility/v0.1-success-matrix.md`](compatibility/v0.1-success-matrix.md) is current.
@@ -40,7 +42,7 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 
 1. Dispatch `Release` with the same version and channel, with `dry_run: false`.
 2. Wait for the workflow to commit the version changes, tag `vX.Y.Z`, create the GitHub
-   release and publish packages with npm provenance.
+   release and publish packages through npm Trusted Publishing with provenance.
 3. Verify the GitHub release contains the SBOM, dependency-health report and `.lorepack`
    example artifact.
 4. Verify npm shows provenance for each published package.

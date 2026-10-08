@@ -204,13 +204,15 @@ describe('release policy', () => {
     expect(workflow).toContain('gh release edit "$release_tag" --target "$RELEASE_TARGET"');
     expect(workflow).toContain('gh release upload "$release_tag"');
     expect(workflow).toContain('scripts/publish-packages.mjs --tag');
-    expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
+    expect(workflow).toContain('Require npm Trusted Publishing for real release');
+    expect(workflow).not.toContain('NPM_TOKEN');
+    expect(workflow).not.toContain('NODE_AUTH_TOKEN');
   });
 
-  it('requires the publisher to request npm provenance and support retries', () => {
+  it('requires the publisher to use npm provenance and support retries', () => {
     const publisher = readFileSync(join(REPO_ROOT, 'scripts', 'publish-packages.mjs'), 'utf8');
     expect(publisher).toContain("['view', `${name}@${version}`, 'version', '--json']");
-    expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag, '--provenance']");
+    expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag]");
     expect(publisher).toContain('cannot publish over the previously published version');
   });
 });
@@ -389,11 +391,9 @@ function releaseWorkflow(): string {
     'performance_report_url:',
     'pnpm changeset version',
     'scripts/publish-packages.mjs --tag',
-    'NODE_AUTH_TOKEN',
     'npm publish',
-    '--provenance',
     'npm view',
-    'NPM_TOKEN',
+    'Trusted Publishing',
     'id-token: write',
     'check-runs',
     '$conclusion" != "success"',
@@ -414,10 +414,10 @@ function releaseWorkflow(): string {
     'Approvals, evidence capture and semantic search are not in v0.1',
     'docs/limitations.md',
     'GHSA-c53f-24h5-74qj',
-    'Require npm publish token for real release',
+    'Require npm Trusted Publishing for real release',
     'Commit version and generated release artifacts',
     'Create GitHub release with SBOM and example artifact',
-    'Publish npm packages with provenance',
+    'Publish npm packages with Trusted Publishing',
     'verify (ubuntu-latest)',
     'verify (windows-latest)',
     'verify (macos-latest)',

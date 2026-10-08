@@ -53,15 +53,14 @@ if (!RELEASE.includes('pnpm changeset version')) {
 if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
   problems.push('release.yml must publish packages with an explicit npm dist tag');
 }
-if (!RELEASE.includes('NODE_AUTH_TOKEN')) {
-  problems.push('release.yml must pass the npm token to the publisher');
-}
 if (!RELEASE.includes('scripts/publish-packages.mjs')) {
   problems.push('release.yml must use the tested npm publisher');
 }
-if (!RELEASE.includes('NPM_TOKEN')) problems.push('release.yml must use NPM_TOKEN for publish');
-if (!RELEASE.includes('Require npm publish token for real release')) {
-  problems.push('release.yml must check NPM_TOKEN before real release side effects');
+if (!RELEASE.includes('Trusted Publishing')) {
+  problems.push('release.yml must use npm Trusted Publishing for real releases');
+}
+if (RELEASE.includes('NPM_TOKEN') || RELEASE.includes('NODE_AUTH_TOKEN')) {
+  problems.push('release.yml must not use a long-lived npm publish token');
 }
 if (!RELEASE.includes('id-token: write')) {
   problems.push('release.yml must grant id-token: write for npm provenance');
@@ -136,15 +135,19 @@ for (const phrase of [
   }
 }
 
-const tokenPreflight = RELEASE.indexOf('Require npm publish token for real release');
+const trustedPublishingPreflight = RELEASE.indexOf('Require npm Trusted Publishing for real release');
 for (const sideEffect of [
   'Commit version and generated release artifacts',
   'Create GitHub release with SBOM and example artifact',
-  'Publish npm packages with provenance',
+  'Publish npm packages with Trusted Publishing',
 ]) {
   const sideEffectIndex = RELEASE.indexOf(sideEffect);
-  if (tokenPreflight === -1 || sideEffectIndex === -1 || tokenPreflight > sideEffectIndex) {
-    problems.push(`release.yml must check NPM_TOKEN before ${sideEffect}`);
+  if (
+    trustedPublishingPreflight === -1 ||
+    sideEffectIndex === -1 ||
+    trustedPublishingPreflight > sideEffectIndex
+  ) {
+    problems.push(`release.yml must check npm Trusted Publishing before ${sideEffect}`);
   }
 }
 

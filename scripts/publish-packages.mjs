@@ -50,7 +50,7 @@ for (const packageDir of packageDirs) {
   }
 
   const result = runNpm(
-    ['publish', '--access', 'public', '--tag', tag, '--provenance'],
+    ['publish', '--access', 'public', '--tag', tag],
     packageDir,
   );
   process.stdout.write(result.stdout);
