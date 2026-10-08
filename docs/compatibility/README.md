@@ -48,6 +48,9 @@ follow-up issue owns any missed historical gate.
 The independent comparison methodology, raw evidence bundle, claim ledger and reproduction
 checklist are in [`benchmark-evidence.md`](benchmark-evidence.md).
 
+The research track and its adoption gates are in
+[`research-retrieval.md`](research-retrieval.md).
+
 ## Target capability matrix
 
 | Capability | Local build runtime | `lorepack serve` | `lorepack mcp` | Cloudflare projection |
