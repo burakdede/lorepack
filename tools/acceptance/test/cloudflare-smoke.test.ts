@@ -40,16 +40,7 @@ import {
   writeCloudflareArtifactSummary,
 } from '../src/cloudflare-testing.js';
 
-const BINARY = join(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  'packages',
-  'cli',
-  'dist',
-  'entry.js',
-);
+const BINARY = join(import.meta.dirname, '..', '..', '..', 'packages', 'cli', 'dist', 'entry.js');
 const UNIQUE_QUERY = 'phase6-rollback-token';
 const RESUME_MUTATION_QUERY = 'phase6-resume-mutation-token';
 const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
