@@ -28,6 +28,53 @@ export function expectedLocationCoverage(cited, expected) {
   return countMetric(cited, expected);
 }
 
+function placementBucket(index, citationCount) {
+  if (index === 0) return 'first';
+  if (index === citationCount - 1) return 'last';
+  return 'middle';
+}
+
+export function contextPlacement(bundles, expectedLocations, matches) {
+  if (bundles.length !== expectedLocations.length)
+    throw new Error('bundles and expected locations must have the same length');
+
+  const buckets = { first: 0, middle: 0, last: 0 };
+  const normalizedPositions = [];
+  let expected = 0;
+  let missing = 0;
+  let noCitations = 0;
+
+  for (const [index, bundle] of bundles.entries()) {
+    const citations = bundle.citations ?? [];
+    if (citations.length === 0) noCitations += expectedLocations[index].length;
+    for (const expectedLocation of expectedLocations[index]) {
+      expected += 1;
+      const citationIndex = citations.findIndex((citation) => matches(citation, expectedLocation));
+      if (citationIndex === -1) {
+        missing += 1;
+        continue;
+      }
+      buckets[placementBucket(citationIndex, citations.length)] += 1;
+      normalizedPositions.push(citations.length < 2 ? 0 : citationIndex / (citations.length - 1));
+    }
+  }
+
+  const matched = expected - missing;
+  const sortedPositions = [...normalizedPositions].sort((a, b) => a - b);
+  const middleIndex = Math.floor((sortedPositions.length - 1) / 2);
+  return {
+    expectedLocations: expected,
+    matched: countMetric(matched, expected),
+    placementBuckets: {
+      first: countMetric(buckets.first, matched),
+      middle: countMetric(buckets.middle, matched),
+      last: countMetric(buckets.last, matched),
+    },
+    normalizedPositionP50: sortedPositions.length === 0 ? null : sortedPositions[middleIndex],
+    excluded: { missing, noCitations },
+  };
+}
+
 export function contextBudgetFit(bundles) {
   const omittedByReason = {};
   let withinBudget = 0;

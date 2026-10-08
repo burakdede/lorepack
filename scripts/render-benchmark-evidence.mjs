@@ -258,6 +258,21 @@ function buildEvidence(reports) {
       pointer: usefulness.pointer,
       owner: 'Lorepack maintainers',
     }),
+    claim({
+      id: 'lorepack-context-placement',
+      statement:
+        'The usefulness fixture records where matched expected citations appear in bounded context.',
+      status: 'measured',
+      metric: 'metrics.contextPlacement',
+      evidencePointer: '/metrics/contextPlacement',
+      denominator: '15 labelled context cases in the usefulness fixture',
+      value: usefulness.report.metrics.contextPlacement,
+      units: 'counts, ratios and normalized citation position',
+      report: usefulness.report,
+      path: usefulness.path,
+      pointer: usefulness.pointer,
+      owner: 'Lorepack maintainers',
+    }),
   ];
 
   const maxGeneratedAt = reports
@@ -306,6 +321,7 @@ function buildEvidence(reports) {
     usefulness: {
       provenance: usefulness.report.metrics.provenance,
       contextBudget: usefulness.report.metrics.contextBudget,
+      contextPlacement: usefulness.report.metrics.contextPlacement,
       changeReview: usefulness.report.metrics.changeReview,
       rollback: usefulness.report.metrics.rollback,
       buildReuse: usefulness.report.metrics.buildReuse,
@@ -375,6 +391,7 @@ function markdownReport(evidence) {
     '',
     `- Provenance coverage: ${usefulness.provenance.search.ratio} for search, ${usefulness.provenance.context.ratio} for context, and ${usefulness.provenance.tableRows.ratio} for table rows in the usefulness fixture.`,
     `- Rollback evidence: ${usefulness.rollback.pointerChangeMs} ms pointer change, restored: ${usefulness.rollback.restored}, rebuilt builds: ${usefulness.rollback.rebuiltBuilds}.`,
+    `- Context placement: ${usefulness.contextPlacement.matched.numerator}/${usefulness.contextPlacement.matched.denominator} expected citations matched; first ${usefulness.contextPlacement.placementBuckets.first.numerator}, middle ${usefulness.contextPlacement.placementBuckets.middle.numerator}, last ${usefulness.contextPlacement.placementBuckets.last.numerator}. This describes ordering, not answer quality.`,
     `- The direct FTS5 baseline is faster for warm lexical lookup here, and it does not implement Lorepack's bounded context, build identity or rollback contract.`,
     '',
     '## Claims and limitations',

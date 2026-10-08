@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   changeReviewWorkload,
   contextBudgetFit,
+  contextPlacement,
   expectedLocationCoverage,
   provenanceCoverage,
   rollbackEvidence,
@@ -57,5 +58,38 @@ describe('usefulness metric definitions', () => {
 
   it('reports expected-location coverage with raw counts', () => {
     expect(expectedLocationCoverage(3, 4)).toEqual({ numerator: 3, denominator: 4, ratio: 0.75 });
+  });
+
+  it('records first, middle, last and missing citation placement', () => {
+    const locator = (relativePath: string) => ({ relativePath, lineStart: 1 });
+    const matches = (citation: { relativePath: string }, expected: { relativePath: string }) =>
+      citation.relativePath === expected.relativePath;
+    expect(
+      contextPlacement(
+        [
+          { citations: [locator('first'), locator('other')] },
+          { citations: [locator('other'), locator('middle'), locator('other-2')] },
+          { citations: [locator('other'), locator('last')] },
+          { citations: [locator('other')] },
+        ],
+        [
+          [{ relativePath: 'first' }],
+          [{ relativePath: 'middle' }],
+          [{ relativePath: 'last' }],
+          [{ relativePath: 'missing' }],
+        ],
+        matches,
+      ),
+    ).toEqual({
+      expectedLocations: 4,
+      matched: { numerator: 3, denominator: 4, ratio: 0.75 },
+      placementBuckets: {
+        first: { numerator: 1, denominator: 3, ratio: 1 / 3 },
+        middle: { numerator: 1, denominator: 3, ratio: 1 / 3 },
+        last: { numerator: 1, denominator: 3, ratio: 1 / 3 },
+      },
+      normalizedPositionP50: 0.5,
+      excluded: { missing: 1, noCitations: 0 },
+    });
   });
 });

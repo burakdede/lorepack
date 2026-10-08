@@ -13,8 +13,10 @@ pnpm bench:usefulness -- --out benchmarks/usefulness/local.json
 ```
 
 The run uses one small mixed-format corpus, the labelled retrieval workload, one source edit, a
-second build and a pointer rollback. Its raw result is
-[`benchmarks/usefulness/metrics-2026-10-08.json`](../../benchmarks/usefulness/metrics-2026-10-08.json).
+second build and a pointer rollback. Its raw results are
+[`benchmarks/usefulness/metrics-2026-10-08.json`](../../benchmarks/usefulness/metrics-2026-10-08.json)
+and the later placement-annotated
+[`benchmarks/usefulness/metrics-2026-10-09.json`](../../benchmarks/usefulness/metrics-2026-10-09.json).
 
 ## Metric definitions
 
@@ -22,6 +24,7 @@ second build and a pointer rollback. Its raw result is
 |---|---|---|---|
 | Provenance coverage | valid `SourceLocator` outputs / all outputs | Every counted result can be traced to a source coordinate | The source is correct or authoritative |
 | Expected-location coverage | cited expected locations / labelled expected locations | The fixture's declared locations were returned or cited | Semantic relevance or factual accuracy |
+| Context placement | matched expected citations grouped by first, middle or last citation position | Where the current context policy places cited evidence | Answer quality, attention effects or a better ordering policy |
 | Search hit@k | cases with an expected location in the first k / search cases | Ranking behavior on the checked-in labels | General search quality |
 | Context budget fit | bundles within budget / context cases | The output respected its declared token budget | That the selected context answers the task |
 | Omission accounting | omitted items grouped by declared reason | Excluded candidates remain inspectable | That omission was the best human choice |
@@ -39,6 +42,9 @@ The 2026-10-08 local run used 9 artifacts, 213 chunks and 2 tables on Darwin arm
 - Search, context and table-row provenance were 43/43, 192/192 and 4/4.
 - Labelled search hit@1 and hit@5 were both 15/15.
 - Labelled context expected-location coverage was 15/15.
+- Context placement is reported separately for matched expected citations. Missing citations are
+  excluded from placement buckets rather than treated as a position. This is an offline placement
+  measurement inspired by evidence-position research, not a model answer-quality result.
 - All 15 context bundles fit their budgets. 1,542 omitted candidates were reported, all with the
   `diversity` reason in this fixture.
 - One source artifact changed. The second build reused 6 artifacts and rebuilt 3.

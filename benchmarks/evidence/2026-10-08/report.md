@@ -17,6 +17,7 @@ This report describes what was measured on the identified corpus and runner. It 
 
 - Provenance coverage: 1 for search, 1 for context, and 1 for table rows in the usefulness fixture.
 - Rollback evidence: 0.44 ms pointer change, restored: true, rebuilt builds: 0.
+- Context placement: 15/15 expected citations matched; first 9, middle 6, last 0. This describes ordering, not answer quality.
 - The direct FTS5 baseline is faster for warm lexical lookup here, and it does not implement Lorepack's bounded context, build identity or rollback contract.
 
 ## Claims and limitations

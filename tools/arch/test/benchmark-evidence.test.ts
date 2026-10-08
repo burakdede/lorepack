@@ -25,6 +25,11 @@ describe('benchmark evidence report', () => {
     expect(report.comparison.sqliteFts5.hitAt1).toBe(0.8);
     expect(report.comparison.offlineRag.answerQuality).toBe('not-measured');
     expect(report.usefulness.rollback.rebuildAvoided).toBe(true);
+    expect(report.usefulness.contextPlacement.matched).toEqual({
+      numerator: 15,
+      denominator: 15,
+      ratio: 1,
+    });
     expect(
       report.claims.every((claim: { evidence: Array<{ artifact: string; pointer: string }> }) =>
         claim.evidence.every(

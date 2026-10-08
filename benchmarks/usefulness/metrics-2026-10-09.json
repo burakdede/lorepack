@@ -3,8 +3,8 @@
     "name": "lorepack-usefulness-metrics",
     "version": 1
   },
-  "generatedAt": "2026-10-08T20:16:44.155Z",
-  "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+  "generatedAt": "2026-10-08T22:22:46.533Z",
+  "commitSha": "c6c12000fe545de947163f7f9307c1dbfbe65b83",
   "machine": {
     "platform": "darwin",
     "arch": "arm64",
@@ -128,7 +128,7 @@
       "contextDelta": 0
     },
     "rollback": {
-      "pointerChangeMs": 0.44,
+      "pointerChangeMs": 0.79,
       "activeBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
       "expectedBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
       "restored": true,
@@ -136,8 +136,8 @@
       "rebuildAvoided": true
     },
     "buildReuse": {
-      "firstBuildMs": 650,
-      "secondBuildMs": 109,
+      "firstBuildMs": 710,
+      "secondBuildMs": 120,
       "reusedArtifacts": 6,
       "rebuiltArtifacts": 3
     }
