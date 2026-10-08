@@ -49,6 +49,10 @@ Commands are registered explicitly in `commands/index.ts`. No dynamic discovery:
 architecture section 4.8 applies here too, and an explicit list is what makes `lorepack --help`
 reviewable in a pull request.
 
+The `completion` command uses that same registered list to generate shell-native top-level
+command and global-option completion for Bash, Zsh, Fish, and PowerShell. It is generated at
+runtime, so a new registered command appears in completion and help together.
+
 ## Cancellation
 
 `runCli` installs SIGINT and SIGTERM handlers and passes an `AbortSignal` on the context.

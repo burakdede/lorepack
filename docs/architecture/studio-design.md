@@ -1,6 +1,6 @@
 # Studio design
 
-Lore Studio is a developer inspector for one immutable context build. It
+Lorepack Studio is a developer inspector for one immutable context build. It
 belongs beside browser DevTools and a terminal: a persistent sidebar, a quiet
 page header, and list and detail panes where the evidence is the content.
 

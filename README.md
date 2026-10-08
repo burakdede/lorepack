@@ -1,84 +1,288 @@
 # Lorepack
 
-**Turn your project's documents and spreadsheets into a versioned context build that AI agents
-read over MCP, with a citation on every answer.**
+Lorepack turns the documents and tables your AI depends on into versioned context builds.
+It gives an agent a stable, inspectable source of truth instead of an untracked folder or a
+mutable search index.
 
-Point Lorepack at a folder of runbooks, specs, spreadsheets and PDFs. It compiles them into an
-immutable build that Claude Code, Codex, VS Code or any MCP client can search and query, and
-every result names the file and lines it came from. Think Git for the context your AI depends
-on: see exactly what it reads, diff two versions, and roll back a bad update without
-rebuilding.
+Every build is immutable and content-addressed. You can inspect what entered it, see what was
+excluded and why, ask for bounded context with citations, compare versions, activate a known
+version, and roll back without rebuilding. AI clients read the active build over MCP or HTTP.
+They cannot edit sources, build, deploy, or run shell commands through the Lorepack boundary.
 
-> **Status:** the `next` npm channel contains the first alpha. Stable v0.1 is not released yet.
-> Progress is tracked on the [backlog](https://github.com/users/burakdede/projects/8).
+## Why teams use it
 
-## Install
+Lorepack is for teams whose AI answers must be grounded in project material that changes over
+time:
 
-Requires Node.js 24.15 or later.
+- Keep engineering runbooks, product specifications, policies, and operational notes in a
+  reviewable context build.
+- Let Claude Code, Codex, VS Code, or another MCP client answer from the same local build.
+- Preserve spreadsheets as typed tables instead of flattening them into prose.
+- Review a context update before activating it, then recover immediately if a bad source update
+  reaches the active version.
+- Inspect every answer back to a file, heading, line range, sheet, or cell range.
 
-For the alpha release:
+Lorepack is a context build system, not a hosted knowledge base, generic crawler, chat app, or
+replacement for your source control. Retrieval is one capability of a versioned build.
+
+## Start in two commands
+
+Requires Node.js `>=24.15 <25`. The first alpha is published on npm's `next` channel:
 
 ```bash
 npm install -g @lorepack/cli@next
+lorepack dev ./my-docs
 ```
 
-The source install remains useful for contributors and for testing unreleased changes:
+`lorepack dev` builds the folder, starts the local read-mostly server, opens Lorepack Studio,
+and prints the MCP and HTTP endpoints. It also prints the connection command for AI clients it
+detects on your machine.
+
+To connect an installed client, run the command Studio prints or use:
 
 ```bash
-git clone https://github.com/burakdede/lorepack.git && cd lorepack
-corepack enable && pnpm install --frozen-lockfile && pnpm build
-alias lorepack="node $PWD/packages/cli/dist/public-entry.js"
+lorepack connect claude-code
 ```
 
-The stable install will be `npm install -g @lorepack/cli` after v0.1. See
-[Getting started](docs/getting-started.md#install) for details and alpha limitations.
+The command changes only that client's Lorepack configuration. It does not upload your sources.
+See the [client integration guides](docs/integrations/) for Claude Code, Codex, VS Code, and
+generic MCP clients.
 
-## Use it
+### Shell completion
+
+Generate completion for the shell you use:
 
 ```bash
-lorepack dev ./my-docs          # build the folder, serve it over MCP and HTTP, rebuild on change
-lorepack connect claude-code    # or codex, or vscode: wire up your agent and check it answers
+eval "$(lorepack completion zsh)"       # zsh
+eval "$(lorepack completion bash)"      # bash
+lorepack completion fish | source       # fish
+lorepack completion powershell | Invoke-Expression
 ```
 
-![Lorepack CLI demo: build a folder, search it with citations, diff two builds, roll back, and serve it over MCP](docs/images/demo.gif)
+Add the matching line to your shell profile when you want completion in every new terminal.
+The generated completion covers Lorepack commands and global options without requiring a plugin.
+
+![Lorepack CLI demo: build a folder, search it with citations, compare versions, roll back, and serve it over MCP](docs/images/demo.gif)
 
 [View the static, reduced-motion version of the demo](docs/images/demo.svg).
 
-## What you get
+## A complete local workflow
 
-- **Answers with provenance.** Every result names its file, heading path and lines.
-  [How provenance works](docs/concepts.md#provenance-and-structure).
-- **Spreadsheets stay tables.** CSV and XLSX become typed tables an agent queries with
-  read-only SQL, never flattened into prose. [How tables are stored](docs/architecture/local-storage.md).
-- **Versioned context.** Builds are immutable and content-addressed: diff any two, activate
-  one, roll back without recompiling. [The build lifecycle](docs/concepts.md#the-build-lifecycle).
-- **Studio, a local inspector.** See what was indexed and what was left out, what a model
-  would receive for a task, and copy any request as a CLI, `curl` or MCP call.
-  [Take the tour](docs/studio-tour.md).
-- **Nothing else to install.** No Python, Docker, model download, API key or account.
-  [Requirements](docs/getting-started.md#requirements).
-- **Deploy when ready.** Project the same build to Cloudflare, verified before it goes live.
-  [Deployment](docs/architecture/deployment.md).
+### 1. Create a project
 
-![Lore Studio, showing the active build, next steps, and the MCP endpoint to give an agent](docs/images/studio-overview.png)
+For a new context directory, initialize the small set of files Lorepack needs:
 
-## Learn more
+```bash
+mkdir my-context
+cd my-context
+lorepack init .
+```
 
-- [Getting started](docs/getting-started.md): install, the first build, and the full lifecycle
-- [Core concepts](docs/concepts.md): why the build is the product, and how Lorepack differs
-  from RAG servers and vector databases
-- Connecting a client: [Claude Code](docs/integrations/claude-code.md),
-  [Codex](docs/integrations/codex.md), [VS Code](docs/integrations/vscode.md), or
-  [any MCP client](docs/integrations/mcp.md)
-- [CLI reference](docs/cli-reference.md)
-- [Limitations](docs/limitations.md): what v0.1 does not do
-- [All documentation](docs/README.md)
+This creates `lore.yaml`, `.loreignore`, and the project entries in `.gitignore`. Commit
+`lore.yaml`, `lore.lock`, and `.loreignore`. The `.lore/` directory contains local build state
+and is intentionally ignored.
+
+Point `lore.yaml` at the directories or files that are part of the context. Keep source files
+in their original structure. The [format and parser guide](docs/architecture/parsers.md) lists
+the supported formats and their structural behavior.
+
+### 2. Preview and build
+
+Preview what will be read before compiling it:
+
+```bash
+lorepack plan
+```
+
+Then create and activate an immutable build:
+
+```bash
+lorepack build
+lorepack status
+```
+
+The build output includes a content-addressed id, artifact and chunk counts, tables, warnings,
+and activation status. A failed build leaves the active version untouched.
+
+Use `--json` in scripts and CI. Use `--frozen` when the checked-in lockfile must not change:
+
+```bash
+lorepack build --frozen --json
+```
+
+### 3. Inspect what the AI can read
+
+Search returns source coordinates with every result:
+
+```bash
+lorepack search "how long do we keep support transcripts"
+```
+
+Inspect the build and its decisions directly:
+
+```bash
+lorepack inspect build
+lorepack inspect sources
+lorepack inspect exclusions
+lorepack inspect warnings
+```
+
+Assemble bounded context for a task without calling a model:
+
+```bash
+lorepack export --task "How should the sync worker recover after a failed deploy?"
+```
+
+The export contains the selected passages and their provenance. Lorepack does not summarize
+source material or decide which user-declared authority is correct.
+
+### 4. Serve and connect
+
+Use `dev` while editing sources. It rebuilds after changes and keeps Studio, HTTP, and MCP
+aligned with the active build:
+
+```bash
+lorepack dev ./my-docs
+```
+
+For a previously built project that must only serve the active build, use the read-only server:
+
+```bash
+lorepack serve
+lorepack mcp
+```
+
+`lorepack serve` never rebuilds or edits sources. `lorepack mcp` is useful as the command in an
+MCP client's stdio configuration. `lorepack connect <client>` writes the client configuration
+for you and supports `--dry-run` when you want to inspect the proposed change first.
+
+### 5. Update safely
+
+Edit a source, then see the candidate changes before activation:
+
+```bash
+lorepack plan
+lorepack build
+lorepack diff
+lorepack builds
+```
+
+The active pointer changes only after validation succeeds. To return to the previous build:
+
+```bash
+lorepack rollback
+lorepack status
+```
+
+Rollback points at an existing immutable build. It does not recompile the sources.
+
+### 6. Package or deploy a build
+
+Create a portable archive and verify it before sharing it:
+
+```bash
+lorepack pack --out context.lorepack
+lorepack pack --verify context.lorepack
+```
+
+Cloudflare deployment is an optional target. It projects the same build rather than compiling a
+different representation remotely. Read the [deployment guide](docs/architecture/deployment.md)
+before configuring a target.
+
+## What makes the build trustworthy
+
+### Immutable identity
+
+The build id comes from canonical inputs, parser and compiler versions, configuration, and
+structure. It does not depend on timestamps, hostnames, absolute paths, or physical SQLite
+bytes. The same canonical inputs produce the same id across supported operating systems.
+
+### Provenance on every result
+
+Search results, exported context items, and table rows carry a `SourceLocator`. A locator can
+name a path, heading, line range, sheet, or cell range. This makes an answer auditable without
+requiring Lorepack to claim that one document is more truthful than another.
+
+### Structure before retrieval
+
+Markdown headings, code boundaries, directories, spreadsheet sheets, columns, and cell ranges
+remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
+through a bounded read-only SQL surface.
+
+### Read-only AI boundary
+
+Model-facing MCP and HTTP capabilities read an immutable active build. They cannot build,
+activate, roll back, deploy, modify source files, or execute shell commands. Mutating lifecycle
+actions remain explicit CLI or Studio operations performed by the developer.
+
+## Lorepack Studio
+
+`lorepack dev` serves Lorepack Studio locally. It is an inspector for the active build:
+
+- Overview shows the active id, freshness, compiler information, capabilities, warnings, and
+  the next rebuild step.
+- Sources shows indexed artifacts and excluded files with reasons.
+- Playground assembles bounded context and shows selections, omissions, budget accounting, and
+  the equivalent CLI, HTTP, and MCP request.
+- Tables shows typed schemas, sample rows, and bounded read-only queries when tables exist.
+- Versions shows build history, diffs, activation, rollback, and portable packaging.
+- Diagnostics shows environment checks, watcher state, and detected AI clients.
+
+![Lorepack Studio, showing the active build, next steps, and the MCP endpoint for an agent](docs/images/studio-overview.png)
+
+Read the [Studio tour](docs/studio-tour.md) for route-by-route screenshots and the actions
+behind each view.
+
+## Supported inputs and current boundaries
+
+The alpha supports the document, text, PDF, CSV, and XLSX paths described in the parser guide.
+It preserves the structure those parsers expose and records unsupported or excluded files as
+warnings. The default install has no Python, Docker, native add-on, model download, API key,
+account, or hosted service requirement.
+
+The first public alpha deliberately does not include OCR, images or screenshots, PPTX, SaaS
+connectors, multi-user tenancy, automatic conflict detection, generated summaries, embeddings
+in the default install, knowledge graphs, conversation memory, agent workflows, or server-side
+compilation on Cloudflare. See the complete [limitations](docs/limitations.md) page before
+designing a production integration.
+
+## Documentation map
+
+- [Getting started](docs/getting-started.md): requirements, installation, the first build, and
+  the lifecycle.
+- [Core concepts](docs/concepts.md): why the immutable build is the product and how Lorepack
+  differs from RAG servers, MCP wrappers, and vector databases.
+- [CLI reference](docs/cli-reference.md): every command, argument, and option.
+- [Studio tour](docs/studio-tour.md): the local inspector and its routes.
+- [Demo transcript](docs/demo-transcript.md): real output from the complete lifecycle.
+- [Client integrations](docs/integrations/): Claude Code, Codex, VS Code, and generic MCP.
+- [Architecture](docs/architecture/README.md): package boundaries, build identity, storage,
+  serving, security, and deployment.
+- [Package format](docs/package-format/README.md): the `.lorepack` archive and generated
+  schemas.
+- [Compatibility](docs/compatibility/README.md): supported platforms and measured behavior.
+
+## Source installation
+
+Contributors and users testing unreleased changes can build from source:
+
+```bash
+git clone https://github.com/burakdede/lorepack.git
+cd lorepack
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+alias lorepack="node $PWD/packages/cli/dist/public-entry.js"
+```
+
+Run `lorepack doctor --json` when diagnosing an environment. Include that output, your OS, and
+your Node.js version in a bug report.
 
 ## Contributing
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). Agents and contributors work to
-[AGENTS.md](AGENTS.md), and vulnerabilities go through [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
+The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 
-## Licence
+## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](LICENSE)

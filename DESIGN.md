@@ -1,5 +1,5 @@
 ---
-name: Lore Studio
+name: Lorepack Studio
 description: The local developer inspector for one immutable Lorepack context build.
 colors:
   bg: "#fafafa"
@@ -205,13 +205,13 @@ components:
     height: "38px"
 ---
 
-# Design System: Lore Studio
+# Design System: Lorepack Studio
 
 ## Overview
 
 **Creative North Star: "The Developer Inspector"**
 
-Lore Studio sits beside browser DevTools and a terminal without apology. It is a persistent sidebar, a quiet route header, and list and detail panes in which the evidence (paths, build ids, ranges, rows) is the content. Nothing on screen is decoration: a surface exists because it frames one group of evidence, and a mark of colour exists because something has a state.
+Lorepack Studio sits beside browser DevTools and a terminal without apology. It is a persistent sidebar, a quiet route header, and list and detail panes in which the evidence (paths, build ids, ranges, rows) is the content. Nothing on screen is decoration: a surface exists because it frames one group of evidence, and a mark of colour exists because something has a state.
 
 The world is restrained neutral zinc in two peer themes, light and dark, each defined once and resolved before first paint. The sidebar sits on a second, slightly offset neutral so the shell reads as furniture and the route reads as the work. There is no accent hue. Selection, focus and the primary action are carried by ink contrast: near-black on light, near-white on dark. Green, amber and red appear only for state, and always beside a word.
 
