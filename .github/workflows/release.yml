@@ -131,6 +131,10 @@ jobs:
         run: |
           echo "real release uses GitHub OIDC for npm Trusted Publishing"
 
+      - name: Preflight npm package bootstrap
+        if: ${{ !inputs.dry_run }}
+        run: node scripts/preflight-npm-packages.mjs
+
       - name: Restrict existing-release recovery to main
         if: ${{ !inputs.dry_run && inputs.resume_existing }}
         run: |

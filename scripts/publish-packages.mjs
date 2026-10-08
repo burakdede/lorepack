@@ -1,10 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { discoverPublishablePackages, runNpm } from './release-packages.mjs';
 
-const ROOT = resolve(import.meta.dirname, '..');
-const NPM = process.env.NPM_COMMAND ?? 'npm';
 const tag = parseTag(process.argv.slice(2));
 
 function parseTag(args) {
@@ -12,17 +8,6 @@ function parseTag(args) {
     throw new Error('usage: publish-packages.mjs --tag <npm-dist-tag>');
   }
   return args[1];
-}
-
-function runNpm(args, cwd) {
-  const result = spawnSync(NPM, args, {
-    cwd,
-    encoding: 'utf8',
-    env: process.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  if (result.error) throw result.error;
-  return result;
 }
 
 function isPublished(name, version, cwd) {
@@ -34,14 +19,8 @@ function isPublished(name, version, cwd) {
   throw new Error(`npm view failed for ${name}@${version}: ${output.trim()}`);
 }
 
-const packageDirs = readdirSync(join(ROOT, 'packages'), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => join(ROOT, 'packages', entry.name))
-  .sort();
-
-for (const packageDir of packageDirs) {
-  const packageJson = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
-  if (packageJson.private) continue;
+for (const packageJson of discoverPublishablePackages()) {
+  const packageDir = packageJson.directory;
 
   const { name, version } = packageJson;
   if (isPublished(name, version, packageDir)) {

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { reportsMatch, sbomsMatch } from '../../../scripts/check-supply-chain.mjs';
+import { findMissingPackages, packageExists } from '../../../scripts/release-packages.mjs';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const CHANGESET_CHECK = join(REPO_ROOT, 'scripts', 'check-changeset-policy.mjs');
@@ -217,6 +218,48 @@ describe('release policy', () => {
     expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag]");
     expect(publisher).toContain('cannot publish over the previously published version');
   });
+
+  it('requires an npm package bootstrap preflight before release side effects', () => {
+    const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
+    const preflight = workflow.indexOf('Preflight npm package bootstrap');
+    const release = workflow.indexOf('Create GitHub release with SBOM and example artifact');
+    const publish = workflow.indexOf('Publish npm packages with Trusted Publishing');
+
+    expect(preflight).toBeGreaterThan(-1);
+    expect(preflight).toBeLessThan(release);
+    expect(preflight).toBeLessThan(publish);
+    expect(workflow).toContain('scripts/preflight-npm-packages.mjs');
+  });
+});
+
+describe('npm package preflight', () => {
+  const packageJson = (name: string) => ({ directory: '/tmp/package', name });
+
+  it('accepts packages that exist in the registry', () => {
+    expect(packageExists(packageJson('@lorepack/cli'), () => ({ status: 0 }))).toBe(true);
+  });
+
+  it('reports only packages missing from the registry', () => {
+    const missing = findMissingPackages(
+      [packageJson('@lorepack/cli'), packageJson('@lorepack/core')],
+      ([, name]) =>
+        name === '@lorepack/cli'
+          ? { status: 0 }
+          : { status: 1, stdout: '', stderr: 'npm error code E404' },
+    );
+
+    expect(missing.map(({ name }) => name)).toEqual(['@lorepack/core']);
+  });
+
+  it('fails closed for registry errors that are not missing packages', () => {
+    expect(() =>
+      packageExists(packageJson('@lorepack/cli'), () => ({
+        status: 1,
+        stdout: '',
+        stderr: 'npm error code E401',
+      })),
+    ).toThrow('npm view failed for @lorepack/cli');
+  });
 });
 
 describe('performance report policy', () => {
@@ -417,6 +460,8 @@ function releaseWorkflow(): string {
     'docs/limitations.md',
     'GHSA-c53f-24h5-74qj',
     'Require npm Trusted Publishing for real release',
+    'Preflight npm package bootstrap',
+    'scripts/preflight-npm-packages.mjs',
     'Commit version and generated release artifacts',
     'Create GitHub release with SBOM and example artifact',
     'Publish npm packages with Trusted Publishing',
