@@ -10,6 +10,11 @@ const OUT_DIR = 'schemas';
 const check = process.argv.includes('--check');
 const BASE_URI = 'https://lorepack.dev/schemas';
 
+// Benchmark reports are a repository-level protocol, not a Core runtime contract.
+// Its JSON Schema is maintained beside the benchmark validator and must survive this
+// generator's stale-file check.
+const EXTERNAL_SCHEMAS = new Set(['benchmark-report.json']);
+
 function sortKeys(value) {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value !== null && typeof value === 'object') {
@@ -51,7 +56,9 @@ for (const [file, contents] of expected) {
   }
 }
 
-const stale = readdirSync(OUT_DIR).filter((f) => f.endsWith('.json') && !expected.has(f));
+const stale = readdirSync(OUT_DIR).filter(
+  (f) => f.endsWith('.json') && !expected.has(f) && !EXTERNAL_SCHEMAS.has(f),
+);
 for (const file of stale) {
   if (check) problems.push(`${join(OUT_DIR, file)} has no matching Zod schema`);
   else rmSync(join(OUT_DIR, file));
