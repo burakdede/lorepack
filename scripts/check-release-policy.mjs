@@ -35,8 +35,10 @@ const REQUIRED = [
 const problems = [];
 const changesetConfig = JSON.parse(CHANGESETS);
 
-if (changesetConfig.fixed?.some((group) => group.includes('@lorepack/*')) !== true) {
-  problems.push('.changeset/config.json must keep @lorepack/* packages versioned together');
+if (changesetConfig.fixed?.length !== 0) {
+  problems.push(
+    '.changeset/config.json must not force private implementation packages into releases',
+  );
 }
 
 if (!RELEASE.includes('workflow_dispatch:')) {

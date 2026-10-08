@@ -27,7 +27,7 @@ The source install remains useful for contributors and for testing unreleased ch
 ```bash
 git clone https://github.com/burakdede/lorepack.git && cd lorepack
 corepack enable && pnpm install --frozen-lockfile && pnpm build
-alias lorepack="node $PWD/packages/cli/dist/entry.js"
+alias lorepack="node $PWD/packages/cli/dist/public-entry.js"
 ```
 
 The stable install will be `npm install -g @lorepack/cli` after v0.1. See

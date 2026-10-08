@@ -6,9 +6,9 @@ if (missing.length > 0) {
   console.error('npm package bootstrap is incomplete. Missing packages:');
   for (const packageJson of missing) console.error(`- ${packageJson.name}`);
   console.error(
-    'Create each package once and configure its npm Trusted Publisher before the real release.',
+    'Create @lorepack/cli once and configure its npm Trusted Publisher before the real release.',
   );
   process.exitCode = 1;
 } else {
-  console.log('all publishable npm packages exist in the registry');
+  console.log('the public npm package exists in the registry');
 }

@@ -119,11 +119,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.1.3"
+          "value": "2.1.4"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-29T06:10:34.512Z"
+          "value": "2026-10-08T04:42:19.622Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -239,11 +239,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "1.63.0"
+          "value": "1.64.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-04T22:44:00.304Z"
+          "value": "2026-10-07T20:44:27.702Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -733,6 +733,30 @@
     },
     {
       "type": "library",
+      "name": "esbuild",
+      "version": "0.28.1",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "0.28.2"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2026-08-08T20:00:55.454Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "hono",
       "version": "4.13.7",
       "licenses": [
@@ -1199,11 +1223,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "8.3.3"
+          "value": "8.3.4"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-06T04:10:19.326Z"
+          "value": "2026-10-08T12:07:04.441Z"
         },
         {
           "name": "lorepack:provenanceStatus",

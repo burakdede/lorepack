@@ -11,7 +11,16 @@ import { AREAS, runScenario, skippedHere } from '../src/index.js';
  * its exit code and its output.
  */
 
-const BINARY = join(import.meta.dirname, '..', '..', '..', 'packages', 'cli', 'dist', 'entry.js');
+const BINARY = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  'packages',
+  'cli',
+  'dist',
+  'public-entry.js',
+);
 
 describe('the binary under test', () => {
   it('is built, which this suite depends on', () => {

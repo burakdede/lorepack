@@ -586,7 +586,7 @@ function resolveInProject(project: string, path: string): string {
   return isAbsolute(path) ? path : join(project, ...path.split('/'));
 }
 
-/** The repository, from the binary at `<repo>/packages/cli/dist/entry.js`. */
+/** The repository, from the binary at `<repo>/packages/cli/dist/public-entry.js`. */
 function repoRootOf(binary: string): string {
   return dirname(dirname(dirname(dirname(binary))));
 }

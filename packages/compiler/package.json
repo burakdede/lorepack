@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/compiler",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Deterministic compiler pipeline and validation for Lorepack.",
   "license": "Apache-2.0",
@@ -36,9 +37,5 @@
   "devDependencies": {
     "@lorepack/test-support": "workspace:*",
     "@types/picomatch": "4.0.2"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

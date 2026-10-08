@@ -16,7 +16,7 @@ Two constraints bound every choice:
 
 `pnpm check:supply-chain` is the release-facing gate for this policy. It checks:
 
-- `publishConfig.provenance: true` on every publishable package.
+- `publishConfig.provenance: true` on the public CLI package.
 - `pnpm audit --prod --audit-level moderate` reports no production vulnerabilities.
 - `pnpm licenses list --prod --json` and every direct dependency report contain only
   allowlisted licences.
@@ -92,6 +92,7 @@ provenance when two candidates are otherwise equivalent.
 |---|---|---|
 | `@biomejs/biome` | Formatter and linter with one binary and one config. | Replace if it adds install scripts to the contributor path or stops supporting TypeScript/Vite syntax used here. |
 | `@changesets/cli` | Version planning for publishable workspace packages. | Replace only if release automation changes away from npm workspaces. |
+| `esbuild` | Contributor-only bundling of the public CLI entry point. Its output contains private workspace packages, while third-party runtime dependencies remain npm dependencies. | Replace if TypeScript output can be packaged without exposing private workspace imports, or if the bundler adds install-time native work. |
 | `@fontsource/ibm-plex-mono` | Bundled Studio font asset, no CDN dependency. | Replace if bundle size exceeds the Studio budget or licence changes. |
 | `@fontsource/ibm-plex-sans` | Bundled Studio font asset, no CDN dependency. | Replace if bundle size exceeds the Studio budget or licence changes. |
 | `@hono/node-server` | Node adapter for the Hono runtime app. | Replace if Node gains a compatible fetch-style server or the adapter adds runtime dependencies that affect user install. |

@@ -9,7 +9,7 @@ Issue `#99` owns the v0.1 supply-chain release gate.
 - production `pnpm audit --prod --audit-level moderate` is clean;
 - `pnpm licenses list --prod --json` and every direct dependency report contain only
   allowlisted licences;
-- every publishable package has `publishConfig.provenance: true`;
+- the public CLI has `publishConfig.provenance: true`;
 - npm provenance metadata is recorded for production direct dependencies where available, and
   missing attestations are named;
 - every direct dependency has a rationale in [`dependencies.md`](dependencies.md);
@@ -23,7 +23,7 @@ pnpm supply-chain:report
 
 ## Provenance
 
-Every publishable `@lorepack/*` package sets:
+The public `@lorepack/cli` package sets:
 
 ```json
 {
@@ -35,23 +35,22 @@ Every publishable `@lorepack/*` package sets:
 ```
 
 The release workflow grants `id-token: write`, uses `actions/setup-node` with the npm registry,
-and publishes each package through `scripts/publish-packages.mjs` using npm Trusted Publishing.
+and publishes the CLI through `scripts/publish-packages.mjs` using npm Trusted Publishing.
 The publisher checks the registry first so a retry skips versions already published, then invokes
 `npm publish` for every missing version. npm obtains the provenance statement from GitHub's OIDC
 identity, so the workflow has no long-lived npm publish token.
 
-Before the first real release, configure Trusted Publishing in the npm settings for every
-publishable package. Select GitHub Actions and set organization `burakdede`, repository
+Before the first real release, configure Trusted Publishing in the npm settings for
+`@lorepack/cli`. Select GitHub Actions and set organization `burakdede`, repository
 `lorepack`, workflow filename `release.yml`, and permission for direct `npm publish`. The
 workflow uses the `next` or `latest` dist tag, so allow dist-tag management when npm asks for
-that permission. After the publisher is verified, set each package to require two-factor
+that permission. After the publisher is verified, set the package to require two-factor
 authentication and disallow token-based publishing, then revoke obsolete automation tokens.
 
-Each package must exist in the npm registry before its Trusted Publisher can be configured.
-Bootstrap new packages once through npm staged publishing, then approve each staged
-placeholder with 2FA. The real release runs `scripts/preflight-npm-packages.mjs` before
-creating a release commit or GitHub release and reports every missing package without
-publishing anything.
+The CLI package must exist in the npm registry before its Trusted Publisher can be configured.
+Bootstrap it once through npm staged publishing, then approve the staged placeholder with 2FA.
+The real release runs `scripts/preflight-npm-packages.mjs` before creating a release commit or
+GitHub release and reports a missing package without publishing anything.
 
 For dependencies, the health report reads npm registry `dist.attestations.provenance` metadata
 for exact production direct dependencies. Missing attestations are reported by package name, not
@@ -59,10 +58,10 @@ silently ignored.
 
 ## Versioning Policy
 
-Changesets owns package version changes and package changelog entries. All publishable
-`@lorepack/*` packages move together for v0.1 through the fixed Changesets group in
-[`.changeset/config.json`](../../.changeset/config.json). Keeping the package versions aligned
-keeps the compatibility story simple while the public surface is still settling.
+Changesets owns package version changes and package changelog entries. The first release versions
+only `@lorepack/cli`. Internal packages remain workspace implementation details and are bundled
+into that CLI. A later public package gets its own Changesets entry and compatibility policy
+after its API and audience are documented.
 
 Package versions do not define build compatibility on their own:
 
@@ -84,11 +83,11 @@ required CI, clean-install, security, Cloudflare, Studio and benchmark check-run
 successfully for the exact release commit.
 
 A dry run performs the same install, verification, Changesets versioning, build, SBOM
-generation, example package creation and npm tarball packing, then uploads the artifacts without
+generation, example package creation and CLI npm tarball packing, then uploads the artifacts without
 committing, tagging, creating a GitHub release or publishing to npm.
 
 A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
-publishes packages with npm provenance through `scripts/publish-packages.mjs --tag <channel>`.
+publishes the CLI with npm provenance through `scripts/publish-packages.mjs --tag <channel>`.
 If a retry finds an existing release from an earlier failed recovery, it retargets that release
 only when the old target is an ancestor of the current green commit and recovery mode is enabled.
 The `Public registry smoke` workflow then installs the published CLI from npm on Ubuntu,

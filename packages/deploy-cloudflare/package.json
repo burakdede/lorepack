@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/deploy-cloudflare",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Cloudflare deployment target for Lorepack.",
   "license": "Apache-2.0",
@@ -37,9 +38,5 @@
   },
   "devDependencies": {
     "wrangler": "4.119.0"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

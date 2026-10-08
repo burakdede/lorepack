@@ -1,5 +1,6 @@
 {
   "name": "@lorepack/connect-clients",
+  "private": true,
   "version": "0.1.0-alpha.0",
   "description": "Safe AI client detection and configuration adapters for Lorepack.",
   "license": "Apache-2.0",
@@ -32,9 +33,5 @@
     "type": "git",
     "url": "git+https://github.com/burakdede/lorepack.git",
     "directory": "packages/connect-clients"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
   }
 }

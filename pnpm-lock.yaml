@@ -28,6 +28,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.10
         version: 4.1.10(vitest@4.1.10)
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
       typescript:
         specifier: 7.0.2
         version: 7.0.2
@@ -114,6 +117,76 @@ importers:
       '@hono/node-server':
         specifier: 2.0.12
         version: 2.0.12(hono@4.13.7)
+      '@modelcontextprotocol/client':
+        specifier: 2.2.0
+        version: 2.2.0
+      '@modelcontextprotocol/hono':
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)
+      '@modelcontextprotocol/node':
+        specifier: 2.0.0
+        version: 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.7)
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
+      chokidar:
+        specifier: 5.0.0
+        version: 5.0.0
+      commander:
+        specifier: 15.0.0
+        version: 15.0.0
+      csv-parse:
+        specifier: 7.0.2
+        version: 7.0.2
+      hono:
+        specifier: 4.13.7
+        version: 4.13.7
+      jose:
+        specifier: 6.2.7
+        version: 6.2.7
+      jsonc-parser:
+        specifier: 3.3.1
+        version: 3.3.1
+      mammoth:
+        specifier: 1.12.0
+        version: 1.12.0
+      mdast-util-from-markdown:
+        specifier: 2.0.2
+        version: 2.0.2(supports-color@10.2.2)
+      pdfjs-dist:
+        specifier: 6.2.108
+        version: 6.2.108
+      rehype-parse:
+        specifier: 9.0.1
+        version: 9.0.1
+      remark-frontmatter:
+        specifier: 5.0.0
+        version: 5.0.0(supports-color@10.2.2)
+      remark-gfm:
+        specifier: 4.0.1
+        version: 4.0.1(supports-color@10.2.2)
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0(supports-color@10.2.2)
+      sax:
+        specifier: 1.6.1
+        version: 1.6.1
+      smol-toml:
+        specifier: 1.9.0
+        version: 1.9.0
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+      yauzl:
+        specifier: 3.4.0
+        version: 3.4.0
+      yazl:
+        specifier: 3.3.1
+        version: 3.3.1
+    devDependencies:
       '@lorepack/backend-local':
         specifier: workspace:*
         version: link:../backend-local
@@ -138,19 +211,6 @@ importers:
       '@lorepack/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@modelcontextprotocol/server':
-        specifier: 2.0.0
-        version: 2.0.0
-      chokidar:
-        specifier: 5.0.0
-        version: 5.0.0
-      commander:
-        specifier: 15.0.0
-        version: 15.0.0
-      hono:
-        specifier: 4.13.7
-        version: 4.13.7
-    devDependencies:
       '@lorepack/test-support':
         specifier: workspace:*
         version: link:../../tools/test-support
