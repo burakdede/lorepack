@@ -63,6 +63,7 @@ jobs:
       - run: pnpm check:no-native
 
       - run: pnpm check:no-em-dash
+      - run: pnpm check:public-branding
 
       - name: Nothing claims Lorepack detected a conflict
         run: pnpm check:no-conflict-claims
