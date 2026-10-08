@@ -283,8 +283,12 @@ jobs:
           if existing_release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" 2>/dev/null)"; then
             existing_target="$(printf '%s' "$existing_release" | jq -r '.target_commitish')"
             if [ "$existing_target" != "$RELEASE_TARGET" ]; then
-              echo "::error::existing $release_tag targets $existing_target, expected $RELEASE_TARGET"
-              exit 1
+              if [ "${{ inputs.resume_existing }}" != 'true' ] || ! git merge-base --is-ancestor "$existing_target" "$RELEASE_TARGET"; then
+                echo "::error::existing $release_tag targets $existing_target, expected $RELEASE_TARGET"
+                exit 1
+              fi
+              echo "retargeting existing $release_tag from ancestor $existing_target to $RELEASE_TARGET"
+              gh release edit "$release_tag" --target "$RELEASE_TARGET"
             fi
             gh release upload "$release_tag" \
               reports/dependency-health.json \

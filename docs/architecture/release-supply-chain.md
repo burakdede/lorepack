@@ -76,6 +76,8 @@ committing, tagging, creating a GitHub release or publishing to npm.
 
 A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
 publishes packages with npm provenance through `scripts/publish-packages.mjs --tag <channel>`.
+If a retry finds an existing release from an earlier failed recovery, it retargets that release
+only when the old target is an ancestor of the current green commit and recovery mode is enabled.
 The `Public registry smoke` workflow then installs the published CLI from npm on Ubuntu,
 Windows and macOS and exercises the shipped binary without installing the workspace.
 
