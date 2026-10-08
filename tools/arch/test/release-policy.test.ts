@@ -211,7 +211,9 @@ describe('release policy', () => {
 
   it('requires the publisher to use npm provenance and support retries', () => {
     const publisher = readFileSync(join(REPO_ROOT, 'scripts', 'publish-packages.mjs'), 'utf8');
-    expect(publisher).toContain("['view', `${name}@${version}`, 'version', '--json']");
+    expect(publisher).toContain(
+      "['view', `" + '$' + '{name}@' + '$' + "{version}`, 'version', '--json']",
+    );
     expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag]");
     expect(publisher).toContain('cannot publish over the previously published version');
   });

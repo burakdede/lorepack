@@ -135,7 +135,9 @@ for (const phrase of [
   }
 }
 
-const trustedPublishingPreflight = RELEASE.indexOf('Require npm Trusted Publishing for real release');
+const trustedPublishingPreflight = RELEASE.indexOf(
+  'Require npm Trusted Publishing for real release',
+);
 for (const sideEffect of [
   'Commit version and generated release artifacts',
   'Create GitHub release with SBOM and example artifact',
