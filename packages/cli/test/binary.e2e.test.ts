@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +14,11 @@ const run = promisify(execFile);
  * how the program behaves when Node actually starts it.
  */
 const BIN = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
+const PACKAGE_VERSION = (
+  JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8')) as {
+    version: string;
+  }
+).version;
 
 interface Executed {
   readonly code: number;
@@ -54,7 +59,7 @@ describe('lorepack binary', () => {
   it('prints a version and exits 0', async () => {
     const result = await lore(['--version']);
     expect(result.code).toBe(0);
-    expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    expect(result.stdout.trim()).toBe(PACKAGE_VERSION);
   });
 
   it('exits 1 with an actionable error for an unknown command', async () => {

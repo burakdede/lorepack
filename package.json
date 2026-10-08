@@ -51,6 +51,7 @@
     "check:studio-bundle": "node scripts/check-studio-bundle.mjs",
     "test:e2e": "pnpm build && pnpm --filter @lorepack/studio-e2e test",
     "docs:capture": "pnpm build && node scripts/capture-docs.mjs",
+    "docs:gif": "node scripts/capture-cli-gif.mjs",
     "check:docs-images": "node scripts/check-docs-images.mjs",
     "check:docs-links": "node scripts/check-docs-links.mjs",
     "check:verify-parity": "node scripts/check-verify-parity.mjs",

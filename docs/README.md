@@ -76,18 +76,17 @@ diagrams in the same folder are maintained as text.
 ```bash
 pnpm exec playwright install chromium   # once
 pnpm docs:capture
+pnpm docs:gif                 # optional, requires local ffmpeg
 ```
 
 This is not tidiness. A screenshot nobody can regenerate is wrong on the first interface edit
 and stays wrong, and by then deleting it is easier than retaking it. Making it cheap to retake
 is what keeps the documentation honest.
 
-The README demo, [`images/demo.svg`](images/demo.svg), is the same idea in motion: real output
-from the capture run, typed and printed scene by scene with CSS keyframes inside one SVG. It
-needs no recorder, GitHub renders it, and a reader who prefers reduced motion sees one still
-scene.
+The README demo has two generated forms: [`images/demo.gif`](images/demo.gif) is the animated
+preview, and [`images/demo.svg`](images/demo.svg) is the static, reduced-motion version. Both
+are rendered from the same real command output. The SVG remains the reviewable source because
+it scales cleanly and diffs as text. GIF capture is optional documentation tooling and does not
+enter the runtime package.
 
-Terminal output is rendered to SVG rather than recorded as a GIF, for two reasons. A GIF needs
-a recorder and an encoder, which is a toolchain this project does not have and invariant 7
-does not want. And an SVG of real captured bytes stays legible at any size and diffs as text,
-so a review can see what the output actually became.
+![Static Lorepack CLI demo](images/demo.svg)
