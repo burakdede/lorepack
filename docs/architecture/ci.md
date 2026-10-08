@@ -1,6 +1,7 @@
 # Continuous integration
 
-Two workflows. Both must be green before a pull request merges.
+Three workflows. The verification and benchmark workflows both run on pull requests. The release
+workflow consumes their results before publishing.
 
 ## `ci.yml`
 
@@ -20,6 +21,25 @@ Steps, in order:
 6. `pnpm check:no-native`, `pnpm check:no-em-dash`
 
 Test results and coverage upload as artifacts on every run, including failures.
+
+## `benchmarks.yml`
+
+Runs the shared evidence protocol on `ubuntu-latest`, `windows-latest` and `macos-latest`. Pull
+requests use the small profile. The schedule and manual dispatch use the medium profile by
+default, with a large profile available only through explicit dispatch. Each runner executes the
+Lorepack, direct FTS5 and offline RAG reports over the same commit, corpus and workload. Raw JSON
+and a rendered summary are uploaded for 30 and 90 days respectively.
+
+The summary keeps platform rows separate. It rejects missing protocol fields, mismatched commit or
+corpus identity, unsupported artifacts and failed rollback evidence. It never averages unlike
+machines. Downloaded artifacts can be checked and rendered locally with:
+
+```sh
+pnpm check:benchmark-artifacts <downloaded-directory> --summary summary.md
+```
+
+Hosted RAG runs are separate, manual-dispatch-only and protected by the `benchmark-hosted`
+environment. Provider secrets are unavailable to pull-request and scheduled runs.
 
 ## Local coverage
 
