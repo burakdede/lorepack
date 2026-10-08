@@ -63,3 +63,10 @@ interpretation is in
 Retrieval quality is measured separately from latency. The 30-question labelled baseline and
 its limits are documented in
 [`docs/compatibility/retrieval-quality-2026-10-05.md`](../docs/compatibility/retrieval-quality-2026-10-05.md).
+
+The opt-in RAG baseline measures retrieval, context assembly, prompt construction, token
+accounting and optional hosted model calls as separate stages. Offline mode is credential-free and
+does not claim answer quality. Reproduction instructions, provider configuration and the current
+report are in
+[`docs/compatibility/rag-benchmark.md`](../docs/compatibility/rag-benchmark.md) and
+[`benchmarks/rag/offline-2026-10-08.json`](rag/offline-2026-10-08.json).

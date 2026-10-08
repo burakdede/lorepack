@@ -44,6 +44,7 @@
     "bench:corpus": "pnpm build && node scripts/bench-corpus.mjs",
     "bench:quality": "pnpm build && node scripts/bench-quality.mjs --check",
     "bench:comparison": "pnpm build && node scripts/bench-retrieval-comparison.mjs",
+    "bench:rag": "pnpm build && node scripts/bench-rag.mjs",
     "check:benchmark-protocol": "node scripts/check-benchmark-protocol.mjs",
     "bench:envelope": "pnpm build && node scripts/bench-envelope.mjs",
     "bench:cloudflare-projection": "pnpm build && node scripts/bench-cloudflare-projection.mjs",

@@ -1,0 +1,175 @@
+{
+  "protocol": {
+    "name": "lorepack-benchmark",
+    "version": 1
+  },
+  "reportId": "rag-large-f3822571be38",
+  "generatedAt": "2026-10-08T20:07:04.203Z",
+  "commitSha": "f3822571be386eedcf347d8f2b5a25f3335f38e1",
+  "implementation": {
+    "name": "rag-offline-lexical",
+    "version": "1"
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "runner": "local",
+    "node": "24.18.1",
+    "cpu": "Apple M1 Pro",
+    "storageClass": "unknown"
+  },
+  "corpus": {
+    "manifestPath": "benchmarks/corpus/manifest.json",
+    "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+    "scale": "large",
+    "profile": "mixed",
+    "artifacts": 360,
+    "bytes": 13948830,
+    "chunks": 8520,
+    "tables": 80
+  },
+  "workload": {
+    "path": "benchmarks/corpus/queries.json",
+    "sha256": "218c9a880b4ab88b2068f984af1a874953c7ae2343ba46b1c4ec4f84270db607",
+    "queryCount": 3,
+    "contextTaskCount": 2,
+    "tableQueryCount": 1
+  },
+  "samples": {
+    "warmup": 0,
+    "repetitions": 20,
+    "timeoutMs": 120000
+  },
+  "tokenAccounting": {
+    "status": "estimated",
+    "tokenizer": "rag-estimator-v1",
+    "model": null,
+    "inputTokens": 190,
+    "retrievedContextTokens": 5900,
+    "promptTokens": 6400,
+    "completionTokens": null,
+    "totalTokens": 6400
+  },
+  "costAccounting": {
+    "status": "not-applicable",
+    "currency": null,
+    "pricingSource": null,
+    "inputUsd": null,
+    "outputUsd": null,
+    "totalUsd": null
+  },
+  "measurements": {
+    "phases": [
+      {
+        "name": "index-build",
+        "p50Ms": 96.4,
+        "p95Ms": 98.03,
+        "samples": 3,
+        "errorCount": 0
+      },
+      {
+        "name": "cold-query",
+        "p50Ms": 1.77,
+        "p95Ms": 1.77,
+        "samples": 1,
+        "errorCount": 0
+      },
+      {
+        "name": "warm-query",
+        "p50Ms": 0.94,
+        "p95Ms": 1.15,
+        "samples": 30,
+        "errorCount": 0
+      },
+      {
+        "name": "context-assembly",
+        "p50Ms": 4.77,
+        "p95Ms": 4.9,
+        "samples": 20,
+        "errorCount": 0
+      },
+      {
+        "name": "prompt-construction",
+        "p50Ms": 0,
+        "p95Ms": 0.02,
+        "samples": 20,
+        "errorCount": 0
+      }
+    ]
+  },
+  "quality": {
+    "search": {
+      "cases": 15,
+      "hitAt1": 15,
+      "hitAt5": 15
+    },
+    "provenance": {
+      "numerator": 72,
+      "denominator": 72
+    },
+    "context": {
+      "cases": 15,
+      "expectedCitations": 5,
+      "selectedTokens": 5900
+    },
+    "answer": {
+      "status": "not-measured",
+      "cases": 15,
+      "citationCoverage": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "taskSuccess": {
+        "numerator": 0,
+        "denominator": 0
+      },
+      "reason": "Offline mode assembles prompts but does not call a model, so answer quality is not measured."
+    }
+  },
+  "resources": {
+    "indexBytes": 11984896,
+    "peakRssMiB": 127.61,
+    "topK": {
+      "min": 5,
+      "max": 5
+    }
+  },
+  "configuration": {
+    "pipeline": "retrieve -> assemble-context -> construct-prompt -> optional-model",
+    "retriever": "SQLite FTS5 bm25",
+    "chunking": "shared Lorepack normalized chunks",
+    "topK": "5",
+    "contextBudgetTokens": "1200",
+    "promptTemplate": "Answer using only the supplied context. Cite each source as [source: <path>].",
+    "mode": "offline",
+    "provider": "none",
+    "model": "none",
+    "embeddingModel": "none",
+    "temperature": "0",
+    "tokenizer": "rag-estimator-v1",
+    "ranking": "bm25(chunks_fts)",
+    "columns": ["path", "heading", "body"],
+    "normalization": "Unicode word extraction with OR term expansion for user questions",
+    "sourceBoundary": "offline lexical baseline over normalized chunks"
+  },
+  "claims": [
+    {
+      "id": "rag-retrieval",
+      "status": "quality-result",
+      "statement": "The offline RAG baseline reports retrieval quality separately from context assembly.",
+      "evidence": ["quality.search", "quality.context"]
+    },
+    {
+      "id": "rag-token-accounting",
+      "status": "measured",
+      "statement": "The offline mode records token fields with explicit estimated status.",
+      "evidence": ["tokenAccounting"]
+    },
+    {
+      "id": "rag-answer-quality",
+      "status": "not-measured",
+      "statement": "Answer citation coverage and task success are separate from retrieval hit metrics.",
+      "evidence": ["quality.answer"]
+    }
+  ]
+}

@@ -84,7 +84,32 @@
       "properties": {
         "search": {"type": "object"},
         "provenance": {"type": "object"},
-        "context": {"type": "object"}
+        "context": {"type": "object"},
+        "answer": {
+          "type": "object",
+          "required": ["status", "cases", "citationCoverage", "taskSuccess"],
+          "properties": {
+            "status": {"enum": ["measured", "not-measured"]},
+            "cases": {"$ref": "#/$defs/nonNegativeInteger"},
+            "citationCoverage": {"$ref": "#/$defs/countMetric"},
+            "taskSuccess": {"$ref": "#/$defs/countMetric"},
+            "reason": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "costAccounting": {
+      "type": "object",
+      "required": ["status", "currency", "pricingSource", "inputUsd", "outputUsd", "totalUsd"],
+      "properties": {
+        "status": {"enum": ["not-applicable", "estimated", "measured"]},
+        "currency": {"type": ["string", "null"]},
+        "pricingSource": {"type": ["string", "null"]},
+        "inputUsd": {"type": ["number", "null"], "minimum": 0},
+        "outputUsd": {"type": ["number", "null"], "minimum": 0},
+        "totalUsd": {"type": ["number", "null"], "minimum": 0}
       },
       "additionalProperties": false
     },
@@ -104,7 +129,18 @@
         "ranking": {"type": "string"},
         "columns": {"type": "array", "items": {"type": "string"}},
         "normalization": {"type": "string"},
-        "sourceBoundary": {"type": "string"}
+        "sourceBoundary": {"type": "string"},
+        "pipeline": {"type": "string"},
+        "retriever": {"type": "string"},
+        "chunking": {"type": "string"},
+        "topK": {"type": "string"},
+        "contextBudgetTokens": {"type": "string"},
+        "promptTemplate": {"type": "string"},
+        "mode": {"type": "string"},
+        "provider": {"type": "string"},
+        "model": {"type": "string"},
+        "embeddingModel": {"type": "string"},
+        "temperature": {"type": "string"}
       },
       "additionalProperties": false
     },
@@ -113,11 +149,20 @@
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "countMetric": {
+      "type": "object",
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": {"$ref": "#/$defs/nonNegativeInteger"},
+        "denominator": {"$ref": "#/$defs/nonNegativeInteger"}
+      },
+      "additionalProperties": false
+    },
     "phase": {
       "type": "object",
       "required": ["name", "p50Ms", "p95Ms", "samples", "errorCount"],
       "properties": {
-        "name": {"enum": ["ingest", "build", "incremental-rebuild", "index-build", "index-warmup", "cold-query", "warm-query", "context-assembly", "table-query", "model-generation"]},
+        "name": {"enum": ["ingest", "build", "incremental-rebuild", "index-build", "index-warmup", "cold-query", "warm-query", "context-assembly", "prompt-construction", "table-query", "model-generation"]},
         "p50Ms": {"type": "number", "minimum": 0},
         "p95Ms": {"type": "number", "minimum": 0},
         "samples": {"type": "integer", "minimum": 1},
