@@ -75,3 +75,7 @@ Usefulness metrics for provenance, expected-location coverage, context budgets, 
 change review and rollback are defined in
 [`docs/compatibility/usefulness-metrics.md`](../docs/compatibility/usefulness-metrics.md), with a
 reproducible fixture at [`benchmarks/usefulness/metrics-2026-10-08.json`](usefulness/metrics-2026-10-08.json).
+
+The independent evidence report combines the same-workload rows, usefulness metrics, claim ledger
+and clean-checkout review checklist:
+[`docs/compatibility/benchmark-evidence.md`](../docs/compatibility/benchmark-evidence.md).

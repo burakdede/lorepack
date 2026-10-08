@@ -50,6 +50,11 @@ function collectReports(files) {
         fail(`${relative(directory, path)} does not prove rollback recovery and rebuild avoidance`);
       continue;
     }
+    if (report.protocol?.name === 'lorepack-benchmark-evidence') {
+      if (report.protocol.version !== 1)
+        fail(`${relative(directory, path)} has an unknown evidence protocol version`);
+      continue;
+    }
     fail(`${relative(directory, path)} is not a supported benchmark artifact`);
   }
   return reports;

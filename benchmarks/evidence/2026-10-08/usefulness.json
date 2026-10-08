@@ -1,0 +1,114 @@
+{
+  "protocol": {
+    "name": "lorepack-usefulness-metrics",
+    "version": 1
+  },
+  "generatedAt": "2026-10-08T20:16:44.155Z",
+  "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "24.18.1"
+  },
+  "corpus": {
+    "manifestPath": "benchmarks/corpus/manifest.json",
+    "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+    "scale": "small",
+    "artifacts": 9,
+    "chunks": 213,
+    "tables": 2
+  },
+  "definitions": {
+    "provenance": "valid SourceLocator-bearing outputs divided by all outputs on each surface",
+    "expectedLocation": "expected labelled locations cited divided by expected labelled locations",
+    "contextBudget": "bundles within their declared budget, plus every omitted item and reason",
+    "changeReview": "added, changed and removed source artifacts, warnings and context delta",
+    "rollback": "pointer-change latency, active-build restoration and rebuilds performed"
+  },
+  "metrics": {
+    "provenance": {
+      "search": {
+        "numerator": 43,
+        "denominator": 43,
+        "ratio": 1,
+        "invalid": 0
+      },
+      "context": {
+        "numerator": 192,
+        "denominator": 192,
+        "ratio": 1,
+        "invalid": 0
+      },
+      "tableRows": {
+        "numerator": 4,
+        "denominator": 4,
+        "ratio": 1,
+        "invalid": 0
+      }
+    },
+    "retrieval": {
+      "cases": 15,
+      "hitAt1": {
+        "numerator": 15,
+        "denominator": 15,
+        "ratio": 1
+      },
+      "hitAt5": {
+        "numerator": 15,
+        "denominator": 15,
+        "ratio": 1
+      }
+    },
+    "expectedLocation": {
+      "numerator": 15,
+      "denominator": 15,
+      "ratio": 1
+    },
+    "contextBudget": {
+      "cases": 15,
+      "withinBudget": {
+        "numerator": 15,
+        "denominator": 15,
+        "ratio": 1
+      },
+      "selectedTokens": 35340,
+      "omittedItems": 1542,
+      "omittedByReason": {
+        "diversity": 1542
+      }
+    },
+    "changeReview": {
+      "added": {
+        "numerator": 0,
+        "denominator": 1,
+        "ratio": 0
+      },
+      "changed": {
+        "numerator": 1,
+        "denominator": 1,
+        "ratio": 1
+      },
+      "removed": {
+        "numerator": 0,
+        "denominator": 1,
+        "ratio": 0
+      },
+      "warnings": 1,
+      "contextDelta": 0
+    },
+    "rollback": {
+      "pointerChangeMs": 0.44,
+      "activeBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
+      "expectedBuildId": "lore_bfbbf00c81574f45341a5cb2d1b60414a5765c1c7b9d7c330da9e6f9b203ae48",
+      "restored": true,
+      "rebuiltBuilds": 0,
+      "rebuildAvoided": true
+    },
+    "buildReuse": {
+      "firstBuildMs": 650,
+      "secondBuildMs": 109,
+      "reusedArtifacts": 6,
+      "rebuiltArtifacts": 3
+    }
+  }
+}

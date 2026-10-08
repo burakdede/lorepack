@@ -1,0 +1,400 @@
+{
+  "protocol": {
+    "name": "lorepack-benchmark-comparison",
+    "version": 1
+  },
+  "provisional": true,
+  "reportedNotEnforced": true,
+  "generatedAt": "2026-10-08T20:16:41.696Z",
+  "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+  "corpusManifest": "benchmarks/corpus/manifest.json",
+  "queryWorkload": "benchmarks/corpus/queries.json",
+  "semantics": {
+    "baseline": "Direct SQLite FTS5 over Lorepack normalized chunks. It starts after parsing and chunking.",
+    "lorepack": "Full local runtime search and context assembly over the same sealed build.",
+    "tableAndBuildContract": "The baseline does not preserve build identity, SourceLocator objects, authority or status ranking, context omission reports, table structure, activation, or rollback."
+  },
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGiB": 32,
+    "node": "24.18.1",
+    "sqlite": "3.53.1"
+  },
+  "corpus": {
+    "packs": 1,
+    "artifacts": 9,
+    "bytes": 348720,
+    "chunks": 213,
+    "tables": 2,
+    "tableRows": 7,
+    "manifestArtifacts": 9
+  },
+  "samples": {
+    "build": 3,
+    "index": 3,
+    "warmSearch": 30,
+    "contextBundle": 20
+  },
+  "protocolReports": {
+    "lorepack": {
+      "protocol": {
+        "name": "lorepack-benchmark",
+        "version": 1
+      },
+      "reportId": "lorepack-small-mixed-4caa4ae2d2e5",
+      "generatedAt": "2026-10-08T20:16:41.696Z",
+      "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+      "implementation": {
+        "name": "lorepack-runtime",
+        "version": "workspace"
+      },
+      "environment": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "runner": "local",
+        "node": "24.18.1",
+        "cpu": "Apple M1 Pro",
+        "storageClass": "unknown",
+        "sqlite": "3.53.1"
+      },
+      "corpus": {
+        "manifestPath": "benchmarks/corpus/manifest.json",
+        "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+        "scale": "small",
+        "profile": "mixed",
+        "artifacts": 9,
+        "bytes": 348720,
+        "chunks": 213,
+        "tables": 2
+      },
+      "workload": {
+        "path": "benchmarks/corpus/queries.json",
+        "sha256": "218c9a880b4ab88b2068f984af1a874953c7ae2343ba46b1c4ec4f84270db607",
+        "queryCount": 3,
+        "contextTaskCount": 2,
+        "tableQueryCount": 1
+      },
+      "samples": {
+        "warmup": 1,
+        "repetitions": 3,
+        "timeoutMs": 30000
+      },
+      "tokenAccounting": {
+        "status": "estimated",
+        "tokenizer": "lorepack-estimator-v1",
+        "model": null,
+        "inputTokens": null,
+        "retrievedContextTokens": 49790,
+        "promptTokens": null,
+        "completionTokens": null,
+        "totalTokens": null
+      },
+      "measurements": {
+        "phases": [
+          {
+            "name": "build",
+            "p50Ms": 484.06,
+            "p95Ms": 716.64,
+            "samples": 3,
+            "errorCount": 0
+          },
+          {
+            "name": "cold-query",
+            "p50Ms": 5.592540999999983,
+            "p95Ms": 5.592540999999983,
+            "samples": 1,
+            "errorCount": 0
+          },
+          {
+            "name": "warm-query",
+            "p50Ms": 0.76,
+            "p95Ms": 3.84,
+            "samples": 30,
+            "errorCount": 0
+          },
+          {
+            "name": "context-assembly",
+            "p50Ms": 9.32,
+            "p95Ms": 11.59,
+            "samples": 20,
+            "errorCount": 0
+          }
+        ]
+      },
+      "quality": {
+        "search": {
+          "cases": 15,
+          "hitAt1": 1,
+          "hitAt5": 1,
+          "expectedLocationCoverage": 1
+        },
+        "provenance": {
+          "available": true,
+          "coverage": 1,
+          "note": "Every runtime hit and context citation carries a SourceLocator."
+        },
+        "context": {
+          "status": "measured",
+          "cases": 15,
+          "allExpectedCited": 1
+        }
+      },
+      "configuration": {
+        "tokenizer": "Lorepack catalog FTS5 plus deterministic runtime ranker",
+        "ranking": "candidate retrieval followed by rankCandidates structural and status-aware ranking",
+        "columns": ["path", "title", "heading", "body"],
+        "normalization": "Lorepack canonical build normalization and chunking.",
+        "sourceBoundary": "Full build and sealed local runtime."
+      },
+      "resources": {
+        "indexBytes": 1495040,
+        "peakRssMiB": 347.44,
+        "topK": {
+          "min": 1,
+          "max": 9
+        }
+      },
+      "claims": [
+        {
+          "id": "lorepack-lifecycle",
+          "status": "measured",
+          "statement": "Lorepack measures build, query and context lifecycle phases over the shared workload.",
+          "evidence": ["measurements.phases"]
+        },
+        {
+          "id": "lorepack-provenance",
+          "status": "quality-result",
+          "statement": "Lorepack returns provenance-bearing hits and context citations.",
+          "evidence": ["quality.provenance"]
+        },
+        {
+          "id": "lorepack-semantic-quality",
+          "status": "not-measured",
+          "statement": "This comparison does not claim semantic superiority over a neural retriever.",
+          "evidence": []
+        }
+      ]
+    },
+    "sqliteFts5": {
+      "protocol": {
+        "name": "lorepack-benchmark",
+        "version": 1
+      },
+      "reportId": "sqlite-fts5-small-mixed-4caa4ae2d2e5",
+      "generatedAt": "2026-10-08T20:16:41.324Z",
+      "commitSha": "4caa4ae2d2e5bb5f9bcacc872141614113ff5a14",
+      "implementation": {
+        "name": "sqlite-fts5-direct",
+        "version": "3.53.1"
+      },
+      "environment": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "runner": "local",
+        "node": "24.18.1",
+        "cpu": "Apple M1 Pro",
+        "storageClass": "unknown",
+        "sqlite": "3.53.1"
+      },
+      "corpus": {
+        "manifestPath": "benchmarks/corpus/manifest.json",
+        "manifestSha256": "b3755b10f9fc702f1f1f3182c3fc611d5d5e80df0d093a8e338862f43527b131",
+        "scale": "small",
+        "profile": "mixed",
+        "artifacts": 9,
+        "bytes": 348720,
+        "chunks": 213,
+        "tables": 2
+      },
+      "workload": {
+        "path": "benchmarks/corpus/queries.json",
+        "sha256": "218c9a880b4ab88b2068f984af1a874953c7ae2343ba46b1c4ec4f84270db607",
+        "queryCount": 3,
+        "contextTaskCount": 2,
+        "tableQueryCount": 1
+      },
+      "samples": {
+        "warmup": 1,
+        "repetitions": 3,
+        "timeoutMs": 30000
+      },
+      "tokenAccounting": {
+        "status": "not-applicable",
+        "tokenizer": null,
+        "model": null,
+        "inputTokens": null,
+        "retrievedContextTokens": null,
+        "promptTokens": null,
+        "completionTokens": null,
+        "totalTokens": null
+      },
+      "measurements": {
+        "phases": [
+          {
+            "name": "index-build",
+            "p50Ms": 4.14,
+            "p95Ms": 4.47,
+            "samples": 3,
+            "errorCount": 0
+          },
+          {
+            "name": "cold-query",
+            "p50Ms": 0.3,
+            "p95Ms": 0.3,
+            "samples": 1,
+            "errorCount": 0
+          },
+          {
+            "name": "warm-query",
+            "p50Ms": 0.03,
+            "p95Ms": 0.07,
+            "samples": 30,
+            "errorCount": 0
+          }
+        ]
+      },
+      "quality": {
+        "search": {
+          "cases": 15,
+          "hitAt1": 0.8,
+          "hitAt5": 0.8,
+          "expectedLocationCoverage": 0.8
+        },
+        "provenance": {
+          "available": true,
+          "coverage": 1,
+          "note": "The direct index stores the normalized chunk coordinates as unindexed columns."
+        },
+        "context": {
+          "status": "not-measured",
+          "reason": "Direct FTS5 returns ranked rows and coordinates only. It does not assemble bounded context or omissions."
+        }
+      },
+      "configuration": {
+        "tokenizer": "unicode61",
+        "ranking": "bm25(chunks_fts) ascending score",
+        "columns": ["path", "heading", "body"],
+        "normalization": "The exact normalized chunks emitted by Lorepack are indexed without translation.",
+        "sourceBoundary": "After parsing, normalization and chunking; build lifecycle is excluded."
+      },
+      "claims": [
+        {
+          "id": "direct-fts5-latency",
+          "status": "measured",
+          "statement": "Direct SQLite FTS5 query latency is measured over the shared workload.",
+          "evidence": ["measurements.phases[name=warm-query]"]
+        },
+        {
+          "id": "direct-fts5-context",
+          "status": "not-measured",
+          "statement": "Direct SQLite FTS5 does not implement bounded context assembly.",
+          "evidence": ["quality.context"]
+        },
+        {
+          "id": "direct-fts5-semantic-quality",
+          "status": "not-measured",
+          "statement": "Semantic retrieval quality is not claimed by the direct lexical baseline.",
+          "evidence": []
+        }
+      ],
+      "resources": {
+        "indexBytes": 327680,
+        "peakRssMiB": 51.14,
+        "topK": {
+          "min": 0,
+          "max": 4
+        }
+      }
+    }
+  },
+  "baselines": {
+    "lorepack": {
+      "indexBytes": 1495040,
+      "peakRssMiB": 347.44,
+      "buildMs": {
+        "p50": 484.06,
+        "p95": 716.64,
+        "samples": 3
+      },
+      "coldSearchMs": 5.59,
+      "warmSearchMs": {
+        "p50": 0.76,
+        "p95": 3.84,
+        "p99": 3.98,
+        "samples": 30
+      },
+      "contextBundleMs": {
+        "p50": 9.32,
+        "p95": 11.59,
+        "samples": 20
+      },
+      "topK": {
+        "min": 1,
+        "max": 9
+      },
+      "quality": {
+        "search": {
+          "cases": 15,
+          "hitAt1": 1,
+          "hitAt5": 1,
+          "expectedLocationCoverage": 1
+        },
+        "provenance": {
+          "available": true,
+          "coverage": 1,
+          "note": "Every runtime hit and context citation carries a SourceLocator."
+        },
+        "context": {
+          "status": "measured",
+          "cases": 15,
+          "allExpectedCited": 1
+        }
+      }
+    },
+    "sqliteFts5": {
+      "indexBytes": 327680,
+      "peakRssMiB": 51.14,
+      "indexMs": {
+        "name": "index-build",
+        "p50Ms": 4.14,
+        "p95Ms": 4.47,
+        "samples": 3,
+        "errorCount": 0
+      },
+      "coldSearchMs": 0.3,
+      "warmSearchMs": {
+        "name": "warm-query",
+        "p50Ms": 0.03,
+        "p95Ms": 0.07,
+        "samples": 30,
+        "errorCount": 0
+      },
+      "contextBundleMs": null,
+      "contextUnsupportedReason": "Direct FTS5 returns ranked rows and coordinates only. It does not assemble bounded context or omissions.",
+      "topK": {
+        "min": 0,
+        "max": 4
+      },
+      "quality": {
+        "search": {
+          "cases": 15,
+          "hitAt1": 0.8,
+          "hitAt5": 0.8,
+          "expectedLocationCoverage": 0.8
+        },
+        "provenance": {
+          "available": true,
+          "coverage": 1,
+          "note": "The direct index stores the normalized chunk coordinates as unindexed columns."
+        },
+        "context": {
+          "status": "not-measured",
+          "reason": "Direct FTS5 returns ranked rows and coordinates only. It does not assemble bounded context or omissions."
+        }
+      }
+    }
+  }
+}

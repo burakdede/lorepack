@@ -261,6 +261,8 @@ designing a production integration.
 - [Package format](docs/package-format/README.md): the `.lorepack` archive and generated
   schemas.
 - [Compatibility](docs/compatibility/README.md): supported platforms and measured behavior.
+- [Benchmark evidence](docs/compatibility/benchmark-evidence.md): reproducible Lorepack, FTS5,
+  and offline RAG comparisons, claim ledger, raw artifacts, and review checklist.
 
 ## Source installation
 
