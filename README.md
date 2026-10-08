@@ -40,7 +40,9 @@ lorepack dev ./my-docs          # build the folder, serve it over MCP and HTTP, 
 lorepack connect claude-code    # or codex, or vscode: wire up your agent and check it answers
 ```
 
-![Lorepack in a terminal: build a folder, search it with citations, diff two builds, roll back, and serve it over MCP](docs/images/demo.svg)
+![Lorepack CLI demo: build a folder, search it with citations, diff two builds, roll back, and serve it over MCP](docs/images/demo.gif)
+
+[View the static, reduced-motion version of the demo](docs/images/demo.svg).
 
 ## What you get
 
