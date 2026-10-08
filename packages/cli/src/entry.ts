@@ -12,14 +12,9 @@
  * entry in a personal global gitignore, and it silently kept this file out of the first
  * commit until CI failed on the missing source.
  */
-import { readFileSync } from 'node:fs';
 import { assertSupportedNode } from '@lorepack/core/engine';
-
-const packageManifest = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-) as { version: string };
 
 assertSupportedNode();
 
 const { runCli } = await import('./framework/program.js');
-await runCli(process.argv, { version: packageManifest.version });
+await runCli(process.argv);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { EXIT_CODES, LoreError, renderAsJson, renderForCli } from '@lorepack/core';
 import { Command, CommanderError } from 'commander';
 import { registerCommands } from '../commands/index.js';
@@ -64,6 +65,21 @@ export interface ProgramHooks {
   readonly onResult: (result: CommandResult | undefined, context: CommandContext) => void;
 }
 
+function packageVersion(): string {
+  for (const url of [
+    new URL('../package.json', import.meta.url),
+    new URL('../../package.json', import.meta.url),
+  ]) {
+    try {
+      const manifest = JSON.parse(readFileSync(url, 'utf8')) as { version?: unknown };
+      if (typeof manifest.version === 'string') return manifest.version;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  throw new Error('The CLI package manifest could not be found.');
+}
+
 export function buildProgram(
   definitions: readonly CommandDefinition[],
   options: RunOptions,
@@ -74,7 +90,7 @@ export function buildProgram(
   const program = new Command()
     .name(CLI_NAME)
     .description('Build, version, and deploy the context your AI depends on.')
-    .version(options.version ?? '0.0.0', '-v, --version')
+    .version(options.version ?? packageVersion(), '-v, --version')
     .option('--json', 'emit machine-readable output on stdout', false)
     .option('--verbose', 'include stage detail and debug diagnostics', false)
     .option('--no-color', 'disable colour')
