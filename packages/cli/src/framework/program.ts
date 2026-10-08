@@ -79,11 +79,9 @@ function packageVersion(): string {
       }
     }
   }
-  throw new LoreError(
-    'LORE_E_INTERNAL',
-    'The CLI package manifest could not be found.',
-    { remediation: 'Reinstall @lorepack/cli or run the CLI from a complete package.' },
-  );
+  throw new LoreError('LORE_E_INTERNAL', 'The CLI package manifest could not be found.', {
+    remediation: 'Reinstall @lorepack/cli or run the CLI from a complete package.',
+  });
 }
 
 export function buildProgram(
