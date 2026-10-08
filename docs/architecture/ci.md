@@ -1,7 +1,8 @@
 # Continuous integration
 
-Three workflows. The verification and benchmark workflows both run on pull requests. The release
-workflow consumes their results before publishing.
+The verification, benchmark, release and commit-hygiene workflows each own a separate gate. The
+verification and benchmark workflows both run on pull requests. The release workflow consumes
+their results before publishing.
 
 ## `ci.yml`
 

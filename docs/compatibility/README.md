@@ -45,6 +45,9 @@ The v0.1 release-gate report is [`performance-v0.1.md`](performance-v0.1.md). It
 for which performance numbers are claims, which are reported-only measurements, and which
 follow-up issue owns any missed historical gate.
 
+The independent comparison methodology, raw evidence bundle, claim ledger and reproduction
+checklist are in [`benchmark-evidence.md`](benchmark-evidence.md).
+
 ## Target capability matrix
 
 | Capability | Local build runtime | `lorepack serve` | `lorepack mcp` | Cloudflare projection |
