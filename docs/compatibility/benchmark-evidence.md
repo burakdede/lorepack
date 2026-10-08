@@ -87,10 +87,11 @@ numbers without recording model, tokenizer, provider, pricing inputs and measure
 
 ## CI and automatic updates
 
-`.github/workflows/benchmarks.yml` runs on every pull request, on the daily schedule, and by
-manual dispatch. Pull requests use the small profile. Scheduled and manually selected runs use
-the medium or large profile. Ubuntu, Windows and macOS produce separate raw artifacts, then the
-summary job validates the shared identities and uploads a machine-readable Markdown summary.
+`.github/workflows/benchmarks.yml` runs on every pull request, every push to `main` after a merge,
+on the daily schedule, and by manual dispatch. Pull requests use the small profile. Main pushes,
+scheduled and manually selected runs use the medium or large profile. Ubuntu, Windows and macOS
+produce separate raw artifacts, then the summary job validates the shared identities and uploads a
+machine-readable JSON and Markdown summary.
 Unlike rows from one runner, cross-platform rows are never averaged.
 
 The workflow retains raw pull-request artifacts for 30 days and summary artifacts for 90 days.
@@ -130,4 +131,3 @@ bounded assembly, deterministic identity, inspectable diffs and rollback evidenc
 - [ ] Treat every claim as expired for a changed corpus, workload, ranking implementation, Node
   version, or runner policy. Re-run and update the report.
 - [ ] Check that no documentation sentence generalizes a measured row into a universal claim.
-
