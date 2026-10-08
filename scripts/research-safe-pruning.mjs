@@ -97,6 +97,61 @@ function buildPostings(rows) {
   return postings;
 }
 
+function buildBm25fPostings(rows) {
+  const fields = [
+    { name: 'path', weight: RANKING_WEIGHTS.columns.path, b: 0.2 },
+    { name: 'title', weight: RANKING_WEIGHTS.columns.title, b: 0.2 },
+    { name: 'heading', weight: RANKING_WEIGHTS.columns.heading, b: 0.35 },
+    { name: 'body', weight: RANKING_WEIGHTS.columns.body, b: 0.75 },
+  ];
+  const k1 = 1.2;
+  const fieldData = rows.map((row) => {
+    const values = new Map();
+    for (const field of fields) values.set(field.name, tokens(row[field.name]));
+    return { row, values };
+  });
+  const averages = new Map(
+    fields.map((field) => [
+      field.name,
+      fieldData.reduce((total, item) => total + item.values.get(field.name).length, 0) /
+        rows.length,
+    ]),
+  );
+  const documentFrequency = new Map();
+  for (const item of fieldData) {
+    const terms = new Set(fields.flatMap((field) => item.values.get(field.name)));
+    for (const term of terms) documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+  }
+  const postings = new Map();
+  const documentTermScores = new Map();
+  for (const item of fieldData) {
+    const terms = new Set(fields.flatMap((field) => item.values.get(field.name)));
+    for (const term of terms) {
+      const frequency = documentFrequency.get(term) ?? 0;
+      const idf = Math.log(1 + (rows.length - frequency + 0.5) / (frequency + 0.5));
+      const normalizedTermFrequency = fields.reduce((total, field) => {
+        const values = item.values.get(field.name);
+        const termFrequency = values.filter((value) => value === term).length;
+        const averageLength = averages.get(field.name) || 1;
+        const normalization = 1 - field.b + field.b * (values.length / averageLength);
+        return total + field.weight * (termFrequency / normalization);
+      }, 0);
+      const contribution =
+        (idf * (k1 + 1) * normalizedTermFrequency) / (k1 + normalizedTermFrequency);
+      const list = postings.get(term) ?? [];
+      list.push({ docId: item.row.id, contribution });
+      postings.set(term, list);
+      const termScores = documentTermScores.get(item.row.id) ?? new Map();
+      termScores.set(term, contribution);
+      documentTermScores.set(item.row.id, termScores);
+    }
+  }
+  for (const list of postings.values())
+    list.sort((a, b) => b.contribution - a.contribution || a.docId.localeCompare(b.docId));
+  postings.documentTermScores = documentTermScores;
+  return postings;
+}
+
 function rank(scores, limit) {
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -243,16 +298,20 @@ async function main() {
     const databasePath = join(project.root, '.lore', 'builds', built.buildId, 'context.sqlite');
     const rows = readRows(databasePath);
     const postings = buildPostings(rows);
+    const bm25fPostings = buildBm25fPostings(rows);
     const fts5 = createFts5Index(rows);
     const queries = workload.qualityQueries.filter((entry) => entry.kind === 'search');
     const exhaustiveTimes = [];
     const prunedTimes = [];
     const fts5Times = [];
+    const bm25fTimes = [];
     let exact = 0;
     let evaluatedPostings = 0;
     let totalPostings = 0;
     let fts5Exact = 0;
     let fts5Overlap = 0;
+    let bm25fOverlap = 0;
+    let bm25fFts5Overlap = 0;
     const cases = [];
     for (const entry of queries) {
       const exhaustiveStarted = performance.now();
@@ -264,6 +323,9 @@ async function main() {
       const fts5Started = performance.now();
       const directFts5 = fts5TopK(fts5, entry.query, topK);
       fts5Times.push(performance.now() - fts5Started);
+      const bm25fStarted = performance.now();
+      const bm25f = exhaustiveTopK(bm25fPostings, entry.query, topK);
+      bm25fTimes.push(performance.now() - bm25fStarted);
       const same = JSON.stringify(pruned.results) === JSON.stringify(exhaustive);
       const sameAsFts5 =
         JSON.stringify(directFts5.map((result) => result.docId)) ===
@@ -271,6 +333,12 @@ async function main() {
       fts5Exact += sameAsFts5 ? 1 : 0;
       fts5Overlap += directFts5.filter((result) =>
         exhaustive.some((item) => item.docId === result.docId),
+      ).length;
+      bm25fOverlap += bm25f.filter((result) =>
+        exhaustive.some((item) => item.docId === result.docId),
+      ).length;
+      bm25fFts5Overlap += bm25f.filter((result) =>
+        directFts5.some((item) => item.docId === result.docId),
       ).length;
       if (same) exact += 1;
       evaluatedPostings += pruned.evaluatedPostings;
@@ -282,6 +350,7 @@ async function main() {
         exhaustive: resultLocations(exhaustive, rows),
         pruned: resultLocations(pruned.results, rows),
         directFts5: resultLocations(directFts5, rows),
+        bm25f: resultLocations(bm25f, rows),
         evaluatedPostings: pruned.evaluatedPostings,
         totalPostings: pruned.totalPostings,
       });
@@ -318,6 +387,7 @@ async function main() {
         exhaustiveP95Ms: percentile(exhaustiveTimes, 0.95),
         prunedP95Ms: percentile(prunedTimes, 0.95),
         directFts5P95Ms: percentile(fts5Times, 0.95),
+        bm25fP95Ms: percentile(bm25fTimes, 0.95),
         queries: queries.length,
         evaluatedPostings,
         totalPostings,
@@ -339,6 +409,18 @@ async function main() {
             numerator: fts5Overlap,
             denominator: queries.length * topK,
             ratio: queries.length === 0 ? 1 : fts5Overlap / (queries.length * topK),
+          },
+        },
+        bm25f: {
+          topKOverlapWithAdditive: {
+            numerator: bm25fOverlap,
+            denominator: queries.length * topK,
+            ratio: queries.length === 0 ? 1 : bm25fOverlap / (queries.length * topK),
+          },
+          topKOverlapWithFts5: {
+            numerator: bm25fFts5Overlap,
+            denominator: queries.length * topK,
+            ratio: queries.length === 0 ? 1 : bm25fFts5Overlap / (queries.length * topK),
           },
         },
         cases,
@@ -364,6 +446,13 @@ async function main() {
           statement:
             'The same queries are reported against direct SQLite FTS5, without claiming score or ranking equivalence.',
           evidence: ['quality.directFts5', 'measurements.directFts5P95Ms'],
+        },
+        {
+          id: 'bm25f-comparison',
+          status: 'reported-only',
+          statement:
+            'The deterministic BM25F-style variant is compared on the shared workload without treating ranking overlap as semantic truth.',
+          evidence: ['quality.bm25f', 'measurements.bm25fP95Ms'],
         },
       ],
       limitations: [
