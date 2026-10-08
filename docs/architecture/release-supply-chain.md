@@ -35,8 +35,10 @@ Every publishable `@lorepack/*` package sets:
 ```
 
 The release workflow grants `id-token: write`, uses `actions/setup-node` with the npm registry,
-and publishes through `pnpm changeset publish`. npm provenance is therefore emitted by npm for
-every package publish that supports it.
+and publishes each package through `scripts/publish-packages.mjs`. The publisher checks the
+registry first so a retry skips versions already published, then invokes `npm publish
+--provenance` for every missing version. npm provenance is therefore requested explicitly for
+every package publish.
 
 For dependencies, the health report reads npm registry `dist.attestations.provenance` metadata
 for exact production direct dependencies. Missing attestations are reported by package name, not
@@ -73,7 +75,7 @@ generation, example package creation and npm tarball packing, then uploads the a
 committing, tagging, creating a GitHub release or publishing to npm.
 
 A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
-publishes packages with npm provenance through `pnpm changeset publish --tag <channel>`.
+publishes packages with npm provenance through `scripts/publish-packages.mjs --tag <channel>`.
 The `Public registry smoke` workflow then installs the published CLI from npm on Ubuntu,
 Windows and macOS and exercises the shipped binary without installing the workspace.
 
