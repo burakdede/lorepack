@@ -53,7 +53,7 @@ export async function assertProjectionReadable(
     namespace.buildId,
     Number(row.buildSchemaVersion),
     SCHEMA_VERSION,
-    'Run `lore build` again, then re-project this build. A sealed build is never migrated in place.',
+    'Run `lorepack build` again, then re-project this build. A sealed build is never migrated in place.',
     'This build was written by a newer Lorepack than the Worker runtime understands. Upgrade Lorepack or re-project with this version.',
   );
   assertSchema(

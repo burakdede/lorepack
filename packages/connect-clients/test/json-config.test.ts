@@ -64,21 +64,23 @@ describe('reading a client configuration', () => {
 describe('merging an entry', () => {
   it('leaves every unrelated entry and setting exactly where it was', () => {
     const merged = withServerEntry(THIRD_PARTY, 'mcpServers', 'lorepack', {
-      command: 'lore',
+      command: 'lorepack',
       args: ['mcp'],
     });
 
     const servers = merged.mcpServers as Record<string, unknown>;
     expect(servers['someone-elses-server']).toEqual(THIRD_PARTY.mcpServers['someone-elses-server']);
     expect(merged.unrelatedTopLevelSetting).toEqual({ theme: 'dark' });
-    expect(servers.lorepack).toEqual({ command: 'lore', args: ['mcp'] });
+    expect(servers.lorepack).toEqual({ command: 'lorepack', args: ['mcp'] });
   });
 
   it('creates the container when the file has never held a server', () => {
     const merged = withServerEntry({ theme: 'dark' }, 'mcpServers', 'lorepack', {
-      command: 'lore',
+      command: 'lorepack',
     });
-    expect((merged.mcpServers as Record<string, unknown>).lorepack).toEqual({ command: 'lore' });
+    expect((merged.mcpServers as Record<string, unknown>).lorepack).toEqual({
+      command: 'lorepack',
+    });
     expect(merged.theme).toBe('dark');
   });
 
@@ -86,7 +88,7 @@ describe('merging an entry', () => {
     // A client that wrote `"mcpServers": []` is not a reason to fail a connect, and the
     // array cannot hold a named entry in any case.
     const merged = withServerEntry({ mcpServers: [] }, 'mcpServers', 'lorepack', {
-      command: 'lore',
+      command: 'lorepack',
     });
     expect((merged.mcpServers as Record<string, unknown>).lorepack).toBeDefined();
   });
@@ -98,7 +100,7 @@ describe('removing an entry', () => {
       THIRD_PARTY,
       'mcpServers',
       'lorepack',
-      markOwned({ command: 'lore', args: ['mcp'] }, '/projects/mine'),
+      markOwned({ command: 'lorepack', args: ['mcp'] }, '/projects/mine'),
     );
 
     const { document: after, removed } = withoutServerEntry(document, 'mcpServers', 'lorepack');
@@ -128,7 +130,7 @@ describe('removing an entry', () => {
       {},
       'mcpServers',
       'lorepack',
-      markOwned({ command: 'lore' }, '/projects/theirs'),
+      markOwned({ command: 'lorepack' }, '/projects/theirs'),
     );
 
     const { removed } = withoutServerEntry(document, 'mcpServers', 'lorepack', '/projects/mine');
@@ -143,8 +145,8 @@ describe('removing an entry', () => {
 
 describe('ownership', () => {
   it('recognises what it marked, and nothing else', () => {
-    expect(isOwned(markOwned({ command: 'lore' }, '/p'))).toBe(true);
-    expect(isOwned({ command: 'lore' })).toBe(false);
+    expect(isOwned(markOwned({ command: 'lorepack' }, '/p'))).toBe(true);
+    expect(isOwned({ command: 'lorepack' })).toBe(false);
     expect(isOwned(null)).toBe(false);
     expect(isOwned('a string')).toBe(false);
   });
@@ -167,7 +169,7 @@ describe('writing', () => {
 
   it('writes atomically, leaving no partial file behind', () => {
     writeJsonAtomically(path, THIRD_PARTY);
-    writeJsonAtomically(path, { mcpServers: { lorepack: { command: 'lore' } } });
+    writeJsonAtomically(path, { mcpServers: { lorepack: { command: 'lorepack' } } });
 
     // A rename either happened or did not: the file parses, always.
     expect(() => JSON.parse(readFileSync(path, 'utf8'))).not.toThrow();

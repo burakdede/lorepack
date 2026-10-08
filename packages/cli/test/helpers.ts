@@ -23,7 +23,7 @@ export async function run(
 ): Promise<CapturedRun> {
   const stdout = new Capture();
   const stderr = new Capture();
-  const code = await runCli(['node', 'lore', ...argv], {
+  const code = await runCli(['node', 'lorepack', ...argv], {
     ...options,
     exitProcess: false,
     streams: {

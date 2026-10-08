@@ -195,7 +195,7 @@ class PortedRuntime implements LoreRuntime {
       const description = await scope.tables.describe(tableId);
       if (description === null) {
         throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${tableId} in this build.`, {
-          remediation: 'Run `lore inspect build` to see which capabilities this build has.',
+          remediation: 'Run `lorepack inspect build` to see which capabilities this build has.',
           subject: tableId,
         });
       }

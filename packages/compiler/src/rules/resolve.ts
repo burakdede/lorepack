@@ -285,7 +285,7 @@ function assertNoCycle(resolved: readonly ResolvedArtifactRule[]): void {
  * What the build id sees.
  *
  * Sorted by artifact id, and carrying only the decided values. `matchedRules` is deliberately
- * excluded: it is attribution for a human reading `lore inspect rules`, and including it would
+ * excluded: it is attribution for a human reading `lorepack inspect rules`, and including it would
  * make reordering two rules that both set the same status change the build id, which is a
  * rebuild for no difference in what the build contains.
  */

@@ -32,7 +32,7 @@ export const SERVER_NAME = 'lorepack';
  * Declaring this is not optional decoration. The SDK installs the mandatory
  * `server/discover` handler only when the list contains a 2026-era entry, and its default
  * is the legacy handshake list, so a server that says nothing is silently legacy-only. The
- * HTTP handler papered over that by appending the version it served, which left `lore mcp`
+ * HTTP handler papered over that by appending the version it served, which left `lorepack mcp`
  * on stdio answering `Method not found` to the one probe a modern client is told to send
  * (#189).
  *

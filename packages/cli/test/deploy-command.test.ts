@@ -191,7 +191,7 @@ function normalizeDeployOutput(root: string, text: string): string {
     .replaceAll(/cloudflare-[0-9a-f]{12}/g, 'cloudflare-<RECEIPT_ID>');
 }
 
-describe('lore deploy command, issue 91', () => {
+describe('lorepack deploy command, issue 91', () => {
   it('builds implicitly, prints the local and remote plan, and deploys with --yes', async () => {
     await withTempProject(
       {
@@ -362,7 +362,7 @@ describe('lore deploy command, issue 91', () => {
 
         expect(failed.code ?? 1).toBeGreaterThan(0);
         expect(failed.stderr).toContain('Forced test failure after candidate projection.');
-        expect(failed.stderr).toContain('Resume with `lore deploy cloudflare --resume');
+        expect(failed.stderr).toContain('Resume with `lorepack deploy cloudflare --resume');
         expect(calls).toEqual(
           expect.arrayContaining(['detect', expect.stringMatching(/^plan:lore_/), 'apply']),
         );
@@ -586,7 +586,7 @@ describe('lore deploy command, issue 91', () => {
 
         expect(result.code ?? 1).toBe(5);
         expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
-        expect(result.stderr).toContain('Run `lore target add cloudflare` first.');
+        expect(result.stderr).toContain('Run `lorepack target add cloudflare` first.');
       },
     );
   });

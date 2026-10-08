@@ -52,7 +52,7 @@
   padding: var(--space-5);
 }
 
-/* The aligned key-value block, echoing what `lore build` prints. Labels form a column the
+/* The aligned key-value block, echoing what `lorepack build` prints. Labels form a column the
    eye can scan, which is the whole reason this is not a set of cards. */
 .facts {
   margin: 0;

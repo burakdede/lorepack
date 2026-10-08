@@ -95,7 +95,7 @@ export function readReceipt(projectRoot: string, receiptId: string): DeploymentR
   const path = receiptPath(projectRoot, receiptId);
   if (!existsSync(path)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No deployment receipt ${receiptId}.`, {
-      // Deliberately naming no command: `lore deploy` and `lore target` arrive with #91 and
+      // Deliberately naming no command: `lorepack deploy` and `lorepack target` arrive with #91 and
       // #85, and a remediation pointing at a command that does not exist is worse than one
       // that describes the action. These become command names when those tickets land.
       remediation: 'Check the receipt id, or deploy again from the start.',

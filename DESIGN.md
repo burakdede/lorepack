@@ -215,7 +215,7 @@ Lore Studio sits beside browser DevTools and a terminal without apology. It is a
 
 The world is restrained neutral zinc in two peer themes, light and dark, each defined once and resolved before first paint. The sidebar sits on a second, slightly offset neutral so the shell reads as furniture and the route reads as the work. There is no accent hue. Selection, focus and the primary action are carried by ink contrast: near-black on light, near-white on dark. Green, amber and red appear only for state, and always beside a word.
 
-Density is a developer's density: 14px body, 36px rows, 12.5px data in mono with tabular figures, aligned key-value facts that echo what `lore build` prints. Motion is limited to 120 to 200ms state changes, the palette rising, and the build id settling when a rebuild lands.
+Density is a developer's density: 14px body, 36px rows, 12.5px data in mono with tabular figures, aligned key-value facts that echo what `lorepack build` prints. Motion is limited to 120 to 200ms state changes, the palette rising, and the build id settling when a rebuild lands.
 
 **Key Characteristics:**
 - Neutral zinc, two peer themes, no accent token.
@@ -356,13 +356,13 @@ Inline under the version it acts on: Clean Sheet, 1px ink frame, 12px radius, ov
 Path in mono 500, heading path in muted sans, range in muted tabular mono, real-space separators. Inline layout so it wraps on the baseline. The copy button appears on hover or focus, and always on touch. When the locator names an artifact, the path is a link to Sources with the cited lines marked, underlined in the border tone and in full ink on hover. It never links to the source already open.
 
 ### Use It Anywhere (signature)
-Every request Studio makes, shown as the same request three ways: a `lore` CLI line, a `curl` call against this server, and the MCP `tools/call` params. A framed panel with a mono tab strip (CLI, HTTP, MCP), one Copy action, and a code well that is dark in both themes (`--code-bg`), because a command reads as a terminal line. A form with no exact equivalent is left out rather than approximated: table queries and source reads have no CLI tab. The code well is focusable, so a long line can be scrolled by keyboard.
+Every request Studio makes, shown as the same request three ways: a `lorepack` CLI line, a `curl` call against this server, and the MCP `tools/call` params. A framed panel with a mono tab strip (CLI, HTTP, MCP), one Copy action, and a code well that is dark in both themes (`--code-bg`), because a command reads as a terminal line. A form with no exact equivalent is left out rather than approximated: table queries and source reads have no CLI tab. The code well is focusable, so a long line can be scrolled by keyboard.
 
 ### Source Reader
 The stored text of one file, as a model reads it. A framed, focusable, 480px-tall scroller with a 4.5ch line-number gutter split by a hairline; each line is a two-column row so wrapped text stays beside its number. Cited lines take the Stale Amber wash with an amber number. The gutter is `user-select: none`, so a copied passage is the document.
 
 ### Connect Panel and Next Steps
-Overview's launchpad. Next steps are three columns in one panel split by hairlines, never three cards, each a title, one sentence and a small action; the connect step carries a live count badge. The Connect panel lists the MCP and HTTP endpoints as copyable values (no `$` prompt) and `lore mcp` as a command, then one row per detected client with its state badge and a `lore connect` command only where it would do something.
+Overview's launchpad. Next steps are three columns in one panel split by hairlines, never three cards, each a title, one sentence and a small action; the connect step carries a live count badge. The Connect panel lists the MCP and HTTP endpoints as copyable values (no `$` prompt) and `lorepack mcp` as a command, then one row per detected client with its state badge and a `lorepack connect` command only where it would do something.
 
 ## Do's and Don'ts
 

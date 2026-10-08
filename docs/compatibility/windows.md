@@ -41,10 +41,10 @@ Windows has no POSIX signals. `child.kill('SIGTERM')` is emulated with `Terminat
 so the handler never runs and a supervisor that did everything right dies non-zero.
 
 **A user pressing Ctrl-C is unaffected**: that path goes through a console control handler
-and does reach the process, so `lore dev` cleans up normally for the person running it.
+and does reach the process, so `lorepack dev` cleans up normally for the person running it.
 
 The consequence is for tooling and tests, not for users: a hard kill leaves a `.lore/dev.json`
-naming a dead pid, and the next `lore dev` clears it. That is precisely why the receipt is
+naming a dead pid, and the next `lorepack dev` clears it. That is precisely why the receipt is
 evidence rather than a lock.
 
 Tests that stop a supervisor from a parent use SIGTERM where a graceful stop is being

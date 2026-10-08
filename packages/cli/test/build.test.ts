@@ -39,7 +39,7 @@ function buildsIn(root: string): string[] {
   return existsSync(directory) ? readdirSync(directory).sort() : [];
 }
 
-describe('lore build', () => {
+describe('lorepack build', () => {
   it('rejects source bytes that no longer match the fingerprint', async () => {
     await project({ 'a.md': '# Original\n' }, async (root) => {
       const original = new TextEncoder().encode('# Original\n');
@@ -401,7 +401,7 @@ describe('what the build says when it cannot read a file', () => {
   });
 });
 
-describe('lore build command', () => {
+describe('lorepack build command', () => {
   it('reports the build and its counts, exiting 0', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (_root, lore) => {
       const result = await lore(['build']);

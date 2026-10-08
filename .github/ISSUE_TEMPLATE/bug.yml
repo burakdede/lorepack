@@ -17,8 +17,8 @@ body:
       label: Reproduction
       description: Exact commands, and the smallest project that shows the problem.
       placeholder: |
-        lore build
-        lore search "pricing"
+        lorepack build
+        lorepack search "pricing"
     validations: {required: true}
   - type: input
     id: platform
@@ -35,9 +35,9 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: lore doctor --json
+      label: lorepack doctor --json
       description: >-
-        Paste the output if you have it. `lore doctor` arrives in Phase 3 (#56); until then
+        Paste the output if you have it. `lorepack doctor` arrives in Phase 3 (#56); until then
         leave this empty and `node --version` above is enough. It reports SQLite/FTS5
         status, which explains most build failures.
       render: json
@@ -45,4 +45,4 @@ body:
     id: build
     attributes:
       label: Build ID and warnings
-      description: If relevant, the affected build ID and `lore inspect warnings` output.
+      description: If relevant, the affected build ID and `lorepack inspect warnings` output.

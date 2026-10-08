@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * `lore dev` as a person actually runs it: point it at a folder and expect a running runtime.
+ * `lorepack dev` as a person actually runs it: point it at a folder and expect a running runtime.
  *
  * Everything this command promises is invisible in process. Whether it validates before it
  * writes, whether the files it says it created exist, whether the URLs it prints answer, and
@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const BINARY = join(import.meta.dirname, '..', 'dist', 'entry.js');
 const DOCUMENT =
-  '# Runbook\n\n## Rolling back\n\nRun `lore rollback` to return to the previous build.\n';
+  '# Runbook\n\n## Rolling back\n\nRun `lorepack rollback` to return to the previous build.\n';
 
 let project: string;
 const running: ChildProcess[] = [];
@@ -55,7 +55,7 @@ interface Started {
   readonly port: number;
 }
 
-/** Runs `lore dev` until it has printed its connection block, or fails loudly. */
+/** Runs `lorepack dev` until it has printed its connection block, or fails loudly. */
 async function dev(): Promise<Started> {
   nextPort += 1;
   const port = nextPort;
@@ -83,7 +83,7 @@ async function dev(): Promise<Started> {
   // nothing at all.
   expect(
     stdout,
-    `lore dev never printed its connection block. stdout:\n${stdout}\nstderr:\n${stderr}`,
+    `lorepack dev never printed its connection block. stdout:\n${stdout}\nstderr:\n${stderr}`,
   ).toContain('MCP stdio');
   return { child, stdout, stderr, log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`, port };
 }
@@ -148,7 +148,7 @@ describe('one command on an unconfigured folder', () => {
 
   it('quotes the stdio command, so a path with a space stays one argument', async () => {
     const started = await dev();
-    expect(started.stdout).toMatch(/MCP stdio {7}lore mcp --project "[^"]+"/);
+    expect(started.stdout).toMatch(/MCP stdio {7}lorepack mcp --project "[^"]+"/);
   }, 120_000);
 
   /**
@@ -163,9 +163,9 @@ describe('one command on an unconfigured folder', () => {
     const started = await dev();
 
     expect(started.stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
-    expect(started.stdout).toContain('lore connect claude-code');
-    expect(started.stdout).toContain('lore connect codex');
-    expect(started.stdout).toContain('lore connect vscode');
+    expect(started.stdout).toContain('lorepack connect claude-code');
+    expect(started.stdout).toContain('lorepack connect codex');
+    expect(started.stdout).toContain('lorepack connect vscode');
   }, 120_000);
 
   it('serves Studio at the root without shadowing the API', async () => {
@@ -399,12 +399,12 @@ describe('changing which build is live, from Studio', () => {
  * Diagnostics over HTTP, which must agree with the command.
  *
  * One check registry, two renderers. The assertion that matters is the comparison against
- * `lore doctor --json` on the same machine at the same moment: two implementations of "is
+ * `lorepack doctor --json` on the same machine at the same moment: two implementations of "is
  * this environment healthy" would disagree eventually, and the disagreement would surface as
  * a user being told two different things by one product.
  */
 describe('diagnostics, in the browser and in the terminal', () => {
-  it('reports what `lore doctor --json` reports for the same environment', async () => {
+  it('reports what `lorepack doctor --json` reports for the same environment', async () => {
     const started = await dev();
     const base = `http://127.0.0.1:${started.port}`;
 
@@ -461,7 +461,7 @@ describe('diagnostics, in the browser and in the terminal', () => {
 
     expect(report.session.port).toBe(started.port);
     expect(report.session.pid).toBe(started.child.pid);
-    // `lore dev` watches, so this is the case where the watcher block is present. `lore serve`
+    // `lorepack dev` watches, so this is the case where the watcher block is present. `lorepack serve`
     // has no watcher and reports null, which the route renders as a sentence rather than as
     // an empty state.
     expect(report.session.watcher?.watchedPaths).toBeGreaterThan(0);
@@ -622,7 +622,7 @@ describe('the session receipt', () => {
       started.child.kill('SIGTERM');
       await new Promise((resolve) => started.child.once('exit', resolve));
 
-      // Left behind, it would make the next `lore dev` refuse to start on behalf of a process
+      // Left behind, it would make the next `lorepack dev` refuse to start on behalf of a process
       // that no longer exists. On Windows a parent cannot ask for a clean stop at all, which
       // is why the stale-receipt path below is the one that matters there.
       expect(existsSync(path), 'the receipt should be gone after a clean stop').toBe(false);

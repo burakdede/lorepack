@@ -125,7 +125,7 @@ export function registerResources(
         //
         // The listing is a real gap rather than a decision, and #66 (Studio's Sources route)
         // is where it has to be built. Today the only implementation is raw SQL inside
-        // `lore inspect sources`, which no remote backend can reach.
+        // `lorepack inspect sources`, which no remote backend can reach.
         const described = await runtime.describeBuild();
         return {
           contents: [
@@ -206,7 +206,7 @@ export function registerResources(
             'This deployment serves one build and cannot compare two.',
             {
               remediation:
-                'Run `lore diff` against the project, or point a client at a server that holds build history.',
+                'Run `lorepack diff` against the project, or point a client at a server that holds build history.',
             },
           );
         }

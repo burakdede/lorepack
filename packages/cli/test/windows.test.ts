@@ -122,7 +122,7 @@ describe('a generated client command', () => {
   const input = (path: string) => ({
     projectRoot: path,
     serverName: 'lorepack',
-    command: { executable: 'lore', args: ['mcp', '--project', path, '--ensure-current'] },
+    command: { executable: 'lorepack', args: ['mcp', '--project', path, '--ensure-current'] },
     scope: 'project' as const,
   });
 

@@ -30,7 +30,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
   if (options.sourceState === 'dirty') {
     lines.push('');
     lines.push(
-      '> The sources have changed since this build was compiled, so this context is behind them. Run `lore build` and export again for current context.',
+      '> The sources have changed since this build was compiled, so this context is behind them. Run `lorepack build` and export again for current context.',
     );
   } else if (options.sourceState === 'unknown') {
     lines.push('');

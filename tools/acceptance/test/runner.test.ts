@@ -73,7 +73,7 @@ describe('the runner', () => {
       { binary: STUB },
     );
     expect(report.failures).toHaveLength(1);
-    expect(report.failures[0]).toContain('lore fail 3');
+    expect(report.failures[0]).toContain('lorepack fail 3');
     expect(report.failures[0]).toContain('exited 3, expected 0');
   });
 

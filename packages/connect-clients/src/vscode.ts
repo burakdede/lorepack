@@ -196,7 +196,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
         path: entryPath(plan.serverName),
         projectRoot: plan.projectRoot,
         value: plan.entry,
-        removeWith: 'lore disconnect vscode',
+        removeWith: 'lorepack disconnect vscode',
       });
       writeTextAtomically(path, text);
 

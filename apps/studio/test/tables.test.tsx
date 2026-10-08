@@ -289,6 +289,6 @@ describe('a build with no tables', () => {
     await waitFor(() =>
       expect(screen.getByText('This build contains no tables.')).toBeInTheDocument(),
     );
-    expect(screen.getByText('lore build')).toBeInTheDocument();
+    expect(screen.getByText('lorepack build')).toBeInTheDocument();
   });
 });

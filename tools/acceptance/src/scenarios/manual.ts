@@ -54,7 +54,7 @@ export const MANUAL_SCENARIOS: readonly Scenario[] = [
         action: 'note',
         text: 'Start a build that takes at least ten seconds and press Ctrl-C once while the parsing stage is running.',
         expect:
-          'It stops within a second or two, prints that it was interrupted, and exits 1. `lore builds` shows no new build and the active pointer is where it was.',
+          'It stops within a second or two, prints that it was interrupted, and exits 1. `lorepack builds` shows no new build and the active pointer is where it was.',
       },
       {
         action: 'note',
@@ -73,7 +73,7 @@ export const MANUAL_SCENARIOS: readonly Scenario[] = [
     steps: [
       {
         action: 'note',
-        text: 'On a fresh machine or container with only a supported Node runtime installed, install the package and run `lore init && lore build && lore search "rollback"` against a small directory of documents. The published files alone are now checked on every commit by `packaging/the-published-files-are-enough`, so what is left here is the part a temporary directory cannot claim: a machine with nothing else on it.',
+        text: 'On a fresh machine or container with only a supported Node runtime installed, install the package and run `lorepack init && lorepack build && lorepack search "rollback"` against a small directory of documents. The published files alone are now checked on every commit by `packaging/the-published-files-are-enough`, so what is left here is the part a temporary directory cannot claim: a machine with nothing else on it.',
         expect:
           'No compiler is invoked, nothing is downloaded beyond the package itself, no post-install script runs, and no prompt asks for an account or key.',
       },

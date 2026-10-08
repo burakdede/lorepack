@@ -237,7 +237,7 @@ describe('the sequence architecture 18.5 fixes', () => {
       const failure = await runDeploy(base(root, fake.target)).catch((error: unknown) => error);
 
       expect((failure as LoreError).code).toBe('LORE_E_TARGET_NOT_CONFIGURED');
-      // Names the action rather than a command, because `lore target add` arrives with #85 and
+      // Names the action rather than a command, because `lorepack target add` arrives with #85 and
       // a remediation pointing at a command that does not exist is worse than none.
       expect((failure as LoreError).remediation).toContain('Set up the fake target');
       expect(fake.calls).toEqual(['detect']);

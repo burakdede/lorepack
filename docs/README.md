@@ -69,7 +69,7 @@ Generated and checked docs:
 ## The pictures are generated, not pasted
 
 `scripts/capture-docs.mjs` builds a demo project, runs the real commands, starts a real
-`lore dev`, and photographs Studio in the browser. The CLI and Studio screenshots under
+`lorepack dev`, and photographs Studio in the browser. The CLI and Studio screenshots under
 `docs/images/` are regenerated from the product rather than taken by hand. The conceptual SVG
 diagrams in the same folder are maintained as text.
 

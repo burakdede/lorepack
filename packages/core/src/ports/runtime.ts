@@ -96,7 +96,7 @@ export interface CatalogStore {
    * Artifacts this build records as superseded by some other artifact.
    *
    * A set rather than the pairs, because ranking only asks "is this one superseded". The
-   * pairs matter to `lore diff` and to the Phase 5 rule resolver, which read them directly.
+   * pairs matter to `lorepack diff` and to the Phase 5 rule resolver, which read them directly.
    */
   supersededArtifacts(): Promise<ReadonlySet<string>>;
   /** By artifact id or by canonical path. Null when the build has no such artifact. */
@@ -105,7 +105,7 @@ export interface CatalogStore {
    * Every artifact in the build, in canonical order.
    *
    * This completes a port that could fetch one artifact and its nodes but not say what it
-   * held. `lore inspect sources` answered that question with raw SQL against the build
+   * held. `lorepack inspect sources` answered that question with raw SQL against the build
    * database, underneath this interface, which meant the capability existed only for the
    * local backend and could not exist for the Phase 6 Worker at all (#66).
    *
@@ -218,7 +218,7 @@ export interface BuildScope {
  *
  * An annotation, never a precondition. A read of a sealed build is not entitled to an
  * opinion about the source tree, and #147 was the proof: establishing freshness first made
- * `lore search` refuse to answer on a project above the file envelope, from a build that
+ * `lorepack search` refuse to answer on a project above the file envelope, from a build that
  * was sitting there ready. A provider that cannot tell returns `unknown`, and the read
  * succeeds regardless.
  */

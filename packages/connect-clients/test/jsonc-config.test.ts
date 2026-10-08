@@ -35,9 +35,9 @@ const owned = (text: string, projectRoot = '/p'): string =>
   withOwnedEntry(config(text), {
     path: PATH,
     projectRoot,
-    value: { type: 'stdio', command: 'lore', args: ['mcp'] },
+    value: { type: 'stdio', command: 'lorepack', args: ['mcp'] },
     createdAt: '2026-08-05T00:00:00.000Z',
-    removeWith: 'lore disconnect vscode',
+    removeWith: 'lorepack disconnect vscode',
   });
 
 const FOREIGN = `{
@@ -67,7 +67,7 @@ describe('editing', () => {
     expect(after).toContain('// Their notes server.');
     expect(after).toContain('"args": ["--serve"] // do not change');
     expect(after).toContain('"inputs": []');
-    expect(parse(after).servers.lorepack.command).toBe('lore');
+    expect(parse(after).servers.lorepack.command).toBe('lorepack');
   });
 
   it('is byte-identical when applied twice, and never stacks a second marker', () => {
@@ -79,7 +79,7 @@ describe('editing', () => {
   });
 
   it('writes into an empty file', () => {
-    expect(parse(owned('')).servers.lorepack.command).toBe('lore');
+    expect(parse(owned('')).servers.lorepack.command).toBe('lorepack');
   });
 
   it('matches the indentation the file already uses', () => {

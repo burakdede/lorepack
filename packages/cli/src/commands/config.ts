@@ -10,7 +10,7 @@ import {
 } from '../services/config-resolve.js';
 
 /**
- * `lore config show --effective` and `lore config explain <path>`.
+ * `lorepack config show --effective` and `lorepack config explain <path>`.
  *
  * Architecture 4.9's transparent-magic contract: defaults work, and nothing is hidden. The
  * test of it is whether a user can learn what Lorepack decided without reading the source,
@@ -45,7 +45,7 @@ export function configCommand(): CommandDefinition {
       if (subject === 'explain') return explain(resolved, args[1]);
 
       throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown config subject: ${subject}.`, {
-        remediation: 'Use `lore config show --effective` or `lore config explain <path>`.',
+        remediation: 'Use `lorepack config show --effective` or `lorepack config explain <path>`.',
         subject: String(subject),
       });
     },
@@ -90,7 +90,7 @@ function show(resolved: ResolvedConfiguration, effective: boolean): CommandResul
 function explain(resolved: ResolvedConfiguration, path: string | undefined): CommandResult {
   if (path === undefined) {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', 'explain needs a configuration path.', {
-      remediation: 'For example: `lore config explain chunking.targetTokens`.',
+      remediation: 'For example: `lorepack config explain chunking.targetTokens`.',
     });
   }
 
@@ -101,8 +101,8 @@ function explain(resolved: ResolvedConfiguration, path: string | undefined): Com
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `No configuration value at ${path}.`, {
       remediation:
         closest === null
-          ? 'Run `lore config show --effective` to see every path.'
-          : `Did you mean ${closest}? Run \`lore config show --effective\` to see every path.`,
+          ? 'Run `lorepack config show --effective` to see every path.'
+          : `Did you mean ${closest}? Run \`lorepack config show --effective\` to see every path.`,
       subject: path,
     });
   }

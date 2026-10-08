@@ -8,7 +8,7 @@
  * discovers it is gone. Running the real `--help` is the cheapest way to notice.
  *
  * The second half is #168. Every error without an explicit remediation told the user to
- * "run `lore doctor` for diagnostics", and `lore doctor` is Phase 3. The advice was
+ * "run `lorepack doctor` for diagnostics", and `lorepack doctor` is Phase 3. The advice was
  * confidently wrong, and a unit test asserted it, so nothing was going to catch it except a
  * person typing the command.
  */
@@ -21,6 +21,16 @@ import { promisify } from 'node:util';
 const execute = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const binary = join(root, 'packages', 'cli', 'dist', 'entry.js');
+const packageManifest = JSON.parse(
+  readFileSync(join(root, 'packages', 'cli', 'package.json'), 'utf8'),
+);
+
+if (JSON.stringify(packageManifest.bin) !== JSON.stringify({ lorepack: './dist/entry.js' })) {
+  console.error(
+    'check:command-set: packages/cli/package.json must publish only the `lorepack` binary.',
+  );
+  process.exit(1);
+}
 
 const EXPECTED = [
   'init',
@@ -62,7 +72,7 @@ const listed = new Set(
 
 const missing = EXPECTED.filter((name) => !listed.has(name));
 if (missing.length > 0) {
-  console.error(`check:command-set: \`lore --help\` does not list: ${missing.join(', ')}`);
+  console.error(`check:command-set: \`lorepack --help\` does not list: ${missing.join(', ')}`);
   console.error('\nA command was removed or failed to register. Full help output:\n');
   console.error(stdout);
   process.exit(1);
@@ -73,11 +83,11 @@ console.log(`check:command-set: all ${EXPECTED.length} commands are registered`)
 /**
  * Commands named in source strings, which is where remediations live.
  *
- * Deliberately literal: `` `lore <word>` `` inside a backtick-quoted phrase is how every
+ * Deliberately literal: `` `lorepack <word>` `` inside a backtick-quoted phrase is how every
  * remediation in the codebase refers to a command, so matching that shape finds them
  * without needing to understand the sentence around it.
  */
-const REFERENCE = /`lore ([a-z][a-z-]*)/g;
+const REFERENCE = /`lorepack ([a-z][a-z-]*)/g;
 const SEARCHED = /^packages\/[^/]+\/src\/.*\.ts$/;
 /** Not commands: `lore.yaml` and friends, and the global flags. */
 const NOT_A_COMMAND = new Set(['yaml', 'lock', 'json', 'help', 'version']);

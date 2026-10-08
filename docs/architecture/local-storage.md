@@ -206,7 +206,7 @@ build is opened read-only, so a build carries the schema it was written at forev
 
 Opening one therefore checks it, against the migration files this binary ships rather than
 against a hand-kept number. A build older or newer than the code reading it is refused with
-`LORE_E_SCHEMA_MISMATCH` and told to run `lore build`. Without the check the first symptom is
+`LORE_E_SCHEMA_MISMATCH` and told to run `lorepack build`. Without the check the first symptom is
 whatever statement happens to name a column that does not exist yet, from inside a query, with
 nothing to connect it to the cause.
 

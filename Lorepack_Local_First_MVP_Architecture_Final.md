@@ -4,7 +4,7 @@
 **Status:** Final audited architecture  
 **Target release:** Lorepack v0.1  
 **Working codename:** Lorepack  
-**Primary CLI:** `lore`  
+**Primary CLI:** `lorepack`
 **Date:** 30 July 2026
 
 > **Product statement:** Lorepack is a versioned context build system for AI. It compiles a directory of documents, spreadsheets, data, and project artifacts into an immutable build that can be inspected, diffed, deployed, activated, and rolled back, then accessed by chat models and agents through MCP, HTTP, or a bounded export.
@@ -60,8 +60,8 @@ This means:
 | Semantic retrieval | Explicit post-v0.1 enhancement unless lifecycle validation shows it is required earlier; never part of the default install or first-run critical path. |
 | Local data | SQLite through Node's bundled `node:sqlite`, isolated behind an adapter, with an FTS5 capability check. |
 | AI interfaces | MCP stdio, MCP Streamable HTTP, REST, and bounded Markdown/JSON exports. |
-| Client setup | `lore connect` detects supported clients, shows a plan, maps the current workspace to each client's safest documented scope, and verifies both the Lore server and the client registration. |
-| Build command | `lore build` hides compile, validate, index, and package stages behind one user-facing operation. |
+| Client setup | `lorepack connect` detects supported clients, shows a plan, maps the current workspace to each client's safest documented scope, and verifies both the Lore server and the client registration. |
+| Build command | `lorepack build` hides compile, validate, index, and package stages behind one user-facing operation. |
 | Deployment | Backend projections are build-scoped; candidate verification precedes one atomic active-build switch. |
 | First remote target | Cloudflare Worker + D1 + R2. Vectorize is a post-v0.1 extension gated by exact embedding compatibility and query-visibility verification. |
 | Platform support | macOS, Windows, and Linux are explicit v0.1 targets with cross-platform CI. |
@@ -74,7 +74,7 @@ This means:
 | Screenshots were promised but OCR was excluded | Valid mismatch | Screenshots and scanned documents are removed from the v0.1 promise and listed as a future parser class. |
 | Native SQLite and ONNX dependencies threaten DX | Confirmed risk; prebuilt gaps can force local compilation.[19] | `better-sqlite3` and ONNX are removed from the default installation. The core uses bundled `node:sqlite`; semantic support is optional. |
 | First run must survive offline use | Valid | The default build is entirely deterministic and offline after npm installation. No model download occurs; any future semantic enhancement has explicit progress, resumable cache, checksum verification, offline-only mode, and lexical fallback. |
-| Agent configuration should be automatic | Confirmed as practical because major clients expose CLI or workspace configuration surfaces.[3][4][5] | Add `lore connect`, `--dry-run`, a non-global workspace default mapped per client, safe merge, backup, disconnect, protocol verification, and client status verification. |
+| Agent configuration should be automatic | Confirmed as practical because major clients expose CLI or workspace configuration surfaces.[3][4][5] | Add `lorepack connect`, `--dry-run`, a non-global workspace default mapped per client, safe merge, backup, disconnect, protocol verification, and client status verification. |
 | Conflict handling lacked a producer | Valid | Automatic conflict detection is removed. Explicit `authority`, `status`, and `supersedes` rules are added. |
 | Linear vector scan had no bound | Valid | Semantic search is not a v0.1 gate; a future exact-scan adapter is capped at 25,000 vectors x 384 dimensions, a 50 MiB resident matrix, and a release gate of p95 top-20 scan at 250 ms or less on the reference machine. |
 | Windows support was unspecified | Valid | Windows 11 x64 is part of the support matrix and CI, with explicit path and watcher rules. |
@@ -132,7 +132,7 @@ project-context/
 The zero-config path is:
 
 ```bash
-lore dev ./project-context
+lorepack dev ./project-context
 ```
 
 Lorepack should:
@@ -148,15 +148,15 @@ Lorepack should:
 The explicit path remains available:
 
 ```bash
-lore init ./project-context
-lore build
-lore connect claude-code
+lorepack init ./project-context
+lorepack build
+lorepack connect claude-code
 ```
 
 When a remote runtime is needed:
 
 ```bash
-lore deploy cloudflare
+lorepack deploy cloudflare
 ```
 
 Lorepack plans the change, creates or reuses a build, projects it to Cloudflare, verifies the candidate, and activates it atomically.
@@ -345,8 +345,8 @@ The codebase uses ports and adapters from day one, but v0.1 does not introduce d
 Lorepack should hide operational complexity while preserving inspectability:
 
 - defaults work without configuration;
-- `lore config show --effective` reveals every resolved default;
-- `lore plan` shows intended mutations;
+- `lorepack config show --effective` reveals every resolved default;
+- `lorepack plan` shows intended mutations;
 - `--verbose` exposes stage details;
 - build manifests record versions and capabilities;
 - Studio explains why context was selected or omitted.
@@ -356,7 +356,7 @@ Lorepack should hide operational complexity while preserving inspectability:
 The client configuration generated by Lorepack runs:
 
 ```bash
-lore mcp --project /absolute/path/to/project --ensure-current
+lorepack mcp --project /absolute/path/to/project --ensure-current
 ```
 
 Before emitting protocol messages, the server performs an authoritative source reconciliation: it discovers the configured files and streams their contents into the project fingerprint. Existing per-artifact hashes still make parsing, normalization, table import, and indexing incremental; reading bytes to verify freshness does not consume model context. Any check lasting more than 250 ms prints file and byte progress to stderr, while MCP stdout remains untouched.
@@ -469,7 +469,7 @@ A later optional local semantic package may use a small ONNX embedding model. ON
 Enabling it is explicit:
 
 ```bash
-lore enhance semantic
+lorepack enhance semantic
 ```
 
 The enhancement flow must:
@@ -514,7 +514,7 @@ The published core package must have no install script that compiles native code
 ### 6.2 Zero-config quick path
 
 ```bash
-lore dev ./project-context
+lorepack dev ./project-context
 ```
 
 When no `lore.yaml` exists, Lorepack:
@@ -532,13 +532,13 @@ No interactive question is required for the default path. Prompts appear only wh
 ### 6.3 Explicit project path
 
 ```bash
-lore init ./project-context
-lore plan
-lore build
-lore dev
+lorepack init ./project-context
+lorepack plan
+lorepack build
+lorepack dev
 ```
 
-`lore init` is idempotent. Re-running it shows the proposed changes and never overwrites user configuration without confirmation or `--force`.
+`lorepack init` is idempotent. Re-running it shows the proposed changes and never overwrites user configuration without confirmation or `--force`.
 
 ### 6.4 Expected first-run output
 
@@ -554,16 +554,16 @@ Activating      lore_b7f2a9c1d4e8                     done
 
 Build           lore_b7f2a9c1d4e8
 Reused          0 artifacts (first build)
-Warnings        2 unsupported files; run `lore inspect warnings`
+Warnings        2 unsupported files; run `lorepack inspect warnings`
 Studio          http://127.0.0.1:43110
 HTTP            http://127.0.0.1:43110/v1
 MCP HTTP        http://127.0.0.1:43110/mcp
-MCP stdio       lore mcp --project "/path/to/project"
+MCP stdio       lorepack mcp --project "/path/to/project"
 
 Connect now:
-  lore connect claude-code
-  lore connect codex
-  lore connect vscode
+  lorepack connect claude-code
+  lorepack connect codex
+  lorepack connect vscode
 ```
 
 If a stage exceeds one second, the CLI shows an updating count or progress bar. A spinner without measurable progress is insufficient for parsing or indexing.
@@ -573,45 +573,45 @@ If a stage exceeds one second, the CLI shows an updating count or progress bar. 
 The normal first-time workflow is deliberately two commands:
 
 ```bash
-lore dev [path]
-lore connect [client|all]
+lorepack dev [path]
+lorepack connect [client|all]
 ```
 
 The explicit build lifecycle uses four verbs:
 
 ```bash
-lore plan
-lore build
-lore deploy [target]
-lore rollback [build-id]
+lorepack plan
+lorepack build
+lorepack deploy [target]
+lorepack rollback [build-id]
 ```
 
-`lore init [path]` remains available for users who want to configure before starting the runtime. `lore build` deliberately hides the internal compile, index, validate, and package phases. By default it validates and atomically activates the new local build; `--no-activate` leaves a verified candidate for CI, inspection, or packing.
+`lorepack init [path]` remains available for users who want to configure before starting the runtime. `lorepack build` deliberately hides the internal compile, index, validate, and package phases. By default it validates and atomically activates the new local build; `--no-activate` leaves a verified candidate for CI, inspection, or packing.
 
 Supporting commands:
 
 | Command | Purpose |
 |---|---|
-| `lore plan` | Read-only preview of source, build, rule, and deployment changes. |
-| `lore connect [client]` | Safely configure and verify one AI client; pass `all` to configure every detected supported client. |
-| `lore disconnect [client]` | Remove only Lorepack-owned configuration; pass `all` to remove it from every detected supported client. |
-| `lore mcp` | Run the workspace-scoped stdio MCP server; generated client configs add `--ensure-current`. |
-| `lore serve` | Serve an active build without watching or rebuilding. |
-| `lore status` | Show source dirtiness, active build, warnings, and target state. |
-| `lore diff [a] [b]` | Compare artifacts, nodes, rules, tables, and capabilities. |
-| `lore inspect [item]` | Inspect parsed structure, provenance, warnings, or a build. |
-| `lore search "query"` | Exercise lexical retrieval from the terminal. |
-| `lore export --task "..."` | Produce a bounded Markdown or JSON context bundle. |
-| `lore pack [build-id]` | Export a portable `.lorepack` archive; not required for normal deploys. |
-| `lore activate [build-id]` | Activate a verified local build. |
-| `lore rollback [build-id]` | Restore the prior or specified verified build. |
-| `lore doctor` | Validate Node, SQLite/FTS5, paths, parsers, watcher, and client setup. |
-| `lore config show --effective` | Show the complete resolved configuration and its source. |
+| `lorepack plan` | Read-only preview of source, build, rule, and deployment changes. |
+| `lorepack connect [client]` | Safely configure and verify one AI client; pass `all` to configure every detected supported client. |
+| `lorepack disconnect [client]` | Remove only Lorepack-owned configuration; pass `all` to remove it from every detected supported client. |
+| `lorepack mcp` | Run the workspace-scoped stdio MCP server; generated client configs add `--ensure-current`. |
+| `lorepack serve` | Serve an active build without watching or rebuilding. |
+| `lorepack status` | Show source dirtiness, active build, warnings, and target state. |
+| `lorepack diff [a] [b]` | Compare artifacts, nodes, rules, tables, and capabilities. |
+| `lorepack inspect [item]` | Inspect parsed structure, provenance, warnings, or a build. |
+| `lorepack search "query"` | Exercise lexical retrieval from the terminal. |
+| `lorepack export --task "..."` | Produce a bounded Markdown or JSON context bundle. |
+| `lorepack pack [build-id]` | Export a portable `.lorepack` archive; not required for normal deploys. |
+| `lorepack activate [build-id]` | Activate a verified local build. |
+| `lorepack rollback [build-id]` | Restore the prior or specified verified build. |
+| `lorepack doctor` | Validate Node, SQLite/FTS5, paths, parsers, watcher, and client setup. |
+| `lorepack config show --effective` | Show the complete resolved configuration and its source. |
 
 ### 6.6 Client connection experience
 
 ```bash
-lore connect claude-code
+lorepack connect claude-code
 ```
 
 Lorepack uses a conceptual **workspace** scope: the server is available only for the current project and is never made global without an explicit flag. That scope maps to each client's documented model:
@@ -632,18 +632,18 @@ The command must:
 6. otherwise parse and merge the documented workspace configuration format;
 7. represent commands as executable plus argument arrays, never shell-concatenated strings;
 8. write atomically, preserve unrelated configuration, and create a timestamped backup before direct file edits;
-9. spawn `lore mcp --ensure-current` and verify the current MCP protocol with `server/discover` plus `tools/list`; use the SDK's backward-compatibility path for 2025-era clients that still initialize a connection;
+9. spawn `lorepack mcp --ensure-current` and verify the current MCP protocol with `server/discover` plus `tools/list`; use the SDK's backward-compatibility path for 2025-era clients that still initialize a connection;
 10. invoke the client's own list/status command when one exists;
 11. print the one remaining approval or workspace-trust step, if the client requires it.
 
 Safety flags:
 
 ```bash
-lore connect claude-code --dry-run
-lore connect codex --scope workspace
-lore connect vscode --shared
-lore connect all --yes
-lore disconnect vscode
+lorepack connect claude-code --dry-run
+lorepack connect codex --scope workspace
+lorepack connect vscode --shared
+lorepack connect all --yes
+lorepack disconnect vscode
 ```
 
 `--scope user` is explicit and never implied by `all`. Unsupported client versions degrade to a validated copy-paste snippet rather than a speculative configuration edit.
@@ -685,7 +685,7 @@ context:
   defaultProfile: chat
 ```
 
-Everything else has versioned defaults. `lore config show --effective` prints the expanded configuration, including include patterns, parser choices, limits, ports, and context budgets.
+Everything else has versioned defaults. `lorepack config show --effective` prints the expanded configuration, including include patterns, parser choices, limits, ports, and context budgets.
 
 ### 6.8 Configuration precedence
 
@@ -697,7 +697,7 @@ From lowest to highest priority:
 4. environment variables for secrets and CI-only overrides;
 5. command-line flags.
 
-`lore config explain <path>` shows the final value and which layer supplied it.
+`lorepack config explain <path>` shows the final value and which layer supplied it.
 
 ### 6.9 Failure and degradation rules
 
@@ -719,9 +719,9 @@ From lowest to highest priority:
 After source edits:
 
 ```bash
-lore status
-lore plan
-lore build
+lorepack status
+lorepack plan
+lorepack build
 ```
 
 Typical output:
@@ -750,7 +750,7 @@ Expected work
   rebuild 27 chunks
 ```
 
-`lore build` performs plan -> compile/index -> validate -> local activate by default. `--no-activate` keeps the verified candidate inactive. `lore deploy cloudflare` implicitly builds when sources are dirty, but prints the same plan before remote changes. `--no-build` requires a clean working set.
+`lorepack build` performs plan -> compile/index -> validate -> local activate by default. `--no-activate` keeps the verified candidate inactive. `lorepack deploy cloudflare` implicitly builds when sources are dirty, but prints the same plan before remote changes. `--no-build` requires a clean working set.
 
 ---
 
@@ -942,7 +942,7 @@ Keep semantic dependencies outside the core dependency graph:
 A future command may be:
 
 ```bash
-lore enhance semantic
+lorepack enhance semantic
 ```
 
 The download flow must expose byte progress, a resumable partial cache, pinned model revision, expected size/checksum, and local-files-only mode; Transformers.js exposes progress and offline lookup controls.[17] The feature is never imported by the base CLI until explicitly enabled.
@@ -1274,7 +1274,7 @@ Normalized source text required for remote source reads is included in the build
 ### 11.3 Portable archive
 
 ```bash
-lore pack lore_b7f2a9c1d4e8
+lorepack pack lore_b7f2a9c1d4e8
 ```
 
 Produces:
@@ -1326,7 +1326,7 @@ parsers:
 semantic: null
 ```
 
-`lore build --frozen` fails if the lockfile would change.
+`lorepack build --frozen` fails if the lockfile would change.
 
 ### 11.6 Build states
 
@@ -1401,9 +1401,9 @@ artifact content hash
 + rule inputs that affect output
 ```
 
-Explicit `lore build` and `lore mcp --ensure-current` runs discover and content-hash every configured file before declaring the project clean. File metadata is retained for diagnostics and watch-event coalescing, but it is not sufficient proof of freshness.
+Explicit `lorepack build` and `lorepack mcp --ensure-current` runs discover and content-hash every configured file before declaring the project clean. File metadata is retained for diagnostics and watch-event coalescing, but it is not sufficient proof of freshness.
 
-A running `lore dev` process hashes affected paths immediately and performs a full reconciliation after watcher startup, after watcher recovery, and periodically during long sessions. Watch events are an acceleration mechanism; content hashes are the source of truth.
+A running `lorepack dev` process hashes affected paths immediately and performs a full reconciliation after watcher startup, after watcher recovery, and periodically during long sessions. Watch events are an acceleration mechanism; content hashes are the source of truth.
 
 Unchanged artifacts reuse parsed nodes, chunks, table data, and normalized objects. The new build still receives independent immutable catalog rows.
 
@@ -1633,7 +1633,7 @@ unless a future explicit analysis capability actually produced and stored that c
 | `chat` | 24,000 | One bounded file or paste for a web chat. |
 | `deep` | 40,000 | Deliberate broad review in a large-window client. |
 
-`lore export` defaults to `chat`. `lore_context_for_task` defaults to `agent` unless the client passes a profile.
+`lorepack export` defaults to `chat`. `lore_context_for_task` defaults to `agent` unless the client passes a profile.
 
 ### 13.6 Token accounting
 
@@ -1708,7 +1708,7 @@ Resources are supplemental. Tools remain the most predictable path for task-awar
 Generated client configurations launch:
 
 ```bash
-lore mcp --project /absolute/path/to/project --ensure-current
+lorepack mcp --project /absolute/path/to/project --ensure-current
 ```
 
 Startup sequence:
@@ -1726,7 +1726,7 @@ The current protocol verification path uses `server/discover` and `tools/list`. 
 
 ### 14.4 Streamable HTTP
 
-`lore dev` and `lore serve` expose:
+`lorepack dev` and `lorepack serve` expose:
 
 ```text
 POST /mcp
@@ -1752,7 +1752,7 @@ MCP and REST share Zod contracts generated into JSON Schema and SDK types.
 ### 14.6 Context export
 
 ```bash
-lore export \
+lorepack export \
   --task "Review the pricing strategy and identify unsupported assumptions" \
   --profile chat \
   --format markdown \
@@ -1778,11 +1778,11 @@ This is the universal compatibility bridge for chat products that cannot connect
 
 | Client type | Local path | Remote path | Lorepack experience |
 |---|---|---|---|
-| Claude Code | stdio MCP | Streamable HTTP | `lore connect claude-code` using official CLI/project config.[3] |
-| Codex CLI/IDE/ChatGPT desktop configuration | stdio MCP | Streamable HTTP | `lore connect codex`; project `.codex/config.toml` by default.[4] |
-| VS Code agent mode | stdio MCP | Streamable HTTP | `lore connect vscode`; workspace `.vscode/mcp.json` by default.[5] |
+| Claude Code | stdio MCP | Streamable HTTP | `lorepack connect claude-code` using official CLI/project config.[3] |
+| Codex CLI/IDE/ChatGPT desktop configuration | stdio MCP | Streamable HTTP | `lorepack connect codex`; project `.codex/config.toml` by default.[4] |
+| VS Code agent mode | stdio MCP | Streamable HTTP | `lorepack connect vscode`; workspace `.vscode/mcp.json` by default.[5] |
 | Cursor and other MCP clients | client-dependent | client-dependent | Detect known format only when verified; otherwise print a validated copy-paste snippet. |
-| Web chat without MCP | not available | not available | `lore export --profile chat`. |
+| Web chat without MCP | not available | not available | `lorepack export --profile chat`. |
 | Custom agent | stdio/HTTP | HTTP | MCP or REST SDK. |
 
 The product must never claim that every web chat can connect directly to a localhost MCP server.
@@ -1808,7 +1808,7 @@ Adapters are versioned and fixture-tested against documented client config shape
 
 ### 15.1 Process model
 
-`lore dev` runs one foreground supervisor containing:
+`lorepack dev` runs one foreground supervisor containing:
 
 - file watcher;
 - incremental build coordinator;
@@ -1817,7 +1817,7 @@ Adapters are versioned and fixture-tested against documented client config shape
 - Studio static assets;
 - active-build generation monitor.
 
-`lore mcp` remains a separate client-managed stdio process. Both resolve the same transactional active-build pointer and open immutable build databases read-only.
+`lorepack mcp` remains a separate client-managed stdio process. Both resolve the same transactional active-build pointer and open immutable build databases read-only.
 
 No background system service is installed in v0.1.
 
@@ -1840,7 +1840,7 @@ Activation semantics:
 4. an old database handle closes only after its final in-flight request releases it;
 5. a missed filesystem notification is harmless because the request boundary rechecks the generation in `state.sqlite`.
 
-Connected coding agents therefore see a successful `lore build`, `lore dev` rebuild, or rollback on the next tool call without restarting or reconfiguring the client.
+Connected coding agents therefore see a successful `lorepack build`, `lorepack dev` rebuild, or rollback on the next tool call without restarting or reconfiguring the client.
 
 ### 15.3 Local ports and files
 
@@ -2072,7 +2072,7 @@ Partially uploaded candidates are invisible because the Worker reads only the ac
 One-time setup:
 
 ```bash
-lore target add cloudflare
+lorepack target add cloudflare
 ```
 
 Expected behavior:
@@ -2088,7 +2088,7 @@ Expected behavior:
 Deploy:
 
 ```bash
-lore deploy cloudflare
+lorepack deploy cloudflare
 ```
 
 Example plan:
@@ -2129,7 +2129,7 @@ OAuth and team authorization belong to a future managed platform.
 ### 17.8 Rollback and retention
 
 ```bash
-lore rollback --target cloudflare lore_61c30ef2a7b4
+lorepack rollback --target cloudflare lore_61c30ef2a7b4
 ```
 
 Rollback validates that the build remains complete, changes the pointer, and performs a health query.
@@ -2145,7 +2145,7 @@ Default retention:
 
 ## 18. Plan, build, deploy, and rollback lifecycle
 
-### 18.1 `lore plan`
+### 18.1 `lorepack plan`
 
 `plan` is side-effect free and compares:
 
@@ -2217,7 +2217,7 @@ An in-flight request is allowed to finish on the old immutable build; a later re
 
 ### 18.5 Deploy semantics
 
-`lore deploy target` performs:
+`lorepack deploy target` performs:
 
 ```text
 status -> plan -> build if dirty -> project candidate -> verify -> activate -> smoke check -> receipt
@@ -2226,10 +2226,10 @@ status -> plan -> build if dirty -> project candidate -> verify -> activate -> s
 Flags:
 
 ```bash
-lore deploy cloudflare --dry-run
-lore deploy cloudflare --no-build
-lore deploy cloudflare --yes
-lore deploy cloudflare --resume <receipt-id>
+lorepack deploy cloudflare --dry-run
+lorepack deploy cloudflare --no-build
+lorepack deploy cloudflare --yes
+lorepack deploy cloudflare --resume <receipt-id>
 ```
 
 ### 18.6 Deployment receipt
@@ -2256,14 +2256,14 @@ lore deploy cloudflare --resume <receipt-id>
 Without arguments, roll back to the previous verified build:
 
 ```bash
-lore rollback
+lorepack rollback
 ```
 
 Explicit:
 
 ```bash
-lore rollback lore_61c30ef2a7b4
-lore rollback --target cloudflare lore_61c30ef2a7b4
+lorepack rollback lore_61c30ef2a7b4
+lorepack rollback --target cloudflare lore_61c30ef2a7b4
 ```
 
 Rollback never rebuilds. If the requested remote projection is incomplete, fail without changing activation.
@@ -2273,11 +2273,11 @@ Rollback never rebuilds. If the requested remote projection is incomplete, fail 
 ```yaml
 steps:
   - run: pnpm install --frozen-lockfile
-  - run: lore doctor --ci
-  - run: lore plan --json > lore-plan.json
-  - run: lore build --frozen
-  - run: lore test
-  - run: lore deploy cloudflare --yes --no-build
+  - run: lorepack doctor --ci
+  - run: lorepack plan --json > lore-plan.json
+  - run: lorepack build --frozen
+  - run: lorepack test
+  - run: lorepack deploy cloudflare --yes --no-build
 ```
 
 CI artifacts should include the plan, manifest, warnings, test results, and `.lorepack` archive.
@@ -2488,14 +2488,14 @@ A clean environment must pass:
 
 ```bash
 npm install -g @lorepack/cli
-lore dev ./fixtures/product-research
-lore connect <fixture-client>
-lore export --task "Summarize the launch decision"
+lorepack dev ./fixtures/product-research
+lorepack connect <fixture-client>
+lorepack export --task "Summarize the launch decision"
 # edit one source
-lore plan
-lore build
-lore diff
-lore rollback
+lorepack plan
+lorepack build
+lorepack diff
+lorepack rollback
 ```
 
 A Cloudflare integration environment additionally passes deploy, remote MCP search, and remote rollback.
@@ -2525,20 +2525,20 @@ This milestone proves the differentiator before broad parser work.
 
 Add:
 
-- `lore dev ./folder` auto-init path;
+- `lorepack dev ./folder` auto-init path;
 - watch/reconciliation flow;
 - MCP stdio with `--ensure-current`;
 - REST and local Streamable HTTP;
 - `lore_context_for_task`;
 - bounded export with 24k chat default and complete omissions;
 - minimal five-route Studio: overview, sources, context playground, versions, diagnostics;
-- `lore connect claude-code` plus a safe generic snippet path;
+- `lorepack connect claude-code` plus a safe generic snippet path;
 - plan/dry-run, non-global scope, server verification, and disconnect;
 - live activation so connected clients use the new build on their next request without reconnecting;
-- `lore doctor`;
+- `lorepack doctor`;
 - macOS/Windows/Linux clean-install CI.
 
-**Exit criterion:** on a clean supported machine, a new user runs `lore dev ./folder` and `lore connect claude-code`, approves the client trust prompt, and receives grounded context without an account, model download, Python, Docker, native compilation, manual JSON, or stale-build ambiguity.
+**Exit criterion:** on a clean supported machine, a new user runs `lorepack dev ./folder` and `lorepack connect claude-code`, approves the client trust prompt, and receives grounded context without an account, model download, Python, Docker, native compilation, manual JSON, or stale-build ambiguity.
 
 ### Milestone 2 - Real mixed artifacts and clients
 
@@ -2552,7 +2552,7 @@ Add:
 - typed table catalog and safe SQL;
 - authority/status/supersedes rules;
 - parser warnings and inspection;
-- `lore connect codex` and `lore connect vscode`;
+- `lorepack connect codex` and `lorepack connect vscode`;
 - path/watcher/client fixtures across supported platforms;
 - scale-envelope benchmarks.
 
@@ -2657,13 +2657,13 @@ The open package format and local runtime prevent lock-in. A hosted platform may
 | Local lexical search | SQLite FTS5 | Mature deterministic retrieval and supported by both local SQLite and D1.[8][16] |
 | Semantic default | Disabled/not installed | Preserves zero-network, zero-native-dependency first run. |
 | Table model | Typed SQLite tables | Keeps structured data queryable and provenance-aware. |
-| Build command | One `lore build` | Hide compile/index/package stages without hiding inspectability. |
+| Build command | One `lorepack build` | Hide compile/index/package stages without hiding inspectability. |
 | Canonical state | Immutable Lore build identified by logical hashes | Enables reproducibility without coupling identity to SQLite page layout. |
 | Runtime switching | Request-scoped active-build handles | Connected clients see activation or rollback on the next request without mixed-build responses. |
 | Archive | Inspectable `.lorepack` ZIP | Portable, standard, and non-proprietary. |
 | Primary AI protocol | MCP | Standard model-facing tools/resources; stdio and HTTP support.[1][2] |
 | Universal fallback | Bounded Markdown/JSON export | Works with clients that cannot connect to MCP. |
-| Client setup | Safe `lore connect` adapters | Maps a conceptual workspace scope per client, removes manual config, and avoids silent global mutations. |
+| Client setup | Safe `lorepack connect` adapters | Maps a conceptual workspace scope per client, removes manual config, and avoids silent global mutations. |
 | Cloudflare stack | Worker + D1 + R2 for v0.1 | Minimal lexical remote projection; Vectorize is post-v0.1 and requires exact query-embedding compatibility plus visibility verification. |
 | Plugin model | Typed ports, no dynamic loader | Extensible without premature security and compatibility complexity. |
 | License | Apache-2.0 | Broad adoption and patent grant. |
@@ -2709,7 +2709,7 @@ The open package format and local runtime prevent lock-in. A hosted platform may
 
 ### 24.8 Client configuration formats change
 
-**Risk:** `lore connect` breaks or corrupts configuration.  
+**Risk:** `lorepack connect` breaks or corrupts configuration.
 **Mitigation:** prefer official CLIs, non-global workspace mapping, plan/dry run, schema fixtures, atomic merge, backups, version detection, and snippet fallback.
 
 ### 24.9 MCP evolves
@@ -2753,7 +2753,7 @@ The open package format and local runtime prevent lock-in. A hosted platform may
 
 ### Lifecycle vertical slice
 
-- `lore init`.
+- `lorepack init`.
 - discovery and `.loreignore`.
 - fingerprint/cache.
 - Markdown/plain-text parser.
@@ -2851,7 +2851,7 @@ The open package format and local runtime prevent lock-in. A hosted platform may
 Lorepack v0.1 succeeds when a technical user can:
 
 1. install it without Python, Docker, a compiler toolchain, or a model download;
-2. run `lore dev ./artifacts` and receive a verified active build;
+2. run `lorepack dev ./artifacts` and receive a verified active build;
 3. inspect exactly what was parsed and what was excluded;
 4. connect Claude Code, Codex, or VS Code through one safe command with no global mutation by default;
 5. let an agent launch against a source-checked active build and retrieve task-specific context without scanning every artifact;
@@ -2878,8 +2878,8 @@ The first public demo should make the wedge obvious in under three minutes.
 ### 27.1 Start
 
 ```bash
-lore dev ./project-context
-lore connect claude-code
+lorepack dev ./project-context
+lorepack connect claude-code
 ```
 
 Show:
@@ -2894,9 +2894,9 @@ Show:
 Edit a requirement and add one CSV row:
 
 ```bash
-lore plan
-lore build
-lore diff
+lorepack plan
+lorepack build
+lorepack diff
 ```
 
 Show:
@@ -2909,7 +2909,7 @@ Show:
 ### 27.3 Recover
 
 ```bash
-lore rollback
+lorepack rollback
 ```
 
 Show immediate return to the previous build without parsing or indexing.
@@ -2917,7 +2917,7 @@ Show immediate return to the previous build without parsing or indexing.
 ### 27.4 Deploy
 
 ```bash
-lore deploy cloudflare
+lorepack deploy cloudflare
 ```
 
 Show:
@@ -2944,8 +2944,8 @@ Proceed with **Lorepack**, but build it as a **versioned context build system**,
 The simple user journey is:
 
 ```bash
-lore dev ./artifacts
-lore connect claude-code
+lorepack dev ./artifacts
+lorepack connect claude-code
 ```
 
 The durable engineering model is:

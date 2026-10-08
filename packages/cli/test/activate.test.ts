@@ -395,7 +395,7 @@ function seedRemoteCleanupFixture(
   return { db, objects, archiveKey, objectKey };
 }
 
-describe('lore builds', () => {
+describe('lorepack builds', () => {
   it('lists history newest first with an active marker and counts', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { third } = await threeBuilds(root);
@@ -424,12 +424,12 @@ describe('lore builds', () => {
     await project({ 'a.md': '# A\n\nText.' }, async (_root, lore) => {
       const result = await lore(['builds']);
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('lore build');
+      expect(result.stderr).toContain('lorepack build');
     });
   });
 });
 
-describe('lore activate', () => {
+describe('lorepack activate', () => {
   it('accepts a full id and moves the pointer', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { first, third } = await threeBuilds(root);
@@ -508,7 +508,7 @@ describe('lore activate', () => {
   });
 });
 
-describe('lore rollback', () => {
+describe('lorepack rollback', () => {
   it('returns to the previous verified build with no argument', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { second, third } = await threeBuilds(root);
@@ -602,7 +602,7 @@ describe('lore rollback', () => {
 
       expect(result.code).toBe(5);
       expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
-      expect(result.stderr).toContain('Run `lore target add cloudflare` first.');
+      expect(result.stderr).toContain('Run `lorepack target add cloudflare` first.');
     });
   });
 
@@ -733,7 +733,7 @@ describe('lore rollback', () => {
   });
 });
 
-describe('lore prune', () => {
+describe('lorepack prune', () => {
   async function manyBuilds(root: string, count: number) {
     const ids: string[] = [];
     for (let index = 0; index < count; index += 1) {

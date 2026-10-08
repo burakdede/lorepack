@@ -17,11 +17,11 @@ describe('public registry smoke assertions', () => {
 
   it('turns command failures into failed smoke results', () => {
     expect(() =>
-      assertCommandSucceeded({ status: 0, stdout: 'ok', stderr: '' }, ['lore', 'build']),
+      assertCommandSucceeded({ status: 0, stdout: 'ok', stderr: '' }, ['lorepack', 'build']),
     ).not.toThrow();
     expect(() =>
-      assertCommandSucceeded({ status: 1, stdout: '', stderr: 'broken' }, ['lore', 'build']),
-    ).toThrow('lore build exited 1');
+      assertCommandSucceeded({ status: 1, stdout: '', stderr: 'broken' }, ['lorepack', 'build']),
+    ).toThrow('lorepack build exited 1');
   });
 
   it('requires complete provenance on every search hit', () => {

@@ -20,7 +20,7 @@ import { lockInputs } from './versions.js';
  * So they are injected host functions on `createApiApp`, exactly like `currentBuild`. A
  * deployment that cannot answer simply does not register the route.
  *
- * Both call the same code the CLI calls, so `lore plan` and Studio can never disagree.
+ * Both call the same code the CLI calls, so `lorepack plan` and Studio can never disagree.
  */
 
 /**

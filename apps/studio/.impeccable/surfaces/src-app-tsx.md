@@ -8,7 +8,7 @@ related_targets: []
 # Lore Studio surface brief
 
 Scope: the whole Studio app (shell plus six routes). Mode: Operate.
-Audience: developers running `lore dev`, moving between terminal and browser.
+Audience: developers running `lorepack dev`, moving between terminal and browser.
 Job: inspect one immutable build: what was compiled, what was left out, what a model receives, which versions exist, whether the environment is healthy.
 Constraints: offline, no new dependencies, routes and API unchanged, provenance on every item, explicit confirmations for version actions, keyboard and reduced motion preserved.
 Memorable moment: the budget tape in Playground and the command palette that jumps to any source or table.

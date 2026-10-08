@@ -17,7 +17,7 @@ import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/r
 import { readFreshness, readStatus } from '../services/status.js';
 
 /**
- * `lore mcp`: the stdio server a coding agent launches.
+ * `lorepack mcp`: the stdio server a coding agent launches.
  *
  * The startup sequence is architecture 14.3, and its order is the whole point. Freshness is
  * reconciled **before the first protocol byte**, so a client that launched against a dirty
@@ -68,7 +68,7 @@ export function mcpCommand(): CommandDefinition {
       if ((await backend.provider.current()) === null) {
         backend.close();
         throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
-          remediation: 'Run `lore build` first, or start the server with --ensure-current.',
+          remediation: 'Run `lorepack build` first, or start the server with --ensure-current.',
         });
       }
 
@@ -207,7 +207,7 @@ async function reconcile(options: {
   if (status?.sourceState === 'unbuilt') {
     if (options.mode !== 'ensure-current') {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
-        remediation: 'Run `lore build`, or start the server with --ensure-current.',
+        remediation: 'Run `lorepack build`, or start the server with --ensure-current.',
       });
     }
     options.warn('No build yet. Building before serving.\n');
@@ -265,7 +265,7 @@ async function rebuild(options: {
       'The project could not be built, so nothing was served.',
       {
         remediation:
-          'Run `lore build` to see the failure, or start with --allow-stale to serve the existing build.',
+          'Run `lorepack build` to see the failure, or start with --allow-stale to serve the existing build.',
         cause,
       },
     );

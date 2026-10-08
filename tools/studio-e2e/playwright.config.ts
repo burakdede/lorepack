@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { STUDIO_SETUP_TIMEOUT_MS } from './test/setup-budget.js';
 
 /**
- * Studio in a real browser, against a real `lore dev`.
+ * Studio in a real browser, against a real `lorepack dev`.
  *
  * A separate suite from the unit run, for the reason the acceptance suite is separate: it
  * builds a project, spawns a server and drives a browser, so it is minutes rather than

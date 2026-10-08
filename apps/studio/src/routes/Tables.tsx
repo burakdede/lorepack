@@ -91,7 +91,7 @@ export function Tables(): React.JSX.Element {
       <Empty title="This build contains no tables.">
         <p>
           CSV and spreadsheet files become typed tables; other formats become text. Add one and run{' '}
-          <code>lore build</code>.
+          <code>lorepack build</code>.
         </p>
       </Empty>,
     );

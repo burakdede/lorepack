@@ -11,7 +11,7 @@ import { runBuild } from '../src/services/build.js';
 /**
  * A damaged build can be rebuilt (#251).
  *
- * Every case here was permanently unrecoverable: `lore build` reported "No changes" over a
+ * Every case here was permanently unrecoverable: `lorepack build` reported "No changes" over a
  * build nobody could open, and the next read failed exactly as before. In two of them the
  * *build itself* crashed on the damaged predecessor, which is backwards: the command that
  * exists to produce a good build failed because a bad one existed.
@@ -87,7 +87,7 @@ describe('a build damaged on disk', () => {
    * The one whose remediation Lorepack wrote itself.
    *
    * #235's guard refuses a build at an older catalog schema and tells the reader to run
-   * `lore build`. Until #251 that command declined to help, so the product named an action
+   * `lorepack build`. Until #251 that command declined to help, so the product named an action
    * that did nothing about a problem it had just diagnosed.
    */
   it('recovers when the build is at an older catalog schema', async () => {

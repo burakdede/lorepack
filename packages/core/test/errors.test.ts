@@ -58,7 +58,7 @@ describe('LoreError', () => {
     // #169: `--no-color`, NO_COLOR and FORCE_COLOR were documented and resolved, and
     // nothing was ever coloured.
     const error = new LoreError('LORE_E_BUILD_NOT_FOUND', 'No build matches nope.', {
-      remediation: 'Run `lore builds` to see what exists.',
+      remediation: 'Run `lorepack builds` to see what exists.',
     });
     const esc = String.fromCharCode(27);
 
@@ -153,14 +153,14 @@ describe('renderers', () => {
   });
 
   it('sends an unclassified failure to doctor, and still names the code', () => {
-    // #168 removed `lore doctor` from here because the command did not exist yet, and #56
+    // #168 removed `lorepack doctor` from here because the command did not exist yet, and #56
     // restored it once it did. `scripts/check-command-set.mjs` is what makes that ordering
     // enforceable rather than remembered: it fails the build if any string in the source
-    // names a command `lore --help` does not list.
+    // names a command `lorepack --help` does not list.
     const bare = new LoreError('LORE_E_INTERNAL', 'something broke');
     const text = renderForCli(bare, { secrets: [] });
 
-    expect(text).toContain('lore doctor');
+    expect(text).toContain('lorepack doctor');
     expect(text.trimEnd().split('\n').at(-1)).toContain('LORE_E_INTERNAL');
   });
 

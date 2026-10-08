@@ -19,7 +19,7 @@ const args = new Set(process.argv.slice(2));
 const check = args.has('--check');
 
 function usageFor(command) {
-  const pieces = ['lore', command.name];
+  const pieces = ['lorepack', command.name];
   for (const argument of command.arguments ?? []) {
     pieces.push(argument.required === false ? `[${argument.name}]` : `<${argument.name}>`);
   }
@@ -62,7 +62,7 @@ const lines = [
 ];
 
 for (const command of commands) {
-  lines.push(`## \`lore ${command.name}\``, '');
+  lines.push(`## \`lorepack ${command.name}\``, '');
   lines.push(command.description, '');
   lines.push('```text', usageFor(command), '```', '');
   lines.push('### Arguments', '');

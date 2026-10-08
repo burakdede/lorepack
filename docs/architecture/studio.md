@@ -19,18 +19,18 @@ are recorded here.
 | Diagnostics | Why is this not working, and what should be run to fix it |
 
 Studio is read-mostly. The only actions that change anything are on Versions:
-activate, roll back, and pack. They exist only under `lore dev` and refuse any
+activate, roll back, and pack. They exist only under `lorepack dev` and refuse any
 browser origin that is not a loopback literal.
 
 ## Running it
 
 ```bash
-lore dev
+lorepack dev
 pnpm --filter @lorepack/studio dev
 ```
 
 The second command runs Vite with hot reload and proxies to a running
-`lore dev` process.
+`lorepack dev` process.
 
 ## Documentation captures
 
@@ -47,7 +47,7 @@ Versions, Diagnostics, and the command palette. The gallery lives in the
 |---|---|---|
 | Component | `pnpm vitest run --project studio` | Route behavior and wording invariants |
 | Contrast | `pnpm vitest run --project studio contrast` | Documented token pairs in both themes |
-| Browser | `pnpm test:e2e` | Real `lore dev`, axe, keyboard, 1280x720, and 200% zoom |
+| Browser | `pnpm test:e2e` | Real `lorepack dev`, axe, keyboard, 1280x720, and 200% zoom |
 
 The browser suite covers all six routes, including the table console and
 version confirmation flow. Wide tables scroll inside their own box so the

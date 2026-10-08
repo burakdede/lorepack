@@ -236,7 +236,7 @@ export function renderOwnedTable(input: OwnedTableInput): string {
   };
 
   const lines = [
-    `${OWNERSHIP_NOTE} \`lore disconnect codex\` removes exactly this block.`,
+    `${OWNERSHIP_NOTE} \`lorepack disconnect codex\` removes exactly this block.`,
     `${TOML_OWNERSHIP_PREFIX}${JSON.stringify(marker)}`,
     `[${input.path.map(renderKey).join('.')}]`,
   ];
@@ -256,7 +256,7 @@ const renderKey = (key: string): string => (/^[A-Za-z0-9_-]+$/.test(key) ? key :
  * Replaces the table's lines, or appends it, leaving every other line exactly as it was.
  *
  * Idempotent by construction: a second call finds the block the first one wrote and replaces
- * the same span, so re-running `lore connect` to fix a stale path never accumulates anything.
+ * the same span, so re-running `lorepack connect` to fix a stale path never accumulates anything.
  */
 export function withTomlTable(config: TomlConfig, path: readonly string[], block: string): string {
   const body = config.text.replace(/\r\n/g, '\n');

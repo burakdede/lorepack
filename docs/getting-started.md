@@ -32,7 +32,7 @@ cd lorepack
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build
-alias lore="node $PWD/packages/cli/dist/entry.js"
+alias lorepack="node $PWD/packages/cli/dist/entry.js"
 ```
 
 The alias lasts for the current shell. Add it to your shell profile to keep it, or call
@@ -47,12 +47,12 @@ npm install -g @lorepack/cli
 ## Two commands
 
 ```bash
-lore dev ./my-docs          # build the folder, serve it with Studio, rebuild on change
-lore connect claude-code    # wire an AI client to the build, and prove it answers
+lorepack dev ./my-docs          # build the folder, serve it with Studio, rebuild on change
+lorepack connect claude-code    # wire an AI client to the build, and prove it answers
 ```
 
-`lore dev` prints everything you need: the active build, the Studio URL, the HTTP and MCP
-endpoints, and a `lore connect` line for each AI client it finds on your machine. Clients with
+`lorepack dev` prints everything you need: the active build, the Studio URL, the HTTP and MCP
+endpoints, and a `lorepack connect` line for each AI client it finds on your machine. Clients with
 their own guides:
 
 - [Claude Code](integrations/claude-code.md)
@@ -63,7 +63,7 @@ their own guides:
 To try it without your own documents, point it at a checked-in example:
 
 ```bash
-lore dev ./examples/product-research
+lorepack dev ./examples/product-research
 ```
 
 ## The lifecycle
@@ -73,10 +73,10 @@ families:
 
 | Step | What happens | Commands |
 |---|---|---|
-| Start | Preview, build and activate an immutable version | `lore plan`, `lore build` |
-| Change | Edit a source and see exactly what will rebuild | `lore plan` |
-| Recover | Compare builds, and move the active pointer back without recompiling | `lore diff`, `lore rollback` |
-| Deploy | Produce and verify a portable artifact, then project it remotely | `lore pack`, `lore target add cloudflare`, `lore deploy cloudflare` |
+| Start | Preview, build and activate an immutable version | `lorepack plan`, `lorepack build` |
+| Change | Edit a source and see exactly what will rebuild | `lorepack plan` |
+| Recover | Compare builds, and move the active pointer back without recompiling | `lorepack diff`, `lorepack rollback` |
+| Deploy | Produce and verify a portable artifact, then project it remotely | `lorepack pack`, `lorepack target add cloudflare`, `lorepack deploy cloudflare` |
 
 `pnpm demo:readme` runs that whole sequence against copies of the checked-in examples and
 rewrites [`demo-transcript.md`](demo-transcript.md) with the real output. CI runs
@@ -88,20 +88,20 @@ Every option of every command is in the [CLI reference](cli-reference.md).
 
 A build reports what it compiled:
 
-![lore init and lore build](images/cli-build.svg)
+![lorepack init and lorepack build](images/cli-build.svg)
 
 Everything the build decided can be inspected without running it again, including the decisions
 that removed a file:
 
-![lore status and lore inspect exclusions](images/cli-inspect.svg)
+![lorepack status and lorepack inspect exclusions](images/cli-inspect.svg)
 
 Every result carries the file, the heading path and the lines it came from. A result without
 them is a bug, not a style issue:
 
-![lore search, with provenance on every hit](images/cli-search.svg)
+![lorepack search, with provenance on every hit](images/cli-search.svg)
 
 ## Next
 
-- [Studio tour](studio-tour.md): the local inspector `lore dev` serves.
+- [Studio tour](studio-tour.md): the local inspector `lorepack dev` serves.
 - [Core concepts](concepts.md): why the build, not the search index, is the product.
 - [Limitations](limitations.md): what v0.1 does not do.

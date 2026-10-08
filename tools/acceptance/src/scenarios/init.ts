@@ -20,7 +20,7 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
         expect: {
           exitCode: 1,
           errorCode: 'LORE_E_NOT_INITIALIZED',
-          stderr: { contains: ['lore init'] },
+          stderr: { contains: ['lorepack init'] },
         },
       },
     ],
@@ -28,7 +28,7 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'init/dry-run-writes-nothing',
-    title: '`lore init --dry-run` reports what it would do and changes nothing',
+    title: '`lorepack init --dry-run` reports what it would do and changes nothing',
     proves: 'Section 4.6: a plan never mutates. The escape hatch is safe to try.',
     mode: 'auto',
     fixture: { files: CORPUS },
@@ -52,7 +52,7 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'init/creates-the-project-files',
-    title: '`lore init` creates the configuration a build needs, and nothing else',
+    title: '`lorepack init` creates the configuration a build needs, and nothing else',
     proves: 'Section 4.6: one command produces a working project.',
     mode: 'auto',
     fixture: { files: CORPUS },
@@ -62,7 +62,7 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
         args: ['init'],
         expect: {
           exitCode: 0,
-          stdout: { contains: ['lore.yaml', '.loreignore', '.gitignore', 'lore build'] },
+          stdout: { contains: ['lore.yaml', '.loreignore', '.gitignore', 'lorepack build'] },
         },
       },
       {
@@ -82,7 +82,7 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'init/nested-project-refused',
-    title: '`lore init` inside an existing project is refused and says why',
+    title: '`lorepack init` inside an existing project is refused and says why',
     proves: 'Section 8.1: one project root. A nested project would make the build ambiguous.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init'] },

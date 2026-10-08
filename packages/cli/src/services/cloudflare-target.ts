@@ -126,7 +126,7 @@ export async function resolveCloudflareResourcesWithAdapter(
       `The cloudflare target receipt belongs to account ${receipt.accountId}, but Wrangler is logged into ${identity.accountId}.`,
       {
         remediation:
-          'Log into the matching Cloudflare account or rewrite the receipt with `lore target add cloudflare`.',
+          'Log into the matching Cloudflare account or rewrite the receipt with `lorepack target add cloudflare`.',
         subject: receipt.accountId,
       },
     );
@@ -138,7 +138,7 @@ export async function resolveCloudflareResourcesWithAdapter(
       'The CLI could not inspect Cloudflare D1 databases through the pinned Wrangler dependency.',
       {
         remediation:
-          'Check that Wrangler is installed and authenticated, then retry `lore deploy cloudflare`.',
+          'Check that Wrangler is installed and authenticated, then retry `lorepack deploy cloudflare`.',
         subject: receipt.catalogDatabaseName,
         cause,
       },
@@ -150,7 +150,7 @@ export async function resolveCloudflareResourcesWithAdapter(
       `The cloudflare target receipt refers to D1 database ${receipt.catalogDatabaseName}, but it is not visible to the current Cloudflare account.`,
       {
         remediation:
-          'Fix the receipt or create the expected D1 database, then run `lore target add cloudflare` again.',
+          'Fix the receipt or create the expected D1 database, then run `lorepack target add cloudflare` again.',
         subject: receipt.catalogDatabaseName,
       },
     );
@@ -176,7 +176,7 @@ export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
           'Wrangler returned an unreadable Cloudflare D1 list response.',
           {
             remediation:
-              'Check that Wrangler is current and authenticated, then retry `lore deploy cloudflare`.',
+              'Check that Wrangler is current and authenticated, then retry `lorepack deploy cloudflare`.',
             subject: 'cloudflare',
           },
         );

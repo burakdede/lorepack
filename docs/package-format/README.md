@@ -17,7 +17,7 @@ single source of truth, and `pnpm schemas:check` fails when committed schemas dr
 | [`schemas/lore-lock.json`](../../schemas/lore-lock.json) | `lore.lock` |
 | [`schemas/build-manifest.json`](../../schemas/build-manifest.json) | `manifest.json` inside a sealed build |
 | [`schemas/build-receipt.json`](../../schemas/build-receipt.json) | Operational build receipt outside the build |
-| [`schemas/plan.json`](../../schemas/plan.json) | `lore plan --json` |
+| [`schemas/plan.json`](../../schemas/plan.json) | `lorepack plan --json` |
 | [`schemas/deployment-receipt.json`](../../schemas/deployment-receipt.json) | `.lore/targets/*` deployment receipt |
 | [`schemas/search-request.json`](../../schemas/search-request.json), [`schemas/search-result.json`](../../schemas/search-result.json) | Search request and result |
 | [`schemas/task-context-request.json`](../../schemas/task-context-request.json), [`schemas/context-bundle.json`](../../schemas/context-bundle.json) | Task context request and bundle |
@@ -34,7 +34,7 @@ A Lorepack project has these persisted inputs:
 | Path | Required | Semantics |
 |---|---:|---|
 | `lore.yaml` | yes | Project name, source roots, rules, context defaults, package options and targets. Effective configuration is a build ID input after defaults are applied and secrets or absolute host paths are removed. |
-| `lore.lock` | yes after first build | Compiler, schema, parser and semantic profile versions. `lore build --frozen` MUST fail when these versions drift. |
+| `lore.lock` | yes after first build | Compiler, schema, parser and semantic profile versions. `lorepack build --frozen` MUST fail when these versions drift. |
 | `.lore/state.sqlite` | no | Local operational state: active pointer, build records and generations. It is not part of a sealed build and MUST NOT affect build identity. |
 | `.lore/builds/lore_<sha256>/` | no | Immutable sealed builds. Once sealed, a build directory MUST NOT be migrated or mutated in place. |
 | `.lore/objects/sha256/` | no | Content-addressed normalized source bodies. Objects are addressed by SHA-256 digest. |

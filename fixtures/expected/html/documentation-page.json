@@ -1,8 +1,8 @@
 {
   "artifact": {
     "authority": 50,
-    "byteSize": 1504,
-    "contentHash": "1757da4f52797b17b9bf144838eeaa926b0fac08842ab06710dda196ad6e6e20",
+    "byteSize": 1508,
+    "contentHash": "fe8075fc8faa318158e700965da63cb3a3f11245494eb0febea186361522be8e",
     "displayPath": "documents/html/documentation-page.html",
     "id": "fixtures:documents/html/documentation-page.html",
     "mediaType": "text/html",
@@ -222,8 +222,8 @@
       },
       "ordinal": 1,
       "parentId": "fixtures:documents/html/documentation-page.html#0.1.4",
-      "revisionHash": "6a58f1d421ea8380628a16904632b9533cda2531ac53affb86a18fccc1216e2f",
-      "text": "lore rollback \\\n  --yes"
+      "revisionHash": "b72c8ad18d076a0cfd2116104ffc0402d4b4e1e59feecaaba1e4e2f16b892358",
+      "text": "lorepack rollback \\\n  --yes"
     },
     {
       "artifactId": "fixtures:documents/html/documentation-page.html",

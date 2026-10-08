@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { type LoadedConfig, LoreError } from '@lorepack/core';
 
 /**
- * The receipt a running `lore dev` leaves, so the session is discoverable rather than
+ * The receipt a running `lorepack dev` leaves, so the session is discoverable rather than
  * guessed at.
  *
  * Architecture 15.3 fixes the file and the preferred port. The reason it exists is that a

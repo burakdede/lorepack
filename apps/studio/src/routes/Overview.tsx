@@ -28,7 +28,7 @@ import './Overview.css';
  * metrics trending over time.** There is no delta to show. A build either is what it is, or
  * it has been replaced by a different build with a different id.
  *
- * So the counts are an aligned key-value block echoing what `lore build` prints, and the
+ * So the counts are an aligned key-value block echoing what `lorepack build` prints, and the
  * weight goes to source state, which is the only thing here that moves under the reader.
  */
 
@@ -55,7 +55,7 @@ export function Overview(): React.JSX.Element {
           <RouteHeader title="Overview" intro={INTRO} />
           <Empty title="This project has no build yet.">
             <p>Build it, and this page fills in.</p>
-            <Command value="lore build" />
+            <Command value="lorepack build" />
           </Empty>
         </section>
       );
@@ -92,7 +92,7 @@ export function Overview(): React.JSX.Element {
                 ? 'The sources have changed since this build. Your AI is reading the older text.'
                 : 'Freshness could not be established, so this build is served as it is.'}
           </p>
-          {dirty && <Command value="lore build" />}
+          {dirty && <Command value="lorepack build" />}
         </div>
         <p className="summary-meta">
           {data.createdAt !== undefined && (
@@ -215,7 +215,7 @@ function Warnings({ count }: { readonly count: number }): React.JSX.Element | nu
                 ))}
                 {group.warnings.length > 5 && (
                   <li className="warning-more prose">
-                    {`and ${group.warnings.length - 5} more, in lore inspect warnings`}
+                    {`and ${group.warnings.length - 5} more, in lorepack inspect warnings`}
                   </li>
                 )}
               </ul>
@@ -334,7 +334,7 @@ function useClients(): { readonly clients: readonly Client[]; readonly pending: 
 }
 
 /**
- * Three things a developer does after `lore dev`, each one action away. Live where the state
+ * Three things a developer does after `lorepack dev`, each one action away. Live where the state
  * is knowable: the connect step says how many clients already read this build.
  */
 function NextSteps({ onPlan }: { readonly onPlan: () => void }): React.JSX.Element {
@@ -386,7 +386,7 @@ function NextSteps({ onPlan }: { readonly onPlan: () => void }): React.JSX.Eleme
  * Everything needed to point a client at this build: the endpoints this process serves, and
  * the one command per installed client that wires it up.
  *
- * Studio shows the commands and never runs them. `lore connect` edits a client's own
+ * Studio shows the commands and never runs them. `lorepack connect` edits a client's own
  * configuration, which is the user's to approve in a terminal, not a browser's to do.
  */
 function ConnectPanel(): React.JSX.Element {
@@ -411,7 +411,7 @@ function ConnectPanel(): React.JSX.Element {
         <div className="endpoint">
           <dt>MCP over stdio</dt>
           <dd>
-            <Command value="lore mcp" />
+            <Command value="lorepack mcp" />
           </dd>
         </div>
         <div className="endpoint">
@@ -450,12 +450,12 @@ function ConnectPanel(): React.JSX.Element {
                   : 'not installed'}
               </Badge>
               {entry.configured && !entry.ownedByLorepack && (
-                // Someone wrote this entry by hand, so it is theirs; `lore disconnect` leaves it.
+                // Someone wrote this entry by hand, so it is theirs; `lorepack disconnect` leaves it.
                 <span className="client-row-note">configured by hand</span>
               )}
               {toWire.includes(entry) && (
                 <span className="client-row-command">
-                  <Command value={`lore connect ${entry.id}`} />
+                  <Command value={`lorepack connect ${entry.id}`} />
                 </span>
               )}
             </li>

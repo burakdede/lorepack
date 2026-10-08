@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path';
  */
 
 export interface StagedInstall {
-  /** Absolute path to the staged `lore` entry point. */
+  /** Absolute path to the staged `lorepack` entry point. */
   readonly binary: string;
   readonly root: string;
 }

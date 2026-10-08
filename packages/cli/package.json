@@ -1,7 +1,7 @@
 {
   "name": "@lorepack/cli",
   "version": "0.1.0-alpha.0",
-  "description": "The lore command line interface.",
+  "description": "The Lorepack command line interface.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -44,7 +44,7 @@
     "directory": "packages/cli"
   },
   "bin": {
-    "lore": "./dist/entry.js"
+    "lorepack": "./dist/entry.js"
   },
   "devDependencies": {
     "@lorepack/test-support": "workspace:*"

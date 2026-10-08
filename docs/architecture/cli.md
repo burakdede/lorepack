@@ -1,4 +1,4 @@
-# The `lore` command line
+# The `lorepack` command line
 
 One shell, many commands. Every command is a handler; argument parsing, error rendering,
 exit codes and output modes belong to the shell so no command reinvents them.
@@ -46,7 +46,7 @@ Returning `undefined` means the command produced its own output and has no struc
 result.
 
 Commands are registered explicitly in `commands/index.ts`. No dynamic discovery:
-architecture section 4.8 applies here too, and an explicit list is what makes `lore --help`
+architecture section 4.8 applies here too, and an explicit list is what makes `lorepack --help`
 reviewable in a pull request.
 
 ## Cancellation
@@ -56,7 +56,7 @@ One interrupt asks the running command to stop at its next checkpoint; a second 
 immediately, because at that point the user is no longer asking.
 
 A command that ignores the signal is simply not cancellable, which is correct for short
-ones. `lore build` checks it between stages and once per artifact, and the guarantee it
+ones. `lorepack build` checks it between stages and once per artifact, and the guarantee it
 makes is not that temporary files are tidy: it is that **`builds/` and the active pointer
 are unchanged**. A leftover candidate directory under `.lore/tmp/` is untidy. A mutated
 `builds/` would be a broken promise, so that is what the scenarios assert.
@@ -101,11 +101,11 @@ against different temp projects, and a global mutation would make that flaky.
 
 `LORE_`-prefixed, and deliberately a short list rather than a general override channel. Every
 one of them is operational: none reaches the build id, so two machines that disagree about all
-of them still produce identical builds. `lore config` prints each with the layer it came from.
+of them still produce identical builds. `lorepack config` prints each with the layer it came from.
 
 | Variable | Effect | Default |
 |---|---|---|
-| `LORE_DEV_PORT` | Port `lore dev` listens on | 43110 |
+| `LORE_DEV_PORT` | Port `lorepack dev` listens on | 43110 |
 | `LORE_REVALIDATE_INTERVAL_MS` | How often a long-lived server rechecks freshness | see `serve` |
 | `LORE_LOCK_WAIT_MS` | How long a command waits for the project lock before reporting it held | 30000 |
 
@@ -123,8 +123,8 @@ someone setting a wait wants, reached by writing nothing.
 ## Output contract
 
 With `--json`, **stdout carries the structured result and nothing else**. Progress,
-warnings and human text move to stderr. That is what makes `lore plan --json | jq` work,
-and it is the same discipline `lore mcp` needs in Phase 2, where stdout carries protocol
+warnings and human text move to stderr. That is what makes `lorepack plan --json | jq` work,
+and it is the same discipline `lorepack mcp` needs in Phase 2, where stdout carries protocol
 frames. The renderer's write target is injected rather than assumed, so the MCP server
 passes stderr without any other change.
 
@@ -135,7 +135,7 @@ stderr first.
 
 `process.exit` terminates "as soon as possible", and on a pipe that is sooner than the
 writes have drained: `process.stdout` is asynchronous when it is a pipe and synchronous when
-it is a file or a TTY. So `lore --json inspect sources` returned exactly 65536 bytes through
+it is a file or a TTY. So `lorepack --json inspect sources` returned exactly 65536 bytes through
 `| jq` and the full 521709 to a redirect, at exit code 0, with no error either side (#154).
 The consumer received a plausible prefix of a real answer, which is worse than receiving
 nothing.
@@ -147,7 +147,7 @@ goodbye would be a worse defect than the one this fixes.
 ## Freshness on a read-only command
 
 Section 4.10 says freshness travels with the result, and it is tempting to read that as
-"establish it or fail". That reading cost `lore search` its usefulness on any project above
+"establish it or fail". That reading cost `lorepack search` its usefulness on any project above
 the file envelope: the build was sealed, complete and perfectly queryable, and the query was
 refused because a guard about the cost of *building* had been consulted first (#147).
 
@@ -163,7 +163,7 @@ answer, never a precondition for producing one.
 - **`unknown` means unknown.** Invariant 6 applies to the degraded case: it never means
   clean.
 
-Phase 2 inherits this. `lore mcp` and `lore serve` answer many queries per session against
+Phase 2 inherits this. `lorepack mcp` and `lorepack serve` answer many queries per session against
 one build, and #112 revisits how often freshness should be re-established for a long-lived
 session. Whatever cadence it picks, the rule that a read is never failed by the source tree
 is fixed here.

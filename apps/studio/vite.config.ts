@@ -20,7 +20,7 @@ export default defineConfig({
     assetsInlineLimit: 2048,
   },
   server: {
-    // `pnpm --filter @lorepack/studio dev` proxies to a running `lore dev`, so the app can be
+    // `pnpm --filter @lorepack/studio dev` proxies to a running `lorepack dev`, so the app can be
     // developed with hot reload against a real server rather than mocks.
     proxy: {
       '/v1': 'http://127.0.0.1:43110',

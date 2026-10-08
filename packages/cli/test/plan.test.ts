@@ -22,7 +22,7 @@ async function project<T>(
   );
 }
 
-describe('lore plan', () => {
+describe('lorepack plan', () => {
   it('previews a first build and exits 0', async () => {
     await project({ 'docs/a.md': '# A', 'docs/b.md': '# B' }, async (_root, plan) => {
       const result = await plan();
@@ -82,7 +82,7 @@ describe('lore plan', () => {
       const result = await run(['--cwd', temp.root, 'plan']);
       expect(result.code).toBe(1);
       expect(result.stderr).toContain('LORE_E_NOT_INITIALIZED');
-      expect(result.stderr).toContain('lore init');
+      expect(result.stderr).toContain('lorepack init');
     });
   });
 

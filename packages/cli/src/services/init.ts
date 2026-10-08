@@ -151,12 +151,12 @@ export function planInit(options: InitOptions): InitPlan {
 
   if (!existsSync(root)) {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `${toPosix(root)} does not exist.`, {
-      remediation: 'Create the directory first, or point `lore init` at an existing one.',
+      remediation: 'Create the directory first, or point `lorepack init` at an existing one.',
     });
   }
   if (!statSync(root).isDirectory()) {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', `${toPosix(root)} is not a directory.`, {
-      remediation: 'Point `lore init` at a directory containing your documents.',
+      remediation: 'Point `lorepack init` at a directory containing your documents.',
     });
   }
 

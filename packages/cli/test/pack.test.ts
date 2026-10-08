@@ -38,7 +38,7 @@ async function packedProject<T>(
   });
 }
 
-describe('lore pack', () => {
+describe('lorepack pack', () => {
   it('writes an archive named for the project and the build', async () => {
     await packedProject(async (_root, _lore, archive) => {
       expect(existsSync(archive)).toBe(true);

@@ -247,9 +247,9 @@ export const MIXED_SCENARIOS: readonly Scenario[] = [
     steps: [
       {
         action: 'note',
-        text: 'Generate a text-layer PDF of more than 500 pages, put it in the project, and run `lore build`.',
+        text: 'Generate a text-layer PDF of more than 500 pages, put it in the project, and run `lorepack build`.',
         expect:
-          'The build succeeds. `lore inspect warnings` names the file and its page count, says the envelope covers 500, and says it was read in full rather than truncated. Generating a 500-page PDF is the reason this is a note rather than an automated scenario: the fixture would dominate the suite runtime for one warning.',
+          'The build succeeds. `lorepack inspect warnings` names the file and its page count, says the envelope covers 500, and says it was read in full rather than truncated. Generating a 500-page PDF is the reason this is a note rather than an automated scenario: the fixture would dominate the suite runtime for one warning.',
       },
       {
         action: 'note',

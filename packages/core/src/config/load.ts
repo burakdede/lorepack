@@ -78,7 +78,7 @@ function notInitialized(start: string): LoreError {
     'LORE_E_NOT_INITIALIZED',
     `No ${CONFIG_FILENAME} found in ${toPosix(start)} or any parent directory.`,
     {
-      remediation: `Run \`lore init\` here, or pass --cwd pointing at a Lorepack project.`,
+      remediation: `Run \`lorepack init\` here, or pass --cwd pointing at a Lorepack project.`,
     },
   );
 }

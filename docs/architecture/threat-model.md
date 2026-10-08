@@ -26,7 +26,7 @@ changes, and which threats are intentionally not solved.
 | Parser input | Parser process and limits | PDF, DOCX, XLSX, CSV, HTML, Markdown and text bytes | Treat bytes as data, never execute, fetch or expand external entities |
 | Build sealing | Candidate build directory | Parsed content, tables, config and warnings | Validate before recording or activation |
 | Runtime REST and MCP | Immutable build projection | Client requests and model tool calls | Read only, bounded inputs, locators everywhere |
-| Local write surface | `lore dev` host process | Browser origins | Register writes only when supplied by host, and only loopback origins may call them |
+| Local write surface | `lorepack dev` host process | Browser origins | Register writes only when supplied by host, and only loopback origins may call them |
 | Remote Worker runtime | Active projected build and D1/R2 bindings | Internet clients | Authenticate before reading build data |
 | Deployment control plane | Local CLI and Wrangler credentials | Remote platform state | Deployment writes are CLI-only, never model-facing |
 

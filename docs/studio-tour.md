@@ -1,7 +1,7 @@
 # A tour of Studio
 
 Six routes, served from static files by the same process that serves the API,
-on the same port, with no toolchain and no network. `lore dev` prints the URL.
+on the same port, with no toolchain and no network. `lorepack dev` prints the URL.
 
 Every image here is regenerated from a real build by `pnpm docs:capture`.
 For the design rules and accessibility review, see
@@ -20,7 +20,7 @@ For the design rules and accessibility review, see
 
 The active build and source state lead the page. Three next steps follow: try a
 task, connect a client, and preview the next build. The Connect panel lists the
-MCP and HTTP endpoints this process serves and one `lore connect` command for
+MCP and HTTP endpoints this process serves and one `lorepack connect` command for
 each installed client that is not yet connected. The MCP URL is also one click
 away in the sidebar.
 
@@ -45,7 +45,7 @@ elsewhere in Studio links here, with its lines marked.
 
 The passages a model would receive for a task, each with provenance, and every
 omission with the reason it was left out. **Use it anywhere** shows the same
-request as a `lore export` command, a `curl` call and an MCP `tools/call`, so
+request as a `lorepack export` command, a `curl` call and an MCP `tools/call`, so
 a request tried here can be pasted into a terminal, a script or an agent. The
 Tables console and the source reader offer the same panel.
 
@@ -69,7 +69,7 @@ recompiles.
 
 ## Diagnostics
 
-The same checks `lore doctor` prints, plus what only a running session knows:
+The same checks `lorepack doctor` prints, plus what only a running session knows:
 the watcher, port, process, and configured clients.
 
 ![Studio Diagnostics](images/studio-diagnostics.png)

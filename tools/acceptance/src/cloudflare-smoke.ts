@@ -115,7 +115,7 @@ export function createCloudflareSmokeProject(name: string): CloudflareSmokeProje
       });
       if (artifactDirectory !== null) {
         commandSequence += 1;
-        writeCommandArtifact(artifactDirectory, commandSequence, 'lore', args, result);
+        writeCommandArtifact(artifactDirectory, commandSequence, 'lorepack', args, result);
       }
       return result;
     },
@@ -329,11 +329,11 @@ export async function callRemoteMcpTool<T>(
 export async function buildProject(project: CloudflareSmokeProject): Promise<BuildId> {
   const result = await project.lore(['--json', 'build']);
   if (result.code !== 0) {
-    throw new Error(`lore build failed:\n${result.stderr}`);
+    throw new Error(`lorepack build failed:\n${result.stderr}`);
   }
   const payload = JSON.parse(result.stdout) as { readonly buildId?: unknown };
   if (!isBuildId(payload.buildId)) {
-    throw new Error(`lore build returned no build id:\n${result.stdout}`);
+    throw new Error(`lorepack build returned no build id:\n${result.stdout}`);
   }
   return payload.buildId;
 }
@@ -347,7 +347,7 @@ export async function addCloudflareTarget(
     target.wranglerEnv,
   );
   if (result.code !== 0) {
-    throw new Error(`lore target add cloudflare failed:\n${commandFailureOutput(result)}`);
+    throw new Error(`lorepack target add cloudflare failed:\n${commandFailureOutput(result)}`);
   }
 
   const receipt = parseCloudflareTargetReceipt(result.stdout);
@@ -403,14 +403,14 @@ export async function deployCloudflareTarget(
       : {}),
   });
   if (result.code !== 0) {
-    throw new Error(`lore deploy cloudflare failed:\n${result.stderr}`);
+    throw new Error(`lorepack deploy cloudflare failed:\n${result.stderr}`);
   }
   const payload = JSON.parse(result.stdout) as {
     readonly buildId?: unknown;
     readonly receiptId?: unknown;
   };
   if (!isBuildId(payload.buildId) || typeof payload.receiptId !== 'string') {
-    throw new Error(`lore deploy cloudflare returned an unreadable receipt:\n${result.stdout}`);
+    throw new Error(`lorepack deploy cloudflare returned an unreadable receipt:\n${result.stdout}`);
   }
   return { buildId: payload.buildId, receiptId: payload.receiptId };
 }
@@ -426,7 +426,7 @@ export async function deployCloudflareTargetExpectFailureAfterProject(
     LORE_TEST_FAIL_DEPLOY_AFTER_PROJECT: '1',
   });
   if (result.code === 0) {
-    throw new Error('lore deploy cloudflare unexpectedly succeeded under the failure hook.');
+    throw new Error('lorepack deploy cloudflare unexpectedly succeeded under the failure hook.');
   }
   const after = listReceiptIds(project.root).filter((receiptId) => !before.has(receiptId));
   if (after.length !== 1) {
@@ -447,7 +447,7 @@ export async function resumeCloudflareTarget(
     runtimeTokenEnv(token),
   );
   if (result.code !== 0) {
-    throw new Error(`lore deploy cloudflare --resume ${receiptId} failed:\n${result.stderr}`);
+    throw new Error(`lorepack deploy cloudflare --resume ${receiptId} failed:\n${result.stderr}`);
   }
   const payload = JSON.parse(result.stdout) as {
     readonly buildId?: unknown;
@@ -455,7 +455,7 @@ export async function resumeCloudflareTarget(
   };
   if (!isBuildId(payload.buildId) || typeof payload.receiptId !== 'string') {
     throw new Error(
-      `lore deploy cloudflare --resume ${receiptId} returned an unreadable receipt:\n${result.stdout}`,
+      `lorepack deploy cloudflare --resume ${receiptId} returned an unreadable receipt:\n${result.stdout}`,
     );
   }
   return { buildId: payload.buildId, receiptId: payload.receiptId };
@@ -475,7 +475,7 @@ export async function rollbackCloudflareTarget(
     runtimeTokenEnv(token),
   );
   if (result.code !== 0) {
-    throw new Error(`lore rollback --target cloudflare failed:\n${result.stderr}`);
+    throw new Error(`lorepack rollback --target cloudflare failed:\n${result.stderr}`);
   }
   const payload = JSON.parse(result.stdout) as {
     readonly buildId?: unknown;
@@ -483,7 +483,9 @@ export async function rollbackCloudflareTarget(
     readonly confirmedBuildId?: unknown;
   };
   if (!isBuildId(payload.buildId)) {
-    throw new Error(`lore rollback --target cloudflare returned no build id:\n${result.stdout}`);
+    throw new Error(
+      `lorepack rollback --target cloudflare returned no build id:\n${result.stdout}`,
+    );
   }
   return {
     buildId: payload.buildId,
@@ -504,11 +506,11 @@ export async function issueCloudflareRuntimeToken(
     ...(rotate ? ['--rotate'] : []),
   ]);
   if (result.code !== 0) {
-    throw new Error(`lore target token cloudflare failed:\n${result.stderr}`);
+    throw new Error(`lorepack target token cloudflare failed:\n${result.stderr}`);
   }
   const payload = JSON.parse(result.stdout) as { readonly token?: unknown };
   if (typeof payload.token !== 'string' || payload.token.trim() === '') {
-    throw new Error(`lore target token cloudflare returned no token:\n${result.stdout}`);
+    throw new Error(`lorepack target token cloudflare returned no token:\n${result.stdout}`);
   }
   return payload.token;
 }
@@ -972,7 +974,7 @@ export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetRecei
     catalogDatabaseName === null ||
     objectsBucketName === null
   ) {
-    throw new Error(`lore target add cloudflare returned an unreadable receipt:\n${raw}`);
+    throw new Error(`lorepack target add cloudflare returned an unreadable receipt:\n${raw}`);
   }
   return {
     accountId,
@@ -1078,7 +1080,7 @@ async function execCommand(
 function writeCommandArtifact(
   root: string,
   sequence: number,
-  tool: 'lore' | 'wrangler',
+  tool: 'lorepack' | 'wrangler',
   args: readonly string[],
   result: CommandOutput,
 ): void {

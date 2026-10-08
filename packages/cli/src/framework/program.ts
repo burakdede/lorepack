@@ -9,7 +9,7 @@ import {
 } from './context.js';
 import { exitAfterFlush } from './exit.js';
 
-export const CLI_NAME = 'lore' as const;
+export const CLI_NAME = 'lorepack' as const;
 
 export interface CommandResult {
   /** Rendered for humans. Omit when the command has already written its own output. */

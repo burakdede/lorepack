@@ -9,7 +9,7 @@
   bug for a permission they could fix. Error codes are part of the public contract, so the
   addition is recorded here.
 
-  The fallback `next:` line no longer names `lore doctor`, which does not exist until Phase 3.
+  The fallback `next:` line no longer names `lorepack doctor`, which does not exist until Phase 3.
 
 - 6976d0b: `buildDescription` gains an optional `createdAt`. A sealed build carries no wall-clock time
   by design, so identical content produces identical bytes; the creation time is operational

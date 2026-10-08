@@ -5,14 +5,14 @@ import { CORPUS } from './corpus.js';
  * What an AI client does with Lorepack.
  *
  * The scenario a person cannot check by reading output: a coding agent launches
- * `lore mcp`, and the first thing it does is ask what tools exist. Everything here is
+ * `lorepack mcp`, and the first thing it does is ask what tools exist. Everything here is
  * invisible to every other scenario, because it happens over a protocol rather than on a
  * terminal.
  */
 export const MCP_SCENARIOS: readonly Scenario[] = [
   {
     id: 'mcp/a-client-connects-and-lists-tools',
-    title: 'An AI client launches `lore mcp` and finds the tools',
+    title: 'An AI client launches `lorepack mcp` and finds the tools',
     proves: 'Section 14.1 and 14.3: the tool surface is served, and stdout carries protocol only.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init'] },
@@ -36,7 +36,7 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
   },
   {
     id: 'mcp/the-server-answers-the-mandatory-version-probe',
-    title: 'A modern client asks `lore mcp` which protocol revisions it supports',
+    title: 'A modern client asks `lorepack mcp` which protocol revisions it supports',
     proves:
       'Section 14.3: `server/discover` is a MUST, and the stdio transport negotiates the same revision the HTTP one does.',
     mode: 'auto',
@@ -75,7 +75,7 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'mcp/export-is-one-file-a-person-can-paste',
-    title: '`lore export` writes a bounded, cited file for a chat product',
+    title: '`lorepack export` writes a bounded, cited file for a chat product',
     proves: 'Section 14.6: the compatibility bridge for clients that cannot speak MCP.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },

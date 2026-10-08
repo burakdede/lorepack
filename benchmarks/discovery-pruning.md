@@ -17,8 +17,8 @@ median of three runs after a warm-up.
 Roughly **63x**, and the gap grows with the dependency tree. A real `node_modules` is often
 200,000 files rather than 10,000.
 
-It is not a one-off cost. Discovery runs on every `lore build`, every `lore plan`, every
-`lore status`, and on every watcher reconcile sweep, which is every two seconds by default.
+It is not a one-off cost. Discovery runs on every `lorepack build`, every `lorepack plan`, every
+`lorepack status`, and on every watcher reconcile sweep, which is every two seconds by default.
 
 ## Reproducing
 

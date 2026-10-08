@@ -12,7 +12,7 @@ packages/
   backend-local/      node:sqlite and filesystem adapters
   runtime/            portable context capabilities and HTTP routes
   mcp/                MCP tools, resources, transports
-  cli/                the lore executable
+  cli/                the lorepack executable
   connect-clients/    AI client detection and configuration
   deploy-cloudflare/  Cloudflare plan, apply, verify, activate
   sdk/                typed HTTP client

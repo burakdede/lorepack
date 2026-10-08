@@ -9,7 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * `lore mcp` as a coding agent actually launches it: a subprocess, spoken to by the real
+ * `lorepack mcp` as a coding agent actually launches it: a subprocess, spoken to by the real
  * MCP client over stdio.
  *
  * Everything that matters here is invisible in-process. Whether stdout stays byte-pure
@@ -137,7 +137,7 @@ describe('the protocol era, over the transport a connector generates a config fo
   /**
    * The regression #189 exists for.
    *
-   * `lore mcp` hand-wired a `StdioServerTransport`, which never classifies the opening
+   * `lorepack mcp` hand-wired a `StdioServerTransport`, which never classifies the opening
    * message, so the connection stayed 2025-era and the mandatory `server/discover` probe
    * was answered with `Method not found`. Nothing caught it: the HTTP surface reaches the
    * modern era through `createMcpHandler`, and the raw-stdio tests sent a modern `_meta`

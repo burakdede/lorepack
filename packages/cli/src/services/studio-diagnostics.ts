@@ -16,7 +16,7 @@ import { COMPILER_VERSION } from './versions.js';
 import type { WatchStatus } from './watch.js';
 
 /**
- * Everything `lore doctor` knows, plus what only a running session can know.
+ * Everything `lorepack doctor` knows, plus what only a running session can know.
  *
  * The checks are not reimplemented here and never will be. `runDoctor` produces the same
  * report the CLI prints, validated against the same published schema
@@ -35,7 +35,7 @@ export interface DiagnosticsInput {
   /** A function, because the port is chosen by binding and is not known before then. */
   readonly port: () => number;
   readonly startedAt: string;
-  /** Present when a watcher is running, which is `lore dev` and not `lore serve`. */
+  /** Present when a watcher is running, which is `lorepack dev` and not `lorepack serve`. */
   readonly watchStatus?: () => WatchStatus;
 }
 
@@ -99,7 +99,7 @@ async function clients(
     projectRoot: config.projectRoot,
     serverName: SERVER_NAME,
     command: {
-      executable: 'lore',
+      executable: 'lorepack',
       args: ['mcp', '--project', config.projectRoot, '--ensure-current'],
     },
     scope: 'project' as const,

@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Developers and AI-tool builders who run `lore dev` locally while inspecting the context build an AI depends on.
+Developers and AI-tool builders who run `lorepack dev` locally while inspecting the context build an AI depends on.
 
 ## Product Purpose
 
@@ -20,7 +20,7 @@ The build is the source of truth. Studio makes that immutable build legible whil
 
 ## Operating Context
 
-Studio is served by the same local `lore dev` process that provides the API and MCP surface. Users arrive from a terminal workflow, usually after building or watching a project, and move between terminal output and the browser. The interface must work offline, without an account or hosted service, and must remain useful at dense artifact and table sizes.
+Studio is served by the same local `lorepack dev` process that provides the API and MCP surface. Users arrive from a terminal workflow, usually after building or watching a project, and move between terminal output and the browser. The interface must work offline, without an account or hosted service, and must remain useful at dense artifact and table sizes.
 
 ## Capabilities and Constraints
 

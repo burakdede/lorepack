@@ -13,7 +13,7 @@ import { verifyStdioServer } from '../src/verify.js';
  * question and gets nothing back.
  *
  * A fixture server would only prove the verifier agrees with itself. These drive
- * `lore mcp` as a client would.
+ * `lorepack mcp` as a client would.
  */
 
 const BINARY = join(import.meta.dirname, '..', '..', 'cli', 'dist', 'entry.js');

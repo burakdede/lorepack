@@ -98,7 +98,7 @@ export interface ApiOptions {
    */
   readonly sources?: () => Promise<unknown>;
   /**
-   * The same Markdown `lore export` writes, for the same inputs.
+   * The same Markdown `lorepack export` writes, for the same inputs.
    *
    * Rendered on the server rather than in the browser, because "what you see is what a chat
    * product gets" is only true if one renderer produces both. A second implementation in
@@ -357,7 +357,7 @@ export function createApiApp(options: ApiOptions): Hono {
           'Only a page served from this machine may change which build is active.',
           {
             remediation:
-              'Open Studio at the address `lore dev` printed. These actions are deliberately unavailable to any other origin.',
+              'Open Studio at the address `lorepack dev` printed. These actions are deliberately unavailable to any other origin.',
             subject: origin,
           },
         ),

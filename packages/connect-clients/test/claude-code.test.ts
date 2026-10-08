@@ -25,7 +25,7 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   return {
     projectRoot: project,
     serverName: 'lorepack',
-    command: { executable: 'lore', args: ['mcp', '--project', project, '--ensure-current'] },
+    command: { executable: 'lorepack', args: ['mcp', '--project', project, '--ensure-current'] },
     scope: 'project',
     ...overrides,
   };
@@ -108,7 +108,7 @@ describe('the fallback for a version this adapter will not edit', () => {
 
     expect(() => JSON.parse(snippet)).not.toThrow();
     const document = parsed(snippet);
-    expect(document.mcpServers.lorepack.command).toBe('lore');
+    expect(document.mcpServers.lorepack.command).toBe('lorepack');
     expect(document.mcpServers.lorepack.args).toContain('--ensure-current');
   });
 });

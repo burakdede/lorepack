@@ -73,7 +73,7 @@ The pieces, so a new format knows what to fill in:
 A score says how well a chunk matches the words that were asked for. It is not a
 confidence, and it is not evidence the content is correct. `authority` is a number the user
 wrote in their configuration; it breaks a tie and it never decides which of two documents is
-true (invariant 6). `lore search --debug` prints the components and says so in the output.
+true (invariant 6). `lorepack search --debug` prints the components and says so in the output.
 
 ## Why BM25 is bounded before anything is added to it
 
@@ -161,7 +161,7 @@ one-document filter is usually nothing.
 `artifactId` is exact on both forms and never widens to a prefix. A caller holds whichever
 form the previous answer gave it (the locator carries both), and asking for a document that
 does not exist returns nothing rather than the document it nearly names. The CLI spells it
-`lore search "rollback" --source guides/deployment.md`.
+`lorepack search "rollback" --source guides/deployment.md`.
 
 ## Assembly: the same path, packed to a budget
 
@@ -177,7 +177,7 @@ worth knowing:
   sits inside that range. Below the floor a bundle is too small to orient a model and still
   say anything; above the ceiling it stops being bounded context. Both are permitted, and
   neither happens by typo: an out-of-range budget is refused unless the caller also passes
-  `allowUnsupportedBudget` (`--allow-unsupported-budget` on `lore export`).
+  `allowUnsupportedBudget` (`--allow-unsupported-budget` on `lorepack export`).
 - **The omission report has to be complete.** Search shows a page and need not explain what
   fell off the end; assembly must. `rankWithReport` returns what it dropped and why, so a
   near-duplicate removed before packing is still nameable. Without it the report would have

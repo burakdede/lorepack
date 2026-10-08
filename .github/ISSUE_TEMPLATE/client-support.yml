@@ -1,5 +1,5 @@
 name: AI client support
-description: A problem with lore connect, MCP, or a specific client
+description: A problem with lorepack connect, MCP, or a specific client
 labels: ["area:connect"]
 body:
   - type: input
@@ -18,7 +18,7 @@ body:
     id: what
     attributes:
       label: What happened
-      description: Include `lore connect <client> --dry-run` output and the client's own MCP status output.
+      description: Include `lorepack connect <client> --dry-run` output and the client's own MCP status output.
     validations: {required: true}
   - type: input
     id: platform
@@ -29,6 +29,6 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: lore doctor --json
+      label: lorepack doctor --json
       description: Paste the output if available.
       render: json

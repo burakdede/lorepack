@@ -67,7 +67,7 @@ export const PHASE_1: PhaseDefinition = {
     {
       id: 'commands-registered',
       kind: 'command',
-      promise: 'Every command Phase 1 ships is listed by `lore --help`.',
+      promise: 'Every command Phase 1 ships is listed by `lorepack --help`.',
       command: 'node',
       args: ['scripts/check-command-set.mjs'],
     },
@@ -131,7 +131,7 @@ export const PHASE_1: PhaseDefinition = {
       promise:
         'A build validates, seals atomically, activates as a pointer change, and leaves builds/ untouched when cancelled.',
       command: 'pnpm',
-      args: ['vitest', 'run', '--project', 'cli', '-t', 'lore build'],
+      args: ['vitest', 'run', '--project', 'cli', '-t', 'lorepack build'],
       timeoutMs: 300_000,
     },
     {

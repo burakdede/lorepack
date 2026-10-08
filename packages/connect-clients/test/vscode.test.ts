@@ -71,7 +71,7 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   return {
     projectRoot: project,
     serverName: 'lorepack',
-    command: { executable: 'lore', args: ['mcp', '--project', project, '--ensure-current'] },
+    command: { executable: 'lorepack', args: ['mcp', '--project', project, '--ensure-current'] },
     scope: 'project',
     ...overrides,
   };
@@ -129,7 +129,7 @@ describe('the key VS Code actually reads', () => {
 
     expect(
       fixture.entry(readFileSync(receipt.configPath as string, 'utf8'), 'lorepack'),
-    ).toMatchObject({ type: 'stdio', command: 'lore' });
+    ).toMatchObject({ type: 'stdio', command: 'lorepack' });
   });
 
   /**
@@ -262,7 +262,7 @@ describe('verification', () => {
     const connector = createVsCodeConnector({
       runClient: installed,
       userConfigDirectory: userDirectory,
-      probe: async () => ({ ok: false, step: 'spawn' as const, detail: 'spawn lore ENOENT' }),
+      probe: async () => ({ ok: false, step: 'spawn' as const, detail: 'spawn lorepack ENOENT' }),
     });
     const check = await connector.verify(await connector.apply(await connector.plan(input())));
 

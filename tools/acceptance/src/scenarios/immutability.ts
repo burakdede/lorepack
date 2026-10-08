@@ -9,7 +9,7 @@ import { CORPUS, EDITED_ONBOARDING } from './corpus.js';
 export const IMMUTABILITY_SCENARIOS: readonly Scenario[] = [
   {
     id: 'immutability/no-activate-leaves-the-pointer',
-    title: '`lore build --no-activate` verifies a candidate without moving the pointer',
+    title: '`lorepack build --no-activate` verifies a candidate without moving the pointer',
     proves: 'Invariant 4: activation is a separate, deliberate step.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },
@@ -40,7 +40,7 @@ export const IMMUTABILITY_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'immutability/frozen-lockfile-refuses-drift',
-    title: '`lore build --frozen` fails when the lockfile would change, and says how',
+    title: '`lorepack build --frozen` fails when the lockfile would change, and says how',
     proves: 'Section 18.4: a pinned build is reproducible or it is an error.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },
@@ -199,7 +199,7 @@ export const IMMUTABILITY_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'immutability/prune-never-deletes-by-default',
-    title: '`lore prune` prints its plan and removes nothing without --yes',
+    title: '`lorepack prune` prints its plan and removes nothing without --yes',
     proves: 'Section 4.6: destructive work is opt-in, and never touches the active build.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },

@@ -117,7 +117,7 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
     });
   } catch (cause) {
     throw new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${path} for reading.`, {
-      remediation: 'Check that the build exists and is readable, then run `lore builds`.',
+      remediation: 'Check that the build exists and is readable, then run `lorepack builds`.',
       cause,
     });
   }
@@ -143,7 +143,7 @@ export function openWritable(path: string): DatabaseSync {
     api(db).enableDefensive(true);
     // Deliberately not WAL. A WAL database leaves `-wal` and `-shm` beside it, and a
     // read-only connection creates them without being able to clean them up, which would
-    // make `lore status` write to disk and a sealed build three files instead of one.
+    // make `lorepack status` write to disk and a sealed build three files instead of one.
     // Writers are already serialized by the project lock, so WAL's concurrency buys
     // nothing here; `busy_timeout` covers the reader that arrives mid-write.
     db.exec('PRAGMA journal_mode = DELETE');

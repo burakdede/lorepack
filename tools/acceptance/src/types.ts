@@ -1,7 +1,7 @@
 /**
  * The acceptance catalogue, as data.
  *
- * Every scenario is one thing a person does with the `lore` binary, written as steps a
+ * Every scenario is one thing a person does with the `lorepack` binary, written as steps a
  * runner executes and a renderer describes. Keeping it data rather than a test file per
  * behaviour buys three things: the executed suite and the written checklist come from one
  * source and cannot drift, a scenario that no machine can run still has a home, and adding
@@ -283,7 +283,7 @@ export interface UnchangedStep extends StepBase {
  */
 export interface ProtocolStep extends StepBase {
   readonly action: 'protocol';
-  /** Arguments after `lore`, for example `['mcp', '--ensure-current']`. */
+  /** Arguments after `lorepack`, for example `['mcp', '--ensure-current']`. */
   readonly args: readonly string[];
   /** The JSON-RPC method to call once the process is up. */
   readonly method: string;

@@ -14,7 +14,7 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { buildDirectory, openStateStore, resolveBuildId } from '../services/builds.js';
 
 /**
- * `lore inspect` makes every compiler decision visible without re-running the build.
+ * `lorepack inspect` makes every compiler decision visible without re-running the build.
  *
  * One command with subjects rather than five verbs, and every subject reads sealed build
  * data only. Nothing here re-parses, so inspection is fast, works on any retained build,
@@ -79,7 +79,7 @@ export function inspectCommand(): CommandDefinition {
             return inspectSources(loreDirectory, buildId);
           case 'builds':
             return {
-              human: 'Run `lore builds` for build history.',
+              human: 'Run `lorepack builds` for build history.',
               json: { builds: builds.map((build) => build.buildId) },
             };
           case 'chunks':
@@ -90,7 +90,7 @@ export function inspectCommand(): CommandDefinition {
             return inspectRules(loreDirectory, buildId);
           default:
             // Anything else is treated as a source path, which is the common case and
-            // saves typing `lore inspect sources <path>`.
+            // saves typing `lorepack inspect sources <path>`.
             return inspectArtifact(loreDirectory, buildId, subject);
         }
       } finally {
@@ -103,7 +103,7 @@ export function inspectCommand(): CommandDefinition {
 function activeOrFail(buildId: BuildId | undefined): BuildId {
   if (buildId === undefined) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build.', {
-      remediation: 'Run `lore build`, or pass `--build <id>`.',
+      remediation: 'Run `lorepack build`, or pass `--build <id>`.',
     });
   }
   return buildId;
@@ -117,7 +117,7 @@ function withDatabase<T>(
   const path = join(buildDirectory(loreDirectory, buildId), 'context.sqlite');
   if (!existsSync(path)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildId} has no database.`, {
-      remediation: 'Run `lore build` to recreate it.',
+      remediation: 'Run `lorepack build` to recreate it.',
       subject: buildId,
     });
   }
@@ -176,7 +176,7 @@ function readManifest(loreDirectory: string, buildId: BuildId): BuildManifest {
   const manifestPath = join(buildDirectory(loreDirectory, buildId), 'manifest.json');
   if (!existsSync(manifestPath)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildId} has no manifest.`, {
-      remediation: 'Run `lore builds` to see which builds are complete.',
+      remediation: 'Run `lorepack builds` to see which builds are complete.',
       subject: buildId,
     });
   }
@@ -186,7 +186,7 @@ function readManifest(loreDirectory: string, buildId: BuildId): BuildManifest {
 /**
  * What ignore rules removed, read from the sealed manifest.
  *
- * The other half of "exactly what was not parsed". `lore inspect warnings` lists files the
+ * The other half of "exactly what was not parsed". `lorepack inspect warnings` lists files the
  * walk read and could not use; this lists the ones a rule removed before anything was read,
  * which is the more common reason a document is missing and was recorded nowhere until #202.
  *
@@ -203,7 +203,7 @@ function inspectExclusions(loreDirectory: string, buildId: BuildId): CommandResu
       human: [
         `${buildId.slice(0, 17)} does not record what its ignore rules removed.`,
         '',
-        'It was built before that record existed. Run `lore build` to make one that does.',
+        'It was built before that record existed. Run `lorepack build` to make one that does.',
       ].join('\n'),
       json: { buildId, recorded: false, total: 0, exclusions: [] },
     };
@@ -485,7 +485,7 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
     );
     if (table === undefined) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table matches ${target}.`, {
-        remediation: 'Run `lore inspect tables` to see the tables this build contains.',
+        remediation: 'Run `lorepack inspect tables` to see the tables this build contains.',
         subject: target,
       });
     }
@@ -498,7 +498,8 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
         'LORE_E_INTERNAL',
         `Table ${String(table.id)} is listed but unreadable.`,
         {
-          remediation: 'The build directory may be damaged. Run `lore build` to compile it again.',
+          remediation:
+            'The build directory may be damaged. Run `lorepack build` to compile it again.',
           subject: String(table.id),
         },
       );
@@ -639,7 +640,7 @@ function findArtifact(db: import('node:sqlite').DatabaseSync, path: string): Art
     remediation:
       close.length > 0
         ? `Did you mean:\n${close.map((candidate) => `  ${candidate}`).join('\n')}`
-        : 'Run `lore inspect sources` to list what this build contains.',
+        : 'Run `lorepack inspect sources` to list what this build contains.',
     subject: path,
   });
 }

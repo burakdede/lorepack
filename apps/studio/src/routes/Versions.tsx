@@ -9,7 +9,7 @@ import './Versions.css';
  *
  * This route holds every action in the product that changes anything, and section 15.6 asks
  * each of them to show a plan and be confirmed. So a confirmation here is a designed surface
- * rather than a browser dialog: it names the build, shows the same comparison `lore diff`
+ * rather than a browser dialog: it names the build, shows the same comparison `lorepack diff`
  * would print, and puts the verb on the button. The verb survives into the result, so
  * "Activate" produces "Activated" and a person can tell which action finished.
  *

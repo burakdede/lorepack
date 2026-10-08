@@ -50,7 +50,7 @@ export function readLockfile(projectRoot: string): Lockfile | null {
     parsed = parseYaml(readFileSync(path, 'utf8'));
   } catch (cause) {
     throw new LoreError('LORE_E_CONFIG_INVALID', `${LOCKFILE_NAME} is not valid YAML.`, {
-      remediation: `Delete ${LOCKFILE_NAME} and run \`lore build\` to regenerate it.`,
+      remediation: `Delete ${LOCKFILE_NAME} and run \`lorepack build\` to regenerate it.`,
       path: LOCKFILE_NAME,
       cause,
     });
@@ -63,7 +63,7 @@ export function readLockfile(projectRoot: string): Lockfile | null {
       'LORE_E_CONFIG_INVALID',
       `${LOCKFILE_NAME} is invalid at \`${(issue?.path ?? []).join('.')}\`: ${issue?.message ?? 'unknown problem'}`,
       {
-        remediation: `Delete ${LOCKFILE_NAME} and run \`lore build\` to regenerate it.`,
+        remediation: `Delete ${LOCKFILE_NAME} and run \`lorepack build\` to regenerate it.`,
         path: LOCKFILE_NAME,
       },
     );
@@ -133,7 +133,7 @@ export function assertNoDrift(drift: LockDrift): void {
     'LORE_E_LOCKFILE_DRIFT',
     `${LOCKFILE_NAME} would change, but --frozen was requested:\n${lines.join('\n')}`,
     {
-      remediation: `Run \`lore build\` without --frozen and commit the updated ${LOCKFILE_NAME}, or pin the versions it expects.`,
+      remediation: `Run \`lorepack build\` without --frozen and commit the updated ${LOCKFILE_NAME}, or pin the versions it expects.`,
       path: LOCKFILE_NAME,
       details: { changes: drift.changes },
     },

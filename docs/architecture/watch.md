@@ -1,6 +1,6 @@
 # Watch mode
 
-How `lore dev` notices a change, and why the watcher is never allowed to be the reason it
+How `lorepack dev` notices a change, and why the watcher is never allowed to be the reason it
 believes one happened.
 
 ## The watcher is an accelerator, not the truth
@@ -21,7 +21,7 @@ So losing an event costs a slower rebuild. It cannot cost a wrong one.
 
 | Step | What happens | Why it is there |
 |---|---|---|
-| 1 | The initial scan | It is the build `lore dev` already ran |
+| 1 | The initial scan | It is the build `lorepack dev` already ran |
 | 2 | Start the watcher | |
 | 3 | **Reconcile once ready** | A file written in the gap belongs to neither the scan nor the stream |
 | 4 | Coalesce events for a debounce window | One save is many events |
@@ -91,17 +91,17 @@ truth from content, because the stream has just proved it cannot be trusted.
 
 ## Freshness comes from the watcher
 
-`lore serve` has no idea whether the sources moved, so it polls on an interval with a
+`lorepack serve` has no idea whether the sources moved, so it polls on an interval with a
 metadata prescreen. A supervisor that is already watching the filesystem **knows**, so
-`lore dev` hands the server `watching.freshness()` instead, and the interval scan does not
+`lorepack dev` hands the server `watching.freshness()` instead, and the interval scan does not
 run at all. That is the hook #112 named, and it is an injection into `startServing` rather
 than a second server.
 
 ## The dev session, and why the receipt is not a lock
 
-`lore dev` writes `.lore/dev.json` once it is serving, recording the port, pid, start time,
+`lorepack dev` writes `.lore/dev.json` once it is serving, recording the port, pid, start time,
 active build and host. Architecture 15.3 fixes the file and the preferred port, `43110`,
-which is deliberately not `lore serve`'s: a dev session and a read-only server are different
+which is deliberately not `lorepack serve`'s: a dev session and a read-only server are different
 things and someone may want both at once.
 
 The receipt is **evidence about a process, never a lock**, and the distinction decides the
@@ -109,7 +109,7 @@ behaviour:
 
 | Situation | What happens |
 |---|---|
-| A receipt naming a live process | The second `lore dev` refuses, naming the port and pid of the one already running |
+| A receipt naming a live process | The second `lorepack dev` refuses, naming the port and pid of the one already running |
 | A receipt naming a process that is gone | Cleared without comment, and the new session starts |
 | A receipt that is corrupt or not JSON | Treated as absent |
 | A clean stop | Removed |

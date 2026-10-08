@@ -9,7 +9,7 @@ import {
 import { createRuntime } from '@lorepack/runtime';
 
 /**
- * `lore search` over the active build.
+ * `lorepack search` over the active build.
  *
  * The query itself lives in `LoreRuntime.search`, which MCP, REST and Studio also call.
  * This file is the CLI's adapter to it: build the local ports, ask, render. Keeping a
@@ -42,7 +42,7 @@ export async function runSearch(options: SearchOptions): Promise<SearchResult> {
   try {
     if ((await backend.provider.current()) === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build to search.', {
-        remediation: 'Run `lore build` first.',
+        remediation: 'Run `lorepack build` first.',
       });
     }
 
@@ -71,7 +71,7 @@ export function renderSearch(result: SearchResult, query: string, verbose = fals
     lines.push('');
     lines.push(
       result.totalIndexedChunks === 0
-        ? 'This build indexed nothing. Run `lore inspect warnings` to see what was skipped.'
+        ? 'This build indexed nothing. Run `lorepack inspect warnings` to see what was skipped.'
         : `Searched ${count(result.totalIndexedChunks, 'chunk')}. Try fewer or more general terms.`,
     );
     return lines.join('\n');

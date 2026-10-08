@@ -101,7 +101,7 @@ test.describe('Connecting a client', () => {
     await page.goto(`${session.url}/#/`);
     const connect = page.locator('#connect');
     await expect(connect).toContainText(`${session.url}/mcp`);
-    await expect(connect).toContainText('lore mcp');
+    await expect(connect).toContainText('lorepack mcp');
 
     await page.getByRole('button', { name: 'Show how to connect' }).click();
     await expect(connect).toBeFocused();

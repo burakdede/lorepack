@@ -38,7 +38,7 @@
     <text class="body" x="26" y="118">preserves tables</text>
     <text class="body" x="26" y="142">validates catalog</text>
     <rect class="control" x="26" y="164" width="198" height="36" rx="12"/>
-    <text class="mono" x="54" y="187">lore plan / build</text>
+    <text class="mono" x="54" y="187">lorepack plan / build</text>
   </g>
 
   <g transform="translate(382 116)">

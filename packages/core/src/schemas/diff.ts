@@ -20,7 +20,7 @@ export const diffTableCellChangeSchema = z
   .strict();
 
 /**
- * What `lore diff --json` returns.
+ * What `lorepack diff --json` returns.
  *
  * The diff is computed from canonical build records alone, never by re-reading sources.
  * That is what makes comparing any two builds instant, and what makes a comparison still

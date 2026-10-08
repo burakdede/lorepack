@@ -9,7 +9,13 @@ const ROOT = join(import.meta.dirname, '..');
 const REQUIRED = new Map([
   [
     '.github/ISSUE_TEMPLATE/bug.yml',
-    ['id: platform', 'id: node', 'id: doctor', 'lore doctor --json', 'Output of `node --version`'],
+    [
+      'id: platform',
+      'id: node',
+      'id: doctor',
+      'lorepack doctor --json',
+      'Output of `node --version`',
+    ],
   ],
   [
     '.github/ISSUE_TEMPLATE/parser-support.yml',
@@ -17,7 +23,12 @@ const REQUIRED = new Map([
   ],
   [
     '.github/ISSUE_TEMPLATE/client-support.yml',
-    ['id: client', 'id: transport', 'lore connect <client> --dry-run', 'Platform and Node version'],
+    [
+      'id: client',
+      'id: transport',
+      'lorepack connect <client> --dry-run',
+      'Platform and Node version',
+    ],
   ],
   [
     '.github/ISSUE_TEMPLATE/feature.yml',

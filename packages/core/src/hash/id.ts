@@ -14,7 +14,7 @@ export function isBuildId(value: string): value is BuildId {
 export function assertBuildId(value: string): BuildId {
   if (!isBuildId(value)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Not a valid build identifier: ${value}`, {
-      remediation: 'Use a full build id, or a unique prefix of one. Run `lore inspect builds`.',
+      remediation: 'Use a full build id, or a unique prefix of one. Run `lorepack inspect builds`.',
       subject: value,
     });
   }
@@ -52,7 +52,7 @@ export function resolveBuildIdPrefix(prefix: string, known: readonly BuildId[]):
   if (matches.length === 1) return matches[0] as BuildId;
   if (matches.length === 0) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No build matches ${prefix}.`, {
-      remediation: 'Run `lore inspect builds` to list available builds.',
+      remediation: 'Run `lorepack inspect builds` to list available builds.',
       subject: prefix,
     });
   }

@@ -9,8 +9,8 @@
   and light and dark themes follow the system unless a reader picks one. Every route keeps its
   data, provenance and confirmations; the Playground now draws the token budget to scale.
 - 0cdba12: Lore Studio is now a launchpad for using the build. Overview lists the MCP and HTTP endpoints
-  and a `lore connect` command for each installed client; every Playground run, search and SQL
-  query can be copied as the equivalent `lore` command, `curl` call or MCP tool call; and every
+  and a `lorepack connect` command for each installed client; every Playground run, search and SQL
+  query can be copied as the equivalent `lorepack` command, `curl` call or MCP tool call; and every
   citation opens the stored text of its source with the cited lines marked.
 
 ### Patch Changes

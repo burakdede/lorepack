@@ -55,7 +55,7 @@ probe costs microseconds and turns a confusing failure into an actionable one, s
 
 ## What Lorepack does about it
 
-At startup and in `lore doctor`, a probe creates an FTS5 table, inserts, matches, and drops
+At startup and in `lorepack doctor`, a probe creates an FTS5 table, inserts, matches, and drops
 it. It is a capability check, not a version check, because the version string cannot tell
 you how a build was compiled.
 

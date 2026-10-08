@@ -1,19 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="687" height="746" viewBox="0 0 687 746" role="img" aria-label="lore init and lore build">
+<svg xmlns="http://www.w3.org/2000/svg" width="687" height="746" viewBox="0 0 687 746" role="img" aria-label="lorepack init and lorepack build">
   <rect width="687" height="746" rx="6" fill="#141414"/>
   <circle cx="20" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="36" cy="20" r="5" fill="#3a3a3a"/>
   <circle cx="52" cy="20" r="5" fill="#3a3a3a"/>
-  <text x="72" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">lore init and lore build</text>
-  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
-  <text x="20" y="54" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lore init .</text>
+  <text x="72" y="24" fill="#6a6a6a" font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="12">lorepack init and lorepack build</text>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="13">
+  <text x="20" y="54" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lorepack init .</text>
   <text x="20" y="75" fill="#9a9a9a" font-weight="400" xml:space="preserve">Created:</text>
   <text x="20" y="96" fill="#9a9a9a" font-weight="400" xml:space="preserve">  + lore.yaml</text>
   <text x="20" y="117" fill="#9a9a9a" font-weight="400" xml:space="preserve">  + .loreignore</text>
   <text x="20" y="138" fill="#9a9a9a" font-weight="400" xml:space="preserve">  + .gitignore</text>
   <text x="20" y="159" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="180" fill="#9a9a9a" font-weight="400" xml:space="preserve">Next: run `lore build` to create your first build.</text>
+  <text x="20" y="180" fill="#9a9a9a" font-weight="400" xml:space="preserve">Next: run `lorepack build` to create your first build.</text>
   <text x="20" y="201" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="222" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lore build</text>
+  <text x="20" y="222" fill="#e6e6e6" font-weight="500" xml:space="preserve">$ lorepack build</text>
   <text x="20" y="243" fill="#9a9a9a" font-weight="400" xml:space="preserve">Discovering     0                               0ms</text>
   <text x="20" y="264" fill="#9a9a9a" font-weight="400" xml:space="preserve">Discovering     6                               done</text>
   <text x="20" y="285" fill="#9a9a9a" font-weight="400" xml:space="preserve">Fingerprinting  0/6                             0ms</text>
@@ -36,6 +36,6 @@
   <text x="20" y="642" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 table, 3 rows</text>
   <text x="20" y="663" fill="#9a9a9a" font-weight="400" xml:space="preserve">  1 warning</text>
   <text x="20" y="684" fill="#9a9a9a" font-weight="400" xml:space="preserve"></text>
-  <text x="20" y="705" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 216 ms.</text>
+  <text x="20" y="705" fill="#9a9a9a" font-weight="400" xml:space="preserve">Activated in 236 ms.</text>
   </g>
 </svg>

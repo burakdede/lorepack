@@ -14,7 +14,7 @@ import {
 import { readActiveBuild, readBuildCatalog } from './project.js';
 
 /**
- * `lore status` answers one question: is the context my AI reads current?
+ * `lorepack status` answers one question: is the context my AI reads current?
  *
  * It never writes, not even a migration or a cache entry. Status is run constantly, often
  * in a prompt, and a command that mutated a project as a side effect of being asked about
@@ -59,7 +59,7 @@ export async function readStatus(options: StatusOptions): Promise<Status> {
       artifacts: { total: fingerprint.artifacts.length, added: 0, changed: 0, removed: 0 },
       changes: [],
       warnings: discovery.warnings.length,
-      remediation: 'lore build',
+      remediation: 'lorepack build',
     };
   }
 
@@ -90,7 +90,7 @@ export async function readStatus(options: StatusOptions): Promise<Status> {
       ...dirty.removed.map((id) => ({ path: pathOf(id), change: 'removed' as const })),
     ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     warnings: countBuildWarnings(loreDirectory, active.buildId) ?? discovery.warnings.length,
-    remediation: dirty.clean ? null : 'lore build',
+    remediation: dirty.clean ? null : 'lorepack build',
   };
 }
 
@@ -105,7 +105,7 @@ export interface Freshness {
  * for it.
  *
  * Section 4.10 says freshness travels with the result, and it is tempting to read that as
- * "establish it or fail". That reading cost `lore search` its usefulness on any project
+ * "establish it or fail". That reading cost `lorepack search` its usefulness on any project
  * above the file envelope: the build existed and was perfectly queryable, and the query was
  * refused because a guard about the cost of *building* had been consulted first (#147). A
  * read of a sealed build is not entitled to have an opinion about the source tree.
@@ -199,7 +199,7 @@ export function renderStatus(status: Status, verbose: boolean): string {
     lines.push('No build yet.');
     lines.push(`  ${count(status.artifacts.total, 'source file')} found`);
     lines.push('');
-    lines.push('Run `lore build` to compile and activate the first build.');
+    lines.push('Run `lorepack build` to compile and activate the first build.');
     return lines.join('\n');
   }
 

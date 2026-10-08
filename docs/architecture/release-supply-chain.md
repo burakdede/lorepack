@@ -110,7 +110,7 @@ A bad release is handled by pointer and registry actions, not by recompiling a b
 3. Mark the GitHub release as problematic and link the fix or rollback PR.
 4. If a bad `.lorepack` example was attached, attach a corrected artifact to the follow-up
    release instead of mutating build identity.
-5. Use `lore activate` or `lore rollback` for affected local projects and Cloudflare target
+5. Use `lorepack activate` or `lorepack rollback` for affected local projects and Cloudflare target
    activation rollback for projected runtimes.
 
 ## SBOM

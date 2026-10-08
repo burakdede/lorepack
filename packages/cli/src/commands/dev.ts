@@ -15,7 +15,7 @@ import { parsePort, startServing, untilInterrupted } from '../services/serving.j
 import { startWatching } from '../services/watch.js';
 
 /**
- * `lore dev [path]`: a folder becomes a running, connected context runtime, asking nothing.
+ * `lorepack dev [path]`: a folder becomes a running, connected context runtime, asking nothing.
  *
  * This is the headline command (architecture 2.2, 6.2), and its whole design is an ordering
  * decision: **validate, then inspect, then mutate**. Section 6.2 lists the seven steps in
@@ -31,9 +31,9 @@ import { startWatching } from '../services/watch.js';
  * 5. serve;
  * 6. print how to connect.
  *
- * It supervises rather than reimplements. Init comes from the same module `lore init` uses,
- * the build from the same `runBuild` that `lore build` calls, and the server from
- * `services/serving.ts`, which is where `lore serve` gets it too. A second implementation of
+ * It supervises rather than reimplements. Init comes from the same module `lorepack init` uses,
+ * the build from the same `runBuild` that `lorepack build` calls, and the server from
+ * `services/serving.ts`, which is where `lorepack serve` gets it too. A second implementation of
  * any of them would be a second behaviour for a user to discover.
  */
 
@@ -70,7 +70,7 @@ export function devCommand(): CommandDefinition {
       // is gone is cleared here rather than treated as an obstacle.
       assertNoLiveSession(config);
 
-      // Step 4. The same builder `lore build` runs, with its stage table on the same bus, so
+      // Step 4. The same builder `lorepack build` runs, with its stage table on the same bus, so
       // a slow parse shows a moving count here exactly as it does there (architecture 6.4).
       const built = await runBuild({
         config,
@@ -102,7 +102,7 @@ export function devCommand(): CommandDefinition {
       const server = await startServing({
         config,
         host,
-        // Architecture 15.3 fixes the preferred dev port, which is not the one `lore serve`
+        // Architecture 15.3 fixes the preferred dev port, which is not the one `lorepack serve`
         // uses: a dev session and a read-only server are different things and a developer
         // may want both at once.
         port: flags.port === undefined ? DEV_PORT : parsePort(flags.port),
@@ -154,7 +154,7 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
  *
  * The receipt is removed last and unconditionally. A session that is stopping has already
  * stopped being useful to anyone reading it, and leaving one behind makes the next
- * `lore dev` refuse to start for a process that no longer exists.
+ * `lorepack dev` refuse to start for a process that no longer exists.
  *
  * The timeout exists because a wedged request must not be able to hold the process open
  * forever. Section 15.3's contract is that Ctrl-C ends the session; it does not promise to
@@ -189,14 +189,14 @@ async function shutdown(
  * Writes the configuration a project needs, only when it does not have one.
  *
  * Returns null when the project was already configured, which is the re-run path: section
- * 6.2 promises a second `lore dev` skips init and rebuilds only what changed, and the build
+ * 6.2 promises a second `lorepack dev` skips init and rebuilds only what changed, and the build
  * step below is already incremental, so there is nothing else to do about it.
  */
 function autoInit(directory: string, context: CommandContext): InitResult | null {
   const planned = planInit({ directory, force: false });
   if (planned.alreadyInitialized) return null;
 
-  // Refused for the same reason `lore init` refuses it: a project inside a project produces
+  // Refused for the same reason `lorepack init` refuses it: a project inside a project produces
   // two builds over overlapping sources, and neither is wrong in a way anyone can see.
   const enclosing = enclosingProject(directory);
   if (enclosing !== null) {
@@ -205,7 +205,7 @@ function autoInit(directory: string, context: CommandContext): InitResult | null
       `${directory} is already inside a Lorepack project rooted at ${enclosing}.`,
       {
         remediation:
-          'Nested projects are not supported. Run `lore dev` in the existing project instead.',
+          'Nested projects are not supported. Run `lorepack dev` in the existing project instead.',
       },
     );
   }
@@ -250,7 +250,7 @@ function render(rendered: Rendered): string {
   );
   if (built.warnings > 0) {
     lines.push(
-      `Warnings        ${count(built.warnings, 'warning')}; run \`lore inspect warnings\``,
+      `Warnings        ${count(built.warnings, 'warning')}; run \`lorepack inspect warnings\``,
     );
   }
 
@@ -260,12 +260,12 @@ function render(rendered: Rendered): string {
   lines.push(`MCP HTTP        ${rendered.url}/mcp`);
   // Quoted, because a project path with a space in it is ordinary on every platform and the
   // line is meant to be pasted (#61 owns the general version of this).
-  lines.push(`MCP stdio       lore mcp --project "${rendered.projectRoot}"`);
+  lines.push(`MCP stdio       lorepack mcp --project "${rendered.projectRoot}"`);
   lines.push('');
   lines.push('Connect now:');
-  lines.push('  lore connect claude-code');
-  lines.push('  lore connect codex');
-  lines.push('  lore connect vscode');
+  lines.push('  lorepack connect claude-code');
+  lines.push('  lorepack connect codex');
+  lines.push('  lorepack connect vscode');
   lines.push('');
   lines.push('Watching for changes. Press Ctrl-C to stop.');
   return lines.join('\n');

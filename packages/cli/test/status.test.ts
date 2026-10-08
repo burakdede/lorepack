@@ -29,13 +29,13 @@ function status(root: string, now?: () => Date) {
   });
 }
 
-describe('lore status', () => {
+describe('lorepack status', () => {
   it('tells an unbuilt project what to do, and exits 0', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const result = await lore(['status']);
       expect(result.code).toBe(0);
       expect(result.stdout).toContain('No build yet');
-      expect(result.stdout).toContain('lore build');
+      expect(result.stdout).toContain('lorepack build');
 
       expect((await status(root)).sourceState).toBe('unbuilt');
     });
@@ -76,7 +76,7 @@ describe('lore status', () => {
 
       const parsed = await status(root);
       expect(parsed.sourceState).toBe('dirty');
-      expect(parsed.remediation).toBe('lore build');
+      expect(parsed.remediation).toBe('lorepack build');
       expect(parsed.changes.map((change) => change.change)).toContain(kind);
     });
   });

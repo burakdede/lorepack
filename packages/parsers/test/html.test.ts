@@ -76,9 +76,11 @@ describe('structure', () => {
   });
 
   it('keeps code text exactly, including indentation', () => {
-    const parsed = parse('<pre><code class="language-bash">lore build\n  --frozen</code></pre>');
+    const parsed = parse(
+      '<pre><code class="language-bash">lorepack build\n  --frozen</code></pre>',
+    );
     const code = parsed.nodes.find((node) => node.kind === 'code');
-    expect(code?.text).toBe('lore build\n  --frozen');
+    expect(code?.text).toBe('lorepack build\n  --frozen');
     expect(code?.metadata).toMatchObject({ language: 'bash' });
   });
 

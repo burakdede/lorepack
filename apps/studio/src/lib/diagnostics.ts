@@ -70,7 +70,7 @@ export type Client = Report['clients'][number];
 
 export function describeConnection(entry: Client): string {
   if (!entry.configured) return 'no';
-  // The distinction that makes `lore disconnect` safe is worth showing here too: an entry
+  // The distinction that makes `lorepack disconnect` safe is worth showing here too: an entry
   // someone wrote by hand is theirs, and Lorepack says so rather than claiming credit.
   return entry.ownedByLorepack ? 'yes' : 'yes, configured by hand';
 }

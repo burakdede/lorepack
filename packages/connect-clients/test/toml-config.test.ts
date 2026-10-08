@@ -32,7 +32,7 @@ const block = (root = '/p'): string =>
   renderOwnedTable({
     path: PATH,
     projectRoot: root,
-    values: { command: 'lore', args: ['mcp', '--project', root], cwd: root },
+    values: { command: 'lorepack', args: ['mcp', '--project', root], cwd: root },
     createdAt: '2026-08-05T00:00:00.000Z',
   });
 
@@ -78,17 +78,17 @@ describe('reading a header line', () => {
 
 describe('finding the lines a table occupies', () => {
   it('runs from the header to the next unrelated header', () => {
-    const text = 'a = 1\n\n[mcp_servers.lorepack]\ncommand = "lore"\n\n[other]\nb = 2\n';
+    const text = 'a = 1\n\n[mcp_servers.lorepack]\ncommand = "lorepack"\n\n[other]\nb = 2\n';
     const span = tableSpan(text, PATH);
 
     expect(text.split('\n').slice(span?.start, span?.end).join('\n')).toBe(
-      '[mcp_servers.lorepack]\ncommand = "lore"\n',
+      '[mcp_servers.lorepack]\ncommand = "lorepack"\n',
     );
   });
 
   it('carries the table\u2019s own sub-tables with it', () => {
     const text =
-      '[mcp_servers.lorepack]\ncommand = "lore"\n\n[mcp_servers.lorepack.env]\nA = "1"\n\n[other]\nb = 2\n';
+      '[mcp_servers.lorepack]\ncommand = "lorepack"\n\n[mcp_servers.lorepack.env]\nA = "1"\n\n[other]\nb = 2\n';
     const span = tableSpan(text, PATH);
 
     // `[mcp_servers.lorepack.env]` belongs to the entry. Leaving it behind on removal would

@@ -27,7 +27,7 @@ The source install remains useful for contributors and for testing unreleased ch
 ```bash
 git clone https://github.com/burakdede/lorepack.git && cd lorepack
 corepack enable && pnpm install --frozen-lockfile && pnpm build
-alias lore="node $PWD/packages/cli/dist/entry.js"
+alias lorepack="node $PWD/packages/cli/dist/entry.js"
 ```
 
 The stable install will be `npm install -g @lorepack/cli` after v0.1. See
@@ -36,8 +36,8 @@ The stable install will be `npm install -g @lorepack/cli` after v0.1. See
 ## Use it
 
 ```bash
-lore dev ./my-docs          # build the folder, serve it over MCP and HTTP, rebuild on change
-lore connect claude-code    # or codex, or vscode: wire up your agent and check it answers
+lorepack dev ./my-docs          # build the folder, serve it over MCP and HTTP, rebuild on change
+lorepack connect claude-code    # or codex, or vscode: wire up your agent and check it answers
 ```
 
 ![Lorepack in a terminal: build a folder, search it with citations, diff two builds, roll back, and serve it over MCP](docs/images/demo.svg)

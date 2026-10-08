@@ -62,7 +62,7 @@ export function pruneCommand(options: PruneCommandOptions = {}): CommandDefiniti
           'LORE_E_INVALID_ARGUMENT',
           'Remote cleanup resume requires `--target cloudflare`.',
           {
-            remediation: 'Run `lore prune --target cloudflare --yes --resume <receipt-id>`.',
+            remediation: 'Run `lorepack prune --target cloudflare --yes --resume <receipt-id>`.',
             subject: resumeId,
           },
         );
@@ -152,7 +152,7 @@ async function pruneRemote(
   }
   if (resumeId !== null && !apply) {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Remote cleanup resume requires `--yes`.', {
-      remediation: 'Run `lore prune --target cloudflare --yes --resume <receipt-id>`.',
+      remediation: 'Run `lorepack prune --target cloudflare --yes --resume <receipt-id>`.',
       subject: resumeId,
     });
   }
@@ -346,7 +346,7 @@ async function applyRemotePruneWithReceipt(
       'LORE_E_REMOTE_DEPLOY',
       `Cloudflare cleanup failed while removing ${count(receipt.plan.remove.length, 'remote build')}.`,
       {
-        remediation: `Completed cleanup work was recorded. Resume with \`lore prune --target cloudflare --yes --resume ${receipt.receiptId}\`.`,
+        remediation: `Completed cleanup work was recorded. Resume with \`lorepack prune --target cloudflare --yes --resume ${receipt.receiptId}\`.`,
         details: { receiptId: receipt.receiptId },
         cause: error,
       },

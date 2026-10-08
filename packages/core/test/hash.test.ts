@@ -200,7 +200,7 @@ describe('resolveBuildIdPrefix', () => {
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as LoreError).code).toBe('LORE_E_BUILD_NOT_FOUND');
-      expect((error as LoreError).remediation).toContain('lore inspect builds');
+      expect((error as LoreError).remediation).toContain('lorepack inspect builds');
     }
   });
 

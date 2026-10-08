@@ -154,12 +154,12 @@ Match the test to the risk, and use every level that applies:
 
 - **Unit**: pure logic: hashing, path canonicalization, ranking, chunking, rule resolution.
 - **Integration**: real SQLite, real filesystem, real fixtures. Storage and parser work belongs here.
-- **End-to-end**: drive the actual `lore` binary in a temp project and assert exit codes and output, not internal APIs.
+- **End-to-end**: drive the actual `lorepack` binary in a temp project and assert exit codes and output, not internal APIs.
 - **Contract**: every `LoreRuntime`/store implementation runs the shared adapter suite.
 - **Determinism**: build twice, from two absolute paths, with shuffled enumeration, on Windows and POSIX; identical build ID.
 - **Cross-platform**: macOS, Windows and Linux in CI. A test skipped on Windows needs a written reason.
 - **Security**: path traversal, symlink escape, SQL injection, malformed documents, oversized payloads, secret redaction.
-- **User testing**: for anything a human touches (CLI output, Studio, `lore connect`), verify the real experience and record the manual checklist in `docs/`. Client trust prompts cannot be automated; they still must be verified and written down.
+- **User testing**: for anything a human touches (CLI output, Studio, `lorepack connect`), verify the real experience and record the manual checklist in `docs/`. Client trust prompts cannot be automated; they still must be verified and written down.
 
 Bug fixes start with a failing test that reproduces the bug.
 
@@ -204,7 +204,7 @@ The first commits set this up; later work keeps it true:
 
 - Apache-2.0 `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue templates (bug, feature, parser support, client support) and a PR template.
 - Formatter, linter, typechecker, architecture rules and test runner wired and enforced in CI, not added later.
-- Bug reports ask for platform, Node version and `lore doctor --json` output.
+- Bug reports ask for platform, Node version and `lorepack doctor --json` output.
 - Everything runs from one command set: `pnpm install`, `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
 
 ## 11. Before you say a task is done

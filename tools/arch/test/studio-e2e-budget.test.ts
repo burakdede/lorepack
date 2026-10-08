@@ -14,6 +14,6 @@ describe('Studio E2E setup budget', () => {
     expect(config).toContain('timeout: STUDIO_SETUP_TIMEOUT_MS');
     expect(fixture).toContain('Date.now() + STUDIO_SETUP_TIMEOUT_MS');
     expect(fixture).toContain('Studio E2E setup failed during lore');
-    expect(fixture).toContain('Studio E2E setup failed while waiting for lore dev');
+    expect(fixture).toContain('Studio E2E setup failed while waiting for lorepack dev');
   });
 });

@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
-const LORE = join(ROOT, 'packages', 'cli', 'dist', 'entry.js');
+const LOREPACK = join(ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const PRODUCT = join(ROOT, 'examples', 'product-research');
 const CODING = join(ROOT, 'examples', 'coding-project');
 const args = new Set(process.argv.slice(2));
 const check = args.has('--check');
 
-if (!existsSync(LORE)) {
+if (!existsSync(LOREPACK)) {
   console.error('demo: build the CLI first with `pnpm build`.');
   process.exit(1);
 }
@@ -89,13 +89,13 @@ function step(label, cwd, command) {
   const result = run(command, cwd);
   transcript.push({ label, cwd: basename(cwd), command, ...result });
   if (result.status !== 0) {
-    throw new Error(`lore ${command.join(' ')} failed with exit ${result.status}`);
+    throw new Error(`lorepack ${command.join(' ')} failed with exit ${result.status}`);
   }
 }
 
 function run(command, cwd) {
   try {
-    const stdout = execFileSync(process.execPath, [LORE, '--cwd', cwd, ...command], {
+    const stdout = execFileSync(process.execPath, [LOREPACK, '--cwd', cwd, ...command], {
       cwd: ROOT,
       encoding: 'utf8',
       env: { ...process.env, NO_COLOR: '1' },
@@ -157,7 +157,7 @@ function renderTranscript(entries) {
     lines.push(`## ${entry.label}: ${entry.cwd}`);
     lines.push('');
     lines.push('```bash');
-    lines.push(`lore ${normalizeCommand(entry.command).map(shellWord).join(' ')}`);
+    lines.push(`lorepack ${normalizeCommand(entry.command).map(shellWord).join(' ')}`);
     lines.push('```');
     lines.push('');
     lines.push('```text');

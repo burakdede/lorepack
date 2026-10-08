@@ -34,7 +34,7 @@ describe('unknown input', () => {
     const result = await run(['nonsense'], { commands });
     expect(result.code).toBe(EXIT_CODES.USER);
     expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
-    expect(result.stderr).toContain('lore --help');
+    expect(result.stderr).toContain('lorepack --help');
     expect(result.stderr).not.toContain('at Object.');
   });
 

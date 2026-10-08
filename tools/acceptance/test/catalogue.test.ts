@@ -15,7 +15,7 @@ import type { Step } from '../src/types.js';
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
 const DOC = join(REPO_ROOT, 'docs', 'testing', 'acceptance.md');
 
-/** The command set Phase 1 ships, taken from the scenario that asserts `lore --help`. */
+/** The command set Phase 1 ships, taken from the scenario that asserts `lorepack --help`. */
 const PHASE_1_COMMANDS = [
   'init',
   'plan',

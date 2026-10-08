@@ -85,7 +85,7 @@ export const PHASE_4: PhaseDefinition = {
       id: 'diagnostics',
       kind: 'command',
       promise:
-        'Everything `lore doctor` knows is visible in the browser, with the remediation intact and no aggregate score invented.',
+        'Everything `lorepack doctor` knows is visible in the browser, with the remediation intact and no aggregate score invented.',
       command: 'pnpm',
       args: ['vitest', 'run', '--project', 'studio', 'diagnostics'],
       timeoutMs: 300_000,
@@ -96,7 +96,7 @@ export const PHASE_4: PhaseDefinition = {
       id: 'export-parity',
       kind: 'command',
       promise:
-        'What Studio copies is byte-identical to what `lore export` writes, because one renderer produces both.',
+        'What Studio copies is byte-identical to what `lorepack export` writes, because one renderer produces both.',
       command: 'pnpm',
       args: ['vitest', 'run', '--project', 'contract', 'serve'],
       timeoutMs: 600_000,

@@ -1,6 +1,6 @@
 # Build orchestration
 
-`lore build` hides compile, index, validate and activate behind one operation
+`lorepack build` hides compile, index, validate and activate behind one operation
 (architecture section 6.5) without hiding what happened (section 4.9). This is the stage
 order and the reasons it cannot be rearranged.
 
@@ -13,7 +13,7 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 1. **Lock.** `ProjectLock` (a `mkdir`-based cross-process lock) serializes builds for one
    project. A waiting build reports the pid it is waiting for through the progress bus
    rather than appearing to hang.
-2. **Plan.** The orchestrator calls the same `createPlan` that `lore plan` prints, so the
+2. **Plan.** The orchestrator calls the same `createPlan` that `lorepack plan` prints, so the
    preview and the executed work cannot diverge.
 3. **Parse.** Cached parses are reused by `cacheKey`, which covers content, parser
    identity, normalization version and the configuration that affects output. A supported,
@@ -34,8 +34,8 @@ remove or corrupt on its own.
 
 Reuse used to trust the record alone, so a build whose database was deleted, truncated,
 overwritten, or written by an older Lorepack left the project **permanently unusable**:
-`lore build` reported "No changes" and the next read failed exactly as before. In the schema
-case the failing read's own remediation was to run `lore build`, so the product named an action
+`lorepack build` reported "No changes" and the next read failed exactly as before. In the schema
+case the failing read's own remediation was to run `lorepack build`, so the product named an action
 that did nothing about a problem it had just diagnosed (#251).
 
 Three things make a rebuild the recovery it claims to be:
@@ -104,7 +104,7 @@ build that is otherwise complete.
 
 Both the state database and every build database use SQLite's rollback journal, not WAL.
 A WAL database grows `-wal` and `-shm` siblings, and a *read-only* connection creates them
-without being able to clean them up. That would make `lore status` write to disk and a
+without being able to clean them up. That would make `lorepack status` write to disk and a
 sealed build three files rather than one. Writers are already serialized by the project
 lock, so WAL's concurrency buys nothing here; `busy_timeout` covers a reader that arrives
 mid-write.

@@ -46,7 +46,7 @@ const BUNDLE = {
   selected: [
     {
       chunkId: 'p:docs/runbook.md@0',
-      text: 'Run lore rollback to point at the previous build.',
+      text: 'Run lorepack rollback to point at the previous build.',
       estimatedTokens: 17,
       headingPath: ['Release runbook', 'Rolling back'],
       labels: [],
@@ -104,7 +104,7 @@ const SEARCH = {
       chunkId: 'p:docs/runbook.md@0',
       artifactId: 'p:docs/runbook.md',
       score: 0.140824,
-      excerpt: 'Run lore [rollback] to point at the previous build.',
+      excerpt: 'Run lorepack [rollback] to point at the previous build.',
       headingPath: ['Release runbook'],
       status: 'active',
       labels: [],
@@ -154,7 +154,7 @@ describe('assembling a bundle', () => {
     renderRoute();
     await assemble();
 
-    await waitFor(() => expect(screen.getByText(/Run lore rollback/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Run lorepack rollback/)).toBeInTheDocument());
     // Invariant 5: a result without a locator is a bug, so the citation is not optional.
     expect(screen.getByText('docs/runbook.md')).toBeInTheDocument();
     expect(screen.getByText('9-11')).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe('assembling a bundle', () => {
     renderRoute();
     await assemble();
 
-    await waitFor(() => expect(screen.getByText(/Run lore rollback/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Run lorepack rollback/)).toBeInTheDocument());
 
     for (const citation of BUNDLE.citations) {
       expect(
@@ -318,7 +318,7 @@ describe('Studio is not a chat application', () => {
   it('offers no way to generate an answer', async () => {
     renderRoute();
     await assemble();
-    await waitFor(() => expect(screen.getByText(/Run lore rollback/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Run lorepack rollback/)).toBeInTheDocument());
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent ?? '');
     for (const forbidden of ['Ask', 'Generate', 'Send', 'Chat', 'Answer']) {

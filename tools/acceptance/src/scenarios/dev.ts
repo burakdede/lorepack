@@ -12,7 +12,7 @@ import { CORPUS } from './corpus.js';
 export const DEV_SCENARIOS: readonly Scenario[] = [
   {
     id: 'dev/one-command-turns-a-folder-into-a-runtime',
-    title: '`lore dev` configures, builds and serves an unconfigured folder',
+    title: '`lorepack dev` configures, builds and serves an unconfigured folder',
     proves:
       'Section 6.2 and 6.4: the zero-config path runs in order, writes only what it names, and prints where to connect.',
     mode: 'auto',
@@ -34,7 +34,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
         // proof that every step before it finished.
         afterOutput: 'MCP stdio',
         afterMs: 250,
-        describe: 'Point `lore dev` at a folder that has never been built, then stop it',
+        describe: 'Point `lorepack dev` at a folder that has never been built, then stop it',
         // No exit code asserted. A parent process on Windows cannot ask a child to stop
         // gracefully at all: `kill` is emulated with `TerminateProcess`, so the handler
         // never runs and the supervisor dies non-zero having done everything right. What
@@ -53,7 +53,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
               // It said where to reach it.
               'HTTP            http://127.0.0.1:',
               'MCP HTTP        http://127.0.0.1:',
-              'MCP stdio       lore mcp --project',
+              'MCP stdio       lorepack mcp --project',
               // And it is watching, which is what makes it `dev` rather than `serve`.
               'Watching for changes',
             ],
@@ -64,7 +64,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
   },
   {
     id: 'dev/an-edit-while-it-runs-becomes-the-next-answer',
-    title: '`lore dev` rebuilds when a document changes underneath it',
+    title: '`lorepack dev` rebuilds when a document changes underneath it',
     proves:
       'Section 12.11: a save is noticed, coalesced, hashed and rebuilt, with no restart and no client action.',
     mode: 'auto',
@@ -87,7 +87,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
           path: 'deployment.md',
           contents: '# Deployment\n\n## Freeze\n\nNo deployments during a change freeze.\n',
         },
-        describe: 'Change a document while `lore dev` is running, then stop it',
+        describe: 'Change a document while `lorepack dev` is running, then stop it',
         // As above: the subject is the rebuild, not how the process was stopped.
         expect: {
           stderr: { contains: ['rebuilding'] },
@@ -97,7 +97,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
   },
   {
     id: 'dev/doctor-explains-the-environment',
-    title: '`lore doctor` reports the environment and says what to do about anything wrong',
+    title: '`lorepack doctor` reports the environment and says what to do about anything wrong',
     proves:
       'Section 6.5 and 6.9: one command names what is wrong and carries a concrete remediation.',
     mode: 'auto',
@@ -150,7 +150,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
         expect: {
           exitCode: 0,
           stdout: {
-            contains: ['lore', '--project', '--ensure-current', 'Nothing was changed'],
+            contains: ['lorepack', '--project', '--ensure-current', 'Nothing was changed'],
           },
         },
       },
@@ -162,7 +162,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
           exitCode: 0,
           // Either the plan or an honest "not installed" with somewhere to go. Both are
           // correct; asserting only the first would make the suite depend on the runner.
-          stdout: { matches: ['lore mcp --project|not installed'] },
+          stdout: { matches: ['lorepack mcp --project|not installed'] },
         },
       },
       {
@@ -173,7 +173,7 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
           exitCode: 0,
           stdout: {
             // Architecture 14.7: never imply that every client can reach a local server.
-            contains: ['mcpServers', 'unverified', 'lore export'],
+            contains: ['mcpServers', 'unverified', 'lorepack export'],
           },
         },
       },

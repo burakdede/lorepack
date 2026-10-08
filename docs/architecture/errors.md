@@ -49,7 +49,7 @@ cannot be opened is `LORE_E_SOURCE_UNREADABLE`, exit 1, naming the display path 
 at permissions or `.loreignore`. It used to arrive as `LORE_E_INTERNAL` carrying a raw
 `EACCES` and an absolute path (#168).
 
-The `next:` line names only what the binary can do today. Until `lore doctor` ships in
+The `next:` line names only what the binary can do today. Until `lorepack doctor` ships in
 Phase 3, no message refers to it: `scripts/check-command-set.mjs` reads the real `--help`
 output and fails when a source string names a command that is not registered. A remediation
 that points at a missing command is worse than no remediation, and a unit test had been

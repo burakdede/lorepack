@@ -47,7 +47,7 @@ follow-up issue owns any missed historical gate.
 
 ## Target capability matrix
 
-| Capability | Local build runtime | `lore serve` | `lore mcp` | Cloudflare projection |
+| Capability | Local build runtime | `lorepack serve` | `lorepack mcp` | Cloudflare projection |
 |---|---|---|---|---|
 | `describeBuild` | yes | REST and HTTP MCP | stdio MCP | yes |
 | `search` with source locators | yes | REST and HTTP MCP | stdio MCP | yes |

@@ -265,7 +265,7 @@ describe('files whose bytes are not readable text', () => {
 
   it('leaves the project clean afterwards, which is the whole point of excluding here', async () => {
     // #165: excluding at parse time instead left the file counted as pending forever, so
-    // `lore status` reported dirty and `lore build` then reported no changes.
+    // `lorepack status` reported dirty and `lorepack build` then reported no changes.
     await withTempProject({ files: CORPUS }, async (project) => {
       writeFileSync(project.path('binary.md'), undecodable['binary.md']);
       const built = await fingerprintOf(project.root);

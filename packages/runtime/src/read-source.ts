@@ -75,7 +75,7 @@ async function readWhole(scope: BuildScope, artifact: CatalogArtifact): Promise<
       'LORE_E_OBJECT_CORRUPT',
       `The normalized body of ${artifact.displayPath} is missing from this build.`,
       {
-        remediation: 'Run `lore build` to produce a complete build.',
+        remediation: 'Run `lorepack build` to produce a complete build.',
         subject: artifact.objectHash,
       },
     );

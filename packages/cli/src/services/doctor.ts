@@ -46,7 +46,7 @@ export interface DoctorOptions {
    * Set when this project's own dev session is the thing holding that port.
    *
    * Without it the report warns that the port is occupied, which is true and useless: it is
-   * occupied by the server that just answered the request, or by the `lore dev` running in
+   * occupied by the server that just answered the request, or by the `lorepack dev` running in
    * the next terminal. Both callers work this out and say so, so the browser and the
    * terminal reach the same conclusion about the same port.
    */
@@ -271,7 +271,7 @@ function watcherLimitCheck(): CheckResult {
     ...(low
       ? {
           remediation:
-            'Raise it if `lore dev` stops noticing changes:\n  sudo sysctl fs.inotify.max_user_watches=524288',
+            'Raise it if `lorepack dev` stops noticing changes:\n  sudo sysctl fs.inotify.max_user_watches=524288',
         }
       : {}),
     values: { platform: 'linux', maxUserWatches: limit },
@@ -285,7 +285,7 @@ function configCheck(config: LoadedConfig | null, root: string): CheckResult {
       title: 'Project configuration',
       status: 'fail',
       detail: `lore.yaml in ${root} could not be read.`,
-      remediation: 'Run `lore plan` to see the parse error in full, or fix lore.yaml by hand.',
+      remediation: 'Run `lorepack plan` to see the parse error in full, or fix lore.yaml by hand.',
       values: { root },
     };
   }
@@ -385,7 +385,7 @@ function activeBuildCheck(root: string): CheckResult {
       title: 'Active build',
       status: 'warn',
       detail: 'This project has no build yet.',
-      remediation: 'Run `lore build`, or `lore dev` to build and serve in one step.',
+      remediation: 'Run `lorepack build`, or `lorepack dev` to build and serve in one step.',
       values: { state },
     };
   }
@@ -405,7 +405,7 @@ function activeBuildCheck(root: string): CheckResult {
       title: 'Active build',
       status: 'fail',
       detail: `${state} cannot be read.`,
-      remediation: 'Check the file permissions, or remove .lore and run `lore build` again.',
+      remediation: 'Check the file permissions, or remove .lore and run `lorepack build` again.',
       values: { state },
     };
   }
@@ -415,7 +415,7 @@ function activeBuildCheck(root: string): CheckResult {
  * Whether the dev port is free, by binding it rather than by guessing from a scan.
  *
  * `ours` is the case that matters whenever a session is up: the port is held by this
- * project's own `lore dev`, and reporting that as a problem tells a person their working
+ * project's own `lorepack dev`, and reporting that as a problem tells a person their working
  * setup is broken. The check concludes differently rather than a caller editing the result
  * afterwards, which would be two opinions about one check.
  */
@@ -440,9 +440,9 @@ async function portCheck(port: number, ours: boolean): Promise<CheckResult> {
     ...(free
       ? {}
       : {
-          // A warning, not a failure: `lore dev` steps to the next free port and says so, so
+          // A warning, not a failure: `lorepack dev` steps to the next free port and says so, so
           // an occupied port is an inconvenience rather than a problem (architecture 6.9).
-          remediation: `\`lore dev\` will use the next free port. Pass --port to choose one.`,
+          remediation: `\`lorepack dev\` will use the next free port. Pass --port to choose one.`,
         }),
     values: { port },
   };

@@ -37,7 +37,7 @@ export function RouteError(): React.JSX.Element {
       />
       <Failure
         message={message}
-        remediation="Reload the page. If it happens again, open an issue with the steps that led here and the output of `lore doctor --json`."
+        remediation="Reload the page. If it happens again, open an issue with the steps that led here and the output of `lorepack doctor --json`."
       />
     </section>
   );

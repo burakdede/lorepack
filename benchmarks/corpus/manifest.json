@@ -16,8 +16,8 @@
       "path": "fixtures/documents/html/documentation-page.html",
       "format": "html",
       "kind": "checked-in-repository-artifact",
-      "sha256": "1757da4f52797b17b9bf144838eeaa926b0fac08842ab06710dda196ad6e6e20",
-      "bytes": 1504
+      "sha256": "fe8075fc8faa318158e700965da63cb3a3f11245494eb0febea186361522be8e",
+      "bytes": 1508
     },
     {
       "path": "examples/product-research/sources/data/segments.csv",
@@ -60,8 +60,8 @@
       "path": "packages/runtime/src/runtime.ts",
       "format": "source-code",
       "kind": "checked-in-repository-artifact",
-      "sha256": "6b69bacd9645094658492d3d87fcab03c2908667318e83f9e6f913b836d16a28",
-      "bytes": 11927
+      "sha256": "5cab28ecc0a0268c0df8c79721b1f287129d8b1e5ecb5718a59a210cd9dcf408",
+      "bytes": 11931
     },
     {
       "path": "benchmarks/corpus/text/operations.txt",

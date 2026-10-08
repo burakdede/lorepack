@@ -40,8 +40,8 @@ source files -> canonical discovery -> parse -> index -> validate -> sealed buil
 After that:
 
 - Studio can show what was parsed, excluded and activated.
-- `lore diff` can show what changed between builds.
-- `lore rollback` can point the project back to a previous build.
+- `lorepack diff` can show what changed between builds.
+- `lorepack rollback` can point the project back to a previous build.
 - An MCP client can ask for task context without reading source files directly.
 - A Cloudflare runtime can serve the same build that was inspected locally.
 
@@ -155,8 +155,8 @@ Start with these:
 Start with the two-command lifecycle:
 
 ```bash
-lore dev ./project-context
-lore connect claude-code
+lorepack dev ./project-context
+lorepack connect claude-code
 ```
 
 Then use:

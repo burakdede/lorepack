@@ -10,18 +10,18 @@ import {
 } from '../services/serving.js';
 
 /**
- * `lore serve`: the read-only server for whatever build is active.
+ * `lorepack serve`: the read-only server for whatever build is active.
  *
- * It does not watch, fingerprint on a timer, or build. That is `lore dev`'s job, and keeping
+ * It does not watch, fingerprint on a timer, or build. That is `lorepack dev`'s job, and keeping
  * them apart is what makes this one safe to leave running: a server that rebuilds on its own
  * is a server that can change what a client sees mid-conversation for reasons the client
  * cannot see.
  *
- * What it does do is re-read the active pointer on every request, so `lore build` or
- * `lore rollback` in another terminal is picked up at the next request with no restart
+ * What it does do is re-read the active pointer on every request, so `lorepack build` or
+ * `lorepack rollback` in another terminal is picked up at the next request with no restart
  * (architecture 15.2).
  *
- * The serving itself lives in `services/serving.ts`, because `lore dev` serves the same way
+ * The serving itself lives in `services/serving.ts`, because `lorepack dev` serves the same way
  * and a second implementation would be a second port policy and a second way to drain.
  */
 
@@ -65,7 +65,7 @@ export function serveCommand(): CommandDefinition {
           `  MCP   ${server.url}/mcp`,
           `  Health ${server.url}/health`,
           '',
-          'Read-only. `lore build` in another terminal is picked up on the next request.',
+          'Read-only. `lorepack build` in another terminal is picked up on the next request.',
           'Press Ctrl-C to stop.',
           '',
         ].join('\n'),
