@@ -3,8 +3,8 @@
     "name": "lorepack-research-pruning",
     "version": 1
   },
-  "generatedAt": "2026-10-08T20:22:15.540Z",
-  "commitSha": "b3912ceb4ec3284d62b53e83c7c16e5a18bb0e49",
+  "generatedAt": "2026-10-08T20:24:00.975Z",
+  "commitSha": "600a1737eaad3b0e0cb1ece2235ef25f4d457657",
   "experiment": {
     "name": "safe-upper-bound-top-k",
     "ranking": "field-aware-additive-v1",
@@ -29,7 +29,8 @@
   },
   "measurements": {
     "exhaustiveP95Ms": 0.14,
-    "prunedP95Ms": 5.54,
+    "prunedP95Ms": 2.51,
+    "directFts5P95Ms": 0.22,
     "queries": 15,
     "evaluatedPostings": 674,
     "totalPostings": 846,
@@ -40,6 +41,18 @@
       "numerator": 15,
       "denominator": 15,
       "ratio": 1
+    },
+    "directFts5": {
+      "exactTopK": {
+        "numerator": 0,
+        "denominator": 15,
+        "ratio": 0
+      },
+      "topKOverlap": {
+        "numerator": 40,
+        "denominator": 75,
+        "ratio": 0.5333333333333333
+      }
     },
     "cases": [
       {
@@ -124,6 +137,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@6",
             "score": 5.847257959305,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-product-strategy.md@0",
+            "score": -7.607037170695082,
+            "path": "pack-000/000-product-strategy.md",
+            "lineStart": 9,
+            "lineEnd": 9,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@2",
+            "score": -5.927083327202214,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@158",
+            "score": -5.634983667578007,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@4",
+            "score": -4.242978997720616,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@1",
+            "score": -4.050396598357861,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -221,6 +276,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-product-strategy.md@2",
+            "score": -16.34209868984276,
+            "path": "pack-000/000-product-strategy.md",
+            "lineStart": 21,
+            "lineEnd": 21,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@10",
+            "score": -11.942144709924287,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@3",
+            "score": -6.5184986548675194,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@50",
+            "score": -4.514026594248803,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@6",
+            "score": -4.2948990585288405,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 22,
         "totalPostings": 89
       },
@@ -306,6 +403,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@121",
             "score": 3.650033381969,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-release-notes.pdf@1",
+            "score": -12.83589994588675,
+            "path": "pack-000/000-release-notes.pdf",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": 2
+          },
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@3",
+            "score": -5.6314219962965755,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 36,
+            "lineEnd": 53,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@120",
+            "score": -5.294618418400977,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@150",
+            "score": -4.974091390773567,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@44",
+            "score": -4.8387848890351615,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -403,6 +542,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-release-notes.pdf@0",
+            "score": -2.9572329311105747,
+            "path": "pack-000/000-release-notes.pdf",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": 1
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@147",
+            "score": -2.830888924599215,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@42",
+            "score": -2.4857304709757555,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@43",
+            "score": -2.4725897944183424,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@184",
+            "score": -2.421386004122468,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 141,
         "totalPostings": 141
       },
@@ -488,6 +669,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@87",
             "score": 3.832104801272,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-sync-worker.md@0",
+            "score": -11.780990513230718,
+            "path": "pack-000/000-sync-worker.md",
+            "lineStart": 3,
+            "lineEnd": 9,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@4",
+            "score": -5.094641816790378,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-sync-worker.md@1",
+            "score": -5.055511618264181,
+            "path": "pack-000/000-sync-worker.md",
+            "lineStart": 14,
+            "lineEnd": 14,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@179",
+            "score": -5.035724043520716,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@134",
+            "score": -4.8374262627008155,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -585,6 +808,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-operations.txt@0",
+            "score": -8.913042689262774,
+            "path": "pack-000/000-operations.txt",
+            "lineStart": 1,
+            "lineEnd": 9,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@133",
+            "score": -4.0776461152941605,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@154",
+            "score": -3.786360693099175,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@127",
+            "score": -3.2502551039640952,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@30",
+            "score": -3.205211929745792,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 38,
         "totalPostings": 38
       },
@@ -670,6 +935,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@180",
             "score": 4.791123098904,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@3",
+            "score": -9.465999868138875,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 36,
+            "lineEnd": 53,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-release-notes.pdf@0",
+            "score": -4.351860336624685,
+            "path": "pack-000/000-release-notes.pdf",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": 1
+          },
+          {
+            "docId": "sources:pack-000/000-release-notes.pdf@1",
+            "score": -4.021619100476584,
+            "path": "pack-000/000-release-notes.pdf",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": 2
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@180",
+            "score": -3.741789557796284,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@151",
+            "score": -3.544485585322101,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -767,6 +1074,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@1",
+            "score": -9.2008989930087,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 27,
+            "lineEnd": 30,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@141",
+            "score": -8.574697769759915,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@2",
+            "score": -6.568075878242502,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 33,
+            "lineEnd": 33,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@125",
+            "score": -4.313865899385935,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@18",
+            "score": -4.232532842132208,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 21,
         "totalPostings": 21
       },
@@ -855,6 +1204,48 @@
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@2",
+            "score": -9.813258128391908,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 33,
+            "lineEnd": 33,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@119",
+            "score": -5.998895969976293,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@18",
+            "score": -4.232532842132208,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@141",
+            "score": -3.95304466204873,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-documentation-page.html@1",
+            "score": -3.253751317517928,
+            "path": "pack-000/000-documentation-page.html",
+            "lineStart": 27,
+            "lineEnd": 30,
             "page": null
           }
         ],
@@ -949,6 +1340,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@63",
+            "score": -4.446212019341485,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@64",
+            "score": -4.423073713138493,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@62",
+            "score": -4.2891480865448015,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@67",
+            "score": -4.18358623736741,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-runtime.ts@2",
+            "score": -3.3172276147906516,
+            "path": "pack-000/000-runtime.ts",
+            "lineStart": 103,
+            "lineEnd": 151,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 72,
         "totalPostings": 72
       },
@@ -1034,6 +1467,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@168",
             "score": 4.334605794942,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@141",
+            "score": -4.715945755426808,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@66",
+            "score": -4.338706044888922,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@113",
+            "score": -3.693380970353967,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@55",
+            "score": -3.6220633024109734,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@5",
+            "score": -3.5574934161205714,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -1131,6 +1606,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@94",
+            "score": -6.454085770263144,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@132",
+            "score": -5.364515268119703,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@92",
+            "score": -5.297345685382375,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@119",
+            "score": -5.264548016571422,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@57",
+            "score": -5.20356447331267,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 123,
         "totalPostings": 123
       },
@@ -1216,6 +1733,48 @@
           {
             "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@38",
             "score": 5.190383357146,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@39",
+            "score": -9.84239427375263,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@162",
+            "score": -6.440687809414431,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@164",
+            "score": -3.9376087917704283,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@101",
+            "score": -3.7111579065396056,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@38",
+            "score": -3.579413173198422,
             "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
             "lineStart": 1,
             "lineEnd": 1,
@@ -1313,6 +1872,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-segments.csv@0",
+            "score": -10.890431900459523,
+            "path": "pack-000/000-segments.csv",
+            "lineStart": 1,
+            "lineEnd": 5,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-environments.xlsx@0",
+            "score": -9.061483156901708,
+            "path": "pack-000/000-environments.xlsx",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@123",
+            "score": -7.345245087815425,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@19",
+            "score": -6.5464819714693,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@29",
+            "score": -6.357428119083687,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          }
+        ],
         "evaluatedPostings": 61,
         "totalPostings": 61
       },
@@ -1404,6 +2005,48 @@
             "page": null
           }
         ],
+        "directFts5": [
+          {
+            "docId": "sources:pack-000/000-sync-worker.md@1",
+            "score": -8.5579291111843,
+            "path": "pack-000/000-sync-worker.md",
+            "lineStart": 14,
+            "lineEnd": 14,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-sync-worker.md@0",
+            "score": -7.936110684142624,
+            "path": "pack-000/000-sync-worker.md",
+            "lineStart": 3,
+            "lineEnd": 9,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@124",
+            "score": -2.85283237483149,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx@166",
+            "score": -2.7350421503319344,
+            "path": "pack-000/000-Lorepack_Local_First_MVP_Architecture_Final.docx",
+            "lineStart": 1,
+            "lineEnd": 1,
+            "page": null
+          },
+          {
+            "docId": "sources:pack-000/000-release-notes.pdf@1",
+            "score": -2.6596678094633965,
+            "path": "pack-000/000-release-notes.pdf",
+            "lineStart": null,
+            "lineEnd": null,
+            "page": 2
+          }
+        ],
         "evaluatedPostings": 5,
         "totalPostings": 31
       }
@@ -1421,11 +2064,18 @@
       "status": "reported-only",
       "statement": "The prototype reports candidate evaluation reduction and query timings; it is not a default runtime path.",
       "evidence": ["measurements"]
+    },
+    {
+      "id": "direct-fts5-comparison",
+      "status": "measured",
+      "statement": "The same queries are reported against direct SQLite FTS5, without claiming score or ranking equivalence.",
+      "evidence": ["quality.directFts5", "measurements.directFts5P95Ms"]
     }
   ],
   "limitations": [
     "The prototype uses a research-only additive field score and is not the full runtime ranker.",
     "The report does not claim a WAND or Block-Max WAND implementation until the exact index structure and equivalence gate are met.",
+    "Direct FTS5 uses its own BM25 ranking, so overlap is descriptive and not an exactness gate for the pruning method.",
     "The local corpus is a regression fixture, not an industry retrieval benchmark."
   ]
 }

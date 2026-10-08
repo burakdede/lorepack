@@ -36,7 +36,8 @@ report is [`benchmark-evidence.md`](benchmark-evidence.md).
 The first safe-pruning prototype is recorded in
 [`benchmarks/research/safe-pruning-2026-10-08.json`](../../benchmarks/research/safe-pruning-2026-10-08.json).
 On the small profile it returned exact top-k IDs and scores for 15/15 queries and skipped 20.3%
-of postings, but its p95 was 5.54 ms versus 0.14 ms for exhaustive scoring. This is a valid
+of postings, but its p95 was 2.51 ms versus 0.14 ms for exhaustive scoring. Direct FTS5 had a
+0.22 ms p95 and 53.3% top-k overlap with the prototype's exhaustive ranking. This is a valid
 correctness result and a negative speed result. It remains a research-only prototype and is not
 evidence that Lorepack currently beats SQLite FTS5.
 

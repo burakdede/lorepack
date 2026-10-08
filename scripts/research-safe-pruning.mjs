@@ -197,6 +197,30 @@ function readRows(databasePath) {
   return rows;
 }
 
+function createFts5Index(rows) {
+  const database = new DatabaseSync(':memory:');
+  database.exec(
+    'CREATE VIRTUAL TABLE chunks_fts USING fts5(id UNINDEXED, path, title, heading, body)',
+  );
+  const insert = database.prepare(
+    'INSERT INTO chunks_fts (id, path, title, heading, body) VALUES (?, ?, ?, ?, ?)',
+  );
+  for (const row of rows)
+    insert.run(row.id, row.path, row.title ?? '', row.heading ?? '', row.body ?? '');
+  return database;
+}
+
+function fts5TopK(database, query, limit) {
+  const match = tokens(query).join(' OR ');
+  if (match.length === 0) return [];
+  return database
+    .prepare(
+      'SELECT id AS docId, bm25(chunks_fts) AS score FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?',
+    )
+    .all(match, limit)
+    .map((row) => ({ docId: row.docId, score: row.score }));
+}
+
 function resultLocations(results, rows) {
   const byId = new Map(rows.map((row) => [row.id, row]));
   return results.map(({ docId, score }) => {
@@ -219,12 +243,16 @@ async function main() {
     const databasePath = join(project.root, '.lore', 'builds', built.buildId, 'context.sqlite');
     const rows = readRows(databasePath);
     const postings = buildPostings(rows);
+    const fts5 = createFts5Index(rows);
     const queries = workload.qualityQueries.filter((entry) => entry.kind === 'search');
     const exhaustiveTimes = [];
     const prunedTimes = [];
+    const fts5Times = [];
     let exact = 0;
     let evaluatedPostings = 0;
     let totalPostings = 0;
+    let fts5Exact = 0;
+    let fts5Overlap = 0;
     const cases = [];
     for (const entry of queries) {
       const exhaustiveStarted = performance.now();
@@ -233,7 +261,17 @@ async function main() {
       const prunedStarted = performance.now();
       const pruned = safePrunedTopK(postings, entry.query, topK);
       prunedTimes.push(performance.now() - prunedStarted);
+      const fts5Started = performance.now();
+      const directFts5 = fts5TopK(fts5, entry.query, topK);
+      fts5Times.push(performance.now() - fts5Started);
       const same = JSON.stringify(pruned.results) === JSON.stringify(exhaustive);
+      const sameAsFts5 =
+        JSON.stringify(directFts5.map((result) => result.docId)) ===
+        JSON.stringify(exhaustive.map((result) => result.docId));
+      fts5Exact += sameAsFts5 ? 1 : 0;
+      fts5Overlap += directFts5.filter((result) =>
+        exhaustive.some((item) => item.docId === result.docId),
+      ).length;
       if (same) exact += 1;
       evaluatedPostings += pruned.evaluatedPostings;
       totalPostings += pruned.totalPostings;
@@ -243,6 +281,7 @@ async function main() {
         exact: same,
         exhaustive: resultLocations(exhaustive, rows),
         pruned: resultLocations(pruned.results, rows),
+        directFts5: resultLocations(directFts5, rows),
         evaluatedPostings: pruned.evaluatedPostings,
         totalPostings: pruned.totalPostings,
       });
@@ -278,6 +317,7 @@ async function main() {
       measurements: {
         exhaustiveP95Ms: percentile(exhaustiveTimes, 0.95),
         prunedP95Ms: percentile(prunedTimes, 0.95),
+        directFts5P95Ms: percentile(fts5Times, 0.95),
         queries: queries.length,
         evaluatedPostings,
         totalPostings,
@@ -288,6 +328,18 @@ async function main() {
           numerator: exact,
           denominator: queries.length,
           ratio: queries.length === 0 ? 1 : exact / queries.length,
+        },
+        directFts5: {
+          exactTopK: {
+            numerator: fts5Exact,
+            denominator: queries.length,
+            ratio: queries.length === 0 ? 1 : fts5Exact / queries.length,
+          },
+          topKOverlap: {
+            numerator: fts5Overlap,
+            denominator: queries.length * topK,
+            ratio: queries.length === 0 ? 1 : fts5Overlap / (queries.length * topK),
+          },
         },
         cases,
       },
@@ -306,10 +358,18 @@ async function main() {
             'The prototype reports candidate evaluation reduction and query timings; it is not a default runtime path.',
           evidence: ['measurements'],
         },
+        {
+          id: 'direct-fts5-comparison',
+          status: 'measured',
+          statement:
+            'The same queries are reported against direct SQLite FTS5, without claiming score or ranking equivalence.',
+          evidence: ['quality.directFts5', 'measurements.directFts5P95Ms'],
+        },
       ],
       limitations: [
         'The prototype uses a research-only additive field score and is not the full runtime ranker.',
         'The report does not claim a WAND or Block-Max WAND implementation until the exact index structure and equivalence gate are met.',
+        'Direct FTS5 uses its own BM25 ranking, so overlap is descriptive and not an exactness gate for the pruning method.',
         'The local corpus is a regression fixture, not an industry retrieval benchmark.',
       ],
     };
