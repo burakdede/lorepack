@@ -1,0 +1,60 @@
+{
+  "protocol": { "name": "lorepack-benchmark", "version": 1 },
+  "reportId": "sample-protocol-v1",
+  "generatedAt": "2026-10-08T20:00:00Z",
+  "commitSha": "0000000000000000000000000000000000000000000000000000000000000000",
+  "implementation": { "name": "sample", "version": "0.0.0" },
+  "environment": {
+    "platform": "linux",
+    "arch": "x64",
+    "runner": "local",
+    "node": "24.18.1",
+    "cpu": "sample CPU",
+    "storageClass": "sample storage"
+  },
+  "corpus": {
+    "manifestPath": "benchmarks/corpus/manifest.json",
+    "manifestSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "scale": "small",
+    "profile": "mixed",
+    "artifacts": 9,
+    "bytes": 448792,
+    "chunks": 239,
+    "tables": 2
+  },
+  "workload": {
+    "path": "benchmarks/corpus/queries.json",
+    "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "queryCount": 30,
+    "contextTaskCount": 20,
+    "tableQueryCount": 20
+  },
+  "samples": { "warmup": 1, "repetitions": 3, "timeoutMs": 30000 },
+  "tokenAccounting": {
+    "status": "not-applicable",
+    "tokenizer": null,
+    "model": null,
+    "inputTokens": null,
+    "retrievedContextTokens": null,
+    "promptTokens": null,
+    "completionTokens": null,
+    "totalTokens": null
+  },
+  "measurements": {
+    "phases": [{ "name": "warm-query", "p50Ms": 1.2, "p95Ms": 2.4, "samples": 30, "errorCount": 0 }]
+  },
+  "claims": [
+    {
+      "id": "sample-warm-query",
+      "status": "measured",
+      "statement": "The sample warm query p95 is 2.4 ms.",
+      "evidence": ["measurements.phases[name=warm-query].p95Ms"]
+    },
+    {
+      "id": "sample-semantic-quality",
+      "status": "not-measured",
+      "statement": "Semantic quality is not measured by this sample.",
+      "evidence": []
+    }
+  ]
+}
