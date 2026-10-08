@@ -16,12 +16,12 @@ Run `pnpm cli:docs` to update it, or `pnpm cli:docs:check` to verify it is curre
 | `--cwd <path>` | run against a project in another directory |
 | `-h, --help` | display help for the command |
 
-## `lore init`
+## `lorepack init`
 
 Create a minimal Lorepack project in a directory.
 
 ```text
-lore init [path]
+lorepack init [path]
 ```
 
 ### Arguments
@@ -37,12 +37,12 @@ lore init [path]
 | `--force` | overwrite existing Lorepack configuration |
 | `--dry-run` | show what would change without writing |
 
-## `lore plan`
+## `lorepack plan`
 
 Preview what a build would change. Makes no changes itself.
 
 ```text
-lore plan
+lorepack plan
 ```
 
 ### Arguments
@@ -56,12 +56,12 @@ None.
 | `--allow-large-project` | continue past the supported file count |
 | `--exit-code` | exit 2 when there are changes, for CI gating |
 
-## `lore build`
+## `lorepack build`
 
 Compile the project into an immutable build and activate it.
 
 ```text
-lore build
+lorepack build
 ```
 
 ### Arguments
@@ -76,12 +76,12 @@ None.
 | `--frozen` | fail if lore.lock would change |
 | `--allow-large-project` | continue past the supported file count |
 
-## `lore status`
+## `lorepack status`
 
 Report whether the active build still matches the sources.
 
 ```text
-lore status
+lorepack status
 ```
 
 ### Arguments
@@ -95,12 +95,12 @@ None.
 | `--exit-code` | exit 2 when sources are dirty, for scripting |
 | `--allow-large-project` | continue past the supported file count |
 
-## `lore diff`
+## `lorepack diff`
 
 Compare two builds. Reads build data only, never the sources.
 
 ```text
-lore diff [from] [to]
+lorepack diff [from] [to]
 ```
 
 ### Arguments
@@ -114,12 +114,12 @@ lore diff [from] [to]
 
 None.
 
-## `lore search`
+## `lorepack search`
 
 Search the active build. Every result carries its source location.
 
 ```text
-lore search <query>
+lorepack search <query>
 ```
 
 ### Arguments
@@ -139,12 +139,12 @@ lore search <query>
 | `--include-archived` | include archived and superseded sources, which are labelled |
 | `--debug` | show why each result ranked where it did |
 
-## `lore inspect`
+## `lorepack inspect`
 
 Show what the build contains. Subjects: warnings, exclusions, sources, build, chunks, tables, rules, builds, or a source path.
 
 ```text
-lore inspect <subject> [target]
+lorepack inspect <subject> [target]
 ```
 
 ### Arguments
@@ -160,12 +160,12 @@ lore inspect <subject> [target]
 |---|---|
 | `--build <id>` | inspect a build other than the active one |
 
-## `lore pack`
+## `lorepack pack`
 
 Write a portable .lorepack archive of a build.
 
 ```text
-lore pack [build]
+lorepack pack [build]
 ```
 
 ### Arguments
@@ -181,12 +181,12 @@ lore pack [build]
 | `--verify <file>` | check an existing archive instead of writing one |
 | `--out <file>` | archive path to write |
 
-## `lore builds`
+## `lorepack builds`
 
 List build history, newest first.
 
 ```text
-lore builds
+lorepack builds
 ```
 
 ### Arguments
@@ -197,12 +197,12 @@ None.
 
 None.
 
-## `lore activate`
+## `lorepack activate`
 
 Point this project at a build. Never recompiles.
 
 ```text
-lore activate <build>
+lorepack activate <build>
 ```
 
 ### Arguments
@@ -215,12 +215,12 @@ lore activate <build>
 
 None.
 
-## `lore rollback`
+## `lorepack rollback`
 
 Return to the previous verified build. Never recompiles.
 
 ```text
-lore rollback [build]
+lorepack rollback [build]
 ```
 
 ### Arguments
@@ -235,12 +235,12 @@ lore rollback [build]
 |---|---|
 | `--target <target>` | roll back a remote deployment target |
 
-## `lore prune`
+## `lorepack prune`
 
 Remove old builds, keeping the active one and the previous five.
 
 ```text
-lore prune
+lorepack prune
 ```
 
 ### Arguments
@@ -256,12 +256,12 @@ None.
 | `--resume <receipt-id>` | continue an interrupted remote cleanup |
 | `--yes` | apply the plan instead of only printing it |
 
-## `lore dev`
+## `lorepack dev`
 
 Turn a folder into a running context runtime. Builds, serves, and connects.
 
 ```text
-lore dev [path]
+lorepack dev [path]
 ```
 
 ### Arguments
@@ -279,12 +279,12 @@ lore dev [path]
 | `--yes` | accept defaults without asking (the default path asks nothing) |
 | `--allow-large-project` | continue past the supported file count |
 
-## `lore deploy`
+## `lorepack deploy`
 
 Project a build onto a remote target and activate it after verification.
 
 ```text
-lore deploy [target]
+lorepack deploy [target]
 ```
 
 ### Arguments
@@ -303,12 +303,12 @@ lore deploy [target]
 | `--resume <receipt-id>` | continue an interrupted deploy |
 | `--allow-capability-loss <capability>` | accept one named capability the target cannot serve |
 
-## `lore target`
+## `lorepack target`
 
 Prepare and inspect deployment targets.
 
 ```text
-lore target <subject> <target>
+lorepack target <subject> <target>
 ```
 
 ### Arguments
@@ -331,12 +331,12 @@ lore target <subject> <target>
 | `--catalog-db <name>` | connect to an existing D1 database name |
 | `--objects-bucket <name>` | connect to an existing R2 bucket name |
 
-## `lore connect`
+## `lorepack connect`
 
 Configure an AI client to read this project, and verify that it works.
 
 ```text
-lore connect [client]
+lorepack connect [client]
 ```
 
 ### Arguments
@@ -355,12 +355,12 @@ lore connect [client]
 | `--shared` | write the project file that others will be asked to trust |
 | `--snippet` | print a configuration to paste, and change nothing |
 
-## `lore disconnect`
+## `lorepack disconnect`
 
 Remove the Lorepack entry from an AI client, leaving everything else.
 
 ```text
-lore disconnect [client]
+lorepack disconnect [client]
 ```
 
 ### Arguments
@@ -376,12 +376,12 @@ lore disconnect [client]
 | `--scope <scope>` | project (default) or user |
 | `--shared` | the project file rather than the local one |
 
-## `lore doctor`
+## `lorepack doctor`
 
 Check this environment and project, and say how to fix what is wrong.
 
 ```text
-lore doctor
+lorepack doctor
 ```
 
 ### Arguments
@@ -395,12 +395,12 @@ None.
 | `--ci` | exit non-zero when any check fails, for use in a pipeline |
 | `--port <number>` | the dev port to test (default 43110) |
 
-## `lore config`
+## `lorepack config`
 
 Show the resolved configuration, and where each value came from.
 
 ```text
-lore config <subject> [path]
+lorepack config <subject> [path]
 ```
 
 ### Arguments
@@ -416,12 +416,12 @@ lore config <subject> [path]
 |---|---|
 | `--effective` | show every resolved value, not only what lore.yaml says |
 
-## `lore mcp`
+## `lorepack mcp`
 
 Serve the active build to an AI client over MCP on stdio.
 
 ```text
-lore mcp
+lorepack mcp
 ```
 
 ### Arguments
@@ -438,12 +438,12 @@ None.
 | `--project <path>` | the project to serve |
 | `--revalidate-interval <ms>` | how often to recheck the sources while serving (default 5000, 0 every request, off never) |
 
-## `lore serve`
+## `lorepack serve`
 
 Serve the active build over HTTP and MCP. Read-only, and never rebuilds.
 
 ```text
-lore serve
+lorepack serve
 ```
 
 ### Arguments
@@ -458,12 +458,12 @@ None.
 | `--host <address>` | address to bind (default 127.0.0.1) |
 | `--revalidate-interval <ms>` | how often to recheck the sources (default 5000, 0 every request) |
 
-## `lore export`
+## `lorepack export`
 
 Write a bounded, cited context bundle for a task. Markdown or JSON.
 
 ```text
-lore export
+lorepack export
 ```
 
 ### Arguments

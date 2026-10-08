@@ -242,7 +242,7 @@ test.describe('Versions', () => {
     await expect(page.locator('.active-marker')).toHaveCount(1);
     await checkA11y();
 
-    // The comparison, which reads the way `lore diff` reads.
+    // The comparison, which reads the way `lorepack diff` reads.
     await expect(page.locator('.diff-section')).toHaveCount(5);
     await expect(page.locator('.diff-list .diff-marker').first()).toBeVisible();
 
@@ -294,7 +294,7 @@ test.describe('Diagnostics', () => {
 
     await expect(page.getByText('Node version')).toBeVisible();
     await expect(page.getByText('SQLite FTS5')).toBeVisible();
-    // The live half, which is why this route is more than `lore doctor` in a browser.
+    // The live half, which is why this route is more than `lorepack doctor` in a browser.
     await expect(page.getByRole('heading', { name: 'Session' })).toBeVisible();
     await expect(page.locator('.facts').first()).toContainText('127.0.0.1:');
 

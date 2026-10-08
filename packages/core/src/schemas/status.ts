@@ -3,7 +3,7 @@ import { buildIdSchema, isoTimestampSchema } from './common.js';
 import { artifactChangeSchema } from './plan.js';
 
 /**
- * What `lore status --json` returns.
+ * What `lorepack status --json` returns.
  *
  * `decidedBy` is not decoration. Freshness is only trustworthy if the user knows how it
  * was decided, and architecture section 12.3 is explicit that content hashing, never

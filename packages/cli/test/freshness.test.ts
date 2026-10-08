@@ -67,7 +67,7 @@ describe('readFreshness', () => {
   });
 
   it('never applies the file envelope, because that guard is about building', async () => {
-    // #147: `lore search` refused to answer on a project above the envelope, even though
+    // #147: `lorepack search` refused to answer on a project above the envelope, even though
     // the build it would have read was already sealed on disk.
     //
     // The limit is lowered rather than the corpus raised. Materialising 2,501 real files

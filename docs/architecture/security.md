@@ -85,7 +85,7 @@ of the boundary:
 
 ## The write surface
 
-There is one: `ApiOptions.localActions`, supplied only by `lore dev`, refusing every browser
+There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`, refusing every browser
 origin that is not a loopback literal. A runtime built without it has **no mutating route at
 all**, which the end-to-end suite asserts by requesting each one and expecting a typed 404.
 
@@ -96,7 +96,7 @@ check would either exclude the query route or admit a genuine write that happene
 ## Privacy defaults
 
 `tools/security/test/privacy-defaults.test.ts` blocks `fetch` and Node socket connection
-attempts inside a real `lore build` invocation. The fixture includes an external URL and a
+attempts inside a real `lorepack build` invocation. The fixture includes an external URL and a
 script tag, so the test proves the core build path treats source content as bytes and never
 executes or fetches it. There is no telemetry path in the compiler, and the test would fail if
 one were added through Node's standard network path.

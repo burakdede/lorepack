@@ -87,7 +87,7 @@ export interface BuildOptions {
 /**
  * A file the build left out, and why. Discovery contributes the ones decided by extension,
  * fingerprinting the ones decided by content; both reach the catalog and the manifest, so
- * they survive the sources and `lore inspect warnings` can answer after they are gone.
+ * they survive the sources and `lorepack inspect warnings` can answer after they are gone.
  */
 interface BuildWarning {
   readonly code: string;
@@ -360,9 +360,9 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
        * `state.getBuild` answers from `state.sqlite`, a separate database that stays perfectly
        * intact while the build directory it points at is deleted, truncated, overwritten or
        * left at a catalog schema this version does not read. Trusting the record alone made
-       * every one of those permanently unrecoverable: `lore build` reported "No changes" and
+       * every one of those permanently unrecoverable: `lorepack build` reported "No changes" and
        * the next read failed exactly as before, including when the failing read's own
-       * remediation was to run `lore build`.
+       * remediation was to run `lorepack build`.
        */
       const existing = state.getBuild(buildId);
       const reusable = existing !== null && isBuildReadable(loreDirectory, buildId);
@@ -449,7 +449,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
               ...(warning.path === '.' ? {} : { path: warning.path }),
               class: warning.class,
             })),
-            // Sealed with the build, so `lore inspect exclusions` and Studio can answer after
+            // Sealed with the build, so `lorepack inspect exclusions` and Studio can answer after
             // the sources have moved on and after a rollback, without reading a source file.
             // Not an input to `deriveBuildId`: identity is what a build contains, and two
             // builds holding the same artifacts are the same build however the rest was
@@ -600,7 +600,7 @@ export function readStableSourceBytes(
     'LORE_E_STALE_SOURCES',
     `${displayPath} changed while the build was reading it.`,
     {
-      remediation: 'Save the source completely, then run `lore build` again.',
+      remediation: 'Save the source completely, then run `lorepack build` again.',
       path: displayPath,
     },
   );

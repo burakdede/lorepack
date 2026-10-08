@@ -35,7 +35,7 @@ import './Playground.css';
 const PROFILES = ['agent', 'coding', 'chat', 'deep'] as const;
 type Profile = (typeof PROFILES)[number];
 
-/** Architecture 5.4's bounds, the same ones `lore export` enforces. */
+/** Architecture 5.4's bounds, the same ones `lorepack export` enforces. */
 const BUDGET_MIN = 4000;
 const BUDGET_MAX = 40_000;
 
@@ -100,7 +100,7 @@ function ContextTab(): React.JSX.Element {
 
   const copyExport = useMutation({
     mutationFn: async () => {
-      // The server renders it with the same function `lore export` calls, so what is copied
+      // The server renders it with the same function `lorepack export` calls, so what is copied
       // is what a chat product would receive rather than a second rendering of the same data.
       const response = await fetch('/v1/export', {
         method: 'POST',
@@ -201,7 +201,7 @@ function ContextTab(): React.JSX.Element {
           )}
 
           {/* The reserve, first, because that is where it is in the bundle and in what
-              `lore export` writes. Leaving it off screen was #199: a reader saw nine of
+              `lorepack export` writes. Leaving it off screen was #199: a reader saw nine of
               fifteen cited passages, and the ones withheld were the openings of the most
               relevant documents, so the passage that answered the task could be missing
               from a page whose whole purpose is showing what the model receives. */}

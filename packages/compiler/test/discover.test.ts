@@ -112,7 +112,7 @@ describe('exclusions', () => {
     );
   });
 
-  it('never discovers the archives lore pack writes into the project', async () => {
+  it('never discovers the archives lorepack pack writes into the project', async () => {
     // #148. The archive lands in the project root by default, so without this the tool
     // finds its own output on the next run and warns about a file it created a second ago.
     await withProject(
@@ -173,7 +173,7 @@ describe('exclusions', () => {
 
 /**
  * #202. A file an ignore rule removed was recorded nowhere: not in the build, not in
- * `lore inspect`, not over the API, and not in the Studio view whose whole purpose is naming
+ * `lorepack inspect`, not over the API, and not in the Studio view whose whole purpose is naming
  * what is missing and why. A rule written a little too broadly could take a folder out of
  * every answer, and the build would look entirely healthy.
  */

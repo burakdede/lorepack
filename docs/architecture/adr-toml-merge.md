@@ -68,7 +68,7 @@ failure modes are not comparable in size:
 
 - A marker a future Codex refuses is a `config.toml` that **no longer loads at all**, with
   Lorepack's name on the change that broke it.
-- A comment lost to some reformatting tool means `lore disconnect` leaves our table in place,
+- A comment lost to some reformatting tool means `lorepack disconnect` leaves our table in place,
   and the user deletes five lines by hand.
 
 The first is the failure 24.8 exists to prevent. The second is an inconvenience. Choosing the

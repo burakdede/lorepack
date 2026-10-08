@@ -11,7 +11,7 @@ import { type BuildId, LORE_DIRECTORY, type LoadedConfig, LoreError } from '@lor
 import { buildDirectory, openStateStore, resolveBuildId } from './builds.js';
 
 /**
- * Writing a `.lorepack` archive, in the one place both `lore pack` and Studio call.
+ * Writing a `.lorepack` archive, in the one place both `lorepack pack` and Studio call.
  *
  * Extracted from the command when Studio grew a pack button (#68). Two implementations of an
  * archive format is how a file packed from a browser ends up subtly different from one packed
@@ -53,7 +53,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
         'LORE_E_BUILD_VALIDATION',
         `Build ${buildId} is ${summary?.state ?? 'unknown'}, and only a verified build can be packed.`,
         {
-          remediation: 'Run `lore build` to produce a verified build.',
+          remediation: 'Run `lorepack build` to produce a verified build.',
           subject: buildId,
         },
       );
@@ -94,7 +94,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
 function activeOrFail(buildId: BuildId | undefined): BuildId {
   if (buildId === undefined) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build to pack.', {
-      remediation: 'Run `lore build`, or name a build.',
+      remediation: 'Run `lorepack build`, or name a build.',
     });
   }
   return buildId;

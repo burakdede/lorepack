@@ -106,7 +106,7 @@ uneven, and paid for the gap in #128.
 
 Two criteria are worth calling out because they catch what prose cannot:
 
-- `commands-registered` runs the real `lore --help` and asserts every Phase 1 command is
+- `commands-registered` runs the real `lorepack --help` and asserts every Phase 1 command is
   listed. A command that quietly stops being registered still compiles and still passes the
   tests for its internals; only a user notices. Verified by drill on 2026-08-01: removing
   `packCommand()` from the registry made `pnpm check:command-set` fail naming `pack`, and

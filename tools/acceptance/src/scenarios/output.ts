@@ -4,14 +4,14 @@ import { CORPUS } from './corpus.js';
 /**
  * The contract every script and every later protocol depends on: with `--json`, stdout
  * carries the structured result and nothing else. Phase 2 needs the same discipline for
- * `lore mcp`, where stdout carries protocol frames (section 14.3), so it is worth proving
+ * `lorepack mcp`, where stdout carries protocol frames (section 14.3), so it is worth proving
  * here rather than discovering there.
  */
 export const OUTPUT_SCENARIOS: readonly Scenario[] = [
   {
     id: 'output/json-stdout-carries-only-the-result',
     title: 'With --json, stdout parses on its own and progress goes to stderr',
-    proves: 'Section 4.7: `lore plan --json | jq` works, and section 14.3 depends on it.',
+    proves: 'Section 4.7: `lorepack plan --json | jq` works, and section 14.3 depends on it.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },
     steps: [
@@ -47,7 +47,8 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
   {
     id: 'output/a-large-result-survives-a-pipe',
     title: 'A result far larger than a pipe buffer arrives whole',
-    proves: 'Section 4.7: `lore <command> --json | jq` is true at every size, not only small ones.',
+    proves:
+      'Section 4.7: `lorepack <command> --json | jq` is true at every size, not only small ones.',
     mode: 'auto',
     regression: 154,
     fixture: {
@@ -109,7 +110,7 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'output/every-command-is-registered',
-    title: '`lore --help` lists every command this phase ships',
+    title: '`lorepack --help` lists every command this phase ships',
     proves: 'Section 4.8: the command set is explicit, so a lost command is visible.',
     mode: 'auto',
     fixture: { files: {}, setup: [] },
@@ -154,7 +155,7 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
         expect: {
           exitCode: 1,
           errorCode: 'LORE_E_BUILD_NOT_FOUND',
-          stderr: { excludes: ['lore doctor'] },
+          stderr: { excludes: ['lorepack doctor'] },
         },
       },
       {
@@ -162,7 +163,7 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
         args: ['inspect', 'nothing-like-this'],
         describe:
           'And a subject that does not exist, which used to fall through to the default advice',
-        expect: { exitCode: 1, stderr: { excludes: ['lore doctor'] } },
+        expect: { exitCode: 1, stderr: { excludes: ['lorepack doctor'] } },
       },
     ],
   },

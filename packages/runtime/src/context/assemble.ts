@@ -24,7 +24,7 @@ import type { DropReason, RankedHit } from '../ranking/rank.js';
  *   more. Lorepack does not decide which of two documents is correct (invariant 6).
  */
 
-/** Architecture 13.5. `contextForTask` defaults to `agent`; `lore export` passes `chat`. */
+/** Architecture 13.5. `contextForTask` defaults to `agent`; `lorepack export` passes `chat`. */
 export const PROFILE_BUDGETS: Readonly<Record<ContextProfile, number>> = {
   agent: 12_000,
   coding: 16_000,

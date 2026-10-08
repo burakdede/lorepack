@@ -51,7 +51,7 @@ Two consequences shaped the fix:
 - **The test is a table of depths, not a list of names.** Each entry was correct at depth
   zero, which is the only depth anything asserted, so the list read as complete for four
   phases. `packages/compiler/test/discover.test.ts` now checks every default at three depths,
-  and `packages/cli/test/init.test.ts` checks that the `.loreignore` written by `lore init`
+  and `packages/cli/test/init.test.ts` checks that the `.loreignore` written by `lorepack init`
   *behaves* the same as the enforced list rather than merely containing the same lines.
 
 A project always has the last word: the defaults are the first rules in the list and
@@ -68,8 +68,8 @@ recorded:
 
 | | Decided | Recorded as | Read with |
 |---|---|---|---|
-| A rule removed it | before anything is read | an entry in `manifest.exclusions` | `lore inspect exclusions` |
-| Nothing could read it | after the bytes are read | an entry in `manifest.warnings` | `lore inspect warnings` |
+| A rule removed it | before anything is read | an entry in `manifest.exclusions` | `lorepack inspect exclusions` |
+| Nothing could read it | after the bytes are read | an entry in `manifest.warnings` | `lorepack inspect warnings` |
 
 Only the second existed until #202. The first is the more common reason a document is
 missing: a rule written a shade too broadly takes a folder out of every answer, and the
@@ -119,8 +119,8 @@ verdict is reached in the fingerprinting stage, which already reads every byte t
 and the file is excluded with an `undecodable-content` warning naming the path and the fix.
 
 The stage matters. Excluding at parse time instead, which is what Lorepack did until #165,
-put the file in the fingerprint but not in the build, so `lore status` reported the project
-dirty forever and `lore build` then reported no changes: a loop of bad advice. Fingerprinting
+put the file in the fingerprint but not in the build, so `lorepack status` reported the project
+dirty forever and `lorepack build` then reported no changes: a loop of bad advice. Fingerprinting
 is the last stage that can change what a build contains, so it is where the decision belongs.
 
 The consequence is that section 6.9's other row, a supported file that fails to parse, is

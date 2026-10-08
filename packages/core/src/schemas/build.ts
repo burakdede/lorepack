@@ -8,7 +8,7 @@ import {
   sha256Schema,
 } from './common.js';
 
-/** Versions that can affect deterministic output. `lore build --frozen` fails on drift. */
+/** Versions that can affect deterministic output. `lorepack build --frozen` fails on drift. */
 export const lockfileSchema = z
   .object({
     formatVersion: z.literal(1),
@@ -32,7 +32,7 @@ export const buildWarningSchema = z
  * What an ignore rule removed, grouped by the rule that removed it.
  *
  * Discovery used to drop an ignored path with a bare `return`, so a file removed by a rule
- * was recorded nowhere: not in the build, not in `lore inspect`, not over the API, and not
+ * was recorded nowhere: not in the build, not in `lorepack inspect`, not over the API, and not
  * in the Studio view whose whole purpose is naming what is missing and why (#202). A rule
  * written too broadly could take a whole directory out of every answer, invisibly.
  *

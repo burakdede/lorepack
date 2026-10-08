@@ -4,7 +4,7 @@ import { DEV_PORT, isRunning, readReceipt } from '../services/dev-session.js';
 import { type CheckResult, type DoctorReport, runDoctor } from '../services/doctor.js';
 
 /**
- * `lore doctor`: when something is wrong, one command names it and says what to do.
+ * `lorepack doctor`: when something is wrong, one command names it and says what to do.
  *
  * Architecture 6.5 and 6.9. Everything here is read-only, so it is safe to run at any time,
  * including against a project that is mid-build, and it works in a directory that is not a
@@ -32,7 +32,7 @@ export function doctorCommand(): CommandDefinition {
         cwd: context.options.cwd,
         ...(port === undefined ? {} : { port }),
         // A dev session of this project holding the port is not a problem to report, and
-        // running doctor while your own `lore dev` is up is the common case. Studio reaches
+        // running doctor while your own `lorepack dev` is up is the common case. Studio reaches
         // the same conclusion from the other side, so the two never disagree.
         portHeldByThisProject: heldByThisProject(context.options.cwd, port),
       });

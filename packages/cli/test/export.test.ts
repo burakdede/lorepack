@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { run } from './helpers.js';
 
 /**
- * `lore export`, the bridge for every chat product that cannot speak MCP.
+ * `lorepack export`, the bridge for every chat product that cannot speak MCP.
  *
  * What matters is that the file is honest: bounded, cited, explicit about what did not
  * fit, and free of anything Lorepack wrote about the content.
@@ -68,7 +68,7 @@ describe('the markdown a person pastes', () => {
       expect(text).toContain('## Citations');
       expect(text).toContain('## What was left out');
       expect(text).toContain('## Getting more');
-      expect(text).toContain('lore export --task');
+      expect(text).toContain('lorepack export --task');
     });
   });
 
@@ -236,7 +236,7 @@ describe('refusals', () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       const result = await run(['--cwd', project.root, 'export', '--task', 'rollback']);
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('lore build');
+      expect(result.stderr).toContain('lorepack build');
     });
   });
 });
@@ -249,7 +249,7 @@ describe('freshness', () => {
 
       const result = await run(['--cwd', project.root, 'export', '--task', 'rollback']);
       expect(result.stdout).toContain('sources have changed');
-      expect(result.stdout).toContain('lore build');
+      expect(result.stdout).toContain('lorepack build');
     });
   });
 });

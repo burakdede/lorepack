@@ -112,7 +112,7 @@ export function createActivateEndpoint(
 }
 
 /**
- * The previous verified build, chosen the same way `lore rollback` chooses it.
+ * The previous verified build, chosen the same way `lorepack rollback` chooses it.
  *
  * Rollback is a pointer change that never recompiles, which is what makes it cheap and safe,
  * and is why Studio does not style it as destructive.

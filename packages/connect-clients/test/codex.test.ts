@@ -69,7 +69,7 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   return {
     projectRoot: project,
     serverName: 'lorepack',
-    command: { executable: 'lore', args: ['mcp', '--project', project, '--ensure-current'] },
+    command: { executable: 'lorepack', args: ['mcp', '--project', project, '--ensure-current'] },
     scope: 'project',
     ...overrides,
   };
@@ -176,7 +176,10 @@ describe('the file is a person\u2019s, and it stays theirs', () => {
       await connector.plan(
         input({
           projectRoot: project,
-          command: { executable: 'lore', args: ['mcp', '--project', windows, '--ensure-current'] },
+          command: {
+            executable: 'lorepack',
+            args: ['mcp', '--project', windows, '--ensure-current'],
+          },
         }),
       ),
     );
@@ -311,7 +314,7 @@ describe('the fallback for a Codex this adapter will not edit', () => {
       args: string[];
       cwd: string;
     };
-    expect(table.command).toBe('lore');
+    expect(table.command).toBe('lorepack');
     expect(table.args).toContain('--ensure-current');
     expect(table.cwd).toBe(project);
     // Nothing to remove later, so nothing claims ownership of it.

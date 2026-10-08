@@ -130,7 +130,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
           `Unknown target command: ${[subject, target].filter(Boolean).join(' ')}.`,
           {
             remediation:
-              'Use `lore target add cloudflare`, `lore target status cloudflare`, or `lore target token cloudflare`.',
+              'Use `lorepack target add cloudflare`, `lorepack target status cloudflare`, or `lorepack target token cloudflare`.',
             subject: [subject, target].filter(Boolean).join(' '),
           },
         );
@@ -266,7 +266,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
             'LORE_E_TARGET_NOT_CONFIGURED',
             `The cloudflare target receipt points at remote resources that are missing: ${missing.join(', ')}.`,
             {
-              remediation: `Recreate the missing resources or remove ${cloudflareTargetPath(config.projectRoot)} and run \`lore target add cloudflare\` again.`,
+              remediation: `Recreate the missing resources or remove ${cloudflareTargetPath(config.projectRoot)} and run \`lorepack target add cloudflare\` again.`,
               subject: 'cloudflare',
             },
           );
@@ -407,7 +407,7 @@ async function handleStatusCommand(
       `The cloudflare target receipt belongs to account ${receipt.accountId}, but Wrangler is logged into ${identity.accountId}.`,
       {
         remediation:
-          'Log into the matching Cloudflare account or rewrite the receipt with `lore target add cloudflare`.',
+          'Log into the matching Cloudflare account or rewrite the receipt with `lorepack target add cloudflare`.',
         subject: receipt.accountId,
       },
     );
@@ -503,7 +503,7 @@ async function handleTokenCommand(
       'LORE_E_INVALID_ARGUMENT',
       'Choose either --rotate or --revoke, not both.',
       {
-        remediation: 'Use `lore target token cloudflare --rotate` or `--revoke`.',
+        remediation: 'Use `lorepack target token cloudflare --rotate` or `--revoke`.',
       },
     );
   }
@@ -551,7 +551,7 @@ async function handleTokenCommand(
       `The cloudflare target receipt belongs to account ${receipt.accountId}, but Wrangler is logged into ${identity.accountId}.`,
       {
         remediation:
-          'Log into the matching Cloudflare account or rewrite the receipt with `lore target add cloudflare`.',
+          'Log into the matching Cloudflare account or rewrite the receipt with `lorepack target add cloudflare`.',
         subject: receipt.accountId,
       },
     );
@@ -578,7 +578,7 @@ async function handleTokenCommand(
       `A runtime token already exists for ${receipt.workerName}.`,
       {
         remediation:
-          'Use `lore target token cloudflare --rotate` to replace it, or `--revoke` to remove it first.',
+          'Use `lorepack target token cloudflare --rotate` to replace it, or `--revoke` to remove it first.',
         subject: receipt.workerName,
       },
     );
@@ -913,7 +913,7 @@ async function createCloudflareProvisionedResources(
       'LORE_E_TARGET_NOT_CONFIGURED',
       'Cloudflare resource provisioning failed during target setup.',
       {
-        remediation: `Check the token permissions in ${CLOUDFLARE_SETUP_DOC}, the account quota, and whether the resource names are available, then rerun \`lore target add cloudflare\`.`,
+        remediation: `Check the token permissions in ${CLOUDFLARE_SETUP_DOC}, the account quota, and whether the resource names are available, then rerun \`lorepack target add cloudflare\`.`,
         subject: 'cloudflare',
         cause,
       },
@@ -961,7 +961,7 @@ export function readCloudflareTargetReceipt(projectRoot: string): CloudflareTarg
       'LORE_E_TARGET_NOT_CONFIGURED',
       'This project has no cloudflare target receipt.',
       {
-        remediation: 'Run `lore target add cloudflare` first.',
+        remediation: 'Run `lorepack target add cloudflare` first.',
         subject: 'cloudflare',
       },
     );
@@ -985,7 +985,7 @@ function readCloudflareTargetReceiptFile(path: string): CloudflareTargetReceipt 
       `The cloudflare target receipt at ${path} could not be read.`,
       {
         remediation:
-          'Fix or remove the unreadable receipt, then run `lore target add cloudflare` again.',
+          'Fix or remove the unreadable receipt, then run `lorepack target add cloudflare` again.',
         subject: path,
         cause,
       },
@@ -1000,7 +1000,7 @@ function parseCloudflareTargetReceipt(raw: unknown, path: string): CloudflareTar
       `The cloudflare target receipt at ${path} is invalid.`,
       {
         remediation:
-          'Remove the invalid receipt and run `lore target add cloudflare` again so it is rewritten.',
+          'Remove the invalid receipt and run `lorepack target add cloudflare` again so it is rewritten.',
         subject: path,
       },
     );

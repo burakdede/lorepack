@@ -62,7 +62,7 @@ function renderHuman(result: InitResult, dryRun: boolean): string {
 
   if (!dryRun && result.written.length > 0) {
     lines.push('');
-    lines.push('Next: run `lore build` to create your first build.');
+    lines.push('Next: run `lorepack build` to create your first build.');
   }
   return lines.join('\n');
 }
@@ -88,7 +88,7 @@ export function initCommand(): CommandDefinition {
           `${directory} is already inside a Lorepack project rooted at ${enclosing}.`,
           {
             remediation:
-              'Nested projects are not supported. Run `lore build` in the existing project, or pass --force if you really want a separate one.',
+              'Nested projects are not supported. Run `lorepack build` in the existing project, or pass --force if you really want a separate one.',
           },
         );
       }

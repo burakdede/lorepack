@@ -15,7 +15,7 @@ import { verifyStdioServer } from './verify.js';
  * confusing, because it looks like it should work.
  *
  * 14.7 also says the product must never claim every client can reach a localhost MCP server.
- * Plenty cannot, and for those the honest next step is `lore export`, not a snippet they will
+ * Plenty cannot, and for those the honest next step is `lorepack export`, not a snippet they will
  * paste somewhere that has nowhere to put it.
  */
 
@@ -81,6 +81,6 @@ function quoteWindows(argument: string): string {
 export function renderSnippetAdvice(supported: readonly string[]): readonly string[] {
   return [
     `Verified clients: ${supported.join(', ')}. Anything else is unverified, so this is a configuration to paste rather than an edit Lorepack will make.`,
-    'If your client cannot speak MCP at all, it cannot reach a local server. Use `lore export --profile chat` for a bounded, cited file you can paste into it.',
+    'If your client cannot speak MCP at all, it cannot reach a local server. Use `lorepack export --profile chat` for a bounded, cited file you can paste into it.',
   ];
 }

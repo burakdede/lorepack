@@ -29,7 +29,7 @@ const RUNBOOK = [
   '',
   '## Rolling back',
   '',
-  'Run `lore rollback` to point at the previous build. Activation is a pointer change, so',
+  'Run `lorepack rollback` to point at the previous build. Activation is a pointer change, so',
   'nothing is recompiled and no source file is touched.',
   '',
   '## Paging thresholds',

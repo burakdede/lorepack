@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Diagnostics } from '../src/routes/Diagnostics.js';
 
 /**
- * Diagnostics, which is `lore doctor` rendered.
+ * Diagnostics, which is `lorepack doctor` rendered.
  *
  * The value of this route is entirely in the remediation reaching the reader intact, so most
  * of what is asserted here is that nothing summarises, scores or truncates it. The amendment
@@ -231,7 +231,7 @@ describe('re-running', () => {
 /**
  * The commands offered for a client that is not wired up yet.
  *
- * This block named a single hardcoded `lore connect claude-code`, and showed it only when
+ * This block named a single hardcoded `lorepack connect claude-code`, and showed it only when
  * *every* client was unconfigured. Both were fine while one adapter existed. Adding Codex and
  * VS Code made it name a client the reader may not use, and made it disappear at exactly the
  * moment the remaining clients still need connecting.
@@ -270,11 +270,11 @@ describe('the clients block', () => {
     ]);
     renderRoute();
 
-    expect(await screen.findByText('lore connect codex')).toBeInTheDocument();
-    expect(screen.getByText('lore connect vscode')).toBeInTheDocument();
+    expect(await screen.findByText('lorepack connect codex')).toBeInTheDocument();
+    expect(screen.getByText('lorepack connect vscode')).toBeInTheDocument();
     // Already connected, so there is nothing to run. Offering it anyway is how a page starts
     // reading as a checklist that is never finished.
-    expect(screen.queryByText('lore connect claude-code')).not.toBeInTheDocument();
+    expect(screen.queryByText('lorepack connect claude-code')).not.toBeInTheDocument();
   });
 
   it('says nothing about a client that is not installed', async () => {
@@ -292,7 +292,7 @@ describe('the clients block', () => {
 
     await waitFor(() => expect(screen.getByText('Codex')).toBeInTheDocument());
     // Running it would only report that Codex is not installed, which the row already says.
-    expect(screen.queryByText('lore connect codex')).not.toBeInTheDocument();
+    expect(screen.queryByText('lorepack connect codex')).not.toBeInTheDocument();
   });
 
   it('distinguishes an entry someone wrote by hand from one Lorepack created', async () => {
@@ -308,7 +308,7 @@ describe('the clients block', () => {
     ]);
     renderRoute();
 
-    // The same distinction that keeps `lore disconnect` from deleting someone else's server.
+    // The same distinction that keeps `lorepack disconnect` from deleting someone else's server.
     expect(await screen.findByText('yes, configured by hand')).toBeInTheDocument();
   });
 });

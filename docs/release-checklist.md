@@ -35,8 +35,8 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 - Run the Cloudflare acceptance checklist in
   [`integrations/cloudflare-testing.md`](integrations/cloudflare-testing.md) against the
   release candidate.
-- Run `lore init`, `lore build`, `lore search rollback`, `lore pack`, `lore serve` and
-  `lore mcp` from the dry-run tarball install.
+- Run `lorepack init`, `lorepack build`, `lorepack search rollback`, `lorepack pack`, `lorepack serve` and
+  `lorepack mcp` from the dry-run tarball install.
 
 ## Real Release
 

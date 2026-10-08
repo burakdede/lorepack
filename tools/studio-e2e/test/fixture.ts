@@ -9,7 +9,7 @@ import type { AxeResults } from 'axe-core';
 import { STUDIO_SETUP_TIMEOUT_MS } from './setup-budget.js';
 
 /**
- * A real project, a real `lore dev`, and the browser pointed at it.
+ * A real project, a real `lorepack dev`, and the browser pointed at it.
  *
  * No mocking anywhere in this suite. The whole reason it exists is that the component tests
  * mock `fetch`, so they cannot catch a route that asks for a field the server does not send,
@@ -36,7 +36,7 @@ const RUNBOOK = [
   '',
   '## Rolling back',
   '',
-  'Run `lore rollback` to point at the previous build. Nothing is recompiled.',
+  'Run `lorepack rollback` to point at the previous build. Nothing is recompiled.',
   '',
 ].join('\n');
 
@@ -199,7 +199,7 @@ async function waitForServer(child: ChildProcess, port: number): Promise<string>
   const deadline = Date.now() + STUDIO_SETUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw new Error(`lore dev exited ${child.exitCode}:\n${output}`);
+      throw new Error(`lorepack dev exited ${child.exitCode}:\n${output}`);
     }
     try {
       const response = await fetch(`http://127.0.0.1:${port}/health`);
@@ -210,7 +210,7 @@ async function waitForServer(child: ChildProcess, port: number): Promise<string>
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(
-    `Studio E2E setup failed while waiting for lore dev on port ${port} after ${STUDIO_SETUP_TIMEOUT_MS / 1000}s:\n${output}`,
+    `Studio E2E setup failed while waiting for lorepack dev on port ${port} after ${STUDIO_SETUP_TIMEOUT_MS / 1000}s:\n${output}`,
   );
 }
 

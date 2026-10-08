@@ -8,7 +8,7 @@ import { LoreClient } from '@lorepack/sdk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * `lore serve` as a person runs it: a real process, a real port, real HTTP.
+ * `lorepack serve` as a person runs it: a real process, a real port, real HTTP.
  *
  * What this reaches that an in-process test cannot: that the two surfaces share one
  * server, that a build made in another terminal is picked up without a restart, and that
@@ -156,7 +156,7 @@ describe('what Studio copies is what a chat product gets', () => {
    * would be invisible: both would look plausible, and only a person comparing them would
    * ever notice.
    */
-  it('renders the same bytes over HTTP as `lore export` writes', async () => {
+  it('renders the same bytes over HTTP as `lorepack export` writes', async () => {
     const { url } = await serve(['--port', '4680']);
 
     const response = await fetch(`${url}/v1/export`, {
@@ -190,8 +190,8 @@ describe('what Studio copies is what a chat product gets', () => {
     expect((await fetch(`${url}/v1/sources`)).status).toBe(200);
     expect((await fetch(`${url}/v1/warnings`)).status).toBe(200);
 
-    // Planning walks the source tree, and `lore serve` promises never to rebuild and has no
-    // business reading sources. That route belongs to `lore dev`.
+    // Planning walks the source tree, and `lorepack serve` promises never to rebuild and has no
+    // business reading sources. That route belongs to `lorepack dev`.
     expect((await fetch(`${url}/v1/plan`)).status).toBe(404);
 
     // Diagnostics exists for the page that renders it, and this server mounts no page.
@@ -201,8 +201,8 @@ describe('what Studio copies is what a chat product gets', () => {
   it('has no route that could change which build is live', async () => {
     const { url } = await serve(['--port', '4695']);
 
-    // `lore serve` promises to be read-only. The actions that move the pointer belong to
-    // `lore dev`, which is where Studio is, and a route this server does not register cannot
+    // `lorepack serve` promises to be read-only. The actions that move the pointer belong to
+    // `lorepack dev`, which is where Studio is, and a route this server does not register cannot
     // be reached by any request at all.
     for (const [method, path] of [
       ['GET', '/v1/builds'],
@@ -273,7 +273,7 @@ describe('ports and refusals', () => {
 
       expect(result.code).not.toBe(0);
       expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
-      expect(result.stderr).toContain('lore build');
+      expect(result.stderr).toContain('lorepack build');
     } finally {
       rmSync(empty, { recursive: true, force: true, maxRetries: 3 });
     }
@@ -291,7 +291,7 @@ describe('ports and refusals', () => {
     const health = await client.health();
     expect(health.buildId).toBe(before);
     expect(health.sourceState).toBe('dirty');
-    // Dirty, and still the same build: serving is not building (that is `lore dev`).
+    // Dirty, and still the same build: serving is not building (that is `lorepack dev`).
     expect((await client.search({ query: 'unindexed' })).hits).toHaveLength(0);
   });
 });

@@ -208,7 +208,7 @@ jobs:
           retention-days: 7
 
   studio-e2e:
-    # Studio in a real browser, against a real `lore dev`.
+    # Studio in a real browser, against a real `lorepack dev`.
     #
     # One OS, deliberately. This suite answers "does the assembled application work against
     # the real API, by keyboard, at the documented viewport", and none of those are questions
@@ -297,13 +297,13 @@ jobs:
           set -euo pipefail
           project="$(mktemp -d)"
           mkdir -p "$project/docs"
-          printf '# Runbook\n\n## Rollback\n\nRun lore rollback.\n' > "$project/docs/a.md"
+          printf '# Runbook\n\n## Rollback\n\nRun lorepack rollback.\n' > "$project/docs/a.md"
 
-          lore() { node packages/cli/dist/entry.js --cwd "$project" "$@"; }
+          lorepack() { node packages/cli/dist/entry.js --cwd "$project" "$@"; }
 
-          lore init .
-          lore build
-          lore search rollback --json > "$project/result.json"
+          lorepack init .
+          lorepack build
+          lorepack search rollback --json > "$project/result.json"
           node -e "
             const r = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
             if (!r.hits?.length) { console.error('no hits'); process.exit(1); }

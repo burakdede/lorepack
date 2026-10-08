@@ -21,7 +21,7 @@ export function renderCatalogue(): string {
   );
   lines.push('');
   lines.push(
-    'Every scenario is one thing a person does with the `lore` binary. The automated ones are',
+    'Every scenario is one thing a person does with the `lorepack` binary. The automated ones are',
   );
   lines.push(
     'executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,',
@@ -105,7 +105,9 @@ function describeFixture(fixture: Fixture): string {
     parts.push(
       `already set up with ${setup
         .map((step) =>
-          step === 'build-large' ? '`lore build --allow-large-project`' : `\`lore ${step}\``,
+          step === 'build-large'
+            ? '`lorepack build --allow-large-project`'
+            : `\`lorepack ${step}\``,
         )
         .join(' and ')}`,
     );
@@ -122,9 +124,9 @@ export function describeStep(step: Step): string {
 
   switch (step.action) {
     case 'run':
-      return `Run \`lore ${step.args.join(' ')}\`${step.json === true ? ' with `--json`' : ''}.`;
+      return `Run \`lorepack ${step.args.join(' ')}\`${step.json === true ? ' with `--json`' : ''}.`;
     case 'run-in':
-      return `Run \`lore ${step.args.join(' ')}\`${step.json === true ? ' with `--json`' : ''} in \`${step.project}\`.`;
+      return `Run \`lorepack ${step.args.join(' ')}\`${step.json === true ? ' with `--json`' : ''} in \`${step.project}\`.`;
     case 'write':
       return step.atomic === true
         ? `Save \`${step.path}\` the way an editor does, by writing a sibling file and renaming over it.`
@@ -132,7 +134,7 @@ export function describeStep(step: Step): string {
           ? `Write \`${step.path}\`.`
           : `Write \`${step.path}\` as raw bytes, which is the only way to make a file that is not text.`;
     case 'protocol':
-      return `Start \`lore ${step.args.join(' ')}\` and call \`${step.method}\` over stdio.`;
+      return `Start \`lorepack ${step.args.join(' ')}\` and call \`${step.method}\` over stdio.`;
     case 'empty-sources':
       return 'Empty every source file, leaving the paths in place.';
     case 'symlink':
@@ -145,10 +147,10 @@ export function describeStep(step: Step): string {
       return `Run \`${step.command} ${step.args.join(' ')}\`${step.whenMissing === 'skip' ? ', where that tool exists' : ''}.`;
     case 'interrupt':
       return step.afterOutput === undefined
-        ? `Start \`lore ${step.args.join(' ')}\` and send ${step.signal} after ${step.afterMs} ms${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`
-        : `Start \`lore ${step.args.join(' ')}\`, wait for \`/${step.afterOutput}/\` in its output, then send ${step.signal} ${step.afterMs} ms later${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`;
+        ? `Start \`lorepack ${step.args.join(' ')}\` and send ${step.signal} after ${step.afterMs} ms${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`
+        : `Start \`lorepack ${step.args.join(' ')}\`, wait for \`/${step.afterOutput}/\` in its output, then send ${step.signal} ${step.afterMs} ms later${(step.repeat ?? 1) > 1 ? `, ${step.repeat} times` : ''}.`;
     case 'concurrent':
-      return `Start \`lore ${step.background.join(' ')}\`, then run \`lore ${step.foreground.join(' ')}\` ${step.afterMs} ms later.`;
+      return `Start \`lorepack ${step.background.join(' ')}\`, then run \`lorepack ${step.foreground.join(' ')}\` ${step.afterMs} ms later.`;
     case 'identical':
       return step.as === 'bytes'
         ? `Compare \`${step.left.path}\` in both projects byte for byte.`

@@ -1,7 +1,7 @@
 /**
  * One request, written the three ways a developer can make it outside Studio.
  *
- * Studio, the `lore` CLI, the HTTP API and the MCP tools are four doors into one runtime, and
+ * Studio, the `lorepack` CLI, the HTTP API and the MCP tools are four doors into one runtime, and
  * the request bodies are the same schemas behind each (`searchRequestSchema`,
  * `taskContextRequestSchema`, `sourceReadRequestSchema`, `tableQueryRequestSchema` in
  * `@lorepack/core`). So a request tried here can be carried into a terminal, a script or an
@@ -43,7 +43,11 @@ export interface ContextRequest {
 }
 
 export function contextEquivalents(request: ContextRequest, origin: string): Equivalents {
-  const cli = ['lore export', `--task ${shellQuote(request.task)}`, `--profile ${request.profile}`];
+  const cli = [
+    'lorepack export',
+    `--task ${shellQuote(request.task)}`,
+    `--profile ${request.profile}`,
+  ];
   if (request.budget !== undefined) cli.push(`--budget ${request.budget}`);
   return {
     cli: cli.join(' '),
@@ -59,7 +63,7 @@ export interface SearchRequest {
 
 export function searchEquivalents(request: SearchRequest, origin: string): Equivalents {
   return {
-    cli: `lore search ${shellQuote(request.query)}${request.debug === true ? ' --debug' : ''}`,
+    cli: `lorepack search ${shellQuote(request.query)}${request.debug === true ? ' --debug' : ''}`,
     http: curlPost(origin, '/v1/search', request),
     mcp: { name: 'lore_search', arguments: { ...request } },
   };
@@ -79,7 +83,7 @@ export interface LineRange {
 }
 
 /**
- * No CLI rendering: `lore inspect <path>` prints a source's metadata and structure, not the
+ * No CLI rendering: `lorepack inspect <path>` prints a source's metadata and structure, not the
  * stored text, so offering it here would be an approximation passed off as an equivalent.
  */
 export function readSourceEquivalents(

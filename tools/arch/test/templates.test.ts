@@ -41,10 +41,10 @@ describe('issue templates', () => {
   });
 
   it('does not ask for output from a command that does not exist yet', () => {
-    // `lore doctor` arrives in Phase 3 (#56). Asking for it without saying so makes a
+    // `lorepack doctor` arrives in Phase 3 (#56). Asking for it without saying so makes a
     // reporter think their report is incomplete when it is not.
     const bug = readFileSync(join(TEMPLATES, 'bug.yml'), 'utf8');
-    if (!bug.includes('lore doctor')) return;
+    if (!bug.includes('lorepack doctor')) return;
     expect(bug).toMatch(/if you have it|Phase 3|#56/);
   });
 });

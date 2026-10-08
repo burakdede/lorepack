@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// A stand-in for the `lore` binary, used to test the runner itself.
+// A stand-in for the `lorepack` binary, used to test the runner itself.
 //
 // The runner is the thing that has to be trustworthy: it is what proves the product
 // behaves, so a bug in it is invisible in exactly the way #146 was. Driving it against a

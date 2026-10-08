@@ -9,7 +9,7 @@ import { CORPUS, EDITED_ONBOARDING } from './corpus.js';
 export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
   {
     id: 'lifecycle/plan-predicts-the-build',
-    title: 'What `lore plan` promises is what `lore build` does',
+    title: 'What `lorepack plan` promises is what `lorepack build` does',
     proves: 'Section 4.6: plan is a preview, not a guess.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init'] },
@@ -224,7 +224,7 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'lifecycle/inspect-survives-the-sources',
-    title: '`lore inspect` explains a build after its sources are gone',
+    title: '`lorepack inspect` explains a build after its sources are gone',
     proves: 'Section 4.9: inspection reads sealed build data, so it keeps working.',
     mode: 'auto',
     fixture: { files: CORPUS, setup: ['init', 'build'] },
@@ -378,7 +378,7 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'lifecycle/every-inspect-subject-answers',
-    title: 'Every subject `lore inspect` advertises does something useful on its own',
+    title: 'Every subject `lorepack inspect` advertises does something useful on its own',
     proves: 'Section 4.8: what the help lists is what the command does.',
     mode: 'auto',
     regression: 166,
@@ -428,7 +428,7 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'lifecycle/diff-works-across-a-rollback',
-    title: 'After a rollback, `lore diff` compares against the build that is still there',
+    title: 'After a rollback, `lorepack diff` compares against the build that is still there',
     proves:
       'Section 4.4: an error states the real situation. Invariant 4: rollback destroys nothing.',
     mode: 'auto',
@@ -497,7 +497,7 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
 
   {
     id: 'lifecycle/search-explains-its-ranking',
-    title: '`lore search --debug` says why each result ranked where it did',
+    title: '`lorepack search --debug` says why each result ranked where it did',
     proves: 'Section 13.2 and 4.9: a page is explainable, and a score is never presented as truth.',
     mode: 'auto',
     regression: 42,

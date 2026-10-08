@@ -14,7 +14,7 @@ import { renderBundleMarkdown } from '../services/export.js';
 import { readFreshness } from '../services/status.js';
 
 /**
- * `lore export`: one file a person can paste into any chat product.
+ * `lorepack export`: one file a person can paste into any chat product.
  *
  * Architecture 14.6 calls this the universal compatibility bridge, and that is the honest
  * framing: MCP is better, and most chat products cannot speak it. The output is bounded,
@@ -71,7 +71,7 @@ export function exportCommand(): CommandDefinition {
       try {
         if ((await backend.provider.current()) === null) {
           throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to export.', {
-            remediation: 'Run `lore build` first.',
+            remediation: 'Run `lorepack build` first.',
           });
         }
 
@@ -89,11 +89,11 @@ export function exportCommand(): CommandDefinition {
             : renderBundleMarkdown(bundle, {
                 projectName: config.config.name,
                 sourceState: bundle.sourceState,
-                moreCommand: `lore export --task ${JSON.stringify(task)} --profile deep`,
+                moreCommand: `lorepack export --task ${JSON.stringify(task)} --profile deep`,
               });
 
         if (output === null) {
-          // stdout carries the export and nothing else, so `lore export ... > file.md` and
+          // stdout carries the export and nothing else, so `lorepack export ... > file.md` and
           // `--output file.md` produce the same bytes.
           return { human: rendered.trimEnd(), json: bundle };
         }

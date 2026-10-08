@@ -12,7 +12,7 @@ export const DELIMITERS: readonly string[] = [',', ';', '\t', '|'];
 
 export interface DialectDecision {
   readonly delimiter: string;
-  /** How the delimiter was chosen, for metadata and for the `lore inspect` output. */
+  /** How the delimiter was chosen, for metadata and for the `lorepack inspect` output. */
   readonly reason: string;
 }
 

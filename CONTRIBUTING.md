@@ -50,7 +50,7 @@ pnpm check:license-policy
 | `packages/parsers` | Format adapters behind compiler boundaries |
 | `packages/backend-local` | Local SQLite and filesystem runtime projection |
 | `packages/runtime` | Read-only runtime capabilities over a build |
-| `packages/cli` | `lore` command line and local Studio server |
+| `packages/cli` | `lorepack` command line and local Studio server |
 | `packages/mcp` | MCP transport surface |
 | `packages/deploy-cloudflare` | Cloudflare projection and deployment target |
 | `packages/connect-clients` | Client configuration adapters |

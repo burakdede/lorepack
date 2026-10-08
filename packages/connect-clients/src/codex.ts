@@ -355,7 +355,7 @@ function assertEditable(
   if (tableSpan(text, [SERVERS_KEY, serverName]) !== undefined) return;
 
   throw new Error(
-    `${path} declares \`${SERVERS_KEY}.${serverName}\` without a \`[${SERVERS_KEY}.${serverName}]\` table, which this adapter cannot edit without risking the rest of the file. Run \`lore connect codex --snippet\` and edit it by hand.`,
+    `${path} declares \`${SERVERS_KEY}.${serverName}\` without a \`[${SERVERS_KEY}.${serverName}]\` table, which this adapter cannot edit without risking the rest of the file. Run \`lorepack connect codex --snippet\` and edit it by hand.`,
   );
 }
 

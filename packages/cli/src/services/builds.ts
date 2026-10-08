@@ -25,14 +25,14 @@ import {
  * engine works on.
  *
  * Everything here reads build data only. Nothing re-parses a source, which is what lets
- * `lore diff` and `lore rollback` work in a project whose source directory has been
+ * `lorepack diff` and `lorepack rollback` work in a project whose source directory has been
  * deleted, and what makes both operations instant.
  */
 
 export function openStateStore(loreDirectory: string): LocalStateStore {
   if (!existsSync(join(loreDirectory, 'state.sqlite'))) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no builds yet.', {
-      remediation: 'Run `lore build` to create the first one.',
+      remediation: 'Run `lorepack build` to create the first one.',
     });
   }
   return LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
@@ -48,7 +48,7 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
   const needle = reference.trim();
   if (needle === '') {
     throw new LoreError('LORE_E_INVALID_ARGUMENT', 'No build was named.', {
-      remediation: 'Pass a build id, or run `lore builds` to list them.',
+      remediation: 'Pass a build id, or run `lorepack builds` to list them.',
     });
   }
 
@@ -62,7 +62,7 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No build matches ${needle}.`, {
       remediation:
         builds.length === 0
-          ? 'Run `lore build` to create one.'
+          ? 'Run `lorepack build` to create one.'
           : `Available builds:\n${builds.map((build) => `  ${build.buildId}`).join('\n')}`,
       subject: needle,
     });
@@ -83,7 +83,7 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
 /**
  * The build a rollback returns to: the newest activatable one that is not already live.
  *
- * One definition, used by `lore rollback` and by the Studio endpoint behind the same button,
+ * One definition, used by `lorepack rollback` and by the Studio endpoint behind the same button,
  * because two definitions is how a terminal and a browser end up returning to different
  * builds from the same history.
  */
@@ -96,7 +96,7 @@ export function previousBuild(builds: readonly BuildSummary[], active: BuildId |
     throw new LoreError(
       'LORE_E_BUILD_NOT_FOUND',
       'There is no earlier verified build to return to.',
-      { remediation: 'Run `lore builds` to see the history.' },
+      { remediation: 'Run `lorepack builds` to see the history.' },
     );
   }
   return previous.buildId;
@@ -224,7 +224,7 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
       'LORE_E_BUILD_VALIDATION',
       `Build ${build.buildId} is ${build.state}, and only a verified build may be activated.`,
       {
-        remediation: 'Activate a build that passed validation, or run `lore build` again.',
+        remediation: 'Activate a build that passed validation, or run `lorepack build` again.',
         subject: build.buildId,
       },
     );
@@ -236,7 +236,7 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
       'LORE_E_BUILD_NOT_FOUND',
       `Build ${build.buildId} is recorded but its files are missing.`,
       {
-        remediation: 'Run `lore build` to recreate it. The active build is unchanged.',
+        remediation: 'Run `lorepack build` to recreate it. The active build is unchanged.',
         subject: build.buildId,
       },
     );
@@ -253,7 +253,8 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
         'LORE_E_OBJECT_CORRUPT',
         `Build ${build.buildId} failed its integrity check: ${problems.join('; ')}`,
         {
-          remediation: 'Run `lore build` to produce a fresh build. The active build is unchanged.',
+          remediation:
+            'Run `lorepack build` to produce a fresh build. The active build is unchanged.',
           subject: build.buildId,
         },
       );

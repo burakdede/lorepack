@@ -53,7 +53,7 @@ export const ALWAYS_EXCLUDE: readonly string[] = [
   'lore.yaml',
   'lore.lock',
   '.loreignore',
-  // Build output. `lore pack` writes its archive into the project by default, so without
+  // Build output. `lorepack pack` writes its archive into the project by default, so without
   // this the tool discovers its own output on the next run and warns about a file it just
   // created (#148). More than noise: an unparseable file becomes a build warning, and
   // warnings are sealed into the build, so an archive lying in the tree changes the bytes

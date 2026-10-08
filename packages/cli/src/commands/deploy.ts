@@ -79,7 +79,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
           'LORE_E_INVALID_ARGUMENT',
           `Receipt ${resume.receiptId} belongs to ${resume.target}, not ${target.id}.`,
           {
-            remediation: `Resume with \`lore deploy ${resume.target} --resume ${resume.receiptId}\`, or start a new deploy.`,
+            remediation: `Resume with \`lorepack deploy ${resume.target} --resume ${resume.receiptId}\`, or start a new deploy.`,
             subject: resume.receiptId,
           },
         );
@@ -131,7 +131,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
             : resume?.receiptId;
         if (receiptId === undefined) throw error;
         throw new LoreError('LORE_E_REMOTE_DEPLOY', original.message, {
-          remediation: `${original.remediation ?? 'The previous remote build is still serving.'} Resume with \`lore deploy ${target.id} --resume ${receiptId}\`.`,
+          remediation: `${original.remediation ?? 'The previous remote build is still serving.'} Resume with \`lorepack deploy ${target.id} --resume ${receiptId}\`.`,
           ...(original.details === undefined ? {} : { details: original.details }),
           ...(original.subject === undefined ? {} : { subject: original.subject }),
           ...(original.cause === undefined ? {} : { cause: original.cause }),
@@ -175,8 +175,8 @@ async function prepareBuild(options: {
       {
         remediation:
           status.sourceState === 'unbuilt'
-            ? 'Run `lore build`, or omit `--no-build` so `lore deploy` can build first.'
-            : 'Run `lore build`, or omit `--no-build` so `lore deploy` can rebuild first.',
+            ? 'Run `lorepack build`, or omit `--no-build` so `lorepack deploy` can build first.'
+            : 'Run `lorepack build`, or omit `--no-build` so `lorepack deploy` can rebuild first.',
       },
     );
   }
@@ -212,7 +212,8 @@ async function prepareBuild(options: {
   const active = readActiveBuild(join(options.config.projectRoot, LORE_DIRECTORY));
   if (active === null) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build to deploy.', {
-      remediation: 'Run `lore build` first, or omit `--no-build` so `lore deploy` can build one.',
+      remediation:
+        'Run `lorepack build` first, or omit `--no-build` so `lorepack deploy` can build one.',
     });
   }
   return {
@@ -227,7 +228,7 @@ function readBuildInputs(projectRoot: string, buildId: BuildId): PreparedBuild {
   const manifestPath = join(buildDirectory, 'manifest.json');
   if (!existsSync(manifestPath)) {
     throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildId} has no manifest.`, {
-      remediation: 'Run `lore build` again to recreate it before deploying.',
+      remediation: 'Run `lorepack build` again to recreate it before deploying.',
       subject: buildId,
     });
   }

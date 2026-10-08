@@ -2,7 +2,7 @@
 
 Architecture section 4.3 forbids a command that appears to hang, and section 5.5 makes
 "visible progress at least once per second" a release gate. Section 14.3 adds a hard
-constraint: in `lore mcp`, stdout carries protocol bytes only.
+constraint: in `lorepack mcp`, stdout carries protocol bytes only.
 
 Both fall out of one design: stages emit typed events, renderers subscribe.
 
@@ -51,8 +51,8 @@ rendering to a writer with a known width instead of by eye.
 `NO_COLOR` disables it outright, `FORCE_COLOR=0` disables it even on a TTY, `FORCE_COLOR=1`
 enables it off one, and `--no-color` overrides all three.
 
-Resolved per stream, because the two are redirected separately: `lore build > log.txt` on a
-terminal keeps its errors readable, and `lore build 2> log.txt` puts no escapes in the file.
+Resolved per stream, because the two are redirected separately: `lorepack build > log.txt` on a
+terminal keeps its errors readable, and `lorepack build 2> log.txt` puts no escapes in the file.
 
 Only three things are ever coloured: the status word of a finished stage, `error:`, and
 `next:`. Each carries meaning a reader uses. `--json` output never carries an escape, which
@@ -60,6 +60,6 @@ is asserted rather than assumed.
 
 ## stdout discipline
 
-`lore mcp` constructs the renderer with `write: (text) => process.stderr.write(text)`.
+`lorepack mcp` constructs the renderer with `write: (text) => process.stderr.write(text)`.
 Nothing else in the process may write to stdout. This is asserted by a test that runs the
 server and parses stdout as pure protocol frames.

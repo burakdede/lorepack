@@ -6,7 +6,7 @@ Verified on **2026-08-08** against:
 - Cloudflare permissions catalog: <https://developers.cloudflare.com/fundamentals/api/reference/permissions/>
 - Pinned local Wrangler help from `packages/deploy-cloudflare/node_modules/wrangler/bin/wrangler.js`
 
-## What `lore target add cloudflare` needs today
+## What `lorepack target add cloudflare` needs today
 
 The current Phase 6 reference path works with three account-scoped Cloudflare resource types:
 
@@ -64,10 +64,10 @@ receipt.
 ## Runtime bearer token flow
 
 As of **2026-08-09**, the deployed Worker read surface is no longer anonymous. After
-`lore target add cloudflare`, issue a runtime token exactly once with:
+`lorepack target add cloudflare`, issue a runtime token exactly once with:
 
 ```text
-lore target token cloudflare
+lorepack target token cloudflare
 ```
 
 That command stores only a SHA-256 hash in the remote D1 catalog and prints the plaintext token
@@ -82,7 +82,7 @@ bearer token with the `lore_rt_` prefix. A Cloudflare deployment credential such
 `CLOUDFLARE_API_TOKEN` is never a valid runtime token, even if someone hashes and stores it by
 mistake.
 
-`lore target token cloudflare --rotate` keeps the previous token valid for exactly **10
+`lorepack target token cloudflare --rotate` keeps the previous token valid for exactly **10
 minutes**, then expires it automatically. That overlap window is there so an already-running
 client can swap credentials without being cut off mid-session. During the window, both the old
 and new runtime tokens work; after the window, only the new token does.
@@ -109,8 +109,8 @@ The Worker also adds a fixed response hardening set on every reply: `Content-Sec
 `X-Content-Type-Options`, `X-Frame-Options`, and `Strict-Transport-Security` on HTTPS
 requests.
 
-Use `lore target token cloudflare --rotate` to replace the token, or
-`lore target token cloudflare --revoke` to remove it. The token must not be written to the
+Use `lorepack target token cloudflare --rotate` to replace the token, or
+`lorepack target token cloudflare --revoke` to remove it. The token must not be written to the
 project receipt or committed to the repository.
 
 ## Cloudflare Access as an alternative front door
@@ -177,7 +177,7 @@ Recorded on **2026-08-09** as the required manual checklist for `#90`:
 
 ## Current command boundary
 
-As of **2026-08-09**, `lore target add cloudflare` supports three setup behaviors:
+As of **2026-08-09**, `lorepack target add cloudflare` supports three setup behaviors:
 
 1. `--dry-run`: show the deterministic resource plan and write nothing.
 2. no explicit resource identifiers: create the deterministic **D1** database and **R2** bucket,

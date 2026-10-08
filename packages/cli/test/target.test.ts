@@ -124,7 +124,7 @@ function createSetupAdapter(
   return { adapter, state };
 }
 
-describe('lore target add cloudflare, issue 85', () => {
+describe('lorepack target add cloudflare, issue 85', () => {
   it('prints a deterministic plan and writes nothing under --dry-run', async () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
@@ -458,7 +458,7 @@ describe('lore target add cloudflare, issue 85', () => {
   });
 });
 
-describe('lore target token cloudflare, issue 90', () => {
+describe('lorepack target token cloudflare, issue 90', () => {
   it('generates a runtime token once and stores only its hash remotely', async () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
@@ -619,7 +619,7 @@ describe('lore target token cloudflare, issue 90', () => {
   });
 });
 
-describe('lore target status cloudflare, issue 92', () => {
+describe('lorepack target status cloudflare, issue 92', () => {
   it('lists remote projected builds newest first with the active marker, deploy time, and state', async () => {
     await withTempProject(
       { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },

@@ -17,7 +17,7 @@ import { LoreError, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 
 /**
- * `lore connect [client]` and `lore disconnect [client]`, the second of the two commands.
+ * `lorepack connect [client]` and `lorepack disconnect [client]`, the second of the two commands.
  *
  * Architecture 6.6 makes this an eleven step contract rather than a file write, and the
  * ordering is the reason: **plan, show, apply, verify**. Every step exists because skipping
@@ -31,7 +31,7 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
  * - A trust prompt the client will still show is printed rather than left to surprise them.
  *
  * Registration is explicit (architecture 4.8). There is no dynamic discovery of connectors,
- * so `lore connect --help` lists what actually exists and a reviewer can see a new client
+ * so `lorepack connect --help` lists what actually exists and a reviewer can see a new client
  * arriving in a diff.
  */
 
@@ -81,7 +81,7 @@ export function connectCommand(): CommandDefinition {
         // An executable plus an argument array, never a concatenated string. That is what
         // makes a project path containing a space safe on every platform (6.6 step 7).
         command: {
-          executable: 'lore',
+          executable: 'lorepack',
           args: ['mcp', '--project', config.projectRoot, '--ensure-current'],
         },
         scope,
@@ -103,7 +103,7 @@ export function connectCommand(): CommandDefinition {
         const detected = await connector.detect();
         if (!detected.installed) {
           lines.push(`${connector.title}: not installed. ${detected.reason ?? ''}`.trimEnd());
-          lines.push('  Run `lore connect --snippet` for a configuration to paste.');
+          lines.push('  Run `lorepack connect --snippet` for a configuration to paste.');
           continue;
         }
 
@@ -157,7 +157,7 @@ export function disconnectCommand(): CommandDefinition {
         const plan = await connector.plan({
           projectRoot: config.projectRoot,
           serverName: SERVER_NAME,
-          command: { executable: 'lore', args: [] },
+          command: { executable: 'lorepack', args: [] },
           scope,
         });
 

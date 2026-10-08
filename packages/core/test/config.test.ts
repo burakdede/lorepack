@@ -8,7 +8,7 @@ import { LoreError } from '../src/errors/lore-error.js';
 
 const MINIMAL = 'version: 1\nname: sarjbot\nsources:\n  - ./docs\n';
 
-/** A project with a config file and a docs directory, the shape `lore init` produces. */
+/** A project with a config file and a docs directory, the shape `lorepack init` produces. */
 async function withProject<T>(
   files: Record<string, string>,
   run: (root: string) => T | Promise<T>,
@@ -74,7 +74,7 @@ describe('loadConfig', () => {
         expect.unreachable('should have thrown');
       } catch (error) {
         expect((error as LoreError).code).toBe('LORE_E_NOT_INITIALIZED');
-        expect((error as LoreError).remediation).toContain('lore init');
+        expect((error as LoreError).remediation).toContain('lorepack init');
       }
     });
   });

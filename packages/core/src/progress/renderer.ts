@@ -2,7 +2,7 @@ import { CLEAR_LINE, style } from '../format/ansi.js';
 import type { ProgressEvent, StageName } from './events.js';
 
 export interface RendererOptions {
-  /** Where progress goes. In `lore mcp` this must be stderr: stdout carries protocol only. */
+  /** Where progress goes. In `lorepack mcp` this must be stderr: stdout carries protocol only. */
   readonly write: (text: string) => void;
   readonly isTty?: boolean;
   readonly color?: boolean;

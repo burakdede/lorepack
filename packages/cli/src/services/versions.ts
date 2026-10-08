@@ -21,7 +21,7 @@ export { SCHEMA_VERSION };
  * This was a hand-written literal naming markdown and text until #234, which is how the five
  * parsers Phase 5 added came to be absent from the build id entirely. Bumping the XLSX
  * parser's version and rebuilding a project full of spreadsheets produced a byte-identical
- * build id, so a parser fix could not invalidate the artifacts it changed, and `lore diff`
+ * build id, so a parser fix could not invalidate the artifacts it changed, and `lorepack diff`
  * saw no difference between two builds whose content differed. Deriving from `PARSERS` makes
  * registering a parser and recording its version one act instead of two.
  *

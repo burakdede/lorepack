@@ -62,7 +62,7 @@ class LocalCatalogStore implements CatalogStore {
     const path = join(this.#buildDirectory, 'manifest.json');
     if (!existsSync(path)) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This build has no manifest.', {
-        remediation: 'The build directory is incomplete. Run `lore build` to create a new one.',
+        remediation: 'The build directory is incomplete. Run `lorepack build` to create a new one.',
         subject: this.#buildDirectory,
       });
     }
@@ -251,7 +251,7 @@ class LocalTableStore implements TableStore {
     const resolved = resolveTable(this.#db, request.tableId);
     if (resolved === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {
-        remediation: 'Run `lore inspect tables` to see which tables this build contains.',
+        remediation: 'Run `lorepack inspect tables` to see which tables this build contains.',
         subject: request.tableId,
       });
     }
@@ -440,7 +440,7 @@ function damagedBuild(buildId: string, cause: unknown): LoreError {
     `Build ${buildId.slice(0, 17)} is damaged and cannot be read.`,
     {
       remediation:
-        'Run `lore build` to compile this project again. It will notice the build is unreadable and replace it.',
+        'Run `lorepack build` to compile this project again. It will notice the build is unreadable and replace it.',
       subject: buildId,
       cause,
     },
@@ -480,7 +480,7 @@ function assertBuildSchema(db: DatabaseSync, buildId: string, expected: string):
     `Build ${buildId.slice(0, 17)} was written at catalog schema ${actual}, and this Lorepack reads ${expected}.`,
     {
       remediation: older
-        ? 'Run `lore build` to compile this project again. A sealed build is never migrated in place, so an old one stays readable only by the version that wrote it.'
+        ? 'Run `lorepack build` to compile this project again. A sealed build is never migrated in place, so an old one stays readable only by the version that wrote it.'
         : 'This build was written by a newer Lorepack than the one installed. Upgrade Lorepack, or rebuild the project with this version.',
       subject: buildId,
       details: { expected, actual },

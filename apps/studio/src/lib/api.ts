@@ -62,7 +62,7 @@ export function toDisplayable(error: unknown): DisplayableError {
     // than reporting a fetch failure.
     return {
       message: error.message,
-      remediation: 'Check that `lore dev` is still running in your terminal.',
+      remediation: 'Check that `lorepack dev` is still running in your terminal.',
     };
   }
   return { message: String(error) };

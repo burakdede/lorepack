@@ -25,7 +25,7 @@ import type { Expect, JsonExpect, Scenario, Step, TextExpect } from './types.js'
 const execute = promisify(execFile);
 
 export interface RunnerOptions {
-  /** Absolute path to the built `lore` entry point. */
+  /** Absolute path to the built `lorepack` entry point. */
   readonly binary: string;
   /** Kept temp directory, for debugging a failure by hand. */
   readonly keepOnFailure?: boolean;
@@ -131,7 +131,9 @@ export async function runScenario(
             : ['build', '--allow-large-project'];
       const result = await lore(project, args);
       if (result.code !== 0) {
-        failures.push(`setup \`lore ${args.join(' ')}\` exited ${result.code}\n${result.stderr}`);
+        failures.push(
+          `setup \`lorepack ${args.join(' ')}\` exited ${result.code}\n${result.stderr}`,
+        );
         return { id: scenario.id, failures, skipped, root };
       }
     }
@@ -198,7 +200,9 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
       if (step.capture !== undefined) {
         problems.push(...capture(result, step.capture, context));
       }
-      return problems.map((problem) => `${context.where} \`lore ${args.join(' ')}\`: ${problem}`);
+      return problems.map(
+        (problem) => `${context.where} \`lorepack ${args.join(' ')}\`: ${problem}`,
+      );
     }
 
     case 'write': {
@@ -300,7 +304,7 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
         step.writeWhileRunning,
       );
       return check(result, step.expect, context).map(
-        (problem) => `${context.where} interrupted \`lore ${step.args.join(' ')}\`: ${problem}`,
+        (problem) => `${context.where} interrupted \`lorepack ${step.args.join(' ')}\`: ${problem}`,
       );
     }
 
@@ -315,7 +319,7 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
         problems.push(`the background command exited ${first.code}\n${first.stderr}`);
       }
       return problems.map(
-        (problem) => `${context.where} \`lore ${step.foreground.join(' ')}\`: ${problem}`,
+        (problem) => `${context.where} \`lorepack ${step.foreground.join(' ')}\`: ${problem}`,
       );
     }
 

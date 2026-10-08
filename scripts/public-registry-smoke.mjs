@@ -52,8 +52,8 @@ function npmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';
 }
 
-function loreCommand() {
-  return process.platform === 'win32' ? 'lore.cmd' : 'lore';
+function lorepackCommand() {
+  return process.platform === 'win32' ? 'lorepack.cmd' : 'lorepack';
 }
 
 function run(command, args, cwd) {
@@ -72,7 +72,7 @@ function run(command, args, cwd) {
 function runLore(args, cwd) {
   const localEntry = process.env.LOREPACK_SMOKE_CLI;
   if (localEntry) return run(process.execPath, [localEntry, '--cwd', cwd, ...args], cwd);
-  return run(loreCommand(), ['--cwd', cwd, ...args], cwd);
+  return run(lorepackCommand(), ['--cwd', cwd, ...args], cwd);
 }
 
 function readInstalledVersion() {
@@ -96,8 +96,8 @@ export function runSmoke(expectedVersion) {
 
   try {
     writeFileSync(source, '# Rollback\n\nRun the rollback procedure after a failed deploy.\n');
-    assertCommandSucceeded(runLore(['init'], project), ['lore', 'init']);
-    assertCommandSucceeded(runLore(['build'], project), ['lore', 'build']);
+    assertCommandSucceeded(runLore(['init'], project), ['lorepack', 'init']);
+    assertCommandSucceeded(runLore(['build'], project), ['lorepack', 'build']);
     const firstBuild = jsonCommand(['status', '--json'], project).activeBuildId;
     if (!firstBuild) throw new Error('public registry smoke has no active build');
 
@@ -108,30 +108,30 @@ export function runSmoke(expectedVersion) {
         project,
       ),
     );
-    assertCommandSucceeded(runLore(['plan', '--json'], project), ['lore', 'plan', '--json']);
+    assertCommandSucceeded(runLore(['plan', '--json'], project), ['lorepack', 'plan', '--json']);
 
     writeFileSync(
       source,
       '# Rollback\n\nRun the rollback procedure after a failed deploy.\n\nKeep the receipt.\n',
     );
-    assertCommandSucceeded(runLore(['build'], project), ['lore', 'build']);
+    assertCommandSucceeded(runLore(['build'], project), ['lorepack', 'build']);
     const secondBuild = jsonCommand(['status', '--json'], project).activeBuildId;
     if (!secondBuild || secondBuild === firstBuild)
       throw new Error('source edit did not create a new build');
     assertCommandSucceeded(runLore(['diff', firstBuild, secondBuild], project), [
-      'lore',
+      'lorepack',
       'diff',
       firstBuild,
       secondBuild,
     ]);
-    assertCommandSucceeded(runLore(['pack', '--out', archive], project), ['lore', 'pack']);
+    assertCommandSucceeded(runLore(['pack', '--out', archive], project), ['lorepack', 'pack']);
     assertCommandSucceeded(runLore(['pack', '--verify', archive], project), [
-      'lore',
+      'lorepack',
       'pack',
       '--verify',
     ]);
-    assertCommandSucceeded(runLore(['serve', '--help'], project), ['lore', 'serve', '--help']);
-    assertCommandSucceeded(runLore(['mcp', '--help'], project), ['lore', 'mcp', '--help']);
+    assertCommandSucceeded(runLore(['serve', '--help'], project), ['lorepack', 'serve', '--help']);
+    assertCommandSucceeded(runLore(['mcp', '--help'], project), ['lorepack', 'mcp', '--help']);
     console.log(
       `public registry smoke passed: ${expectedVersion} on ${process.platform} ${process.arch}`,
     );

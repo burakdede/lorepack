@@ -13,7 +13,7 @@ import {
 /**
  * Reads what the active build recorded, so a plan can compare against it.
  *
- * Every read here is read-only, including the state database. `lore plan` and `lore status`
+ * Every read here is read-only, including the state database. `lorepack plan` and `lorepack status`
  * must not write, not even a migration, or they would stop being previews. A project that
  * has never been built has no state database at all, which is the case a new user hits, so
  * absence is a normal answer rather than an error.
@@ -54,7 +54,7 @@ export function readActiveBuild(
  *
  * The build is the source of truth (invariant 1), so dirtiness is computed against what
  * the active build actually contains. A summary cached elsewhere could drift from the
- * build it claims to describe, and then `lore status` would confidently lie.
+ * build it claims to describe, and then `lorepack status` would confidently lie.
  */
 /**
  * What the previous build contains, or `null` if it cannot say.
@@ -95,7 +95,7 @@ export function isBuildReadable(loreDirectory: string, buildId: BuildId): boolea
 /**
  * Whether the build's catalog schema is the one this binary reads.
  *
- * The same comparison the runtime makes when it opens a build, made here so `lore build` can
+ * The same comparison the runtime makes when it opens a build, made here so `lorepack build` can
  * act on it. Without this a build written by an older Lorepack passes every other check, is
  * reported as "No changes", and then fails at the first request with the guard's message
  * telling the user to run the command that just declined to help (#251, #235).

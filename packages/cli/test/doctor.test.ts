@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { runDoctor } from '../src/services/doctor.js';
 
 /**
- * `lore doctor`, whose entire value is the remediation.
+ * `lorepack doctor`, whose entire value is the remediation.
  *
  * A check that reports "FTS5 unavailable" and stops has told the user what the failure that
  * sent them here already said. So the assertions below are mostly about whether a failing
@@ -112,7 +112,7 @@ describe('the dev port, which is usually occupied by the person asking', () => {
         expect(stranger.checks.find((check) => check.id === 'dev-port')?.status).toBe('warn');
 
         // The same occupied port, held by this project's own session. Studio asks from
-        // inside that session and `lore doctor` reads the receipt, so both reach this
+        // inside that session and `lorepack doctor` reads the receipt, so both reach this
         // answer rather than telling a person their working setup is broken.
         const ours = await runDoctor({
           cwd: project.root,
@@ -153,7 +153,7 @@ describe('a project that is new rather than broken', () => {
       const build = report.checks.find((check) => check.id === 'active-build');
 
       expect(build?.status).toBe('warn');
-      expect(build?.remediation).toContain('lore build');
+      expect(build?.remediation).toContain('lorepack build');
     });
   });
 });

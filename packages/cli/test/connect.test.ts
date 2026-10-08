@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { run } from './helpers.js';
 
 /**
- * `lore connect` and `lore disconnect` at the command level.
+ * `lorepack connect` and `lorepack disconnect` at the command level.
  *
  * The adapters have their own suites, and the shared contract suite covers what must be true
  * of every one of them. What is only true here is the *registration*: which clients exist,

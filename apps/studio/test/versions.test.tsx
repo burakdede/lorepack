@@ -276,7 +276,7 @@ describe('failures', () => {
   });
 });
 
-describe('the diff, which has to read the way lore diff reads', () => {
+describe('the diff, which has to read the way lorepack diff reads', () => {
   it('carries added, changed and removed with markers rather than colour alone', async () => {
     renderRoute();
     await waitFor(() => expect(screen.getAllByRole('rowheader')).toHaveLength(2));

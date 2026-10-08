@@ -65,7 +65,7 @@ export interface Watching {
    * Freshness from watcher state, costing no filesystem work.
    *
    * This is the whole point of handing it to the server. The polling revalidator exists
-   * because `lore serve` has no better information; a supervisor that is watching does.
+   * because `lorepack serve` has no better information; a supervisor that is watching does.
    */
   freshness(): Promise<SourceState>;
   close(): Promise<void>;

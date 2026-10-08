@@ -524,7 +524,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(forcedFailure.stderr).toContain('Forced test failure after candidate projection.');
         expect(forcedFailure.stderr).toContain(
-          `lore deploy cloudflare --resume ${forcedFailure.receiptId}`,
+          `lorepack deploy cloudflare --resume ${forcedFailure.receiptId}`,
         );
         expect(
           existsSync(join(project.root, RECEIPTS_DIRECTORY, `${forcedFailure.receiptId}.json`)),

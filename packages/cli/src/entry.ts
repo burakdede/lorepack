@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The `lore` entry point.
+ * The `lorepack` entry point.
  *
  * The engine guard runs before anything heavy is imported, so an unsupported runtime
  * produces one actionable line instead of a module-load failure from deep inside a

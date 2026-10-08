@@ -40,8 +40,8 @@ Everything else the automated suite covers: `pnpm acceptance` runs the
 2. **Connect the client**, from a second terminal in the same project.
 
    ```bash
-   lore connect claude-code --dry-run   # read this first
-   lore connect claude-code
+   lorepack connect claude-code --dry-run   # read this first
+   lorepack connect claude-code
    ```
 
    - [ ] The dry run printed the exact file and command, and changed nothing.
@@ -51,7 +51,7 @@ Everything else the automated suite covers: `pnpm acceptance` runs the
 3. **The step only you can do.** Open Claude Code in the project.
 
    - [ ] The client shows Lorepack as an MCP server.
-   - [ ] If it asks you to approve or trust the project, it says so, and `lore connect`
+   - [ ] If it asks you to approve or trust the project, it says so, and `lorepack connect`
          warned you it would.
 
    > Expected: with `--shared`, the entry is in `.mcp.json`, which is checked in, and the
@@ -72,7 +72,7 @@ Everything else the automated suite covers: `pnpm acceptance` runs the
 6. **Take it back.**
 
    ```bash
-   lore disconnect claude-code
+   lorepack disconnect claude-code
    ```
 
    - [ ] The Lorepack entry is gone.
@@ -90,7 +90,7 @@ Fill this in each time. An integration page with no date is a claim, not a recor
 ## If a step fails
 
 ```bash
-lore doctor
+lorepack doctor
 ```
 
-names what is wrong and what to do about it. Include `lore doctor --json` in any bug report.
+names what is wrong and what to do about it. Include `lorepack doctor --json` in any bug report.

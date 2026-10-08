@@ -14,9 +14,9 @@ exist in one interface and be missing from another.
 
 | Surface | Started by | Speaks |
 |---|---|---|
-| stdio MCP | `lore mcp` | MCP 2026-07-28 over stdin/stdout |
-| HTTP | `lore serve` | REST under `/v1`, and MCP at `POST /mcp`, on one port |
-| Process | `lore search`, `lore export` | the same runtime, in-process |
+| stdio MCP | `lorepack mcp` | MCP 2026-07-28 over stdin/stdout |
+| HTTP | `lorepack serve` | REST under `/v1`, and MCP at `POST /mcp`, on one port |
+| Process | `lorepack search`, `lorepack export` | the same runtime, in-process |
 
 ## The protocol revision, and where it is decided
 
@@ -40,7 +40,7 @@ and `createMcpHandler` classify the opening message, choose an era, and pin one 
 from a factory. The hand-wired shape most SDK examples show, `server.connect(transport)`,
 does none of that: the connection stays 2025-era and the mandatory `server/discover` probe
 is answered with `Method not found` even though the handler is registered. That is exactly
-how `lore mcp` shipped until #189. Anything that serves this surface over a new transport
+how `lorepack mcp` shipped until #189. Anything that serves this surface over a new transport
 uses an entry.
 
 ## One condition, one classification, whichever surface asks
@@ -115,7 +115,7 @@ The diff resource is the one that does not come from `LoreRuntime`, and it is wo
 why. Every runtime capability reads the **active** build through one handle. A diff reads
 two builds, neither of which need be active, from build records alone, which is what makes
 it work after the sources have moved on. So it is a separate optional port, `BuildComparer`,
-supplied by the host: `lore mcp` and `lore serve` both supply the local one, and a
+supplied by the host: `lorepack mcp` and `lorepack serve` both supply the local one, and a
 deployment that holds only the build it serves supplies none.
 
 That deployment still lists the resource and answers with a typed error explaining it
@@ -140,11 +140,11 @@ has one error format rather than two.
 Five more routes exist only where the host supplied them, because each reads something a
 deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
 `GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
-`lore export` writes; `GET /v1/diagnostics` reads the machine. `lore serve` registers only
+`lorepack export` writes; `GET /v1/diagnostics` reads the machine. `lorepack serve` registers only
 the three that read the active build, because the other two read sources and a live session,
-and `lore serve` has neither.
+and `lorepack serve` has neither.
 
-`/v1/diagnostics` returns the same report `lore doctor --json` prints, validated against
+`/v1/diagnostics` returns the same report `lorepack doctor --json` prints, validated against
 `schemas/doctor-report.json`, plus the live session state a one-shot command cannot see: the
 watcher, the port, the process, and which clients are configured. It is an injected host
 function rather than a runtime capability, for the same reason `currentBuild` is: architecture
@@ -164,7 +164,7 @@ The only routes in this API that change anything:
 | `POST /v1/builds/pack` | write a `.lorepack` archive |
 
 They exist only where a host passes `localActions`, which only the local CLI does, and only
-for `lore dev`. Three things keep them local:
+for `lorepack dev`. Three things keep them local:
 
 1. **A remote deployment cannot register them.** It holds one build and no history, so it has
    nothing to supply. A route that does not exist cannot be reached by getting past a check.
@@ -227,7 +227,7 @@ remembering.
 Every response carries the build id it was read from and a `sourceState` of `clean`, `dirty`
 or `unknown`. It is an annotation, never a precondition: a read of a sealed build is not
 entitled to an opinion about the source tree, and refusing to answer because freshness could
-not be established is how `lore search` once became useless on a large project (#147).
+not be established is how `lorepack search` once became useless on a large project (#147).
 
 Activation is observed at the next request. Nothing is cached across requests, no session
 holds a build open, and no response ever mixes rows from two builds: the runtime asserts the
@@ -239,7 +239,7 @@ scope it opened against the handle it acquired before reading anything.
 the two come apart the moment the pointer moves without a file changing, which is exactly what
 an activation or a rollback is.
 
-Under `lore dev` the answer comes from the watcher rather than from the polling revalidator,
+Under `lorepack dev` the answer comes from the watcher rather than from the polling revalidator,
 because a supervisor that is already watching knows without paying for a scan. That answer is
 cached, and the cache is keyed on filesystem events, which an activation does not produce. So
 rolling back in Studio left the server reporting the freshness of the build that had just
@@ -258,5 +258,5 @@ pointer has moved, it reports `unknown` immediately and queues the re-establishm
   rollback the reader just asked for. The re-establishment path is deliberately separate from
   the settle path for that reason, and a test asserts the rebuild callback is never called.
 
-This also covers the case nobody wired: `lore activate` run in a second terminal against a
+This also covers the case nobody wired: `lorepack activate` run in a second terminal against a
 live dev session moves the same pointer, and is noticed the same way.

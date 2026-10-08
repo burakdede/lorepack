@@ -31,7 +31,7 @@ That distinction is not stylistic. It was a hand-written literal naming markdown
 until #234, and the five parsers Phase 5 added were never appended to it. The result was that
 bumping the XLSX parser's version and rebuilding a project full of spreadsheets produced a
 byte-identical build id: a parser fix could not invalidate the artifacts it changed, and
-`lore diff` reported no difference between two builds whose content genuinely differed.
+`lorepack diff` reported no difference between two builds whose content genuinely differed.
 Deriving it makes registering a parser and recording its version one act rather than two that
 have to be kept in step.
 
@@ -94,7 +94,7 @@ change is a reviewed, format-affecting act that needs a changeset.
 ## Rules in build identity
 
 Resolved rules are an input to `deriveBuildId` (section 11.4), so editing a rule produces a
-different build. That is what makes `lore diff` able to show a precedence change, and what
+different build. That is what makes `lorepack diff` able to show a precedence change, and what
 stops an activation from silently keeping the old ranking.
 
 What is hashed is what a rule **decided**, not how it was written:
@@ -104,7 +104,7 @@ What is hashed is what a rule **decided**, not how it was written:
   two narrower ones, or reordering rules that do not overlap, does not rebuild the world.
 - Changing any resolved value produces a different one.
 - `matchedRules` is excluded deliberately. It is attribution for a human reading
-  `lore inspect rules`, and hashing it would make reordering two rules that set the same value
+  `lorepack inspect rules`, and hashing it would make reordering two rules that set the same value
   a rebuild for no difference in what the build contains.
 
 Artifacts that no rule touched are omitted from the hashed form entirely, so a project with no

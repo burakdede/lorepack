@@ -12,7 +12,7 @@ import { lockInputs, parserVersions } from '../src/services/versions.js';
  *
  * The defect these exist for: `lockInputs` named markdown and text in a hand-written literal,
  * and the five parsers Phase 5 added were never appended. So bumping the XLSX parser's version
- * and rebuilding a project full of spreadsheets produced the same build id, and `lore diff`
+ * and rebuilding a project full of spreadsheets produced the same build id, and `lorepack diff`
  * between two builds whose content genuinely differed reported no change.
  *
  * A presence check would not have caught it. `parserVersions` was non-empty the whole time.

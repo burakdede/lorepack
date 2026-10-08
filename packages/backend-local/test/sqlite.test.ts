@@ -131,14 +131,14 @@ describe('opening databases', () => {
       expect.unreachable('should have thrown');
     } catch (error) {
       expect((error as LoreError).code).toBe('LORE_E_SQLITE_UNAVAILABLE');
-      // #168: this asserted `lore doctor`, a command that does not exist until Phase 3.
-      expect((error as LoreError).remediation).toContain('lore builds');
+      // #168: this asserted `lorepack doctor`, a command that does not exist until Phase 3.
+      expect((error as LoreError).remediation).toContain('lorepack builds');
     }
   });
 
   it('leaves a single file behind, so a read never writes and a build packs as one file', async () => {
     // A WAL database grows `-wal` and `-shm` siblings, and a read-only connection creates
-    // them without being able to remove them. That would make `lore status` write to disk.
+    // them without being able to remove them. That would make `lorepack status` write to disk.
     await withTempProject({}, (project) => {
       const path = project.path('build.sqlite');
       const writable = openWritable(path);

@@ -95,8 +95,8 @@ describe('freshness, which is the question the route exists for', () => {
 
     await waitFor(() => expect(screen.getByText(/reading the older text/)).toBeInTheDocument());
     // Not "your build is stale": the consequence, and the one command that ends it.
-    expect(screen.getByText('lore build')).toBeInTheDocument();
-    expect(screen.getByLabelText('Copy command lore build')).toBeInTheDocument();
+    expect(screen.getByText('lorepack build')).toBeInTheDocument();
+    expect(screen.getByLabelText('Copy command lorepack build')).toBeInTheDocument();
   });
 });
 
@@ -112,7 +112,7 @@ describe('a project that is new rather than broken', () => {
     await waitFor(() =>
       expect(screen.getByText('This project has no build yet.')).toBeInTheDocument(),
     );
-    expect(screen.getByText('lore build')).toBeInTheDocument();
+    expect(screen.getByText('lorepack build')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
@@ -191,7 +191,7 @@ describe('what this route must not become', () => {
     renderRoute();
     await waitFor(() => expect(screen.getByText('184')).toBeInTheDocument());
 
-    // A definition list is the shape that echoes `lore build` and keeps the labels in a
+    // A definition list is the shape that echoes `lorepack build` and keeps the labels in a
     // column the eye can scan. Tiles would each be their own little box.
     const value = screen.getByText('184');
     expect(value.tagName).toBe('DD');
@@ -199,7 +199,7 @@ describe('what this route must not become', () => {
   });
 });
 
-describe('getting a developer from `lore dev` to a connected client', () => {
+describe('getting a developer from `lorepack dev` to a connected client', () => {
   const CLIENTS = [
     {
       id: 'claude-code',
@@ -254,16 +254,18 @@ describe('getting a developer from `lore dev` to a connected client', () => {
     const origin = window.location.origin;
     expect(screen.getByText(`${origin}/mcp`)).toBeInTheDocument();
     expect(screen.getByText(`${origin}/v1`)).toBeInTheDocument();
-    expect(screen.getByText('lore mcp')).toBeInTheDocument();
+    expect(screen.getByText('lorepack mcp')).toBeInTheDocument();
   });
 
   it('offers a connect command only for a client that is installed and not yet connected', async () => {
     renderRoute();
-    await waitFor(() => expect(screen.getByText('lore connect claude-code')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('lorepack connect claude-code')).toBeInTheDocument(),
+    );
 
     // Running it for a connected client changes nothing, and for a missing one it only fails.
-    expect(screen.queryByText('lore connect codex')).not.toBeInTheDocument();
-    expect(screen.queryByText('lore connect vscode')).not.toBeInTheDocument();
+    expect(screen.queryByText('lorepack connect codex')).not.toBeInTheDocument();
+    expect(screen.queryByText('lorepack connect vscode')).not.toBeInTheDocument();
     expect(screen.getByText('not installed')).toBeInTheDocument();
   });
 

@@ -18,7 +18,7 @@ function input(path: string): ConnectInput {
   return {
     projectRoot: path,
     serverName: 'lorepack',
-    command: { executable: 'lore', args: ['mcp', '--project', path, '--ensure-current'] },
+    command: { executable: 'lorepack', args: ['mcp', '--project', path, '--ensure-current'] },
     scope: 'project',
   };
 }
@@ -28,7 +28,7 @@ describe('the JSON form', () => {
     const snippet = renderSnippet(input('/home/me/docs'));
     const parsed = JSON.parse(snippet.json) as Record<string, never>;
 
-    expect(parsed.mcpServers.lorepack.command).toBe('lore');
+    expect(parsed.mcpServers.lorepack.command).toBe('lorepack');
     expect(parsed.mcpServers.lorepack.args).toEqual([
       'mcp',
       '--project',
@@ -46,7 +46,7 @@ describe('the JSON form', () => {
 describe('the command form', () => {
   it('leaves an ordinary path unquoted, so it stays readable', () => {
     const snippet = renderSnippet(input('/home/me/docs'));
-    expect(snippet.posixCommand).toBe('lore mcp --project /home/me/docs --ensure-current');
+    expect(snippet.posixCommand).toBe('lorepack mcp --project /home/me/docs --ensure-current');
   });
 
   it('quotes a POSIX path with a space', () => {
@@ -61,7 +61,7 @@ describe('the command form', () => {
     // quote, emit an escaped apostrophe, reopen. A regex here is how a correct escaping
     // gets "corrected" by someone reading a failing test.
     expect(snippet.posixCommand).toBe(
-      `lore mcp --project '/home/me/paul'\\''s docs' --ensure-current`,
+      `lorepack mcp --project '/home/me/paul'\\''s docs' --ensure-current`,
     );
   });
 
@@ -96,6 +96,6 @@ describe('what it claims', () => {
     // Architecture 14.7 is explicit about this, and it is exactly the sort of claim that
     // creeps into product copy because it sounds welcoming.
     expect(advice).toContain('cannot reach a local server');
-    expect(advice).toContain('lore export');
+    expect(advice).toContain('lorepack export');
   });
 });

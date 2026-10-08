@@ -62,7 +62,7 @@ describe('first run', () => {
   it('points at the next command', async () => {
     await withTempProject({ files: { 'a.md': '#' } }, async (project) => {
       const result = await init(project.root);
-      expect(result.stdout).toContain('lore build');
+      expect(result.stdout).toContain('lorepack build');
     });
   });
 });

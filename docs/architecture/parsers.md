@@ -55,7 +55,7 @@ that could not be laid out at all. Nothing justified failing harder for the bett
 case.
 
 It is not silent. Each produces a warning carrying the file, the count and the limit, surfaced by
-`lore inspect warnings`, by `GET /v1/warnings` and by Studio's Sources view, and the file keeps a
+`lorepack inspect warnings`, by `GET /v1/warnings` and by Studio's Sources view, and the file keeps a
 node describing it so a reader searching their project still finds it. What the node says is that
 the rows are **not** in the build, never a prose dump of them: flattening a table into text is an
 invalid implementation, and it stays invalid when the table was refused.

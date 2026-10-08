@@ -33,7 +33,7 @@ rules:
 
 const FILES = {
   'lore.yaml': CONFIG,
-  'docs/runbook-v2.md': '# Runbook v2\n\nRollback the release by running lore rollback.\n',
+  'docs/runbook-v2.md': '# Runbook v2\n\nRollback the release by running lorepack rollback.\n',
   'docs/runbook-v1.md': '# Runbook v1\n\nRollback the release the old way.\n',
   'draft.md': '# Draft plan\n\nRollback ideas, half-formed.\n',
   'archived.md': '# Archive\n\nRollback notes from 2019.\n',

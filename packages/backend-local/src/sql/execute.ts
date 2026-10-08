@@ -122,7 +122,7 @@ function run(child: ChildProcess, sql: string, limit: number): Promise<QueryOutc
       finish(() => {
         reject(
           new LoreError('LORE_E_SQLITE_UNAVAILABLE', 'The query engine did not start.', {
-            remediation: 'Run `lore doctor` to check this environment.',
+            remediation: 'Run `lorepack doctor` to check this environment.',
           }),
         );
       });
@@ -213,7 +213,7 @@ function classify(message: string): LoreError {
       'The query touches something outside the table it was asked about.',
       {
         remediation:
-          'A query may read the table named in the request and call ordinary SQL functions. It cannot read other tables, the build catalog, or anything on this machine. Call `describeTable` for the `sqlName` this table is addressed by, or `lore inspect tables` to see what a build contains.',
+          'A query may read the table named in the request and call ordinary SQL functions. It cannot read other tables, the build catalog, or anything on this machine. Call `describeTable` for the `sqlName` this table is addressed by, or `lorepack inspect tables` to see what a build contains.',
       },
     );
   }

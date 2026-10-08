@@ -24,7 +24,7 @@ Optional CI metadata:
 
 When CI metadata is present, the harness derives a per-run resource prefix by appending those
 numeric values. It prepends that prefix to the smoke project name before
-`lore target add cloudflare`, so the CLI's own deterministic D1 and R2 names stay aligned with
+`lorepack target add cloudflare`, so the CLI's own deterministic D1 and R2 names stay aligned with
 the acceptance harness. Worker scripts are different: CI always deploys one singleton Worker
 named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`. The checked-in GitHub Actions job is serialized
 with a `cloudflare-acceptance` concurrency group so two CI runs do not race on that Worker.
@@ -84,7 +84,7 @@ deletes stale CI resources whose names match
 `LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-objects`. This is deliberately limited to older CI
 run ids or earlier attempts for the same run, so it does not delete the current run, a newer run,
 the singleton Worker, or resources outside the configured prefix. The cleanup exists because
-leaked resources can exhaust account quota before `lore target add cloudflare` reaches the deploy
+leaked resources can exhaust account quota before `lorepack target add cloudflare` reaches the deploy
 path.
 
 ## Shared corpus and acceptance shape
@@ -96,14 +96,14 @@ fixture that could drift.
 
 The eventual `#93` suite is expected to prove:
 
-1. `lore target add cloudflare`
-2. `lore target token cloudflare`
-3. `lore deploy cloudflare`
+1. `lorepack target add cloudflare`
+2. `lorepack target token cloudflare`
+3. `lorepack deploy cloudflare`
 4. remote REST and MCP reads report the same build id as the deployed local build
 5. a second deploy changes the served build id
 6. remote rollback returns the earlier build id by pointer change alone
 
-The checked-in smoke now generates a runtime bearer token after `lore target add cloudflare`
+The checked-in smoke now generates a runtime bearer token after `lorepack target add cloudflare`
 and passes it through `LORE_REMOTE_BEARER_TOKEN` for deploy and rollback confirmation, and as
 `Authorization: Bearer <token>` for direct `GET /v1/build`, `POST /v1/context`, and `POST /mcp`
 verification calls.
@@ -127,22 +127,22 @@ The checked-in gates today are:
 - `tools/acceptance/test/cloudflare-testing.test.ts`, which verifies the environment contract,
   the resource-prefix rule, and the documented skip behavior
 - `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
-  runtime plus target resources, runs `lore target add cloudflare` in automatic provisioning
+  runtime plus target resources, runs `lorepack target add cloudflare` in automatic provisioning
   mode so the command itself creates the D1 database and R2 bucket, rewrites the non-secret
   target receipt to the singleton CI Worker, then deploys the checked-in Worker package, runs
-  `lore target token cloudflare`, runs
-  `lore deploy cloudflare`, edits the mixed corpus, runs a second `lore deploy cloudflare`,
+  `lorepack target token cloudflare`, runs
+  `lorepack deploy cloudflare`, edits the mixed corpus, runs a second `lorepack deploy cloudflare`,
   proves unauthenticated REST and MCP requests are rejected while the issued runtime token
   succeeds, then verifies the public build id and read surface before and after
-  `lore rollback --target cloudflare <buildId>` through `GET /v1/build`,
+  `lorepack rollback --target cloudflare <buildId>` through `GET /v1/build`,
   `POST /v1/context`, and MCP `lore_search`
 - the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also forces a test-only
   failure immediately after candidate projection, mutates the local sealed build, then
-  resumes with `lore deploy cloudflare --resume <receiptId>` and proves the remote search
+  resumes with `lorepack deploy cloudflare --resume <receiptId>` and proves the remote search
   surface did not pick up that local mutation, which is the checked-in evidence that resume
   reused the prior projection instead of silently restarting it
 - the same `tools/acceptance/test/cloudflare-smoke.test.ts` file also mutates a real local
-  build to advertise `semantic-search`, then proves `lore deploy cloudflare` refuses it with
+  build to advertise `semantic-search`, then proves `lorepack deploy cloudflare` refuses it with
   `LORE_E_CAPABILITY_LOSS` unless the loss is explicitly named
 
 The broader Phase 2 contract-suite and CI artifact cases are still open work on `#93`.

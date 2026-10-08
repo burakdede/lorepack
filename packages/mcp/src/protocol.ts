@@ -17,7 +17,7 @@ import { SUPPORTED_PROTOCOL_VERSIONS } from '@modelcontextprotocol/server';
  * SDK can still answer a 2025-era client, and the 2026-07-28 specification requires
  * exactly that backward compatibility.
  *
- * Verified by hand against a running `lore serve` on 2026-08-03, and asserted by
+ * Verified by hand against a running `lorepack serve` on 2026-08-03, and asserted by
  * `tools/contract/test/protocol-version.test.ts` against the server's own
  * `server/discover` result:
  *

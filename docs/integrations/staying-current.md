@@ -18,7 +18,7 @@ changed, and every answer would look exactly as authoritative as the first one.
 | Startup, `--ensure-current` | Reconciles before the first protocol byte: builds if the sources moved, or if there is no build yet |
 | Every request | Stamps the response with the active build id and the freshness observed for that request |
 | Past the revalidation interval | Cheap metadata prescreen; only if something moved does it content-hash |
-| Another terminal runs `lore build` | Picked up at the next request, with no restart and no client action |
+| Another terminal runs `lorepack build` | Picked up at the next request, with no restart and no client action |
 | A request already in flight | Finishes against the build it captured. No response mixes two builds |
 
 ## The cost, and why the interval exists
@@ -34,11 +34,11 @@ deciding evidence. A scan that finds nothing moved answers from cache. A scan th
 something calls the real check.
 
 ```bash
-lore mcp --ensure-current                          # recheck every 5 seconds
-lore mcp --ensure-current --revalidate-interval 0  # recheck every request
-lore mcp --ensure-current --revalidate-interval off # startup only, the old behaviour
-lore mcp --allow-stale                             # serve as-is, label every result dirty
-lore mcp --active-only                             # never look at the sources
+lorepack mcp --ensure-current                          # recheck every 5 seconds
+lorepack mcp --ensure-current --revalidate-interval 0  # recheck every request
+lorepack mcp --ensure-current --revalidate-interval off # startup only, the old behaviour
+lorepack mcp --allow-stale                             # serve as-is, label every result dirty
+lorepack mcp --active-only                             # never look at the sources
 ```
 
 ## Freshness never fails a read
@@ -46,7 +46,7 @@ lore mcp --active-only                             # never look at the sources
 A read of a sealed build is not entitled to an opinion about the source tree. If the
 sources cannot be inspected at all, the answer is `sourceState: "unknown"` and the build
 still answers. This was learned the hard way: establishing freshness first once made
-`lore search` refuse to answer on a project above the file envelope, from a build sitting
+`lorepack search` refuse to answer on a project above the file envelope, from a build sitting
 ready on disk (#147).
 
 ## What a client should do with this

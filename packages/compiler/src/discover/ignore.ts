@@ -131,7 +131,7 @@ export function createMatcher(rules: readonly IgnoreRule[]): Matcher {
    *
    * Where a directory *is* named, git also says a negation cannot reach inside it, and that
    * holds here for the same reason: the walk never goes in. Anything below an excluded
-   * directory is unreachable, and `lore inspect exclusions` reports the directory once
+   * directory is unreachable, and `lorepack inspect exclusions` reports the directory once
    * rather than each of its files.
    */
   function decideDirectory(canonicalPath: string): IgnoreRule | null {

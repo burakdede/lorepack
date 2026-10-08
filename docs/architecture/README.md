@@ -44,7 +44,7 @@ for source edits, shell execution, deploy, build, activate or rollback.
 
 ## Compiler pipeline
 
-`lore build` runs this sequence:
+`lorepack build` runs this sequence:
 
 ```text
 lock -> plan -> parse -> index -> validate -> seal -> record -> activate

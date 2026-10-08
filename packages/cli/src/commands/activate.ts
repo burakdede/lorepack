@@ -152,7 +152,7 @@ interface BuildRow {
 }
 
 function renderBuilds(builds: readonly BuildRow[]): string {
-  if (builds.length === 0) return 'No builds yet. Run `lore build`.';
+  if (builds.length === 0) return 'No builds yet. Run `lorepack build`.';
 
   const lines = ['  BUILD              CREATED               ARTIFACTS  CHUNKS  STATE'];
   for (const build of builds) {
@@ -231,7 +231,7 @@ async function previousRemoteBuildId(
     throw new LoreError(
       'LORE_E_BUILD_NOT_FOUND',
       'There is no earlier verified remote build to return to.',
-      { remediation: 'Run `lore target status cloudflare` to see the remote history.' },
+      { remediation: 'Run `lorepack target status cloudflare` to see the remote history.' },
     );
   }
 
@@ -253,7 +253,7 @@ ORDER BY verified_at DESC, projected_at DESC, build_id DESC`,
     throw new LoreError(
       'LORE_E_BUILD_NOT_FOUND',
       'There is no earlier verified remote build to return to.',
-      { remediation: 'Run `lore target status cloudflare` to see the remote history.' },
+      { remediation: 'Run `lorepack target status cloudflare` to see the remote history.' },
     );
   }
   return previous.buildId as BuildId;

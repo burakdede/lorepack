@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 /**
- * What `lore doctor` reports, as a published contract.
+ * What `lorepack doctor` reports, as a published contract.
  *
  * It is public for two reasons that both outlive the CLI. Phase 4's Studio Diagnostics route
  * (#69) renders these results over HTTP rather than reimplementing the checks, and a bug
- * report is asked for `lore doctor --json`, so the shape has to be stable enough for a
+ * report is asked for `lorepack doctor --json`, so the shape has to be stable enough for a
  * maintainer to read a stranger's output six months from now.
  *
  * The contract lives here, in `core`, for the same reason every other one does: the CLI, the

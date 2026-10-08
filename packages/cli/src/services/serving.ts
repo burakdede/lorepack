@@ -19,13 +19,13 @@ import {
 /**
  * Serving an active build over HTTP and MCP, in one place, for the two commands that do it.
  *
- * `lore serve` and `lore dev` differ in what they are willing to do to a project: one never
+ * `lorepack serve` and `lorepack dev` differ in what they are willing to do to a project: one never
  * builds, the other builds and watches. They do not differ in how a build is served, and the
- * Phase 3 audit on #4 is explicit that `lore dev` should supervise the existing server rather
+ * Phase 3 audit on #4 is explicit that `lorepack dev` should supervise the existing server rather
  * than grow a second one. Two servers would mean two port policies, two binding warnings and
  * two ways to drain, and the difference between them would be discovered by a user.
  *
- * The freshness revalidator is injectable for the same reason. `lore serve` has no better
+ * The freshness revalidator is injectable for the same reason. `lorepack serve` has no better
  * information than an interval and a metadata prescreen, but a supervisor that is already
  * watching the filesystem does, and supplying it is an injection rather than a rewrite.
  */
@@ -45,7 +45,7 @@ export interface ServingOptions {
   /**
    * How the server decides whether the sources have moved on.
    *
-   * Omitted, it polls with a metadata prescreen on `revalidateIntervalMs`. `lore dev` passes
+   * Omitted, it polls with a metadata prescreen on `revalidateIntervalMs`. `lorepack dev` passes
    * its watcher's answer instead, which is the hook #112 named and the Phase 3 audit expects
    * #53 and #55 to use.
    */
@@ -54,15 +54,15 @@ export interface ServingOptions {
   /**
    * Serve Studio at the root.
    *
-   * `lore dev` does; `lore serve` does not, because Studio can activate and roll back and
-   * `lore serve` promises to be read-only and never to rebuild. Two commands with different
+   * `lorepack dev` does; `lorepack serve` does not, because Studio can activate and roll back and
+   * `lorepack serve` promises to be read-only and never to rebuild. Two commands with different
    * promises should not quietly offer the same surface.
    */
   readonly studio?: boolean;
   /**
    * The watcher's live state, when there is a watcher.
    *
-   * Supplied by `lore dev` for Studio's Diagnostics route. `lore serve` has no watcher and
+   * Supplied by `lorepack dev` for Studio's Diagnostics route. `lorepack serve` has no watcher and
    * supplies nothing, and the route says so rather than inventing a state for it.
    */
   readonly watchStatus?: () => import('./watch.js').WatchStatus;
@@ -104,7 +104,7 @@ export async function startServing(
     const active = await backend.provider.current();
     if (active === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
-        remediation: 'Run `lore build` first.',
+        remediation: 'Run `lorepack build` first.',
       });
     }
 
@@ -128,17 +128,17 @@ export async function startServing(
       freshness,
       mcpHandler: (request) => mcp.fetch(request),
       // Reads of the **active build**, so any server can answer them: they change nothing and
-      // they touch no source file. `lore serve` offering them is the same promise it already
+      // they touch no source file. `lorepack serve` offering them is the same promise it already
       // makes about `/v1/search`.
       exportBundle: async (request) => {
         const bundle = await runtime.contextForTask(
           request as Parameters<typeof runtime.contextForTask>[0],
         );
-        // The same renderer `lore export` uses, so "copy as export" is byte-identical rather
+        // The same renderer `lorepack export` uses, so "copy as export" is byte-identical rather
         // than merely similar. A parity test asserts it.
         return renderBundleMarkdown(bundle, {
           projectName: options.config.config.name,
-          moreCommand: `lore export --task ${JSON.stringify(bundle.task)} --profile deep`,
+          moreCommand: `lorepack export --task ${JSON.stringify(bundle.task)} --profile deep`,
           sourceState: bundle.sourceState,
         });
       },
@@ -172,8 +172,8 @@ export async function startServing(
             assets: createStudioAssets(),
             allowLoopbackOrigin: true,
             // The one Studio read that is **not** a read of the build: planning walks the
-            // source tree. `lore serve` promises never to rebuild and has no business reading
-            // sources, so this belongs to `lore dev` alone.
+            // source tree. `lorepack serve` promises never to rebuild and has no business reading
+            // sources, so this belongs to `lorepack dev` alone.
             plan: createPlanEndpoint(options.config),
             // Reads the machine rather than the build: SQLite controls, the watcher, the
             // process serving this request. The port is passed as a function because it is
@@ -185,7 +185,7 @@ export async function startServing(
               startedAt,
               ...(options.watchStatus === undefined ? {} : { watchStatus: options.watchStatus }),
             }),
-            // The only writes in this API, and they exist only here. `lore serve` promises to
+            // The only writes in this API, and they exist only here. `lorepack serve` promises to
             // be read-only, so it passes no actions and simply does not have these routes.
             localActions: {
               builds: createBuildsEndpoint(options.config),
@@ -300,7 +300,7 @@ export function isLoopback(host: string): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1';
 }
 
-/** Milliseconds, or 0 for every request. `off` belongs to `lore mcp`, which can pin. */
+/** Milliseconds, or 0 for every request. `off` belongs to `lorepack mcp`, which can pin. */
 export function parseInterval(raw: unknown): number {
   // `Number('')` is 0, and 0 is the most expensive setting there is: it content-hashes the
   // corpus on every request. Reaching it by writing nothing, which is what a shell does

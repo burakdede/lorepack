@@ -13,7 +13,7 @@ Configure the client to run:
 
 ```json
 {
-  "command": "lore",
+  "command": "lorepack",
   "args": ["mcp", "--project", "/absolute/path/to/project", "--ensure-current"]
 }
 ```
@@ -26,7 +26,7 @@ letters remain unambiguous only when the client passes argv directly.
 Prefer project or workspace scope when the client supports it. User scope makes one corpus
 visible to every project the client opens, which is rarely the safe default for private context.
 
-`--ensure-current` asks `lore mcp` to rebuild when sources changed. Use `--active-only` only
+`--ensure-current` asks `lorepack mcp` to rebuild when sources changed. Use `--active-only` only
 when the client must read a pinned build and must not touch the source tree.
 
 ## Protocol behavior
@@ -43,9 +43,9 @@ contract data.
 | Symptom | Check |
 |---|---|
 | The client lists no Lorepack tools | Confirm the project or workspace configuration is trusted by the client. |
-| The server fails to start | Run `lore mcp --project /absolute/path --ensure-current` manually from the same shell. |
-| The client cannot find `lore` | Use an absolute command path or fix the client's PATH. |
-| The server reports stale sources | Use `--ensure-current`, or run `lore build` before connecting. |
+| The server fails to start | Run `lorepack mcp --project /absolute/path --ensure-current` manually from the same shell. |
+| The client cannot find `lorepack` | Use an absolute command path or fix the client's PATH. |
+| The server reports stale sources | Use `--ensure-current`, or run `lorepack build` before connecting. |
 | The client rejects the protocol | Check that it supports MCP 2026-07-28 or the handshake-era compatibility path. |
 
 ## Verified against

@@ -8,8 +8,8 @@ export interface GlobalOptions {
   readonly color: boolean;
   /**
    * Colour for stderr, resolved separately because the two streams are redirected
-   * separately. `lore build > log.txt` on a terminal keeps its errors readable, and
-   * `lore build 2> log.txt` does not put escapes in the file.
+   * separately. `lorepack build > log.txt` on a terminal keeps its errors readable, and
+   * `lorepack build 2> log.txt` does not put escapes in the file.
    */
   readonly colorStderr: boolean;
   readonly cwd: string;
@@ -63,8 +63,8 @@ export function resolveGlobalOptions(
  * Builds the per-invocation context.
  *
  * With `--json`, stdout carries the structured result and nothing else, so progress and
- * warnings move to stderr. That is what makes `lore plan --json | jq` work, and it is the
- * same discipline `lore mcp` will need for protocol purity in Phase 2.
+ * warnings move to stderr. That is what makes `lorepack plan --json | jq` work, and it is the
+ * same discipline `lorepack mcp` will need for protocol purity in Phase 2.
  */
 export function createContext(
   options: GlobalOptions,

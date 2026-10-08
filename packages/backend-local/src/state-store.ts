@@ -96,7 +96,7 @@ export class LocalStateStore {
     const build = this.getBuild(buildId);
     if (build === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${buildId} is not in this project.`, {
-        remediation: 'Run `lore inspect builds` to list available builds.',
+        remediation: 'Run `lorepack inspect builds` to list available builds.',
         subject: buildId,
       });
     }
@@ -187,7 +187,7 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     const active = this.#state.current();
     if (active === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build.', {
-        remediation: 'Run `lore build` to create and activate one.',
+        remediation: 'Run `lorepack build` to create and activate one.',
       });
     }
 

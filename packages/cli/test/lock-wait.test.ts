@@ -51,7 +51,7 @@ describe('the lock wait a command will accept', () => {
     }
   });
 
-  it('is listed among the documented environment keys, so `lore config` shows it', () => {
+  it('is listed among the documented environment keys, so `lorepack config` shows it', () => {
     // An override channel nothing reports is an override channel nobody finds.
     expect(ENVIRONMENT_KEYS).toContain('LORE_LOCK_WAIT_MS');
   });

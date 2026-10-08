@@ -17,11 +17,11 @@ import {
 import { buildLockfile, compareLockfiles, type LockfileInputs } from '../lock/lockfile.js';
 
 /**
- * `lore plan` is the Terraform half of the product: a side-effect-free preview of every
+ * `lorepack plan` is the Terraform half of the product: a side-effect-free preview of every
  * intended mutation.
  *
  * It is one pure function over (config, lock, fingerprints, active build), so the CLI,
- * Studio and `lore deploy` all show the same thing. Anything that writes belongs to the
+ * Studio and `lorepack deploy` all show the same thing. Anything that writes belongs to the
  * build orchestrator; a plan that touched the filesystem would not be a plan.
  */
 

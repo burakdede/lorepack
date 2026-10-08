@@ -2,7 +2,7 @@
 // The pictures in the documentation, regenerated from a real build rather than pasted in once.
 //
 // The CLI and Studio screenshots under `docs/images/` come out of this script: a demo project
-// is built, a real `lore dev` serves it, the CLI transcripts are captured by running the
+// is built, a real `lorepack dev` serves it, the CLI transcripts are captured by running the
 // actual commands, and Studio is photographed in the browser the end-to-end suite already uses.
 //
 // The reason it is a script and not a folder of hand-taken screenshots is section 8 of
@@ -132,7 +132,7 @@ The largest drop-off is at the import step, not at signup.
  *
  * `progress` decides whether the stage table is part of the picture. It is written to stderr,
  * which is the whole point of the output contract: with `--json` stdout carries the result and
- * nothing else. For `lore build` the stages *are* the interesting part; for `lore status` they
+ * nothing else. For `lorepack build` the stages *are* the interesting part; for `lorepack status` they
  * are two seconds of scaffolding in front of one sentence, so they are left out.
  */
 function lore(cwd, args, { progress = false } = {}) {
@@ -142,7 +142,7 @@ function lore(cwd, args, { progress = false } = {}) {
     env: { ...process.env, FORCE_COLOR: '0', COLUMNS: '92' },
   });
   if (result.status !== 0) {
-    throw new Error(`lore ${args.join(' ')} exited ${result.status}:\n${result.stderr}`);
+    throw new Error(`lorepack ${args.join(' ')} exited ${result.status}:\n${result.stderr}`);
   }
   return progress ? `${result.stderr}${result.stdout}` : result.stdout;
 }
@@ -323,7 +323,7 @@ ${groups.join('\n')}
 async function waitForServer(child) {
   const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`lore dev exited ${child.exitCode}`);
+    if (child.exitCode !== null) throw new Error(`lorepack dev exited ${child.exitCode}`);
     try {
       if ((await fetch(`http://127.0.0.1:${PORT}/health`)).ok) return;
     } catch {
@@ -331,7 +331,7 @@ async function waitForServer(child) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`lore dev never answered on ${PORT}`);
+  throw new Error(`lorepack dev never answered on ${PORT}`);
 }
 
 async function main() {
@@ -365,9 +365,9 @@ async function main() {
     const build = lore(project, ['build'], { progress: true });
     writeFileSync(
       join(IMAGES, 'cli-build.svg'),
-      terminalSvg('lore init and lore build', [
-        { command: 'lore init .', output: init },
-        { command: 'lore build', output: build },
+      terminalSvg('lorepack init and lorepack build', [
+        { command: 'lorepack init .', output: init },
+        { command: 'lorepack build', output: build },
       ]),
       'utf8',
     );
@@ -375,8 +375,11 @@ async function main() {
     writeFileSync(
       join(IMAGES, 'cli-inspect.svg'),
       terminalSvg('inspecting what is in the build, and what is not', [
-        { command: 'lore status', output: lore(project, ['status']) },
-        { command: 'lore inspect exclusions', output: lore(project, ['inspect', 'exclusions']) },
+        { command: 'lorepack status', output: lore(project, ['status']) },
+        {
+          command: 'lorepack inspect exclusions',
+          output: lore(project, ['inspect', 'exclusions']),
+        },
       ]),
       'utf8',
     );
@@ -385,7 +388,7 @@ async function main() {
     writeFileSync(
       join(IMAGES, 'cli-search.svg'),
       terminalSvg('every result carries where it came from', [
-        { command: 'lore search "how long do we keep support transcripts"', output: search },
+        { command: 'lorepack search "how long do we keep support transcripts"', output: search },
       ]),
       'utf8',
     );
@@ -423,9 +426,9 @@ async function main() {
       animatedTerminalSvg(
         'Lorepack: build, ask with citations, diff, roll back, serve',
         [
-          { command: 'lore build', output: build, keep: (line) => !STAGE.test(line) },
+          { command: 'lorepack build', output: build, keep: (line) => !STAGE.test(line) },
           {
-            command: 'lore search "how long do we keep support transcripts"',
+            command: 'lorepack search "how long do we keep support transcripts"',
             output: search,
             // The first hit, with its file, heading path and line.
             keep: (() => {
@@ -437,7 +440,7 @@ async function main() {
             })(),
           },
           {
-            command: 'lore diff',
+            command: 'lorepack diff',
             output: diff,
             keep: (() => {
               let section = 'Build';
@@ -447,9 +450,9 @@ async function main() {
               };
             })(),
           },
-          { command: 'lore rollback', output: rollback },
+          { command: 'lorepack rollback', output: rollback },
           {
-            command: `lore dev . --port ${PORT}`,
+            command: `lorepack dev . --port ${PORT}`,
             output: served.slice(0, served.indexOf('Watching for changes')),
             // The stdio line names this run's absolute temp directory, which is noise here.
             keep: (line) => !STAGE.test(line) && !line.startsWith('MCP stdio'),

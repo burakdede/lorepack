@@ -46,7 +46,7 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
     projectRoot: project(),
     serverName: SERVER_NAME,
     command: {
-      executable: 'lore',
+      executable: 'lorepack',
       args: ['mcp', '--project', project(), '--ensure-current'],
     },
     scope: 'project',
@@ -78,7 +78,7 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
         const detected = await fixture.createMissing(project()).detect();
 
         // Not an error: a machine without this client is an ordinary machine, and
-        // `lore connect` has other clients and a snippet to offer.
+        // `lorepack connect` has other clients and a snippet to offer.
         expect(detected.installed).toBe(false);
         expect(detected.reason).toBeTruthy();
       });
@@ -124,7 +124,7 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
         const plan = await fixture.create(project()).plan(input());
 
         expect(plan.configPath).toBeTruthy();
-        expect(plan.changes.join('\n')).toContain('lore mcp --project');
+        expect(plan.changes.join('\n')).toContain('lorepack mcp --project');
         // `--dry-run` is the orchestrator's flag; the guarantee it rests on is that planning
         // itself never touches the disk.
         expect(existsSync(plan.configPath as string)).toBe(false);

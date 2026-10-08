@@ -21,7 +21,7 @@ import { run } from './helpers.js';
  * What a caller learns about a typed table (#235).
  *
  * The contract suite holds every backend to the invariants. These are the local specifics the
- * contract cannot state: the exact cell range an XLSX sheet was read from, what `lore inspect
+ * contract cannot state: the exact cell range an XLSX sheet was read from, what `lorepack inspect
  * tables` prints beside what the port returns, and what happens to a build written at an older
  * catalog schema.
  */
@@ -295,7 +295,7 @@ describe('a build written at an older catalog schema', () => {
         const runtime = createRuntime(backend);
         await expect(runtime.describeBuild()).rejects.toMatchObject({
           code: 'LORE_E_SCHEMA_MISMATCH',
-          remediation: expect.stringContaining('lore build'),
+          remediation: expect.stringContaining('lorepack build'),
         });
       } finally {
         backend.close();

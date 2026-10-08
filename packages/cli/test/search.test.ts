@@ -37,7 +37,7 @@ async function builtProject<T>(
   });
 }
 
-describe('lore search', () => {
+describe('lorepack search', () => {
   it('returns located results with a highlighted excerpt', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['search', 'rollback']);
@@ -190,7 +190,7 @@ describe('lore search', () => {
     await project(CORPUS, async (_root, lore) => {
       const result = await lore(['search', 'rollback']);
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('lore build');
+      expect(result.stderr).toContain('lorepack build');
     });
   });
 

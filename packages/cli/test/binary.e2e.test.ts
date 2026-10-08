@@ -37,7 +37,7 @@ async function lore(args: readonly string[]): Promise<Executed> {
 
 // The binary only exists after a build. Skipping silently would make a broken build look
 // like a passing suite, so the absence is asserted instead.
-describe('lore binary', () => {
+describe('lorepack binary', () => {
   it('has been built, which the rest of this suite depends on', () => {
     expect(
       existsSync(BIN),
@@ -61,7 +61,7 @@ describe('lore binary', () => {
     const result = await lore(['definitely-not-a-command']);
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
-    expect(result.stderr).toContain('lore --help');
+    expect(result.stderr).toContain('lorepack --help');
   });
 
   it('prints a failure exactly once', async () => {

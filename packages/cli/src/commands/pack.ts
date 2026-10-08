@@ -6,7 +6,7 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { packBuild } from '../services/packing.js';
 
 /**
- * `lore pack` writes a `.lorepack` archive: a standard, inspectable ZIP.
+ * `lorepack pack` writes a `.lorepack` archive: a standard, inspectable ZIP.
  *
  * Nothing about it is clever, and that is the feature. Section 22.3 promises no lock-in,
  * which only means something if a plain `unzip` can open the file without Lorepack.

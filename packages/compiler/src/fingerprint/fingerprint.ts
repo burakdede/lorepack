@@ -28,7 +28,7 @@ export interface SourceFingerprint {
    *
    * They belong here rather than at parse time because this stage decides what a build
    * contains. An exclusion decided later would leave the file counted as pending forever:
-   * `lore status` would report it dirty and `lore build` would report no changes (#165).
+   * `lorepack status` would report it dirty and `lorepack build` would report no changes (#165).
    */
   readonly warnings: readonly DiscoveryWarning[];
   readonly totalBytes: number;

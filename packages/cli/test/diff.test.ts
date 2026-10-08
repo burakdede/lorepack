@@ -202,7 +202,7 @@ describe('diff engine', () => {
   });
 });
 
-describe('lore diff', () => {
+describe('lorepack diff', () => {
   it('compares the previous build to the active one by default', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const first = await build(root);
@@ -298,7 +298,7 @@ describe('lore diff', () => {
 
   it('compares against the newer build after a rollback, instead of claiming there is one', async () => {
     // #176: the active build is the oldest after a rollback, so there is nothing after it
-    // in history. That was reported as "there is only one build" while `lore builds` listed
+    // in history. That was reported as "there is only one build" while `lorepack builds` listed
     // two, and the remediation asked the user to make a build that already existed.
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const first = await build(root);

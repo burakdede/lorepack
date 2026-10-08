@@ -22,7 +22,7 @@ async function runLore(
 }> {
   const stdout = new Capture();
   const stderr = new Capture();
-  const code = await runCli(['node', 'lore', '--cwd', cwd, ...argv], {
+  const code = await runCli(['node', 'lorepack', '--cwd', cwd, ...argv], {
     commands: registerCommands(),
     exitProcess: false,
     streams: {

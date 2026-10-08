@@ -23,7 +23,7 @@ body:
     id: actual
     attributes:
       label: Actual result
-      description: Include `lore inspect <path>` output and any parser warnings.
+      description: Include `lorepack inspect <path>` output and any parser warnings.
     validations: {required: true}
   - type: input
     id: platform
@@ -34,7 +34,7 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: lore doctor --json
+      label: lorepack doctor --json
       description: Paste the output if available.
       render: json
   - type: checkboxes

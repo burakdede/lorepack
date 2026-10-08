@@ -27,7 +27,7 @@ async function builtProject<T>(
   });
 }
 
-describe('lore inspect warnings', () => {
+describe('lorepack inspect warnings', () => {
   it('lists every exclusion grouped by class, with exact paths', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'warnings']);
@@ -67,7 +67,7 @@ describe('lore inspect warnings', () => {
  * `warnings` lists files the walk read and could not use; a file an ignore rule removed
  * produced no record at all, which is the more common reason a document is not in a build.
  */
-describe('lore inspect exclusions', () => {
+describe('lorepack inspect exclusions', () => {
   it('names the rule, where it came from, and what it took', async () => {
     await withTempProject(
       {
@@ -148,7 +148,7 @@ describe('lore inspect exclusions', () => {
   });
 });
 
-describe('lore inspect build', () => {
+describe('lorepack inspect build', () => {
   it('shows counts, capabilities, versions and canonical roots', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'build']);
@@ -168,7 +168,7 @@ describe('lore inspect build', () => {
   });
 });
 
-describe('lore inspect sources and artifacts', () => {
+describe('lorepack inspect sources and artifacts', () => {
   it('lists every indexed artifact with its parser and chunk count', async () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'sources']);
@@ -256,12 +256,12 @@ describe('lore inspect sources and artifacts', () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'nowhere/at/all.md']);
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('lore inspect sources');
+      expect(result.stderr).toContain('lorepack inspect sources');
     });
   });
 });
 
-describe('the node tree in `lore inspect <path>`', () => {
+describe('the node tree in `lorepack inspect <path>`', () => {
   // #149. `ordinal` is a node's position among its siblings, which is what node ids need
   // and is not a document position. Ordering by it across different parents put a
   // document's paragraphs ahead of the sections they belong to, and rendering depth from
@@ -402,7 +402,7 @@ const TABLE_CORPUS = {
   'people.csv': 'staff_id,name,zip,salary\n0007,Ada,02139,120000\n0008,Alan,00501,115000\n',
 };
 
-describe('lore inspect tables', () => {
+describe('lorepack inspect tables', () => {
   it('lists the tables with their row counts and source paths', async () => {
     await withTempProject({ files: TABLE_CORPUS }, async (temp) => {
       await runBuild({ config: loadConfig({ cwd: temp.root }), progress: new ProgressBus() });
@@ -458,7 +458,7 @@ describe('lore inspect tables', () => {
     await builtProject(async (_root, lore) => {
       const result = await lore(['inspect', 'tables', 'nope.csv']);
       expect(result.code).not.toBe(0);
-      expect(result.stderr).toContain('lore inspect tables');
+      expect(result.stderr).toContain('lorepack inspect tables');
     });
   });
 });

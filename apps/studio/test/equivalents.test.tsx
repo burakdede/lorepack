@@ -53,7 +53,7 @@ describe('a context request', () => {
     const forms = contextEquivalents(request, ORIGIN);
 
     expect(forms.cli).toBe(
-      "lore export --task 'what'\\''s our retention window' --profile agent --budget 8000",
+      "lorepack export --task 'what'\\''s our retention window' --profile agent --budget 8000",
     );
     expect(forms.http).toContain(`${ORIGIN}/v1/context`);
     expect(curlBody(forms.http)).toEqual(request);
@@ -62,7 +62,7 @@ describe('a context request', () => {
 
   it('passes no budget when the profile default was used', () => {
     const forms = contextEquivalents({ task: 'rollback', profile: 'chat' }, ORIGIN);
-    expect(forms.cli).toBe('lore export --task rollback --profile chat');
+    expect(forms.cli).toBe('lorepack export --task rollback --profile chat');
     expect(curlBody(forms.http)).toEqual({ task: 'rollback', profile: 'chat' });
   });
 });
@@ -70,7 +70,7 @@ describe('a context request', () => {
 describe('the other requests', () => {
   it('writes a search with its debug flag', () => {
     const forms = searchEquivalents({ query: 'roll back', debug: true }, ORIGIN);
-    expect(forms.cli).toBe("lore search 'roll back' --debug");
+    expect(forms.cli).toBe("lorepack search 'roll back' --debug");
     expect(curlBody(forms.http)).toEqual({ query: 'roll back', debug: true });
     expect(forms.mcp.name).toBe('lore_search');
   });

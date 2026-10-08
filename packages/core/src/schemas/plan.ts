@@ -58,7 +58,7 @@ export const deployTransferSchema = z
   })
   .strict();
 
-/** `lore plan` is side-effect free. This is what it returns with --json. */
+/** `lorepack plan` is side-effect free. This is what it returns with --json. */
 export const planSchema = z
   .object({
     formatVersion: z.literal(1),

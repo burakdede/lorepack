@@ -133,7 +133,7 @@ export class D1TableStore implements TableStore {
     const resolved = await this.#resolve(request.tableId);
     if (resolved === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {
-        remediation: 'Run `lore inspect tables` to see which tables this build contains.',
+        remediation: 'Run `lorepack inspect tables` to see which tables this build contains.',
         subject: request.tableId,
       });
     }

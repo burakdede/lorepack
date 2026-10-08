@@ -144,7 +144,7 @@ export function validateStatement(sql: string): ValidatedStatement {
     }
     throw refuse(
       `Only SELECT is allowed here, and this statement begins with ${keyword.toUpperCase()}.`,
-      'This surface is read-only by design: no model-facing tool may write, and nothing here can be made to. Use a SELECT, or `lore inspect tables` to see what a build contains.',
+      'This surface is read-only by design: no model-facing tool may write, and nothing here can be made to. Use a SELECT, or `lorepack inspect tables` to see what a build contains.',
     );
   }
   // `WITH ... INSERT` is a real SQLite statement and begins with an allowed keyword, so the

@@ -1,11 +1,11 @@
 # VS Code
 
-**Verified 2026-08-05 against VS Code 1.132.0** (commit `df53daab`), connecting to `lore mcp`
+**Verified 2026-08-05 against VS Code 1.132.0** (commit `df53daab`), connecting to `lorepack mcp`
 speaking MCP **2026-07-28**.
 
 ```bash
-lore dev ./project-context
-lore connect vscode
+lorepack dev ./project-context
+lorepack connect vscode
 ```
 
 The first command builds and serves; the second configures the workspace and then proves the
@@ -15,7 +15,7 @@ server answers.
 
 | Scope | File | When |
 |---|---|---|
-| workspace (default) | `<project>/.vscode/mcp.json` | `lore connect vscode` |
+| workspace (default) | `<project>/.vscode/mcp.json` | `lorepack connect vscode` |
 | user | `~/.config/Code/User/mcp.json`, and the platform equivalent | `--scope user`, never implied |
 
 The default is the workspace, and **`connect all` never writes the user profile**. A profile
@@ -29,11 +29,11 @@ knowingly rather than one you discover in a diff.
 ```jsonc
 {
 	"servers": {
-		// Managed by Lorepack. `lore disconnect vscode` removes exactly this entry.
+		// Managed by Lorepack. `lorepack disconnect vscode` removes exactly this entry.
 		// x-lorepack {"projectRoot":"/absolute/path","createdAt":"..."}
 		"lorepack": {
 			"type": "stdio",
-			"command": "lore",
+			"command": "lorepack",
 			"args": ["mcp", "--project", "/absolute/path", "--ensure-current"]
 		}
 	}
@@ -43,7 +43,7 @@ knowingly rather than one you discover in a diff.
 The top-level key is **`servers`**, not the Claude-style `mcpServers`. The wrong key produces
 a file VS Code ignores without a word, which looks exactly like a connect that worked.
 
-`--ensure-current` means a fresh clone works without a prior `lore build`.
+`--ensure-current` means a fresh clone works without a prior `lorepack build`.
 
 ### `sandboxEnabled` is deliberately not set
 
@@ -81,7 +81,7 @@ is a legal line and `JSON.parse` would refuse the whole file over it.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.
 - **A file that will not parse is refused**, not overwritten. So is one whose `servers` is not
   an object.
-- **The ownership comment marks what we created**, so `lore disconnect` removes exactly that.
+- **The ownership comment marks what we created**, so `lorepack disconnect` removes exactly that.
   A server called `lorepack` that you wrote yourself is left alone. It is a comment rather
   than a key because VS Code's schema for a server is `additionalProperties: false`, so an
   extra key would put a permanent error squiggle in a file we wrote.
@@ -92,7 +92,7 @@ line breaks.
 
 ## Verification, and the trust dialog
 
-`lore connect` spawns the server exactly as VS Code will, calls `server/discover` and
+`lorepack connect` spawns the server exactly as VS Code will, calls `server/discover` and
 `tools/list`, and reports which step failed if one does.
 
 VS Code then asks you to confirm you trust the server the first time it starts, and chat runs
@@ -116,12 +116,12 @@ record (working agreement §7).
 
 | Date | Client | What was driven, and what it proved |
 |---|---|---|
-| 2026-08-05 | VS Code 1.132.0 | A workspace with a hand-written `.vscode/mcp.json` holding two comments and another MCP server. `lore connect vscode` backed the file up, added the entry, and **kept both comments and left the other server without the `"type"` key `code --add-mcp` injects**. It reported `Verified: Answered with 7 tools on protocol 2026-07-28` plus the trust step. Re-running said `Update` and left exactly one entry and one ownership comment. VS Code's own CLI then read the file we wrote and extended it, returning `['lorepack', 'notes', 'probe']` with our entry intact. `lore disconnect vscode` left the file **byte for byte identical to the original**. |
+| 2026-08-05 | VS Code 1.132.0 | A workspace with a hand-written `.vscode/mcp.json` holding two comments and another MCP server. `lorepack connect vscode` backed the file up, added the entry, and **kept both comments and left the other server without the `"type"` key `code --add-mcp` injects**. It reported `Verified: Answered with 7 tools on protocol 2026-07-28` plus the trust step. Re-running said `Update` and left exactly one entry and one ownership comment. VS Code's own CLI then read the file we wrote and extended it, returning `['lorepack', 'notes', 'probe']` with our entry intact. `lorepack disconnect vscode` left the file **byte for byte identical to the original**. |
 
 ## Removing it
 
 ```bash
-lore disconnect vscode
+lorepack disconnect vscode
 ```
 
 Removes the Lorepack entry and leaves every other server, comment and setting where they were.
@@ -129,7 +129,7 @@ Removes the Lorepack entry and leaves every other server, comment and setting wh
 ## If your version is not supported
 
 ```bash
-lore connect vscode --snippet
+lorepack connect vscode --snippet
 ```
 
 prints the exact JSON to paste and changes nothing.
