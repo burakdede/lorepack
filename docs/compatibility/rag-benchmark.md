@@ -67,6 +67,23 @@ key and bearer values. The benchmark does not print model responses.
 Hosted numbers are provider-, model-, tokenizer-, prompt- and date-dependent. They must remain
 separate from offline and Lorepack rows, and a hosted result without those identities is invalid.
 
+## GitHub Actions
+
+The `Benchmark evidence` workflow runs the offline report on all three declared runner platforms.
+Pull requests use the small profile. Scheduled and manual runs use medium by default; large is
+available through explicit manual dispatch. The workflow uploads raw reports and a Markdown summary
+that keeps each platform row separate.
+
+To inspect a downloaded workflow artifact locally:
+
+```sh
+pnpm check:benchmark-artifacts ./benchmark-artifacts --summary summary.md
+```
+
+The provider-backed path is a separate manual dispatch option behind the `benchmark-hosted`
+environment. It requires the endpoint, model, tokenizer and API key secrets and is impossible in
+the default pull-request or scheduled profile.
+
 ## What this proves
 
 - The pipeline stages and their latency can be inspected independently.

@@ -19,7 +19,10 @@ import { buildAt, MANIFEST, WORKLOAD, writeProject } from './bench-corpus.mjs';
 import { matchesLocation } from './bench-quality.mjs';
 import { validateBenchmarkReport } from './benchmark-report.mjs';
 
-const PACKS = 40;
+const PACKS = Number(process.env.LORE_BENCH_PACKS ?? 40);
+const SCALE =
+  process.env.LORE_BENCH_SCALE ?? (PACKS === 1 ? 'small' : PACKS === 10 ? 'medium' : 'large');
+const PROFILE = process.env.LORE_BENCH_PROFILE ?? 'mixed';
 const SAMPLES = 3;
 const QUERY_ITERATIONS = 30;
 const CONTEXT_ITERATIONS = 20;
@@ -143,8 +146,8 @@ const baselineProcess = spawnSync(
         execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       manifestSha256: sha256(join(import.meta.dirname, '..', 'benchmarks/corpus/manifest.json')),
       workloadSha256: sha256(join(import.meta.dirname, '..', 'benchmarks/corpus/queries.json')),
-      scale: 'large',
-      profile: 'mixed',
+      scale: SCALE,
+      profile: PROFILE,
       artifacts: lorepack.built.counts.artifacts,
       bytes: lorepack.bytes,
       tables: lorepack.built.counts.tables,
@@ -207,8 +210,8 @@ const common = {
   commitSha,
   manifestSha256,
   workloadSha256,
-  scale: 'large',
-  profile: 'mixed',
+  scale: SCALE,
+  profile: PROFILE,
   artifacts: lorepack.built.counts.artifacts,
   bytes: lorepack.bytes,
   tables: lorepack.built.counts.tables,

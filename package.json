@@ -47,6 +47,7 @@
     "bench:rag": "pnpm build && node scripts/bench-rag.mjs",
     "bench:usefulness": "pnpm build && node scripts/bench-usefulness.mjs",
     "check:benchmark-protocol": "node scripts/check-benchmark-protocol.mjs",
+    "check:benchmark-artifacts": "node scripts/check-benchmark-artifacts.mjs",
     "bench:envelope": "pnpm build && node scripts/bench-envelope.mjs",
     "bench:cloudflare-projection": "pnpm build && node scripts/bench-cloudflare-projection.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",

@@ -1,0 +1,161 @@
+name: Benchmark evidence
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Corpus scale for this run
+        required: true
+        default: medium
+        type: choice
+        options: [small, medium, large]
+      hosted:
+        description: Run the provider-backed RAG smoke test
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.profile || 'small' }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.18.1'
+  BENCHMARK_PROFILE: ${{ github.event_name == 'pull_request' && 'small' || inputs.profile || 'medium' }}
+
+jobs:
+  benchmark:
+    name: benchmark (${{ matrix.os }}, ${{ github.event_name == 'pull_request' && 'small' || inputs.profile || 'medium' }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Select the declared corpus profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$BENCHMARK_PROFILE" in
+            small) packs=1 ;;
+            medium) packs=10 ;;
+            large) packs=40 ;;
+            *) echo "::error::Unknown benchmark profile $BENCHMARK_PROFILE"; exit 1 ;;
+          esac
+          {
+            echo "LORE_BENCH_PACKS=$packs"
+            echo "LORE_BENCH_SCALE=$BENCHMARK_PROFILE"
+            echo 'LORE_BENCH_PROFILE=mixed'
+          } >> "$GITHUB_ENV"
+
+      - name: Run Lorepack, FTS5 and offline RAG on the same inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          node scripts/bench-retrieval-comparison.mjs --out "benchmark-artifacts/comparison-${RUNNER_OS}.json"
+          node scripts/bench-rag.mjs --out "benchmark-artifacts/rag-${RUNNER_OS}.json"
+          node scripts/bench-usefulness.mjs --out "benchmark-artifacts/usefulness-${RUNNER_OS}.json"
+
+      - name: Validate and render this runner row
+        shell: bash
+        run: node scripts/check-benchmark-artifacts.mjs benchmark-artifacts --summary benchmark-artifacts/summary.md
+
+      - name: Upload raw benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ github.run_id }}-${{ matrix.os }}
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+  summary:
+    name: benchmark summary
+    if: ${{ needs.benchmark.result == 'success' }}
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download all runner rows
+        uses: actions/download-artifact@v8
+        with:
+          pattern: benchmark-${{ github.run_id }}-*
+          path: benchmark-artifacts
+          merge-multiple: true
+
+      - name: Validate and render the cross-platform report
+        run: node scripts/check-benchmark-artifacts.mjs benchmark-artifacts --summary benchmark-artifacts/summary.md
+
+      - name: Publish the comparison summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ github.run_id }}-summary
+          path: benchmark-artifacts/summary.md
+          if-no-files-found: error
+          retention-days: 90
+
+  hosted-rag:
+    name: hosted RAG smoke
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.hosted == true }}
+    environment: benchmark-hosted
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run the explicitly authorized hosted RAG profile
+        env:
+          LORE_BENCH_PACKS: 1
+          LORE_BENCH_SCALE: small
+          RAG_BENCH_MODE: hosted
+          RAG_BENCH_ENDPOINT: ${{ secrets.RAG_BENCH_ENDPOINT }}
+          RAG_BENCH_API_KEY: ${{ secrets.RAG_BENCH_API_KEY }}
+          RAG_BENCH_MODEL: ${{ secrets.RAG_BENCH_MODEL }}
+          RAG_BENCH_TOKENIZER: ${{ secrets.RAG_BENCH_TOKENIZER }}
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-hosted
+          node scripts/bench-rag.mjs --out benchmark-hosted/rag-hosted.json
+          node scripts/benchmark-report.mjs benchmark-hosted/rag-hosted.json
+      - name: Upload hosted report without model responses
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-${{ github.run_id }}-hosted-rag
+          path: benchmark-hosted/
+          if-no-files-found: error
+          retention-days: 30

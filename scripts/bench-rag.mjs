@@ -12,6 +12,10 @@ import { buildAt, WORKLOAD, writeProject } from './bench-corpus.mjs';
 import { validateBenchmarkReport } from './benchmark-report.mjs';
 
 const REPO = join(import.meta.dirname, '..');
+const PACKS = Number(process.env.LORE_BENCH_PACKS ?? 40);
+const SCALE =
+  process.env.LORE_BENCH_SCALE ?? (PACKS === 1 ? 'small' : PACKS === 10 ? 'medium' : 'large');
+const PROFILE = process.env.LORE_BENCH_PROFILE ?? 'mixed';
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -22,7 +26,7 @@ function outputPath() {
   return index === -1 ? undefined : process.argv[index + 1];
 }
 
-const project = writeProject(40);
+const project = writeProject(PACKS);
 try {
   const built = await buildAt(project.root);
   const buildDatabasePath = join(project.root, '.lore', 'builds', built.buildId, 'context.sqlite');
@@ -36,8 +40,8 @@ try {
     corpus: {
       manifestPath: 'benchmarks/corpus/manifest.json',
       manifestSha256: sha256(join(REPO, 'benchmarks/corpus/manifest.json')),
-      scale: 'large',
-      profile: 'mixed',
+      scale: SCALE,
+      profile: PROFILE,
       artifacts: built.counts.artifacts,
       bytes: project.bytes,
       chunks: built.counts.chunks,
