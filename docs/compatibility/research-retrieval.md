@@ -33,6 +33,13 @@ The shared corpus and workload are versioned in
 [`benchmarks/corpus/queries.json`](../../benchmarks/corpus/queries.json). The current evidence
 report is [`benchmark-evidence.md`](benchmark-evidence.md).
 
+The first safe-pruning prototype is recorded in
+[`benchmarks/research/safe-pruning-2026-10-08.json`](../../benchmarks/research/safe-pruning-2026-10-08.json).
+On the small profile it returned exact top-k IDs and scores for 15/15 queries and skipped 20.3%
+of postings, but its p95 was 5.54 ms versus 0.14 ms for exhaustive scoring. This is a valid
+correctness result and a negative speed result. It remains a research-only prototype and is not
+evidence that Lorepack currently beats SQLite FTS5.
+
 ## Research map and experiments
 
 ### BM25, BM25F and field-aware ranking
@@ -182,4 +189,3 @@ the only authority for a displayed number.
 
 Failed experiments remain in `benchmarks/research/` with their raw report and reason for rejection.
 No method is adopted by deleting a disappointing measurement.
-

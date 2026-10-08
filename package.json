@@ -46,6 +46,7 @@
     "bench:comparison": "pnpm build && node scripts/bench-retrieval-comparison.mjs",
     "bench:rag": "pnpm build && node scripts/bench-rag.mjs",
     "bench:usefulness": "pnpm build && node scripts/bench-usefulness.mjs",
+    "bench:research:pruning": "pnpm build && node scripts/research-safe-pruning.mjs",
     "check:benchmark-protocol": "node scripts/check-benchmark-protocol.mjs",
     "check:benchmark-artifacts": "node scripts/check-benchmark-artifacts.mjs",
     "render:benchmark-evidence": "node scripts/render-benchmark-evidence.mjs",

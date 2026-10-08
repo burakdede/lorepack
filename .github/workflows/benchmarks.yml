@@ -76,6 +76,7 @@ jobs:
           node scripts/bench-retrieval-comparison.mjs --out "benchmark-artifacts/comparison-${RUNNER_OS}.json"
           node scripts/bench-rag.mjs --out "benchmark-artifacts/rag-${RUNNER_OS}.json"
           node scripts/bench-usefulness.mjs --out "benchmark-artifacts/usefulness-${RUNNER_OS}.json"
+          node scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${RUNNER_OS}.json"
 
       - name: Validate and render this runner row
         shell: bash

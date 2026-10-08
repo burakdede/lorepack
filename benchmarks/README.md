@@ -79,3 +79,7 @@ reproducible fixture at [`benchmarks/usefulness/metrics-2026-10-08.json`](useful
 The independent evidence report combines the same-workload rows, usefulness metrics, claim ledger
 and clean-checkout review checklist:
 [`docs/compatibility/benchmark-evidence.md`](../docs/compatibility/benchmark-evidence.md).
+
+Research prototypes are kept separate from product claims. The current safe-pruning experiment and
+its exactness and negative-speed result are documented in
+[`docs/compatibility/research-retrieval.md`](../docs/compatibility/research-retrieval.md).
