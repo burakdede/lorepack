@@ -48,6 +48,11 @@ function collectReports(files) {
       const metrics = report.metrics;
       if (metrics?.rollback?.restored !== true || metrics?.rollback?.rebuildAvoided !== true)
         fail(`${relative(directory, path)} does not prove rollback recovery and rebuild avoidance`);
+      if (
+        metrics?.contextPlacement?.matched?.denominator === undefined ||
+        metrics.contextPlacement?.placementBuckets?.first?.denominator === undefined
+      )
+        fail(`${relative(directory, path)} has no context placement metric`);
       continue;
     }
     if (report.protocol?.name === 'lorepack-benchmark-evidence') {

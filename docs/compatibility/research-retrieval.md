@@ -43,6 +43,12 @@ overlap with the additive ranker. These are ranking comparisons, not semantic-qu
 The pruning result is a valid correctness result and a negative speed result. Both prototypes
 remain research-only and are not evidence that Lorepack currently beats SQLite FTS5.
 
+The usefulness report also records the position of matched expected citations in each bounded
+context bundle. First, middle and last buckets describe the current deterministic ordering only;
+missing citations are excluded. This is an offline placement metric inspired by Lost in the
+Middle, KILT and ARES. It does not measure attention, answer faithfulness, answer relevance or
+factual correctness.
+
 ## Research map and experiments
 
 ### BM25, BM25F and field-aware ranking

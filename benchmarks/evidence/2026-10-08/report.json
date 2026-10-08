@@ -129,6 +129,36 @@
         "diversity": 1542
       }
     },
+    "contextPlacement": {
+      "expectedLocations": 15,
+      "matched": {
+        "numerator": 15,
+        "denominator": 15,
+        "ratio": 1
+      },
+      "placementBuckets": {
+        "first": {
+          "numerator": 9,
+          "denominator": 15,
+          "ratio": 0.6
+        },
+        "middle": {
+          "numerator": 6,
+          "denominator": 15,
+          "ratio": 0.4
+        },
+        "last": {
+          "numerator": 0,
+          "denominator": 15,
+          "ratio": 0
+        }
+      },
+      "normalizedPositionP50": 0,
+      "excluded": {
+        "missing": 0,
+        "noCitations": 0
+      }
+    },
     "changeReview": {
       "added": {
         "numerator": 0,
@@ -288,6 +318,56 @@
         {
           "artifact": "usefulness.json",
           "pointer": "/metrics/rollback"
+        }
+      ],
+      "runner": "local",
+      "platform": "darwin",
+      "runnerArchitecture": "arm64"
+    },
+    {
+      "id": "lorepack-context-placement",
+      "statement": "The usefulness fixture records where matched expected citations appear in bounded context.",
+      "status": "measured",
+      "metric": "metrics.contextPlacement",
+      "denominator": "15 labelled context cases in the usefulness fixture",
+      "value": {
+        "expectedLocations": 15,
+        "matched": {
+          "numerator": 15,
+          "denominator": 15,
+          "ratio": 1
+        },
+        "placementBuckets": {
+          "first": {
+            "numerator": 9,
+            "denominator": 15,
+            "ratio": 0.6
+          },
+          "middle": {
+            "numerator": 6,
+            "denominator": 15,
+            "ratio": 0.4
+          },
+          "last": {
+            "numerator": 0,
+            "denominator": 15,
+            "ratio": 0
+          }
+        },
+        "normalizedPositionP50": 0,
+        "excluded": {
+          "missing": 0,
+          "noCitations": 0
+        }
+      },
+      "units": "counts, ratios and normalized citation position",
+      "owner": "Lorepack maintainers",
+      "expiresOn": null,
+      "retestWhen": "When the corpus, workload, ranking implementation, Node version or runner policy changes.",
+      "evidence": [
+        {
+          "artifact": "usefulness.json",
+          "pointer": "/metrics/contextPlacement"
         }
       ],
       "runner": "local",

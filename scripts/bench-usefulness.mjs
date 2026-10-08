@@ -14,6 +14,7 @@ import { matchesLocation } from './bench-quality.mjs';
 import {
   changeReviewWorkload,
   contextBudgetFit,
+  contextPlacement,
   expectedLocationCoverage,
   provenanceCoverage,
   rollbackEvidence,
@@ -119,6 +120,8 @@ try {
     definitions: {
       provenance: 'valid SourceLocator-bearing outputs divided by all outputs on each surface',
       expectedLocation: 'expected labelled locations cited divided by expected labelled locations',
+      contextPlacement:
+        'matched expected citations grouped by first, middle or last citation position',
       contextBudget: 'bundles within their declared budget, plus every omitted item and reason',
       changeReview: 'added, changed and removed source artifacts, warnings and context delta',
       rollback: 'pointer-change latency, active-build restoration and rebuilds performed',
@@ -135,6 +138,13 @@ try {
         hitAt5: expectedLocationCoverage(searchHitAt5, searchCases),
       },
       expectedLocation: expectedLocationCoverage(citedLocations, contextExpectedLocations),
+      contextPlacement: contextPlacement(
+        contextBundles,
+        WORKLOAD.qualityQueries
+          .filter((entry) => entry.kind !== 'search')
+          .map((entry) => entry.expected),
+        matchesLocation,
+      ),
       contextBudget: contextBudgetFit(contextBundles),
       changeReview: changeReviewWorkload({
         added: 0,
