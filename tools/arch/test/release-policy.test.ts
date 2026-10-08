@@ -201,6 +201,15 @@ describe('release policy', () => {
     expect(workflow).toContain('Use the merged commit as the existing release target');
     expect(workflow).toContain('existing $release_tag targets');
     expect(workflow).toContain('gh release upload "$release_tag"');
+    expect(workflow).toContain('scripts/publish-packages.mjs --tag');
+    expect(workflow).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
+  });
+
+  it('requires the publisher to request npm provenance and support retries', () => {
+    const publisher = readFileSync(join(REPO_ROOT, 'scripts', 'publish-packages.mjs'), 'utf8');
+    expect(publisher).toContain("['view', `${name}@${version}`, 'version', '--json']");
+    expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag, '--provenance']");
+    expect(publisher).toContain('cannot publish over the previously published version');
   });
 });
 
@@ -377,7 +386,11 @@ function releaseWorkflow(): string {
     'channel:',
     'performance_report_url:',
     'pnpm changeset version',
-    'pnpm changeset publish --tag',
+    'scripts/publish-packages.mjs --tag',
+    'NODE_AUTH_TOKEN',
+    'npm publish',
+    '--provenance',
+    'npm view',
     'NPM_TOKEN',
     'id-token: write',
     'check-runs',

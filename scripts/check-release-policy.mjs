@@ -50,8 +50,14 @@ if (!RELEASE.includes('performance_report_url:')) {
 if (!RELEASE.includes('pnpm changeset version')) {
   problems.push('release.yml must run pnpm changeset version');
 }
-if (!RELEASE.includes('pnpm changeset publish --tag')) {
-  problems.push('release.yml must publish with an explicit npm dist tag');
+if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
+  problems.push('release.yml must publish packages with an explicit npm dist tag');
+}
+if (!RELEASE.includes('NODE_AUTH_TOKEN')) {
+  problems.push('release.yml must pass the npm token to the publisher');
+}
+if (!RELEASE.includes('scripts/publish-packages.mjs')) {
+  problems.push('release.yml must use the tested npm publisher');
 }
 if (!RELEASE.includes('NPM_TOKEN')) problems.push('release.yml must use NPM_TOKEN for publish');
 if (!RELEASE.includes('Require npm publish token for real release')) {
