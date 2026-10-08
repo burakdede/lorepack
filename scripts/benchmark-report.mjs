@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 export const BENCHMARK_PROTOCOL_VERSION = 1;
 
 const HASH = /^[0-9a-f]{64}$/;
+const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const CLAIM_STATUSES = new Set(['measured', 'reported-only', 'quality-result', 'not-measured']);
 const TOKEN_STATUSES = new Set(['not-applicable', 'estimated', 'measured']);
 const PHASES = new Set([
@@ -37,6 +38,12 @@ function finiteNonNegative(value, path, problems) {
 function digest(value, path, problems) {
   if (typeof value !== 'string' || !HASH.test(value))
     problems.push(`${path} must be a lowercase SHA-256`);
+}
+
+function commitDigest(value, path, problems) {
+  if (typeof value !== 'string' || !COMMIT.test(value)) {
+    problems.push(`${path} must be a lowercase Git commit id`);
+  }
 }
 
 function unknownKeys(value, allowed, path, problems) {
@@ -142,6 +149,9 @@ export function validateBenchmarkReport(report) {
       'samples',
       'tokenAccounting',
       'measurements',
+      'quality',
+      'resources',
+      'configuration',
       'claims',
     ]),
     'report',
@@ -151,7 +161,7 @@ export function validateBenchmarkReport(report) {
   unknownKeys(report.implementation, new Set(['name', 'version']), 'implementation', problems);
   unknownKeys(
     report.environment,
-    new Set(['platform', 'arch', 'runner', 'node', 'cpu', 'storageClass']),
+    new Set(['platform', 'arch', 'runner', 'node', 'cpu', 'storageClass', 'sqlite']),
     'environment',
     problems,
   );
@@ -178,6 +188,19 @@ export function validateBenchmarkReport(report) {
   );
   unknownKeys(report.samples, new Set(['warmup', 'repetitions', 'timeoutMs']), 'samples', problems);
   unknownKeys(report.measurements, new Set(['phases']), 'measurements', problems);
+  unknownKeys(report.quality, new Set(['search', 'provenance', 'context']), 'quality', problems);
+  unknownKeys(
+    report.resources,
+    new Set(['indexBytes', 'peakRssMiB', 'topK']),
+    'resources',
+    problems,
+  );
+  unknownKeys(
+    report.configuration,
+    new Set(['tokenizer', 'ranking', 'columns', 'normalization', 'sourceBoundary']),
+    'configuration',
+    problems,
+  );
 
   if (report.protocol?.name !== 'lorepack-benchmark')
     problems.push('protocol.name must be lorepack-benchmark');
@@ -211,7 +234,7 @@ export function validateBenchmarkReport(report) {
     required(value, path, problems);
   }
 
-  digest(report.commitSha, 'commitSha', problems);
+  commitDigest(report.commitSha, 'commitSha', problems);
   if (typeof report.generatedAt !== 'string' || Number.isNaN(Date.parse(report.generatedAt))) {
     problems.push('generatedAt must be an ISO date-time');
   }

@@ -54,10 +54,11 @@ path-local text, so they are scale trend evidence rather than an industry corpus
 owns a same-workload retrieval comparison against an external baseline.
 
 The first comparison is deliberately a direct SQLite FTS5 index over the same normalized chunks:
-[`benchmarks/comparison/results-2026-10-04.json`](comparison/results-2026-10-04.json). It measures
-index-only cost separately from Lorepack's full build and labels the missing provenance, context,
-table and activation semantics. The interpretation is in
-[`docs/compatibility/retrieval-comparison-2026-10-04.md`](../docs/compatibility/retrieval-comparison-2026-10-04.md).
+[`benchmarks/comparison/results-2026-10-08.json`](comparison/results-2026-10-08.json). It measures
+index-only cost separately from Lorepack's full build, validates both implementation reports
+against benchmark protocol v1, and labels the missing context and activation semantics. The
+interpretation is in
+[`docs/compatibility/retrieval-comparison-2026-10-08.md`](../docs/compatibility/retrieval-comparison-2026-10-08.md).
 
 Retrieval quality is measured separately from latency. The 30-question labelled baseline and
 its limits are documented in
