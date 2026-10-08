@@ -70,3 +70,8 @@ does not claim answer quality. Reproduction instructions, provider configuration
 report are in
 [`docs/compatibility/rag-benchmark.md`](../docs/compatibility/rag-benchmark.md) and
 [`benchmarks/rag/offline-2026-10-08.json`](rag/offline-2026-10-08.json).
+
+Usefulness metrics for provenance, expected-location coverage, context budgets, omission reasons,
+change review and rollback are defined in
+[`docs/compatibility/usefulness-metrics.md`](../docs/compatibility/usefulness-metrics.md), with a
+reproducible fixture at [`benchmarks/usefulness/metrics-2026-10-08.json`](usefulness/metrics-2026-10-08.json).
