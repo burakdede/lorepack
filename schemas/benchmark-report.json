@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lorepack.dev/schemas/benchmark-report-v1.json",
+  "title": "Lorepack Benchmark Report v1",
+  "description": "Comparable, reproducible measurements for one benchmark implementation.",
+  "type": "object",
+  "required": ["protocol", "reportId", "generatedAt", "commitSha", "implementation", "environment", "corpus", "workload", "samples", "tokenAccounting", "measurements", "claims"],
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {"name": {"const": "lorepack-benchmark"}, "version": {"const": 1}},
+      "additionalProperties": false
+    },
+    "reportId": {"type": "string", "minLength": 1},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "commitSha": {"$ref": "#/$defs/sha256"},
+    "implementation": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {"name": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "arch", "runner", "node", "cpu", "storageClass"],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "arch": {"type": "string", "minLength": 1},
+        "runner": {"type": "string", "minLength": 1},
+        "node": {"type": "string", "minLength": 1},
+        "cpu": {"type": "string", "minLength": 1},
+        "storageClass": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "corpus": {
+      "type": "object",
+      "required": ["manifestPath", "manifestSha256", "scale", "profile", "artifacts", "bytes", "chunks", "tables"],
+      "properties": {
+        "manifestPath": {"type": "string", "minLength": 1},
+        "manifestSha256": {"$ref": "#/$defs/sha256"},
+        "scale": {"enum": ["small", "medium", "large", "envelope"]},
+        "profile": {"type": "string", "minLength": 1},
+        "artifacts": {"$ref": "#/$defs/nonNegativeInteger"},
+        "bytes": {"$ref": "#/$defs/nonNegativeInteger"},
+        "chunks": {"$ref": "#/$defs/nonNegativeInteger"},
+        "tables": {"$ref": "#/$defs/nonNegativeInteger"}
+      },
+      "additionalProperties": false
+    },
+    "workload": {
+      "type": "object",
+      "required": ["path", "sha256", "queryCount", "contextTaskCount", "tableQueryCount"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "queryCount": {"$ref": "#/$defs/nonNegativeInteger"},
+        "contextTaskCount": {"$ref": "#/$defs/nonNegativeInteger"},
+        "tableQueryCount": {"$ref": "#/$defs/nonNegativeInteger"}
+      },
+      "additionalProperties": false
+    },
+    "samples": {
+      "type": "object",
+      "required": ["warmup", "repetitions", "timeoutMs"],
+      "properties": {
+        "warmup": {"$ref": "#/$defs/nonNegativeInteger"},
+        "repetitions": {"type": "integer", "minimum": 1},
+        "timeoutMs": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "tokenAccounting": {"$ref": "#/$defs/tokenAccounting"},
+    "measurements": {
+      "type": "object",
+      "required": ["phases"],
+      "properties": {"phases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/phase"}}},
+      "additionalProperties": false
+    },
+    "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "phase": {
+      "type": "object",
+      "required": ["name", "p50Ms", "p95Ms", "samples", "errorCount"],
+      "properties": {
+        "name": {"enum": ["ingest", "build", "incremental-rebuild", "index-build", "index-warmup", "cold-query", "warm-query", "context-assembly", "table-query", "model-generation"]},
+        "p50Ms": {"type": "number", "minimum": 0},
+        "p95Ms": {"type": "number", "minimum": 0},
+        "samples": {"type": "integer", "minimum": 1},
+        "errorCount": {"$ref": "#/$defs/nonNegativeInteger"}
+      },
+      "additionalProperties": false
+    },
+    "tokenAccounting": {
+      "type": "object",
+      "required": ["status", "tokenizer", "model", "inputTokens", "retrievedContextTokens", "promptTokens", "completionTokens", "totalTokens"],
+      "properties": {
+        "status": {"enum": ["not-applicable", "estimated", "measured"]},
+        "tokenizer": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "inputTokens": {"type": ["integer", "null"], "minimum": 0},
+        "retrievedContextTokens": {"type": ["integer", "null"], "minimum": 0},
+        "promptTokens": {"type": ["integer", "null"], "minimum": 0},
+        "completionTokens": {"type": ["integer", "null"], "minimum": 0},
+        "totalTokens": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "claim": {
+      "type": "object",
+      "required": ["id", "status", "statement", "evidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "status": {"enum": ["measured", "reported-only", "quality-result", "not-measured"]},
+        "statement": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
