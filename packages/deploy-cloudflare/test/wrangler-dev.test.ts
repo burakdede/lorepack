@@ -51,6 +51,7 @@ const MANIFEST: BuildManifest = {
 
 let persistTo = '';
 let schemaFile = '';
+let tableSchemaFile = '';
 let objectFile = '';
 let worker: Unstable_DevWorker | null = null;
 
@@ -79,6 +80,7 @@ async function decodeMcp(response: Response): Promise<Record<string, unknown>> {
 beforeAll(async () => {
   persistTo = mkdtempSync(join(tmpdir(), 'lore-wrangler-'));
   schemaFile = join(persistTo, 'seed.sql');
+  tableSchemaFile = join(persistTo, 'table-seed.sql');
   objectFile = join(persistTo, 'rollback.md');
 
   writeFileSync(
@@ -239,6 +241,14 @@ VALUES
 `,
   );
   writeFileSync(objectFile, OBJECT_BODY);
+  writeFileSync(
+    tableSchemaFile,
+    `CREATE TABLE ${TABLE_SQL} (c_0_sku TEXT NOT NULL, c_1_price INTEGER NOT NULL);
+INSERT INTO ${TABLE_SQL} (c_0_sku, c_1_price) VALUES ('SKU-1', 10), ('SKU-2', 20);
+CREATE TABLE ${CANDIDATE_TABLE_SQL} (c_0_sku TEXT NOT NULL, c_1_price INTEGER NOT NULL);
+INSERT INTO ${CANDIDATE_TABLE_SQL} (c_0_sku, c_1_price) VALUES ('SKU-C', 99);
+`,
+  );
 
   runWrangler([
     'd1',
@@ -251,6 +261,18 @@ VALUES
     persistTo,
     '--file',
     schemaFile,
+  ]);
+  runWrangler([
+    'd1',
+    'execute',
+    'lorepack-tables',
+    '--local',
+    '--config',
+    CONFIG,
+    '--persist-to',
+    persistTo,
+    '--file',
+    tableSchemaFile,
   ]);
   runWrangler([
     'r2',

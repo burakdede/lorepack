@@ -46,6 +46,7 @@ function fakeTarget(
           resourceLines: [
             '= Worker deployed-runtime',
             '= D1 deployed-catalog',
+            '= D1 tables deployed-tables',
             '= R2 deployed-objects',
           ],
           projectionLines: [
@@ -134,6 +135,7 @@ function writeCloudflareReceipt(
         accountId: 'acc-1',
         workerName: 'deployed-runtime',
         catalogDatabaseName: 'deployed-catalog',
+        tablesDatabaseName: 'deployed-tables',
         objectsBucketName: 'deployed-objects',
         capabilities: ['lexical-search', 'structured-context', 'table-query'],
         ...overrides,
@@ -156,7 +158,7 @@ function fakeCloudflareAdapter(
       accountId: 'acc-1',
       accountName: 'Example',
     }),
-    listDatabases: async () => [{ name: 'deployed-catalog' }],
+    listDatabases: async () => [{ name: 'deployed-catalog' }, { name: 'deployed-tables' }],
     openCatalogDatabase: () => ({
       prepare: () => ({
         bind() {
@@ -167,6 +169,16 @@ function fakeCloudflareAdapter(
         },
         async first() {
           return null;
+        },
+      }),
+    }),
+    openTablesDatabase: () => ({
+      prepare: () => ({
+        bind() {
+          return this;
+        },
+        async run() {
+          return {};
         },
       }),
     }),
@@ -517,6 +529,7 @@ describe('lorepack deploy command, issue 91', () => {
             'Resources',
             '  = Worker deployed-runtime',
             '  = D1 deployed-catalog',
+            '  = D1 tables deployed-tables',
             '  = R2 deployed-objects',
             '',
             'Projection',
@@ -644,7 +657,10 @@ describe('lorepack deploy command, issue 91', () => {
             commands: [
               deployCommand({
                 cloudflareAdapter: fakeCloudflareAdapter({
-                  listDatabases: async () => [{ name: 'deployed-catalog' }],
+                  listDatabases: async () => [
+                    { name: 'deployed-catalog' },
+                    { name: 'deployed-tables' },
+                  ],
                 }),
               }),
             ],

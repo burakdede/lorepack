@@ -82,16 +82,22 @@ WHERE project_id = ? AND build_id = ? AND table_id = ?
 ORDER BY ordinal`;
 
 export class D1TableStore implements TableStore {
-  readonly #db: D1QueryDatabaseLike;
+  readonly #catalogDb: D1QueryDatabaseLike;
+  readonly #queryDb: D1QueryDatabaseLike;
   readonly #namespace: D1TableNamespace;
 
-  constructor(db: D1QueryDatabaseLike, namespace: D1TableNamespace) {
-    this.#db = db;
+  constructor(
+    catalogDb: D1QueryDatabaseLike,
+    namespace: D1TableNamespace,
+    queryDb: D1QueryDatabaseLike = catalogDb,
+  ) {
+    this.#catalogDb = catalogDb;
+    this.#queryDb = queryDb;
     this.#namespace = namespace;
   }
 
   async list(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
-    const rows = await this.#run<{ id: string; name: string }>(LIST_TABLES_QUERY, [
+    const rows = await this.#run<{ id: string; name: string }>(this.#catalogDb, LIST_TABLES_QUERY, [
       this.#namespace.projectId,
       this.#namespace.buildId,
     ]);
@@ -107,6 +113,7 @@ export class D1TableStore implements TableStore {
       selected.length === 0
         ? []
         : await this.#run<Record<string, unknown>>(
+            this.#queryDb,
             `SELECT ${selected.join(', ')} FROM ${assertIdentifier(resolved.table.sql_name)} LIMIT ?`,
             [DESCRIBE_SAMPLE_ROWS],
           );
@@ -157,6 +164,7 @@ export class D1TableStore implements TableStore {
     let rows: readonly Record<string, unknown>[];
     try {
       rows = await this.#run<Record<string, unknown>>(
+        this.#queryDb,
         `SELECT * FROM (\n${sql}\n) LIMIT ${String(limit + 1)}`,
       );
     } catch {
@@ -199,7 +207,10 @@ export class D1TableStore implements TableStore {
   /** Every object name in the database, read fresh. Failing to read them refuses the query. */
   async #schemaNames(): Promise<readonly string[]> {
     try {
-      const rows = await this.#run<{ name: string }>('SELECT name FROM sqlite_master');
+      const rows = await this.#run<{ name: string }>(
+        this.#queryDb,
+        'SELECT name FROM sqlite_master',
+      );
       return rows.map((row) => row.name);
     } catch {
       throw new LoreError(
@@ -216,7 +227,7 @@ export class D1TableStore implements TableStore {
     tableId: string,
   ): Promise<{ readonly table: TableRow; readonly columns: readonly ColumnRow[] } | null> {
     const table = (
-      await this.#run<TableRow>(RESOLVE_TABLE_QUERY, [
+      await this.#run<TableRow>(this.#catalogDb, RESOLVE_TABLE_QUERY, [
         this.#namespace.projectId,
         this.#namespace.buildId,
         tableId,
@@ -224,7 +235,7 @@ export class D1TableStore implements TableStore {
     )[0];
     if (table === undefined) return null;
 
-    const columns = await this.#run<ColumnRow>(TABLE_COLUMNS_QUERY, [
+    const columns = await this.#run<ColumnRow>(this.#catalogDb, TABLE_COLUMNS_QUERY, [
       this.#namespace.projectId,
       this.#namespace.buildId,
       tableId,
@@ -232,8 +243,12 @@ export class D1TableStore implements TableStore {
     return { table, columns };
   }
 
-  async #run<T>(query: string, bindings: readonly unknown[] = []): Promise<readonly T[]> {
-    const result = await this.#db
+  async #run<T>(
+    db: D1QueryDatabaseLike,
+    query: string,
+    bindings: readonly unknown[] = [],
+  ): Promise<readonly T[]> {
+    const result = await db
       .prepare(query)
       .bind(...bindings)
       .run<T>();

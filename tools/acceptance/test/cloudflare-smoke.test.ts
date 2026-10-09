@@ -98,6 +98,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
           accountId: 'acc-1',
           workerName: 'cloudflare-acceptance-runtime',
           catalogDatabaseName: 'cloudflare-acceptance-catalog',
+          tablesDatabaseName: 'cloudflare-acceptance-tables',
           objectsBucketName: 'cloudflare-acceptance-objects',
         }),
       ),
@@ -105,6 +106,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
       accountId: 'acc-1',
       workerName: 'cloudflare-acceptance-runtime',
       catalogDatabaseName: 'cloudflare-acceptance-catalog',
+      tablesDatabaseName: 'cloudflare-acceptance-tables',
       objectsBucketName: 'cloudflare-acceptance-objects',
     });
   });

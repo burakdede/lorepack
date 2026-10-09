@@ -40,6 +40,7 @@ interface BuildColumnRow {
 
 export interface ProjectTableDataOptions {
   readonly db: ProjectionMigrationDatabaseLike;
+  readonly metadataDb?: ProjectionMigrationDatabaseLike;
   readonly projectId: string;
   readonly buildId: string;
   readonly buildDirectory: string;
@@ -99,6 +100,8 @@ export async function projectTableData(
   options: ProjectTableDataOptions,
 ): Promise<ProjectTableDataResult> {
   const writeOptions = projectionWriteOptions(options);
+  const tableDb = options.db;
+  const metadataDb = options.metadataDb ?? tableDb;
   const buildDatabase = openBuildDatabase(options.buildDirectory);
 
   try {
@@ -111,9 +114,10 @@ export async function projectTableData(
       columnsByTable.set(column.table_id, existing);
     }
 
-    await options.db.prepare('BEGIN IMMEDIATE').run();
+    await metadataDb.prepare('BEGIN IMMEDIATE').run();
+    if (tableDb !== metadataDb) await tableDb.prepare('BEGIN IMMEDIATE').run();
     try {
-      const previous = await options.db
+      const previous = await metadataDb
         .prepare(LOOKUP_PROJECTED_SQL_NAMES)
         .bind(options.projectId, options.buildId)
         .run<{ sql_name: string }>();
@@ -122,7 +126,7 @@ export async function projectTableData(
       );
       for (const row of previous.results ?? []) {
         await runProjectionBatch(
-          options.db,
+          tableDb,
           `DROP TABLE IF EXISTS ${assertIdentifier(row.sql_name)}`,
           [],
           writeOptions,
@@ -131,7 +135,7 @@ export async function projectTableData(
         );
       }
       await runProjectionBatch(
-        options.db,
+        metadataDb,
         DELETE_PROJECTED_COLUMNS,
         [options.projectId, options.buildId],
         writeOptions,
@@ -139,7 +143,7 @@ export async function projectTableData(
         'delete projected table columns',
       );
       await runProjectionBatch(
-        options.db,
+        metadataDb,
         DELETE_PROJECTED_TABLES,
         [options.projectId, options.buildId],
         writeOptions,
@@ -151,16 +155,10 @@ export async function projectTableData(
       for (const table of tables) {
         const projectedSqlName = projectedSqlNameFor(options.buildId, table.id, table.sql_name);
         const tableColumns = columnsByTable.get(table.id) ?? [];
-        await createPhysicalTable(
-          options.db,
-          projectedSqlName,
-          tableColumns,
-          writeOptions,
-          progress,
-        );
+        await createPhysicalTable(tableDb, projectedSqlName, tableColumns, writeOptions, progress);
         projectedRows += await copyRows(
           buildDatabase,
-          options.db,
+          tableDb,
           table.sql_name,
           projectedSqlName,
           tableColumns,
@@ -169,7 +167,7 @@ export async function projectTableData(
         );
 
         await runProjectionBatch(
-          options.db,
+          metadataDb,
           INSERT_PROJECTED_TABLE,
           [
             table.id,
@@ -193,7 +191,7 @@ export async function projectTableData(
 
         for (const column of tableColumns) {
           await runProjectionBatch(
-            options.db,
+            metadataDb,
             INSERT_PROJECTED_COLUMN,
             [
               options.projectId,
@@ -217,10 +215,12 @@ export async function projectTableData(
         }
       }
 
-      await options.db.prepare('COMMIT').run();
+      await metadataDb.prepare('COMMIT').run();
+      if (tableDb !== metadataDb) await tableDb.prepare('COMMIT').run();
       return { projectedTables: tables.length, projectedRows };
     } catch (cause) {
-      await options.db.prepare('ROLLBACK').run();
+      await metadataDb.prepare('ROLLBACK').run();
+      if (tableDb !== metadataDb) await tableDb.prepare('ROLLBACK').run();
       throw cause;
     }
   } finally {

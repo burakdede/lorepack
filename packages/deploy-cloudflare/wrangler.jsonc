@@ -14,6 +14,13 @@
       "database_id": "00000000-0000-0000-0000-000000000000",
       "preview_database_id": "lorepack-catalog-local",
       "remote": false
+    },
+    {
+      "binding": "TABLES_DB",
+      "database_name": "lorepack-tables",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "preview_database_id": "lorepack-tables-local",
+      "remote": false
     }
   ],
   "r2_buckets": [

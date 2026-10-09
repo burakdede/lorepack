@@ -348,6 +348,7 @@ lorepack target <subject> <target>
 | `--account-id <id>` | connect to an existing Cloudflare account id |
 | `--worker <name>` | connect to an existing Worker name |
 | `--catalog-db <name>` | connect to an existing D1 database name |
+| `--tables-db <name>` | connect to the isolated table D1 database name |
 | `--objects-bucket <name>` | connect to an existing R2 bucket name |
 
 ## `lorepack connect`

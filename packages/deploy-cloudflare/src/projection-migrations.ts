@@ -222,6 +222,15 @@ export const PROJECTION_MIGRATIONS: readonly ProjectionMigration[] =
 
 export { PROJECTION_SCHEMA_VERSION };
 
+const TABLE_PROJECTION_MIGRATIONS: readonly ProjectionMigration[] = [
+  {
+    id: '0001-table-data',
+    name: 'table-data-isolation',
+    statements: [],
+    checksum: createHash('sha256').update('table-data-isolation').digest('hex'),
+  },
+];
+
 export async function runProjectionMigrations(
   db: ProjectionMigrationDatabaseLike,
   now: () => string = () => new Date().toISOString(),
@@ -258,4 +267,31 @@ export async function runProjectionMigrations(
   }
 
   return { applied, alreadyApplied };
+}
+
+export async function runTableProjectionMigrations(
+  db: ProjectionMigrationDatabaseLike,
+  now: () => string = () => new Date().toISOString(),
+): Promise<ProjectionMigrationResult> {
+  await db.prepare(SCHEMA_MIGRATIONS_TABLE).run();
+  const existingRows = await db
+    .prepare('SELECT id, checksum FROM schema_migrations ORDER BY id')
+    .run<AppliedMigrationRow>();
+  const existing = new Map((existingRows.results ?? []).map((row) => [row.id, row.checksum]));
+  const migration = TABLE_PROJECTION_MIGRATIONS[0];
+  if (migration === undefined) return { applied: [], alreadyApplied: [] };
+  const previous = existing.get(migration.id);
+  if (previous !== undefined) {
+    if (previous !== migration.checksum) {
+      throw new Error(
+        `Projection migration ${migration.id}_${migration.name} changed after it was applied.`,
+      );
+    }
+    return { applied: [], alreadyApplied: [migration.id] };
+  }
+  await db
+    .prepare('INSERT INTO schema_migrations (id, name, checksum, applied_at) VALUES (?, ?, ?, ?)')
+    .bind(migration.id, migration.name, migration.checksum, now())
+    .run();
+  return { applied: [migration.id], alreadyApplied: [] };
 }

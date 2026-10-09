@@ -395,6 +395,41 @@ describe('projectTableData, issue 258', () => {
     });
   });
 
+  it('projects metadata into the catalog and physical rows into the table database', async () => {
+    const buildDirectory = makeBuildDirectory(BUILD_A, 3);
+    const catalogProjection = new DatabaseSync(':memory:');
+    const tableProjection = new DatabaseSync(':memory:');
+    databases.push(catalogProjection, tableProjection);
+    const catalogDb = new SqliteProjectionDatabase(catalogProjection);
+    const tableDb = new SqliteProjectionDatabase(tableProjection);
+    await runProjectionMigrations(catalogDb, () => '2026-08-08T12:00:00.000Z');
+
+    await projectTableData({
+      db: tableDb,
+      metadataDb: catalogDb,
+      projectId: PROJECT,
+      buildId: BUILD_A,
+      buildDirectory,
+    });
+
+    const store = new D1TableStore(catalogDb, { projectId: PROJECT, buildId: BUILD_A }, tableDb);
+    const description = await store.describe(TABLE_ID);
+    expect(description?.rowCount).toBe(3);
+    expect(
+      catalogProjection
+        .prepare("SELECT name FROM sqlite_master WHERE name LIKE 't_products_%'")
+        .all(),
+    ).toEqual([]);
+    expect(
+      tableProjection
+        .prepare("SELECT name FROM sqlite_master WHERE name LIKE 't_products_%'")
+        .all(),
+    ).toHaveLength(1);
+    expect(
+      tableProjection.prepare("SELECT name FROM sqlite_master WHERE name = 'runtime_tokens'").all(),
+    ).toEqual([]);
+  });
+
   it('keeps two projected builds mechanically queryable without sharing physical tables', async () => {
     const buildA = makeBuildDirectory(BUILD_A, 3);
     const buildB = makeBuildDirectory(BUILD_B, 2);

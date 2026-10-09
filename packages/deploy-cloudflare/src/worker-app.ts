@@ -47,6 +47,7 @@ export interface CloudflareWorkerApp {
 
 export interface CloudflareBindings {
   readonly CATALOG_DB: D1DatabaseLike & D1CatalogDatabaseLike & D1QueryDatabaseLike;
+  readonly TABLES_DB: D1QueryDatabaseLike;
   readonly OBJECTS: R2BucketLike;
   readonly PROJECT_ID: string;
   readonly ALLOWED_ORIGINS?: string;
@@ -148,7 +149,7 @@ export function createCloudflareWorkerFromBindings(
           db: bindings.CATALOG_DB,
           namespace,
         }),
-        tables: new D1TableStore(bindings.CATALOG_DB, namespace),
+        tables: new D1TableStore(bindings.CATALOG_DB, namespace, bindings.TABLES_DB),
         objects: new R2ObjectStore(bindings.PROJECT_ID, bindings.OBJECTS),
       };
     },
