@@ -60,6 +60,15 @@ beforeEach(() => {
 });
 
 describe('createMcpHttpHandler', () => {
+  it('configures loopback Host validation when the listener binds all interfaces', () => {
+    createMcpHttpHandler({} as never);
+
+    expect(createMcpHonoApp).toHaveBeenCalledWith({
+      host: '0.0.0.0',
+      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+    });
+  });
+
   it('forwards the mounted /mcp request object unchanged, so request abort reaches the SDK', async () => {
     const handler = createMcpHttpHandler({} as never);
     const controller = new AbortController();

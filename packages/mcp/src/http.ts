@@ -23,7 +23,10 @@ export function createMcpHttpHandler(
   const handler = createMcpHandler(() =>
     createMcpServer({ runtime, ...(comparer === undefined ? {} : { comparer }) }),
   );
-  const app = createMcpHonoApp({ host: '0.0.0.0' });
+  const app = createMcpHonoApp({
+    host: '0.0.0.0',
+    allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+  });
   app.all('/mcp', (context) => {
     const parsedBody = (context.get as (key: string) => unknown)('parsedBody');
     return handler.fetch(context.req.raw, { parsedBody });
