@@ -82,6 +82,7 @@ families:
 | Step | What happens | Commands |
 |---|---|---|
 | Start | Preview, build and activate an immutable version | `lorepack plan`, `lorepack build` |
+| Verify | Compile and validate a candidate without moving the active pointer | `lorepack validate` |
 | Change | Edit a source and see exactly what will rebuild | `lorepack plan` |
 | Recover | Compare builds, and move the active pointer back without recompiling | `lorepack diff`, `lorepack rollback` |
 | Deploy | Produce and verify a portable artifact, then project it remotely | `lorepack pack`, `lorepack target add cloudflare`, `lorepack deploy cloudflare` |

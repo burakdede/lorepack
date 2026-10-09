@@ -19,6 +19,7 @@ import { searchCommand } from './search.js';
 import { serveCommand } from './serve.js';
 import { statusCommand } from './status.js';
 import { targetCommand } from './target.js';
+import { validateCommand } from './validate.js';
 
 /**
  * Commands are registered explicitly. No dynamic discovery: architecture section 4.8
@@ -30,6 +31,7 @@ export function registerCommands(): CommandDefinition[] {
     initCommand(),
     planCommand(),
     buildCommand(),
+    validateCommand(),
     statusCommand(),
     diffCommand(),
     searchCommand(),

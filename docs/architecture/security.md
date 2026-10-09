@@ -79,7 +79,7 @@ of the boundary:
 | An XML entity expansion (billion laughs) | Refused: a DOCTYPE is rejected outright |
 | An external entity naming `file:///etc/passwd` | The same |
 | An encrypted PDF | Refused, saying it is encrypted |
-| A PDF with no text layer | A warning, and it contributes nothing. OCR is out of scope |
+| A PDF with no text layer | The build is refused with an OCR remediation; the active build is unchanged |
 | A file whose bytes are not readable text | Excluded at fingerprinting, with a warning |
 | A table past a column or row limit | Excluded with a warning; the build succeeds (#242) |
 

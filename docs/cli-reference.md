@@ -76,6 +76,25 @@ None.
 | `--frozen` | fail if lore.lock would change |
 | `--allow-large-project` | continue past the supported file count |
 
+## `lorepack validate`
+
+Compile and validate a candidate without activating it.
+
+```text
+lorepack validate
+```
+
+### Arguments
+
+None.
+
+### Flags
+
+| Name | Description |
+|---|---|
+| `--frozen` | fail if lore.lock would change |
+| `--allow-large-project` | continue past the supported file count |
+
 ## `lorepack status`
 
 Report whether the active build still matches the sources.

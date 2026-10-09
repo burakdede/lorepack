@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lorepack` binary. The automa
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-56 automated, 4 checked by hand.
+57 automated, 4 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -190,7 +190,7 @@ Starting point: 3 source files, already set up with `lorepack init` and `lorepac
 
 ## The lifecycle
 
-plan, build, status, search, inspect, diff, activate, rollback.
+plan, build, validate, status, search, inspect, diff, activate, rollback.
 
 ### `lifecycle/plan-predicts-the-build`
 
@@ -222,6 +222,23 @@ Starting point: 3 source files, already set up with `lorepack init` and `lorepac
    Expect: it exits 2.
 4. Run `lorepack build` with `--json`.
    Expect: it succeeds, `reusedArtifacts` is 2, `rebuiltArtifacts` is 1, `created` is true.
+
+### `lifecycle/validate-then-activate`
+
+**A candidate can be validated before its pointer moves**
+
+Proves: The release lifecycle keeps compilation, validation and activation separate and explicit.
+
+Starting point: 3 source files, already set up with `lorepack init`.
+
+1. Run `lorepack build --no-activate` with `--json`.
+   Expect: it succeeds, `created` is true, `activated` is false.
+2. Run `lorepack validate` with `--json`.
+   Expect: it succeeds, `buildId` is the candidate build, `created` is false, `activated` is false.
+3. Run `lorepack activate {{candidate}}`.
+   Expect: it succeeds.
+4. Run `lorepack status` with `--json`.
+   Expect: it succeeds, `sourceState` is "clean", `activeBuildId` is the candidate build.
 
 ### `lifecycle/diff-reads-builds-not-sources`
 
@@ -777,7 +794,7 @@ Proves: Section 4.8: the command set is explicit, so a lost command is visible.
 Starting point: an empty directory.
 
 1. Run `lorepack --help`.
-   Expect: it succeeds, stdout mentions "init", "plan", "build", "status", "diff", "search", "inspect", "pack", "builds", "activate", "rollback", "prune".
+   Expect: it succeeds, stdout mentions "init", "plan", "build", "validate", "status", "diff", "search", "inspect", "pack", "builds", "activate", "rollback", "prune".
 
 ### `output/a-failure-names-something-that-exists`
 

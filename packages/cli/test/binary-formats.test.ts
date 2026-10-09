@@ -13,6 +13,7 @@ import {
 } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { readActiveBuild } from '../src/services/project.js';
 
 /**
  * Binary formats, driven through a real build rather than through their parsers.
@@ -130,6 +131,31 @@ describe('a binary format reaches its parser', () => {
       expect(result.counts.artifacts).toBe(1);
       expect(manifest.warnings.some((warning) => warning.path === 'broken.md')).toBe(true);
     });
+  });
+
+  it('refuses a fully scanned PDF and keeps the active build unchanged', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'notes.md': '# Kept\n\nExisting context.\n' } },
+      async (temp) => {
+        const config = loadConfig({ cwd: temp.root });
+        const first = await runBuild({ config, progress: new ProgressBus() });
+        writeFileSync(
+          join(temp.root, 'scanned.pdf'),
+          makePdf([
+            { lines: [], image: true },
+            { lines: [], image: true },
+          ]),
+        );
+
+        await expect(runBuild({ config, progress: new ProgressBus() })).rejects.toMatchObject({
+          code: 'LORE_E_UNSUPPORTED_FORMAT',
+          message: expect.stringContaining('no text layer'),
+          remediation: expect.stringContaining('Optical character recognition is out of scope'),
+        });
+
+        expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(first.buildId);
+      },
+    );
   });
 });
 

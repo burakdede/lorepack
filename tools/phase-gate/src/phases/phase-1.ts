@@ -60,7 +60,7 @@ export const PHASE_1: PhaseDefinition = {
       id: 'command-set',
       kind: 'exports',
       promise:
-        'The binary still exposes init, plan, build, status, search, diff, activate, rollback, builds, prune, inspect and pack.',
+        'The binary still exposes init, plan, build, validate, status, search, diff, activate, rollback, builds, prune, inspect and pack.',
       module: './packages/cli/dist/commands/index.js',
       symbols: ['registerCommands'],
     },
