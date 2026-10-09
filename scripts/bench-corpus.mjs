@@ -36,6 +36,28 @@ const QUERY_ITERATIONS = 30;
 const CONTEXT_ITERATIONS = 20;
 const TABLE_ITERATIONS = 20;
 const tiers = ['small', 'medium', 'large'];
+const edgeCases = ['standard', 'incremental', 'unsupported', 'tables'];
+
+function optionValue(args, name, fallback) {
+  const prefix = `--${name}=`;
+  const inline = args.find((arg) => arg.startsWith(prefix));
+  if (inline !== undefined) return inline.slice(prefix.length);
+  const index = args.indexOf(`--${name}`);
+  return index === -1 ? fallback : (args[index + 1] ?? fallback);
+}
+
+function parseOptions(args = process.argv.slice(2)) {
+  const scale = optionValue(args, 'scale', 'all');
+  const edgeCase = optionValue(args, 'edge-case', 'standard');
+  const selectedTiers = scale === 'all' ? tiers : [scale];
+  if (!selectedTiers.every((tier) => tiers.includes(tier))) {
+    throw new Error(`--scale must be one of ${tiers.join(', ')} or all`);
+  }
+  if (!edgeCases.includes(edgeCase)) {
+    throw new Error(`--edge-case must be one of ${edgeCases.join(', ')}`);
+  }
+  return { scale, edgeCase, tiers: selectedTiers };
+}
 
 function percentile(samples, fraction) {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -66,7 +88,7 @@ function addPathSuffix(contents, extension, pack) {
   return `${contents}\n\n## ${marker}\n\nThis path identifies the deterministic corpus copy.\n`;
 }
 
-function writeProject(packs) {
+function writeProject(packs, edgeCase = 'standard') {
   const root = mkdtempSync(join(tmpdir(), 'lorepack-corpus-'));
   let bytes = 0;
   writeFileSync(
@@ -95,6 +117,11 @@ function writeProject(packs) {
       }
       bytes += statSync(destination).size;
     }
+    if (edgeCase === 'unsupported') {
+      const unsupported = join(packDir, `${String(pack).padStart(3, '0')}-unsupported.bin`);
+      writeFileSync(unsupported, Buffer.from([0, 1, 2, 3]));
+      bytes += 4;
+    }
   }
   return { root, bytes };
 }
@@ -107,7 +134,7 @@ async function buildAt(root) {
   });
 }
 
-async function measureTier(name) {
+async function measureTier(name, edgeCase) {
   const packs = MANIFEST.tiers[name].packs;
   const buildSamples = [];
   let lastRoot;
@@ -115,7 +142,7 @@ async function measureTier(name) {
   let lastProjectBytes = 0;
   try {
     for (let sample = 0; sample < SAMPLES; sample += 1) {
-      const project = writeProject(packs);
+      const project = writeProject(packs, edgeCase);
       const root = project.root;
       const started = performance.now();
       const built = await buildAt(root);
@@ -188,6 +215,7 @@ async function measureTier(name) {
 
     return {
       tier: name,
+      edgeCase,
       packs,
       corpus: {
         artifacts: lastBuild.counts.artifacts,
@@ -235,7 +263,7 @@ async function measureTier(name) {
   }
 }
 
-export { buildAt, MANIFEST, WORKLOAD, writeProject };
+export { buildAt, MANIFEST, parseOptions, WORKLOAD, writeProject };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (const artifact of MANIFEST.artifacts) {
@@ -246,8 +274,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       throw new Error(`Corpus byte count mismatch: ${artifact.path}`);
   }
 
+  const options = parseOptions();
   const results = [];
-  for (const tier of tiers) results.push(await measureTier(tier));
+  for (const tier of options.tiers) results.push(await measureTier(tier, options.edgeCase));
 
   const report = {
     provisional: true,
@@ -255,6 +284,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     generatedAt: '2026-10-04',
     corpusManifest: relative(REPO, MANIFEST_PATH),
     queryWorkload: 'benchmarks/corpus/queries.json',
+    requestedScale: options.scale,
+    edgeCase: options.edgeCase,
     limitation:
       'The medium and large tiers repeat repository-owned mixed-format packs with deterministic path-local text. They establish scale trends and parser coverage, not a representative industry corpus. A public industry baseline remains issue 386.',
     machine: {

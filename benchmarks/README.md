@@ -46,6 +46,21 @@ Run the three-tier measurement with:
 pnpm bench:corpus -- --out benchmarks/corpus/results-<date>.json
 ```
 
+Choose one scale when iterating locally. The default runs all three tiers:
+
+```sh
+pnpm bench:corpus -- --scale small
+pnpm bench:corpus -- --scale medium --edge-case incremental
+pnpm bench:corpus -- --scale large --edge-case unsupported
+```
+
+The supported edge-case profiles are `standard`, `incremental`, `unsupported`, and `tables`.
+`incremental` exercises reuse after an edit, `unsupported` adds files with no parser so the
+exclusion path is measured, and `tables` keeps the typed-table query workload visible. Every
+report records `requestedScale` and `edgeCase`, so a downloaded result can be interpreted without
+guessing which command produced it. These profiles test operational behavior and scale trends;
+they do not establish universal retrieval quality.
+
 The committed Apple M1 Pro result is
 [`benchmarks/corpus/results-2026-10-04.json`](corpus/results-2026-10-04.json). It records file
 count, bytes, nodes, chunks, table rows, peak RSS, build and incremental p50/p95, warm search,

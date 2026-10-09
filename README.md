@@ -189,6 +189,69 @@ Cloudflare deployment is an optional target. It projects the same build rather t
 different representation remotely. Read the [deployment guide](docs/architecture/deployment.md)
 before configuring a target.
 
+## Workflows worth copying
+
+### Keep a coding agent on a reviewed context version
+
+```bash
+lorepack plan
+lorepack build --no-activate
+lorepack validate
+lorepack diff
+lorepack activate
+lorepack mcp
+```
+
+The agent sees only the active immutable build. If the source change is wrong, `lorepack rollback`
+returns to the previous build without parsing or indexing the sources again.
+
+### Investigate a source before changing the build
+
+```bash
+lorepack inspect sources
+lorepack inspect exclusions
+lorepack inspect warnings
+lorepack search "where is the deployment rollback procedure"
+lorepack export --task "prepare a cited rollback checklist"
+```
+
+This is useful when a result is missing. It shows whether the file was parsed, excluded by a
+project rule, refused because no parser supports it, or simply did not match the query.
+
+### Review context in Studio
+
+```bash
+lorepack dev ./my-docs
+```
+
+Open Sources to inspect artifacts and exclusions, Playground to assemble a bounded task bundle,
+and Versions to compare, activate, pack, or roll back builds. The same workflows are shown in
+the [Studio tour](docs/studio-tour.md):
+
+![Studio first build and source inspection](docs/images/studio-first-build.gif)
+
+![Studio context assembly and provenance](docs/images/studio-playground.gif)
+
+![Studio version diff, activation, and rollback](docs/images/studio-versions.gif)
+
+The GIFs are regenerable with `pnpm docs:studio:gifs`. Static screenshots remain available in
+the Studio tour for reduced-motion and offline readers.
+
+### Measure a corpus before making a performance claim
+
+```bash
+pnpm bench:corpus -- --scale small --edge-case standard \
+  --out benchmarks/corpus/local-small.json
+pnpm check:benchmark-artifacts
+```
+
+Use `small`, `medium`, or `large` to select scale, and `standard`, `incremental`, `unsupported`,
+or `tables` to select an operational edge case. The report includes corpus identity, machine
+metadata, build and incremental p50/p95, warm search, context assembly, typed-table latency, and
+reuse counts. Read [benchmark methodology](benchmarks/README.md) before comparing results. The
+medium and large tiers are deterministic copies of repository-owned mixed-format material, so
+they show scale trends rather than proving performance on every customer corpus.
+
 ## What makes the build trustworthy
 
 ### Immutable identity
