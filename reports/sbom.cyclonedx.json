@@ -7,7 +7,7 @@
     "component": {
       "type": "application",
       "name": "lorepack",
-      "version": "0.1.0-alpha.0"
+      "version": "0.1.0"
     }
   },
   "components": [
@@ -1151,11 +1151,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "1.9.0"
+          "value": "1.9.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-22T17:15:34.756Z"
+          "value": "2026-10-09T10:21:39.612Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1271,11 +1271,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.148.0"
+          "value": "4.149.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-06T18:33:23.820Z"
+          "value": "2026-10-08T18:24:09.016Z"
         },
         {
           "name": "lorepack:provenanceStatus",
