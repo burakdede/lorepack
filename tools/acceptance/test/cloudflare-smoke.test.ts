@@ -17,6 +17,7 @@ import {
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
+  isCloudflareWorkerPropagationError,
   isMissingCloudflareBucketError,
   isMissingCloudflareD1Error,
   isNonEmptyCloudflareBucketError,
@@ -134,6 +135,30 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     ).toEqual({
       endpointBase: 'https://lorepack-ci-31329883479-1-cloudflare-acc-runtime.workers.dev',
     });
+  });
+
+  it('recognizes only the post-upload Worker propagation error as retryable', () => {
+    expect(
+      isCloudflareWorkerPropagationError(
+        new Error(
+          'A request to the Cloudflare API (/accounts/acc/workers/scripts/name/subdomain) failed.\nThis Worker does not exist on your account. [code: 10007]',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      isCloudflareWorkerPropagationError(
+        new Error(
+          'A request to the Cloudflare API (/accounts/acc/workers/scripts/name) failed.\nThis Worker does not exist on your account. [code: 10007]',
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isCloudflareWorkerPropagationError(
+        new Error(
+          'A request to the Cloudflare API (/accounts/acc/workers/scripts/name/subdomain) failed.\nUnauthorized [code: 10000]',
+        ),
+      ),
+    ).toBe(false);
   });
 
   it('builds the direct Cloudflare Worker delete URL from account and worker names', () => {
