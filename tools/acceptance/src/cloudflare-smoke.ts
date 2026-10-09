@@ -33,6 +33,8 @@ const WRANGLER_BIN = join(WORKER_ROOT, 'node_modules', 'wrangler', 'bin', 'wrang
 // Wrangler dependency is intentionally not part of the public CLI bundle.
 const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const COMPATIBILITY_DATE = '2026-08-08';
+const WORKER_DEPLOY_ATTEMPTS = 3;
+const WORKER_PROPAGATION_DELAY_MS = 2_000;
 
 export interface CloudflareSmokeProject {
   readonly root: string;
@@ -657,12 +659,37 @@ async function deployAcceptanceWorker(
     'utf8',
   );
 
-  const deployed = await runWrangler(
-    ['deploy', '--config', target.configPath],
-    target.wranglerEnv,
-    WORKER_ROOT,
+  for (let attempt = 1; attempt <= WORKER_DEPLOY_ATTEMPTS; attempt += 1) {
+    try {
+      const deployed = await runWrangler(
+        ['deploy', '--config', target.configPath],
+        target.wranglerEnv,
+        WORKER_ROOT,
+      );
+      return parseWranglerDeploymentInfo(deployed.stdout, target.workerName);
+    } catch (error) {
+      if (!isCloudflareWorkerPropagationError(error) || attempt === WORKER_DEPLOY_ATTEMPTS) {
+        throw error;
+      }
+      await delay(WORKER_PROPAGATION_DELAY_MS * attempt);
+    }
+  }
+
+  throw new Error('Cloudflare Worker deployment exhausted its retry attempts.');
+}
+
+export function isCloudflareWorkerPropagationError(error: unknown): boolean {
+  const message = messageOf(error);
+  return (
+    message.includes('/workers/scripts/') &&
+    message.includes('/subdomain') &&
+    message.includes('This Worker does not exist on your account.') &&
+    message.includes('[code: 10007]')
   );
-  return parseWranglerDeploymentInfo(deployed.stdout, target.workerName);
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function parseD1DatabaseInfo(value: unknown): D1DatabaseInfo | null {
