@@ -109,6 +109,60 @@ export const LIFECYCLE_SCENARIOS: readonly Scenario[] = [
   },
 
   {
+    id: 'lifecycle/validate-then-activate',
+    title: 'A candidate can be validated before its pointer moves',
+    proves:
+      'The release lifecycle keeps compilation, validation and activation separate and explicit.',
+    mode: 'auto',
+    fixture: { files: CORPUS, setup: ['init'] },
+    steps: [
+      {
+        action: 'run',
+        args: ['build', '--no-activate'],
+        json: true,
+        capture: { candidate: 'buildId' },
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'created', equals: true },
+            { path: 'activated', equals: false },
+          ],
+        },
+      },
+      {
+        action: 'run',
+        args: ['validate'],
+        json: true,
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'buildId', equalsCapture: 'candidate' },
+            { path: 'created', equals: false },
+            { path: 'activated', equals: false },
+          ],
+        },
+      },
+      {
+        action: 'run',
+        args: ['activate', '{{candidate}}'],
+        expect: { exitCode: 0 },
+      },
+      {
+        action: 'run',
+        args: ['status'],
+        json: true,
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'sourceState', equals: 'clean' },
+            { path: 'activeBuildId', equalsCapture: 'candidate' },
+          ],
+        },
+      },
+    ],
+  },
+
+  {
     id: 'lifecycle/diff-reads-builds-not-sources',
     title: 'Two builds are compared without reading a single source file',
     proves: 'Invariant 1: the build is the source of truth, so a diff needs nothing else.',

@@ -45,6 +45,7 @@ const EXPECTED = [
   'disconnect',
   'plan',
   'build',
+  'validate',
   'status',
   'search',
   'diff',

@@ -125,6 +125,7 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
               'init',
               'plan',
               'build',
+              'validate',
               'status',
               'diff',
               'search',

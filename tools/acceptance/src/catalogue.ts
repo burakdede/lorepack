@@ -43,7 +43,7 @@ export const AREAS: readonly Area[] = [
   {
     id: 'lifecycle',
     title: 'The lifecycle',
-    summary: 'plan, build, status, search, inspect, diff, activate, rollback.',
+    summary: 'plan, build, validate, status, search, inspect, diff, activate, rollback.',
     scenarios: LIFECYCLE_SCENARIOS,
   },
   {

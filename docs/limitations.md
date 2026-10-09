@@ -4,8 +4,8 @@ What v0.1 does not do, stated plainly so nobody finds out the hard way.
 
 - **Markdown, HTML, DOCX, CSV, XLSX, text-layer PDF, plain text and source code.** A file with
   an extension Lorepack does not know is named in the build's exclusions rather than silently
-  skipped. A scanned PDF is refused outright rather than indexed as an empty document: OCR is out
-  of scope for v0.1.
+  skipped. A fully scanned PDF is refused outright, the active build remains unchanged, and the
+  error names OCR as the remediation. OCR is out of scope for v0.1.
 - **A spreadsheet becomes a typed table, not prose**, queried with SQL rather than searched as
   text. Types are inferred conservatively and refuse to be clever: `00123` stays text, a
   19-digit id stays text, and `03/04/2026` stays text because the file never says which country
