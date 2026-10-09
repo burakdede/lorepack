@@ -60,6 +60,26 @@ beforeEach(() => {
 });
 
 describe('createMcpHttpHandler', () => {
+  it('configures the requested Host policy', () => {
+    createMcpHttpHandler({} as never);
+
+    expect(createMcpHonoApp).toHaveBeenCalledWith({
+      host: 'runtime',
+    });
+  });
+
+  it('passes an explicit Host policy to the adapter', () => {
+    createMcpHttpHandler({} as never, undefined, {
+      host: '0.0.0.0',
+      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+    });
+
+    expect(createMcpHonoApp).toHaveBeenCalledWith({
+      host: '0.0.0.0',
+      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+    });
+  });
+
   it('forwards the mounted /mcp request object unchanged, so request abort reaches the SDK', async () => {
     const handler = createMcpHttpHandler({} as never);
     const controller = new AbortController();

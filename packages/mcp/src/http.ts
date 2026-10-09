@@ -19,11 +19,15 @@ import { createMcpServer } from './server.js';
 export function createMcpHttpHandler(
   runtime: LoreRuntime,
   comparer?: BuildComparer,
+  options: { readonly host?: string; readonly allowedHosts?: readonly string[] } = {},
 ): McpHttpHandler {
   const handler = createMcpHandler(() =>
     createMcpServer({ runtime, ...(comparer === undefined ? {} : { comparer }) }),
   );
-  const app = createMcpHonoApp({ host: '0.0.0.0' });
+  const app = createMcpHonoApp({
+    host: options.host ?? 'runtime',
+    ...(options.allowedHosts === undefined ? {} : { allowedHosts: [...options.allowedHosts] }),
+  });
   app.all('/mcp', (context) => {
     const parsedBody = (context.get as (key: string) => unknown)('parsedBody');
     return handler.fetch(context.req.raw, { parsedBody });

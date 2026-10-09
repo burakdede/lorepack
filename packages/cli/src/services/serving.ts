@@ -118,7 +118,10 @@ export async function startServing(
     let boundPort = options.port;
 
     const comparer = createLocalComparer(options.config.projectRoot);
-    const mcp = createMcpHttpHandler(runtime, comparer);
+    const mcp = createMcpHttpHandler(runtime, comparer, {
+      host: options.host,
+      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+    });
     // Absent when the package was installed without built assets, which is a broken install
     // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
     const serveStudio = options.studio === true && studioIsBuilt();
