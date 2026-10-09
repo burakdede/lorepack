@@ -196,6 +196,9 @@ jobs:
               echo "### ${changelog%/CHANGELOG.md}"
               sed -n '1,120p' "$changelog"
             done
+            echo
+            echo "## Upgrade notes"
+            sed -n '1,220p' docs/compatibility/v0.1-upgrade.md
           } > release-artifacts/release-notes.md
 
       - name: Upload dry-run release artifacts

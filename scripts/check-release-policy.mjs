@@ -16,6 +16,7 @@ const SUPPLY_CHAIN = readFileSync(
 const CHECKLIST = readFileSync(join(ROOT, 'docs', 'release-checklist.md'), 'utf8');
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8');
 const GETTING_STARTED = readFileSync(join(ROOT, 'docs', 'getting-started.md'), 'utf8');
+const UPGRADE_NOTES = join(ROOT, 'docs', 'compatibility', 'v0.1-upgrade.md');
 
 const REQUIRED = [
   'verify (ubuntu-latest)',
@@ -51,6 +52,12 @@ if (!RELEASE.includes('performance_report_url:')) {
 }
 if (!RELEASE.includes('pnpm changeset version')) {
   problems.push('release.yml must run pnpm changeset version');
+}
+if (!RELEASE.includes('docs/compatibility/v0.1-upgrade.md')) {
+  problems.push('release.yml must include the versioned upgrade notes in release notes');
+}
+if (!readFileSync(UPGRADE_NOTES, 'utf8').includes('schemaVersion')) {
+  problems.push('v0.1 upgrade notes must document schemaVersion compatibility');
 }
 if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
   problems.push('release.yml must publish packages with an explicit npm dist tag');
