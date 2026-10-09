@@ -74,9 +74,12 @@ constraints. A person should still verify these before a release:
 | 2026-10-04 | `pnpm lint`, `pnpm format:check`, `pnpm typecheck` | Green |
 | 2026-10-04 | `pnpm test:e2e` | 31 browser tests passed across all six routes |
 | 2026-10-04 | `pnpm docs:capture` and visual inspection | Seven current Studio captures regenerated and inspected |
+| 2026-10-09 | `pnpm test:e2e` on macOS 27.0.1, Chromium 1.62.1 | 35 browser tests passed across all six routes; reduced-motion assertion passed |
 
-The manual screen-reader and reduced-motion checks remain a human release
-check. They are not claimed as automated results.
+The reduced-motion behavior is now asserted in the browser suite. A physical
+screen reader was not available in this verification environment, so the
+screen-reader announcement remains an explicit human release check. It must be
+recorded with the screen reader name and version before closing issue #381.
 
 ## What Studio will not do
 

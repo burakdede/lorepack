@@ -83,6 +83,22 @@ test.describe('reaching everything by keyboard', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('region', { name: /^Activate lore_/ })).toHaveCount(0);
   });
+
+  test('reduced motion disables the build settle animation', async ({ page, session }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${session.url}/#/`);
+    await expect(page.locator('h1.route-title')).toBeVisible();
+
+    const motion = await page.locator('.header-id').evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return {
+        animationDuration: style.animationDuration,
+        transitionDuration: style.transitionDuration,
+      };
+    });
+    expect(Number.parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.0001);
+    expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.0001);
+  });
 });
 
 test.describe('at 200% zoom', () => {
