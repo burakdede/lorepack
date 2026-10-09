@@ -51,6 +51,8 @@ export interface CloudflareSmokeTarget {
   readonly workerName: string;
   readonly catalogDatabaseName: string;
   readonly catalogDatabaseId: string;
+  readonly tablesDatabaseName: string;
+  readonly tablesDatabaseId: string;
   readonly objectsBucketName: string;
   readonly configPath: string;
   readonly endpointBase: string;
@@ -86,6 +88,7 @@ interface CloudflareTargetReceiptJson {
   readonly accountId: string;
   readonly workerName: string;
   readonly catalogDatabaseName: string;
+  readonly tablesDatabaseName: string;
   readonly objectsBucketName: string;
 }
 
@@ -152,6 +155,8 @@ export async function provisionCloudflareSmokeTarget(
     workerName: names.workerName,
     catalogDatabaseName: names.catalogDatabaseName,
     catalogDatabaseId: '',
+    tablesDatabaseName: names.tablesDatabaseName,
+    tablesDatabaseId: '',
     objectsBucketName: names.objectsBucketName,
     configPath,
     endpointBase: `https://${names.workerName}.workers.dev`,
@@ -185,6 +190,7 @@ export async function teardownCloudflareSmokeTarget(
           workerName: target.workerName,
           endpointBase: target.endpointBase,
           catalogDatabaseName: target.catalogDatabaseName,
+          tablesDatabaseName: target.tablesDatabaseName,
           objectsBucketName: target.objectsBucketName,
           buildIds,
         },
@@ -228,6 +234,17 @@ export async function teardownCloudflareSmokeTarget(
   } catch (error) {
     if (!isMissingCloudflareD1Error(error)) {
       failures.push(`delete D1 ${target.catalogDatabaseName}: ${messageOf(error)}`);
+    }
+  }
+
+  try {
+    await runWrangler(
+      ['d1', 'delete', target.tablesDatabaseName, '--skip-confirmation'],
+      target.wranglerEnv,
+    );
+  } catch (error) {
+    if (!isMissingCloudflareD1Error(error)) {
+      failures.push(`delete D1 ${target.tablesDatabaseName}: ${messageOf(error)}`);
     }
   }
 
@@ -365,6 +382,7 @@ export async function addCloudflareTarget(
     accountId: singletonReceipt.accountId,
     workerName: singletonReceipt.workerName,
     catalogDatabaseName: singletonReceipt.catalogDatabaseName,
+    tablesDatabaseName: singletonReceipt.tablesDatabaseName,
     objectsBucketName: singletonReceipt.objectsBucketName,
     configPath: join(WORKER_ROOT, `.wrangler-acceptance-${singletonReceipt.workerName}.jsonc`),
     endpointBase: `https://${singletonReceipt.workerName}.workers.dev`,
@@ -373,9 +391,14 @@ export async function addCloudflareTarget(
     configuredNames.catalogDatabaseName,
     configuredNames.wranglerEnv,
   );
+  const tablesDatabaseId = await lookupD1DatabaseId(
+    configuredNames.tablesDatabaseName,
+    configuredNames.wranglerEnv,
+  );
   const configuredTarget = {
     ...configuredNames,
     catalogDatabaseId: databaseId,
+    tablesDatabaseId,
   };
   const deployed = await deployAcceptanceWorker(configuredTarget, project.projectName);
   return {
@@ -564,11 +587,13 @@ function resourceNamesFor(
 ): {
   readonly workerName: string;
   readonly catalogDatabaseName: string;
+  readonly tablesDatabaseName: string;
   readonly objectsBucketName: string;
 } {
   return {
     workerName: activeCloudflareWorkerName(env),
     catalogDatabaseName: withSuffix(projectName, 'catalog', 63),
+    tablesDatabaseName: withSuffix(projectName, 'tables', 63),
     objectsBucketName: withSuffix(projectName, 'objects', 63),
   };
 }
@@ -642,6 +667,12 @@ async function deployAcceptanceWorker(
             binding: 'CATALOG_DB',
             database_name: target.catalogDatabaseName,
             database_id: target.catalogDatabaseId,
+            remote: true,
+          },
+          {
+            binding: 'TABLES_DB',
+            database_name: target.tablesDatabaseName,
+            database_id: target.tablesDatabaseId,
             remote: true,
           },
         ],
@@ -995,12 +1026,15 @@ export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetRecei
   const workerName = typeof payload.workerName === 'string' ? payload.workerName : null;
   const catalogDatabaseName =
     typeof payload.catalogDatabaseName === 'string' ? payload.catalogDatabaseName : null;
+  const tablesDatabaseName =
+    typeof payload.tablesDatabaseName === 'string' ? payload.tablesDatabaseName : null;
   const objectsBucketName =
     typeof payload.objectsBucketName === 'string' ? payload.objectsBucketName : null;
   if (
     accountId === null ||
     workerName === null ||
     catalogDatabaseName === null ||
+    tablesDatabaseName === null ||
     objectsBucketName === null
   ) {
     throw new Error(`lorepack target add cloudflare returned an unreadable receipt:\n${raw}`);
@@ -1009,6 +1043,7 @@ export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetRecei
     accountId,
     workerName,
     catalogDatabaseName,
+    tablesDatabaseName,
     objectsBucketName,
   };
 }

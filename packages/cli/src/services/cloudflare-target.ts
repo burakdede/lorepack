@@ -46,6 +46,7 @@ export interface ResolvedCloudflareTargetResources {
     D1CatalogDatabaseLike &
     D1QueryDatabaseLike &
     D1DatabaseLike;
+  readonly tablesDb: ProjectionMigrationDatabaseLike & D1QueryDatabaseLike;
   readonly objects: R2BucketLike;
 }
 
@@ -54,6 +55,7 @@ export interface CloudflareResolverAdapter extends CloudflareTargetAdapter {
   openCatalogDatabase(
     name: string,
   ): ProjectionMigrationDatabaseLike & D1CatalogDatabaseLike & D1QueryDatabaseLike & D1DatabaseLike;
+  openTablesDatabase(name: string): ProjectionMigrationDatabaseLike & D1QueryDatabaseLike;
   openObjectsBucket(name: string): R2BucketLike;
 }
 
@@ -84,8 +86,12 @@ export async function resolveCloudflareTargetWithAdapter(
     endpoint: resolved.endpoint,
     workerName: resolved.receipt.workerName,
     catalogDatabaseName: resolved.receipt.catalogDatabaseName,
+    ...(resolved.receipt.tablesDatabaseName === undefined
+      ? {}
+      : { tablesDatabaseName: resolved.receipt.tablesDatabaseName }),
     objectsBucketName: resolved.receipt.objectsBucketName,
     catalogDb: resolved.catalogDb,
+    tablesDb: resolved.tablesDb,
     objects: resolved.objects,
     publicBuildId: async () => await readPublicBuildId(resolved.receipt.workerName),
   });
@@ -132,6 +138,18 @@ export async function resolveCloudflareResourcesWithAdapter(
     );
   }
 
+  if (receipt.tablesDatabaseName === undefined) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      'The cloudflare target receipt predates isolated table storage.',
+      {
+        remediation:
+          'Run `lorepack target add cloudflare` again to provision or connect the separate tables D1 database before deploying.',
+        subject: 'tablesDatabaseName',
+      },
+    );
+  }
+
   const databases = await adapter.listDatabases().catch((cause) => {
     throw new LoreError(
       'LORE_E_TARGET_NOT_CONFIGURED',
@@ -155,11 +173,23 @@ export async function resolveCloudflareResourcesWithAdapter(
       },
     );
   }
+  if (!databases.some((database) => database.name === receipt.tablesDatabaseName)) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The cloudflare target receipt refers to D1 database ${receipt.tablesDatabaseName}, but it is not visible to the current Cloudflare account.`,
+      {
+        remediation:
+          'Fix the receipt or create the expected D1 database, then run `lorepack target add cloudflare` again.',
+        subject: receipt.tablesDatabaseName,
+      },
+    );
+  }
 
   return {
     receipt,
     endpoint: `https://${receipt.workerName}.workers.dev/mcp`,
     catalogDb: adapter.openCatalogDatabase(receipt.catalogDatabaseName),
+    tablesDb: adapter.openTablesDatabase(receipt.tablesDatabaseName),
     objects: adapter.openObjectsBucket(receipt.objectsBucketName),
   };
 }
@@ -184,6 +214,9 @@ export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
       return parsed;
     },
     openCatalogDatabase(name) {
+      return new WranglerCatalogDatabase(name);
+    },
+    openTablesDatabase(name) {
       return new WranglerCatalogDatabase(name);
     },
     openObjectsBucket(name) {

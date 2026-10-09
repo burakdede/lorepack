@@ -777,6 +777,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       resourceLines: [
         '= Worker contracted-runtime',
         '= D1 contracted-catalog',
+        '= D1 tables (resolved by receipt)',
         '= R2 contracted-objects',
       ],
       projectionLines: [

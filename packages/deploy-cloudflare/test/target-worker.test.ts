@@ -387,6 +387,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
 
     const worker = createCloudflareWorkerFromBindings({
       CATALOG_DB: fixture.projection,
+      TABLES_DB: fixture.projection,
       OBJECTS: fixture.bucket,
       PROJECT_ID: PROJECT,
     });
@@ -476,6 +477,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
 
     const worker = createCloudflareWorkerFromBindings({
       CATALOG_DB: fixture.projection,
+      TABLES_DB: fixture.projection,
       OBJECTS: fixture.bucket,
       PROJECT_ID: PROJECT,
     });
@@ -558,6 +560,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
 
     const worker = createCloudflareWorkerFromBindings({
       CATALOG_DB: fixture.projection,
+      TABLES_DB: fixture.projection,
       OBJECTS: fixture.bucket,
       PROJECT_ID: PROJECT,
     });
@@ -640,6 +643,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
 
     const worker = createCloudflareWorkerFromBindings({
       CATALOG_DB: fixture.projection,
+      TABLES_DB: fixture.projection,
       OBJECTS: fixture.bucket,
       PROJECT_ID: PROJECT,
     });

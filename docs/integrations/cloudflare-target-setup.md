@@ -11,7 +11,7 @@ Verified on **2026-08-08** against:
 The current Phase 6 reference path works with three account-scoped Cloudflare resource types:
 
 - one **Worker**
-- one **D1** database
+- two **D1** databases: a catalog database and an isolated table-data database
 - one **R2** bucket
 
 Lorepack does not create or manage zones for this path, and it does not need Pages, KV, Queues,
@@ -47,7 +47,7 @@ just inspection.
 
 - account id
 - Worker name
-- D1 database name
+- D1 catalog and table database names
 - R2 bucket name
 - advertised runtime capabilities
 
@@ -180,10 +180,10 @@ Recorded on **2026-08-09** as the required manual checklist for `#90`:
 As of **2026-08-09**, `lorepack target add cloudflare` supports three setup behaviors:
 
 1. `--dry-run`: show the deterministic resource plan and write nothing.
-2. no explicit resource identifiers: create the deterministic **D1** database and **R2** bucket,
+2. no explicit resource identifiers: create the deterministic **D1** databases and **R2** bucket,
    then write the target receipt. The Worker name is recorded for the first deploy.
 3. connect existing resources with explicit identifiers:
-   `--account-id`, `--worker`, `--catalog-db`, `--objects-bucket`
+   `--account-id`, `--worker`, `--catalog-db`, `--tables-db`, `--objects-bucket`
 
 On rerun, the command is idempotent. It reuses an unchanged receipt, checks the remote D1 and R2
 resources are still visible, and reports drift if the receipt no longer matches the account state.

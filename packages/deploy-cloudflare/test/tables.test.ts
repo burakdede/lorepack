@@ -165,6 +165,26 @@ ORDER BY ordinal`,
 }
 
 describe('D1TableStore', () => {
+  it('keeps metadata and model-authored SQL on separate databases', async () => {
+    const catalog = new FakeD1Database();
+    const tables = new FakeD1Database();
+    installTableHandlers(catalog);
+    installTableHandlers(tables);
+    tables.handlers.set('SELECT name FROM sqlite_master', () => [{ name: 't_products_active' }]);
+
+    const store = new D1TableStore(catalog, namespace(), tables);
+    const result = await store.query({
+      tableId: TABLE_ID,
+      sql: 'SELECT c_0_sku, c_1_available FROM t_products_active',
+    });
+
+    expect(result.rowCount).toBe(3);
+    expect(catalog.calls.some((call) => call.query.includes('SELECT * FROM'))).toBe(false);
+    expect(catalog.calls.some((call) => call.query.includes('runtime_tokens'))).toBe(false);
+    expect(tables.calls.some((call) => call.query.includes('FROM tables'))).toBe(false);
+    expect(tables.calls.some((call) => call.query.includes('runtime_tokens'))).toBe(false);
+  });
+
   it('lists tables through project and build namespace filters', async () => {
     const db = new FakeD1Database();
     installTableHandlers(db);

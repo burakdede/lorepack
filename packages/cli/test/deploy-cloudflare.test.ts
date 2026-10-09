@@ -415,6 +415,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
 
       const staleWorker = createCloudflareWorkerFromBindings({
         CATALOG_DB: publicProjection,
+        TABLES_DB: publicProjection,
         OBJECTS: bucket,
         PROJECT_ID: PROJECT,
       });
@@ -469,6 +470,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
 
       const liveWorker = createCloudflareWorkerFromBindings({
         CATALOG_DB: targetProjection,
+        TABLES_DB: targetProjection,
         OBJECTS: bucket,
         PROJECT_ID: PROJECT,
       });

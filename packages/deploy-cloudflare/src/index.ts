@@ -13,7 +13,7 @@ import type {
   ProjectionMigrationDatabaseLike,
   ProjectionMigrationStatementLike,
 } from './projection-migrations.js';
-import { runProjectionMigrations } from './projection-migrations.js';
+import { runProjectionMigrations, runTableProjectionMigrations } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import {
   applyRemoteRetention,
@@ -113,6 +113,7 @@ export {
   revokeRuntimeTokens,
   rotateRuntimeTokenHash,
   runProjectionMigrations,
+  runTableProjectionMigrations,
   storeRuntimeTokenHash,
   uploadProjectArchive,
   uploadProjectObjects,

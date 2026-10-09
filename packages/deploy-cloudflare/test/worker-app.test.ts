@@ -398,6 +398,7 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
           throw new Error('the request should stop at CORS preflight');
         },
       } as never,
+      TABLES_DB: {} as never,
       OBJECTS: {} as never,
       PROJECT_ID: 'demo',
       ALLOWED_ORIGINS: 'https://app.example, https://admin.example',
@@ -431,6 +432,7 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
     const bearerWorker = createCloudflareWorkerFromBindings(
       {
         CATALOG_DB: auth as never,
+        TABLES_DB: auth as never,
         OBJECTS: {} as never,
         PROJECT_ID: 'demo',
       },
@@ -456,6 +458,7 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
             throw new Error('the request should stop at auth');
           },
         } as never,
+        TABLES_DB: {} as never,
         OBJECTS: {} as never,
         PROJECT_ID: 'demo',
       },

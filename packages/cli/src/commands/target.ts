@@ -49,6 +49,7 @@ export interface CloudflareTargetReceipt {
   readonly accountId: string;
   readonly workerName: string;
   readonly catalogDatabaseName: string;
+  readonly tablesDatabaseName?: string;
   readonly objectsBucketName: string;
   readonly capabilities: readonly string[];
 }
@@ -69,6 +70,7 @@ export interface WranglerIdentity {
 export interface CloudflareRemoteResources {
   readonly workerExists: boolean;
   readonly catalogDatabaseExists: boolean;
+  readonly tablesDatabaseExists?: boolean;
   readonly objectsBucketExists: boolean;
 }
 
@@ -81,14 +83,17 @@ export interface CloudflareTargetProvisioningAdapter extends CloudflareTargetAda
   inspectResources(input: {
     readonly workerName: string;
     readonly catalogDatabaseName: string;
+    readonly tablesDatabaseName: string;
     readonly objectsBucketName: string;
   }): Promise<CloudflareRemoteResources>;
   createCatalogDatabase(name: string): Promise<void>;
+  createTablesDatabase?(name: string): Promise<void>;
   createObjectsBucket(name: string): Promise<void>;
 }
 
 export interface CloudflareTargetTokenAdapter extends CloudflareTargetProvisioningAdapter {
   openCatalogDatabase(name: string): ProjectionMigrationDatabaseLike & RuntimeAuthDatabaseLike;
+  openTablesDatabase?(name: string): ProjectionMigrationDatabaseLike;
 }
 
 export interface TargetCommandOptions {
@@ -113,6 +118,10 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       { flags: '--account-id <id>', description: 'connect to an existing Cloudflare account id' },
       { flags: '--worker <name>', description: 'connect to an existing Worker name' },
       { flags: '--catalog-db <name>', description: 'connect to an existing D1 database name' },
+      {
+        flags: '--tables-db <name>',
+        description: 'connect to the isolated table D1 database name',
+      },
       {
         flags: '--objects-bucket <name>',
         description: 'connect to an existing R2 bucket name',
@@ -171,6 +180,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         typeof flags.accountId === 'string' ||
         typeof flags.worker === 'string' ||
         typeof flags.catalogDb === 'string' ||
+        typeof flags.tablesDb === 'string' ||
         typeof flags.objectsBucket === 'string';
       const planned = {
         accountId:
@@ -185,6 +195,10 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
           typeof flags.catalogDb === 'string'
             ? flags.catalogDb
             : (existing?.catalogDatabaseName ?? defaults.catalogDatabaseName),
+        tablesDatabaseName:
+          typeof flags.tablesDb === 'string'
+            ? flags.tablesDb
+            : (existing?.tablesDatabaseName ?? defaults.tablesDatabaseName),
         objectsBucketName:
           typeof flags.objectsBucket === 'string'
             ? flags.objectsBucket
@@ -206,6 +220,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       const remote = await adapterWithProvisioning.inspectResources({
         workerName: planned.workerName,
         catalogDatabaseName: planned.catalogDatabaseName,
+        tablesDatabaseName: planned.tablesDatabaseName,
         objectsBucketName: planned.objectsBucketName,
       });
       const mode: 'provision' | 'connect-existing' | 'reuse' =
@@ -288,7 +303,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
           'Connecting existing Cloudflare resources requires explicit resource identifiers together.',
           {
             remediation:
-              'Pass --worker, --catalog-db, and --objects-bucket together (and --account-id when Wrangler cannot infer it), or omit them all to provision the deterministic names automatically.',
+              'Pass --worker, --catalog-db, and --objects-bucket together. Pass --tables-db to override the deterministic isolated table database name (and --account-id when Wrangler cannot infer it), or omit them all to provision the deterministic names automatically.',
             subject: 'cloudflare',
           },
         );
@@ -333,6 +348,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         accountId: planned.accountId,
         workerName: planned.workerName,
         catalogDatabaseName: planned.catalogDatabaseName,
+        tablesDatabaseName: planned.tablesDatabaseName,
         objectsBucketName: planned.objectsBucketName,
         capabilities: [...CLOUDFLARE_CAPABILITIES],
       };
@@ -637,6 +653,7 @@ function renderCloudflarePlan(input: {
     readonly accountId: string;
     readonly workerName: string;
     readonly catalogDatabaseName: string;
+    readonly tablesDatabaseName: string;
     readonly objectsBucketName: string;
   };
 }): string {
@@ -651,6 +668,9 @@ function renderCloudflarePlan(input: {
   lines.push(`  Worker: ${describeWorkerPlan(input.mode, input.planned.workerName, input.remote)}`);
   lines.push(
     `  D1 catalog: ${describeCatalogPlan(input.mode, input.planned.catalogDatabaseName, input.remote)}`,
+  );
+  lines.push(
+    `  D1 tables: ${describeCatalogPlan(input.mode, input.planned.tablesDatabaseName, input.remote)}`,
   );
   lines.push(
     `  R2 objects: ${describeBucketPlan(input.mode, input.planned.objectsBucketName, input.remote)}`,
@@ -715,6 +735,7 @@ function compareReceipt(
     readonly accountId: string;
     readonly workerName: string;
     readonly catalogDatabaseName: string;
+    readonly tablesDatabaseName: string;
     readonly objectsBucketName: string;
   },
 ): Array<{ readonly field: string; readonly current: string; readonly requested: string }> {
@@ -740,6 +761,13 @@ function compareReceipt(
       requested: requested.catalogDatabaseName,
     });
   }
+  if (existing.tablesDatabaseName !== requested.tablesDatabaseName) {
+    drift.push({
+      field: 'tablesDatabaseName',
+      current: existing.tablesDatabaseName ?? '(legacy receipt)',
+      requested: requested.tablesDatabaseName,
+    });
+  }
   if (existing.objectsBucketName !== requested.objectsBucketName) {
     drift.push({
       field: 'objectsBucketName',
@@ -753,6 +781,7 @@ function compareReceipt(
 function defaultNames(project: string): {
   readonly workerName: string;
   readonly catalogDatabaseName: string;
+  readonly tablesDatabaseName: string;
   readonly objectsBucketName: string;
 } {
   const slug = project
@@ -763,6 +792,7 @@ function defaultNames(project: string): {
   return {
     workerName: `${slug}-runtime`,
     catalogDatabaseName: `${slug}-catalog`,
+    tablesDatabaseName: `${slug}-tables`,
     objectsBucketName: `${slug}-objects`,
   };
 }
@@ -805,26 +835,35 @@ export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
     async inspectResources({
       workerName,
       catalogDatabaseName,
+      tablesDatabaseName,
       objectsBucketName,
     }): Promise<CloudflareRemoteResources> {
-      const [worker, catalog, bucket] = await Promise.all([
+      const [worker, catalog, tables, bucket] = await Promise.all([
         wranglerWorkerExists(workerName),
         wranglerD1Exists(catalogDatabaseName),
+        wranglerD1Exists(tablesDatabaseName),
         wranglerBucketExists(objectsBucketName),
       ]);
       return {
         workerExists: worker,
         catalogDatabaseExists: catalog,
+        tablesDatabaseExists: tables,
         objectsBucketExists: bucket,
       };
     },
     async createCatalogDatabase(name) {
       await execWrangler(['d1', 'create', name]);
     },
+    async createTablesDatabase(name) {
+      await execWrangler(['d1', 'create', name]);
+    },
     async createObjectsBucket(name) {
       await execWrangler(['r2', 'bucket', 'create', name]);
     },
     openCatalogDatabase(name) {
+      return new WranglerCatalogDatabase(name);
+    },
+    openTablesDatabase(name) {
       return new WranglerCatalogDatabase(name);
     },
   };
@@ -839,7 +878,7 @@ function requireProvisioningAdapter(
     'The Cloudflare target adapter cannot inspect or provision remote resources.',
     {
       remediation:
-        'Use the default Wrangler-backed adapter, or provide one with inspectResources(), createCatalogDatabase(), and createObjectsBucket().',
+        'Use the default Wrangler-backed adapter, or provide one with inspectResources(), createCatalogDatabase(), createTablesDatabase(), and createObjectsBucket().',
     },
   );
 }
@@ -868,6 +907,7 @@ function isCloudflareTargetTokenAdapter(
 function describeMissingRemoteResources(remote: CloudflareRemoteResources): readonly string[] {
   return [
     ...(remote.catalogDatabaseExists ? [] : ['D1 catalog']),
+    ...(remote.tablesDatabaseExists === false ? ['D1 tables'] : []),
     ...(remote.objectsBucketExists ? [] : ['R2 objects']),
   ];
 }
@@ -881,6 +921,7 @@ function describeProvisioningConflicts(
   planned: {
     readonly workerName: string;
     readonly catalogDatabaseName: string;
+    readonly tablesDatabaseName: string;
     readonly objectsBucketName: string;
   },
 ): readonly string[] {
@@ -890,6 +931,9 @@ function describeProvisioningConflicts(
       : []),
     ...(remote.catalogDatabaseExists
       ? [`D1 database ${planned.catalogDatabaseName} already exists.`]
+      : []),
+    ...(remote.tablesDatabaseExists === true
+      ? [`D1 database ${planned.tablesDatabaseName} already exists.`]
       : []),
     ...(remote.objectsBucketExists
       ? [`R2 bucket ${planned.objectsBucketName} already exists.`]
@@ -902,11 +946,14 @@ async function createCloudflareProvisionedResources(
   planned: {
     readonly workerName: string;
     readonly catalogDatabaseName: string;
+    readonly tablesDatabaseName: string;
     readonly objectsBucketName: string;
   },
 ): Promise<void> {
   try {
     await adapter.createCatalogDatabase(planned.catalogDatabaseName);
+    await (adapter.createTablesDatabase?.(planned.tablesDatabaseName) ??
+      adapter.createCatalogDatabase(planned.tablesDatabaseName));
     await adapter.createObjectsBucket(planned.objectsBucketName);
   } catch (cause) {
     throw new LoreError(
@@ -1020,6 +1067,7 @@ function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt
     typeof receipt.accountId === 'string' &&
     typeof receipt.workerName === 'string' &&
     typeof receipt.catalogDatabaseName === 'string' &&
+    (receipt.tablesDatabaseName === undefined || typeof receipt.tablesDatabaseName === 'string') &&
     typeof receipt.objectsBucketName === 'string' &&
     Array.isArray(receipt.capabilities) &&
     receipt.capabilities.every((value) => typeof value === 'string')

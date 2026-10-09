@@ -340,7 +340,7 @@ describe('lorepack target add cloudflare, issue 85', () => {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('D1 catalog: create deploy-demo-catalog');
         expect(result.stdout).toContain('R2 objects: create deploy-demo-objects');
-        expect(state.createdCatalogs).toEqual(['deploy-demo-catalog']);
+        expect(state.createdCatalogs).toEqual(['deploy-demo-catalog', 'deploy-demo-tables']);
         expect(state.createdBuckets).toEqual(['deploy-demo-objects']);
 
         const receipt = JSON.parse(

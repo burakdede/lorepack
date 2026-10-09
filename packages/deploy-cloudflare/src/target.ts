@@ -27,6 +27,7 @@ import { projectTableData } from './project-table-data.js';
 import {
   type ProjectionMigrationDatabaseLike,
   runProjectionMigrations,
+  runTableProjectionMigrations,
 } from './projection-migrations.js';
 import {
   D1_FREE_TIER_LIMIT_BYTES,
@@ -47,11 +48,13 @@ export interface CloudflareDeploymentTargetOptions {
   readonly endpoint: string;
   readonly workerName?: string;
   readonly catalogDatabaseName?: string;
+  readonly tablesDatabaseName?: string;
   readonly objectsBucketName?: string;
   readonly catalogDb: ProjectionMigrationDatabaseLike &
     D1CatalogDatabaseLike &
     D1QueryDatabaseLike &
     D1DatabaseLike;
+  readonly tablesDb?: ProjectionMigrationDatabaseLike & D1QueryDatabaseLike;
   readonly objects: R2BucketLike;
   readonly now?: () => string;
   readonly detect?: () => Promise<TargetDetection>;
@@ -158,6 +161,7 @@ export function createCloudflareDeploymentTarget(
       try {
         if (transfer.state?.migrations_done !== true) {
           await runProjectionMigrations(options.catalogDb, options.now);
+          await runTableProjectionMigrations(options.tablesDb ?? options.catalogDb, options.now);
           transfer = updateState(transfer, 'migrations_done', true);
           receipt = { ...receipt, transfer };
           projectedSteps += 1;
@@ -208,7 +212,8 @@ export function createCloudflareDeploymentTarget(
 
         if (transfer.state?.tables_done !== true) {
           await projectTableData({
-            db: options.catalogDb,
+            db: options.tablesDb ?? options.catalogDb,
+            metadataDb: options.catalogDb,
             projectId: options.projectId,
             buildId: plan.input.buildId,
             buildDirectory,
@@ -448,6 +453,7 @@ async function renderDisplay(input: {
     resourceLines: [
       `= Worker ${input.options.workerName ?? '(resolved by receipt)'}`,
       `= D1 ${input.options.catalogDatabaseName ?? '(resolved by receipt)'}`,
+      `= D1 tables ${input.options.tablesDatabaseName ?? '(resolved by receipt)'}`,
       `= R2 ${input.options.objectsBucketName ?? '(resolved by receipt)'}`,
     ],
     projectionLines,
@@ -559,7 +565,11 @@ async function verifyCandidateBuild(
     open: async () => ({
       buildId,
       catalog,
-      tables: new D1TableStore(options.catalogDb, { projectId: options.projectId, buildId }),
+      tables: new D1TableStore(
+        options.catalogDb,
+        { projectId: options.projectId, buildId },
+        options.tablesDb ?? options.catalogDb,
+      ),
       objects: new R2ObjectStore(options.projectId, options.objects),
     }),
   });
