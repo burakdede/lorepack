@@ -60,8 +60,19 @@ beforeEach(() => {
 });
 
 describe('createMcpHttpHandler', () => {
-  it('configures loopback Host validation when the listener binds all interfaces', () => {
+  it('configures the requested Host policy', () => {
     createMcpHttpHandler({} as never);
+
+    expect(createMcpHonoApp).toHaveBeenCalledWith({
+      host: '127.0.0.1',
+    });
+  });
+
+  it('passes an explicit Host policy to the adapter', () => {
+    createMcpHttpHandler({} as never, undefined, {
+      host: '0.0.0.0',
+      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
+    });
 
     expect(createMcpHonoApp).toHaveBeenCalledWith({
       host: '0.0.0.0',

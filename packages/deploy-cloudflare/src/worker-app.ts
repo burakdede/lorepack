@@ -80,7 +80,7 @@ const CORS_MAX_AGE_SECONDS = '600';
 function createWorkerApp(
   options: CloudflareRuntimeOptions,
 ): CloudflareWorkerApp & { readonly apiOptions: ApiOptions } {
-  const mcp = createMcpHttpHandler(options.runtime, options.comparer);
+  const mcp = createMcpHttpHandler(options.runtime, options.comparer, { host: 'cloudflare' });
   const apiOptions: ApiOptions = {
     runtime: options.runtime,
     currentBuild: options.currentBuild,
