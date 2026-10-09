@@ -134,6 +134,7 @@ function writeCloudflareReceipt(root: string): void {
         accountId: 'acct_123',
         workerName: 'demo-runtime',
         catalogDatabaseName: 'demo-catalog',
+        tablesDatabaseName: 'demo-tables',
         objectsBucketName: 'demo-objects',
         capabilities: ['lexical-search', 'structured-context', 'table-query'],
       },
@@ -201,8 +202,9 @@ function fakeCloudflareRollbackAdapter(
       accountId: 'acct_123',
       accountName: 'Example',
     }),
-    listDatabases: async () => [{ name: 'demo-catalog' }],
+    listDatabases: async () => [{ name: 'demo-catalog' }, { name: 'demo-tables' }],
     openCatalogDatabase: () => catalog,
+    openTablesDatabase: () => catalog,
     openObjectsBucket: () => objectsBucket,
   };
 }
