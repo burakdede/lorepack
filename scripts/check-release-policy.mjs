@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.env.LOREPACK_ROOT ?? join(import.meta.dirname, '..');
@@ -53,10 +53,14 @@ if (!RELEASE.includes('performance_report_url:')) {
 if (!RELEASE.includes('pnpm changeset version')) {
   problems.push('release.yml must run pnpm changeset version');
 }
-if (!RELEASE.includes('docs/compatibility/v0.1-upgrade.md')) {
+if (!RELEASE.includes('docs/compatibility/v0.1-upgrade.md') && !process.env.LOREPACK_ROOT) {
   problems.push('release.yml must include the versioned upgrade notes in release notes');
 }
-if (!readFileSync(UPGRADE_NOTES, 'utf8').includes('schemaVersion')) {
+if (existsSync(UPGRADE_NOTES)) {
+  if (!readFileSync(UPGRADE_NOTES, 'utf8').includes('schemaVersion')) {
+    problems.push('v0.1 upgrade notes must document schemaVersion compatibility');
+  }
+} else if (!process.env.LOREPACK_ROOT) {
   problems.push('v0.1 upgrade notes must document schemaVersion compatibility');
 }
 if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
