@@ -64,7 +64,7 @@ describe('createMcpHttpHandler', () => {
     createMcpHttpHandler({} as never);
 
     expect(createMcpHonoApp).toHaveBeenCalledWith({
-      host: '127.0.0.1',
+      host: 'runtime',
     });
   });
 
