@@ -88,9 +88,23 @@ it was.
 
 ## Workflow recordings
 
+The first recording follows the initial build from the active overview into source inspection.
+It helps answer the first operational question: what did Lorepack index, and what did it leave
+out? Use the Sources screenshots above when you prefer a still image.
+
 ![Studio first build and source inspection](images/studio-first-build.gif)
 
+The second recording shows the Context Playground assembling a bounded task bundle. It helps
+reviewers see the selected passages, explicit omissions, budget accounting, and provenance before
+copying the equivalent CLI, HTTP, or MCP request. Use the Playground screenshot above for a
+reduced-motion view.
+
 ![Studio context assembly and provenance](images/studio-playground.gif)
+
+The final recording follows a version review through diff, activation, and rollback. It helps
+verify that a context update is reviewed before activation and that rollback selects an existing
+immutable build instead of recompiling sources. Use the Versions screenshot above when you want
+the same workflow without motion.
 
 ![Studio version diff, activation, and rollback](images/studio-versions.gif)
 

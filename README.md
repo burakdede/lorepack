@@ -25,6 +25,53 @@ time:
 Lorepack is a context build system, not a hosted knowledge base, generic crawler, chat app, or
 replacement for your source control. Retrieval is one capability of a versioned build.
 
+## Where Lorepack fits
+
+Lorepack is useful when an AI system depends on files that change and those changes need the
+same reviewability as code or infrastructure. Common environments include:
+
+- Local coding agents that need one checked-in context for a repository, its runbooks, and its
+  design documents.
+- Engineering and operations teams that review deployment procedures, incident notes, and
+  policies before an agent can use a new version.
+- Regulated or security-sensitive teams that need immutable builds, explicit activation, and a
+  source location for every returned passage or table row.
+- Product and research teams that work from evolving specifications, decision records, and
+  experiment notes without copying them into a second knowledge base.
+- CI and release workflows that need to build, validate, compare, package, or roll back context
+  as part of a repeatable change process.
+- Teams serving several AI clients from one local or packaged build through MCP or HTTP while
+  keeping lifecycle changes in developer-controlled tooling.
+
+The Terraform analogy describes the lifecycle, not infrastructure provisioning. `lore.yaml` is
+the desired context configuration. `lorepack plan` previews the candidate, `lorepack build`
+compiles an immutable artifact, `lorepack validate` checks it without moving the active pointer,
+and `lorepack activate` changes that pointer. `lorepack diff` reviews versions and
+`lorepack rollback` selects a previous immutable build. This separates desired inputs, review,
+and activation. Lorepack does not provision cloud resources and does not mutate source files.
+
+This is a good fit when provenance, reproducibility, and safe updates matter as much as asking a
+question. It is not a replacement for OCR, SaaS connectors, or a hosted multi-user knowledge
+platform in v0.1.
+
+## Lorepack Studio
+
+`lorepack dev` serves Lorepack Studio locally. It is an inspector for the active build:
+
+- Overview shows the active id, freshness, compiler information, capabilities, warnings, and
+  the next rebuild step.
+- Sources shows indexed artifacts and excluded files with reasons.
+- Playground assembles bounded context and shows selections, omissions, budget accounting, and
+  the equivalent CLI, HTTP, and MCP request.
+- Tables shows typed schemas, sample rows, and bounded read-only queries when tables exist.
+- Versions shows build history, diffs, activation, rollback, and portable packaging.
+- Diagnostics shows environment checks, watcher state, and detected AI clients.
+
+![Lorepack Studio, showing the active build, next steps, and the MCP endpoint for an agent](docs/images/studio-overview.png)
+
+Read the [Studio tour](docs/studio-tour.md) for route-by-route screenshots, workflow recordings,
+and the actions behind each view.
+
 ## Start in two commands
 
 Requires Node.js `>=24.15 <25`. The first alpha is published on npm's `next` channel:
@@ -226,16 +273,9 @@ lorepack dev ./my-docs
 
 Open Sources to inspect artifacts and exclusions, Playground to assemble a bounded task bundle,
 and Versions to compare, activate, pack, or roll back builds. The same workflows are shown in
-the [Studio tour](docs/studio-tour.md):
-
-![Studio first build and source inspection](docs/images/studio-first-build.gif)
-
-![Studio context assembly and provenance](docs/images/studio-playground.gif)
-
-![Studio version diff, activation, and rollback](docs/images/studio-versions.gif)
-
-The GIFs are regenerable with `pnpm docs:studio:gifs`. Static screenshots remain available in
-the Studio tour for reduced-motion and offline readers.
+the [Studio tour](docs/studio-tour.md). The recordings are optional motion summaries; the tour
+also keeps static screenshots for reduced-motion and offline readers. Regenerate recordings with
+`pnpm docs:studio:gifs`.
 
 ### Measure a corpus before making a performance claim
 
@@ -277,24 +317,6 @@ through a bounded read-only SQL surface.
 Model-facing MCP and HTTP capabilities read an immutable active build. They cannot build,
 activate, roll back, deploy, modify source files, or execute shell commands. Mutating lifecycle
 actions remain explicit CLI or Studio operations performed by the developer.
-
-## Lorepack Studio
-
-`lorepack dev` serves Lorepack Studio locally. It is an inspector for the active build:
-
-- Overview shows the active id, freshness, compiler information, capabilities, warnings, and
-  the next rebuild step.
-- Sources shows indexed artifacts and excluded files with reasons.
-- Playground assembles bounded context and shows selections, omissions, budget accounting, and
-  the equivalent CLI, HTTP, and MCP request.
-- Tables shows typed schemas, sample rows, and bounded read-only queries when tables exist.
-- Versions shows build history, diffs, activation, rollback, and portable packaging.
-- Diagnostics shows environment checks, watcher state, and detected AI clients.
-
-![Lorepack Studio, showing the active build, next steps, and the MCP endpoint for an agent](docs/images/studio-overview.png)
-
-Read the [Studio tour](docs/studio-tour.md) for route-by-route screenshots and the actions
-behind each view.
 
 ## Supported inputs and current boundaries
 
