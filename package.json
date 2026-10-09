@@ -1,6 +1,6 @@
 {
   "name": "lorepack",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Versioned context build system for AI",
   "license": "Apache-2.0",
