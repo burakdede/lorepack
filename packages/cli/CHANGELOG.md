@@ -1,5 +1,18 @@
 # @lorepack/cli
 
+## 0.1.0
+
+### Minor Changes
+
+- 218f5e0: Use `lorepack` as the canonical public command.
+- de0aad4: Add shell completion and clarify the public Lorepack workflow in the documentation.
+- f8d0794: Add an explicit `lorepack validate` step for safe candidate verification before activation.
+
+### Patch Changes
+
+- 375423e: Add typed command metadata for help, documentation and completion tooling.
+- 2b3dd49: Report the published package version from `lorepack --version`.
+
 ## 0.1.0-alpha.0
 
 ### Minor Changes

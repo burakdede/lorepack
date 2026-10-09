@@ -1244,15 +1244,15 @@
         "packages/cli/package.json:dependencies",
         "packages/connect-clients/package.json:dependencies"
       ],
-      "latestVersion": "1.9.0",
+      "latestVersion": "1.9.1",
       "pinnedPublishedAt": "2026-09-22T17:15:34.756Z",
-      "latestReleaseAt": "2026-09-22T17:15:34.756Z",
+      "latestReleaseAt": "2026-10-09T10:21:39.612Z",
       "daysSinceLastRelease": 0,
       "license": "BSD-3-Clause",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/smol-toml@1.9.0"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/smol-toml@1.9.1"
       },
       "health": {
         "status": "current"
@@ -1368,9 +1368,9 @@
       "references": [
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
-      "latestVersion": "4.148.0",
+      "latestVersion": "4.149.0",
       "pinnedPublishedAt": "2026-08-05T12:31:36.536Z",
-      "latestReleaseAt": "2026-10-06T18:33:23.820Z",
+      "latestReleaseAt": "2026-10-08T18:24:09.016Z",
       "daysSinceLastRelease": 0,
       "license": "MIT OR Apache-2.0",
       "provenance": {
