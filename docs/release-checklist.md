@@ -5,6 +5,8 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 ## Before Dispatch
 
 - Confirm the release issue links the PRs being shipped and every handoff is current.
+- Confirm the generated package changelogs and [`v0.1 upgrade notes`](compatibility/v0.1-upgrade.md)
+  are present in the release dry-run artifact and release notes.
 - Keep release issue `#102` open until the publish and post-publish evidence are complete.
 - Confirm `main` is the intended release commit and all required checks are green there.
 - Confirm npm Trusted Publishing is configured for `@lorepack/cli` with GitHub Actions
