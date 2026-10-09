@@ -99,7 +99,6 @@
 /* The one animated moment in the product: a rebuild landed and the world changed. */
 @keyframes build-settle {
   from {
-    opacity: 0.25;
     filter: blur(2px);
   }
 }
