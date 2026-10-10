@@ -12,7 +12,7 @@
 // See docs/architecture/release-supply-chain.md.
 //
 // Usage: node scripts/pack-cli.mjs --out <directory>   (prints the tarball path)
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   cpSync,
@@ -120,6 +120,13 @@ export function packCli({ outDir, root = ROOT }) {
     delete manifest.devDependencies;
     delete manifest.scripts;
     manifest.bundleDependencies = Object.keys(manifest.dependencies ?? {}).sort();
+    // npm records `gitHead` only when it packs inside a git checkout, and this stage is not
+    // one. The publisher and the registry smoke both require it to equal the release tag's
+    // commit (#619).
+    manifest.gitHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim();
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     copyFileSync(join(root, 'LICENSE'), join(stage, 'LICENSE'));
 
