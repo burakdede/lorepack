@@ -294,7 +294,7 @@ lorepack dev [path]
 | Name | Description |
 |---|---|
 | `--port <number>` | port to listen on (default 43110) |
-| `--host <address>` | address to bind (default 127.0.0.1) |
+| `--host <address>` | address to bind (default 127.0.0.1); off loopback, serves read-only |
 | `--yes` | accept defaults without asking (the default path asks nothing) |
 | `--allow-large-project` | continue past the supported file count |
 

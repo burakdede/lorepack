@@ -1,5 +1,13 @@
+import type { NetworkInterfaceInfo } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { isLoopback, parseInterval, parsePort, SERVE_DEFAULTS } from '../src/services/serving.js';
+import {
+  allowedHostsFor,
+  bindWarning,
+  isLoopback,
+  parseInterval,
+  parsePort,
+  SERVE_DEFAULTS,
+} from '../src/services/serving.js';
 
 /**
  * The policy both servers share, asserted once.
@@ -48,5 +56,62 @@ describe('refusing an argument that cannot mean what it says', () => {
     }
     // Zero is meaningful: recheck on every request.
     expect(parseInterval('0')).toBe(0);
+  });
+});
+
+/**
+ * The `Host` names a server answers to, which is the DNS rebinding defence (#547).
+ *
+ * One list for REST and MCP, so the assertion is on the list rather than on either surface.
+ */
+describe('which Host names a server answers to', () => {
+  const interfaces = {
+    lo0: [{ address: '127.0.0.1' }, { address: '::1' }],
+    en0: [{ address: '192.168.0.162' }, { address: 'fe80::1c2b:3d4e', scopeid: 4 }],
+  } as unknown as Record<string, NetworkInterfaceInfo[]>;
+
+  it('is exactly the loopback names on a loopback bind', () => {
+    for (const bind of ['127.0.0.1', 'localhost', '::1']) {
+      expect(allowedHostsFor(bind, interfaces).sort(), bind).toEqual(
+        ['127.0.0.1', '[::1]', 'localhost'].sort(),
+      );
+    }
+  });
+
+  it('adds an explicit non-loopback address, as a Host header carries it', () => {
+    expect(allowedHostsFor('192.168.0.162', interfaces)).toContain('192.168.0.162');
+    expect(allowedHostsFor('My-Box.LOCAL', interfaces)).toContain('my-box.local');
+    expect(allowedHostsFor('FE80::1', interfaces)).toContain('[fe80::1]');
+  });
+
+  it("adds this machine's addresses on a wildcard bind, and never a hostname", () => {
+    const hosts = allowedHostsFor('0.0.0.0', interfaces);
+    expect(hosts).toContain('192.168.0.162');
+    expect(hosts).toContain('[fe80::1c2b:3d4e]');
+    expect(hosts).not.toContain('0.0.0.0');
+    expect(allowedHostsFor('::', interfaces)).toContain('192.168.0.162');
+  });
+
+  it('refuses a bind host that is not an address', () => {
+    expect(() => allowedHostsFor('not a host', interfaces)).toThrow(/--host must be an address/);
+  });
+});
+
+/** The warning a non-loopback bind prints, which must not promise more than is true (#549). */
+describe('the non-loopback warning', () => {
+  it('says there is no authentication and what anyone on the network can read', () => {
+    for (const studio of [true, false]) {
+      const text = bindWarning('0.0.0.0', studio);
+      expect(text).toContain('no authentication');
+      expect(text).toContain('every source document');
+      expect(text).toContain('cannot change which build is active');
+    }
+  });
+
+  it('names what Studio withholds only when Studio is served', () => {
+    expect(bindWarning('0.0.0.0', true)).toContain(
+      'activate, roll back, pack, plan and diagnostics are only served on a loopback address',
+    );
+    expect(bindWarning('0.0.0.0', false)).not.toContain('Studio');
   });
 });

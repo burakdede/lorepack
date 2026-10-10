@@ -115,11 +115,34 @@ of the boundary:
 | A file whose bytes are not readable text | Excluded at fingerprinting, with a warning |
 | A table past a column or row limit | Excluded with a warning; the build succeeds (#242) |
 
+## DNS rebinding
+
+The local server refuses any `Host` header that is not a loopback name or an address it was
+explicitly bound to, before any route runs, `/mcp` included (#547). That, not the `Origin`
+check, is the rebinding defence: a rebound page is same-origin, and a browser sends no
+`Origin` on a same-origin `GET`. `tools/security/test/local-server.test.ts` drives the real
+`lorepack dev` binary with `Host: attacker.example` against `/v1/sources/:id`,
+`/v1/diagnostics`, `/v1/builds`, `/health` and `/mcp`; `packages/runtime/test/http.test.ts`
+and `packages/cli/test/serving.test.ts` pin the check and the list.
+
 ## The write surface
 
-There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`, refusing every browser
-origin that is not a loopback literal. A runtime built without it has **no mutating route at
-all**, which the end-to-end suite asserts by requesting each one and expecting a typed 404.
+There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`. A browser caller must
+be the page this server served: its `Origin` must match the request's `Host`, port included,
+and name a loopback host, so a page on another `localhost` port is refused (#548). Every JSON
+route refuses a `text/plain`, form-encoded or untyped body with `415`, which forces a CORS
+preflight on any cross-origin page, and the HTTP pack route has no `out` field, so no caller
+chooses which file is written. `tools/security/test/local-server.test.ts` replays the
+original attack, a `text/plain` POST naming an output path from `http://localhost:8080`,
+against the real binary and asserts the target file is untouched. A runtime built without
+`localActions` has **no mutating route at all**, which the end-to-end suite asserts by
+requesting each one and expecting a typed 404.
+
+`lorepack dev` supplies no `localActions` when bound to a non-loopback address, because the
+write guard admits a request with no `Origin` and a network client sends none (#549).
+`packages/cli/test/dev.e2e.test.ts` drives `lorepack dev --host 0.0.0.0` and asserts every
+write route, `/v1/plan` and `/v1/diagnostics` are 404 while Studio and the build reads still
+answer.
 
 That is checked by **registration rather than by HTTP method**, because
 `POST /v1/tables/:id/query` is a read: a SQL statement does not belong in a URL. A method-based
@@ -150,4 +173,6 @@ echoed in the Worker 401 response.
 - **Live credentialed Cloudflare drift.** The checked-in remote auth and Worker tests run
   locally without credentials. The credentialed Cloudflare smoke remains the live-account proof.
 - **Local authentication.** There is none locally, by design: the server binds loopback and
-  serves one project. Browser-origin checks protect the local write surface.
+  serves one project. The `Host` allowlist, same-origin checks and the JSON content-type
+  requirement protect it from web pages. A process running as the same user can call it
+  freely, which the threat model lists as a non-goal.

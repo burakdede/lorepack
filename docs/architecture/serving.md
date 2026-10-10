@@ -137,12 +137,20 @@ a surface a client has to probe.
 Anything else is a `404` in the same typed error shape as every other failure, so a client
 has one error format rather than two.
 
+Every `POST` route under `/v1` takes a JSON body and requires `Content-Type: application/json`
+(parameters such as `charset` are fine). Any other type, or none, is a typed `415`, checked
+before the body is read. `text/plain` and the form encodings are exactly what a web page can
+send cross-origin without a CORS preflight, so refusing them means a hostile page has to ask
+first, and the server never approves a foreign origin (#548). The SDK, Studio and the `curl`
+equivalents Studio prints all send the header already.
+
 Five more routes exist only where the host supplied them, because each reads something a
 deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
 `GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
 `lorepack export` writes; `GET /v1/diagnostics` reads the machine. `lorepack serve` registers only
 the three that read the active build, because the other two read sources and a live session,
-and `lorepack serve` has neither.
+and `lorepack serve` has neither. `lorepack dev --host` with a non-loopback address registers
+the same three, and none of the writes below (#549).
 
 `/v1/diagnostics` returns the same report `lorepack doctor --json` prints, validated against
 `schemas/doctor-report.json`, plus the live session state a one-shot command cannot see: the
@@ -161,17 +169,28 @@ The only routes in this API that change anything:
 | `GET /v1/builds/:from/diff/:to` | section 18.3's comparison of any two builds |
 | `POST /v1/builds/activate` | move the active pointer to a named build |
 | `POST /v1/builds/rollback` | move it back to the previous verified build |
-| `POST /v1/builds/pack` | write a `.lorepack` archive |
+| `POST /v1/builds/pack` | write a `.lorepack` archive to the default name in the project root |
 
 They exist only where a host passes `localActions`, which only the local CLI does, and only
-for `lorepack dev`. Three things keep them local:
+for `lorepack dev` bound to a loopback address. With `--host 0.0.0.0` or any other
+non-loopback address, `lorepack dev` registers none of them, nor `/v1/plan` and
+`/v1/diagnostics`, which disclose absolute paths: the write guard admits a request with no
+`Origin`, and every host on a network can send one (#549). Studio is then read-only, and the
+startup warning says exactly what is exposed. Four things keep the routes local:
 
 1. **A remote deployment cannot register them.** It holds one build and no history, so it has
    nothing to supply. A route that does not exist cannot be reached by getting past a check.
-2. **They refuse any browser origin that is not a loopback literal**, and `allowedOrigins`
-   cannot widen this. Adding a remote origin so a team can read a deployment is not the same
-   as letting it activate a build.
-3. **No model-facing tool reaches them.** MCP stays read-only (invariant 10). These are
+2. **They refuse every browser page but Studio.** A request with an `Origin` must be
+   same-origin with the `Host` it was sent to (scheme aside, the same host and port) and
+   name a loopback host. Another server on `localhost:8080` is a loopback origin, but it is not
+   Studio, and it is refused (#548). `allowedOrigins` cannot widen this: adding a remote
+   origin so a team can read a deployment is not the same as letting it activate a build.
+   A request with no `Origin` (curl, a script) is admitted, because only the person at this
+   machine can send one to a loopback address.
+3. **An HTTP caller cannot choose a file to write.** `POST /v1/builds/pack` accepts only
+   `build`; an `out` field is refused with a `400`. The archive goes to the same default name
+   `lorepack pack` uses, and `lorepack pack --out` is how to put it elsewhere.
+4. **No model-facing tool reaches them.** MCP stays read-only (invariant 10). These are
    Studio's, and Studio is served from loopback.
 
 Each one calls the same code path the equivalent command does, so a build activated in a
@@ -184,12 +203,37 @@ is refused with `LORE_E_OBJECT_CORRUPT` while the previous one is still serving.
 before confirming. If the history moved in between, the request is refused rather than
 applied to a different build than the one that was confirmed.
 
+### Host checking
+
+DNS rebinding makes a hostname the attacker controls resolve to `127.0.0.1`. The attacker's
+page is then same-origin with the local server, and a browser sends no `Origin` on a
+same-origin `GET`, so an `Origin` check alone would let it read every source. What the page
+cannot change is the `Host` header, which names the attacker's hostname.
+
+So the local server answers only to the names it was bound for, before any route runs,
+including `/health`, `/mcp` and Studio. Anything else is a typed `403`
+(`LORE_E_INVALID_ARGUMENT`). `allowedHostsFor` in `packages/cli/src/services/serving.ts`
+derives one list, and the REST app and the MCP transport both enforce it:
+
+| Bind | Accepted `Host` names (any port) |
+|---|---|
+| `127.0.0.1`, `localhost`, `::1` (default) | `127.0.0.1`, `localhost`, `[::1]` |
+| an explicit address or name, e.g. `192.168.0.162` | the loopback names and that address |
+| `0.0.0.0` or `::` | the loopback names and every address of this machine's interfaces, read at startup |
+
+The port is not compared: a rebound page uses this server's own port, and an SSH tunnel or
+Studio's Vite dev proxy legitimately arrives on another. An IP literal is safe to accept,
+because rebinding needs a DNS name. A reverse proxy in front of Lorepack under another
+hostname must forward a loopback `Host` (for nginx, `proxy_set_header Host 127.0.0.1;`).
+A Worker deployment passes no list: it is reached by its own hostname and authenticates.
+
 ### Origin checking
 
-A page on any website can make a request to `127.0.0.1`, and DNS rebinding can make it look
-same-origin to the browser. Every unrecognised `Origin` is refused. A non-browser client
-(the SDK, an MCP host, curl) sends no `Origin` header and is unaffected. `/health` is exempt
-so a browser can probe liveness without learning anything.
+A page on any website can make a request to `127.0.0.1`. Every unrecognised `Origin` is
+refused. A non-browser client (the SDK, an MCP host, curl) sends no `Origin` header and is
+unaffected. `/health` is exempt so a browser can probe liveness without learning anything.
+This check stops cross-site requests; it is not the DNS rebinding defence, the `Host` check
+above is.
 
 ### Authorization
 

@@ -31,7 +31,7 @@ export interface PackOptions {
   readonly build?: string | undefined;
   /** Where to write. Defaults into the project root, named for the project and the build. */
   readonly out?: string | undefined;
-  /** Base for a relative `out`. The process cwd for the CLI, the project root for Studio. */
+  /** Base for a relative `out`: the process cwd. Only the CLI passes `out`; HTTP cannot. */
   readonly relativeTo?: string | undefined;
 }
 

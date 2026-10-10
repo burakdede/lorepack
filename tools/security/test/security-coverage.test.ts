@@ -85,7 +85,35 @@ const EVIDENCE: readonly Evidence[] = [
   {
     name: 'localhost Origin validation protects the local write surface',
     path: 'packages/runtime/test/http.test.ts',
-    patterns: [/refuses a non-loopback browser origin/, /allowLoopbackOrigin/, /127\.0\.0\.1/],
+    patterns: [/refuses a non-loopback browser origin/, /allowSameOrigin/, /127\.0\.0\.1/],
+  },
+  {
+    name: 'local write routes refuse other localhost ports, simple requests and an output path',
+    path: 'packages/runtime/test/http.test.ts',
+    patterns: [
+      /refuses a loopback page on another port/,
+      /refuses a simple-request body with 415/,
+      /will not let an HTTP caller choose where an archive is written/,
+    ],
+  },
+  {
+    name: 'a Host allowlist stops DNS rebinding on REST and MCP',
+    path: 'tools/security/test/local-server.test.ts',
+    patterns: [/DNS rebinding/, /attacker\.example/, /\/v1\/sources/, /\/mcp/, /toBe\(403\)/],
+  },
+  {
+    name: 'the runtime refuses a foreign Host before any handler runs',
+    path: 'packages/runtime/test/http.test.ts',
+    patterns: [/refuses a foreign Host before any handler runs/, /allowedHosts/],
+  },
+  {
+    name: 'a non-loopback dev bind serves no write route',
+    path: 'packages/cli/test/dev.e2e.test.ts',
+    patterns: [
+      /--host', '0\.0\.0\.0'/,
+      /serves no write route, plan or diagnostics/,
+      /toBe\(404\)/,
+    ],
   },
   {
     name: 'remote runtime auth rejects bypass attempts',

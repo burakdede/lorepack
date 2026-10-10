@@ -44,7 +44,10 @@ export function devCommand(): CommandDefinition {
     arguments: [{ name: 'path', description: 'project directory (default: .)', required: false }],
     flags: [
       { flags: '--port <number>', description: `port to listen on (default ${DEV_PORT})` },
-      { flags: '--host <address>', description: 'address to bind (default 127.0.0.1)' },
+      {
+        flags: '--host <address>',
+        description: 'address to bind (default 127.0.0.1); off loopback, serves read-only',
+      },
       {
         flags: '--yes',
         description: 'accept defaults without asking (the default path asks nothing)',

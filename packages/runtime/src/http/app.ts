@@ -61,20 +61,35 @@ export interface ApiOptions {
    */
   readonly allowedOrigins?: readonly string[];
   /**
-   * Also accept a browser page served from a loopback address.
+   * The hostnames this server answers to, checked against `Host` before any route runs.
    *
-   * Set when Studio is mounted, because Studio is served by this same app and its own
-   * subresource and API requests carry an `Origin` naming the loopback host it was loaded
-   * from. The port is not known when this app is constructed (it is chosen by trying), so
-   * the rule is expressed as a property of the origin rather than as a literal.
+   * This, not the `Origin` check, is the DNS rebinding defence (#547). After a rebind the
+   * attacker's page is same-origin with this server, and a browser sends no `Origin` on a
+   * same-origin `GET`, so every read would pass an origin check. The `Host` header is what the
+   * attacker cannot change: it names the hostname in the URL the page fetched, which is theirs.
    *
-   * This does not weaken the DNS rebinding defence, which is the reason the check exists.
-   * Rebinding works by making a hostname the attacker controls resolve to `127.0.0.1`, and
-   * the browser puts that **hostname** in `Origin`, not the resolved address. So an attacker
-   * page is `https://evil.example` and is still refused; only a page genuinely served from a
-   * loopback literal produces a loopback origin.
+   * Hostnames only, compared case-insensitively, with IPv6 literals in brackets (`[::1]`). The
+   * port is not compared: a rebinding attack uses this server's own port, and an SSH tunnel or
+   * a dev proxy legitimately reaches it through another. The local CLI derives one list from
+   * the bind address and hands the same list to the MCP transport. Absent, nothing is
+   * checked, which is a Worker: it is reached by its own hostname and authenticates instead.
    */
-  readonly allowLoopbackOrigin?: boolean;
+  readonly allowedHosts?: readonly string[];
+  /**
+   * Also accept a browser page this server itself served: one whose `Origin` names the same
+   * host and port as the request's `Host`.
+   *
+   * Set when Studio is mounted, because Studio is served by this same app and its API
+   * requests carry an `Origin` naming the address it was loaded from. Same-origin rather than
+   * "any loopback origin" (#548): another server on this machine, on another port, is a
+   * loopback origin too, and it is not Studio. Compared per request against `Host` rather
+   * than against a literal, because the port is chosen by trying after this app is built,
+   * and because a dev proxy or tunnel serves Studio on a port of its own.
+   *
+   * Only meaningful when `allowedHosts` is set: without it, a rebound page is same-origin
+   * with whatever `Host` it sends. So `createApiApp` refuses this option without that one.
+   */
+  readonly allowSameOrigin?: boolean;
   /**
    * What a rebuild would change, computed on demand.
    *
@@ -125,8 +140,8 @@ export interface ApiOptions {
    * does not have these routes at all, which is stronger than having them and refusing.
    *
    * Model-facing MCP tools never reach them (invariant 10). These belong to Studio, which is
-   * loopback-bound, and the routes below refuse any browser origin that is not a loopback
-   * literal regardless of what `allowedOrigins` permits for reads.
+   * loopback-bound, and the routes below refuse any browser page except a same-origin one on
+   * a loopback name, regardless of what `allowedOrigins` permits for reads.
    */
   readonly localActions?: LocalActions;
   /** Largest request body accepted, in bytes. */
@@ -177,9 +192,12 @@ export type AuthorizationDecision = boolean | string | Promise<boolean | string>
  * contract every backend implements. It is the shape of two local requests.
  */
 const activateRequestSchema = z.object({ build: z.string().min(1) }).strict();
-const packRequestSchema = z
-  .object({ build: z.string().min(1).optional(), out: z.string().min(1).optional() })
-  .strict();
+/**
+ * No `out`: an HTTP caller never chooses where a file is written (#548). The archive goes to
+ * the default name in the project root, and `lorepack pack --out` remains the way to pick
+ * another place, from a terminal, as the person who owns the files.
+ */
+const packRequestSchema = z.object({ build: z.string().min(1).optional() }).strict();
 /**
  * `expect` is the build the caller was shown before confirming. Optional, because a script
  * rolling back has nothing to have been shown; supplied by Studio, so a confirmation that
@@ -203,23 +221,50 @@ const MCP_NAME_HEADER_SOURCE: Readonly<Record<string, 'name' | 'uri'>> = {
 export function createApiApp(options: ApiOptions): Hono {
   const app = new Hono();
   const allowed = new Set(options.allowedOrigins ?? []);
+  if (options.allowSameOrigin === true && options.allowedHosts === undefined) {
+    throw new LoreError(
+      'LORE_E_INTERNAL',
+      'allowSameOrigin needs allowedHosts: a same-origin check against an unchecked Host admits a DNS-rebound page.',
+    );
+  }
   const maxBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
 
   /**
-   * Origin checking, which is the defence a loopback server actually needs.
+   * Host checking, first, so a rebound request reaches nothing: not `/health`, not `/mcp`,
+   * not a Studio asset. See `ApiOptions.allowedHosts` for why this and not `Origin`.
+   */
+  if (options.allowedHosts !== undefined) {
+    const hosts = new Set(options.allowedHosts.map((host) => host.toLowerCase()));
+    app.use('*', async (context, next) => {
+      const host = context.req.header('Host');
+      if (host !== undefined && hosts.has(hostnameOf(host) ?? '')) return next();
+      return failure(
+        context,
+        new LoreError('LORE_E_INVALID_ARGUMENT', 'This server does not answer to that host name.', {
+          remediation:
+            'Use the address `lorepack dev` or `lorepack serve` printed. A reverse proxy in front of Lorepack must forward the original loopback Host header.',
+          ...(host === undefined ? {} : { subject: host }),
+        }),
+        403,
+      );
+    });
+  }
+
+  /**
+   * Origin checking, which stops a page on another site from calling this API.
    *
-   * A page on any website can make a request to `127.0.0.1`, and DNS rebinding can make
-   * that request look same-origin to the browser. A non-browser client (the SDK, an MCP
-   * host, curl) sends no `Origin` header at all, so refusing every unrecognised origin
-   * costs those nothing and closes the hole. `/health` is exempt so a browser can probe
-   * liveness without learning anything: it returns no content.
+   * A page on any website can make a request to `127.0.0.1`. A non-browser client (the SDK,
+   * an MCP host, curl) sends no `Origin` header at all, so refusing every unrecognised origin
+   * costs those nothing. It does not stop DNS rebinding: a rebound page is same-origin, and a
+   * same-origin `GET` carries no `Origin`. The `Host` check above is what does. `/health` is
+   * exempt so a browser can probe liveness without learning anything: it returns no content.
    */
   app.use('*', async (context, next) => {
     const origin = context.req.header('Origin');
     const permitted =
       origin === undefined ||
       allowed.has(origin) ||
-      (options.allowLoopbackOrigin === true && isLoopbackOrigin(origin));
+      (options.allowSameOrigin === true && isSameOrigin(origin, context.req.header('Host')));
 
     if (!permitted && context.req.path !== '/health') {
       return failure(
@@ -334,9 +379,10 @@ export function createApiApp(options: ApiOptions): Hono {
    *
    * Two independent things keep these off a remote deployment. A Worker has no build history
    * to hand over, so it supplies no `localActions` and these routes are never registered.
-   * And where they are registered, they additionally require any browser origin to be a
-   * loopback literal, which `allowedOrigins` cannot widen: a deployment that added a remote
-   * origin for reads has not thereby granted it the ability to activate a build.
+   * And where they are registered, a browser page must be the one this server served from a
+   * loopback name, which `allowedOrigins` cannot widen: a deployment that added a remote
+   * origin for reads has not thereby granted it the ability to activate a build, and another
+   * localhost server on another port is not Studio (#548).
    */
   if (options.localActions !== undefined) {
     const actions = options.localActions;
@@ -346,7 +392,12 @@ export function createApiApp(options: ApiOptions): Hono {
       next: () => Promise<void>,
     ): Promise<Response | undefined> => {
       const origin = context.req.header('Origin');
-      if (origin === undefined || isLoopbackOrigin(origin)) {
+      if (
+        origin === undefined ||
+        (options.allowSameOrigin === true &&
+          isLoopbackOrigin(origin) &&
+          isSameOrigin(origin, context.req.header('Host')))
+      ) {
         await next();
         return undefined;
       }
@@ -495,6 +546,42 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * Whether a browser page's `Origin` names exactly the host and port this request was sent to.
+ *
+ * That is what "served by this server" means once `Host` has been checked against the
+ * allowlist. Compared as `host:port` after URL normalisation, so `LOCALHOST:4321` and
+ * `localhost:4321` agree and `http://localhost` and `localhost:80` do too.
+ */
+function isSameOrigin(origin: string, host: string | undefined): boolean {
+  if (host === undefined || hostnameOf(host) === undefined) return false;
+  try {
+    const page = new URL(origin);
+    if (page.protocol !== 'http:' && page.protocol !== 'https:') return false;
+    return page.host === new URL(`${page.protocol}//${host}`).host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The hostname a `Host` header names, lowercased, with an IPv6 literal kept in brackets.
+ *
+ * Parsed by the URL parser rather than split on a colon, so `[::1]:4321` keeps its brackets
+ * and case and trailing ports are normalised the way a client resolved them. Anything that is
+ * not a bare `host[:port]`, such as `127.0.0.1@evil.example`, is `undefined` and so refused.
+ */
+function hostnameOf(host: string): string | undefined {
+  if (host === '' || /[/?#\\\s]/.test(host)) return undefined;
+  try {
+    const url = new URL(`http://${host}`);
+    if (url.username !== '' || url.password !== '') return undefined;
+    return url.hostname;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Paths the API owns, whose failures must stay typed rather than becoming the Studio shell. */
 function isApiPath(path: string): boolean {
   return path === '/health' || path === '/mcp' || path.startsWith('/v1/') || path === '/v1';
@@ -519,6 +606,21 @@ async function body<T>(
   maxBytes: number,
   extra: Record<string, unknown> = {},
 ): Promise<T> {
+  // Before the body is read. `text/plain`, a form encoding and no type at all are what a page
+  // can send cross-origin without a CORS preflight; requiring JSON forces the preflight, and
+  // this server never approves one for a foreign origin (#548).
+  const type = context.req.header('Content-Type');
+  if (!isJsonMediaType(type)) {
+    throw new UnsupportedMediaTypeError(
+      'LORE_E_INVALID_ARGUMENT',
+      'This route takes a JSON body, sent as application/json.',
+      {
+        remediation: "Send the body with the header 'Content-Type: application/json'.",
+        subject: type ?? '(none)',
+      },
+    );
+  }
+
   const declared = Number(context.req.header('Content-Length') ?? '0');
   if (Number.isFinite(declared) && declared > maxBytes) {
     throw tooLarge(declared, maxBytes);
@@ -559,6 +661,14 @@ async function body<T>(
   );
 }
 
+/** The media type before any parameter, so `application/json; charset=utf-8` qualifies. */
+function isJsonMediaType(header: string | undefined): boolean {
+  return header?.split(';')[0]?.trim().toLowerCase() === 'application/json';
+}
+
+/** A request whose body is the wrong media type, answered as `415` rather than `400`. */
+class UnsupportedMediaTypeError extends LoreError {}
+
 function tooLarge(actual: number, limit: number): LoreError {
   return new LoreError('LORE_E_LIMIT_EXCEEDED', 'The request body is too large.', {
     remediation: `This API accepts at most ${limit} bytes; the request declared ${actual}.`,
@@ -579,6 +689,7 @@ function failure(context: Context, error: unknown, status: number): Response {
  * caller that needs to branch reads `error.code`.
  */
 function statusFor(error: unknown): number {
+  if (error instanceof UnsupportedMediaTypeError) return 415;
   const code = LoreError.from(error).code;
   if (code === 'LORE_E_BUILD_NOT_FOUND') return 404;
   if (code === 'LORE_E_INVALID_ARGUMENT') return 400;

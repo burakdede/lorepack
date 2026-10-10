@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { serve } from '@hono/node-server';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
@@ -118,15 +119,20 @@ export async function startServing(
     let boundPort = options.port;
 
     const comparer = createLocalComparer(options.config.projectRoot);
-    const mcp = createMcpHttpHandler(runtime, comparer, {
-      host: options.host,
-      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
-    });
+    // One list for REST and MCP, so the two surfaces cannot disagree about which names this
+    // server answers to (#547).
+    const allowedHosts = allowedHostsFor(options.host);
+    const mcp = createMcpHttpHandler(runtime, comparer, { host: options.host, allowedHosts });
     // Absent when the package was installed without built assets, which is a broken install
     // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
     const serveStudio = options.studio === true && studioIsBuilt();
+    // Off loopback, nothing that writes or discloses this machine is served (#549). The write
+    // guard admits a request with no `Origin`, which is right for the person at this machine
+    // and wrong for every other host on the network, since none of them sends one either.
+    const local = isLoopback(options.host);
     const app = createApiApp({
       runtime,
+      allowedHosts,
       currentBuild: () => backend.provider.current(),
       freshness,
       mcpHandler: (request) => mcp.fetch(request),
@@ -170,10 +176,9 @@ export async function startServing(
           handle.release();
         }
       }),
-      ...(serveStudio
+      ...(serveStudio ? { assets: createStudioAssets(), allowSameOrigin: true } : {}),
+      ...(serveStudio && local
         ? {
-            assets: createStudioAssets(),
-            allowLoopbackOrigin: true,
             // The one Studio read that is **not** a read of the build: planning walks the
             // source tree. `lorepack serve` promises never to rebuild and has no business reading
             // sources, so this belongs to `lorepack dev` alone.
@@ -195,20 +200,18 @@ export async function startServing(
               diff: (from, to) => comparer.compare(from, to),
               activate: createActivateEndpoint(options.config),
               rollback: createRollbackEndpoint(options.config),
-              pack: async (request) => {
-                const asked = request as { build?: string; out?: string };
-                return packBuild(options.config, { build: asked.build, out: asked.out });
-              },
+              // No `out`: the request schema refuses one, so an HTTP caller can never pick
+              // the file this writes (#548).
+              pack: async (request) =>
+                packBuild(options.config, { build: (request as { build?: string }).build }),
             },
           }
         : {}),
     });
 
-    if (!isLoopback(options.host)) {
+    if (!local) {
       // Architecture 15.3: binding beyond loopback is possible and never accidental.
-      options.warn(
-        `Warning: binding to ${options.host} exposes this build to your network. It is read-only, and it is still your documents.\n`,
-      );
+      options.warn(bindWarning(options.host, serveStudio));
     }
 
     const server = await (dependencies.listen ?? listen)(
@@ -299,8 +302,63 @@ export async function untilInterrupted(warn: (text: string) => void): Promise<vo
   });
 }
 
+/**
+ * What a non-loopback bind exposes, stated exactly, because it is the only thing standing
+ * between a person and an unauthenticated server on their network.
+ */
+export function bindWarning(host: string, studio: boolean): string {
+  const withheld = studio
+    ? ' Studio is read-only here: activate, roll back, pack, plan and diagnostics are only served on a loopback address.'
+    : '';
+  return `Warning: binding to ${host} exposes this build to your network with no authentication. Anyone who can reach this address can read every source document, table and search result in it, and call MCP. It cannot change which build is active.${withheld}\n`;
+}
+
 export function isLoopback(host: string): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
+
+const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'] as const;
+
+/**
+ * The `Host` names a server bound to `bindHost` answers to, for the DNS rebinding check.
+ *
+ * The loopback names always, because a local client uses them whatever the bind. An explicit
+ * address or name is added as given, since the person typed it to be reached by it. A wildcard
+ * bind (`0.0.0.0`, `::`) names no address a client would use, so it admits this machine's
+ * interface addresses instead. That is safe because rebinding needs a DNS name: a page cannot
+ * make a browser send a bare IP address as `Host` unless it was loaded from that address.
+ *
+ * Computed once at startup, so an address gained later (a new DHCP lease) is not admitted
+ * until the server restarts.
+ */
+export function allowedHostsFor(
+  bindHost: string,
+  interfaces: ReturnType<typeof networkInterfaces> = networkInterfaces(),
+): string[] {
+  const hosts = new Set<string>(LOOPBACK_HOSTNAMES);
+  if (bindHost === '0.0.0.0' || bindHost === '::') {
+    for (const entries of Object.values(interfaces)) {
+      for (const entry of entries ?? []) hosts.add(asHostname(entry.address));
+    }
+  } else {
+    hosts.add(asHostname(bindHost));
+  }
+  return [...hosts];
+}
+
+/**
+ * As the URL parser reads a `Host` header: lowercased, an IPv6 literal compressed and in
+ * brackets, without a zone id. The REST check and the MCP SDK both compare against that form.
+ */
+function asHostname(address: string): string {
+  const bare = address.replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  try {
+    return new URL(`http://${bare.includes(':') ? `[${bare}]` : bare}`).hostname;
+  } catch {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `--host must be an address, got ${address}.`, {
+      remediation: 'Pass an IP address or host name, for example --host 127.0.0.1.',
+    });
+  }
 }
 
 /** Milliseconds, or 0 for every request. `off` belongs to `lorepack mcp`, which can pin. */

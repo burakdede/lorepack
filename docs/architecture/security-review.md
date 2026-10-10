@@ -18,6 +18,8 @@ security-affecting change before release.
 | Repeated or excessive query terms cannot multiply FTS5 work, locally or on D1 | `packages/core/test/fts-query.test.ts`, `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
 | Localhost Origin validation | `packages/runtime/test/http.test.ts` | Covered |
+| Local write CSRF from other localhost ports, preflight-free bodies, pack output path | `packages/runtime/test/http.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
+| DNS rebinding: Host allowlist on REST and MCP | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
@@ -52,7 +54,8 @@ pnpm exec vitest run test/cloudflare-smoke.test.ts test/cloudflare-testing.test.
 ## Notes
 
 Local runtime authentication is intentionally absent. The local server is a loopback process
-started by the user, and local writes are protected by route registration and Origin checks.
+started by the user. It answers only to allowlisted `Host` names, and local writes are
+protected by route registration, same-origin checks and a JSON-only body requirement.
 Remote reads are authenticated at the Worker boundary.
 
 The privacy-default test blocks `fetch` and Node socket connection attempts. It does not prove
