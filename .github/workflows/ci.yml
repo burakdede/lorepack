@@ -169,6 +169,35 @@ jobs:
       - name: Every acceptance scenario, against the real binary
         run: pnpm acceptance
 
+  packed-install:
+    # What an npm user gets, rather than what the pnpm workspace has. Workspace overrides
+    # (`@napi-rs/canvas` removed, `mammoth>argparse` pinned) never reach a published manifest,
+    # so only an npm install of the packed tarball can show a native add-on or an untested
+    # version arriving (#603). The release workflow runs the same script on the tarball it
+    # publishes.
+    name: packed install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Pack, install with npm, build a PDF, audit
+        run: pnpm check:packed-cli
+
   cloudflare-acceptance:
     name: cloudflare acceptance (ubuntu-latest)
     runs-on: ubuntu-latest
