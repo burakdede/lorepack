@@ -1,11 +1,12 @@
-import type {
-  BuildManifest,
-  CatalogArtifact,
-  CatalogArtifactSummary,
-  CatalogNode,
-  CatalogSearchCriteria,
-  CatalogSearchHit,
-  CatalogStore,
+import {
+  type BuildManifest,
+  type CatalogArtifact,
+  type CatalogArtifactSummary,
+  type CatalogNode,
+  type CatalogSearchCriteria,
+  type CatalogSearchHit,
+  type CatalogStore,
+  escapeFtsQuery,
 } from '@lorepack/core/worker';
 
 export interface D1CatalogStatementLike {
@@ -76,7 +77,6 @@ interface SearchRow {
 }
 
 const MATCH_ALL = 'all';
-const MATCH_ANY = 'any';
 
 function coordinateString(metadata: string, key: string): string | null {
   const value = (JSON.parse(metadata) as Record<string, unknown>)[key];
@@ -348,12 +348,4 @@ export class D1CatalogStore implements CatalogStore {
       .run<T>();
     return result.results ?? [];
   }
-}
-
-function escapeFtsQuery(query: string, match: 'all' | 'any'): string {
-  const terms = query
-    .split(/\s+/)
-    .map((term) => term.replace(/"/g, '""').trim())
-    .filter((term) => term !== '' && term !== '""');
-  return terms.map((term) => `"${term}"`).join(match === MATCH_ANY ? ' OR ' : ' ');
 }

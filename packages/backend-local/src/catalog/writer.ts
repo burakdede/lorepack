@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   type Artifact,
   bm25ColumnWeights,
+  escapeFtsQuery,
   type LoreNode,
   type ParsedTable,
   type SourceLocator,
@@ -196,24 +197,6 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
     tables: tableCount,
     tableRows: tableRowCount,
   };
-}
-
-/**
- * Escapes a user query for an FTS5 MATCH expression.
- *
- * Every term is quoted, so `NEAR`, `AND`, `*` and `"` are treated as text rather than as
- * syntax. Users get literal search and can never produce a syntax error; operator support
- * would be a deliberate feature with its own surface, not an accident of quoting.
- */
-export function escapeFtsQuery(query: string, match: 'all' | 'any' = 'all'): string {
-  const terms = query
-    .split(/\s+/)
-    .map((term) => term.replace(/"/g, '""').trim())
-    .filter((term) => term !== '' && term !== '""');
-  // Every term is quoted, so nothing a user types is FTS5 syntax. `all` is implicit AND,
-  // which is what a keyword search wants; `any` is what a sentence wants, because a task
-  // like "how do I roll back a release" shares no chunk with all of its own words.
-  return terms.map((term) => `"${term}"`).join(match === 'any' ? ' OR ' : ' ');
 }
 
 export interface CatalogSearchHit {

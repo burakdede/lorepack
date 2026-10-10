@@ -105,7 +105,8 @@ export {
   parseNodeVersion,
   SUPPORTED_NODE_RANGE,
 } from './runtime/engine.js';
-export { RUNTIME_LIMITS, TABLE_QUERY_LIMITS } from './runtime/limits.js';
+export { RUNTIME_LIMITS, SEARCH_QUERY_LIMITS, TABLE_QUERY_LIMITS } from './runtime/limits.js';
 export * from './schemas/index.js';
 export * from './sql/index.js';
 export { closestMatch, editDistance } from './text/closest.js';
+export { escapeFtsQuery } from './text/fts-query.js';

@@ -35,7 +35,6 @@ export {
   type CatalogSearchOptions,
   type CatalogWarning,
   countRows,
-  escapeFtsQuery,
   RUNTIME_TABLES,
   SEARCH_TABLES,
   searchCatalog,
