@@ -200,7 +200,7 @@ jobs:
 
       - run: pnpm build
 
-      - name: Pack, install with npm, build a PDF, audit
+      - name: Pack, install with npm, build a PDF, query a table, audit
         run: pnpm check:packed-cli
 
   privacy-sandbox:
