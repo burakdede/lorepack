@@ -29,6 +29,7 @@ const config = (text: string) => ({
   document: parse(text, [], { allowTrailingComma: true }) as Record<string, unknown>,
   formatting: formattingOf(text),
   newline: text.includes('\r\n') ? ('\r\n' as const) : ('\n' as const),
+  bom: false,
 });
 
 const owned = (text: string, projectRoot = '/p'): string =>
@@ -197,4 +198,48 @@ describe('reading a file', () => {
     writeFileSync(blank, '\n\n', 'utf8');
     expect(readJsoncConfig(blank).document).toEqual({});
   });
+});
+
+describe('what a Windows editor writes, and paths a comment cannot hold raw (#581)', () => {
+  it('reads a file with a byte order mark and CRLF endings, and keeps both', () => {
+    const path = join(directory, 'mcp.json');
+    writeFileSync(path, `\ufeff${FOREIGN.replace(/\n/g, '\r\n')}`, 'utf8');
+
+    const read = readJsoncConfig(path);
+    expect(read.bom).toBe(true);
+    expect(read.newline).toBe('\r\n');
+    expect(read.text.startsWith('{')).toBe(true);
+
+    const added = owned(read.text);
+    const { text } = withoutOwnedEntry({ ...read, text: added }, PATH);
+    expect(text).toBe(read.text);
+  });
+
+  it('escapes a project path into a plain ASCII marker, and reads it back', () => {
+    const root = 'C:\\Users\\me\\del\u007fproj\u2028caf\u00e9';
+    const written = owned(FOREIGN, root);
+
+    const marker = written.split('\n').find((line) => line.includes('// x-lorepack'));
+    expect(marker?.trim()).toMatch(/^[\x20-\x7e]*$/);
+    expect(ownerOfEntry(written, PATH)?.projectRoot).toBe(root);
+  });
+
+  // Each holds a multi-line object for our entry to join. A neighbour written on one line is
+  // expanded when ours is added beside it, the caveat `docs/integrations/vscode.md` records.
+  const FIXTURES = [
+    FOREIGN,
+    FOREIGN.replace(/\n/g, '\r\n'),
+    '{\n  // two spaces\n  "servers": {\n    "a": {\n      "command": "a"\n    },\n    "b": {\n      "command": "b"\n    }\n  },\n  "inputs": []\n}\n',
+    '{\n\t"inputs": [],\n\t"servers": {\n\t\t"a": {\n\t\t\t"command": "a"\n\t\t}\n\t}\n}',
+  ];
+
+  it.each(FIXTURES.map((text) => [JSON.stringify(text), text]))(
+    'connect then disconnect is byte-identical for %s',
+    (_name, before) => {
+      const { text, removed } = withoutOwnedEntry(config(owned(before)), PATH, '/p');
+
+      expect(removed).toBe(true);
+      expect(text).toBe(before);
+    },
+  );
 });
