@@ -149,7 +149,8 @@ deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warning
 `GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
 `lorepack export` writes; `GET /v1/diagnostics` reads the machine. `lorepack serve` registers only
 the three that read the active build, because the other two read sources and a live session,
-and `lorepack serve` has neither.
+and `lorepack serve` has neither. `lorepack dev --host` with a non-loopback address registers
+the same three, and none of the writes below (#549).
 
 `/v1/diagnostics` returns the same report `lorepack doctor --json` prints, validated against
 `schemas/doctor-report.json`, plus the live session state a one-shot command cannot see: the
@@ -171,7 +172,11 @@ The only routes in this API that change anything:
 | `POST /v1/builds/pack` | write a `.lorepack` archive to the default name in the project root |
 
 They exist only where a host passes `localActions`, which only the local CLI does, and only
-for `lorepack dev`. Four things keep them local:
+for `lorepack dev` bound to a loopback address. With `--host 0.0.0.0` or any other
+non-loopback address, `lorepack dev` registers none of them, nor `/v1/plan` and
+`/v1/diagnostics`, which disclose absolute paths: the write guard admits a request with no
+`Origin`, and every host on a network can send one (#549). Studio is then read-only, and the
+startup warning says exactly what is exposed. Four things keep the routes local:
 
 1. **A remote deployment cannot register them.** It holds one build and no history, so it has
    nothing to supply. A route that does not exist cannot be reached by getting past a check.

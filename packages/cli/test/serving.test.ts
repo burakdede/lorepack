@@ -2,6 +2,7 @@ import type { NetworkInterfaceInfo } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   allowedHostsFor,
+  bindWarning,
   isLoopback,
   parseInterval,
   parsePort,
@@ -93,5 +94,24 @@ describe('which Host names a server answers to', () => {
 
   it('refuses a bind host that is not an address', () => {
     expect(() => allowedHostsFor('not a host', interfaces)).toThrow(/--host must be an address/);
+  });
+});
+
+/** The warning a non-loopback bind prints, which must not promise more than is true (#549). */
+describe('the non-loopback warning', () => {
+  it('says there is no authentication and what anyone on the network can read', () => {
+    for (const studio of [true, false]) {
+      const text = bindWarning('0.0.0.0', studio);
+      expect(text).toContain('no authentication');
+      expect(text).toContain('every source document');
+      expect(text).toContain('cannot change which build is active');
+    }
+  });
+
+  it('names what Studio withholds only when Studio is served', () => {
+    expect(bindWarning('0.0.0.0', true)).toContain(
+      'activate, roll back, pack, plan and diagnostics are only served on a loopback address',
+    );
+    expect(bindWarning('0.0.0.0', false)).not.toContain('Studio');
   });
 });

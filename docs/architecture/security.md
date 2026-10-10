@@ -138,6 +138,12 @@ against the real binary and asserts the target file is untouched. A runtime buil
 `localActions` has **no mutating route at all**, which the end-to-end suite asserts by
 requesting each one and expecting a typed 404.
 
+`lorepack dev` supplies no `localActions` when bound to a non-loopback address, because the
+write guard admits a request with no `Origin` and a network client sends none (#549).
+`packages/cli/test/dev.e2e.test.ts` drives `lorepack dev --host 0.0.0.0` and asserts every
+write route, `/v1/plan` and `/v1/diagnostics` are 404 while Studio and the build reads still
+answer.
+
 That is checked by **registration rather than by HTTP method**, because
 `POST /v1/tables/:id/query` is a read: a SQL statement does not belong in a URL. A method-based
 check would either exclude the query route or admit a genuine write that happened to be a `GET`.

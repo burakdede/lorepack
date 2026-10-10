@@ -126,6 +126,10 @@ export async function startServing(
     // Absent when the package was installed without built assets, which is a broken install
     // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
     const serveStudio = options.studio === true && studioIsBuilt();
+    // Off loopback, nothing that writes or discloses this machine is served (#549). The write
+    // guard admits a request with no `Origin`, which is right for the person at this machine
+    // and wrong for every other host on the network, since none of them sends one either.
+    const local = isLoopback(options.host);
     const app = createApiApp({
       runtime,
       allowedHosts,
@@ -172,10 +176,9 @@ export async function startServing(
           handle.release();
         }
       }),
-      ...(serveStudio
+      ...(serveStudio ? { assets: createStudioAssets(), allowSameOrigin: true } : {}),
+      ...(serveStudio && local
         ? {
-            assets: createStudioAssets(),
-            allowSameOrigin: true,
             // The one Studio read that is **not** a read of the build: planning walks the
             // source tree. `lorepack serve` promises never to rebuild and has no business reading
             // sources, so this belongs to `lorepack dev` alone.
@@ -206,11 +209,9 @@ export async function startServing(
         : {}),
     });
 
-    if (!isLoopback(options.host)) {
+    if (!local) {
       // Architecture 15.3: binding beyond loopback is possible and never accidental.
-      options.warn(
-        `Warning: binding to ${options.host} exposes this build to your network. It is read-only, and it is still your documents.\n`,
-      );
+      options.warn(bindWarning(options.host, serveStudio));
     }
 
     const server = await (dependencies.listen ?? listen)(
@@ -299,6 +300,17 @@ export async function untilInterrupted(warn: (text: string) => void): Promise<vo
     process.once('SIGINT', () => stop('SIGINT'));
     process.once('SIGTERM', () => stop('SIGTERM'));
   });
+}
+
+/**
+ * What a non-loopback bind exposes, stated exactly, because it is the only thing standing
+ * between a person and an unauthenticated server on their network.
+ */
+export function bindWarning(host: string, studio: boolean): string {
+  const withheld = studio
+    ? ' Studio is read-only here: activate, roll back, pack, plan and diagnostics are only served on a loopback address.'
+    : '';
+  return `Warning: binding to ${host} exposes this build to your network with no authentication. Anyone who can reach this address can read every source document, table and search result in it, and call MCP. It cannot change which build is active.${withheld}\n`;
 }
 
 export function isLoopback(host: string): boolean {

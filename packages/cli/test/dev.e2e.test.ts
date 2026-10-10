@@ -434,6 +434,36 @@ const LAN_ADDRESS = Object.values(networkInterfaces())
   .find((entry) => entry !== undefined && entry.family === 'IPv4' && !entry.internal)?.address;
 
 describe('binding beyond loopback with --host 0.0.0.0', () => {
+  /**
+   * A LAN client sends no `Origin`, so an origin guard admits it. The write routes are
+   * therefore not registered at all on a non-loopback bind, and neither are the two reads that
+   * disclose absolute paths (#549).
+   */
+  it('serves no write route, plan or diagnostics, and says so', async () => {
+    const started = await dev(['--host', '0.0.0.0']);
+    const base = `http://127.0.0.1:${started.port}`;
+
+    expect(started.stderr).toContain('Warning: binding to 0.0.0.0');
+    expect(started.stderr).toContain('no authentication');
+    expect(started.stderr).toMatch(/activate, roll back, pack, plan and diagnostics/);
+
+    for (const path of ['/v1/builds/activate', '/v1/builds/rollback', '/v1/builds/pack']) {
+      const response = await fetch(`${base}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      expect(response.status, path).toBe(404);
+    }
+    for (const path of ['/v1/builds', '/v1/plan', '/v1/diagnostics']) {
+      expect((await fetch(`${base}${path}`)).status, path).toBe(404);
+    }
+
+    // Studio and the build reads are still there: this is a read-only server now.
+    expect((await fetch(base)).status).toBe(200);
+    expect((await fetch(`${base}/v1/sources`)).status).toBe(200);
+  }, 120_000);
+
   // Every CI runner has a non-loopback interface. A machine with none has no network to be
   // exposed to, so there is nothing to assert.
   it.runIf(LAN_ADDRESS !== undefined)(

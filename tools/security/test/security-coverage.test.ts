@@ -107,6 +107,15 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/refuses a foreign Host before any handler runs/, /allowedHosts/],
   },
   {
+    name: 'a non-loopback dev bind serves no write route',
+    path: 'packages/cli/test/dev.e2e.test.ts',
+    patterns: [
+      /--host', '0\.0\.0\.0'/,
+      /serves no write route, plan or diagnostics/,
+      /toBe\(404\)/,
+    ],
+  },
+  {
     name: 'remote runtime auth rejects bypass attempts',
     path: 'packages/deploy-cloudflare/test/runtime-auth.test.ts',
     patterns: [
