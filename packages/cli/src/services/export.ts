@@ -19,10 +19,20 @@ export interface ExportOptions {
   readonly sourceState: ContextBundle['sourceState'];
 }
 
+/**
+ * The command that asks for more of the same, for a reader to copy into a shell.
+ *
+ * The task is single-quoted, which a POSIX shell takes literally. `JSON.stringify` produced
+ * double quotes, inside which `$(...)` and backticks still run (#552).
+ */
+export function moreCommandFor(task: string): string {
+  return `lorepack export --task '${task.replaceAll("'", "'\\''")}' --profile deep`;
+}
+
 export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptions): string {
   const lines: string[] = [];
 
-  lines.push(`# Context for: ${bundle.task}`, '');
+  lines.push(`# Context for: ${oneLine(bundle.task)}`, '');
   lines.push(`Project **${options.projectName}**, build \`${bundle.buildId}\`.`);
   lines.push(
     `Profile **${bundle.profile}**, budget ${count(bundle.budget, 'estimated token')}, of which ${count(bundle.estimatedTokens, 'estimated token')} used.`,
@@ -51,12 +61,16 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
     // Grouped by source, which is how a reader navigates it: one heading per document,
     // passages in the order the assembler chose them.
     for (const [path, items] of groupBySource(included)) {
-      lines.push(`### ${path}`, '');
+      lines.push(`### ${oneLine(path)}`, '');
       for (const item of items) {
-        const heading = item.headingPath.length === 0 ? '' : `${item.headingPath.join(' > ')}, `;
+        const heading =
+          item.headingPath.length === 0 ? '' : `${oneLine(item.headingPath.join(' > '))}, `;
         const labels = item.labels.length === 0 ? '' : ` [${item.labels.join(', ')}]`;
         lines.push(`**${heading}${lineRange(item.locator)}**${labels}`, '');
-        lines.push(item.text.trim(), '');
+        // Fenced, because the text is a document's and the lines around it are Lorepack's.
+        // Appended raw, a plain-text source could write `## Citations` and a `### path` of
+        // its choosing and pass its claim off as another file's (#552).
+        lines.push(...fenced(item.text.trim(), 'text'), '');
       }
     }
   }
@@ -108,7 +122,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
 
   lines.push('## Getting more', '');
   lines.push('To widen this context, raise the budget or name a profile with a larger one:', '');
-  lines.push('```bash', options.moreCommand, '```', '');
+  lines.push(...fenced(options.moreCommand, 'bash'), '');
   lines.push(
     `Token counts are conservative estimates from a deterministic counter, not a model tokenizer. Treat them as a bound, not a measurement.`,
   );
@@ -169,4 +183,23 @@ function lineRange(locator: ContextBundle['citations'][number]): string {
   return locator.lineEnd === undefined || locator.lineEnd === locator.lineStart
     ? `line ${locator.lineStart}`
     : `lines ${locator.lineStart}-${locator.lineEnd}`;
+}
+
+/**
+ * A fenced block that the text inside cannot close.
+ *
+ * CommonMark closes a fence only on a run of at least as many backticks as opened it, so the
+ * fence is one longer than the longest run in the text. Inside it nothing renders as a
+ * heading, a list or emphasis: the passage is shown exactly as the document has it.
+ */
+function fenced(text: string, info: string): string[] {
+  let longest = 0;
+  for (const run of text.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
+  const marker = '`'.repeat(Math.max(3, longest + 1));
+  return [`${marker}${info}`, text, marker];
+}
+
+/** A label that must stay on its line: a path or a heading cannot start a new one. */
+function oneLine(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ');
 }

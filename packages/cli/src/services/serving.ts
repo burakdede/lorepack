@@ -5,7 +5,7 @@ import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
-import { renderBundleMarkdown } from './export.js';
+import { moreCommandFor, renderBundleMarkdown } from './export.js';
 import { packBuild } from './packing.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
 import { createStudioAssets, studioIsBuilt } from './studio-assets.js';
@@ -163,7 +163,7 @@ export async function startServing(
         // than merely similar. A parity test asserts it.
         return renderBundleMarkdown(bundle, {
           projectName: options.config.config.name,
-          moreCommand: `lorepack export --task ${JSON.stringify(bundle.task)} --profile deep`,
+          moreCommand: moreCommandFor(bundle.task),
           sourceState: bundle.sourceState,
         });
       },

@@ -160,9 +160,13 @@ function renderTranscript(entries) {
     lines.push(`lorepack ${normalizeCommand(entry.command).map(shellWord).join(' ')}`);
     lines.push('```');
     lines.push('');
-    lines.push('```text');
-    lines.push(normalizeOutput(trimOutput(entry.stdout || entry.stderr)));
-    lines.push('```');
+    // Longer than any backtick run in the output, so an export's own fences stay inside.
+    const output = normalizeOutput(trimOutput(entry.stdout || entry.stderr));
+    const longest = Math.max(0, ...[...output.matchAll(/`+/g)].map((run) => run[0].length));
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    lines.push(`${fence}text`);
+    lines.push(output);
+    lines.push(fence);
     lines.push('');
   }
   return `${lines.join('\n').replaceAll(/\n{3,}/g, '\n\n')}\n`;
