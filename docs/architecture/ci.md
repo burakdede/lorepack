@@ -7,14 +7,15 @@ their results before publishing.
 ## `ci.yml`
 
 Runs on every pull request and every push to `main`, across a three-way OS matrix
-(`ubuntu-latest`, `windows-latest`, `macos-latest`) on Node 24.18.1. `fail-fast` is off so
+(`ubuntu-latest`, `windows-latest`, `macos-latest`) on Node 24.21.0. `fail-fast` is off so
 a Windows-only failure is visible even when Linux is green, which is the whole reason the
 matrix exists.
 
 Steps, in order:
 
-1. Assert the resolved Node stays inside `>=24.15 <25`. A silent drift below the floor
-   would remove the SQLite authorizer and `db.limits`, so it fails loudly instead.
+1. Assert the resolved Node stays inside `>=24.19.0 <25`. A silent drift below the floor
+   would bring back a bundled SQLite older than 3.53.2, with the FTS5 CVEs, so it fails
+   loudly instead.
 2. `pnpm install --frozen-lockfile`
 3. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`
 4. `pnpm test:arch`, the dependency-direction rules

@@ -8,10 +8,12 @@ import {
   type CheckResult,
   type CheckStatus,
   checkNodeVersion,
+  checkSqliteVersion,
   type DoctorReport,
   doctorReportSchema,
   type LoadedConfig,
   loadConfig,
+  MINIMUM_SQLITE_VERSION,
 } from '@lorepack/core';
 import { DEV_PORT } from './dev-session.js';
 
@@ -56,6 +58,7 @@ export interface DoctorOptions {
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const checks: CheckResult[] = [
     nodeVersionCheck(),
+    sqliteVersionCheck(),
     sqliteCapabilityCheck(),
     fts5Check(),
     watcherLimitCheck(),
@@ -130,6 +133,41 @@ function nodeVersionCheck(): CheckResult {
 }
 
 /**
+ * Whether the SQLite this Node links carries the FTS5 fixes from 3.53.2.
+ *
+ * The Node check cannot answer this on its own: a Node linked against a shared system SQLite
+ * reports that library, whatever its age. Takes the version as an argument so a test can hand
+ * it a vulnerable one, which no supported runtime would otherwise produce.
+ */
+export function sqliteVersionCheck(detected: string = linkedSqliteVersion()): CheckResult {
+  const result = checkSqliteVersion(detected);
+  return {
+    id: 'sqlite-version',
+    title: 'SQLite version',
+    status: result.supported ? 'pass' : 'fail',
+    detail: result.supported
+      ? `SQLite ${detected}, at or above ${MINIMUM_SQLITE_VERSION}.`
+      : `SQLite ${detected} is below ${MINIMUM_SQLITE_VERSION}, which fixes FTS5 memory corruption reachable from search.`,
+    ...(result.supported ? {} : { remediation: result.message }),
+    values: {
+      detected,
+      minimum: MINIMUM_SQLITE_VERSION,
+      execPath: process.execPath,
+      ...(result.code === undefined ? {} : { code: result.code }),
+    },
+  };
+}
+
+function linkedSqliteVersion(): string {
+  const db = new DatabaseSync(':memory:');
+  try {
+    return (db.prepare('SELECT sqlite_version() AS version').get() as { version: string }).version;
+  } finally {
+    db.close();
+  }
+}
+
+/**
  * Which `node:sqlite` controls this build actually has, individually.
  *
  * Reported one by one rather than as a single yes/no, because a user on an unexpected build
@@ -164,7 +202,7 @@ function sqliteCapabilityCheck(): CheckResult {
       title: 'node:sqlite controls',
       status: 'fail',
       detail: `node:sqlite could not be opened: ${error instanceof Error ? error.message : String(error)}`,
-      remediation: 'Install Node 24.15 or newer from https://nodejs.org/en/download',
+      remediation: 'Install Node 24.19.0 or newer from https://nodejs.org/en/download',
       values: { execPath: process.execPath },
     };
   }
@@ -186,9 +224,9 @@ function sqliteCapabilityCheck(): CheckResult {
       ? {}
       : {
           // Each maps to a different floor: setAuthorizer 24.10, enableDefensive 24.14,
-          // limits 24.15. Naming the floor is more useful than naming the range.
+          // limits 24.15. All three sit below the supported floor of 24.19.0.
           remediation:
-            'Install Node 24.15 or newer, which is the first release with all three: https://nodejs.org/en/download',
+            'Install Node 24.19.0 or newer, which has all three: https://nodejs.org/en/download',
         }),
     values: { ...present, execPath: process.execPath },
   };

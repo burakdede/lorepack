@@ -149,7 +149,8 @@ provenance when two candidates are otherwise equivalent.
 | `zod` | Runtime schemas and JSON Schema generation. | Replace only if schema generation no longer matches public contracts. |
 
 `node:sqlite`, `node:crypto` and `node:zlib` are used directly and are deliberately not
-dependencies. That is the reason the supported Node floor is 24.15: see
+dependencies. That is the reason the supported Node floor is 24.19.0, the first 24.x release whose
+bundled SQLite fixes the FTS5 CVEs: see
 [`docs/compatibility/sqlite-fts5.md`](../compatibility/sqlite-fts5.md).
 
 ## Adding one

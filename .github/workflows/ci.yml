@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '24.18.1'
+  NODE_VERSION: '24.21.0'
 
 jobs:
   verify:
@@ -38,8 +38,8 @@ jobs:
           major="${version%%.*}"
           rest="${version#*.}"
           minor="${rest%%.*}"
-          if [ "$major" -ne 24 ] || [ "$minor" -lt 15 ]; then
-            echo "::error::Node $version is outside the supported range >=24.15 <25"
+          if [ "$major" -ne 24 ] || [ "$minor" -lt 19 ]; then
+            echo "::error::Node $version is outside the supported range >=24.19.0 <25"
             exit 1
           fi
           echo "Node $version is inside the supported range"

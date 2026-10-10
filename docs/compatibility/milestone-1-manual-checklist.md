@@ -12,7 +12,7 @@ version, because "it worked" without those is folklore.
 | | |
 |---|---|
 | Client | Claude Code, version recorded below |
-| Node | `node --version`, inside `>=24.15 <25` |
+| Node | `node --version`, inside `>=24.19.0 <25` |
 | Absent | No Python, no Docker, no compiler toolchain, no API key, no account |
 
 Everything else the automated suite covers: `pnpm acceptance` runs the

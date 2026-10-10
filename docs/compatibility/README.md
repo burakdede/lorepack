@@ -10,7 +10,7 @@ The delivered-epic reliability scope and evidence plan is [`reliability-audit-v0
 
 | Area | Supported | Verification |
 |---|---|---|
-| Node.js | `>=24.15 <25`; CI pins 24.18.1 | [`package.json`](../../package.json), [CI](../architecture/ci.md) |
+| Node.js | `>=24.19.0 <25` with SQLite `>=3.53.2`; CI pins 24.21.0 | [`package.json`](../../package.json), [CI](../architecture/ci.md) |
 | Package manager | pnpm 11.18.0 | [`package.json`](../../package.json) |
 | macOS | supported on `macos-latest` and local Darwin arm64 | CI verify matrix, local shell on 2026-08-13 |
 | Linux | supported on `ubuntu-latest` | CI verify matrix |

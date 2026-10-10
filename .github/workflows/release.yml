@@ -31,7 +31,7 @@ on:
         type: string
 
 env:
-  NODE_VERSION: '24.18.1'
+  NODE_VERSION: '24.21.0'
   RELEASE_COMMIT: ${{ github.sha }}
 
 jobs:

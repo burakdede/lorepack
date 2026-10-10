@@ -98,10 +98,13 @@ export {
 } from './ranking/weights.js';
 export {
   assertSupportedNode,
+  assertSupportedSqlite,
   checkNodeVersion,
+  checkSqliteVersion,
   type EngineCheckResult,
   MAXIMUM_NODE_MAJOR,
   MINIMUM_NODE,
+  MINIMUM_SQLITE_VERSION,
   parseNodeVersion,
   SUPPORTED_NODE_RANGE,
 } from './runtime/engine.js';

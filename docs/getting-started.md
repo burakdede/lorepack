@@ -4,14 +4,16 @@ From nothing to an AI client answering from your documents, with a citation on e
 
 ## Requirements
 
-Node.js `>=24.15 <25`, and that is the whole list. No Python, Docker, compiler toolchain,
+Node.js `>=24.19.0 <25`, and that is the whole list. No Python, Docker, compiler toolchain,
 native add-on, model download, API key or account. The clean-install CI matrix proves it on
 macOS, Linux and Windows, installing with lifecycle scripts suppressed and then running the
 product.
 
-The floor is 24.15 because that is the first release where `node:sqlite` exposes the authorizer
-and per-connection limits the read-only SQL surface depends on. Lorepack also needs SQLite
-compiled with FTS5, which every official Node build has. See
+The floor is 24.19.0 because that is the first Node 24 release whose bundled SQLite (3.53.3)
+fixes the FTS5 memory-corruption bugs CVE-2026-11822 and CVE-2026-11824; Lorepack checks that
+the SQLite in use is at least 3.53.2 at startup and in `lorepack doctor`. The authorizer and
+per-connection limits the read-only SQL surface depends on arrived earlier, in 24.15. Lorepack
+also needs SQLite compiled with FTS5, which every official Node build has. See
 [SQLite FTS5 availability](compatibility/sqlite-fts5.md) for the verified matrix, and for what
 happens if your build lacks it.
 
