@@ -24,6 +24,8 @@ security-affecting change before release.
 | DNS rebinding: Host allowlist on REST and MCP | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
 | Redaction runs in linear time on caller-controlled error text (#551) | `packages/core/test/errors.test.ts`, `packages/runtime/test/http.test.ts` | Covered |
+||||||| parent of c4af9ce (Document request field bounds [no release])
+| Oversized request fields are typed refusals on every backend (#554) | `tools/test-support/src/runtime-contract.ts` (local and D1), `packages/runtime/test/http.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |
