@@ -165,6 +165,68 @@ function runtimeFor() {
   });
 }
 
+/**
+ * Files whose names look like percent-encoding, each with a body naming itself (#608).
+ *
+ * A second decode of the route parameter turned `a%20b.md` into `a b.md`, so the read returned
+ * the other file's text under the first one's name, and made a bare `%` a 500.
+ */
+const ENCODED_NAMES: Readonly<Record<string, string>> = {
+  'p:docs/a%20b.md': 'ENCODED-NAME',
+  'p:docs/a b.md': 'SPACED-NAME',
+  'p:docs/a%2520b.md': 'DOUBLY-ENCODED-NAME',
+  'p:docs/100%.md': 'PERCENT-NAME',
+};
+
+function encodedNamesRuntime() {
+  const byHash = new Map<string, string>();
+  const artifacts = new Map<string, CatalogArtifact>();
+  Object.entries(ENCODED_NAMES).forEach(([artifactId, body], index) => {
+    const hash = String(index).repeat(64);
+    const relativePath = artifactId.slice('p:'.length);
+    byHash.set(hash, body);
+    artifacts.set(artifactId, {
+      artifactId,
+      relativePath,
+      displayPath: relativePath,
+      title: body,
+      status: 'active',
+      authority: 50,
+      mediaType: 'text/markdown',
+      objectHash: hash,
+    });
+  });
+  const scope: BuildScope = {
+    buildId: BUILD,
+    catalog: { ...catalog, artifact: async (id: string) => artifacts.get(id) ?? null },
+    tables,
+    objects: {
+      async get(hash: string) {
+        const body = byHash.get(hash);
+        return body === undefined ? null : new TextEncoder().encode(body);
+      },
+      async put() {
+        return '';
+      },
+      async has() {
+        return true;
+      },
+    },
+  };
+  return createRuntime({
+    provider: {
+      async current() {
+        return { buildId: BUILD, generation: 7 };
+      },
+      async acquire(): Promise<BuildHandle> {
+        return { buildId: BUILD, generation: 7, release() {} };
+      },
+    },
+    open: async () => scope,
+    freshness: async () => 'clean',
+  });
+}
+
 function registeredRoutes(app: ReturnType<typeof createApiApp>): string[] {
   return app.routes.map((route) => `${route.method} ${route.path}`);
 }
@@ -330,6 +392,33 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
       id: 1,
     });
     expect(authorized).toBe(0);
+  });
+
+  it('reads every artifact id as its own file, locally and on the Worker, #608', async () => {
+    const runtime = encodedNamesRuntime();
+    const currentBuild = async () => ({ buildId: BUILD, generation: 7 });
+    const local = createApiApp({ runtime, currentBuild });
+    const worker = createCloudflareWorker({ runtime, currentBuild });
+    closers.push(() => worker.close());
+    const surfaces = {
+      local: (path: string) => local.request(`https://worker.example${path}`),
+      worker: (path: string) => worker.fetch(new Request(`https://worker.example${path}`)),
+    };
+
+    for (const [name, read] of Object.entries(surfaces)) {
+      for (const [artifactId, body] of Object.entries(ENCODED_NAMES)) {
+        const response = await read(`/v1/sources/${encodeURIComponent(artifactId)}`);
+        expect(response.status, `${name} ${artifactId}`).toBe(200);
+        const json = (await response.json()) as { text: string; locator: { artifactId: string } };
+        expect(json.text, `${name} ${artifactId}`).toBe(body);
+        expect(json.locator.artifactId).toBe(artifactId);
+      }
+
+      // A bare `%` that the client never encoded is not a valid escape. It must still be a
+      // typed answer, never a raw `URIError` as a 500.
+      const bare = await read('/v1/sources/p%3Adocs%2F100%.md');
+      expect(bare.status, `${name} bare %`).toBeLessThan(500);
+    }
   });
 
   it('adds security headers and keeps CORS closed by default', async () => {

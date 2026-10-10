@@ -459,10 +459,14 @@ export function createApiApp(options: ApiOptions): Hono {
    * The artifact is a path parameter, so it arrives as text. It is looked up in the build
    * and nothing else: a traversal or an absolute path is simply an artifact this build does
    * not have, which is what makes it a miss rather than a hazard.
+   *
+   * `param()` has already percent-decoded it, exactly once. Decoding again read
+   * `docs/a%20b.md` as `docs/a b.md`, another file's text under this one's name, and made a
+   * bare `%` a `URIError` (#608).
    */
   app.get('/v1/sources/:artifactId', async (context) =>
     answer(context, async () => {
-      const artifactId = decodeURIComponent(context.req.param('artifactId'));
+      const artifactId = context.req.param('artifactId');
       const query = context.req.query();
       return options.runtime.readSource({
         artifactId,
