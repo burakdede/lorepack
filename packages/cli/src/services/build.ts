@@ -53,8 +53,14 @@ import {
   sha256Hex,
   writeFileAtomic,
 } from '@lorepack/core';
-import { parserFor } from '@lorepack/parsers';
-import { checkpoint } from './cancellation.js';
+import {
+  type IsolatedParse,
+  PARSE_LIMITS,
+  type ParseLimits,
+  ParserHost,
+  parserFor,
+} from '@lorepack/parsers';
+import { cancelledError, checkpoint } from './cancellation.js';
 import { type CachedParse, ParseCache } from './parse-cache.js';
 import { isBuildReadable, readBuildCatalog } from './project.js';
 import { lockInputs } from './versions.js';
@@ -80,6 +86,8 @@ export interface BuildOptions {
   readonly signal?: AbortSignal;
   /** How long to wait for the project lock. Tests use a short wait; users get the default. */
   readonly lockWaitMs?: number;
+  /** The deadline and heap ceiling for each parse. Tests set low ones; users get the env. */
+  readonly parseLimits?: ParseLimits;
   readonly now?: () => Date;
   readonly seal?: typeof sealCandidateDirectory;
 }
@@ -101,9 +109,11 @@ interface BuildWarning {
  * ("this file is not in the build"), so they share a class and differ in code.
  */
 function warningClass(code: string): BuildWarning['class'] {
-  return code === 'unsupported-format' || code === 'undecodable-content'
-    ? 'unsupported-file'
-    : 'parser';
+  if (code === 'unsupported-format' || code === 'undecodable-content') return 'unsupported-file';
+  // A file left out because parsing it exceeded the time or memory a build allows one file.
+  // The bytes may be perfectly valid, which is why it is a limit and not a parse failure.
+  if (code === 'parse-timeout' || code === 'parse-memory') return 'envelope';
+  return 'parser';
 }
 
 export interface BuildResult {
@@ -150,12 +160,67 @@ export function lockWaitFromEnvironment(
   return value;
 }
 
+/**
+ * The per-file parse deadline and heap ceiling (#594), from `LORE_PARSE_TIMEOUT_MS` and
+ * `LORE_PARSE_MEMORY_MB`.
+ *
+ * Operational for the same reason as `LORE_LOCK_WAIT_MS`: a slow laptop and a fast CI runner
+ * should not disagree about a build's identity because one of them waited longer. The limit
+ * decides whether a file is in the build, and that reaches the id through the content, like
+ * any other excluded file; the number itself never does.
+ *
+ * Bounded both ways. Below 100 ms Node has not finished starting a parse; above an hour, or
+ * beyond 32 GB, the value has stopped being a limit.
+ */
+export function parseLimitsFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): ParseLimits {
+  return {
+    timeoutMs: boundedInteger(
+      environment,
+      'LORE_PARSE_TIMEOUT_MS',
+      'milliseconds',
+      PARSE_LIMITS.defaults.timeoutMs,
+      PARSE_LIMITS.timeoutMs,
+    ),
+    memoryMb: boundedInteger(
+      environment,
+      'LORE_PARSE_MEMORY_MB',
+      'megabytes',
+      PARSE_LIMITS.defaults.memoryMb,
+      PARSE_LIMITS.memoryMb,
+    ),
+  };
+}
+
+function boundedInteger(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  unit: string,
+  fallback: number,
+  bounds: { readonly min: number; readonly max: number },
+): number {
+  const raw = environment[name];
+  if (raw === undefined) return fallback;
+  // The empty string is refused rather than read as 0, as for LORE_LOCK_WAIT_MS (#195).
+  const value = raw.trim() === '' ? Number.NaN : Number(raw);
+  if (!Number.isInteger(value) || value < bounds.min || value > bounds.max) {
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      `${name} must be a whole number of ${unit} from ${bounds.min} to ${bounds.max}, got ${raw}.`,
+      { remediation: `Set it within that range, or unset it to use the default of ${fallback}.` },
+    );
+  }
+  return value;
+}
+
 export async function runBuild(options: BuildOptions): Promise<BuildResult> {
   const { config, progress } = options;
   const now = options.now ?? (() => new Date());
   const startedAt = now();
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
 
+  const parseLimits = options.parseLimits ?? parseLimitsFromEnvironment();
   const waitMs = options.lockWaitMs ?? lockWaitFromEnvironment();
   const lock = new ProjectLock(join(loreDirectory, 'lock'), {
     ...(waitMs === undefined ? {} : { waitMs }),
@@ -207,109 +272,142 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       const cache = new ParseCache(join(loreDirectory, 'cache', 'parse'));
       progress.start('parsing', 'Parsing', fingerprint.artifacts.length);
       const parsed: CachedParse[] = [];
+      const parseExclusions: { code: string; path: string; message: string }[] = [];
       let handled = 0;
 
-      for (const discovered of fingerprint.artifacts) {
-        await checkpoint(options.signal, { hasActiveBuild: active !== null });
-        const parser = parserFor({
-          mediaType: discovered.mediaType,
-          relativePath: discovered.relativePath,
-        });
-        if (parser === null) continue;
-
-        const key = cacheKey({
-          artifactId: discovered.artifactId,
-          contentHash: discovered.contentHash,
-          parserId: parser.id,
-          parserVersion: parser.version,
-          normalizationVersion: NORMALIZATION_VERSION,
-          chunking: config.effective.chunking as unknown as Canonical,
-          rules: ruleResolution.canonical as unknown as Canonical,
-        });
-
-        const bytes = readStableSourceBytes(
-          discovered.absolutePath,
-          discovered.contentHash,
-          discovered.displayPath,
-        );
-
-        // A hit still has to have its normalized body present: the object store and the
-        // cache can be pruned independently, and reusing a parse whose body is gone would
-        // produce a build that cannot answer a source read.
-        const cached = cache.get(key);
-        if (cached !== null && (await objects.has(cached.objectHash))) {
-          parsed.push(withRules(cached, rulesById));
-          handled += 1;
-          continue;
-        }
-
-        let result: ParsedArtifact;
-        try {
-          // Awaited because a parser may be asynchronous: PDF and DOCX cannot be read any
-          // other way. The `await` matters for the `catch` as much as for the value, since
-          // a rejected promise from an unawaited call would escape this block entirely and
-          // surface as an unhandled rejection rather than as `LORE_E_PARSE_FAILED`.
-          result = await parser.parse({
-            artifactId: discovered.artifactId,
-            sourceId: discovered.sourceId,
-            relativePath: discovered.relativePath,
-            displayPath: discovered.displayPath,
+      // Started on the first cache miss and ended with the stage, so a build whose every
+      // artifact is cached never starts a process, and none outlives the build.
+      const host = new ParserHost(parseLimits);
+      try {
+        for (const discovered of fingerprint.artifacts) {
+          await checkpoint(options.signal, { hasActiveBuild: active !== null });
+          const parser = parserFor({
             mediaType: discovered.mediaType,
-            byteSize: discovered.byteSize,
+            relativePath: discovered.relativePath,
+          });
+          if (parser === null) continue;
+
+          const key = cacheKey({
+            artifactId: discovered.artifactId,
             contentHash: discovered.contentHash,
-            bytes,
+            parserId: parser.id,
+            parserVersion: parser.version,
+            normalizationVersion: NORMALIZATION_VERSION,
+            chunking: config.effective.chunking as unknown as Canonical,
+            rules: ruleResolution.canonical as unknown as Canonical,
           });
-        } catch (cause) {
-          // A parser that raised a `LoreError` classified its own failure, and that
-          // classification is kept (#242).
-          //
-          // Wrapping everything meant a parser raising `LORE_E_ENVELOPE_EXCEEDED`, a user
-          // problem that exits 1, was reported as `LORE_E_PARSE_FAILED`, a build integrity
-          // failure that exits 2. The parser was right and the pipeline overrode it, so
-          // anything branching on the stable code, which is what the taxonomy is for, was
-          // told the wrong thing.
-          if (cause instanceof LoreError) throw cause;
 
-          // Anything else is a genuine surprise, and that is exactly what this code means:
-          // a supported, included file whose bytes could not be read. It fails the candidate
-          // by default (architecture section 6.9) and the previous build stays active.
-          //
-          // A file whose bytes are not readable text does not reach here: fingerprinting
-          // classified it and left it out with a warning, which is the other row of the
-          // same table (#165).
-          throw new LoreError('LORE_E_PARSE_FAILED', `Could not parse ${discovered.displayPath}.`, {
-            remediation:
-              'Fix the file, or exclude it in .loreignore. The active build is unchanged.',
-            path: discovered.displayPath,
-            cause,
-          });
-        }
+          const bytes = readStableSourceBytes(
+            discovered.absolutePath,
+            discovered.contentHash,
+            discovered.displayPath,
+          );
 
-        const normalized = await normalizeArtifact({ parsed: result, objects });
-        const entry: CachedParse = {
-          artifact: result.artifact,
-          nodes: normalized.nodes,
-          chunks: chunkArtifact({
-            artifactId: result.artifact.id,
+          // A hit still has to have its normalized body present: the object store and the
+          // cache can be pruned independently, and reusing a parse whose body is gone would
+          // produce a build that cannot answer a source read.
+          const cached = cache.get(key);
+          if (cached !== null && (await objects.has(cached.objectHash))) {
+            parsed.push(withRules(cached, rulesById));
+            handled += 1;
+            continue;
+          }
+
+          let outcome: IsolatedParse;
+          try {
+            // In a separate process, under a deadline and a heap ceiling (#594). A rejection is
+            // the parser's own error, rebuilt on this side with its class, so the handling
+            // below is the same as when the parser ran here.
+            outcome = await host.parse(
+              parser,
+              {
+                artifactId: discovered.artifactId,
+                sourceId: discovered.sourceId,
+                relativePath: discovered.relativePath,
+                displayPath: discovered.displayPath,
+                mediaType: discovered.mediaType,
+                byteSize: discovered.byteSize,
+                contentHash: discovered.contentHash,
+                bytes,
+              },
+              options.signal,
+            );
+          } catch (cause) {
+            // A parser that raised a `LoreError` classified its own failure, and that
+            // classification is kept (#242).
+            //
+            // Wrapping everything meant a parser raising `LORE_E_ENVELOPE_EXCEEDED`, a user
+            // problem that exits 1, was reported as `LORE_E_PARSE_FAILED`, a build integrity
+            // failure that exits 2. The parser was right and the pipeline overrode it, so
+            // anything branching on the stable code, which is what the taxonomy is for, was
+            // told the wrong thing.
+            if (cause instanceof LoreError) throw cause;
+
+            // Anything else is a genuine surprise, and that is exactly what this code means:
+            // a supported, included file whose bytes could not be read. It fails the candidate
+            // by default (architecture section 6.9) and the previous build stays active.
+            //
+            // A file whose bytes are not readable text does not reach here: fingerprinting
+            // classified it and left it out with a warning, which is the other row of the
+            // same table (#165).
+            throw new LoreError(
+              'LORE_E_PARSE_FAILED',
+              `Could not parse ${discovered.displayPath}.`,
+              {
+                remediation:
+                  'Fix the file, or exclude it in .loreignore. The active build is unchanged.',
+                path: discovered.displayPath,
+                cause,
+              },
+            );
+          }
+
+          // The child was stopped because the build was, or it died of the same Ctrl-C the
+          // terminal sent the whole process group. Either way the active build is unchanged.
+          if (outcome.kind === 'interrupted')
+            throw cancelledError({ hasActiveBuild: active !== null });
+          if (outcome.kind === 'excluded') {
+            parseExclusions.push({
+              code: outcome.code,
+              path: discovered.displayPath,
+              message: outcome.message,
+            });
+            // Said now as well as in the manifest: the build has just spent the whole deadline
+            // on this file, and a person watching deserves to know why it paused.
+            progress.diagnostic('warn', `${discovered.displayPath}: ${outcome.message}`);
+            handled += 1;
+            continue;
+          }
+          const result: ParsedArtifact = outcome.result;
+
+          const normalized = await normalizeArtifact({ parsed: result, objects });
+          const entry: CachedParse = {
+            artifact: result.artifact,
             nodes: normalized.nodes,
-            chunking: config.effective.chunking,
-          }),
-          objectHash: normalized.objectHash,
-          ...(result.tables === undefined || result.tables.length === 0
-            ? {}
-            : { tables: result.tables }),
-          ...(result.warnings.length === 0 ? {} : { warnings: result.warnings }),
-        };
-        // A table-bearing parse is deliberately not cached. The cache is a JSON file per
-        // artifact, and a 500,000-row table would write hundreds of megabytes there to save
-        // a re-read that takes seconds. Rows are exactly reproducible from bytes the build
-        // has already read, so the cheap thing to keep is nothing. Nothing is ever written,
-        // so nothing can ever be read back missing its tables.
-        if (entry.tables === undefined) cache.put(key, entry);
-        parsed.push(withRules(entry, rulesById));
+            chunks: chunkArtifact({
+              artifactId: result.artifact.id,
+              nodes: normalized.nodes,
+              chunking: config.effective.chunking,
+            }),
+            objectHash: normalized.objectHash,
+            ...(result.tables === undefined || result.tables.length === 0
+              ? {}
+              : { tables: result.tables }),
+            ...(result.warnings.length === 0 ? {} : { warnings: result.warnings }),
+          };
+          // A table-bearing parse is deliberately not cached. The cache is a JSON file per
+          // artifact, and a 500,000-row table would write hundreds of megabytes there to save
+          // a re-read that takes seconds. Rows are exactly reproducible from bytes the build
+          // has already read, so the cheap thing to keep is nothing. Nothing is ever written,
+          // so nothing can ever be read back missing its tables.
+          if (entry.tables === undefined) cache.put(key, entry);
+          parsed.push(withRules(entry, rulesById));
 
-        handled += 1;
-        if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
+          handled += 1;
+          if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
+        }
+      } finally {
+        host.close();
       }
       progress.finish('parsing', handled);
 
@@ -319,6 +417,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       const warnings: readonly BuildWarning[] = [
         ...discovery.warnings,
         ...fingerprint.warnings,
+        ...parseExclusions,
         // What the parsers said. Discovery reports files left out; these report decisions
         // taken *inside* a file that was kept, which is the other half of the same promise:
         // a heading flattened, a column widened, a sheet not read as a table. Without this

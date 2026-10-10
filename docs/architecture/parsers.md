@@ -41,6 +41,7 @@ Three outcomes, and the difference between them is what the failure says about t
 |---|---|---|
 | **Excluded before parsing** | No parser handles the extension, or the bytes are not readable text | Warning, build succeeds (#165) |
 | **Excluded by a limit** | The file parsed, and a scale limit means part of it is not imported | Warning, build succeeds (#242) |
+| **Excluded by a resource limit** | Parsing the file exceeded the deadline or the memory ceiling | Warning, build succeeds (#594) |
 | **Fails the build** | A supported, included file whose bytes could not be read | `LORE_E_PARSE_FAILED`, exit 2 |
 
 The middle row is the one that changed. A CSV of 101 columns or a sheet of 500,001 rows used to
@@ -68,6 +69,84 @@ what `LORE_E_PARSE_FAILED` means. Wrapping everything reported a parser's delibe
 The **file-count** envelope is unchanged and still refuses the build, offering
 `--allow-large-project`. It is a property of the project as a whole, so there is no smaller thing
 to exclude; a per-file limit has one.
+
+## Every parse has a deadline and a memory ceiling
+
+A parser is a pure function of its bytes, which is not the same as a bounded one. Small, valid
+files drive the libraries underneath into quadratic time or into gigabytes of memory: 20 KB of
+nested Markdown brackets takes micromark seconds and 200 KB takes minutes, a 3.8 MB PDF whose
+content stream inflates to 1.5 GB held a build for 150 s at 3.4 GB, and a 900-byte PDF whose
+`/ToUnicode` CMap declares eight 2^24-code ranges aborts V8 outright (#594). In-process, the
+first kind hangs the build with the project lock held and Ctrl-C ignored, and the second kills
+the process with nothing a `try` can catch.
+
+So every built-in parse runs in a **child process**, `packages/parsers/src/isolation.ts`, under
+two limits. [ADR 0001](../adr/0001-parser-process-isolation.md) records the isolation boundary
+and its limitations:
+
+| Limit | Default | Override | When reached |
+|---|---|---|---|
+| Wall-clock time per file | 30 s | `LORE_PARSE_TIMEOUT_MS`, 100 to 3600000 | `parse-timeout` warning, file left out |
+| V8 heap of the parse process | 2048 MB | `LORE_PARSE_MEMORY_MB`, 64 to 32768 | `parse-memory` warning, file left out |
+
+Both warnings have class `envelope`, name the file, and say which variable to raise. A newly
+sealed build records them in its manifest for `lorepack inspect warnings` and Studio. The
+build also reports them as they happen. If the retained content matches an existing build,
+the no-op reuses that immutable manifest; the new exclusion appears only in live output.
+[Issue #662](https://github.com/burakdede/lorepack/issues/662) tracks persistent diagnostics
+for those attempts. A
+process that dies any other way, such as the operating system's out-of-memory killer, is a
+`parse-crashed` warning and the file is also left out.
+
+**A process, not a worker thread.** `worker_threads` with `resourceLimits` was the first design.
+It does not hold: on the CMap fixture with a 512 MB or 2048 MB worker heap, and on a CSV of
+single-character rows at 128 MB, V8 reached the worker's limit on a path that aborts the *whole
+process* (`FATAL ERROR: Reached heap limit`, exit 134) instead of raising
+`ERR_WORKER_OUT_OF_MEMORY`. A child process that aborts takes only itself with it. It costs one
+Node start per build (the child is reused, and replaced only after it was killed), and a copy of
+each file's bytes and result across the IPC channel.
+
+**What the ceiling covers.** `--max-old-space-size` bounds the JavaScript heap. It does not bound
+`ArrayBuffer` memory, which is where pdfjs inflates a compressed stream, so a decompression bomb
+is stopped by the deadline rather than the ceiling: the 1.5 GB PDF above reached about 3.2 GB of
+resident memory in its 30 s. Issue #599 covers extracted-text amplification, which does not
+bound those buffers. A total resident-memory ceiling remains an acceptance gap in #594.
+Peak memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever
+buffers the parse allocates before its deadline.
+
+**Ctrl-C stops a parse, not just the build after it.** The parent's event loop stays free while
+a file parses, so the interrupt is heard immediately, the child is killed, and the build ends
+with `LORE_E_CANCELLED` before candidate activation. The terminal also delivers the interrupt to
+the child, which can die of it first; that is reported as the same cancellation rather than as
+a broken file.
+
+**Neither limit is part of the build id.** They are environment variables for the same reason as
+`LORE_LOCK_WAIT_MS`: a slow laptop and a fast runner must not disagree about a build's identity
+because one waited longer. Whether a file was left out does reach the id, through the content,
+like any other excluded file. A file left out this way is not cached, so the next build tries it
+again.
+
+**The child runs under Node's permission model.** It may read (its own modules) and nothing
+else: no file writes, no child process, no worker, no add-on. A parser reads only the bytes it is
+sent, so a hostile document that reaches a parser bug cannot write to the project or start a
+program. Node 24 has no network permission; the privacy sandbox observes the child's network
+use instead (see [security](./security.md)).
+
+**Only registered parsers are isolated.** The child builds its own registry and finds the parser
+by id, so a parser that exists only in the calling process (an embedder's, or a test's) runs
+in-process, as every parser did before.
+
+### Manual CLI verification
+
+Verified on 2026-10-10 with the bundled CLI 0.1.0, Node 24.21.0, macOS arm64:
+
+- Create `ready.md` with ordinary text and `slow.md` with 100,000 opening brackets, `x`,
+  and 100,000 closing brackets. Run `build` with `LORE_PARSE_TIMEOUT_MS=100` and
+  `LORE_PARSE_MEMORY_MB=128`. The first build exits 0, activates one artifact and reports
+  `parse-timeout` for `slow.md`. `inspect warnings --json` returns that file and code.
+- Build `ready.md` first, then add the same `slow.md` and run with those limits. The command
+  exits 0, reports the exclusion and preserves the active build ID. Persistent inspection
+  returns zero warnings, reproducing #662; this case remains unresolved.
 
 ## HTML
 
