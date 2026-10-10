@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fsyncDirectory, LoreError } from '@lorepack/core';
+import { fsyncDirectory, LoreError, mkdirOwnerOnly } from '@lorepack/core';
 
 /**
  * Build directory lifecycle. The generic atomic-write primitives live in `core`, since the
@@ -23,7 +23,7 @@ export interface SealDependencies {
  */
 export function createCandidateDirectory(loreDirectory: string): CandidateDirectory {
   const temporaryRoot = join(loreDirectory, 'tmp');
-  mkdirSync(temporaryRoot, { recursive: true });
+  mkdirOwnerOnly(temporaryRoot);
   return { path: mkdtempSync(join(temporaryRoot, CANDIDATE_PREFIX)) };
 }
 
@@ -64,7 +64,7 @@ export function sealCandidateDirectory(
   dependencies: SealDependencies = {},
 ): { sealed: boolean } {
   const parent = dirname(destination);
-  mkdirSync(parent, { recursive: true });
+  mkdirOwnerOnly(parent);
   fsyncDirectory(candidate.path);
 
   try {

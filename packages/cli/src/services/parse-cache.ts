@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Chunk } from '@lorepack/compiler';
 import type { Artifact, LoreNode, ParsedTable, ParserWarning } from '@lorepack/core';
-import { writeFileAtomic } from '@lorepack/core';
+import { mkdirOwnerOnly, writeFileAtomic } from '@lorepack/core';
 
 /**
  * The parse cache behind incremental builds.
@@ -95,8 +95,8 @@ export class ParseCache {
   put(key: string, value: CachedParse): void {
     const envelope: CacheEnvelope = { version: CACHE_FORMAT_VERSION, ...value };
     try {
-      mkdirSync(join(this.#directory, key.slice(0, 2)), { recursive: true });
-      writeFileAtomic(this.#pathFor(key), JSON.stringify(envelope));
+      mkdirOwnerOnly(join(this.#directory, key.slice(0, 2)));
+      writeFileAtomic(this.#pathFor(key), JSON.stringify(envelope), { ownerOnly: true });
     } catch {
       // A cache that cannot be written (read-only volume, full disk) must not fail a build
       // that is otherwise complete.

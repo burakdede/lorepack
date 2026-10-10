@@ -10,7 +10,12 @@ import {
 } from 'node:fs';
 import { hostname as osHostname, platform } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { LoreError } from '@lorepack/core';
+import {
+  LoreError,
+  mkdirOwnerOnly,
+  OWNER_ONLY_DIRECTORY_MODE,
+  OWNER_ONLY_FILE_MODE,
+} from '@lorepack/core';
 import { ownProcessStart, processStart, sameProcessStart } from './process-start.js';
 
 /**
@@ -138,10 +143,10 @@ export class ProjectLock {
   }
 
   async #tryAcquire(deadline: number): Promise<boolean> {
-    mkdirSync(dirname(this.#directory), { recursive: true });
+    mkdirOwnerOnly(dirname(this.#directory));
     for (;;) {
       try {
-        mkdirSync(this.#directory);
+        mkdirSync(this.#directory, { mode: OWNER_ONLY_DIRECTORY_MODE });
         break;
       } catch (cause) {
         const code = (cause as { code?: string }).code;
@@ -160,7 +165,10 @@ export class ProjectLock {
       hostname: this.#options.hostname,
       token,
     };
-    writeFileSync(this.#recordPath, JSON.stringify(record), 'utf8');
+    writeFileSync(this.#recordPath, JSON.stringify(record), {
+      encoding: 'utf8',
+      mode: OWNER_ONLY_FILE_MODE,
+    });
     this.#held = true;
     this.#ownerToken = token;
     this.#sweepTombstones();
@@ -280,7 +288,10 @@ export class ProjectLock {
 
   #markTombstone(tombstone: string): void {
     try {
-      writeFileSync(join(tombstone, TOMBSTONE_MARKER), String(this.#options.now()), 'utf8');
+      writeFileSync(join(tombstone, TOMBSTONE_MARKER), String(this.#options.now()), {
+        encoding: 'utf8',
+        mode: OWNER_ONLY_FILE_MODE,
+      });
     } catch {
       // Unmarked tombstones are marked by the next sweep, which delays their removal only.
     }

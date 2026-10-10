@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -8,6 +8,7 @@ import {
   type BuildId,
   type BuildSummary,
   LoreError,
+  mkdirOwnerOnly,
 } from '@lorepack/core';
 import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
 import { inTransaction, openReadOnly, openWritable } from './sqlite.js';
@@ -27,7 +28,7 @@ export class LocalStateStore {
   }
 
   static open(loreDirectory: string, migrationsDirectory: string): LocalStateStore {
-    mkdirSync(loreDirectory, { recursive: true });
+    mkdirOwnerOnly(loreDirectory);
     const path = join(loreDirectory, 'state.sqlite');
     const migrations = loadMigrations(migrationsDirectory);
     // Checked on a read-only connection first, because opening for writing already writes:

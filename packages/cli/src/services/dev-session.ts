@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type LoadedConfig, LoreError } from '@lorepack/core';
+import { type LoadedConfig, LoreError, mkdirOwnerOnly, OWNER_ONLY_FILE_MODE } from '@lorepack/core';
 
 /**
  * The receipt a running `lorepack dev` leaves, so the session is discoverable rather than
@@ -41,9 +41,12 @@ function receiptPath(config: LoadedConfig): string {
  */
 export function writeReceipt(config: LoadedConfig, receipt: DevReceipt): void {
   const path = receiptPath(config);
-  mkdirSync(dirname(path), { recursive: true });
+  mkdirOwnerOnly(dirname(path));
   const temporary = `${path}.${process.pid}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+  writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: OWNER_ONLY_FILE_MODE,
+  });
   renameSync(temporary, path);
 }
 

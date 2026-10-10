@@ -304,7 +304,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         if (endpoint !== undefined && endpoint !== existing.endpoint) {
           const updated: CloudflareTargetReceipt = { ...existing, endpoint };
           const path = cloudflareTargetPath(config.projectRoot);
-          writeFileAtomic(path, `${JSON.stringify(updated, null, 2)}\n`);
+          writeFileAtomic(path, `${JSON.stringify(updated, null, 2)}\n`, { ownerOnly: true });
           return {
             human: `${plan}\n\nRecorded the cloudflare endpoint ${endpoint}.\nReceipt: ${path}`,
             json: updated,
@@ -384,7 +384,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       const written: CloudflareTargetReceipt =
         endpoint === undefined ? receipt : { ...receipt, endpoint };
       const path = cloudflareTargetPath(config.projectRoot);
-      writeFileAtomic(path, `${JSON.stringify(written, null, 2)}\n`);
+      writeFileAtomic(path, `${JSON.stringify(written, null, 2)}\n`, { ownerOnly: true });
 
       return {
         human: `${plan}\n\nConfigured cloudflare for ${config.config.name}.\nReceipt: ${path}\n${

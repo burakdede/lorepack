@@ -1,5 +1,6 @@
+import { closeSync, openSync } from 'node:fs';
 import { constants, DatabaseSync } from 'node:sqlite';
-import { diskFullError, LoreError } from '@lorepack/core';
+import { diskFullError, LoreError, OWNER_ONLY_FILE_MODE } from '@lorepack/core';
 
 /**
  * The only module in the repository that imports node:sqlite. The API is a release
@@ -141,6 +142,10 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
 /** Opens a candidate build for writing. Only the compiler does this, never the runtime. */
 export function openWritable(path: string): DatabaseSync {
   try {
+    // SQLite creates a missing database with the umask's default mode, and its journal
+    // inherits the database's. Every writable database lives under `.lore`, so it is
+    // created owner-only first (#569); an existing file keeps its mode.
+    closeSync(openSync(path, 'a', OWNER_ONLY_FILE_MODE));
     const db = new DatabaseSync(path, {
       readOnly: false,
       allowExtension: false,
