@@ -2,8 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   assertIdentifier,
+  assertMigrationsKnown,
+  buildMigrationsDirectory,
   decodeValue,
   LocalStateStore,
+  loadMigrations,
   openReadOnly,
   stateMigrationsDirectory,
   tableLocator,
@@ -281,6 +284,21 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
           details: { missing },
         },
       );
+    }
+
+    // A catalog a newer Lorepack wrote may hold tables this one cannot read, and serving
+    // would refuse it at the first request. Refused here instead, before the pointer moves
+    // (#570).
+    try {
+      assertMigrationsKnown(db, loadMigrations(buildMigrationsDirectory()));
+    } catch (cause) {
+      if (!(cause instanceof LoreError)) throw cause;
+      throw new LoreError('LORE_E_SCHEMA_MISMATCH', `Build ${build.buildId}: ${cause.message}`, {
+        remediation:
+          'Upgrade Lorepack to activate this build, or activate another one. The active build is unchanged.',
+        subject: build.buildId,
+        ...(cause.details === undefined ? {} : { details: cause.details }),
+      });
     }
   } finally {
     db.close();
