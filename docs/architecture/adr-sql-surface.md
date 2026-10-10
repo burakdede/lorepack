@@ -180,3 +180,30 @@ bounds them.
 - The guard narrows the remote attack surface to what its rules allow, but it is not an
   engine-level control. The durable fix is engine isolation for remote table data, for example
   per-build storage whose only table is the one being queried, tracked separately.
+
+## Addendum, 2026-10-10: the remote cost bound is an estimate of rows (#558)
+
+**Status:** accepted.
+
+**Context.** The bound above charged every row source the table's row count. A VALUES list was
+charged that too, so a ten-way cross join of ten literal rows (10^10 rows) passed whenever the
+table held four rows or fewer. A subquery in FROM was charged its inner table and then the
+table again, which refused ordinary queries over a few thousand rows. A CTE that names itself is
+recursive to SQLite without the `RECURSIVE` keyword, and only the keyword was refused. And
+`printf('%.*c', 1000000, x)` makes one row cost a megabyte, which no row count sees.
+
+**Decision.** The guard estimates rows per query frame: a SELECT core multiplies its sources
+(the table at its row count, a CTE or subquery at its own estimate, a VALUES list at the rows it
+lists), a compound SELECT sums its cores, and a subquery in an expression multiplies the query
+around it, since the guard cannot tell whether it is correlated. Remotely, any frame or the
+whole statement over 5,000,000 is refused, as is a CTE named inside its own body. On both
+profiles, a CTE may not be named like the table it would shadow, and `printf`/`format` take a
+string-literal format with widths and precisions of at most 100.
+
+**Consequences.**
+
+- The guard bounds rows, not per-row CPU, and [`security.md`](security.md) says so. The runtime
+  bound on the rest is the Worker's per-caller rate limit on table queries
+  ([`deployment.md`](deployment.md)), not anything in this module.
+- A subquery in FROM no longer counts its table twice, so `SELECT n FROM (SELECT 1 AS n FROM t)`
+  is admitted at any row count up to the bound.
