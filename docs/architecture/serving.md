@@ -254,11 +254,23 @@ reason as the error message. The decision may be asynchronous, because a real ch
 something.
 
 On `/mcp`, the standard Streamable HTTP headers are validated against the parsed JSON-RPC
-body **before** the hook runs. `Mcp-Method` must agree with `body.method`, and `Mcp-Name`
-must agree with `params.name` or `params.uri` on the methods that mirror one. A divergence is
-rejected as HTTP `400` with MCP error `-32020` (`HeaderMismatch`). That is what makes those
-headers safe to use as a routing hint in Cloudflare Access or WAF policy: the body remains the
-source of truth, and a forged header is refused before an authorization decision can trust it.
+body **after** the hook admits the request and before the MCP handler runs. `Mcp-Method` must
+agree with `body.method`, and `Mcp-Name` must agree with `params.name` or `params.uri` on the
+methods that mirror one. A divergence is rejected as HTTP `400` with MCP error `-32020`
+(`HeaderMismatch`). That is what makes those headers safe to use as a routing hint in
+Cloudflare Access or WAF policy: the body remains the source of truth, and a forged header
+never reaches the handler. The check used to run before the hook, which meant parsing an
+anonymous caller's body; it moved after the hook in #550, so an unauthenticated request is
+answered `401` without its body being read. A hook must therefore not trust `Mcp-Method` or
+`Mcp-Name`; none of the shipped hooks reads them.
+
+Every request body, `/mcp` included, is capped at `maxRequestBytes` (1 MB by default) **as it
+streams**: Hono's `bodyLimit` reads at most that much and answers `413 LORE_E_LIMIT_EXCEEDED`
+without reading the rest. Checking `Content-Length` alone was not enough, because a chunked
+upload declares no length (#550). The cap runs after the hook, so an anonymous caller costs no
+read at all. Locally, the Node server also bounds how long a client may take to send its
+headers (10 s) and its whole request (30 s), so a client trickling bytes cannot hold sockets
+open for Node's default of minutes.
 
 **No hook is passed locally, and that is deliberate.** A loopback server can only be reached
 by the person who started it, and a token they issue to themselves protects nothing while

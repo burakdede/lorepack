@@ -11,6 +11,7 @@ import {
 } from '@lorepack/core/worker';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { type ZodType, z } from 'zod';
 
 /**
@@ -292,11 +293,6 @@ export function createApiApp(options: ApiOptions): Hono {
     app.use('*', async (context, next) => {
       if (UNAUTHENTICATED_PATHS.includes(context.req.path)) return next();
 
-      if (context.req.path === '/mcp') {
-        const mismatch = await validateMcpHeadersBeforeAuthorization(context.req.raw);
-        if (mismatch !== null) return mismatch;
-      }
-
       const decision = await authorize({
         authorization: context.req.header('Authorization'),
         method: context.req.method,
@@ -317,6 +313,40 @@ export function createApiApp(options: ApiOptions): Hono {
         ),
         401,
       );
+    });
+  }
+
+  /**
+   * The body cap, counted as the body streams in rather than after it has (#550).
+   *
+   * A chunked upload declares no length, so checking `Content-Length` alone let a client make
+   * this process buffer as much as it cared to send. `bodyLimit` reads at most `maxBytes` and
+   * then answers `413` without reading the rest. After authorization, so an anonymous caller
+   * costs no read at all, and before every route, `/mcp` included: the MCP adapter parses
+   * whatever body it is handed.
+   */
+  app.use(
+    '*',
+    bodyLimit({
+      maxSize: maxBytes,
+      onError: (context) => failure(context, tooLarge(maxBytes), 413),
+    }),
+  );
+
+  /**
+   * `Mcp-Method` and `Mcp-Name` must agree with the body they mirror, before the handler
+   * runs, so a policy that routes on those headers cannot be steered by a forged one.
+   *
+   * After the hook rather than before it (#550): checking means parsing the body, and parsing
+   * an anonymous caller's body is work the caller chooses the size of. No hook here reads
+   * these headers. Only where a hook exists, because that is a remote deployment, which is
+   * where something in front of it may route on them.
+   */
+  if (options.authorize !== undefined) {
+    app.use('/mcp', async (context, next) => {
+      const mismatch = await validateMcpHeaders(context.req.raw);
+      if (mismatch !== null) return mismatch;
+      return next();
     });
   }
 
@@ -625,14 +655,11 @@ async function body<T>(
     );
   }
 
-  const declared = Number(context.req.header('Content-Length') ?? '0');
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    throw tooLarge(declared, maxBytes);
-  }
-
+  // The `bodyLimit` middleware has already stopped a body that streamed past the cap. This
+  // catches the one it trusts: a `Content-Length` smaller than the body, which an HTTP parser
+  // never delivers but an in-process `Request` can carry.
   const text = await context.req.text();
-  // The declared length is a claim, so the real one is checked too.
-  if (byteLength(text) > maxBytes) throw tooLarge(byteLength(text), maxBytes);
+  if (byteLength(text) > maxBytes) throw tooLarge(maxBytes);
 
   let raw: unknown;
   try {
@@ -673,9 +700,9 @@ function isJsonMediaType(header: string | undefined): boolean {
 /** A request whose body is the wrong media type, answered as `415` rather than `400`. */
 class UnsupportedMediaTypeError extends LoreError {}
 
-function tooLarge(actual: number, limit: number): LoreError {
+function tooLarge(limit: number): LoreError {
   return new LoreError('LORE_E_LIMIT_EXCEEDED', 'The request body is too large.', {
-    remediation: `This API accepts at most ${limit} bytes; the request declared ${actual}.`,
+    remediation: `This API accepts a body of at most ${limit} bytes.`,
   });
 }
 
@@ -723,7 +750,7 @@ function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
 }
 
-async function validateMcpHeadersBeforeAuthorization(request: Request): Promise<Response | null> {
+async function validateMcpHeaders(request: Request): Promise<Response | null> {
   if (request.method.toUpperCase() !== 'POST') return null;
   const methodHeader = request.headers.get('Mcp-Method');
   const nameHeader = request.headers.get('Mcp-Name');

@@ -35,6 +35,22 @@ const DEFAULT_PORT = 4321;
 /** How many ports to try before giving up. Enough for several servers, few enough to fail. */
 const PORT_ATTEMPTS = 20;
 
+/**
+ * How long a client may take to send a request, in milliseconds (#550).
+ *
+ * Node's defaults hold a connection that trickles its headers for a minute and its body for
+ * five, which lets one client keep many sockets open for almost nothing. Every request this
+ * server takes is under a megabyte from a process on the same machine, so seconds are
+ * generous. These bound receiving the request only: a long-lived MCP response stream is
+ * unaffected. Node enforces them on a sweep, so the sweep runs every second rather than every
+ * thirty.
+ */
+export const REQUEST_TIMEOUTS = {
+  headersTimeout: 10_000,
+  requestTimeout: 30_000,
+  connectionsCheckingInterval: 1_000,
+} as const;
+
 /** Exported for the tests, which assert the wording rather than reproducing it. */
 export const SERVE_DEFAULTS = { port: DEFAULT_PORT, attempts: PORT_ATTEMPTS } as const;
 
@@ -266,7 +282,10 @@ async function listen(
     const port = first + attempt;
     try {
       const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
-        const started = serve({ fetch, hostname, port }, () => resolve(started));
+        const started = serve(
+          { fetch, hostname, port, serverOptions: { ...REQUEST_TIMEOUTS } },
+          () => resolve(started),
+        );
         started.on('error', reject);
       });
       if (attempt > 0) warn(`Port ${first} was busy, using ${port}.\n`);

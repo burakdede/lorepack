@@ -15,7 +15,7 @@ security-affecting change before release.
 | Packed originals are the build's bytes, never a link's target (#568) | `packages/cli/test/pack.test.ts` | Covered |
 | Malformed PDF and Office inputs | `packages/parsers/test/pdf.test.ts`, `packages/parsers/test/docx.test.ts`, `packages/parsers/test/xlsx.test.ts` | Covered |
 | SQL injection and multi-statement attempts | `packages/cli/test/security.e2e.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
-| Oversized requests and responses | `packages/runtime/test/http.test.ts`, export/context budget tests | Covered |
+| Oversized requests and responses, including chunked bodies, `/mcp`, and slow clients (#550) | `packages/runtime/test/http.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts`, `tools/security/test/local-server.test.ts`, export/context budget tests | Covered |
 | Repeated or excessive query terms cannot multiply FTS5 work, locally or on D1 | `packages/core/test/fts-query.test.ts`, `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
 | Archive verification is bounded and has no prototype-name bypass (#567) | `packages/backend-local/test/archive.test.ts`, `packages/cli/test/pack-verify.e2e.test.ts` | Covered |

@@ -355,7 +355,7 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
     expect(workerNames).toEqual(localNames);
   });
 
-  it('rejects MCP header mismatches before the Worker auth hook can inspect them', async () => {
+  it('rejects MCP header mismatches after the Worker auth hook and before the handler', async () => {
     let authorized = 0;
     const worker = createCloudflareWorker({
       runtime: runtimeFor(),
@@ -391,7 +391,77 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
       error: { code: -32020 },
       id: 1,
     });
-    expect(authorized).toBe(0);
+    expect(authorized).toBe(1);
+  });
+
+  it('answers an anonymous /mcp with 401 and never buffers its body, #550', async () => {
+    const worker = createCloudflareWorker({
+      runtime: runtimeFor(),
+      currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
+      authorize: () => false,
+    });
+    closers.push(() => worker.close());
+
+    let pulled = 0;
+    const chunk = new Uint8Array(64 * 1024).fill(0x20);
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += chunk.byteLength;
+        if (pulled > 256 * 1024 * 1024) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const response = await worker.fetch(
+      new Request('https://worker.example/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'tools/list',
+        },
+        body,
+        duplex: 'half',
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(401);
+    expect(pulled).toBeLessThanOrEqual(chunk.byteLength);
+  });
+
+  it('caps a chunked body on every Worker route, /mcp included, #550', async () => {
+    const worker = createCloudflareWorker({
+      runtime: runtimeFor(),
+      currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
+      authorize: () => true,
+    });
+    closers.push(() => worker.close());
+
+    for (const path of ['/mcp', '/v1/search']) {
+      let pulled = 0;
+      const chunk = new Uint8Array(64 * 1024).fill(0x20);
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          pulled += chunk.byteLength;
+          if (pulled > 256 * 1024 * 1024) controller.close();
+          else controller.enqueue(chunk);
+        },
+      });
+      const response = await worker.fetch(
+        new Request(`https://worker.example${path}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'Mcp-Method': 'tools/list',
+          },
+          body,
+          duplex: 'half',
+        } as RequestInit),
+      );
+      expect(response.status, path).toBe(413);
+      // The 1 MB default, plus at most the chunk that crossed it.
+      expect(pulled, path).toBeLessThanOrEqual(1024 * 1024 + 2 * chunk.byteLength);
+    }
   });
 
   it('reads every artifact id as its own file, locally and on the Worker, #608', async () => {

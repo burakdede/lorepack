@@ -210,6 +210,25 @@ const EVIDENCE: readonly Evidence[] = [
     ],
   },
   {
+    name: 'request bodies are capped while they stream, before MCP parses them',
+    path: 'tools/security/test/local-server.test.ts',
+    tests: [
+      'a request body is capped while it streams (#550) answers 413 on /v1/search long before an oversized chunked body has been sent',
+      'a request body is capped while it streams (#550) answers 413 on /mcp long before an oversized chunked body has been sent',
+      'a request body is capped while it streams (#550) drops a connection that never finishes sending its headers',
+    ],
+    patterns: [/Transfer-Encoding/, /toBe\(413\)/, /\/mcp/, /never finishes sending its headers/],
+  },
+  {
+    name: 'an anonymous /mcp request is refused before its body is read',
+    path: 'packages/runtime/test/http.test.ts',
+    tests: [
+      'request bodies are capped as they stream, #550 refuses an anonymous /mcp request as 401 without reading its body',
+      'request bodies are capped as they stream, #550 stops reading a chunked body to /mcp once it crosses the cap',
+    ],
+    patterns: [/refuses an anonymous \/mcp request as 401 without reading its body/],
+  },
+  {
     name: 'a Host allowlist stops DNS rebinding on REST and MCP',
     path: 'tools/security/test/local-server.test.ts',
     tests: [
