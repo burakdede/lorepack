@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lorepack` binary. The automa
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-57 automated, 4 checked by hand.
+58 automated, 4 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -957,6 +957,19 @@ Starting point: 3 source files.
    Expect: it succeeds, `counts.artifacts` is 3.
 3. And answer a query with provenance, which needs the catalog schema
    Expect: it succeeds, `hits[0].locator.relativePath` is present.
+
+### `packaging/the-installed-cli-finds-the-projects-wrangler`
+
+**The installed CLI runs the project's own Wrangler**
+
+Proves: Invariant 7 keeps Wrangler out of the published install, so deploy must find the one the user installed, by package name, and never by walking out of its own package.
+
+Locks down the defect in #580.
+
+Starting point: 5 source files, already set up with `lorepack init`.
+
+1. Plan a Cloudflare target from the staged install, which ships no Wrangler
+   Expect: it succeeds, stdout mentions "Wrangler 9.9.9-fixture", "dry run, nothing was changed".
 
 ## Checked by a person
 
