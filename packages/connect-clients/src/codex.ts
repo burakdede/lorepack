@@ -13,6 +13,7 @@ import type {
   ConnectionCheck,
   ConnectPlan,
   ConnectReceipt,
+  RemoveOutcome,
 } from './port.js';
 import {
   ownerOfTable,
@@ -309,20 +310,31 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       return check;
     },
 
-    async remove(receipt: ConnectReceipt): Promise<void> {
-      if (receipt.configPath === null) return;
+    async remove(receipt: ConnectReceipt): Promise<RemoveOutcome> {
+      if (receipt.configPath === null) return { removed: false };
       const location = locationFor(receipt.projectRoot, receipt.scope);
       const path = resolveConfigFile(receipt.configPath, location);
-      if (!existsSync(path)) return;
+      if (!existsSync(path)) return { removed: false };
 
       const config = readTomlConfig(path);
-      const { text, removed } = withoutTomlTable(config, tablePath(receipt.serverName));
+      // Scoped to this project: `$CODEX_HOME/config.toml` is shared by every project, and
+      // another project's entry under the same name is not this disconnect's to take (#581).
+      const { text, removed, owner } = withoutTomlTable(
+        config,
+        tablePath(receipt.serverName),
+        receipt.projectRoot,
+      );
       // Only when something actually changed: rewriting the file to remove nothing would
       // reformat a configuration for no reason.
-      if (!removed) return;
+      if (!removed) {
+        return owner === undefined
+          ? { removed: false }
+          : { removed: false, ownedBy: owner.projectRoot };
+      }
 
       backup(path);
       writeTextAtomically(path, text, config.bom, writeOptionsFor(location));
+      return { removed: true };
     },
   };
 }

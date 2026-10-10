@@ -86,6 +86,15 @@ describe('which clients exist', () => {
 });
 
 describe('disconnect', () => {
+  it('says what it did for each client, rather than one sentence for every outcome', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const result = await run(['--cwd', temp.root, 'disconnect', 'codex']);
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Codex: no Lorepack entry for this project in');
+    });
+  });
+
   it('names the file it would take an entry out of, for each client', async () => {
     await withTempProject({ files: FILES }, async (temp) => {
       const result = await run(['--cwd', temp.root, 'disconnect']);

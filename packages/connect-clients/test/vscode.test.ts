@@ -222,6 +222,22 @@ describe("the file is a person's, and it stays theirs", () => {
   });
 });
 
+describe('a configuration a Windows editor saved (#581)', () => {
+  it('connects through a byte order mark and CRLF, and disconnect restores it byte for byte', async () => {
+    const before = `\ufeff${FOREIGN.replace(/\n/g, '\r\n')}`;
+    const path = write(project, before);
+    const connector = fixture.create(project);
+
+    const receipt = await connector.apply(await connector.plan(input()));
+    const connected = readFileSync(path, 'utf8');
+    expect(connected.startsWith('\ufeff{')).toBe(true);
+    expect(document(connected.slice(1)).servers).toHaveProperty('lorepack');
+
+    await connector.remove(receipt);
+    expect(readFileSync(path, 'utf8')).toBe(before);
+  });
+});
+
 describe('scope, which is where a private corpus leaks', () => {
   it('defaults to the workspace and says it is shareable', async () => {
     const plan = await fixture.create(project).plan(input());
