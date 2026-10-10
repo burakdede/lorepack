@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, posix, relative, sep } from 'node:path';
-import { LoreError, sha256Hex } from '@lorepack/core';
+import { checksumIndexSchema, LoreError, sha256Hex } from '@lorepack/core';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
 
@@ -162,57 +163,135 @@ export interface VerificationResult {
 }
 
 /**
- * Reads every member back and checks it against the recorded index.
+ * Caps on what an archive may declare, checked against the central directory before any member
+ * is inflated.
  *
- * Reported in archive order and the first mismatch is the one that matters, so a corrupt
- * download says which file went wrong rather than "invalid archive".
+ * An archive is input someone handed you, so a 3 MB file that declares gigabytes must fail on
+ * the declaration, not after the memory is spent. The declared sizes are trustworthy for this
+ * purpose because yauzl fails any member that inflates past its declaration. The values leave
+ * room above the scale envelope (2,500 files and 1 GB of sources): every member is read as a
+ * stream, so they bound work rather than memory.
  */
-export async function verifyArchive(path: string): Promise<VerificationResult> {
-  const members = await readArchive(path);
-  const indexMember = members.get(CHECKSUM_MEMBER);
-  if (indexMember === undefined) {
-    throw new LoreError('LORE_E_OBJECT_CORRUPT', `${path} has no ${CHECKSUM_MEMBER}.`, {
-      remediation: 'This is not a Lorepack archive, or it was truncated. Pack the build again.',
-    });
-  }
+export const ARCHIVE_LIMITS = {
+  /** Entries in the central directory. An envelope build packs a few thousand. */
+  maxMembers: 100_000,
+  /** Declared uncompressed bytes of one member. `context.sqlite` is the large one. */
+  maxMemberBytes: 4 * 1024 * 1024 * 1024,
+  /** Declared uncompressed bytes across every member. */
+  maxTotalBytes: 16 * 1024 * 1024 * 1024,
+  /** `checksums.json`, the one member parsed whole rather than streamed. */
+  maxIndexBytes: 16 * 1024 * 1024,
+} as const;
 
-  let index: ChecksumIndex;
-  try {
-    index = JSON.parse(new TextDecoder().decode(indexMember)) as ChecksumIndex;
-  } catch (cause) {
-    throw new LoreError('LORE_E_OBJECT_CORRUPT', `${CHECKSUM_MEMBER} in ${path} is unreadable.`, {
-      remediation: 'The archive is corrupt. Pack the build again.',
-      cause,
-    });
-  }
+export type ArchiveLimits = { readonly [K in keyof typeof ARCHIVE_LIMITS]: number };
 
-  const failures: VerificationFailure[] = [];
-  for (const [member, expected] of Object.entries(index.members)) {
-    const bytes = members.get(member);
-    if (bytes === undefined) {
-      failures.push({ member, reason: 'missing', expected });
-      continue;
-    }
-    const actual = sha256Hex(bytes);
-    if (actual !== expected)
-      failures.push({ member, reason: 'checksum-mismatch', expected, actual });
-  }
-
-  // A member nobody vouched for is as suspicious as a corrupt one: it means the archive
-  // carries content the index does not describe.
-  for (const member of members.keys()) {
-    if (member === CHECKSUM_MEMBER) continue;
-    if (!(member in index.members)) failures.push({ member, reason: 'unlisted' });
-  }
-
-  return { ok: failures.length === 0, memberCount: members.size, failures };
+export interface ArchiveReadOptions {
+  readonly limits?: ArchiveLimits;
 }
 
-/** Reads an archive into memory. Archives are bounded by the build envelope, so this is
- *  simpler than streaming and the whole file is being hashed anyway. */
-export function readArchive(path: string): Promise<Map<string, Uint8Array>> {
+/**
+ * Checks every member against the recorded index.
+ *
+ * Names are compared from the central directory first, so an unlisted member is reported
+ * without being inflated. Listed members are hashed as they stream, so memory stays flat
+ * whatever their size. Failures are reported in archive order, so a corrupt download says
+ * which file went wrong rather than "invalid archive".
+ */
+export async function verifyArchive(
+  path: string,
+  options: ArchiveReadOptions = {},
+): Promise<VerificationResult> {
+  const limits = options.limits ?? ARCHIVE_LIMITS;
+  const archive = await openArchive(path);
+  try {
+    const entries = await listEntries(archive, path, limits);
+    const indexEntry = entries.find((entry) => entry.fileName === CHECKSUM_MEMBER);
+    if (indexEntry === undefined) {
+      throw new LoreError('LORE_E_OBJECT_CORRUPT', `${path} has no ${CHECKSUM_MEMBER}.`, {
+        remediation: 'This is not a Lorepack archive, or it was truncated. Pack the build again.',
+      });
+    }
+    if (indexEntry.uncompressedSize > limits.maxIndexBytes) {
+      throw limitExceeded(path, 'maxIndexBytes', limits.maxIndexBytes, CHECKSUM_MEMBER);
+    }
+    const index = parseIndex(path, await readEntry(archive, path, indexEntry));
+
+    const failures: VerificationFailure[] = [];
+    const present = new Set<string>();
+    for (const entry of entries) {
+      const member = entry.fileName;
+      if (member === CHECKSUM_MEMBER) continue;
+      present.add(member);
+      // A member nobody vouched for is as suspicious as a corrupt one: it means the archive
+      // carries content the index does not describe.
+      const expected = index.get(member);
+      if (expected === undefined) {
+        failures.push({ member, reason: 'unlisted' });
+        continue;
+      }
+      const hash = createHash('sha256');
+      await streamEntry(archive, path, entry, (chunk) => hash.update(chunk));
+      const actual = hash.digest('hex');
+      if (actual !== expected) {
+        failures.push({ member, reason: 'checksum-mismatch', expected, actual });
+      }
+    }
+    for (const [member, expected] of index) {
+      if (!present.has(member)) failures.push({ member, reason: 'missing', expected });
+    }
+
+    return { ok: failures.length === 0, memberCount: entries.length, failures };
+  } finally {
+    archive.close();
+  }
+}
+
+/**
+ * Reads an archive into memory, member by member.
+ *
+ * The same central-directory limits apply as for verification, so nothing is inflated from an
+ * archive that declares more than Lorepack will read. Use `verifyArchive` first on anything
+ * received from elsewhere: this returns bytes, not trust.
+ */
+export async function readArchive(
+  path: string,
+  options: ArchiveReadOptions = {},
+): Promise<Map<string, Uint8Array>> {
+  const archive = await openArchive(path);
+  try {
+    const members = new Map<string, Uint8Array>();
+    for (const entry of await listEntries(archive, path, options.limits ?? ARCHIVE_LIMITS)) {
+      members.set(entry.fileName, await readEntry(archive, path, entry));
+    }
+    return members;
+  } finally {
+    archive.close();
+  }
+}
+
+function parseIndex(path: string, bytes: Uint8Array): Map<string, string> {
+  const invalid = (cause: unknown): LoreError =>
+    new LoreError('LORE_E_OBJECT_CORRUPT', `${CHECKSUM_MEMBER} in ${path} is unreadable.`, {
+      remediation: 'The archive is corrupt. Pack the build again.',
+      subject: CHECKSUM_MEMBER,
+      cause,
+    });
+  let raw: unknown;
+  try {
+    raw = JSON.parse(new TextDecoder().decode(bytes));
+  } catch (cause) {
+    throw invalid(cause);
+  }
+  const parsed = checksumIndexSchema.safeParse(raw);
+  if (!parsed.success) throw invalid(parsed.error);
+  // A Map, because a plain object answers `in` and indexing for `constructor` and friends.
+  return new Map(Object.entries(parsed.data.members));
+}
+
+function openArchive(path: string): Promise<yauzl.ZipFile> {
   return new Promise((resolve, reject) => {
-    yauzl.open(path, { lazyEntries: true, autoClose: true }, (openError, zipfile) => {
+    // autoClose off: members are opened after the directory has been read and checked.
+    yauzl.open(path, { lazyEntries: true, autoClose: false }, (openError, zipfile) => {
       if (openError !== null || zipfile === undefined) {
         reject(
           new LoreError('LORE_E_OBJECT_CORRUPT', `Cannot open ${path} as a ZIP archive.`, {
@@ -222,67 +301,125 @@ export function readArchive(path: string): Promise<Map<string, Uint8Array>> {
         );
         return;
       }
-
-      const members = new Map<string, Uint8Array>();
-      zipfile.on('error', (cause) =>
-        reject(
-          new LoreError('LORE_E_OBJECT_CORRUPT', `${path} is not a readable archive.`, {
-            remediation: 'Download or pack the archive again.',
-            cause,
-          }),
-        ),
-      );
-      zipfile.on('end', () => resolve(members));
-      zipfile.on('entry', (entry: yauzl.Entry) => {
-        if (entry.fileName.endsWith('/')) {
-          zipfile.readEntry();
-          return;
-        }
-        if (members.has(entry.fileName)) {
-          reject(
-            new LoreError(
-              'LORE_E_OBJECT_CORRUPT',
-              `${entry.fileName} appears more than once in ${path}.`,
-              {
-                remediation: 'The archive contains duplicate members. Pack the build again.',
-                subject: entry.fileName,
-              },
-            ),
-          );
-          zipfile.close();
-          return;
-        }
-        // A member whose compressed payload is damaged fails here, inside inflate. It is
-        // corruption like any checksum mismatch, so it is reported as corruption naming
-        // the member rather than as an unexplained internal error.
-        const corrupt = (cause: unknown): LoreError =>
-          new LoreError(
-            'LORE_E_OBJECT_CORRUPT',
-            `${entry.fileName} in ${path} could not be read: the archive is damaged.`,
-            {
-              remediation: 'Download or pack the archive again. Its contents cannot be trusted.',
-              subject: entry.fileName,
-              ...(cause === null || cause === undefined ? {} : { cause }),
-            },
-          );
-
-        zipfile.openReadStream(entry, (streamError, stream) => {
-          if (streamError !== null || stream === undefined) {
-            reject(corrupt(streamError));
-            return;
-          }
-          const chunks: Buffer[] = [];
-          stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-          stream.on('error', (cause) => reject(corrupt(cause)));
-          stream.on('end', () => {
-            members.set(entry.fileName, new Uint8Array(Buffer.concat(chunks)));
-            zipfile.readEntry();
-          });
-        });
-      });
-      zipfile.readEntry();
+      resolve(zipfile);
     });
   });
+}
+
+/** The central directory, in archive order, checked against the limits. Inflates nothing. */
+function listEntries(
+  archive: yauzl.ZipFile,
+  path: string,
+  limits: ArchiveLimits,
+): Promise<yauzl.Entry[]> {
+  return new Promise((resolve, reject) => {
+    if (archive.entryCount > limits.maxMembers) {
+      reject(limitExceeded(path, 'maxMembers', limits.maxMembers));
+      return;
+    }
+    const entries: yauzl.Entry[] = [];
+    const names = new Set<string>();
+    let total = 0;
+    archive.on('error', (cause) =>
+      reject(
+        new LoreError('LORE_E_OBJECT_CORRUPT', `${path} is not a readable archive.`, {
+          remediation: 'Download or pack the archive again.',
+          cause,
+        }),
+      ),
+    );
+    archive.on('end', () => resolve(entries));
+    archive.on('entry', (entry: yauzl.Entry) => {
+      const name = entry.fileName;
+      if (name.endsWith('/')) {
+        archive.readEntry();
+        return;
+      }
+      if (names.has(name)) {
+        reject(
+          new LoreError('LORE_E_OBJECT_CORRUPT', `${name} appears more than once in ${path}.`, {
+            remediation: 'The archive contains duplicate members. Pack the build again.',
+            subject: name,
+          }),
+        );
+        return;
+      }
+      if (entry.uncompressedSize > limits.maxMemberBytes) {
+        reject(limitExceeded(path, 'maxMemberBytes', limits.maxMemberBytes, name));
+        return;
+      }
+      total += entry.uncompressedSize;
+      if (total > limits.maxTotalBytes) {
+        reject(limitExceeded(path, 'maxTotalBytes', limits.maxTotalBytes));
+        return;
+      }
+      names.add(name);
+      entries.push(entry);
+      archive.readEntry();
+    });
+    archive.readEntry();
+  });
+}
+
+async function readEntry(
+  archive: yauzl.ZipFile,
+  path: string,
+  entry: yauzl.Entry,
+): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  await streamEntry(archive, path, entry, (chunk) => chunks.push(chunk));
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+function streamEntry(
+  archive: yauzl.ZipFile,
+  path: string,
+  entry: yauzl.Entry,
+  onChunk: (chunk: Buffer) => void,
+): Promise<void> {
+  // A member whose compressed payload is damaged, or that inflates past its declared size,
+  // fails here. It is corruption like any checksum mismatch, so it is reported as corruption
+  // naming the member rather than as an unexplained internal error.
+  const corrupt = (cause: unknown): LoreError =>
+    new LoreError(
+      'LORE_E_OBJECT_CORRUPT',
+      `${entry.fileName} in ${path} could not be read: the archive is damaged.`,
+      {
+        remediation: 'Download or pack the archive again. Its contents cannot be trusted.',
+        subject: entry.fileName,
+        ...(cause === null || cause === undefined ? {} : { cause }),
+      },
+    );
+  return new Promise((resolve, reject) => {
+    archive.openReadStream(entry, (streamError, stream) => {
+      if (streamError !== null || stream === undefined) {
+        reject(corrupt(streamError));
+        return;
+      }
+      stream.on('data', onChunk);
+      stream.on('error', (cause) => reject(corrupt(cause)));
+      stream.on('end', () => resolve());
+    });
+  });
+}
+
+function limitExceeded(
+  path: string,
+  limit: keyof ArchiveLimits,
+  value: number,
+  member?: string,
+): LoreError {
+  const what = member === undefined ? path : `${member} in ${path}`;
+  return new LoreError(
+    'LORE_E_LIMIT_EXCEEDED',
+    `${what} declares more than Lorepack will read (${limit} is ${String(value)}).`,
+    {
+      remediation:
+        'An archive this large is not one Lorepack writes. It may be a decompression bomb; do not trust it.',
+      ...(member === undefined ? {} : { subject: member }),
+      details: { limit, value, ...(member === undefined ? {} : { member }) },
+    },
+  );
 }
 
 /** Original source files, for `package.includeOriginals`. Paths are archive-relative. */
