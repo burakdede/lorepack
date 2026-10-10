@@ -24,7 +24,10 @@ import {
   makePdf,
   makeXlsx,
   nestedBracketsMarkdown,
+  nestedHtml,
   nestedListHtml,
+  nestedQuoteMarkdown,
+  nestedTablesDocx,
   number,
   paragraph,
   row,
@@ -244,6 +247,55 @@ describe('a parse that exceeds its limits, issue 594', SUITE, () => {
     const started = Date.now();
     expect(await pending).toEqual({ kind: 'interrupted' });
     expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});
+
+describe('a document nested deeper than its parser can recurse, issue 595', SUITE, () => {
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  const cases: [string, () => Promise<ParseInput>][] = [
+    [
+      'Markdown blockquotes',
+      async () => inputFor('quote.md', 'text/markdown', nestedQuoteMarkdown(5_000)),
+    ],
+    ['HTML spans', async () => inputFor('span.html', 'text/html', nestedHtml('<span>', 2_000))],
+    ['HTML divs', async () => inputFor('div.html', 'text/html', nestedHtml('<div>', 2_000))],
+    [
+      'HTML tables',
+      async () => inputFor('table.html', 'text/html', nestedHtml('<table><tr><td>', 20_000)),
+    ],
+    // Wrapped by the DOCX parser in its own LoreError, so the overflow is the cause.
+    ['DOCX tables', async () => inputFor('tables.docx', DOCX, await nestedTablesDocx(1_000))],
+  ];
+
+  for (const [name, input] of cases) {
+    it(`leaves out ${name} as a typed nesting exclusion`, async () => {
+      const parsed = await input();
+      const outcome = await host().parse(parserFor(parsed) as ArtifactParser, parsed);
+      expect(outcome).toMatchObject({ kind: 'excluded', code: 'nesting-too-deep' });
+    });
+  }
+
+  it('says the same for a parser that runs in this process', async () => {
+    const own: ArtifactParser = {
+      ...markdownParser,
+      parse: () => {
+        throw new RangeError('Maximum call stack size exceeded');
+      },
+    };
+    const outcome = await host().parse(own, inputFor('a.md', 'text/markdown', utf8('# A\n')));
+    expect(outcome).toMatchObject({ kind: 'excluded', code: 'nesting-too-deep' });
+  });
+
+  it('still fails on any other RangeError, which is a parser bug and not a limit', async () => {
+    const own: ArtifactParser = {
+      ...markdownParser,
+      parse: () => {
+        throw new RangeError('Invalid array length');
+      },
+    };
+    await expect(
+      host().parse(own, inputFor('a.md', 'text/markdown', utf8('# A\n'))),
+    ).rejects.toThrow('Invalid array length');
   });
 });
 

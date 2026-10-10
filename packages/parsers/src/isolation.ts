@@ -45,12 +45,52 @@ export const PARSE_LIMITS = {
   memoryMb: { min: 64, max: 32_768 },
 } as const;
 
-export type ParseExclusionCode = 'parse-timeout' | 'parse-memory' | 'parse-crashed';
+export type ParseExclusionCode =
+  | 'parse-timeout'
+  | 'parse-memory'
+  | 'parse-crashed'
+  | 'nesting-too-deep';
 
 export type IsolatedParse =
   | { readonly kind: 'parsed'; readonly result: ParsedArtifact }
   | { readonly kind: 'excluded'; readonly code: ParseExclusionCode; readonly message: string }
   | { readonly kind: 'interrupted' };
+
+/**
+ * A document nested deeper than a parser can recurse (#595): a few kilobytes of `>` or
+ * `<span>` overflow the stack in remark, in `hast-util-from-parse5`, or in our own walkers.
+ *
+ * The bytes are valid and the parser is not broken; the document is past a limit, the same as
+ * one that takes too long. So it is left out with a warning, and the rest of the project still
+ * builds, instead of the whole build failing as `LORE_E_PARSE_FAILED` until someone finds the
+ * file. Only the stack overflow qualifies: any other `RangeError` is a parser bug and still
+ * fails the build.
+ */
+const NESTING_TOO_DEEP: IsolatedParse = {
+  kind: 'excluded',
+  code: 'nesting-too-deep',
+  message:
+    'The document is nested more deeply than its parser can follow, so the file was left out of the build. Reduce the nesting, or exclude the file in .loreignore.',
+};
+
+/** Cause chains are short; the bound only stops a cyclic one. */
+const MAX_CAUSE_DEPTH = 8;
+
+/**
+ * True when the error, or anything it wraps, is V8's stack overflow. Checked through the
+ * cause chain because a parser may wrap it (DOCX reports `LORE_E_PARSE_FAILED` with the
+ * overflow as its cause), and by name because an error rebuilt from the child is a plain
+ * `Error` carrying the original name.
+ */
+function overflowedStack(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current instanceof Error; depth += 1) {
+    if (current.name === 'RangeError' && /Maximum call stack size exceeded/.test(current.message))
+      return true;
+    current = current.cause;
+  }
+  return false;
+}
 
 /** How much of the child's stderr is kept. V8 prints its fatal line first, the stack after. */
 const STDERR_HEAD_BYTES = 16 * 1024;
@@ -78,7 +118,14 @@ export class ParserHost {
     input: ParseInput,
     signal?: AbortSignal,
   ): Promise<IsolatedParse> {
-    if (!PARSERS.includes(parser)) return { kind: 'parsed', result: await parser.parse(input) };
+    if (!PARSERS.includes(parser)) {
+      try {
+        return { kind: 'parsed', result: await parser.parse(input) };
+      } catch (error) {
+        if (overflowedStack(error)) return NESTING_TOO_DEEP;
+        throw error;
+      }
+    }
     const child = await this.#ready();
     // Checked after the start, not before: an abort while Node was starting fires no listener
     // added later, and the child it started is ended by `close` like any other.
@@ -118,7 +165,10 @@ export class ParserHost {
       const onMessage = (reply: ChildReply): void => {
         if (reply.kind === 'parsed')
           finish(() => resolve({ kind: 'parsed', result: reply.result }));
-        else if (reply.kind === 'failed') finish(() => reject(deserializeError(reply.error)));
+        else if (reply.kind === 'failed') {
+          const error = deserializeError(reply.error);
+          finish(() => (overflowedStack(error) ? resolve(NESTING_TOO_DEEP) : reject(error)));
+        }
       };
       child.process.on('message', onMessage);
 

@@ -6,6 +6,9 @@ import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
 import {
   cmapBombPdf,
   nestedBracketsMarkdown,
+  nestedHtml,
+  nestedQuoteMarkdown,
+  nestedTablesDocx,
   singleCharacterCsv,
   withTempProject,
 } from '@lorepack/test-support';
@@ -66,6 +69,30 @@ describe('a file that exceeds a parse limit', () => {
           expect.objectContaining({ code: 'parse-memory', path: 'cmap.pdf', class: 'envelope' }),
         ]),
       );
+    });
+  });
+
+  it('leaves out a document nested past the parser stack, issue 595', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'readme.md': README } }, async (temp) => {
+      writeFileSync(join(temp.root, 'quote.md'), nestedQuoteMarkdown(5_000));
+      writeFileSync(join(temp.root, 'span.html'), nestedHtml('<span>', 2_000));
+      writeFileSync(join(temp.root, 'tables.docx'), await nestedTablesDocx(1_000));
+
+      const result = await runBuild({
+        config: loadConfig({ cwd: temp.root }),
+        progress: new ProgressBus(),
+      });
+
+      expect(result.activated).toBe(true);
+      expect(result.counts.artifacts).toBe(1);
+      const nesting = manifestOf(temp.root, result.buildId).warnings.filter(
+        (warning) => warning.code === 'nesting-too-deep',
+      );
+      expect(nesting.map((warning) => [warning.path, warning.class])).toEqual([
+        ['quote.md', 'envelope'],
+        ['span.html', 'envelope'],
+        ['tables.docx', 'envelope'],
+      ]);
     });
   });
 
