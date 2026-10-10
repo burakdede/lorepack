@@ -63,7 +63,8 @@ started by the user. It answers only to allowlisted `Host` names, and local writ
 protected by route registration, same-origin checks and a JSON-only body requirement.
 Remote reads are authenticated at the Worker boundary.
 
-The privacy-default test runs the real build under Node's permission model, which refuses child
-processes, worker threads, native add-ons and WASI, and observes every network channel and the
-DNS resolver; on Linux CI it also runs in a network namespace that must transmit zero packets
+The privacy-default test runs the real build under Node's permission model, which refuses worker
+threads, native add-ons and WASI. It admits one child process, the parse child (#594), only
+while that child is itself under the permission model, refuses every other process, and observes
+every network channel and the DNS resolver in both processes; on Linux CI it also runs in a network namespace that must transmit zero packets
 (#616). Invariant 7 and `pnpm check:no-native` keep native add-ons out of the default install.

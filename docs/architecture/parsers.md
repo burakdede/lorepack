@@ -121,6 +121,12 @@ because one waited longer. Whether a file was left out does reach the id, throug
 like any other excluded file. A file left out this way is not cached, so the next build tries it
 again.
 
+**The child runs under Node's permission model.** It may read (its own modules) and nothing
+else: no file writes, no child process, no worker, no add-on. A parser reads only the bytes it is
+sent, so a hostile document that reaches a parser bug cannot write to the project or start a
+program. Node 24 has no network permission; the privacy sandbox observes the child's network
+use instead (see [security](./security.md)).
+
 **Only registered parsers are isolated.** The child builds its own registry and finds the parser
 by id, so a parser that exists only in the calling process (an embedder's, or a test's) runs
 in-process, as every parser did before.
