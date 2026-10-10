@@ -1,4 +1,4 @@
-import { expect, test } from './fixture.js';
+import { ENCODED_NAMES, expect, test } from './fixture.js';
 
 /**
  * The workflows Studio exists for, driven end to end.
@@ -70,6 +70,22 @@ test.describe('Sources', () => {
     await expect(page.getByRole('cell', { name: 'drafts/', exact: true })).toBeVisible();
 
     await checkA11y();
+  });
+
+  test('shows the stored text of the file that was clicked, whatever its name', async ({
+    page,
+    session,
+  }) => {
+    await page.goto(`${session.url}/#/sources`);
+    for (const [name, body] of Object.entries(ENCODED_NAMES)) {
+      await page.getByRole('button', { name: `docs/${name}`, exact: true }).click();
+      const reader = page.getByRole('region', { name: `Stored text of docs/${name}` });
+      // The body of `a%20b.md` once came back for `a b.md` under the first file's name (#608).
+      await expect(reader).toContainText(body);
+      for (const other of Object.values(ENCODED_NAMES).filter((word) => word !== body)) {
+        await expect(reader).not.toContainText(other);
+      }
+    }
   });
 
   /**
