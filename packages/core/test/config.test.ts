@@ -4,7 +4,12 @@ import { platform } from 'node:os';
 import { join } from 'node:path';
 import { checkDeterminism, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
-import { PRODUCT_DEFAULTS } from '../src/config/defaults.js';
+import {
+  ALWAYS_EXCLUDE,
+  CLIENT_CONFIG,
+  PRODUCT_DEFAULTS,
+  SECRET_SHAPED,
+} from '../src/config/defaults.js';
 import { findProjectRoot, loadConfig } from '../src/config/load.js';
 import { LoreError } from '../src/errors/lore-error.js';
 
@@ -412,4 +417,28 @@ describe('a source root behind a symbolic link', () => {
       });
     },
   );
+});
+
+/**
+ * Issue 585. `lorepack init` promises that every credential-shaped file it names is never
+ * indexed, so the list it warns from must be part of the list discovery excludes. The two
+ * were separate literals once and drifted: `*.jks` and `*credentials*.json` were warned
+ * about and then built.
+ */
+describe('the always-on exclusions', () => {
+  it('contain every credential-shaped pattern init warns about', () => {
+    expect(SECRET_SHAPED.filter((pattern) => !ALWAYS_EXCLUDE.includes(pattern))).toEqual([]);
+  });
+
+  it('contain every client configuration path connect writes into a project', () => {
+    expect(CLIENT_CONFIG.filter((pattern) => !ALWAYS_EXCLUDE.includes(pattern))).toEqual([]);
+  });
+
+  it('are what the effective configuration records, so a change to them moves the build id', () => {
+    expect(PRODUCT_DEFAULTS.exclude).toEqual(ALWAYS_EXCLUDE);
+  });
+
+  it('name no pattern twice', () => {
+    expect(new Set(ALWAYS_EXCLUDE).size).toBe(ALWAYS_EXCLUDE.length);
+  });
 });

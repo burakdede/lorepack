@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { createMatcher } from '@lorepack/compiler';
 import {
   ALWAYS_EXCLUDE,
   CONFIG_FILENAME,
@@ -82,9 +83,15 @@ export function renderIgnore(): string {
 /**
  * Files whose names suggest credentials. Architecture section 19.2 is explicit that this
  * is a guardrail rather than a secret scanner, so contents are never read.
+ *
+ * Matched with discovery's own matcher, never a second implementation of the patterns. The
+ * warning promises these files are not indexed, and a separate case-insensitive regex once
+ * named `Prod-Credentials.json` while discovery, matching as written, built it (#585).
  */
 export function findSecretShaped(root: string, limit = 5000): string[] {
-  const matchers = SECRET_SHAPED.map(toRegExp);
+  const matcher = createMatcher(
+    SECRET_SHAPED.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+  );
   const found: string[] = [];
   let visited = 0;
 
@@ -111,19 +118,13 @@ export function findSecretShaped(root: string, limit = 5000): string[] {
         walk(full);
         continue;
       }
-      if (matchers.some((matcher) => matcher.test(entry))) {
-        found.push(toPosix(relative(root, full).split(sep).join('/')));
-      }
+      const path = toPosix(relative(root, full).split(sep).join('/'));
+      if (matcher.excludes(path)) found.push(path);
     }
   };
 
   walk(root);
   return found.sort();
-}
-
-function toRegExp(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-  return new RegExp(`^${escaped}$`, 'i');
 }
 
 function gitignoreNeedsEntry(path: string): boolean {
