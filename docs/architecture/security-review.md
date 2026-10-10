@@ -27,6 +27,7 @@ security-affecting change before release.
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |
 | `connect` refuses linked project configs and keeps client config modes (#574) | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts`, `packages/cli/test/connect.test.ts` | Covered |
+| Project lock reclaim is atomic, host-aware and survives pid reuse (#565) | `packages/backend-local/test/lock-reclaim.e2e.test.ts`, `packages/backend-local/test/storage.test.ts`, `packages/backend-local/test/process-start.test.ts`, `packages/cli/test/build.test.ts` | Covered |
 | Model-facing tools are read-only | `tools/contract/test/mcp.test.ts` | Covered |
 
 ## Commands To Run For Sign-off
