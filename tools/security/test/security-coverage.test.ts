@@ -42,6 +42,19 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/processStart\(process.pid\)/, /expect\(existsSync\(marker\)\)\.toBe\(false\)/],
   },
   {
+    name: 'export passages cannot forge provenance and tasks stay literal, issue 552',
+    path: 'packages/cli/test/export.test.ts',
+    tests: [
+      'a passage cannot forge the structure around it keeps every passage inside a fence, whatever it contains',
+      'a passage cannot forge the structure around it renders the "getting more" command so a shell takes the task literally',
+    ],
+    patterns: [
+      /structure\).not.toContain\('### policies\/security-policy\.md'\)/,
+      /structure\).not.toContain\('## Escaped the fence'\)/,
+      /argv\.split\('\\n'\)\)\.toEqual/,
+    ],
+  },
+  {
     name: 'secret redaction is linear on adversarial input',
     path: 'packages/core/test/errors.test.ts',
     tests: [
