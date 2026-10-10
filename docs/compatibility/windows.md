@@ -93,6 +93,11 @@ npm installs `codex` as `codex.cmd`, and VS Code ships `code.cmd`. Node refuses 
 batch file without a shell since CVE-2024-27980, so these run through `cmd.exe`, named by its
 absolute path, with the arguments escaped the way cross-spawn escapes them.
 
+Closing the verification transport stops its immediate process. A `.cmd` server shim can
+leave the Node process it launched running after a timeout. Direct executable cleanup is
+tested; cleanup of the shim's process tree remains open in
+[issue #578](https://github.com/burakdede/lorepack/issues/578).
+
 ## Running the suite
 
 ```bash

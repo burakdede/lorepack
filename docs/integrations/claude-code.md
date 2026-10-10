@@ -101,10 +101,12 @@ a question and get nothing:
   Check that `lorepack` is on the path.
 ```
 
-The server is spawned and then stopped on every outcome, including a timeout, so a server stuck
-in a long first build is not left holding the project lock after `connect` returns. When it
-does not start or does not list its tools, `connect` exits 3, so a script can tell; a trust
-step the client still asks for is reported but is not a failure.
+The verifier closes its server transport on every outcome, including a timeout. A direct
+server process is stopped before `connect` returns. On Windows, a server started through an
+npm `.cmd` shim can leave its Node child running after the shell stops; this remains open in
+[issue #578](https://github.com/burakdede/lorepack/issues/578).
+When the server does not start or does not list its tools, `connect` exits 3, so a script can
+tell; a trust step the client still asks for is reported but is not a failure.
 
 It then runs `claude mcp list` from the project directory, which is where a local-scope server
 is listed. With `--shared`, a server the client has registered but you have not yet approved
