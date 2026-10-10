@@ -440,6 +440,8 @@ const EVIDENCE: readonly Evidence[] = [
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a UDP datagram',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a child process that connects',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a fetch from a worker thread',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the parse process connects',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 refuses a parse process started without the permission model',
     ],
     patterns: [
       /builds every parser format in a sandbox/,

@@ -24,6 +24,8 @@ export interface SandboxOptions {
   readonly monitor?: boolean;
   /** Modules loaded into the build process before it starts, standing in for build code. */
   readonly inject?: readonly string[];
+  /** Modules loaded into every process of the build, the parse child included. */
+  readonly injectEverywhere?: readonly string[];
 }
 
 /** True inside the namespace the Linux CI job sets up; see `netns.sh`. */
@@ -47,13 +49,22 @@ export function transmittedPackets(): number {
 
 const imports = (path: string): string[] => ['--import', pathToFileURL(path).href];
 
+/** The same preloads as `--import`, in the form `NODE_OPTIONS` carries into a child. */
+const nodeOptionImports = (paths: readonly string[]): string =>
+  paths.map((path) => `"--import=${pathToFileURL(path).href}"`).join(' ');
+
 /**
  * Runs `lorepack build` in its own Node process under the permission model.
  *
- * The grants are the whole sandbox: read anywhere, write only inside the project, and
- * nothing else. With no `--allow-child-process`, `--allow-worker`, `--allow-addons` or
- * `--allow-wasi`, Node refuses each of those outright, so no egress can hide in a process or
- * thread the monitor does not see.
+ * The grants are the whole sandbox: read anywhere, write only inside the project, start a
+ * child process, and nothing else. With no `--allow-worker`, `--allow-addons` or
+ * `--allow-wasi`, Node refuses each of those outright.
+ *
+ * `--allow-child-process` is there because the build parses every file in a forked
+ * `parse-child.js` (#594). The monitor refuses every other process, and lets that fork through
+ * only when it runs under the permission model with no write, process or worker grant. The
+ * preloads travel in `NODE_OPTIONS` rather than as flags so the parse child loads the monitor
+ * too, which keeps the parsers, the code that reads hostile documents, inside the proof.
  */
 export function runSandboxedBuild(projectRoot: string, options: SandboxOptions = {}): SandboxRun {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing; run pnpm build first`);
@@ -68,16 +79,20 @@ export function runSandboxedBuild(projectRoot: string, options: SandboxOptions =
     // The real path: macOS's temp directory is reached through a link, and Node checks the
     // grant against the resolved path a write lands on.
     `--allow-fs-write=${realpathSync(projectRoot)}`,
-    ...imports(join(HERE, 'fsync.mjs')),
-    ...(options.monitor === false ? [] : imports(join(HERE, 'monitor.mjs'))),
+    '--allow-child-process',
     ...(options.inject ?? []).flatMap(imports),
     CLI,
     'build',
   ];
+  const preloads = [
+    join(HERE, 'fsync.mjs'),
+    ...(options.monitor === false ? [] : [join(HERE, 'monitor.mjs')]),
+    ...(options.injectEverywhere ?? []),
+  ];
   const before = IN_NETWORK_NAMESPACE ? transmittedPackets() : null;
   const result = spawnSync(process.execPath, args, {
     cwd: projectRoot,
-    env: { ...env, NO_COLOR: '1' },
+    env: { ...env, NO_COLOR: '1', NODE_OPTIONS: nodeOptionImports(preloads) },
     encoding: 'utf8',
     timeout: 120_000,
   });

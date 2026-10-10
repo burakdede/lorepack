@@ -131,6 +131,29 @@ describe('privacy defaults: no telemetry or source egress in the build path, iss
     expect(egressProblems(run).join('\n')).toMatch(expected);
   });
 
+  /**
+   * The parse child (#594) is the one process the sandbox admits, so it has to be held to the
+   * same proof: the monitor runs inside it, and the fork is admitted only while the child is
+   * itself under the permission model.
+   */
+  it('fails when the parse process connects', async () => {
+    const run = runSandboxedBuild(await project('parse-child-connect.mjs'), {
+      injectEverywhere: [egress('parse-child-connect.mjs')],
+    });
+
+    expect(egressProblems(run).join('\n')).toMatch(/LORE_EGRESS_ATTEMPT net\.client\.socket/);
+  });
+
+  it('refuses a parse process started without the permission model', async () => {
+    const run = runSandboxedBuild(await project('unsandboxed-fork.mjs'), {
+      inject: [egress('unsandboxed-fork.mjs')],
+    });
+
+    expect(egressProblems(run).join('\n')).toMatch(
+      /network attempt: child_process\.fork[\s\S]*ERR_ACCESS_DENIED|ERR_ACCESS_DENIED[\s\S]*network attempt: child_process\.fork/,
+    );
+  });
+
   it.each([
     ['fetch', 'fetch.mjs', /network attempt: undici:request:create/],
     ['a TLS connection', 'tls.mjs', /network attempt: net\.client\.socket/],

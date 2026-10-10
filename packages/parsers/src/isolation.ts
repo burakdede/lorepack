@@ -151,8 +151,13 @@ export class ParserHost {
 function start(limits: ParseLimits): Promise<Child> {
   const child = fork(fileURLToPath(new URL('./parse-child.js', import.meta.url)), [], {
     // Explicit rather than inherited: the parent may run under a test runner's loader or a
-    // debugger flag, and the child must start as a plain Node with only the ceiling set.
-    execArgv: [`--max-old-space-size=${limits.memoryMb}`],
+    // debugger flag, and the child must start as a plain Node with only these set.
+    //
+    // The permission model is the second reason this is a process. A parser reads nothing but
+    // the bytes it is sent, so the process that runs one on a hostile document gets read access
+    // (its own modules) and nothing else: no file writes, no child process, no worker, no
+    // addon. Node 24 has no network permission; the privacy sandbox covers that (#616).
+    execArgv: ['--permission', '--allow-fs-read=*', `--max-old-space-size=${limits.memoryMb}`],
     // Structured clone rather than JSON, so `bytes` arrives as a `Uint8Array` and a parse
     // result arrives exactly as the parser built it.
     serialization: 'advanced',
