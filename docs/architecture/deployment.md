@@ -127,6 +127,28 @@ content addressed and deduplicated. The archive is build scoped because retentio
 status address one sealed build at a time, and a deterministic `project/builds/<buildId>/`
 prefix lets later work enumerate or remove exactly that build without guessing.
 
+## Cloudflare remote cleanup
+
+`lorepack prune --target cloudflare` removes builds from both D1 databases and from R2. The
+catalog rows (`tables`, `table_columns` and the rest) are deleted from `CATALOG_DB`; the
+projected physical tables they name are dropped from `TABLES_DB`, where projection created them
+([ADR](adr-d1-table-query-isolation.md)). Physical tables are dropped first, so a failed catalog
+delete still leaves the rows a resume needs to find them.
+
+A table is reported in `physicalTablesDropped` only when `sqlite_master` listed it before the
+`DROP TABLE` and no longer lists it afterwards. `DROP TABLE IF EXISTS` on its own cannot prove
+anything: it succeeds on a missing table, which is how releases before #557 reported drops
+that never happened while the rows stayed in `TABLES_DB`. Every name read from the catalog must
+match the same `SAFE_IDENTIFIER` the table store uses before it is interpolated into SQL.
+
+The plan also lists `orphanTablesToRemove`: tables in `TABLES_DB` that have the projected name
+shape (`<prefix>_<16 hex>`) but that no catalog row references, for any build. Those are what
+the earlier bug left behind. `--yes` drops them after reading the references again, so a table
+a deploy claimed after the plan was printed is kept. Because a deploy creates a physical table
+before it writes the catalog row for it, do not run a remote prune while a deploy to the same
+target is in progress. A tables database must also belong to exactly one catalog database: the
+sweep cannot see references held by a different catalog.
+
 ## Cloudflare D1 projection concurrency
 
 Phase 6 keeps Cloudflare D1 projection writes **serial**. The current chosen concurrency is `1`:

@@ -233,6 +233,10 @@ The Worker resource is still created by the first successful deploy rather than 
 That is why reruns treat an undeployed Worker name as valid while still insisting that the D1
 database and R2 bucket exist remotely.
 
+`--tables-db` must name a database that no other target's catalog uses. `lorepack prune --target
+cloudflare` treats any projected table that its own catalog does not reference as an orphan and
+offers to drop it (see [remote cleanup](../architecture/deployment.md#cloudflare-remote-cleanup)).
+
 ## Verified against
 
 Cloudflare token and permissions docs on 2026-08-08, Cloudflare Access path on 2026-08-09,
