@@ -200,6 +200,32 @@ jobs:
       - name: Pack, install with npm, build a PDF, audit
         run: pnpm check:packed-cli
 
+  privacy-sandbox:
+    # Linux only, and a job of its own: the network namespace needs root, which no
+    # contributor's `pnpm test:security` should ask for, and macOS and Windows have no
+    # equivalent. Every other job runs the same test file with the portable permission
+    # sandbox; this one adds the kernel's packet counters, which no JavaScript can evade.
+    name: privacy sandbox (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Build offline inside a network namespace that counts every packet
+        run: sudo env "PATH=$PATH" unshare --net --mount -- bash tools/security/test/sandbox/netns.sh
+
   cloudflare-acceptance:
     name: cloudflare acceptance (ubuntu-latest)
     runs-on: ubuntu-latest
