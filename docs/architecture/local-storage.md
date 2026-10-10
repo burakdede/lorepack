@@ -140,12 +140,11 @@ the wait loop into a hang.
 
 ### Why not `proper-lockfile`
 
-Architecture section 8.2 allows "`proper-lockfile` or an equivalent narrow lock". The
-dependency has had no release since 2022, and the equivalent is under a hundred lines with
-cross-platform tests we own. Given the choice between a dormant dependency in the critical
-path of build correctness and a small tested implementation, the implementation wins. It is
-isolated in one module, so the decision is reversible without touching build or activation
-code.
+Architecture section 8.2 allows "`proper-lockfile` or an equivalent narrow lock". The local
+adapter uses Node built-ins and operating system probes, without a new dependency or native
+add-on. Real concurrent-process tests cover reclamation on each supported platform. The
+lock stays behind its existing interface, so changing the mechanism does not require changing
+build or activation callers. Its reclamation bounds are recorded in ADR 0002 above.
 
 ## Typed tables
 

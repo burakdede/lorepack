@@ -16,10 +16,9 @@ import { ownProcessStart, processStart, sameProcessStart } from './process-start
 /**
  * A narrow cross-process lock for builds and activation.
  *
- * `mkdir` is atomic on every filesystem we support, which is all this needs. Architecture
- * section 8.2 allows "proper-lockfile or an equivalent narrow lock"; the dependency has
- * had no release since 2022, and this is under a hundred lines fully covered by our own
- * cross-platform tests, so the equivalent is preferred over a dormant dependency.
+ * Architecture section 8.2 permits an equivalent narrow lock. Node built-ins and operating
+ * system probes avoid an extra dependency or native add-on, keeping first installation
+ * independent of a compiler toolchain. The reclamation trade-offs are in ADR 0002.
  */
 
 export interface LockOptions {
