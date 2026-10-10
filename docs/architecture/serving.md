@@ -65,6 +65,16 @@ handler.
 `-32603` is narrowed by this, not removed. A runtime that throws something Lorepack never
 classified still reports an internal error, because that is what it is.
 
+What an internal error *says* is a different question (#560). An unclassified exception is
+whatever a dependency threw, and on a Worker that is D1 text quoting the failing SQL and the
+schema. So REST, MCP tools and MCP resources all render through `forClient()` in
+`@lorepack/core`: an unclassified error becomes `LORE_E_INTERNAL` "The server could not
+complete this request." with no cause chain, and the original is written with
+`console.error`, which is Workers Logs remotely and the terminal locally. A classified
+`LoreError` keeps its code and wording, loses its cause chain, and has absolute paths
+replaced by `<path>`. The local table-query child never sends the text of a failure to open
+its database, because SQLite names the file's absolute path there.
+
 ## Worker D1 query budget
 
 Verified on **2026-08-08** against the Phase 6 Worker fixture in
