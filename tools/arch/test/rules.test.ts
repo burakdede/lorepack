@@ -77,6 +77,17 @@ describe('violation detection', () => {
     writeFileSync(join(dir, file), contents, 'utf8');
   };
 
+  it('checks every package in the shared repository scan', () => {
+    write('core', 'bad.ts', "import 'node:sqlite';");
+    write('parsers', 'bad.ts', "import 'hono';");
+    const studio = join(root, 'apps', 'studio', 'src');
+    mkdirSync(studio, { recursive: true });
+    writeFileSync(join(studio, 'bad.ts'), "import '@lorepack/compiler';");
+    const individual = PACKAGES.flatMap((name) => checkPackage(root, name));
+    expect(individual).toHaveLength(3);
+    expect(checkAll(root)).toEqual(individual);
+  });
+
   it('rejects core importing node:sqlite', () => {
     write(
       'core',

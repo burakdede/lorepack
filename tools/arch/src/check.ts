@@ -9,7 +9,13 @@ import {
   type PackageName,
   TEST_ONLY_PACKAGES,
 } from './rules.js';
-import { collectImports, listSourceFiles, workspaceDependency } from './scan.js';
+import {
+  collectImports,
+  collectReferences,
+  type ImportRecord,
+  listSourceFiles,
+  workspaceDependency,
+} from './scan.js';
 
 export interface Violation {
   readonly file: string;
@@ -30,11 +36,20 @@ export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
   const dir = join(packageRoot, 'src');
   if (!existsSync(dir)) return [];
 
+  return checkReferences(repoRoot, name, collectImports(dir, repoRoot));
+}
+
+function checkReferences(
+  repoRoot: string,
+  name: PackageName,
+  records: readonly ImportRecord[],
+): Violation[] {
+  const packageRoot = join(repoRoot, PACKAGE_DIRS[name]);
   const violations: Violation[] = [];
   const allowed = ALLOWED_WORKSPACE_EDGES[name];
   const forbidden = FORBIDDEN_EXTERNAL[name] ?? [];
 
-  for (const record of collectImports(dir, repoRoot)) {
+  for (const record of records) {
     if (record.computed) {
       violations.push({
         ...record,
@@ -85,7 +100,17 @@ export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
 }
 
 export function checkAll(repoRoot: string): Violation[] {
-  return PACKAGES.flatMap((name) => checkPackage(repoRoot, name));
+  const files = PACKAGES.flatMap((name) =>
+    listSourceFiles(join(repoRoot, PACKAGE_DIRS[name], 'src')),
+  );
+  const records = collectReferences(files, repoRoot);
+  return PACKAGES.flatMap((name) =>
+    checkReferences(
+      repoRoot,
+      name,
+      records.filter((record) => record.file.startsWith(`${PACKAGE_DIRS[name]}/src/`)),
+    ),
+  );
 }
 
 /** Declared workspace dependencies must not exceed the allowed edges either. */
