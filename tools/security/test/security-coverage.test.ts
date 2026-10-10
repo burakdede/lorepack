@@ -382,6 +382,14 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/written\(\)\)\.toEqual\(\[\]\)/, /readdirSync\(home\)\)\.toEqual\(\[\]\)/],
   },
   {
+    name: 'connect never runs a client executable planted in the project, issue 577',
+    path: 'packages/cli/test/connect.e2e.test.ts',
+    tests: [
+      'a client executable planted in the project (#577) is never run: lookups use absolute PATH entries only',
+    ],
+    patterns: [/existsSync\(marker\)/, /'\.bat', '\.cmd'/],
+  },
+  {
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     tests: [

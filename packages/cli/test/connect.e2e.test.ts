@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -175,6 +175,38 @@ describe('a connection that does not work (#578)', () => {
     const result = connect(['connect', 'vscode', '--yes']);
 
     expect(result.stdout).toContain('Not working yet');
+    expect(result.code).toBe(3);
+  });
+});
+
+describe('a client executable planted in the project (#577)', () => {
+  it('is never run: lookups use absolute PATH entries only', () => {
+    // Each stand-in writes a marker if it ever runs. On Windows they are the batch files the
+    // shell would find in the working directory first; elsewhere a relative `.` on `PATH`
+    // reaches them the same way.
+    const marker = join(scratch, 'planted-ran');
+    for (const name of ['lorepack', 'claude', 'codex', 'code']) {
+      if (WINDOWS) {
+        for (const extension of ['.bat', '.cmd']) {
+          writeFileSync(
+            join(project, `${name}${extension}`),
+            `@echo off\r\necho ${name}> "${marker}"\r\n`,
+          );
+        }
+      } else {
+        const path = join(project, name);
+        writeFileSync(path, `#!/bin/sh\necho ${name} > "${marker}"\n`);
+        chmodSync(path, 0o755);
+      }
+    }
+    // No `lorepack` on the real PATH: only the planted one could answer.
+    const result = connect(['connect', '--yes'], `.${delimiter}${bin}`);
+
+    expect(existsSync(marker), `${result.stdout}\n${result.stderr}`).toBe(false);
+    expect(result.stdout).toContain('`lorepack` was not found on the PATH');
+    // The real stand-ins were still found and used, so detection itself is not broken.
+    expect(result.stdout).toContain('Claude Code 2.1.296');
+    expect(result.stdout).toContain('VS Code 1.132.0');
     expect(result.code).toBe(3);
   });
 });

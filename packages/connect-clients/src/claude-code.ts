@@ -1,9 +1,8 @@
-import { execFile } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
+import { runExecutable } from './executable.js';
 import {
   backup,
   type ContainerPath,
@@ -58,8 +57,6 @@ import { type VerifyOptions, verifyStdioServer } from './verify.js';
  * `disconnect` able to remove exactly our entry and nothing else, and a connector that
  * cannot undo itself precisely is one that eventually deletes something it did not create.
  */
-
-const execute = promisify(execFile);
 
 export const CLAUDE_CODE_ID = 'claude-code';
 /** The entry name, which `disconnect` and the ownership check both key on. */
@@ -126,13 +123,8 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
   const probe = options.probe ?? verifyStdioServer;
   const runClient =
     options.runClient ??
-    (async (args: readonly string[], runOptions: { readonly cwd?: string } = {}) => {
-      const { stdout, stderr } = await execute('claude', [...args], {
-        timeout: 20_000,
-        ...(runOptions.cwd === undefined ? {} : { cwd: runOptions.cwd }),
-      });
-      return { stdout, stderr };
-    });
+    ((args: readonly string[], runOptions: { readonly cwd?: string } = {}) =>
+      runExecutable('claude', args, runOptions));
 
   /** Where each scope stores its servers, per the documented configuration surface. */
   const targetFor = (projectRoot: string, scope: ConnectInput['scope']): Target => {
