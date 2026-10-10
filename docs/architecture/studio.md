@@ -23,6 +23,18 @@ activate, roll back, and pack. They exist only under `lorepack dev` on a loopbac
 and refuse any browser page that is not Studio itself (same host and port). Pack always
 writes to the default name in the project root.
 
+No other site may frame Studio (#553). A click inside a frame would carry Studio's own
+loopback `Origin`, which the write guard admits, so every Studio response is sent with
+`Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`, plus
+`nosniff` and `Referrer-Policy: no-referrer`. The same policy admits only this origin's
+scripts, styles and fonts, which is defence in depth for a page that renders other people's
+documents. The one inline script, the theme resolver in `index.html` that runs before first
+paint, is admitted by its SHA-256 hash, computed from the document at serve time so an edit
+to it cannot leave a stale hash behind. `img-src` adds `data:` for the select arrows the
+stylesheet draws as inline SVG. The browser suite fails any test whose page reports a policy
+violation. The Vite dev server (`pnpm --filter @lorepack/studio dev`) sends none of this; it
+is a development tool, not the served product.
+
 ## Running it
 
 ```bash
@@ -48,7 +60,7 @@ Versions, Diagnostics, and the command palette. The gallery lives in the
 |---|---|---|
 | Component | `pnpm vitest run --project studio` | Route behavior and wording invariants |
 | Contrast | `pnpm vitest run --project studio contrast` | Documented token pairs in both themes |
-| Browser | `pnpm test:e2e` | Real `lorepack dev`, axe, keyboard, 1280x720, and 200% zoom |
+| Browser | `pnpm test:e2e` | Real `lorepack dev`, axe, keyboard, 1280x720, 200% zoom, and no CSP violation on any page |
 
 The browser suite covers all six routes, including the table console and
 version confirmation flow. Wide tables scroll inside their own box so the

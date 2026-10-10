@@ -9,6 +9,39 @@ import { ENCODED_NAMES, expect, test } from './fixture.js';
  * about the assembled product rather than about a component's props.
  */
 
+test.describe('the document Studio is served as', () => {
+  /**
+   * #553. Any site could frame Studio, and a click inside the frame carries a loopback
+   * `Origin`, which the write guard admits. The headers say no one may frame it, and the
+   * policy is enforced on every test in this suite by the `cspViolations` fixture.
+   */
+  test('may not be framed and runs only its own scripts', async ({
+    page,
+    session,
+    cspViolations,
+  }) => {
+    const response = await page.goto(`${session.url}/#/versions`);
+    const headers = response?.headers() ?? {};
+    expect(headers['x-frame-options']).toBe('DENY');
+    expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(headers['content-security-policy']).not.toContain('unsafe-inline');
+
+    // The inline theme script ran, so its hash is right: without it the page has no theme.
+    await expect(page.locator('html')).toHaveAttribute('data-theme', /^(light|dark)$/);
+
+    // And a script the policy does not name does not run.
+    const ran = await page.evaluate(() => {
+      const script = document.createElement('script');
+      script.textContent = 'window.__injected = true;';
+      document.head.append(script);
+      return (window as { __injected?: boolean }).__injected === true;
+    });
+    expect(ran).toBe(false);
+    await expect.poll(() => cspViolations.length).toBe(1);
+    cspViolations.length = 0;
+  });
+});
+
 test.describe('Overview', () => {
   test('answers what this build contains and whether the sources moved', async ({
     page,
