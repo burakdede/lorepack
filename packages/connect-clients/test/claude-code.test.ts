@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { claudeCodeSnippet, createClaudeCodeConnector } from '../src/claude-code.js';
 import type { ConnectInput } from '../src/port.js';
-import { type ConnectorFixture, runConnectorContract } from './contract.js';
+import {
+  type ConnectorFixture,
+  runConfigFileSafetyContract,
+  runConnectorContract,
+} from './contract.js';
 
 /**
  * The Claude Code adapter.
@@ -44,6 +48,8 @@ const fixture: ConnectorFixture = {
   id: 'claude-code',
   title: 'Claude Code',
   create: () => createClaudeCodeConnector({ runClient: installed }),
+  createForUser: (home) => createClaudeCodeConnector({ runClient: installed, home }),
+  userConfigPath: (home) => join(home, '.claude.json'),
   createMissing: () =>
     createClaudeCodeConnector({
       runClient: async () => {
@@ -71,6 +77,7 @@ afterEach(() => {
 });
 
 runConnectorContract(fixture, () => project);
+runConfigFileSafetyContract(fixture, () => project);
 
 describe('the shared project file, which is this client alone', () => {
   it('is never written unless asked for', async () => {

@@ -1,12 +1,7 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { writeFileAtomically } from './config-file.js';
+
+export { backup } from './config-file.js';
 
 /**
  * Editing someone else's configuration file without breaking it.
@@ -21,6 +16,8 @@ import { dirname, join } from 'node:path';
  * - **Write to a sibling and rename.** A process interrupted mid-write leaves a truncated
  *   file that the client refuses to start with; rename is atomic on every filesystem this
  *   runs on, so the file is either the old one or the new one.
+ * - **Keep its mode, and never follow a link out of the project.** See
+ *   [`config-file.ts`](./config-file.ts), which every format shares.
  * - **Mark what we created.** `disconnect` has to remove exactly our entry, and nothing
  *   else. Without a marker the safe behaviour is to remove nothing, and the useful
  *   behaviour deletes something that was not ours.
@@ -71,26 +68,13 @@ export function readJsonConfig(path: string): Record<string, unknown> {
   }
 }
 
-/** A timestamped copy beside the original, returned so a receipt can name it. */
-export function backup(path: string, now: () => Date = () => new Date()): string | undefined {
-  if (!existsSync(path)) return undefined;
-  const stamp = now().toISOString().replace(/[:.]/g, '-');
-  const target = `${path}.lorepack-${stamp}.bak`;
-  copyFileSync(path, target);
-  return target;
-}
-
-/**
- * Writes atomically, so an interrupted run leaves the old file rather than half of one.
- *
- * The temporary file is a sibling deliberately: a rename across filesystems is not atomic,
- * and the OS temp directory is frequently on a different one from a user's home.
- */
-export function writeJsonAtomically(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporary = join(dirname(path), `.${path.split(/[\\/]/).pop()}.${process.pid}.tmp`);
-  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  renameSync(temporary, path);
+/** Writes atomically, keeping the existing file's mode (see `writeFileAtomically`). */
+export function writeJsonAtomically(
+  path: string,
+  value: unknown,
+  options: { readonly newFileMode?: number } = {},
+): void {
+  writeFileAtomically(path, `${JSON.stringify(value, null, 2)}\n`, options);
 }
 
 /** Sets one server entry inside a nested container, leaving every sibling untouched. */

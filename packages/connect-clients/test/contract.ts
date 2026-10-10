@@ -1,5 +1,22 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
+import { LoreError } from '@lorepack/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ClientConnector, ConnectInput, ConnectReceipt } from '../src/port.js';
 
 /**
@@ -24,6 +41,10 @@ export interface ConnectorFixture {
   create(project: string): ClientConnector;
   /** A connector whose client binary is absent. */
   createMissing(project: string): ClientConnector;
+  /** A connector whose user-scope configuration lives under `home`. */
+  createForUser(home: string): ClientConnector;
+  /** Where that connector keeps its user-scope configuration. */
+  userConfigPath(home: string): string;
   /** Writes a configuration holding a server someone else set up, plus one unrelated setting. */
   seedForeign(project: string): string;
   /** The unrelated setting `seedForeign` wrote, read back from the file. */
@@ -261,6 +282,204 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
           connector.remove(receiptFor(`${project()}/nothing-here.config`)),
         ).resolves.toBeUndefined();
       });
+    });
+  });
+}
+
+/**
+ * POSIX permission bits are not meaningful on Windows, where `chmod` only toggles the
+ * read-only flag, so the mode assertions run on macOS and Linux.
+ */
+const posixOnly = process.platform === 'win32' ? it.skip : it;
+
+/**
+ * Creating a symbolic link on Windows needs either administrator rights or Developer Mode,
+ * neither of which a CI runner or a contributor's machine can be assumed to have. The code
+ * under test is platform-neutral (`lstat` and `realpath`), so macOS and Linux cover it.
+ */
+const symlinkOnly = process.platform === 'win32' ? it.skip : it;
+
+const modeOf = (path: string): number => statSync(path).mode & 0o777;
+
+/** Every backup file under a directory, which is what "backed up nothing" is checked against. */
+const backupsIn = (directory: string): readonly string[] =>
+  existsSync(directory)
+    ? readdirSync(directory, { recursive: true, encoding: 'utf8' }).filter((name) =>
+        name.includes('.lorepack-'),
+      )
+    : [];
+
+/**
+ * The file's permissions and what it links to, which a naive atomic write destroys (#574).
+ *
+ * A client configuration can hold API keys, so it is often 0600; a write-then-rename makes a
+ * new file with the default mode. And a project directory is someone else's content, so a
+ * configuration file in it may be a link to the user's own secrets.
+ */
+export function runConfigFileSafetyContract(
+  fixture: ConnectorFixture,
+  project: () => string,
+): void {
+  const input = (overrides: Partial<ConnectInput> = {}): ConnectInput => ({
+    projectRoot: project(),
+    serverName: SERVER_NAME,
+    command: {
+      executable: 'lorepack',
+      args: ['mcp', '--project', project(), '--ensure-current'],
+    },
+    scope: 'project',
+    ...overrides,
+  });
+
+  describe(`${fixture.title}: the file's permissions and links`, () => {
+    let outside: string;
+
+    beforeEach(() => {
+      outside = mkdtempSync(join(tmpdir(), 'lore-outside-'));
+    });
+
+    afterEach(() => {
+      rmSync(outside, { recursive: true, force: true });
+    });
+
+    /** A file holding a secret, outside the project, with the content the format expects. */
+    const secretFile = (): { path: string; text: string } => {
+      const seeded = fixture.seedForeign(project());
+      const path = join(outside, 'secrets.config');
+      renameSync(seeded, path);
+      return { path, text: readFileSync(path, 'utf8') };
+    };
+
+    posixOnly('keeps the mode of a project file through connect and disconnect', async () => {
+      const path = fixture.seedForeign(project());
+      chmodSync(path, 0o640);
+
+      const connector = fixture.create(project());
+      const receipt = await connector.apply(await connector.plan(input()));
+      expect(modeOf(path)).toBe(0o640);
+      expect(modeOf(receipt.backupPath as string)).toBe(0o640);
+
+      await connector.remove(receipt);
+      expect(modeOf(path)).toBe(0o640);
+    });
+
+    posixOnly('keeps a private user file private through connect and disconnect', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'lore-home-'));
+      try {
+        const path = fixture.userConfigPath(home);
+        const text = readFileSync(fixture.seedForeign(project()), 'utf8');
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, text, { mode: 0o600 });
+        chmodSync(path, 0o600);
+
+        const connector = fixture.createForUser(home);
+        const receipt = await connector.apply(await connector.plan(input({ scope: 'user' })));
+        expect(modeOf(path)).toBe(0o600);
+        expect(modeOf(receipt.backupPath as string)).toBe(0o600);
+
+        await connector.remove(receipt);
+        expect(modeOf(path)).toBe(0o600);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+
+    posixOnly('creates a new user file readable by its owner only', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'lore-home-'));
+      try {
+        const connector = fixture.createForUser(home);
+        await connector.apply(await connector.plan(input({ scope: 'user' })));
+        expect(modeOf(fixture.userConfigPath(home))).toBe(0o600);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    });
+
+    symlinkOnly(
+      'refuses a project file that is a link, and reads, writes and backs up nothing',
+      async () => {
+        const secret = secretFile();
+        const path = fixture.seedForeign(project());
+        rmSync(path);
+        symlinkSync(secret.path, path);
+
+        const connector = fixture.create(project());
+        const refusal = await connector.plan(input()).catch((error: unknown) => error);
+        expect(LoreError.is(refusal) && refusal.code).toBe('LORE_E_PATH_ESCAPE');
+        expect(String(refusal)).toMatch(/symbolic link/);
+
+        expect(lstatSync(path).isSymbolicLink()).toBe(true);
+        expect(readFileSync(secret.path, 'utf8')).toBe(secret.text);
+        expect(backupsIn(project())).toEqual([]);
+        expect(backupsIn(outside)).toEqual([]);
+      },
+    );
+
+    symlinkOnly('refuses a link that appears between planning and applying', async () => {
+      const secret = secretFile();
+      const path = fixture.seedForeign(project());
+      const connector = fixture.create(project());
+      const plan = await connector.plan(input());
+
+      rmSync(path);
+      symlinkSync(secret.path, path);
+
+      await expect(connector.apply(plan)).rejects.toThrow(/symbolic link/);
+      await expect(
+        connector.remove({
+          clientId: fixture.id,
+          scope: 'project',
+          projectRoot: project(),
+          serverName: SERVER_NAME,
+          configPath: path,
+          connectedAt: new Date().toISOString(),
+        }),
+      ).rejects.toThrow(/symbolic link/);
+      expect(lstatSync(path).isSymbolicLink()).toBe(true);
+      expect(readFileSync(secret.path, 'utf8')).toBe(secret.text);
+      expect(backupsIn(project())).toEqual([]);
+      expect(backupsIn(outside)).toEqual([]);
+    });
+
+    symlinkOnly('refuses a project file reached through a linked directory', async () => {
+      const path = fixture.seedForeign(project());
+      const directory = dirname(path);
+      const elsewhere = join(outside, 'linked-directory');
+      renameSync(directory, elsewhere);
+      symlinkSync(elsewhere, directory, 'dir');
+      const before = readdirSync(elsewhere);
+
+      await expect(fixture.create(project()).plan(input())).rejects.toThrow(/symbolic link/);
+      expect(readdirSync(elsewhere)).toEqual(before);
+    });
+
+    symlinkOnly('edits a linked user file at its target, and keeps the link', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'lore-home-'));
+      try {
+        const secret = secretFile();
+        chmodSync(secret.path, 0o600);
+        const path = fixture.userConfigPath(home);
+        mkdirSync(dirname(path), { recursive: true });
+        symlinkSync(secret.path, path);
+
+        const connector = fixture.createForUser(home);
+        const receipt = await connector.apply(await connector.plan(input({ scope: 'user' })));
+
+        expect(lstatSync(path).isSymbolicLink()).toBe(true);
+        expect(fixture.serverNames(readFileSync(secret.path, 'utf8'))).toContain(SERVER_NAME);
+        expect(fixture.serverNames(readFileSync(secret.path, 'utf8'))).toContain('their-server');
+        expect(dirname(receipt.backupPath as string)).toBe(realpathSync(outside));
+        expect(readFileSync(receipt.backupPath as string, 'utf8')).toBe(secret.text);
+        if (process.platform !== 'win32') expect(modeOf(secret.path)).toBe(0o600);
+        // Nothing beside the link: the backup and the temporary file both live at the target.
+        expect(readdirSync(dirname(path))).toEqual([basename(path)]);
+
+        await connector.remove(receipt);
+        expect(lstatSync(path).isSymbolicLink()).toBe(true);
+        expect(fixture.serverNames(readFileSync(secret.path, 'utf8'))).not.toContain(SERVER_NAME);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
     });
   });
 }

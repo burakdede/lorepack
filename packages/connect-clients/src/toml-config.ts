@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'smol-toml';
+import { writeFileAtomically } from './config-file.js';
 
 /**
  * Editing someone else's TOML configuration without losing a byte of it.
@@ -75,12 +75,14 @@ export function readTomlConfig(path: string): TomlConfig {
   }
 }
 
-/** Writes atomically to a sibling and renames, so an interrupted run leaves the old file. */
-export function writeTextAtomically(path: string, text: string, bom = false): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const temporary = join(dirname(path), `.${path.split(/[\\/]/).pop()}.${process.pid}.tmp`);
-  writeFileSync(temporary, `${bom ? BOM : ''}${text}`, 'utf8');
-  renameSync(temporary, path);
+/** Writes atomically to a sibling and renames, keeping the existing file's mode. */
+export function writeTextAtomically(
+  path: string,
+  text: string,
+  bom = false,
+  options: { readonly newFileMode?: number } = {},
+): void {
+  writeFileAtomically(path, `${bom ? BOM : ''}${text}`, options);
 }
 
 /**

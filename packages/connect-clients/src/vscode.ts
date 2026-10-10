@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
 import { backup } from './json-config.js';
 import {
   ownerOfEntry,
@@ -87,6 +88,11 @@ function configPathFor(
   return join(projectRoot, '.vscode', 'mcp.json');
 }
 
+/** Who owns the directory the file is in, which decides whether a link may be followed. */
+function locationFor(projectRoot: string, scope: ConnectInput['scope']): ConfigLocation {
+  return scope === 'user' ? { owner: 'user' } : { owner: 'project', projectRoot };
+}
+
 export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnector {
   const userDirectory = options.userConfigDirectory ?? userConfigDirectory();
   const probe = options.probe ?? verifyStdioServer;
@@ -123,7 +129,10 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
 
     async status(input: ConnectInput): Promise<ClientStatus> {
       const detected = await this.detect();
-      const path = configPathFor(input.projectRoot, input.scope, userDirectory);
+      const path = resolveConfigFile(
+        configPathFor(input.projectRoot, input.scope, userDirectory),
+        locationFor(input.projectRoot, input.scope),
+      );
 
       // Reads the file and nothing else. Studio's Diagnostics route calls this on every visit.
       const config = readJsoncConfig(path);
@@ -138,7 +147,10 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
     },
 
     async plan(input: ConnectInput): Promise<ConnectPlan> {
-      const path = configPathFor(input.projectRoot, input.scope, userDirectory);
+      const path = resolveConfigFile(
+        configPathFor(input.projectRoot, input.scope, userDirectory),
+        locationFor(input.projectRoot, input.scope),
+      );
       const config = readJsoncConfig(path);
       assertServersIsAnObject(config.document, path);
 
@@ -187,8 +199,10 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
     },
 
     async apply(plan: ConnectPlan): Promise<ConnectReceipt> {
-      const path = plan.configPath;
-      if (path === null) throw new Error('This plan has no file to write.');
+      if (plan.configPath === null) throw new Error('This plan has no file to write.');
+      // Resolved again: the plan was shown to a person, and the file may have changed since.
+      const location = locationFor(plan.projectRoot, plan.scope);
+      const path = resolveConfigFile(plan.configPath, location);
 
       const config = readJsoncConfig(path);
       const backupPath = backup(path);
@@ -198,7 +212,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
         value: plan.entry,
         removeWith: 'lorepack disconnect vscode',
       });
-      writeTextAtomically(path, text);
+      writeTextAtomically(path, text, false, writeOptionsFor(location));
 
       return {
         clientId: VSCODE_ID,
@@ -238,15 +252,17 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
     },
 
     async remove(receipt: ConnectReceipt): Promise<void> {
-      const path = receipt.configPath;
-      if (path === null || !existsSync(path)) return;
+      if (receipt.configPath === null) return;
+      const location = locationFor(receipt.projectRoot, receipt.scope);
+      const path = resolveConfigFile(receipt.configPath, location);
+      if (!existsSync(path)) return;
 
       const config = readJsoncConfig(path);
       const { text, removed } = withoutOwnedEntry(config, entryPath(receipt.serverName));
       if (!removed) return;
 
       backup(path);
-      writeTextAtomically(path, text);
+      writeTextAtomically(path, text, false, writeOptionsFor(location));
     },
   };
 }

@@ -5,7 +5,11 @@ import { parse } from 'smol-toml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { codexSnippet, createCodexConnector, projectTrust } from '../src/codex.js';
 import type { ConnectInput } from '../src/port.js';
-import { type ConnectorFixture, runConnectorContract } from './contract.js';
+import {
+  type ConnectorFixture,
+  runConfigFileSafetyContract,
+  runConnectorContract,
+} from './contract.js';
 
 /**
  * The Codex adapter, against recorded `config.toml` shapes.
@@ -81,6 +85,8 @@ const fixture: ConnectorFixture = {
   id: 'codex',
   title: 'Codex',
   create: () => createCodexConnector({ runClient: installed, home }),
+  createForUser: (codexHome) => createCodexConnector({ runClient: installed, home: codexHome }),
+  userConfigPath: (codexHome) => join(codexHome, 'config.toml'),
   createMissing: () =>
     createCodexConnector({
       home,
@@ -106,6 +112,7 @@ afterEach(() => {
 });
 
 runConnectorContract(fixture, () => project);
+runConfigFileSafetyContract(fixture, () => project);
 
 describe('the file is a person\u2019s, and it stays theirs', () => {
   it('keeps every comment, every section and every blank line', async () => {
