@@ -765,6 +765,33 @@ describe('the request media type', () => {
   });
 });
 
+describe('an adversarial key in a request body, #551', () => {
+  /**
+   * Zod echoes an unknown key into the error, and every error is redacted. A 200 KB key once
+   * held the event loop for 30 s, so `/health` waited just as long.
+   */
+  it('answers quickly, keeps /health responsive, and echoes only a bounded key', async () => {
+    const app = appFor();
+    const key = 'TOKEN'.repeat(40_000);
+    const started = performance.now();
+    const [bad, health] = await Promise.all([
+      app.request('/v1/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'x', [key]: 1 }),
+      }),
+      app.request('/health'),
+    ]);
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(bad.status).toBe(400);
+    expect(health.status).toBe(200);
+
+    const text = await bad.text();
+    expect(text.length).toBeLessThan(4_096);
+    expect(text).toContain('TOKENTOKEN');
+  });
+});
+
 describe('errors', () => {
   it('renders through the taxonomy, with a code and a remediation', async () => {
     const response = await appFor().request('/v1/tables/missing');
