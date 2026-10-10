@@ -70,6 +70,11 @@ type ChildReply =
  * the child identical in tests and in production, which for the highest-risk surface in the
  * product is worth more than the convenience of running it from source: a security control that
  * behaves differently under test is not tested. `pnpm test` builds first.
+ *
+ * The sibling covers both shipped layouts: this package's own `dist/sql/`, and the published
+ * CLI, where esbuild inlines this module into `public-entry.js` and `scripts/bundle-cli.mjs`
+ * emits the child as its own entry beside it (#639). The `src/` fallback is for test runners
+ * only, and in any other layout it names a file that does not exist.
  */
 function childEntry(): string {
   const sibling = fileURLToPath(new URL('./query-child.js', import.meta.url));
@@ -80,10 +85,12 @@ function childEntry(): string {
   const compiled = join(packageRoot, 'dist', 'sql', 'query-child.js');
   if (existsSync(compiled)) return compiled;
 
+  // The file name only. This error crosses REST and MCP, and an absolute path there tells a
+  // remote caller where the install lives without helping anyone reinstall it.
   throw new LoreError('LORE_E_INTERNAL', 'The query engine is missing from this install.', {
     remediation:
       'Reinstall Lorepack. From a checkout, run `pnpm build` first: the query engine always runs compiled, so that it is the same code under test as in production.',
-    subject: compiled,
+    subject: 'query-child.js',
   });
 }
 
