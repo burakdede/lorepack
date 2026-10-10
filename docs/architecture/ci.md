@@ -24,6 +24,12 @@ Steps, in order:
 
 Test results and coverage upload as artifacts on every run, including failures.
 
+The `privacy sandbox (ubuntu-latest)` job builds the project and runs
+`tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
+counts every packet (`tools/security/test/sandbox/netns.sh`). It is a separate job because it
+needs `sudo`, and Linux only because that namespace has no macOS or Windows equivalent. See
+[`security.md`](security.md#privacy-defaults).
+
 ## `benchmarks.yml`
 
 Runs the shared evidence protocol on `ubuntu-latest`, `windows-latest` and `macos-latest`. Pull

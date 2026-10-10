@@ -60,6 +60,7 @@ started by the user. It answers only to allowlisted `Host` names, and local writ
 protected by route registration, same-origin checks and a JSON-only body requirement.
 Remote reads are authenticated at the Worker boundary.
 
-The privacy-default test blocks `fetch` and Node socket connection attempts. It does not prove
-native dependencies cannot open sockets by another route; invariant 7 and `pnpm check:no-native`
-keep native add-ons out of the default install.
+The privacy-default test runs the real build under Node's permission model, which refuses child
+processes, worker threads, native add-ons and WASI, and observes every network channel and the
+DNS resolver; on Linux CI it also runs in a network namespace that must transmit zero packets
+(#616). Invariant 7 and `pnpm check:no-native` keep native add-ons out of the default install.
