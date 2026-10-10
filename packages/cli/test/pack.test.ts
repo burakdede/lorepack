@@ -1,5 +1,14 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { platform } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
@@ -205,5 +214,108 @@ describe('lorepack pack', () => {
       await run(['--cwd', root, 'pack', '--out', 'again.lorepack']);
       expect(readdirSync(builds, { recursive: true }).length).toBe(before);
     });
+  });
+});
+
+/**
+ * Originals are read from the live tree at pack time, so they are the one part of an archive
+ * that can drift from the build it claims to carry (#568). Each case changes the tree after
+ * the build and expects the pack to refuse, naming the file, and to write no archive.
+ */
+describe('lorepack pack with originals', () => {
+  const WITH_ORIGINALS = `${CONFIG}package:\n  includeOriginals: true\n`;
+
+  async function builtWithOriginals(
+    body: (context: { root: string; outside: string }) => Promise<void>,
+    config = WITH_ORIGINALS,
+  ): Promise<void> {
+    await withTempProject(
+      { files: { 'outside/id_secret': 'PRIVATE KEY MATERIAL\n' } },
+      async (temp) => {
+        const root = join(temp.root, 'p');
+        mkdirSync(join(root, 'notes'), { recursive: true });
+        mkdirSync(join(root, 'guides'), { recursive: true });
+        writeFileSync(join(root, 'lore.yaml'), config);
+        for (const [path, text] of Object.entries(CORPUS)) writeFileSync(join(root, path), text);
+        await runBuild({ config: loadConfig({ cwd: root }), progress: new ProgressBus() });
+        await body({ root, outside: join(temp.root, 'outside') });
+      },
+    );
+  }
+
+  function archives(root: string): string[] {
+    return readdirSync(root).filter((name) => name.endsWith('.lorepack'));
+  }
+
+  it('refuses a source swapped for a symlink out of the project, and writes nothing', async () => {
+    await builtWithOriginals(async ({ root, outside }) => {
+      rmSync(join(root, 'notes', 'meeting.txt'));
+      symlinkSync(join(outside, 'id_secret'), join(root, 'notes', 'meeting.txt'));
+
+      const result = await run(['--cwd', root, 'pack']);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('LORE_E_PATH_ESCAPE');
+      expect(result.stderr).toContain('notes/meeting.txt');
+      expect(archives(root)).toEqual([]);
+    });
+  });
+
+  it('refuses a source reached through a directory linked out of the project', async () => {
+    // Identical bytes on the far side of the link: containment, not the hash, refuses it.
+    await builtWithOriginals(async ({ root, outside }) => {
+      writeFileSync(join(outside, 'meeting.txt'), CORPUS['notes/meeting.txt']);
+      rmSync(join(root, 'notes'), { recursive: true });
+      symlinkSync(outside, join(root, 'notes'), platform() === 'win32' ? 'junction' : 'dir');
+
+      const result = await run(['--cwd', root, 'pack']);
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('LORE_E_PATH_ESCAPE');
+      expect(archives(root)).toEqual([]);
+    });
+  });
+
+  it('refuses a source whose bytes changed since the build', async () => {
+    await builtWithOriginals(async ({ root }) => {
+      writeFileSync(join(root, 'notes', 'meeting.txt'), 'Edited after the build.\n');
+
+      const result = await run(['--cwd', root, 'pack']);
+
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_STALE_SOURCES');
+      expect(result.stderr).toContain('notes/meeting.txt');
+      expect(archives(root)).toEqual([]);
+    });
+  });
+
+  it('refuses a source deleted since the build instead of packing without it', async () => {
+    await builtWithOriginals(async ({ root }) => {
+      rmSync(join(root, 'notes', 'meeting.txt'));
+
+      const result = await run(['--cwd', root, 'pack']);
+
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_STALE_SOURCES');
+      expect(archives(root)).toEqual([]);
+    });
+  });
+
+  it('packs the bytes the build was made from, at their project paths', async () => {
+    // A source root below the project: artifact paths are relative to `docs`, and the
+    // originals must still be read from, and named by, their place in the project.
+    await builtWithOriginals(async ({ root }) => {
+      const result = await run(['--cwd', root, 'pack', '--out', 'out.lorepack']);
+      expect(result.code, result.stderr).toBe(0);
+
+      const members = await readArchive(join(root, 'out.lorepack'));
+      expect(new TextDecoder().decode(members.get('originals/guides/deployment.md'))).toBe(
+        CORPUS['guides/deployment.md'],
+      );
+      expect([...members.keys()].filter((name) => name.startsWith('originals/'))).toEqual([
+        'originals/guides/deployment.md',
+      ]);
+      expect((await verifyArchive(join(root, 'out.lorepack'))).ok).toBe(true);
+    }, 'version: 1\nname: demo\nsources:\n  - guides\npackage:\n  includeOriginals: true\n');
   });
 });
