@@ -30,7 +30,7 @@ throw new LoreError('LORE_E_PATH_ESCAPE', 'archive/../../etc/passwd escapes the 
 | Exit | Meaning | Example codes |
 |---:|---|---|
 | 1 | User or configuration error | `LORE_E_CONFIG_INVALID`, `LORE_E_PATH_ESCAPE`, `LORE_E_SQL_REJECTED`, `LORE_E_CANCELLED` |
-| 2 | Build integrity failure | `LORE_E_PARSE_FAILED`, `LORE_E_BUILD_VALIDATION`, `LORE_E_STALE_SOURCES` |
+| 2 | Build integrity failure | `LORE_E_PARSE_FAILED`, `LORE_E_BUILD_VALIDATION`, `LORE_E_STALE_SOURCES`, `LORE_E_SCHEMA_MISMATCH` |
 | 3 | Environment or capability | `LORE_E_UNSUPPORTED_NODE`, `LORE_E_FTS5_UNAVAILABLE` |
 | 4 | Concurrency | `LORE_E_LOCK_HELD`, `LORE_E_BUSY` |
 | 5 | Remote or deployment | `LORE_E_REMOTE_DEPLOY`, `LORE_E_CAPABILITY_LOSS` |
@@ -54,6 +54,18 @@ Phase 3, no message refers to it: `scripts/check-command-set.mjs` reads the real
 output and fails when a source string names a command that is not registered. A remediation
 that points at a missing command is worse than no remediation, and a unit test had been
 asserting the wrong one, so review alone was demonstrably not enough.
+
+## Schema mismatch
+
+`LORE_E_SCHEMA_MISMATCH` means a database was written at a schema this binary does not
+read. Which way round decides the remediation:
+
+- A sealed build from an **older** Lorepack: run `lorepack build`. Builds are never migrated
+  in place.
+- A build or `state.sqlite` from a **newer** Lorepack: upgrade Lorepack. Any database that
+  records a migration this binary does not ship is refused before it is written, so an
+  older binary can never write state it does not understand (#570). See
+  [`v0.1-upgrade.md`](../compatibility/v0.1-upgrade.md#local-state-and-downgrades).
 
 ## Renderers
 
