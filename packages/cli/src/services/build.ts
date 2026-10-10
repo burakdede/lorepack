@@ -15,6 +15,7 @@ import {
   sealCandidateDirectory,
   searchCatalog,
   stateMigrationsDirectory,
+  sweepCandidateDirectories,
   writeCatalog,
 } from '@lorepack/backend-local';
 import {
@@ -234,6 +235,8 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       ),
   });
   return lock.withLock(async () => {
+    // Under the lock, any candidate is one a killed build left behind (#572).
+    sweepCandidateDirectories(loreDirectory);
     const state = LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
     const objects = new FileObjectStore(join(loreDirectory, 'objects'));
 

@@ -314,6 +314,19 @@ describe('cancellation', () => {
   });
 });
 
+describe('candidates left by killed builds', () => {
+  it('are swept by the next build (#572)', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const leftover = join(root, '.lore', 'tmp', 'candidate-KILLED');
+      mkdirSync(leftover, { recursive: true });
+      writeFileSync(join(leftover, 'context.sqlite'), 'half a database');
+
+      await expect(build(root)).resolves.toMatchObject({ created: true });
+      expect(existsSync(leftover)).toBe(false);
+    });
+  });
+});
+
 describe('concurrency', () => {
   it('serializes two simultaneous builds so exactly one does the work', async () => {
     await project({ 'a.md': '# A\n\nText.', 'b.md': '# B\n\nMore.' }, async (root) => {

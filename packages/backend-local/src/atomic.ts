@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fsyncDirectory, LoreError } from '@lorepack/core';
 
@@ -24,7 +24,29 @@ export interface SealDependencies {
 export function createCandidateDirectory(loreDirectory: string): CandidateDirectory {
   const temporaryRoot = join(loreDirectory, 'tmp');
   mkdirSync(temporaryRoot, { recursive: true });
-  return { path: mkdtempSync(join(temporaryRoot, 'candidate-')) };
+  return { path: mkdtempSync(join(temporaryRoot, CANDIDATE_PREFIX)) };
+}
+
+const CANDIDATE_PREFIX = 'candidate-';
+
+/**
+ * Removes candidates that builds killed before sealing left behind, returning how many.
+ *
+ * Callers hold the project lock: a build holds it from creating its candidate until it seals,
+ * so under the lock every candidate belongs to a build that is no longer running. Without a
+ * sweep they survived every later build and prune, a megabyte or more each (#572). Only
+ * `candidate-*` directories are touched.
+ */
+export function sweepCandidateDirectories(loreDirectory: string): number {
+  const temporaryRoot = join(loreDirectory, 'tmp');
+  if (!existsSync(temporaryRoot)) return 0;
+  let removed = 0;
+  for (const entry of readdirSync(temporaryRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(CANDIDATE_PREFIX)) continue;
+    discardCandidateDirectory({ path: join(temporaryRoot, entry.name) });
+    removed += 1;
+  }
+  return removed;
 }
 
 export function discardCandidateDirectory(candidate: CandidateDirectory): void {
