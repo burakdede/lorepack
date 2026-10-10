@@ -1,5 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ownProcessStart, processStart, sameProcessStart } from '../src/process-start.js';
@@ -13,6 +15,29 @@ import { ownProcessStart, processStart, sameProcessStart } from '../src/process-
 const COMPILED = pathToFileURL(join(import.meta.dirname, '..', 'dist', 'process-start.js')).href;
 
 describe('process start identity', () => {
+  it('does not execute a process probe from a relative PATH entry', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'lorepack-process-probe-'));
+    const marker = join(directory, 'intercepted');
+    const originalDirectory = process.cwd();
+    const originalPath = process.env.PATH;
+    writeFileSync(
+      join(directory, 'ps'),
+      `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)}, 'intercepted');\n`,
+      { mode: 0o755 },
+    );
+    try {
+      process.chdir(directory);
+      process.env.PATH = `.${delimiter}${originalPath ?? ''}`;
+      processStart(process.pid);
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      process.chdir(originalDirectory);
+      if (originalPath === undefined) delete process.env.PATH;
+      else process.env.PATH = originalPath;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('agrees with itself: the probe of this process matches what it records', () => {
     const observed = processStart(process.pid);
     expect(observed).not.toBeNull();

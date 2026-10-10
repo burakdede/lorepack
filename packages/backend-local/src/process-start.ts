@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { win32 } from 'node:path';
 
 /**
  * Which process a pid currently names, so a lock can tell its owner from a stranger that was
@@ -74,9 +75,9 @@ function psStartMs(pid: number): number | null {
   try {
     // The C locale and UTC fix the format, so the value does not depend on the user's
     // language or time zone. Example: `Tue Sep 29 14:59:44 2026`.
-    const output = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+    const output = execFileSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH ?? '/bin:/usr/bin', LC_ALL: 'C', TZ: 'UTC' },
+      env: { LC_ALL: 'C', TZ: 'UTC' },
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: PROBE_TIMEOUT_MS,
     }).trim();
@@ -99,9 +100,11 @@ function psStartMs(pid: number): number | null {
 }
 
 function windowsStartMs(pid: number): number | null {
+  const systemRoot = process.env.SystemRoot;
+  if (systemRoot === undefined || !/^[A-Za-z]:[\\/]/.test(systemRoot)) return null;
   try {
     const output = execFileSync(
-      'powershell.exe',
+      win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       [
         '-NoProfile',
         '-NonInteractive',
