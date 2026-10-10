@@ -141,6 +141,34 @@ const EVIDENCE: readonly Evidence[] = [
     ],
   },
   {
+    name: 'archive verification refuses a bomb before inflating it, issue 567',
+    path: 'packages/backend-local/test/archive.test.ts',
+    tests: [
+      'archive verification refuses a bomb with a typed limit error before inflating it',
+      'archive verification never inflates an unlisted member',
+      'archive verification fails members named after Object.prototype keys as unlisted',
+    ],
+    patterns: [
+      /refuses a bomb with a typed limit error before inflating it/,
+      /never inflates an unlisted member/,
+      /fails members named after Object\.prototype keys as unlisted/,
+      /LORE_E_LIMIT_EXCEEDED/,
+    ],
+  },
+  {
+    name: 'pack --verify keeps memory flat on a hostile archive',
+    path: 'packages/cli/test/pack-verify.e2e.test.ts',
+    tests: [
+      'lorepack pack --verify on a hostile archive refuses a decompression bomb with a typed limit error and flat memory',
+      'lorepack pack --verify on a hostile archive hashes a large listed member as a stream rather than buffering it',
+      'lorepack pack --verify on a hostile archive fails members named after Object.prototype keys as unlisted',
+    ],
+    patterns: [
+      /refuses a decompression bomb with a typed limit error and flat memory/,
+      /RSS_CEILING/,
+    ],
+  },
+  {
     name: 'localhost Origin validation protects the local write surface',
     path: 'packages/runtime/test/http.test.ts',
     tests: [

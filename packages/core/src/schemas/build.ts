@@ -98,6 +98,21 @@ export const buildManifestSchema = z
   );
 
 /**
+ * `checksums.json` inside a `.lorepack` archive. Member digests detect corruption; they are not
+ * build identity.
+ *
+ * Zod skips a `__proto__` key rather than copying it, so a member of that name is never in the
+ * parsed index and fails verification as unlisted. That is the safe direction.
+ */
+export const checksumIndexSchema = z
+  .object({
+    formatVersion: z.literal(1),
+    algorithm: z.literal('sha256'),
+    members: z.record(z.string().min(1), sha256Schema),
+  })
+  .strict();
+
+/**
  * Wall-clock and machine facts, kept outside the canonical build and outside .lorepack so
  * two machines can agree on identity while disagreeing about how long the build took.
  */

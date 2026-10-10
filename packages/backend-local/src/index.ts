@@ -1,5 +1,8 @@
 export {
+  ARCHIVE_LIMITS,
+  type ArchiveLimits,
   type ArchiveMember,
+  type ArchiveReadOptions,
   archivePath,
   CHECKSUM_MEMBER,
   type ChecksumIndex,
