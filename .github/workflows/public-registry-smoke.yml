@@ -26,11 +26,16 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The provenance check compares the package with the release tag's commit.
+          fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       - name: Resolve and validate the published version
         id: version
@@ -68,6 +73,26 @@ jobs:
             fi
             sleep 10
           done
+
+      - name: Verify registry signatures and provenance attestations
+        shell: bash
+        env:
+          LOREPACK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          project="$(mktemp -d)"
+          (
+            cd "$project"
+            npm init --yes >/dev/null
+            npm install --ignore-scripts --no-audit --no-fund "@lorepack/cli@${LOREPACK_VERSION}"
+            npm audit signatures
+          )
+
+      - name: Assert gitHead and provenance name the release tag's commit
+        shell: bash
+        env:
+          LOREPACK_VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/check-registry-provenance.mjs "$LOREPACK_VERSION"
 
       - name: Install the published CLI with npm and check it carries no native add-on
         shell: bash
