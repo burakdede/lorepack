@@ -331,6 +331,24 @@ describe('LocalStateStore', () => {
       second.close();
     });
   });
+
+  it('forgets several builds all together or not at all', async () => {
+    // #564. Retention forgot builds one by one, so a refusal part-way through left some
+    // records gone and their directories still on disk.
+    await withState((state) => {
+      const older = buildId('c');
+      state.recordBuild(summary(older, 'verified', '2026-07-31T09:00:00Z'));
+      state.recordBuild(summary(BUILD_A));
+      state.recordBuild(summary(BUILD_B, 'verified', '2026-07-31T11:00:00Z'));
+      state.activate(BUILD_B);
+
+      expect(() => state.forgetBuilds([older, BUILD_B])).toThrow(LoreError);
+      expect(state.getBuild(older)).not.toBeNull();
+
+      state.forgetBuilds([older, BUILD_A]);
+      expect(state.listBuilds().map((build) => build.buildId)).toEqual([BUILD_B]);
+    });
+  });
 });
 
 describe('LocalActiveBuildProvider', () => {
