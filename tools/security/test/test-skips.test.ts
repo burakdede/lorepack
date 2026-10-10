@@ -99,6 +99,11 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
     why: 'Windows cannot deliver a catchable POSIX signal to a child',
   },
   {
+    file: 'tools/security/test/privacy-defaults.test.ts',
+    line: "describe.runIf(IN_NETWORK_NAMESPACE)('inside a network namespace, issue 616', () => {",
+    why: 'needs root to create the namespace; the Linux privacy sandbox CI job runs it',
+  },
+  {
     file: 'tools/test-support/src/runtime-contract.ts',
     line: 'it.skipIf(activate === undefined)(',
     why: 'a backend that cannot activate another build in a test declares so in its options',

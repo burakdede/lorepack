@@ -285,9 +285,17 @@ const EVIDENCE: readonly Evidence[] = [
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     tests: [
-      'privacy defaults: no telemetry or source egress in the build path builds offline with fetch and sockets blocked',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 builds every parser format in a sandbox with no network, process or thread, and attempts nothing',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a DNS query',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a UDP datagram',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a child process that connects',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a fetch from a worker thread',
     ],
-    patterns: [/fetch and sockets blocked/, /network\.calls/, /toEqual\(\[\]\)/],
+    patterns: [
+      /builds every parser format in a sandbox/,
+      /runSandboxedBuild/,
+      /egressProblems\(run\)\)\.toEqual\(\[\]\)/,
+    ],
   },
 ];
 
