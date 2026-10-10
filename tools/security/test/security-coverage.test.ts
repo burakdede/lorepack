@@ -120,6 +120,16 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/malformed input, per section 20\.9/, /encrypted/i, /deeply nested document/],
   },
   {
+    name: 'a parse that hangs or exhausts memory is bounded and excluded, issue 594',
+    path: 'packages/parsers/test/isolation.test.ts',
+    patterns: [/parse-timeout/, /parse-memory/, /cmapBombPdf/, /docxBomb/, /flateBombPdf/],
+  },
+  {
+    name: 'a build leaves out a file over a parse limit and Ctrl-C stops a parse',
+    path: 'packages/cli/test/parse-limits.test.ts',
+    patterns: [/class: 'envelope'/, /LORE_E_CANCELLED/, /outlived the build/],
+  },
+  {
     name: 'malformed Office files are parser fixtures, not crashes',
     path: 'packages/parsers/test/xlsx.test.ts',
     tests: [

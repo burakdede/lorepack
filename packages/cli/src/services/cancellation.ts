@@ -32,7 +32,15 @@ export async function checkpoint(
     setImmediate(resolve);
   });
   if (!signal.aborted) return;
-  throw new LoreError('LORE_E_CANCELLED', 'The build was cancelled.', {
+  throw cancelledError(state);
+}
+
+/**
+ * The error a cancelled build ends with, wherever the cancellation was noticed: at a
+ * checkpoint, or by the parse process being stopped mid-file (#594).
+ */
+export function cancelledError(state: { readonly hasActiveBuild?: boolean } = {}): LoreError {
+  return new LoreError('LORE_E_CANCELLED', 'The build was cancelled.', {
     // The first build in a project is the most likely one to be interrupted, and it is
     // exactly the case where "the previously active build is still serving" is false (#168).
     remediation:
