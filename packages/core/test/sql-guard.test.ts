@@ -405,6 +405,54 @@ describe('format widths', () => {
   });
 });
 
+/**
+ * A query whose answer depends on when or where it ran cannot be cited (#452, #563). Refused on
+ * both profiles, so local and D1 agree: before, `CURRENT_TIMESTAMP` read the clock remotely and
+ * was refused locally, and `date('now')` read it on both.
+ */
+describe('clock and time zone reads', () => {
+  it.each([
+    `SELECT CURRENT_TIMESTAMP AS ts FROM ${TABLE}`,
+    `SELECT current_date AS d FROM ${TABLE}`,
+    `SELECT sku FROM ${TABLE} WHERE CURRENT_TIME > '12:00'`,
+    `SELECT date('now') AS d FROM ${TABLE}`,
+    `SELECT date('NOW') AS d FROM ${TABLE}`,
+    `SELECT date(' now ') AS d FROM ${TABLE}`,
+    `SELECT datetime(sku, 'localtime') AS d FROM ${TABLE}`,
+    `SELECT datetime(sku, 'UTC') AS d FROM ${TABLE}`,
+    `SELECT strftime('%s', 'now') AS s FROM ${TABLE}`,
+    `SELECT julianday('now') - julianday(sku) AS age FROM ${TABLE}`,
+    `SELECT timediff('now', sku) AS age FROM ${TABLE}`,
+    `SELECT date(coalesce(sku, 'now')) AS d FROM ${TABLE}`,
+    `SELECT "date"('now') AS d FROM ${TABLE}`,
+    // With no time value, each of these is the current time.
+    `SELECT date() AS d FROM ${TABLE}`,
+    `SELECT time() AS t FROM ${TABLE}`,
+    `SELECT datetime() AS t FROM ${TABLE}`,
+    `SELECT julianday() AS j FROM ${TABLE}`,
+    `SELECT unixepoch() AS u FROM ${TABLE}`,
+    `SELECT strftime('%Y') AS y FROM ${TABLE}`,
+  ])('refuses %s', (sql) => {
+    refuses(sql, 'remote');
+    refuses(sql, 'local');
+  });
+
+  it.each([
+    `SELECT date(sku) AS d FROM ${TABLE}`,
+    `SELECT date(sku, '+1 day', 'start of month') AS d FROM ${TABLE}`,
+    `SELECT strftime('%Y', sku) AS y FROM ${TABLE}`,
+    `SELECT julianday(sku) - julianday('2024-01-01') AS days FROM ${TABLE}`,
+    `SELECT unixepoch(sku) AS u FROM ${TABLE}`,
+    `SELECT timediff(sku, '2024-01-01') AS d FROM ${TABLE}`,
+    // The word outside a date function is data, not a clock read.
+    `SELECT sku FROM ${TABLE} WHERE region = 'now'`,
+    `SELECT sku AS "current_date" FROM ${TABLE}`,
+  ])('answers %s', (sql) => {
+    expect(() => guard(sql, 'remote')).not.toThrow();
+    expect(() => guard(sql, 'local')).not.toThrow();
+  });
+});
+
 describe('ordinary SQL a model writes', () => {
   it.each([
     `SELECT sku, list_price FROM ${TABLE} WHERE list_price > 10 ORDER BY sku LIMIT 5`,
@@ -429,6 +477,7 @@ describe('ordinary SQL a model writes', () => {
     `SELECT sku FROM (SELECT sku FROM ${TABLE}) AS inner_rows`,
     `SELECT sku FROM ${TABLE} WHERE list_price BETWEEN 1 AND 2.5e1`,
     `SELECT json_extract(sku, '$.a') AS a FROM ${TABLE}`,
+    `SELECT sku -> '$.a' AS a, sku ->> '$.a' AS b FROM ${TABLE}`,
     `SELECT sku FROM ${TABLE};`,
     `SELECT sku FROM ${TABLE} WHERE region IS NOT DISTINCT FROM 'eu'`,
     `SELECT sku FROM ${TABLE} WHERE region IS DISTINCT FROM 'eu'`,

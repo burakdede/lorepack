@@ -70,6 +70,7 @@ function discard(root: string): void {
 let currentRoot = '';
 
 runRuntimeContract({
+  sqlProfile: 'local',
   name: 'local SQLite and filesystem',
   create: async (): Promise<ContractFixture> => {
     const root = mkdtempSync(join(tmpdir(), 'lore-contract-'));

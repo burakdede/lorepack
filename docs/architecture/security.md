@@ -37,6 +37,7 @@ backend, local and Cloudflare, must pass.
 | An aggregate used as a window, or a statement whose estimated rows pass 5,000,000 | Remotely only, refused by the guard's cost bound (below) |
 | A `printf` or `format` width or precision of `*` or above 100, or a format that is not a string literal | The statement guard, on both backends |
 | A CTE named like the table, which would shadow it | The statement guard, on both backends |
+| A clock or time zone read: `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`, a `'now'`, `'localtime'` or `'utc'` literal in a date function, or a date function given no time value | The statement guard, on both backends, so an answer never depends on when or where it ran. A value computed at run time (a cell holding `now`, `lower('NOW')`) is not seen: the rule is static |
 
 ### What the remote cost bound does and does not bound
 

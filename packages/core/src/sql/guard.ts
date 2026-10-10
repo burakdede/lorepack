@@ -1,4 +1,10 @@
-import { AGGREGATE_FUNCTIONS, QUERY_FUNCTIONS, REMOTE_QUERY_FUNCTIONS } from './functions.js';
+import {
+  AGGREGATE_FUNCTIONS,
+  CLOCK_KEYWORDS,
+  DATE_FUNCTIONS,
+  QUERY_FUNCTIONS,
+  ROW_FUNCTIONS,
+} from './functions.js';
 import { lexSql, refuseQuery, type Token } from './lexer.js';
 import { validateStatement } from './statement.js';
 
@@ -306,8 +312,7 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
     }
   }
 
-  const functions = query.profile === 'remote' ? REMOTE_QUERY_FUNCTIONS : QUERY_FUNCTIONS;
-  const rowFunctions = query.profile === 'local' ? new Set(['json_each', 'json_tree']) : new Set();
+  const rowFunctions: ReadonlySet<string> = query.profile === 'local' ? ROW_FUNCTIONS : new Set();
   const declared = new Set<string>();
   const declarations = new Set<number>();
 
@@ -517,16 +522,21 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
 
   if (remote) estimate(top());
 
-  // Rules 4, 5 and 6.
+  // Rules 4, 5, 6 and 7.
   for (let index = 0; index < body.length; index += 1) {
     const token = body[index] as Token;
     const next = body[index + 1];
 
+    // Rule 7. A bare `CURRENT_TIMESTAMP` is a keyword, not a call, so rule 4 never sees it. A
+    // quoted spelling is a name, not the keyword.
+    if (token.kind === 'word' && CLOCK_KEYWORDS.has(token.value)) throw refuseQuery();
+
     if (isName(token) && next?.text === '(') {
       if (declarations.has(index)) continue;
       if (token.kind === 'word' && KEYWORDS.has(token.value)) continue;
-      if (!functions.has(token.value)) throw refuseQuery();
+      if (!QUERY_FUNCTIONS.has(token.value) && !rowFunctions.has(token.value)) throw refuseQuery();
       if (FORMAT_FUNCTIONS.has(token.value)) assertFormatBounded(body, index + 2);
+      if (DATE_FUNCTIONS.has(token.value)) assertNoClock(body, token.value, index + 1);
       if (
         query.profile === 'remote' &&
         AGGREGATE_FUNCTIONS.has(token.value) &&
@@ -598,6 +608,36 @@ function assertFormatBounded(body: readonly Token[], first: number): void {
     at = bounded(at);
     if (text[at] === '.') at = bounded(at + 1);
   }
+}
+
+/** The literal arguments that make a date function read the clock or the time zone. */
+const CLOCK_ARGUMENTS = new Set(['now', 'localtime', 'utc']);
+
+/**
+ * Rule 7: the date function called at `open` reads neither the clock nor the time zone. It
+ * must be given a time value (`strftime` takes its format first), and no string literal
+ * anywhere in its arguments may be `'now'`, `'localtime'` or `'utc'`.
+ *
+ * A value computed at run time, such as a cell holding `now` or `lower('NOW')`, is not seen:
+ * this is a static rule over the statement, documented as such in `security.md`.
+ */
+function assertNoClock(body: readonly Token[], name: string, open: number): void {
+  const close = matching(body, open);
+  if (close === -1) throw refuseQuery();
+  let depth = 0;
+  let commas = 0;
+  for (let at = open + 1; at < close; at += 1) {
+    const token = body[at] as Token;
+    if (token.text === '(') depth += 1;
+    else if (token.text === ')') depth -= 1;
+    else if (token.text === ',' && depth === 0) commas += 1;
+    else if (token.kind === 'string' && CLOCK_ARGUMENTS.has(token.value.trim())) {
+      throw refuseQuery();
+    }
+  }
+  const empty = close === open + 1;
+  const required = name === 'strftime' ? 2 : 1;
+  if (empty || commas + 1 < required) throw refuseQuery();
 }
 
 function assertBalanced(tokens: readonly Token[]): void {

@@ -1,4 +1,11 @@
-export { AGGREGATE_FUNCTIONS, QUERY_FUNCTIONS, REMOTE_QUERY_FUNCTIONS } from './functions.js';
+export {
+  AGGREGATE_FUNCTIONS,
+  CLOCK_KEYWORDS,
+  DATE_FUNCTIONS,
+  ENGINE_FUNCTIONS,
+  QUERY_FUNCTIONS,
+  ROW_FUNCTIONS,
+} from './functions.js';
 export {
   guardSingleTableQuery,
   QUERY_GUARD_LIMITS,

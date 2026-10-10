@@ -225,3 +225,33 @@ string-literal format with widths and precisions of at most 100.
   ([`deployment.md`](deployment.md)), not anything in this module.
 - A subquery in FROM no longer counts its table twice, so `SELECT n FROM (SELECT 1 AS n FROM t)`
   is admitted at any row count up to the bound.
+
+## Addendum, 2026-10-10: one allowlist for the guard and the authorizer (#563, #452)
+
+**Status:** accepted.
+
+**Context.** The guard and the local authorizer read the same function list but disagreed at
+the edges, so the same query could pass one layer and fail the other, and a model saw different
+behaviour locally and on Cloudflare. SQLite authorizes the `->` and `->>` operators as calls to
+functions named `->` and `->>`, and `json_each`/`json_tree` as reads of a virtual table named
+after the function, so the local authorizer refused all four while the guard admitted them.
+`CURRENT_TIMESTAMP`, `CURRENT_DATE` and `CURRENT_TIME` are keywords, not calls, so the guard
+never checked them: they read the wall clock on D1 and were refused locally. `date('now')` read
+the clock on both, although the list's comment said `now` was refused.
+
+**Decision.** `packages/core/src/sql/functions.ts` is the one table: `QUERY_FUNCTIONS` (scalar
+and aggregate calls, both profiles), `ROW_FUNCTIONS` (table-valued, local only),
+`ENGINE_FUNCTIONS` (the list plus the operator functions, for the authorizer), and the clock
+sets the guard refuses on both profiles: the `current_*` keywords, any `'now'`, `'localtime'` or
+`'utc'` literal inside a date function, and a date function given no time value. `cast`, `in`
+and `nvl` left the list: the first two are syntax the guard reads as keywords, and SQLite has no
+`nvl`. The shared runtime contract calls every allowlisted function on every backend, and a test
+fails when the list gains an entry without an example.
+
+**Consequences.**
+
+- The remote profile still refuses `json_each` and `json_tree` by design; the contract asserts
+  that difference rather than skipping it.
+- A clock read computed at run time is not caught. The rule is static, and documented as such
+  in [`security.md`](security.md).
+
