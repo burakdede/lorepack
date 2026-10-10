@@ -34,6 +34,7 @@ security-affecting change before release.
 | `connect` refuses linked project configs and keeps client config modes (#574) | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts`, `packages/cli/test/connect.test.ts` | Covered |
 | Project lock reclaim is atomic, host-aware and survives pid reuse (#565) | `packages/backend-local/test/lock-reclaim.e2e.test.ts`, `packages/backend-local/test/storage.test.ts`, `packages/backend-local/test/process-start.test.ts`, `packages/cli/test/build.test.ts` | Covered |
 | `.lore` linked outside the project is refused, and doctor reports it (#572) | `packages/core/test/config.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
+| `.lore` objects, cache and state are owner-only (#569) | `packages/cli/test/lore-permissions.test.ts`, `packages/core/test/atomic-write.test.ts` | Covered on POSIX; Windows relies on profile ACLs |
 | Model-facing tools are read-only | `tools/contract/test/mcp.test.ts` | Covered |
 
 ## Commands To Run For Sign-off

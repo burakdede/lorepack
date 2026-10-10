@@ -143,6 +143,19 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/refuses a \.lore link out of the project/, /lore-writable/],
   },
   {
+    name: 'copies of sources under .lore are owner-only, issue 569',
+    path: 'packages/cli/test/lore-permissions.test.ts',
+    tests: [
+      'what a build writes under .lore is owner-only: 0700 directories and 0600 files, including the copy of a 0600 source',
+      'what a build writes under .lore includes the project lock while it is held',
+    ],
+    patterns: [/0o600/, /0o700/, /Confidential salary plan/],
+    skippedOn: {
+      win32:
+        'Windows has no POSIX mode bits for Node to set; .lore inherits the user profile ACL there',
+    },
+  },
+  {
     name: 'pack refuses originals that became links or changed, issue 568',
     path: 'packages/cli/test/pack.test.ts',
     tests: [
