@@ -5,6 +5,16 @@ from each of them to the test that holds it, so a gap is visible rather than ass
 
 The release gate is `pnpm test:security`. It runs the offline privacy-default proof and a
 coverage index that names every class below, then CI runs the same command as its own step.
+
+The coverage index (`tools/security/test/security-coverage.test.ts`) does not take a test's
+existence on trust. It runs every file it names in a fresh Vitest process, reads the JSON
+reporter, and fails unless each named test reported `passed`. A skipped, focused-away, todo,
+failing, renamed or deleted test fails the class it holds. The only exception is a skip on a
+platform the entry names with a written reason, such as the symbolic-link cases on Windows.
+It still checks the test source for its key assertions, because a test emptied of them still
+reports `passed`. `tools/security/test/gate.test.ts` proves the gate catches each of these
+against a fixture, and `tools/security/test/test-skips.test.ts` keeps every conditional skip
+in the repository on a reviewed allow-list (#615).
 The threat model is in [`threat-model.md`](threat-model.md), and the current pre-release review
 is in [`security-review.md`](security-review.md).
 
