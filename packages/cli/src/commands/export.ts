@@ -10,7 +10,7 @@ import {
 } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
-import { renderBundleMarkdown } from '../services/export.js';
+import { moreCommandFor, renderBundleMarkdown } from '../services/export.js';
 import { readFreshness } from '../services/status.js';
 
 /**
@@ -89,7 +89,7 @@ export function exportCommand(): CommandDefinition {
             : renderBundleMarkdown(bundle, {
                 projectName: config.config.name,
                 sourceState: bundle.sourceState,
-                moreCommand: `lorepack export --task ${JSON.stringify(task)} --profile deep`,
+                moreCommand: moreCommandFor(task),
               });
 
         if (output === null) {
