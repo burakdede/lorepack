@@ -230,6 +230,52 @@ describe('a request cannot be made too large to refuse', () => {
   });
 });
 
+/**
+ * #625. One common word repeated a few dozen times used to cost FTS5 minutes of CPU, and
+ * every search and task request reaches the index. Repetition is folded away before the
+ * index sees it, and a query past the distinct-term cap is a typed 400, not a long wait.
+ */
+describe('a query cannot be made expensive by repeating it', () => {
+  const post = (app: ReturnType<typeof createApiApp>, path: string, body: unknown) =>
+    app.request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const overCap = Array.from({ length: 65 }, (_, index) => `term${index}`).join(' ');
+
+  it('answers a repeated term at the length limit as it answers the term once', async () => {
+    await withServedProject(async ({ app }) => {
+      const once = await post(app, '/v1/search', { query: 'activation' });
+      // Close to the request schema's 1,000 characters, of one term in folded spellings.
+      const repeated = 'activation Activation ACTIVATION, '.repeat(29).trim();
+      const many = await post(app, '/v1/search', { query: repeated });
+
+      expect(many.status).toBe(200);
+      const chunks = async (response: Response) =>
+        ((await response.json()) as { hits: { chunkId: string }[] }).hits.map((h) => h.chunkId);
+      const expected = await chunks(once);
+      expect(expected.length).toBeGreaterThan(0);
+      expect(await chunks(many)).toEqual(expected);
+    });
+  });
+
+  for (const [path, body] of [
+    ['/v1/search', { query: overCap }],
+    ['/v1/context', { task: overCap }],
+  ] as const) {
+    it(`refuses ${path} past the distinct-term cap with a typed 400`, async () => {
+      await withServedProject(async ({ app }) => {
+        const response = await post(app, path, body);
+        const parsed = (await response.json()) as { error?: { code: string } };
+
+        expect(response.status).toBe(400);
+        expect(parsed.error?.code).toBe('LORE_E_INVALID_ARGUMENT');
+      });
+    });
+  }
+});
+
 describe('the served surface writes nothing', () => {
   /**
    * The invariant behind invariant 10, checked at the assembled boundary.

@@ -1,12 +1,11 @@
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import type { Artifact, LoreNode } from '@lorepack/core';
+import { type Artifact, type LoreNode, SEARCH_QUERY_LIMITS } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import {
   type CatalogArtifact,
   countRows,
-  escapeFtsQuery,
   searchCatalog,
   writeCatalog,
 } from '../src/catalog/writer.js';
@@ -199,20 +198,8 @@ describe('search', () => {
 });
 
 describe('query escaping', () => {
-  it.each([
-    ['simple query', '"simple" "query"'],
-    ['with "quotes"', '"with" """quotes"""'],
-    ['NEAR AND OR', '"NEAR" "AND" "OR"'],
-    ['wildcard*', '"wildcard*"'],
-    ['  spaced   out  ', '"spaced" "out"'],
-  ])('escapes %s', (input, expected) => {
-    expect(escapeFtsQuery(input)).toBe(expected);
-  });
-
-  it('produces an empty match for an empty query rather than a syntax error', () => {
-    expect(escapeFtsQuery('   ')).toBe('');
-  });
-
+  // The escaping itself is `escapeFtsQuery` in core, shared with the D1 catalog and unit
+  // tested there. These cases hold the real FTS5 index to it.
   it.each(['"', '*', ':', '(', ')', '^', 'NEAR("a" "b")', 'a OR b', '-x', 'a AND NOT b'])(
     'never throws for hostile input %s',
     async (query) => {
@@ -230,6 +217,29 @@ describe('query escaping', () => {
         expect(searchCatalog(db, 'beta OR gamma')).toHaveLength(0);
       },
     );
+  });
+
+  it('answers a repeated term exactly as it answers the term once, issue 625', async () => {
+    await withCatalog(
+      [entry('src:a.md', 'A', ['a rollback plan']), entry('src:b.md', 'B', ['a release'])],
+      (db) => {
+        const once = searchCatalog(db, 'a rollback');
+        expect(once).toHaveLength(1);
+        expect(searchCatalog(db, `${Array(200).fill('a A a.').join(' ')} rollback`)).toEqual(once);
+      },
+    );
+  });
+
+  it('refuses more distinct terms than the cap with a typed error, issue 625', async () => {
+    await withCatalog([entry('src:a.md', 'A', ['hello'])], (db) => {
+      const query = Array.from(
+        { length: SEARCH_QUERY_LIMITS.maxDistinctTerms + 1 },
+        (_, index) => `term${index}`,
+      ).join(' ');
+      expect(() => searchCatalog(db, query, { match: 'any' })).toThrow(
+        expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+      );
+    });
   });
 });
 

@@ -28,3 +28,15 @@ export const TABLE_QUERY_LIMITS = {
   maxRows: 10_000,
   maxBytes: 1_000_000,
 } as const;
+
+/**
+ * Bounds for a lexical query, shared by every catalog adapter.
+ *
+ * FTS5 work grows with the number of phrases in a MATCH, and a common term matches most of
+ * the corpus. Sixty-four distinct terms is far more than a keyword search or a task
+ * sentence's useful vocabulary, and small enough that the worst query a caller can send
+ * stays in the same order of cost as an ordinary one (#625).
+ */
+export const SEARCH_QUERY_LIMITS = {
+  maxDistinctTerms: 64,
+} as const;

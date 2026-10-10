@@ -15,6 +15,7 @@ security-affecting change before release.
 | Malformed PDF and Office inputs | `packages/parsers/test/pdf.test.ts`, `packages/parsers/test/docx.test.ts`, `packages/parsers/test/xlsx.test.ts` | Covered |
 | SQL injection and multi-statement attempts | `packages/cli/test/security.e2e.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
 | Oversized requests and responses | `packages/runtime/test/http.test.ts`, export/context budget tests | Covered |
+| Repeated or excessive query terms cannot multiply FTS5 work, locally or on D1 | `packages/core/test/fts-query.test.ts`, `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
 | Localhost Origin validation | `packages/runtime/test/http.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
