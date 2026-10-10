@@ -1,10 +1,10 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test as base } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 import type { AxeResults } from 'axe-core';
 import { STUDIO_SETUP_TIMEOUT_MS } from './setup-budget.js';
 
@@ -82,6 +82,12 @@ export interface Session {
 interface TestFixtures {
   /** Runs axe against the current page and fails on any critical or serious violation. */
   readonly checkA11y: () => Promise<AxeResults>;
+  /**
+   * Fails any test whose page broke the Content Security Policy (#553). Automatic, so every
+   * flow in this suite doubles as proof that the policy Studio is served with lets it work.
+   * A test that provokes one on purpose reads and empties the list.
+   */
+  readonly cspViolations: string[];
 }
 
 /** Worker-scoped: one project and one server for the whole run. */
@@ -166,11 +172,25 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     { scope: 'worker' },
   ],
 
+  cspViolations: [
+    async ({ page }, use) => {
+      const violations: string[] = [];
+      page.on('console', (message) => {
+        if (/Content Security Policy/i.test(message.text())) violations.push(message.text());
+      });
+      await use(violations);
+      expect(violations, 'the page broke its Content Security Policy').toEqual([]);
+    },
+    { auto: true },
+  ],
+
   checkA11y: async ({ page }, use) => {
     await use(async () => {
       // Injected from the installed package rather than a CDN: this suite runs offline,
-      // like everything else in this product.
-      await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') });
+      // like everything else in this product. Evaluated through the DevTools protocol rather
+      // than added as a `<script>`, because Studio's policy refuses inline scripts (#553) and
+      // the test harness is not something the policy should make an exception for.
+      await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
       const results = (await page.evaluate(async () => {
         // @ts-expect-error injected above
         return (await window.axe.run(document, {

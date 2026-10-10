@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,6 +93,7 @@ function file(path: string): Response {
 
   return new Response(new Uint8Array(body), {
     headers: {
+      ...securityHeaders(type.startsWith('text/html') ? inlineScripts(body.toString('utf8')) : []),
       'content-type': type,
       // Vite fingerprints every asset except the entry document, so those are immutable and
       // the document must never be.
@@ -100,4 +102,44 @@ function file(path: string): Response {
         : 'public, max-age=31536000, immutable',
     },
   });
+}
+
+/**
+ * Who may frame Studio and what may run in it (#553).
+ *
+ * Studio can activate, roll back and pack, and a click inside a frame carries a loopback
+ * `Origin`, which the write guard admits, so no site may frame it: `frame-ancestors 'none'`
+ * and, for browsers that predate it, `X-Frame-Options`. It also renders text from documents
+ * the user did not write, so the policy is the defence in depth against a future injection:
+ * scripts, styles, fonts and requests from this origin only, with no inline script except the
+ * theme script in `index.html`, admitted by its hash. `img-src` adds `data:` for the select
+ * arrows the stylesheet draws as inline SVG.
+ *
+ * The hash is computed from the document being served rather than written down, so editing
+ * the theme script cannot silently break it: the policy always names exactly what is there.
+ */
+function securityHeaders(inline: readonly string[]): Record<string, string> {
+  const hashes = inline.map(
+    (script) => `'sha256-${createHash('sha256').update(script, 'utf8').digest('base64')}'`,
+  );
+  const policy = [
+    "default-src 'self'",
+    ["script-src 'self'", ...hashes].join(' '),
+    "img-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+  return {
+    'content-security-policy': policy,
+    'x-frame-options': 'DENY',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+  };
+}
+
+/** The text of every `<script>` with no attributes, which is how an inline one is written. */
+function inlineScripts(html: string): string[] {
+  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1] ?? '');
 }
