@@ -74,6 +74,12 @@ const EVIDENCE: readonly Evidence[] = [
   {
     name: 'pack refuses originals that became links or changed, issue 568',
     path: 'packages/cli/test/pack.test.ts',
+    tests: [
+      'lorepack pack with originals refuses a source swapped for a symlink out of the project, and writes nothing',
+      'lorepack pack with originals refuses a source reached through a directory linked out of the project',
+      'lorepack pack with originals refuses a source whose bytes changed since the build',
+      'lorepack pack with originals refuses a source deleted since the build instead of packing without it',
+    ],
     patterns: [
       /refuses a source swapped for a symlink out of the project, and writes nothing/,
       /refuses a source reached through a directory linked out of the project/,
