@@ -101,6 +101,24 @@ The cost is startup, tens of milliseconds against a five-second deadline, and it
 guarantee rather than an intention. This supersedes the "worker-thread executor" wording in
 section 19.5, for the reason measured above rather than by preference.
 
+**A deadline bounds time, not memory** (#559). The child used to materialise every row
+(`statement.all()`, up to 10,001 rows of up to 1 MB each) and only then check the 1 MB response
+cap: one query reached 4,235 MB of child RSS in under a second, and three at once 7,926 MB. Three
+bounds now hold, all in `packages/backend-local/src/sql/`:
+
+- The child iterates (`statement.iterate()`) with a running count of serialized bytes and stops
+  at the first row past the cap. Measured on the same query: 82 MB peak.
+- The child is forked with `--max-old-space-size=128`, replacing the parent's flags, so a
+  query that defeats the streaming (one row of 200 one-megabyte columns) dies at the cap and is
+  reported as `LORE_E_LIMIT_EXCEEDED`. The flag does not cover SQLite's own allocations; the
+  per-value length limit (`SAFE_QUERY_LIMITS.length`) and the deadline bound those.
+- At most four children run at once per process. A fifth query is refused with `LORE_E_BUSY`
+  before any process starts, rather than queued.
+
+`packages/backend-local/test/query-resources.test.ts` asserts the issue's reproduction stays
+below 256 MB of child RSS (`QUERY_LIMITS.childRssCeilingBytes`), that every fork carries the
+heap flag, and that a query past the concurrency limit starts no process.
+
 ## The authorizer, and the one thing it gets wrong by default
 
 Denying every `SQLITE_READ` outside the allowlist also denies **common table expressions**,

@@ -106,18 +106,27 @@ process.on('message', (message: Setup | Request) => {
   try {
     if (db === null) throw new Error('The query engine was not configured.');
     const statement = db.prepare(bound(request.sql, request.limit));
-    const rows = statement.all() as Record<string, unknown>[];
 
-    const truncated = rows.length > request.limit;
-    const kept = truncated ? rows.slice(0, request.limit) : rows;
-
+    // One row at a time, with a running count of the bytes the response would carry, so the
+    // size cap stops the query at the first row past it. Materialising every row first and
+    // measuring afterwards let one query reach 4 GB before the 1 MB cap fired (#559).
+    //
     // Serialized size is checked here rather than by the caller, because the caller would
     // have to receive the rows to measure them, and receiving them is the cost being bounded.
-    const serialized = JSON.stringify(kept);
-    const serializedBytes = new TextEncoder().encode(serialized).byteLength;
-    if (serializedBytes > request.maxBytes) {
-      send({ ok: false, kind: 'too-large', bytes: serializedBytes });
-      return;
+    const kept: Record<string, unknown>[] = [];
+    let truncated = false;
+    let serializedBytes = 2;
+    for (const row of statement.iterate() as Iterable<Record<string, unknown>>) {
+      if (kept.length === request.limit) {
+        truncated = true;
+        break;
+      }
+      serializedBytes += Buffer.byteLength(JSON.stringify(row)) + (kept.length === 0 ? 0 : 1);
+      if (serializedBytes > request.maxBytes) {
+        send({ ok: false, kind: 'too-large', bytes: serializedBytes, peakRssBytes: peakRss() });
+        return;
+      }
+      kept.push(row);
     }
 
     send({
@@ -132,6 +141,11 @@ process.on('message', (message: Setup | Request) => {
     send({ ok: false, kind: 'failed', message: (cause as Error).message });
   }
 });
+
+/** The most memory this process has held, so the parent can report what a refusal cost. */
+function peakRss(): number {
+  return process.resourceUsage().maxRSS * 1024;
+}
 
 /** Column names for an empty result, which `Object.keys` of a missing row cannot give. */
 function columnsOf(statement: ReturnType<DatabaseSync['prepare']>): string[] {
