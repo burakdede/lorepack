@@ -21,7 +21,7 @@ forgets will be the one written last, by someone reading a different target as a
 | Capability loss fails by default | The orchestration: a target only *reports* loss |
 | The override is per capability, never a blanket flag | The orchestration |
 | `apply` writes only build-scoped candidate data | The target |
-| Nothing is activated that was not verified first | The orchestration, by ordering |
+| Nothing is activated that was not verified first | The orchestration, by ordering; the Cloudflare target also refuses a build it never marked verified |
 | A failed verify leaves the previous build serving | The orchestration |
 | Receipts are resumable | The orchestration, from a validated schema |
 | A target cannot change the build | Asserted by hashing the build around a deploy |
@@ -76,6 +76,20 @@ never started.
 back: a receipt whose steps are whatever a target felt like writing can only be resumed by that
 target. A resume skips the steps already done, so it continues rather than restarting, and
 resuming a finished deploy changes nothing.
+
+`verify` is the one step a resume cannot skip on the strength of its name alone. It is recorded
+in `completedSteps` only when no check failed, and a resume skips it only when the receipt's
+`verification` outcomes contain no failure. A failed verification is therefore not resumable:
+the error does not offer `--resume`, and a resume run anyway verifies again and stops again
+(#555). A receipt whose verification passed but whose smoke check failed after activation still
+skips straight to activation, because its candidate did pass.
+
+The remote side does not rely on the receipt. Cloudflare activation reads
+`projected_builds.verified_at` inside the activation transaction and throws
+`CloudflareUnverifiedBuildError` when it is NULL, leaving the pointer where it was. That covers a
+receipt edited by hand and a second client sharing the catalog. Rollback is exempt: it returns
+to a build that already served, and builds projected before the `verified_at` column existed
+carry NULL there.
 
 ## Cloudflare R2 key layout
 
