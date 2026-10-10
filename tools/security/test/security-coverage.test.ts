@@ -88,6 +88,16 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/refuses a non-loopback browser origin/, /allowLoopbackOrigin/, /127\.0\.0\.1/],
   },
   {
+    name: 'a Host allowlist stops DNS rebinding on REST and MCP',
+    path: 'tools/security/test/local-server.test.ts',
+    patterns: [/DNS rebinding/, /attacker\.example/, /\/v1\/sources/, /\/mcp/, /toBe\(403\)/],
+  },
+  {
+    name: 'the runtime refuses a foreign Host before any handler runs',
+    path: 'packages/runtime/test/http.test.ts',
+    patterns: [/refuses a foreign Host before any handler runs/, /allowedHosts/],
+  },
+  {
     name: 'remote runtime auth rejects bypass attempts',
     path: 'packages/deploy-cloudflare/test/runtime-auth.test.ts',
     patterns: [

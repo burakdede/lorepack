@@ -184,12 +184,37 @@ is refused with `LORE_E_OBJECT_CORRUPT` while the previous one is still serving.
 before confirming. If the history moved in between, the request is refused rather than
 applied to a different build than the one that was confirmed.
 
+### Host checking
+
+DNS rebinding makes a hostname the attacker controls resolve to `127.0.0.1`. The attacker's
+page is then same-origin with the local server, and a browser sends no `Origin` on a
+same-origin `GET`, so an `Origin` check alone would let it read every source. What the page
+cannot change is the `Host` header, which names the attacker's hostname.
+
+So the local server answers only to the names it was bound for, before any route runs,
+including `/health`, `/mcp` and Studio. Anything else is a typed `403`
+(`LORE_E_INVALID_ARGUMENT`). `allowedHostsFor` in `packages/cli/src/services/serving.ts`
+derives one list, and the REST app and the MCP transport both enforce it:
+
+| Bind | Accepted `Host` names (any port) |
+|---|---|
+| `127.0.0.1`, `localhost`, `::1` (default) | `127.0.0.1`, `localhost`, `[::1]` |
+| an explicit address or name, e.g. `192.168.0.162` | the loopback names and that address |
+| `0.0.0.0` or `::` | the loopback names and every address of this machine's interfaces, read at startup |
+
+The port is not compared: a rebound page uses this server's own port, and an SSH tunnel or
+Studio's Vite dev proxy legitimately arrives on another. An IP literal is safe to accept,
+because rebinding needs a DNS name. A reverse proxy in front of Lorepack under another
+hostname must forward a loopback `Host` (for nginx, `proxy_set_header Host 127.0.0.1;`).
+A Worker deployment passes no list: it is reached by its own hostname and authenticates.
+
 ### Origin checking
 
-A page on any website can make a request to `127.0.0.1`, and DNS rebinding can make it look
-same-origin to the browser. Every unrecognised `Origin` is refused. A non-browser client
-(the SDK, an MCP host, curl) sends no `Origin` header and is unaffected. `/health` is exempt
-so a browser can probe liveness without learning anything.
+A page on any website can make a request to `127.0.0.1`. Every unrecognised `Origin` is
+refused. A non-browser client (the SDK, an MCP host, curl) sends no `Origin` header and is
+unaffected. `/health` is exempt so a browser can probe liveness without learning anything.
+This check stops cross-site requests; it is not the DNS rebinding defence, the `Host` check
+above is.
 
 ### Authorization
 

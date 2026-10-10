@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { serve } from '@hono/node-server';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
@@ -118,15 +119,16 @@ export async function startServing(
     let boundPort = options.port;
 
     const comparer = createLocalComparer(options.config.projectRoot);
-    const mcp = createMcpHttpHandler(runtime, comparer, {
-      host: options.host,
-      allowedHosts: ['127.0.0.1', 'localhost', '[::1]'],
-    });
+    // One list for REST and MCP, so the two surfaces cannot disagree about which names this
+    // server answers to (#547).
+    const allowedHosts = allowedHostsFor(options.host);
+    const mcp = createMcpHttpHandler(runtime, comparer, { host: options.host, allowedHosts });
     // Absent when the package was installed without built assets, which is a broken install
     // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.
     const serveStudio = options.studio === true && studioIsBuilt();
     const app = createApiApp({
       runtime,
+      allowedHosts,
       currentBuild: () => backend.provider.current(),
       freshness,
       mcpHandler: (request) => mcp.fetch(request),
@@ -301,6 +303,50 @@ export async function untilInterrupted(warn: (text: string) => void): Promise<vo
 
 export function isLoopback(host: string): boolean {
   return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
+
+const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost', '[::1]'] as const;
+
+/**
+ * The `Host` names a server bound to `bindHost` answers to, for the DNS rebinding check.
+ *
+ * The loopback names always, because a local client uses them whatever the bind. An explicit
+ * address or name is added as given, since the person typed it to be reached by it. A wildcard
+ * bind (`0.0.0.0`, `::`) names no address a client would use, so it admits this machine's
+ * interface addresses instead. That is safe because rebinding needs a DNS name: a page cannot
+ * make a browser send a bare IP address as `Host` unless it was loaded from that address.
+ *
+ * Computed once at startup, so an address gained later (a new DHCP lease) is not admitted
+ * until the server restarts.
+ */
+export function allowedHostsFor(
+  bindHost: string,
+  interfaces: ReturnType<typeof networkInterfaces> = networkInterfaces(),
+): string[] {
+  const hosts = new Set<string>(LOOPBACK_HOSTNAMES);
+  if (bindHost === '0.0.0.0' || bindHost === '::') {
+    for (const entries of Object.values(interfaces)) {
+      for (const entry of entries ?? []) hosts.add(asHostname(entry.address));
+    }
+  } else {
+    hosts.add(asHostname(bindHost));
+  }
+  return [...hosts];
+}
+
+/**
+ * As the URL parser reads a `Host` header: lowercased, an IPv6 literal compressed and in
+ * brackets, without a zone id. The REST check and the MCP SDK both compare against that form.
+ */
+function asHostname(address: string): string {
+  const bare = address.replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  try {
+    return new URL(`http://${bare.includes(':') ? `[${bare}]` : bare}`).hostname;
+  } catch {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `--host must be an address, got ${address}.`, {
+      remediation: 'Pass an IP address or host name, for example --host 127.0.0.1.',
+    });
+  }
 }
 
 /** Milliseconds, or 0 for every request. `off` belongs to `lorepack mcp`, which can pin. */

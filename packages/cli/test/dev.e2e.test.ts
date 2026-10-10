@@ -8,7 +8,8 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { platform, tmpdir } from 'node:os';
+import { request } from 'node:http';
+import { networkInterfaces, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -56,12 +57,14 @@ interface Started {
 }
 
 /** Runs `lorepack dev` until it has printed its connection block, or fails loudly. */
-async function dev(): Promise<Started> {
+async function dev(extra: readonly string[] = []): Promise<Started> {
   nextPort += 1;
   const port = nextPort;
-  const child = spawn(process.execPath, [BINARY, 'dev', project, '--port', String(port)], {
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    process.execPath,
+    [BINARY, 'dev', project, '--port', String(port), ...extra],
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  );
   running.push(child);
 
   let stdout = '';
@@ -393,6 +396,82 @@ describe('changing which build is live, from Studio', () => {
     });
     expect(allowed.status).toBe(200);
   }, 120_000);
+});
+
+/** One request over a loopback socket, with a `Host` header `fetch` would not let us set. */
+function sendWithHost(
+  port: number,
+  host: string,
+  path: string,
+  init: { method: string; headers: Record<string, string>; body: string },
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const outgoing = request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: init.method,
+        headers: { ...init.headers, Host: host },
+      },
+      (response) => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', (chunk: string) => {
+          body += chunk;
+        });
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, body }));
+      },
+    );
+    outgoing.on('error', reject);
+    outgoing.end(init.body);
+  });
+}
+
+/** An address of this machine that is not loopback, as a LAN client would name it. */
+const LAN_ADDRESS = Object.values(networkInterfaces())
+  .flat()
+  .find((entry) => entry !== undefined && entry.family === 'IPv4' && !entry.internal)?.address;
+
+describe('binding beyond loopback with --host 0.0.0.0', () => {
+  // Every CI runner has a non-loopback interface. A machine with none has no network to be
+  // exposed to, so there is nothing to assert.
+  it.runIf(LAN_ADDRESS !== undefined)(
+    'answers MCP and REST under the address a LAN client uses (#547)',
+    async () => {
+      const started = await dev(['--host', '0.0.0.0']);
+      const host = `${LAN_ADDRESS}:${started.port}`;
+
+      const mcp = await sendWithHost(started.port, host, '/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      });
+      expect(mcp.status, mcp.body).toBe(200);
+      expect(mcp.body).toContain('lore_search');
+
+      const rest = await sendWithHost(started.port, host, '/v1/build', {
+        method: 'GET',
+        headers: {},
+        body: '',
+      });
+      expect(rest.status, rest.body).toBe(200);
+
+      // And a name nobody bound to is still refused, on both surfaces.
+      for (const path of ['/mcp', '/v1/build']) {
+        const rebound = await sendWithHost(started.port, `attacker.example:${started.port}`, path, {
+          method: path === '/mcp' ? 'POST' : 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          body: path === '/mcp' ? '{}' : '',
+        });
+        expect(rebound.status, path).toBe(403);
+      }
+    },
+    120_000,
+  );
 });
 
 /**

@@ -115,6 +115,16 @@ of the boundary:
 | A file whose bytes are not readable text | Excluded at fingerprinting, with a warning |
 | A table past a column or row limit | Excluded with a warning; the build succeeds (#242) |
 
+## DNS rebinding
+
+The local server refuses any `Host` header that is not a loopback name or an address it was
+explicitly bound to, before any route runs, `/mcp` included (#547). That, not the `Origin`
+check, is the rebinding defence: a rebound page is same-origin, and a browser sends no
+`Origin` on a same-origin `GET`. `tools/security/test/local-server.test.ts` drives the real
+`lorepack dev` binary with `Host: attacker.example` against `/v1/sources/:id`,
+`/v1/diagnostics`, `/v1/builds`, `/health` and `/mcp`; `packages/runtime/test/http.test.ts`
+and `packages/cli/test/serving.test.ts` pin the check and the list.
+
 ## The write surface
 
 There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`, refusing every browser

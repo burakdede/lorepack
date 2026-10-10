@@ -61,6 +61,21 @@ export interface ApiOptions {
    */
   readonly allowedOrigins?: readonly string[];
   /**
+   * The hostnames this server answers to, checked against `Host` before any route runs.
+   *
+   * This, not the `Origin` check, is the DNS rebinding defence (#547). After a rebind the
+   * attacker's page is same-origin with this server, and a browser sends no `Origin` on a
+   * same-origin `GET`, so every read would pass an origin check. The `Host` header is what the
+   * attacker cannot change: it names the hostname in the URL the page fetched, which is theirs.
+   *
+   * Hostnames only, compared case-insensitively, with IPv6 literals in brackets (`[::1]`). The
+   * port is not compared: a rebinding attack uses this server's own port, and an SSH tunnel or
+   * a dev proxy legitimately reaches it through another. The local CLI derives one list from
+   * the bind address and hands the same list to the MCP transport. Absent, nothing is
+   * checked, which is a Worker: it is reached by its own hostname and authenticates instead.
+   */
+  readonly allowedHosts?: readonly string[];
+  /**
    * Also accept a browser page served from a loopback address.
    *
    * Set when Studio is mounted, because Studio is served by this same app and its own
@@ -68,11 +83,9 @@ export interface ApiOptions {
    * from. The port is not known when this app is constructed (it is chosen by trying), so
    * the rule is expressed as a property of the origin rather than as a literal.
    *
-   * This does not weaken the DNS rebinding defence, which is the reason the check exists.
-   * Rebinding works by making a hostname the attacker controls resolve to `127.0.0.1`, and
-   * the browser puts that **hostname** in `Origin`, not the resolved address. So an attacker
-   * page is `https://evil.example` and is still refused; only a page genuinely served from a
-   * loopback literal produces a loopback origin.
+   * A rebound page is not admitted by this: the browser puts the attacker's **hostname** in
+   * `Origin`, not the resolved address. But a rebound page's same-origin `GET` carries no
+   * `Origin` at all, so this rule is not the rebinding defence. `allowedHosts` is.
    */
   readonly allowLoopbackOrigin?: boolean;
   /**
@@ -206,13 +219,34 @@ export function createApiApp(options: ApiOptions): Hono {
   const maxBytes = options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES;
 
   /**
-   * Origin checking, which is the defence a loopback server actually needs.
+   * Host checking, first, so a rebound request reaches nothing: not `/health`, not `/mcp`,
+   * not a Studio asset. See `ApiOptions.allowedHosts` for why this and not `Origin`.
+   */
+  if (options.allowedHosts !== undefined) {
+    const hosts = new Set(options.allowedHosts.map((host) => host.toLowerCase()));
+    app.use('*', async (context, next) => {
+      const host = context.req.header('Host');
+      if (host !== undefined && hosts.has(hostnameOf(host) ?? '')) return next();
+      return failure(
+        context,
+        new LoreError('LORE_E_INVALID_ARGUMENT', 'This server does not answer to that host name.', {
+          remediation:
+            'Use the address `lorepack dev` or `lorepack serve` printed. A reverse proxy in front of Lorepack must forward the original loopback Host header.',
+          ...(host === undefined ? {} : { subject: host }),
+        }),
+        403,
+      );
+    });
+  }
+
+  /**
+   * Origin checking, which stops a page on another site from calling this API.
    *
-   * A page on any website can make a request to `127.0.0.1`, and DNS rebinding can make
-   * that request look same-origin to the browser. A non-browser client (the SDK, an MCP
-   * host, curl) sends no `Origin` header at all, so refusing every unrecognised origin
-   * costs those nothing and closes the hole. `/health` is exempt so a browser can probe
-   * liveness without learning anything: it returns no content.
+   * A page on any website can make a request to `127.0.0.1`. A non-browser client (the SDK,
+   * an MCP host, curl) sends no `Origin` header at all, so refusing every unrecognised origin
+   * costs those nothing. It does not stop DNS rebinding: a rebound page is same-origin, and a
+   * same-origin `GET` carries no `Origin`. The `Host` check above is what does. `/health` is
+   * exempt so a browser can probe liveness without learning anything: it returns no content.
    */
   app.use('*', async (context, next) => {
     const origin = context.req.header('Origin');
@@ -492,6 +526,24 @@ function isLoopbackOrigin(origin: string): boolean {
     );
   } catch {
     return false;
+  }
+}
+
+/**
+ * The hostname a `Host` header names, lowercased, with an IPv6 literal kept in brackets.
+ *
+ * Parsed by the URL parser rather than split on a colon, so `[::1]:4321` keeps its brackets
+ * and case and trailing ports are normalised the way a client resolved them. Anything that is
+ * not a bare `host[:port]`, such as `127.0.0.1@evil.example`, is `undefined` and so refused.
+ */
+function hostnameOf(host: string): string | undefined {
+  if (host === '' || /[/?#\\\s]/.test(host)) return undefined;
+  try {
+    const url = new URL(`http://${host}`);
+    if (url.username !== '' || url.password !== '') return undefined;
+    return url.hostname;
+  } catch {
+    return undefined;
   }
 }
 

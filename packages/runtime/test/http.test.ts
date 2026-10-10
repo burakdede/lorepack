@@ -390,6 +390,91 @@ describe('safety, architecture 19.4 and 20.9', () => {
   });
 });
 
+/**
+ * DNS rebinding, which an `Origin` check cannot see (#547).
+ *
+ * After a rebind the attacker's page is same-origin with this server, and a browser sends no
+ * `Origin` on a same-origin `GET`. What it cannot change is the `Host` header: that names the
+ * attacker's hostname, because that is the URL the page fetched.
+ */
+describe('the Host header, which DNS rebinding cannot forge', () => {
+  const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
+
+  it.each([
+    ['GET', '/v1/sources/p%3Aguides%2Fa.md'],
+    ['GET', '/v1/build'],
+    ['GET', '/v1/tables'],
+    ['GET', '/health'],
+    ['POST', '/mcp'],
+    ['GET', '/'],
+  ] as const)('refuses a foreign Host before any handler runs: %s %s', async (method, path) => {
+    const reached: string[] = [];
+    const app = appFor({
+      allowedHosts: LOOPBACK,
+      mcpHandler: () => {
+        reached.push('mcp');
+        return new Response('{}');
+      },
+      assets: () => {
+        reached.push('assets');
+        return new Response('<html></html>');
+      },
+    });
+
+    const response = await app.request(path, {
+      method,
+      headers: { Host: 'attacker.example:4321' },
+    });
+    const body = (await response.json()) as { error: { code: string; subject?: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+    expect(body.error.subject).toBe('attacker.example:4321');
+    expect(JSON.stringify(body)).not.toContain('the only node');
+    expect(reached).toEqual([]);
+  });
+
+  it('answers the loopback names on any port, which is every local client', async () => {
+    const app = appFor({ allowedHosts: LOOPBACK });
+    for (const host of ['127.0.0.1:4321', 'localhost:43110', '[::1]:4321', 'LOCALHOST:4321']) {
+      const response = await app.request('/v1/build', { headers: { Host: host } });
+      expect(response.status, host).toBe(200);
+    }
+  });
+
+  it('refuses names that merely start or end like a loopback name', async () => {
+    const app = appFor({ allowedHosts: LOOPBACK });
+    for (const host of [
+      'localhost.attacker.example',
+      '127.0.0.1.nip.io:4321',
+      'attacker.example@127.0.0.1',
+      '127.0.0.1@attacker.example',
+      '',
+    ]) {
+      const response = await app.request('/v1/build', { headers: { Host: host } });
+      expect(response.status, host).toBe(403);
+    }
+  });
+
+  it('refuses a request with no Host at all, which no real client sends', async () => {
+    const response = await appFor({ allowedHosts: LOOPBACK }).request('/v1/build');
+    expect(response.status).toBe(403);
+  });
+
+  it('answers an explicit non-loopback bind address the host added', async () => {
+    const app = appFor({ allowedHosts: [...LOOPBACK, '192.168.0.162'] });
+    const response = await app.request('/v1/build', { headers: { Host: '192.168.0.162:4321' } });
+    expect(response.status).toBe(200);
+  });
+
+  it('checks nothing when no list is given, which is a Worker behind its own hostname', async () => {
+    const response = await appFor().request('/v1/build', {
+      headers: { Host: 'lorepack.example.workers.dev' },
+    });
+    expect(response.status).toBe(200);
+  });
+});
+
 describe('diagnostics, which read the machine rather than the build', () => {
   it('is absent unless a host supplies it, because a deployment answers differently', async () => {
     expect((await appFor().request('/v1/diagnostics')).status).toBe(404);

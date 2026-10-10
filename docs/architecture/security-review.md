@@ -18,6 +18,7 @@ security-affecting change before release.
 | Repeated or excessive query terms cannot multiply FTS5 work, locally or on D1 | `packages/core/test/fts-query.test.ts`, `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
 | Localhost Origin validation | `packages/runtime/test/http.test.ts` | Covered |
+| DNS rebinding: Host allowlist on REST and MCP | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |

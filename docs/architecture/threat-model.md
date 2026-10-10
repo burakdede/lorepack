@@ -26,6 +26,7 @@ changes, and which threats are intentionally not solved.
 | Parser input | Parser process and limits | PDF, DOCX, XLSX, CSV, HTML, Markdown and text bytes | Treat bytes as data, never execute, fetch or expand external entities |
 | Build sealing | Candidate build directory | Parsed content, tables, config and warnings | Validate before recording or activation |
 | Runtime REST and MCP | Immutable build projection | Client requests and model tool calls | Read only, bounded inputs, locators everywhere |
+| Local HTTP server | `lorepack dev` and `lorepack serve` on loopback | Web pages in the user's browser, including DNS-rebound ones | Answer only to the `Host` names derived from the bind address, on every route |
 | Local write surface | `lorepack dev` host process | Browser origins | Register writes only when supplied by host, and only loopback origins may call them |
 | Remote Worker runtime | Active projected build and D1/R2 bindings | Internet clients | Authenticate before reading build data |
 | Deployment control plane | Local CLI and Wrangler credentials | Remote platform state | Deployment writes are CLI-only, never model-facing |
@@ -41,6 +42,7 @@ changes, and which threats are intentionally not solved.
 | SQL injection reaches catalog or filesystem | One `SELECT` statement, one table authorizer, no filesystem functions, worker deadline | `packages/cli/test/security.e2e.test.ts` |
 | A repeated or very long query multiplies FTS5 work and stalls the server or the shared D1 database | `escapeFtsQuery` in core, shared by the local and D1 catalogs, folds repeated terms into one phrase and refuses more than 64 distinct terms with a typed 400 | `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts`, `pnpm test:security` |
 | Oversized request or response exhausts memory | Request size caps and export/context budgets bound runtime payloads | `packages/runtime/test/http.test.ts`, export tests |
+| DNS rebinding lets a web page read sources, tables or diagnostics from the local server | Every route, REST and `/mcp`, refuses a `Host` outside the allowlist derived from the bind address; `Origin` checks do not cover this, because a rebound page's same-origin `GET` carries no `Origin` | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` |
 | Cross-origin browser writes activate or rollback a build | Local action routes are absent unless supplied and reject non-loopback origins | `packages/runtime/test/http.test.ts` |
 | Remote auth bypass exposes a deployed build | Worker authorization runs before route handling and accepts only valid Lore runtime tokens or configured Access JWTs | `packages/deploy-cloudflare/test/*auth*.test.ts` |
 | Secrets appear in manifests, logs or protocol errors | Manifest validation and shared redaction renderers remove secret values and token shapes | `packages/compiler/test/validate.test.ts`, runtime and Worker tests |
