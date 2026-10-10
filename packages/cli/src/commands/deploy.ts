@@ -50,6 +50,10 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
       { flags: '--yes', description: 'apply without asking' },
       { flags: '--resume <receipt-id>', description: 'continue an interrupted deploy' },
       {
+        flags: '--skip-smoke',
+        description: 'accept an activation the endpoint cannot confirm',
+      },
+      {
         flags: '--allow-capability-loss <capability>',
         description: 'accept one named capability the target cannot serve',
       },
@@ -120,6 +124,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
         plan: deployPlan,
         progress: context.progress,
         dryRun: flags.dryRun === true,
+        skipSmoke: flags.skipSmoke === true,
         ...(afterProject === undefined ? {} : { afterProject }),
         ...(resume === undefined ? {} : { resume }),
         ...(accepted.length === 0 ? {} : { allowCapabilityLoss: accepted }),

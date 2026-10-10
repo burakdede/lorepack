@@ -76,6 +76,7 @@ function createSetupAdapter(
     readonly workers?: readonly string[];
     readonly failCatalogCreate?: string;
     readonly failBucketCreate?: string;
+    readonly subdomain?: string | null;
   } = {},
 ) {
   const state = {
@@ -84,8 +85,13 @@ function createSetupAdapter(
     workers: new Set(options.workers ?? []),
     createdCatalogs: [] as string[],
     createdBuckets: [] as string[],
+    subdomainLookups: [] as string[],
   };
   const adapter = {
+    workersSubdomain: async (accountId: string) => {
+      state.subdomainLookups.push(accountId);
+      return options.subdomain === undefined ? null : options.subdomain;
+    },
     detect: async () => ({
       installed: true,
       version: '4.119.0',
@@ -229,6 +235,177 @@ describe('lorepack target add cloudflare, issue 85', () => {
         const raw = readFileSync(path, 'utf8');
         expect(raw).not.toContain('token');
         expect(raw).not.toContain('dev@example.com');
+      },
+    );
+  });
+
+  /**
+   * The Workers URL includes the account subdomain (#580). Built without it, the endpoint did
+   * not resolve and every post-deploy smoke check silently returned nothing.
+   */
+  it('records the full Workers endpoint from the account subdomain', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter, state } = createSetupAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+          subdomain: 'acme',
+        });
+        const result = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [targetCommand({ adapter })] },
+        );
+
+        expect(result.code).toBe(0);
+        expect(state.subdomainLookups).toEqual(['acct_123']);
+        const receipt = JSON.parse(
+          readFileSync(`${temp.root}/.lore/targets/cloudflare.json`, 'utf8'),
+        ) as Record<string, unknown>;
+        expect(receipt.endpoint).toBe('https://demo-runtime.acme.workers.dev');
+      },
+    );
+  });
+
+  it('records an explicit --endpoint without looking the subdomain up', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter, state } = createSetupAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+          subdomain: 'acme',
+        });
+        const result = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+            '--endpoint',
+            'https://lore.example.com/',
+          ],
+          { commands: [targetCommand({ adapter })] },
+        );
+
+        expect(result.code).toBe(0);
+        expect(state.subdomainLookups).toEqual([]);
+        const receipt = JSON.parse(
+          readFileSync(`${temp.root}/.lore/targets/cloudflare.json`, 'utf8'),
+        ) as Record<string, unknown>;
+        expect(receipt.endpoint).toBe('https://lore.example.com');
+      },
+    );
+  });
+
+  it('refuses an --endpoint that is not a bare https origin', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        for (const endpoint of [
+          'http://lore.example.com',
+          'https://user:pass@lore.example.com',
+          'https://lore.example.com/mcp',
+          'not a url',
+        ]) {
+          const result = await run(
+            [
+              '--cwd',
+              temp.root,
+              'target',
+              'add',
+              'cloudflare',
+              '--dry-run',
+              '--endpoint',
+              endpoint,
+            ],
+            { commands: [targetCommand({ adapter: createSetupAdapter().adapter })] },
+          );
+          expect(result.code, endpoint).toBe(1);
+          expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+        }
+      },
+    );
+  });
+
+  it('adds an endpoint to an existing receipt when rerun with --endpoint', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const { adapter } = createSetupAdapter({
+          catalogs: ['demo-catalog'],
+          buckets: ['demo-objects'],
+          workers: ['demo-runtime'],
+        });
+        const command = targetCommand({ adapter });
+        const first = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--account-id',
+            'acct_123',
+            '--worker',
+            'demo-runtime',
+            '--catalog-db',
+            'demo-catalog',
+            '--objects-bucket',
+            'demo-objects',
+          ],
+          { commands: [command] },
+        );
+        expect(first.code).toBe(0);
+        const path = `${temp.root}/.lore/targets/cloudflare.json`;
+        expect((JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>).endpoint).toBe(
+          undefined,
+        );
+
+        const second = await run(
+          [
+            '--cwd',
+            temp.root,
+            'target',
+            'add',
+            'cloudflare',
+            '--yes',
+            '--endpoint',
+            'https://demo-runtime.acme.workers.dev',
+          ],
+          { commands: [command] },
+        );
+
+        expect(second.code).toBe(0);
+        expect((JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>).endpoint).toBe(
+          'https://demo-runtime.acme.workers.dev',
+        );
       },
     );
   });

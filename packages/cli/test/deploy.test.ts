@@ -43,6 +43,7 @@ interface FakeOptions {
   readonly planTransfer?: DeployTransfer;
   readonly appliedTransfer?: DeployTransfer;
   readonly applyProgress?: readonly DeployApplyProgress[];
+  readonly endpoint?: string | null;
 }
 
 const PLAN_TRANSFER: DeployTransfer = {
@@ -110,7 +111,7 @@ function fakeTarget(options: FakeOptions = {}): {
         input,
         capabilityLoss: input.buildCapabilities.filter((one) => !supported.includes(one)),
         steps: ['write rows', 'upload objects'],
-        endpoint: 'https://fake.example/mcp',
+        endpoint: options.endpoint === undefined ? 'https://fake.example/mcp' : options.endpoint,
         ...(options.planTransfer === undefined ? {} : { transfer: options.planTransfer }),
       };
     },
@@ -472,16 +473,50 @@ describe('the smoke check', () => {
     });
   });
 
-  it('accepts a target that cannot confirm, and records that it could not', async () => {
+  /**
+   * An unconfirmed smoke check is a failure, not a pass (#580).
+   *
+   * The first version treated null as "cannot confirm" and carried on, so a Workers endpoint
+   * built without the account subdomain never resolved, every check returned null, and the
+   * protection above never fired once.
+   */
+  it('fails when the target cannot confirm what the endpoint serves', async () => {
     await deploying(async (root) => {
       const fake = fakeTarget({ confirms: null });
 
-      const result = await runDeploy(base(root, fake.target));
+      const failure = await runDeploy(base(root, fake.target)).catch((error: unknown) => error);
 
-      // Not treated as a failure: a target that cannot query itself is a limitation, not a
-      // broken deploy. It is also not treated as a confirmation.
+      const error = failure as LoreError;
+      expect(error.code).toBe('LORE_E_REMOTE_DEPLOY');
+      expect(error.message).toContain('could not confirm');
+      expect(error.remediation).toContain('--skip-smoke');
+      const recorded = readReceipt(root, 'fake-aaaaaaaaaaaa');
+      expect(recorded.state).toBe('failed');
+      expect(recorded.completedSteps).not.toContain('smoke');
+    });
+  });
+
+  it('accepts an unconfirmed deploy only when the smoke check is skipped by name', async () => {
+    await deploying(async (root) => {
+      const fake = fakeTarget({ confirms: null });
+
+      const result = await runDeploy(base(root, fake.target, { skipSmoke: true }));
+
       expect(result.receipt.state).toBe('active');
       expect(result.activation?.confirmedBuildId).toBeNull();
+      // Skipped is recorded as skipped: the receipt does not claim a smoke check ran.
+      expect(result.receipt.completedSteps).toEqual(['plan', 'project', 'verify', 'activate']);
+    });
+  });
+
+  it('refuses before touching anything remote when the plan has no endpoint to confirm', async () => {
+    await deploying(async (root) => {
+      const fake = fakeTarget({ endpoint: null });
+
+      const failure = await runDeploy(base(root, fake.target)).catch((error: unknown) => error);
+
+      expect((failure as LoreError).code).toBe('LORE_E_TARGET_NOT_CONFIGURED');
+      expect(fake.calls).toEqual(['detect', 'plan']);
     });
   });
 });

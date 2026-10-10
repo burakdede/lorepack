@@ -222,7 +222,7 @@ async function previousRemoteBuildId(
   }
 
   const receipt = readCloudflareTargetReceipt(projectRoot);
-  const adapter = cloudflareAdapter ?? createWranglerDeployAdapter();
+  const adapter = cloudflareAdapter ?? createWranglerDeployAdapter(projectRoot);
   const db = adapter.openCatalogDatabase(receipt.catalogDatabaseName);
   const hasProjectedBuilds = await db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
@@ -273,6 +273,8 @@ async function resolveRemoteTarget(
     });
   }
   return cloudflareAdapter === undefined
-    ? await resolveCloudflareTarget(projectRoot)
-    : await resolveCloudflareTargetWithAdapter(projectRoot, cloudflareAdapter);
+    ? await resolveCloudflareTarget(projectRoot, { requireEndpoint: false })
+    : await resolveCloudflareTargetWithAdapter(projectRoot, cloudflareAdapter, {
+        requireEndpoint: false,
+      });
 }

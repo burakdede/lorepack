@@ -45,7 +45,12 @@ status -> plan -> build if dirty -> project candidate -> verify -> activate -> s
 The **smoke check** is the difference between "the write returned" and "it is serving". A target
 confirms by querying its own public endpoint and comparing the build id, so a pointer that was
 written and not picked up is caught here rather than by a user. A target that cannot confirm
-returns null, which is recorded rather than treated as success.
+returns null, and **that fails the deploy** unless `--skip-smoke` was passed. The first version
+treated null as "cannot confirm" and carried on, so a Cloudflare endpoint built without the
+account subdomain never resolved and the check never fired once (#580). A plan with no endpoint
+at all is refused before anything remote is written, because finding out after activation is
+finding out too late. With `--skip-smoke` the receipt records the deploy as active and leaves
+`smoke` out of `completedSteps`, so it never claims a check that did not run.
 
 ## Capability loss
 
@@ -90,6 +95,23 @@ The remote side does not rely on the receipt. Cloudflare activation reads
 receipt edited by hand and a second client sharing the catalog. Rollback is exempt: it returns
 to a build that already served, and builds projected before the `verified_at` column existed
 carry NULL there.
+
+## Cloudflare endpoint and Wrangler
+
+The Worker's public origin is `https://<worker>.<account-subdomain>.workers.dev`. The subdomain
+is an account setting, so `lorepack target add cloudflare` records the origin in
+`.lore/targets/cloudflare.json`: from `--endpoint` when given (an https origin, no path), or from
+the Cloudflare API (`GET /accounts/:id/workers/subdomain`) when `CLOUDFLARE_API_TOKEN` is set. A
+deploy uses the recorded origin, falls back to the same lookup for receipts written before #580,
+and refuses when neither is available. Rollback proceeds without one, because it only moves the
+pointer and is the way out of an incident.
+
+Wrangler is never a dependency of the published CLI (it pulls native tooling, and invariant 7
+rules that out). The user installs it in the project or next to lorepack, and the CLI resolves
+the package named `wrangler` through Node's own algorithm, from the project first and then from
+its own install. It runs Wrangler in an empty temporary directory so a `wrangler.toml` that
+belongs to some other Worker in the project cannot redirect a command. In this repository the
+CLI declares `wrangler` as a devDependency, which is what lets the bundled entry point find it.
 
 ## Cloudflare R2 key layout
 

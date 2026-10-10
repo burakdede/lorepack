@@ -18,22 +18,19 @@ import {
   createWranglerAdapter,
   isRetryableWranglerRemoteD1Failure,
   readCloudflareTargetReceipt,
+  UNKNOWN_ENDPOINT_REMEDIATION,
 } from '../commands/target.js';
+import { workersDevEndpoint } from './workers-endpoint.js';
+import {
+  locateWrangler,
+  requireWranglerBin,
+  WRANGLER_MISSING_REMEDIATION,
+  wranglerSearchDirectories,
+  wranglerWorkingDirectory,
+} from './wrangler.js';
 
 const execFileAsync = promisify(execFile);
 const WRANGLER_REMOTE_D1_RETRY_LIMIT = 3;
-const WRANGLER_BIN = join(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  'deploy-cloudflare',
-  'node_modules',
-  'wrangler',
-  'bin',
-  'wrangler.js',
-);
-const WRANGLER_CWD = join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare');
 
 interface CloudflareDatabaseInfo {
   readonly name: string;
@@ -41,7 +38,6 @@ interface CloudflareDatabaseInfo {
 
 export interface ResolvedCloudflareTargetResources {
   readonly receipt: ReturnType<typeof readCloudflareTargetReceipt>;
-  readonly endpoint: string;
   readonly catalogDb: ProjectionMigrationDatabaseLike &
     D1CatalogDatabaseLike &
     D1QueryDatabaseLike &
@@ -72,18 +68,37 @@ interface WranglerExecResult {
 
 const WRANGLER_D1_TRANSACTION_CONTROL = new Set(['begin immediate', 'commit', 'rollback']);
 
-export async function resolveCloudflareTarget(projectRoot: string): Promise<DeploymentTarget> {
-  return await resolveCloudflareTargetWithAdapter(projectRoot, createWranglerDeployAdapter());
+export async function resolveCloudflareTarget(
+  projectRoot: string,
+  options: { readonly requireEndpoint?: boolean } = {},
+): Promise<DeploymentTarget> {
+  return await resolveCloudflareTargetWithAdapter(
+    projectRoot,
+    createWranglerDeployAdapter(projectRoot),
+    options,
+  );
 }
 
 export async function resolveCloudflareTargetWithAdapter(
   projectRoot: string,
   adapter: CloudflareResolverAdapter,
+  options: { readonly requireEndpoint?: boolean } = {},
 ): Promise<DeploymentTarget> {
   const resolved = await resolveCloudflareResourcesWithAdapter(projectRoot, adapter);
+  const origin = await resolveEndpointOrigin(resolved.receipt, adapter);
+  // A deploy without an endpoint could never confirm what it activated, so it stops here,
+  // before anything remote is written. A rollback is the way out of an incident and only moves
+  // the pointer, so it proceeds and reports the endpoint as unknown.
+  if (origin === null && options.requireEndpoint !== false) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The public endpoint of Worker ${resolved.receipt.workerName} is not known.`,
+      { remediation: UNKNOWN_ENDPOINT_REMEDIATION, subject: resolved.receipt.workerName },
+    );
+  }
   return createCloudflareDeploymentTarget({
     projectId: resolved.receipt.project,
-    endpoint: resolved.endpoint,
+    endpoint: origin === null ? null : `${origin}/mcp`,
     workerName: resolved.receipt.workerName,
     catalogDatabaseName: resolved.receipt.catalogDatabaseName,
     ...(resolved.receipt.tablesDatabaseName === undefined
@@ -93,8 +108,18 @@ export async function resolveCloudflareTargetWithAdapter(
     catalogDb: resolved.catalogDb,
     tablesDb: resolved.tablesDb,
     objects: resolved.objects,
-    publicBuildId: async () => await readPublicBuildId(resolved.receipt.workerName),
+    publicBuildId: async () => (origin === null ? null : await readPublicBuildId(origin)),
   });
+}
+
+/** The recorded origin, else one built from the account subdomain, else null. */
+async function resolveEndpointOrigin(
+  receipt: ReturnType<typeof readCloudflareTargetReceipt>,
+  adapter: CloudflareResolverAdapter,
+): Promise<string | null> {
+  if (receipt.endpoint !== undefined) return receipt.endpoint;
+  const subdomain = (await adapter.workersSubdomain?.(receipt.accountId)) ?? null;
+  return subdomain === null ? null : workersDevEndpoint(receipt.workerName, subdomain);
 }
 
 export async function resolveCloudflareResourcesWithAdapter(
@@ -106,9 +131,9 @@ export async function resolveCloudflareResourcesWithAdapter(
   if (!detection.installed) {
     throw new LoreError(
       'LORE_E_TARGET_NOT_CONFIGURED',
-      'The pinned Cloudflare Wrangler dependency is not available for deploy resolution.',
+      'Wrangler was not found for this project.',
       {
-        remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+        remediation: WRANGLER_MISSING_REMEDIATION,
         subject: 'cloudflare',
       },
     );
@@ -120,7 +145,7 @@ export async function resolveCloudflareResourcesWithAdapter(
       'LORE_E_TARGET_NOT_CONFIGURED',
       'Wrangler is installed, but no Cloudflare login is available for this machine.',
       {
-        remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+        remediation: `Log in first with \`${process.execPath} ${detection.path ?? '<wrangler>'} login --device\`.`,
         subject: 'cloudflare',
       },
     );
@@ -187,18 +212,19 @@ export async function resolveCloudflareResourcesWithAdapter(
 
   return {
     receipt,
-    endpoint: `https://${receipt.workerName}.workers.dev/mcp`,
     catalogDb: adapter.openCatalogDatabase(receipt.catalogDatabaseName),
     tablesDb: adapter.openTablesDatabase(receipt.tablesDatabaseName),
     objects: adapter.openObjectsBucket(receipt.objectsBucketName),
   };
 }
 
-export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
+export function createWranglerDeployAdapter(projectRoot: string): CloudflareResolverAdapter {
+  const location = locateWrangler(wranglerSearchDirectories(projectRoot));
+  const bin = (): string => requireWranglerBin(location);
   return {
-    ...createWranglerAdapter(),
+    ...createWranglerAdapter(projectRoot),
     async listDatabases(): Promise<readonly CloudflareDatabaseInfo[]> {
-      const { stdout } = await execWrangler(['d1', 'list', '--json']);
+      const { stdout } = await execWrangler(bin(), ['d1', 'list', '--json']);
       const parsed = parseWranglerJson(stdout);
       if (!Array.isArray(parsed) || !parsed.every(isDatabaseInfo)) {
         throw new LoreError(
@@ -214,13 +240,13 @@ export function createWranglerDeployAdapter(): CloudflareResolverAdapter {
       return parsed;
     },
     openCatalogDatabase(name) {
-      return new WranglerCatalogDatabase(name);
+      return new WranglerCatalogDatabase(bin(), name);
     },
     openTablesDatabase(name) {
-      return new WranglerCatalogDatabase(name);
+      return new WranglerCatalogDatabase(bin(), name);
     },
     openObjectsBucket(name) {
-      return new WranglerR2Bucket(name);
+      return new WranglerR2Bucket(bin(), name);
     },
   };
 }
@@ -232,25 +258,34 @@ class WranglerCatalogDatabase
     D1QueryDatabaseLike,
     D1DatabaseLike
 {
+  readonly #bin: string;
   readonly #name: string;
   readonly #transaction = new WranglerD1TransactionBatch();
 
-  constructor(name: string) {
+  constructor(bin: string, name: string) {
+    this.#bin = bin;
     this.#name = name;
   }
 
   prepare(query: string): WranglerStatement {
-    return new WranglerStatement(this.#name, this.#transaction, query);
+    return new WranglerStatement(this.#bin, this.#name, this.#transaction, query);
   }
 }
 
 class WranglerStatement implements ProjectionMigrationStatementLike {
+  readonly #bin: string;
   readonly #databaseName: string;
   readonly #transaction: WranglerD1TransactionBatch;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
 
-  constructor(databaseName: string, transaction: WranglerD1TransactionBatch, query: string) {
+  constructor(
+    bin: string,
+    databaseName: string,
+    transaction: WranglerD1TransactionBatch,
+    query: string,
+  ) {
+    this.#bin = bin;
     this.#databaseName = databaseName;
     this.#transaction = transaction;
     this.#query = query;
@@ -274,7 +309,7 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
     if (control === 'commit') {
       const flushed = this.#transaction.commit();
       if (flushed === null) return {};
-      const { stdout } = await execWranglerSqlFile(this.#databaseName, flushed);
+      const { stdout } = await execWranglerSqlFile(this.#bin, this.#databaseName, flushed);
       return { results: readD1Results<T>(parseWranglerJson(stdout)) };
     }
 
@@ -287,13 +322,13 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
     if (mode === 'command' && this.#transaction.active) {
       const flushed = this.#transaction.flush();
       if (flushed !== null) {
-        await execWranglerSqlFile(this.#databaseName, flushed);
+        await execWranglerSqlFile(this.#bin, this.#databaseName, flushed);
       }
     }
     const { stdout } =
       mode === 'file'
-        ? await execWranglerSqlFile(this.#databaseName, rendered)
-        : await execWrangler([
+        ? await execWranglerSqlFile(this.#bin, this.#databaseName, rendered)
+        : await execWrangler(this.#bin, [
             'd1',
             'execute',
             this.#databaseName,
@@ -376,9 +411,11 @@ function isWranglerD1ReadQuery(query: string): boolean {
 }
 
 class WranglerR2Bucket implements R2BucketLike {
+  readonly #bin: string;
   readonly #name: string;
 
-  constructor(name: string) {
+  constructor(bin: string, name: string) {
+    this.#bin = bin;
     this.#name = name;
   }
 
@@ -386,7 +423,7 @@ class WranglerR2Bucket implements R2BucketLike {
     const temp = tempPath('lore-r2-put-');
     try {
       writeFileSync(temp, value);
-      await execWrangler([
+      await execWrangler(this.#bin, [
         'r2',
         'object',
         'put',
@@ -404,6 +441,7 @@ class WranglerR2Bucket implements R2BucketLike {
     const temp = tempPath('lore-r2-get-');
     try {
       const result = await execWrangler(
+        this.#bin,
         ['r2', 'object', 'get', `${this.#name}/${key}`, '--remote', '--file', temp],
         true,
       );
@@ -424,7 +462,7 @@ class WranglerR2Bucket implements R2BucketLike {
   }
 
   async delete(key: string): Promise<void> {
-    await execWrangler(['r2', 'object', 'delete', `${this.#name}/${key}`, '--remote']);
+    await execWrangler(this.#bin, ['r2', 'object', 'delete', `${this.#name}/${key}`, '--remote']);
   }
 }
 
@@ -558,6 +596,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function execWrangler(
+  bin: string,
   args: readonly string[],
   allowMissingObject = false,
 ): Promise<WranglerExecResult> {
@@ -568,8 +607,8 @@ async function execWrangler(
   let lastFailure: Error | null = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
-        cwd: WRANGLER_CWD,
+      const { stdout } = await execFileAsync(process.execPath, [bin, ...args], {
+        cwd: wranglerWorkingDirectory(),
         env: { ...process.env, NO_D1_WARNING: 'true' },
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
@@ -591,13 +630,14 @@ async function execWrangler(
 }
 
 async function execWranglerSqlFile(
+  bin: string,
   databaseName: string,
   sql: string,
 ): Promise<{ readonly stdout: string }> {
   const path = tempPath('lore-d1-execute-', 'statement.sql');
   try {
     writeFileSync(path, sql, 'utf8');
-    return await execWrangler([
+    return await execWrangler(bin, [
       'd1',
       'execute',
       databaseName,
@@ -639,14 +679,14 @@ function readableFileExists(path: string): boolean {
   }
 }
 
-async function readPublicBuildId(workerName: string): Promise<BuildId | null> {
+async function readPublicBuildId(origin: string): Promise<BuildId | null> {
   try {
     const token = process.env.LORE_REMOTE_BEARER_TOKEN;
     const headers =
       token === undefined || token.trim() === ''
         ? null
         : { Authorization: `Bearer ${token.trim()}` };
-    const response = await fetch(`https://${workerName}.workers.dev/v1/build`, {
+    const response = await fetch(`${origin}/v1/build`, {
       ...(headers === null ? {} : { headers }),
     });
     if (!response.ok) return null;

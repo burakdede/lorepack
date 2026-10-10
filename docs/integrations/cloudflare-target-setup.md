@@ -25,6 +25,33 @@ queries without it. Why it exists is in
 Its `namespace_id` is shared by every Worker on the account that uses the same value; keys are
 per credential, so two Lorepack Workers sharing it only share a counter for the same token.
 
+## Wrangler and the endpoint
+
+Lorepack drives Cloudflare through Wrangler, which you install yourself. It is not bundled with
+lorepack because it carries native tooling:
+
+```text
+npm install --save-dev wrangler      # in the project, or
+npm install --global wrangler        # next to a global lorepack
+```
+
+The CLI finds the package named `wrangler` from the project first, then from its own install.
+
+A Worker's URL includes your account's `workers.dev` subdomain:
+`https://<worker>.<subdomain>.workers.dev`. `lorepack target add cloudflare` records it in the
+target receipt. With `CLOUDFLARE_API_TOKEN` set it looks the subdomain up through the Cloudflare
+API (the `Workers Scripts Edit` permission below covers it). Otherwise, or for a custom domain,
+pass it explicitly:
+
+```text
+lorepack target add cloudflare --endpoint https://<worker>.<subdomain>.workers.dev
+```
+
+Rerunning with `--endpoint` adds it to an existing receipt. `lorepack deploy cloudflare` refuses
+to start without an endpoint, and fails after activation if the endpoint cannot confirm it is
+serving the new build (usually a missing `LORE_REMOTE_BEARER_TOKEN`). Pass `--skip-smoke` only
+for a setup that can never confirm, such as an endpoint behind a gate the CLI cannot pass.
+
 ## Least-privilege token shape
 
 The smallest current account-scoped token for the checked-in Phase 6 setup and deploy path is:

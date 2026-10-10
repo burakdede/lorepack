@@ -320,6 +320,7 @@ lorepack deploy [target]
 | `--no-build` | refuse when sources are dirty or unbuilt |
 | `--yes` | apply without asking |
 | `--resume <receipt-id>` | continue an interrupted deploy |
+| `--skip-smoke` | accept an activation the endpoint cannot confirm |
 | `--allow-capability-loss <capability>` | accept one named capability the target cannot serve |
 
 ## `lorepack target`
@@ -350,6 +351,7 @@ lorepack target <subject> <target>
 | `--catalog-db <name>` | connect to an existing D1 database name |
 | `--tables-db <name>` | connect to the isolated table D1 database name |
 | `--objects-bucket <name>` | connect to an existing R2 bucket name |
+| `--endpoint <url>` | record the Worker origin, e.g. https://<worker>.<subdomain>.workers.dev |
 
 ## `lorepack connect`
 

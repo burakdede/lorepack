@@ -22,22 +22,23 @@ import {
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { targetsDirectory } from '../services/config-resolve.js';
+import {
+  lookupWorkersSubdomain,
+  parseEndpointOrigin,
+  workersDevEndpoint,
+} from '../services/workers-endpoint.js';
+import {
+  locateWrangler,
+  requireWranglerBin,
+  WRANGLER_MISSING_REMEDIATION,
+  wranglerSearchDirectories,
+  wranglerWorkingDirectory,
+} from '../services/wrangler.js';
 
 const execFileAsync = promisify(execFile);
 const CLOUDFLARE_CAPABILITIES = ['lexical-search', 'structured-context', 'table-query'] as const;
 const CLOUDFLARE_SETUP_DOC = 'docs/integrations/cloudflare-target-setup.md' as const;
 const WRANGLER_REMOTE_D1_RETRY_LIMIT = 3;
-const WRANGLER_BIN = join(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  'deploy-cloudflare',
-  'node_modules',
-  'wrangler',
-  'bin',
-  'wrangler.js',
-);
 const WRANGLER_D1_TRANSACTION_CONTROL = new Set(['begin immediate', 'commit', 'rollback']);
 
 export interface CloudflareTargetReceipt {
@@ -52,6 +53,11 @@ export interface CloudflareTargetReceipt {
   readonly tablesDatabaseName?: string;
   readonly objectsBucketName: string;
   readonly capabilities: readonly string[];
+  /**
+   * The Worker's public origin, such as `https://<worker>.<subdomain>.workers.dev`. Optional
+   * because receipts written before #580 lack it; deploy then looks the subdomain up.
+   */
+  readonly endpoint?: string;
 }
 
 export interface WranglerDetection {
@@ -77,6 +83,8 @@ export interface CloudflareRemoteResources {
 export interface CloudflareTargetAdapter {
   detect(): Promise<WranglerDetection>;
   whoami(): Promise<WranglerIdentity>;
+  /** The account's `workers.dev` subdomain, or null when it cannot be determined here. */
+  workersSubdomain?(accountId: string): Promise<string | null>;
 }
 
 export interface CloudflareTargetProvisioningAdapter extends CloudflareTargetAdapter {
@@ -126,6 +134,10 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         flags: '--objects-bucket <name>',
         description: 'connect to an existing R2 bucket name',
       },
+      {
+        flags: '--endpoint <url>',
+        description: 'record the Worker origin, e.g. https://<worker>.<subdomain>.workers.dev',
+      },
     ],
     handler: async (args, flags, context): Promise<CommandResult> => {
       const subject = args[0];
@@ -149,14 +161,16 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
       if (subject === 'status') return await handleStatusCommand(context, options);
 
       const config = loadConfig({ cwd: context.options.cwd });
-      const adapter = options.adapter ?? createWranglerAdapter();
+      const explicitEndpoint =
+        typeof flags.endpoint === 'string' ? parseEndpointOrigin(flags.endpoint) : undefined;
+      const adapter = options.adapter ?? createWranglerAdapter(config.projectRoot);
       const detection = await adapter.detect();
       if (!detection.installed) {
         throw new LoreError(
           'LORE_E_TARGET_NOT_CONFIGURED',
-          'The pinned Cloudflare Wrangler dependency is not available.',
+          'Wrangler was not found for this project.',
           {
-            remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+            remediation: WRANGLER_MISSING_REMEDIATION,
             subject: 'cloudflare',
           },
         );
@@ -168,7 +182,7 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
           'LORE_E_TARGET_NOT_CONFIGURED',
           'Wrangler is installed, but no Cloudflare login is available for this machine.',
           {
-            remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+            remediation: `Log in first with \`${process.execPath} ${detection.path ?? '<wrangler>'} login --device\`.`,
             subject: 'cloudflare',
           },
         );
@@ -286,6 +300,16 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
             },
           );
         }
+        const endpoint = await resolveTargetEndpoint(adapter, existing, explicitEndpoint);
+        if (endpoint !== undefined && endpoint !== existing.endpoint) {
+          const updated: CloudflareTargetReceipt = { ...existing, endpoint };
+          const path = cloudflareTargetPath(config.projectRoot);
+          writeFileAtomic(path, `${JSON.stringify(updated, null, 2)}\n`);
+          return {
+            human: `${plan}\n\nRecorded the cloudflare endpoint ${endpoint}.\nReceipt: ${path}`,
+            json: updated,
+          };
+        }
         return {
           human: `${plan}\n\ncloudflare already matches ${cloudflareTargetPath(config.projectRoot)}.`,
           json: existing,
@@ -352,12 +376,23 @@ export function targetCommand(options: TargetCommandOptions = {}): CommandDefini
         objectsBucketName: planned.objectsBucketName,
         capabilities: [...CLOUDFLARE_CAPABILITIES],
       };
+      const endpoint = await resolveTargetEndpoint(
+        adapter,
+        { accountId: planned.accountId, workerName: planned.workerName },
+        explicitEndpoint,
+      );
+      const written: CloudflareTargetReceipt =
+        endpoint === undefined ? receipt : { ...receipt, endpoint };
       const path = cloudflareTargetPath(config.projectRoot);
-      writeFileAtomic(path, `${JSON.stringify(receipt, null, 2)}\n`);
+      writeFileAtomic(path, `${JSON.stringify(written, null, 2)}\n`);
 
       return {
-        human: `${plan}\n\nConfigured cloudflare for ${config.config.name}.\nReceipt: ${path}`,
-        json: receipt,
+        human: `${plan}\n\nConfigured cloudflare for ${config.config.name}.\nReceipt: ${path}\n${
+          endpoint === undefined
+            ? `Endpoint: unknown. ${UNKNOWN_ENDPOINT_REMEDIATION}`
+            : `Endpoint: ${endpoint}`
+        }`,
+        json: written,
       };
     },
   };
@@ -381,7 +416,7 @@ async function handleStatusCommand(
   options: TargetCommandOptions,
 ): Promise<CommandResult> {
   const config = loadConfig({ cwd: context.options.cwd });
-  const adapter = options.adapter ?? createWranglerAdapter();
+  const adapter = options.adapter ?? createWranglerAdapter(config.projectRoot);
   if (!isCloudflareTargetTokenAdapter(adapter)) {
     throw new LoreError(
       'LORE_E_INTERNAL',
@@ -396,9 +431,9 @@ async function handleStatusCommand(
   if (!detection.installed) {
     throw new LoreError(
       'LORE_E_TARGET_NOT_CONFIGURED',
-      'The pinned Cloudflare Wrangler dependency is not available.',
+      'Wrangler was not found for this project.',
       {
-        remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+        remediation: WRANGLER_MISSING_REMEDIATION,
         subject: 'cloudflare',
       },
     );
@@ -410,7 +445,7 @@ async function handleStatusCommand(
       'LORE_E_TARGET_NOT_CONFIGURED',
       'Wrangler is installed, but no Cloudflare login is available for this machine.',
       {
-        remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+        remediation: `Log in first with \`${process.execPath} ${detection.path ?? '<wrangler>'} login --device\`.`,
         subject: 'cloudflare',
       },
     );
@@ -525,7 +560,7 @@ async function handleTokenCommand(
   }
 
   const config = loadConfig({ cwd: context.options.cwd });
-  const adapter = options.adapter ?? createWranglerAdapter();
+  const adapter = options.adapter ?? createWranglerAdapter(config.projectRoot);
   if (!isCloudflareTargetTokenAdapter(adapter)) {
     throw new LoreError(
       'LORE_E_INTERNAL',
@@ -540,9 +575,9 @@ async function handleTokenCommand(
   if (!detection.installed) {
     throw new LoreError(
       'LORE_E_TARGET_NOT_CONFIGURED',
-      'The pinned Cloudflare Wrangler dependency is not available.',
+      'Wrangler was not found for this project.',
       {
-        remediation: 'Run `pnpm install` so the pinned Wrangler dependency is available.',
+        remediation: WRANGLER_MISSING_REMEDIATION,
         subject: 'cloudflare',
       },
     );
@@ -554,7 +589,7 @@ async function handleTokenCommand(
       'LORE_E_TARGET_NOT_CONFIGURED',
       'Wrangler is installed, but no Cloudflare login is available for this machine.',
       {
-        remediation: `Log in first with \`${process.execPath} ${detection.path ?? WRANGLER_BIN} login --device\`.`,
+        remediation: `Log in first with \`${process.execPath} ${detection.path ?? '<wrangler>'} login --device\`.`,
         subject: 'cloudflare',
       },
     );
@@ -797,25 +832,29 @@ function defaultNames(project: string): {
   };
 }
 
-export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
+export function createWranglerAdapter(projectRoot: string): CloudflareTargetTokenAdapter {
+  const location = locateWrangler(wranglerSearchDirectories(projectRoot));
+  const bin = (): string => requireWranglerBin(location);
   return {
     async detect(): Promise<WranglerDetection> {
-      if (!existsSync(WRANGLER_BIN)) return { installed: false };
-      const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, '--version'], {
-        cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
+      if (location === null) return { installed: false };
+      const { stdout } = await execFileAsync(process.execPath, [location.bin, '--version'], {
+        cwd: wranglerWorkingDirectory(),
       });
-      return { installed: true, version: stdout.trim(), path: WRANGLER_BIN };
+      return { installed: true, version: stdout.trim(), path: location.bin };
+    },
+    async workersSubdomain(accountId: string): Promise<string | null> {
+      // The same token variable Wrangler reads for non-interactive use. An OAuth login made
+      // with `wrangler login` is Wrangler's to hold, so without a token the user records the
+      // endpoint with `--endpoint` instead.
+      return await lookupWorkersSubdomain(accountId, { token: process.env.CLOUDFLARE_API_TOKEN });
     },
     async whoami(): Promise<WranglerIdentity> {
       try {
-        const { stdout } = await execFileAsync(
-          process.execPath,
-          [WRANGLER_BIN, 'whoami', '--json'],
-          {
-            cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
-            env: { ...process.env, NO_D1_WARNING: 'true' },
-          },
-        );
+        const { stdout } = await execFileAsync(process.execPath, [bin(), 'whoami', '--json'], {
+          cwd: wranglerWorkingDirectory(),
+          env: { ...process.env, NO_D1_WARNING: 'true' },
+        });
         const parsed = JSON.parse(stdout) as {
           email?: string;
           accounts?: Array<{ id?: string; name?: string }>;
@@ -839,10 +878,10 @@ export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
       objectsBucketName,
     }): Promise<CloudflareRemoteResources> {
       const [worker, catalog, tables, bucket] = await Promise.all([
-        wranglerWorkerExists(workerName),
-        wranglerD1Exists(catalogDatabaseName),
-        wranglerD1Exists(tablesDatabaseName),
-        wranglerBucketExists(objectsBucketName),
+        wranglerWorkerExists(bin(), workerName),
+        wranglerD1Exists(bin(), catalogDatabaseName),
+        wranglerD1Exists(bin(), tablesDatabaseName),
+        wranglerBucketExists(bin(), objectsBucketName),
       ]);
       return {
         workerExists: worker,
@@ -852,19 +891,19 @@ export function createWranglerAdapter(): CloudflareTargetTokenAdapter {
       };
     },
     async createCatalogDatabase(name) {
-      await execWrangler(['d1', 'create', name]);
+      await execWrangler(bin(), ['d1', 'create', name]);
     },
     async createTablesDatabase(name) {
-      await execWrangler(['d1', 'create', name]);
+      await execWrangler(bin(), ['d1', 'create', name]);
     },
     async createObjectsBucket(name) {
-      await execWrangler(['r2', 'bucket', 'create', name]);
+      await execWrangler(bin(), ['r2', 'bucket', 'create', name]);
     },
     openCatalogDatabase(name) {
-      return new WranglerCatalogDatabase(name);
+      return new WranglerCatalogDatabase(bin(), name);
     },
     openTablesDatabase(name) {
-      return new WranglerCatalogDatabase(name);
+      return new WranglerCatalogDatabase(bin(), name);
     },
   };
 }
@@ -1055,6 +1094,30 @@ function parseCloudflareTargetReceipt(raw: unknown, path: string): CloudflareTar
   return raw;
 }
 
+export const UNKNOWN_ENDPOINT_REMEDIATION =
+  'Record it with `lorepack target add cloudflare --endpoint https://<worker>.<subdomain>.workers.dev`, or set CLOUDFLARE_API_TOKEN so the account subdomain can be looked up.';
+
+/** An explicit `--endpoint` wins, then the one already recorded, then the subdomain lookup. */
+async function resolveTargetEndpoint(
+  adapter: CloudflareTargetAdapter,
+  target: Pick<CloudflareTargetReceipt, 'accountId' | 'workerName' | 'endpoint'>,
+  explicit: string | undefined,
+): Promise<string | undefined> {
+  if (explicit !== undefined) return explicit;
+  if (target.endpoint !== undefined) return target.endpoint;
+  const subdomain = (await adapter.workersSubdomain?.(target.accountId)) ?? null;
+  return subdomain === null ? undefined : workersDevEndpoint(target.workerName, subdomain);
+}
+
+function isEndpointOrigin(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  try {
+    return parseEndpointOrigin(value) === value;
+  } catch {
+    return false;
+  }
+}
+
 function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt {
   if (typeof raw !== 'object' || raw === null) return false;
   const receipt = raw as Record<string, unknown>;
@@ -1070,30 +1133,40 @@ function isCloudflareTargetReceipt(raw: unknown): raw is CloudflareTargetReceipt
     (receipt.tablesDatabaseName === undefined || typeof receipt.tablesDatabaseName === 'string') &&
     typeof receipt.objectsBucketName === 'string' &&
     Array.isArray(receipt.capabilities) &&
-    receipt.capabilities.every((value) => typeof value === 'string')
+    receipt.capabilities.every((value) => typeof value === 'string') &&
+    (receipt.endpoint === undefined || isEndpointOrigin(receipt.endpoint))
   );
 }
 
 class WranglerCatalogDatabase implements ProjectionMigrationDatabaseLike, RuntimeAuthDatabaseLike {
+  readonly #bin: string;
   readonly #name: string;
   readonly #transaction = new WranglerD1TransactionBatch();
 
-  constructor(name: string) {
+  constructor(bin: string, name: string) {
+    this.#bin = bin;
     this.#name = name;
   }
 
   prepare(query: string): WranglerStatement {
-    return new WranglerStatement(this.#name, this.#transaction, query);
+    return new WranglerStatement(this.#bin, this.#name, this.#transaction, query);
   }
 }
 
 class WranglerStatement implements ProjectionMigrationStatementLike {
+  readonly #bin: string;
   readonly #databaseName: string;
   readonly #transaction: WranglerD1TransactionBatch;
   readonly #query: string;
   #bindings: readonly unknown[] = [];
 
-  constructor(databaseName: string, transaction: WranglerD1TransactionBatch, query: string) {
+  constructor(
+    bin: string,
+    databaseName: string,
+    transaction: WranglerD1TransactionBatch,
+    query: string,
+  ) {
+    this.#bin = bin;
     this.#databaseName = databaseName;
     this.#transaction = transaction;
     this.#query = query;
@@ -1117,7 +1190,7 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
     if (control === 'commit') {
       const flushed = this.#transaction.commit();
       if (flushed === null) return {};
-      const { stdout } = await execWranglerSqlFile(this.#databaseName, flushed);
+      const { stdout } = await execWranglerSqlFile(this.#bin, this.#databaseName, flushed);
       return { results: readD1Results<T>(parseWranglerJson(stdout)) };
     }
 
@@ -1130,13 +1203,13 @@ class WranglerStatement implements ProjectionMigrationStatementLike {
     if (mode === 'command' && this.#transaction.active) {
       const flushed = this.#transaction.flush();
       if (flushed !== null) {
-        await execWranglerSqlFile(this.#databaseName, flushed);
+        await execWranglerSqlFile(this.#bin, this.#databaseName, flushed);
       }
     }
     const { stdout } =
       mode === 'file'
-        ? await execWranglerSqlFile(this.#databaseName, rendered)
-        : await execWrangler([
+        ? await execWranglerSqlFile(this.#bin, this.#databaseName, rendered)
+        : await execWrangler(this.#bin, [
             'd1',
             'execute',
             this.#databaseName,
@@ -1221,13 +1294,16 @@ function issueRuntimeToken(): string {
   return `${RUNTIME_TOKEN_PREFIX}${randomBytes(24).toString('hex')}`;
 }
 
-async function execWrangler(args: readonly string[]): Promise<{ readonly stdout: string }> {
+async function execWrangler(
+  bin: string,
+  args: readonly string[],
+): Promise<{ readonly stdout: string }> {
   const attempts = isWranglerRemoteD1Execute(args) ? WRANGLER_REMOTE_D1_RETRY_LIMIT : 1;
   let lastFailure: Error | null = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      const { stdout } = await execFileAsync(process.execPath, [WRANGLER_BIN, ...args], {
-        cwd: join(import.meta.dirname, '..', '..', '..', 'deploy-cloudflare'),
+      const { stdout } = await execFileAsync(process.execPath, [bin, ...args], {
+        cwd: wranglerWorkingDirectory(),
         env: { ...process.env, NO_D1_WARNING: 'true' },
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
@@ -1246,13 +1322,14 @@ async function execWrangler(args: readonly string[]): Promise<{ readonly stdout:
 }
 
 async function execWranglerSqlFile(
+  bin: string,
   databaseName: string,
   sql: string,
 ): Promise<{ readonly stdout: string }> {
   const path = tempPath('lore-target-d1-execute-', 'statement.sql');
   try {
     writeFileSync(path, sql, 'utf8');
-    return await execWrangler([
+    return await execWrangler(bin, [
       'd1',
       'execute',
       databaseName,
@@ -1266,27 +1343,27 @@ async function execWranglerSqlFile(
   }
 }
 
-async function wranglerD1Exists(name: string): Promise<boolean> {
+async function wranglerD1Exists(bin: string, name: string): Promise<boolean> {
   try {
-    await execWrangler(['d1', 'info', name, '--json']);
+    await execWrangler(bin, ['d1', 'info', name, '--json']);
     return true;
   } catch {
     return false;
   }
 }
 
-async function wranglerBucketExists(name: string): Promise<boolean> {
+async function wranglerBucketExists(bin: string, name: string): Promise<boolean> {
   try {
-    await execWrangler(['r2', 'bucket', 'info', name, '--json']);
+    await execWrangler(bin, ['r2', 'bucket', 'info', name, '--json']);
     return true;
   } catch {
     return false;
   }
 }
 
-async function wranglerWorkerExists(name: string): Promise<boolean> {
+async function wranglerWorkerExists(bin: string, name: string): Promise<boolean> {
   try {
-    const { stdout } = await execWrangler(['deployments', 'list', '--name', name, '--json']);
+    const { stdout } = await execWrangler(bin, ['deployments', 'list', '--name', name, '--json']);
     const parsed = JSON.parse(stdout) as unknown;
     return Array.isArray(parsed) && parsed.length > 0;
   } catch {
