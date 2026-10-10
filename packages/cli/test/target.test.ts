@@ -777,6 +777,20 @@ describe('lorepack target token cloudflare, issue 90', () => {
         expect(rows[1]?.expires_at).toBeNull();
         expect(rotated.activeTokens).toHaveLength(2);
 
+        // #562: rotating again inside the overlap must not extend the retiring first token.
+        now = '2026-08-09T10:09:00.000Z';
+        const rotatedAgain = await run(
+          ['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare', '--rotate'],
+          { commands: [command] },
+        );
+        expect(rotatedAgain.code).toBe(0);
+        const expiries = (
+          db
+            .prepare('SELECT expires_at FROM runtime_tokens ORDER BY created_at, token_hash')
+            .all() as Array<{ expires_at: string | null }>
+        ).map((row) => row.expires_at);
+        expect(expiries).toEqual(['2026-08-09T10:15:00.000Z', '2026-08-09T10:19:00.000Z', null]);
+
         const revoked = await run(
           ['--json', '--cwd', temp.root, 'target', 'token', 'cloudflare', '--revoke'],
           { commands: [command] },
@@ -784,7 +798,7 @@ describe('lorepack target token cloudflare, issue 90', () => {
         expect(revoked.code).toBe(0);
         expect(JSON.parse(revoked.stdout)).toMatchObject({
           worker: 'demo-runtime',
-          revoked: 2,
+          revoked: 3,
         });
         expect(
           (db.prepare('SELECT token_hash FROM runtime_tokens').all() as unknown[]).length,

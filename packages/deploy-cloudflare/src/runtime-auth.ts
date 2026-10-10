@@ -50,9 +50,11 @@ export async function rotateRuntimeTokenHash(
   overlapUntil: string,
 ): Promise<void> {
   await db.prepare(RUNTIME_TOKENS_TABLE).run();
+  // Only the current token gets an overlap. A token that is already retiring keeps its expiry:
+  // moving it later would let repeated rotation after a leak keep the leaked token alive.
   await db
-    .prepare('UPDATE runtime_tokens SET expires_at = ? WHERE expires_at IS NULL OR expires_at > ?')
-    .bind(overlapUntil, now)
+    .prepare('UPDATE runtime_tokens SET expires_at = ? WHERE expires_at IS NULL')
+    .bind(overlapUntil)
     .run();
   await db
     .prepare('INSERT INTO runtime_tokens (token_hash, created_at, expires_at) VALUES (?, ?, NULL)')
