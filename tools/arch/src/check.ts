@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   ALLOWED_WORKSPACE_EDGES,
   FORBIDDEN_EXTERNAL,
   NO_BARE_ERROR_PACKAGES,
+  PACKAGE_DIRS,
   PACKAGES,
   type PackageName,
   TEST_ONLY_PACKAGES,
@@ -21,8 +22,12 @@ function matches(specifier: string, pattern: string | RegExp): boolean {
   return typeof pattern === 'string' ? specifier === pattern : pattern.test(specifier);
 }
 
+/** Absolute paths and URLs name a file without saying which package it belongs to. */
+const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/]|\\\\|file:)/;
+
 export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
-  const dir = join(repoRoot, 'packages', name, 'src');
+  const packageRoot = join(repoRoot, PACKAGE_DIRS[name]);
+  const dir = join(packageRoot, 'src');
   if (!existsSync(dir)) return [];
 
   const violations: Violation[] = [];
@@ -30,6 +35,29 @@ export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
   const forbidden = FORBIDDEN_EXTERNAL[name] ?? [];
 
   for (const record of collectImports(dir, repoRoot)) {
+    if (record.computed) {
+      violations.push({
+        ...record,
+        rule: `@lorepack/${name} may not load a module by a name the source does not spell out, because no rule can see what it loads. Import it by a string literal.`,
+      });
+      continue;
+    }
+    if (record.specifier.startsWith('.') || ABSOLUTE.test(record.specifier)) {
+      const target = ABSOLUTE.test(record.specifier)
+        ? null
+        : resolve(dirname(join(repoRoot, record.file)), record.specifier);
+      const inside =
+        target !== null &&
+        !relative(packageRoot, target).startsWith('..') &&
+        !isAbsolute(relative(packageRoot, target));
+      if (!inside) {
+        violations.push({
+          ...record,
+          rule: `@lorepack/${name} may not reach a file outside ${PACKAGE_DIRS[name]} by path. Another package is imported by its @lorepack name, which the allowed edges check.`,
+        });
+      }
+      continue;
+    }
     const workspace = workspaceDependency(record.specifier);
     if (workspace !== null) {
       if (workspace === name) continue;
@@ -64,7 +92,7 @@ export function checkAll(repoRoot: string): Violation[] {
 export function checkManifests(repoRoot: string): Violation[] {
   const violations: Violation[] = [];
   for (const name of PACKAGES) {
-    const manifestPath = join(repoRoot, 'packages', name, 'package.json');
+    const manifestPath = join(repoRoot, PACKAGE_DIRS[name], 'package.json');
     if (!existsSync(manifestPath)) continue;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       dependencies?: Record<string, string>;
@@ -77,7 +105,7 @@ export function checkManifests(repoRoot: string): Violation[] {
       if (TEST_ONLY_PACKAGES.includes(workspace)) continue;
       if (!ALLOWED_WORKSPACE_EDGES[name].includes(workspace as PackageName)) {
         violations.push({
-          file: `packages/${name}/package.json`,
+          file: `${PACKAGE_DIRS[name]}/package.json`,
           line: 1,
           specifier: dep,
           rule: `@lorepack/${name} declares a dependency on ${dep}, which the allowed edges forbid.`,

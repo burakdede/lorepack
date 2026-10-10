@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -9,7 +9,7 @@ import {
   checkPackage,
   formatViolations,
 } from '../src/check.js';
-import { ALLOWED_WORKSPACE_EDGES, PACKAGES } from '../src/rules.js';
+import { ALLOWED_WORKSPACE_EDGES, PACKAGE_DIRS, PACKAGES } from '../src/rules.js';
 import { collectImports } from '../src/scan.js';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -39,6 +39,25 @@ describe('the real repository', () => {
 
   it('covers every package that exists on disk', () => {
     expect(new Set(PACKAGES)).toEqual(new Set(Object.keys(ALLOWED_WORKSPACE_EDGES)));
+  });
+
+  it('checks every package and app directory, so a new one cannot go unchecked', () => {
+    const onDisk = ['packages', 'apps'].flatMap((parent) =>
+      readdirSync(join(REPO_ROOT, parent), { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isDirectory() && existsSync(join(REPO_ROOT, parent, entry.name, 'package.json')),
+        )
+        .map((entry) => `${parent}/${entry.name}`),
+    );
+    expect(new Set(Object.values(PACKAGE_DIRS))).toEqual(new Set(onDisk));
+  });
+
+  it('reads the real sources, so a clean result is not an empty one', () => {
+    const core = collectImports(join(REPO_ROOT, 'packages', 'core', 'src'), REPO_ROOT);
+    const studio = collectImports(join(REPO_ROOT, 'apps', 'studio', 'src'), REPO_ROOT);
+    expect(core.some((record) => record.specifier === 'zod')).toBe(true);
+    expect(studio.some((record) => record.specifier === '@lorepack/sdk')).toBe(true);
   });
 });
 
@@ -106,6 +125,94 @@ describe('violation detection', () => {
     write('core', 'b.ts', "export * from 'hono';\n");
     write('core', 'c.ts', "const h = require('react');\nexport default h;\n");
     expect(checkPackage(root, 'core')).toHaveLength(3);
+  });
+
+  // The five bypasses from #617. Each passed the regex scanner, `tsc` and Biome.
+  it('rejects a multi-line import', () => {
+    write(
+      'core',
+      'bad.ts',
+      "import {\n  DatabaseSync as Db,\n} from 'node:sqlite';\nexport const x = Db;\n",
+    );
+    const violations = checkPackage(root, 'core');
+    expect(violations.map((v) => [v.specifier, v.line])).toEqual([['node:sqlite', 3]]);
+  });
+
+  it('rejects a multi-line re-export and a multi-line dynamic import', () => {
+    write('core', 'a.ts', "export {\n  Hono,\n} from 'hono';\n");
+    write('core', 'b.ts', "export const load = () =>\n  import(\n    'node:sqlite'\n  );\n");
+    expect(checkPackage(root, 'core').map((v) => v.specifier)).toEqual(['hono', 'node:sqlite']);
+  });
+
+  it.each([
+    ["export const db = process.getBuiltinModule('node:sqlite');\n"],
+    ["const { getBuiltinModule } = process;\nexport const db = getBuiltinModule('node:sqlite');\n"],
+    ["export const db = process['getBuiltinModule']('node:sqlite');\n"],
+    [
+      "import { createRequire } from 'node:module';\nexport const db = createRequire(import.meta.url)('node:sqlite');\n",
+    ],
+  ])('rejects a module loaded by name: %s', (source) => {
+    write('core', 'bad.ts', source);
+    const violations = checkPackage(root, 'core');
+    expect(violations.some((v) => v.rule.includes('does not spell out'))).toBe(true);
+  });
+
+  it.each([
+    ["const name = 'node:sqlite';\nexport const load = () => import(name);\n"],
+    [`export const load = (name: string) => import(\`node:\${name}\`);\n`],
+    ["const name = 'hono';\nexport const h = require(name);\n"],
+    ["export const h = module.require('hono' + '');\n"],
+  ])('rejects a computed specifier: %s', (source) => {
+    write('core', 'bad.ts', source);
+    expect(checkPackage(root, 'core').some((v) => v.rule.includes('does not spell out'))).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ["export * from '../../backend-local/src/index.js';\n"],
+    ["import { x } from '../../../packages/runtime/src/index.js';\nexport { x };\n"],
+    ["export const load = () => import('../../mcp/src/server.js');\n"],
+    ["export * from '/etc/lorepack/index.js';\n"],
+    ["export * from 'file:///tmp/index.js';\n"],
+  ])('rejects a path that leaves the package: %s', (source) => {
+    write('core', 'bad.ts', source);
+    const violations = checkPackage(root, 'core');
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.rule).toContain('outside packages/core');
+  });
+
+  it('allows a relative import that stays inside the package', () => {
+    write('core', 'a.ts', 'export const a = 1;\n');
+    mkdirSync(join(root, 'packages', 'core', 'src', 'nested'), { recursive: true });
+    write(
+      'core',
+      'nested/b.ts',
+      "export { a } from '../a.js';\nexport * from '../../package.json';\n",
+    );
+    expect(checkPackage(root, 'core')).toEqual([]);
+  });
+
+  it('checks apps/studio, which only reaches the runtime over HTTP through the SDK', () => {
+    const dir = join(root, 'apps', 'studio', 'src');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'bad.tsx'),
+      [
+        "import { createClient } from '@lorepack/sdk';",
+        "import { openBuild } from '@lorepack/backend-local';",
+        "import { readFileSync } from 'node:fs';",
+        "import { join } from 'path';",
+        'export const App = () => <div>{String(createClient)}{String(openBuild)}{String(readFileSync)}{join}</div>;',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    expect(checkPackage(root, 'studio').map((v) => v.specifier)).toEqual([
+      '@lorepack/backend-local',
+      'node:fs',
+      'path',
+    ]);
   });
 
   it('ignores specifiers that only appear inside comments', () => {
