@@ -72,7 +72,11 @@ expected warnings, and a canonical hash.
 1. Put it beside the module, in that package's `test/` directory.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
-   write down why in the test.
+   write down why in the test, and add the line to the allow-list in
+   `tools/security/test/test-skips.test.ts`. Biome rejects a literal `.skip` or `.only`
+   (`noSkippedTests`, `noFocusedTests`); the allow-list covers the forms Biome cannot see
+   (`skipIf`, `runIf`, `todo`, `context.skip()` and `it.skip` used as a value), so every way
+   a test can stop running is a reviewed line rather than a side effect.
 
 ## The acceptance suite
 

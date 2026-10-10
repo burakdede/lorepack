@@ -50,6 +50,8 @@ pnpm exec vitest run test/cloudflare-smoke.test.ts test/cloudflare-testing.test.
 | 2026-08-14 | `mise exec -- pnpm verify` | Passed through `pnpm test:security`; then failed at `check:sources-tracked` because the new files were not staged yet |
 | 2026-08-14 | `mise exec -- pnpm check:sources-tracked && mise exec -- pnpm check:docs-images && mise exec -- pnpm check:docs-links && mise exec -- pnpm check:templates && mise exec -- pnpm check:license-policy && mise exec -- pnpm check:verify-parity && mise exec -- pnpm schemas:check && mise exec -- pnpm probe:fts5 && mise exec -- pnpm acceptance:docs:check && mise exec -- pnpm cli:docs:check && mise exec -- pnpm demo:readme:check` | Passed after staging the new files |
 | 2026-10-04 | `mise exec -- pnpm exec vitest run packages/deploy-cloudflare/test/tables.test.ts packages/deploy-cloudflare/test/project-table-data.test.ts` | Passed: 2 files, 11 tests; D1 SQL is bounded before JavaScript slicing and oversized serialized results are refused |
+| 2026-10-10 | `mise exec -- pnpm test:security` | Passed: 4 files, 33 tests. The coverage index now runs each named test and fails unless it reported `passed` (#615) |
+| 2026-10-10 | `describe.skip` on the traversal block in `packages/cli/test/security.e2e.test.ts`, then `pnpm exec vitest run --root tools/security test/security-coverage.test.ts` | Failed as intended: 7 traversal tests reported skipped; the same edit passed the previous grep-based index (19 passed) |
 
 ## Notes
 
