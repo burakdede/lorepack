@@ -188,6 +188,12 @@ Interaction with bearer auth:
 - deployment credentials are still rejected structurally, because only Lore runtime tokens
   with the `lore_rt_` prefix and valid Access JWTs are accepted
 
+The Worker verifies the Access JWT's signature, issuer and audience, and requires an `exp`
+claim; a token without one is refused. It fetches the team's signing keys from
+`/cdn-cgi/access/certs` at most once per Worker isolate per key-cache period, not per request,
+so a flood of forged Access headers does not turn into a flood of key fetches. Failed bearer
+checks only read D1: the Worker issues no schema statements on the authentication path.
+
 Cloudflare's current `workers.dev` docs also note that the Access gate can use policy rules
 over the request before it reaches the Worker. For Lorepack's MCP surface, the relevant safe
 policy hints are the mirrored `Mcp-Method` and `Mcp-Name` headers. The body remains the source
