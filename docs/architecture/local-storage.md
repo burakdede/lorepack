@@ -62,6 +62,14 @@ together. A crash leaves the old pointer, never a torn state. The generation nev
 including after a rollback, so a reader detects a change by comparing one integer rather
 than by watching the filesystem.
 
+Several processes open `state.sqlite` at once by design: `lorepack dev`, MCP sessions, Studio
+and one-off commands. Every connection gets its five-second busy timeout from the constructor,
+before its first statement, so a writer holding the database makes an open wait rather than
+fail; the journal-mode change that opening for writing performs is a write, and it used to run
+unprotected (#571). Migrations are decided inside the `BEGIN IMMEDIATE` that applies them, so
+when two processes open a new project together one applies `0001` and the other finds it
+applied.
+
 Only a verified build can be activated. Attempting to activate a failed candidate raises
 `LORE_E_BUILD_VALIDATION` and leaves the pointer untouched, which is the mechanism behind
 "a failed build can never corrupt the active version".
