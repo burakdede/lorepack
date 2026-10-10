@@ -60,6 +60,7 @@ type ChildReply =
   | { ok: true; columns: string[]; rows: Record<string, unknown>[]; truncated: boolean }
   | { ok: false; kind: 'too-large'; bytes: number; peakRssBytes: number }
   | { ok: false; kind: 'failed'; message: string }
+  | { ok: false; kind: 'unavailable' }
   | { ready: true };
 
 /**
@@ -209,17 +210,17 @@ function run(child: ChildProcess, sql: string, limit: number): Promise<QueryOutc
           resolve({ columns: reply.columns, rows: reply.rows, truncated: reply.truncated });
           return;
         }
-        reject(
-          reply.kind === 'too-large'
-            ? tooLarge(reply.bytes, reply.peakRssBytes)
-            : classify(reply.message),
-        );
+        if (reply.kind === 'too-large') reject(tooLarge(reply.bytes, reply.peakRssBytes));
+        else if (reply.kind === 'unavailable') reject(unavailable());
+        else reject(classify(reply.message));
       });
     });
 
-    child.on('error', (cause: Error) => {
+    // A process that could not be started is not a query error, and the reason names this
+    // machine's paths, so it is not passed on.
+    child.on('error', () => {
       finish(() => {
-        reject(classify(cause.message));
+        reject(unavailable());
       });
     });
     child.on('exit', (code: number | null) => {
@@ -239,6 +240,24 @@ function run(child: ChildProcess, sql: string, limit: number): Promise<QueryOutc
       });
     });
   });
+}
+
+/**
+ * The build's table data could not be opened, in words that name no path (#560).
+ *
+ * The usual cause is a build removed or damaged after it was activated. SQLite says so with
+ * the absolute path of the file in the message, which would hand a model the username and
+ * the layout of this machine.
+ */
+function unavailable(): LoreError {
+  return new LoreError(
+    'LORE_E_SQLITE_UNAVAILABLE',
+    "This build's table data could not be opened: the build is damaged or was removed.",
+    {
+      remediation:
+        'Run `lorepack builds` to check the active build, and `lorepack build` to make a new one if it is missing.',
+    },
+  );
 }
 
 /** `bytes` is how far the result had grown when it passed the cap: a lower bound, not its size. */

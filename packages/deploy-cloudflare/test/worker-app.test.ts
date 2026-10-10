@@ -1,15 +1,16 @@
 import { DatabaseSync } from 'node:sqlite';
-import type {
-  BuildHandle,
-  BuildId,
-  BuildManifest,
-  BuildScope,
-  CatalogArtifact,
-  CatalogNode,
-  CatalogSearchCriteria,
-  CatalogSearchHit,
-  CatalogStore,
-  TableStore,
+import {
+  type BuildHandle,
+  type BuildId,
+  type BuildManifest,
+  type BuildScope,
+  type CatalogArtifact,
+  type CatalogNode,
+  type CatalogSearchCriteria,
+  type CatalogSearchHit,
+  type CatalogStore,
+  LoreError,
+  type TableStore,
 } from '@lorepack/core';
 import { createMcpHttpHandler, MCP_PROTOCOL_VERSION, TOOL_NAMES } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
@@ -286,6 +287,42 @@ function mcpRequest(method: string): Request {
   });
 }
 
+function toolCall(name: string, args: Record<string, unknown>): Request {
+  return new Request('https://worker.example/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      'Mcp-Method': 'tools/call',
+      'Mcp-Name': name,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args, _meta: envelope },
+    }),
+  });
+}
+
+function resourceRead(uri: string): Request {
+  return new Request('https://worker.example/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      'Mcp-Method': 'resources/read',
+      'Mcp-Name': uri,
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'resources/read',
+      params: { uri, _meta: envelope },
+    }),
+  });
+}
+
 async function decodeMcp(response: Response): Promise<Record<string, unknown>> {
   const text = await response.text();
   const payload = text.startsWith('event:')
@@ -488,6 +525,74 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
       // typed answer, never a raw `URIError` as a 500.
       const bare = await read('/v1/sources/p%3Adocs%2F100%.md');
       expect(bare.status, `${name} bare %`).toBeLessThan(500);
+    }
+  });
+
+  it('never sends raw storage errors or absolute paths to a client, REST or MCP, #560', async () => {
+    const RAW =
+      'D1_ERROR: no such column: secret_internal_col (query: SELECT manifest_json AS manifestJson\nFROM build_manifests)';
+    const PATH = '/private/tmp/someone/proj/.lore/builds/lore_c900/context.sqlite';
+    const failing = (error: Error) =>
+      ({
+        describeBuild: async () => {
+          throw error;
+        },
+        search: async () => {
+          throw error;
+        },
+        listTables: async () => {
+          throw error;
+        },
+      }) as never;
+    const logged: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args);
+    };
+    try {
+      for (const [label, error] of [
+        ['raw D1', new Error(RAW)],
+        [
+          'typed with a path',
+          new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${PATH} for reading.`, {
+            cause: new Error(RAW),
+          }),
+        ],
+      ] as const) {
+        const runtime = failing(error);
+        const currentBuild = async () => ({ buildId: BUILD, generation: 7 });
+        const localMcp = createMcpHttpHandler(runtime);
+        closers.push(() => localMcp.close());
+        const local = createApiApp({
+          runtime,
+          currentBuild,
+          mcpHandler: (request) => localMcp.fetch(request),
+        });
+        const worker = createCloudflareWorker({ runtime, currentBuild });
+        closers.push(() => worker.close());
+
+        for (const [surface, fetch] of [
+          ['local', (request: Request) => local.request(request)],
+          ['worker', (request: Request) => worker.fetch(request)],
+        ] as const) {
+          const bodies = [
+            await (await fetch(new Request('https://worker.example/v1/build'))).text(),
+            await (await fetch(toolCall('lore_build_info', {}))).text(),
+            await (await fetch(toolCall('lore_search', { query: 'x' }))).text(),
+            await (await fetch(resourceRead('lore://project/build'))).text(),
+          ];
+          for (const body of bodies) {
+            expect(body, `${label} via ${surface}`).not.toContain('D1_ERROR');
+            expect(body, `${label} via ${surface}`).not.toContain('secret_internal_col');
+            expect(body, `${label} via ${surface}`).not.toContain('/private/tmp');
+            expect(body, `${label} via ${surface}`).not.toContain('causes');
+          }
+        }
+      }
+      // Hidden from the client, not from the operator: Workers Logs and the local terminal.
+      expect(JSON.stringify(logged.map(String))).toContain('D1_ERROR');
+    } finally {
+      console.error = original;
     }
   });
 

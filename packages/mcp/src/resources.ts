@@ -1,6 +1,7 @@
-import { type BuildComparer, LoreError, type LoreRuntime } from '@lorepack/core/worker';
+import { type BuildComparer, forClient, LoreError, type LoreRuntime } from '@lorepack/core/worker';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  INTERNAL_ERROR,
   INVALID_PARAMS,
   ProtocolError,
   ResourceNotFoundError,
@@ -31,7 +32,8 @@ import {
  * server really did break, and narrowing it must not mean deleting it.
  */
 function classify(uri: URL, cause: unknown): unknown {
-  const failure = LoreError.from(cause);
+  const { error: failure, hidden } = forClient(cause);
+  if (hidden !== undefined) console.error('lorepack: internal error in an MCP resource', hidden);
   const remediation = failure.remediation === undefined ? '' : ` ${failure.remediation}`;
   const message = `${failure.message}${remediation}`;
 
@@ -45,7 +47,9 @@ function classify(uri: URL, cause: unknown): unknown {
     case 'LORE_E_INVALID_ARGUMENT':
       return new ProtocolError(INVALID_PARAMS, message);
     default:
-      return cause;
+      // Still `-32603`, but carrying the client-safe message rather than the original: the
+      // SDK puts a thrown error's own text on the wire (#560).
+      return new ProtocolError(INTERNAL_ERROR, message);
   }
 }
 

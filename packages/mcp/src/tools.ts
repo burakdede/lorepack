@@ -1,7 +1,7 @@
 import {
   buildDescriptionSchema,
   contextBundleSchema,
-  LoreError,
+  forClient,
   type LoreRuntime,
   searchRequestSchema,
   searchResultSchema,
@@ -186,7 +186,10 @@ export function toolFailure(error: unknown): {
   content: Array<{ type: 'text'; text: string }>;
   isError: true;
 } {
-  const failure = LoreError.from(error);
+  // Unclassified failures, raw D1 or SQLite text among them, are replaced and logged rather
+  // than shown to the model (#560).
+  const { error: failure, hidden } = forClient(error);
+  if (hidden !== undefined) console.error('lorepack: internal error in an MCP tool', hidden);
   const remediation = failure.remediation === undefined ? '' : ` ${failure.remediation}`;
   return {
     content: [{ type: 'text', text: `${failure.code}: ${failure.message}${remediation}` }],

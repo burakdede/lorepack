@@ -101,8 +101,10 @@ process.on('message', (message: Setup | Request) => {
     try {
       db = install(message);
       send({ ready: true });
-    } catch (cause) {
-      send({ ok: false, kind: 'failed', message: (cause as Error).message });
+    } catch {
+      // No message: opening a database fails with its absolute path in the text, and this
+      // reply's audience is a model (#560). The parent states what happened in fixed words.
+      send({ ok: false, kind: 'unavailable' });
     }
     return;
   }
@@ -141,8 +143,9 @@ process.on('message', (message: Setup | Request) => {
       truncated,
     });
   } catch (cause) {
-    // Passed through as text and classified by the parent. Nothing about the filesystem
-    // crosses this boundary, because this process never puts a path in a message.
+    // Passed through as text and classified by the parent. Only statement errors arrive
+    // here, after the database opened, and SQLite words those about the SQL rather than the
+    // file. Opening it is what names the path, and that failure is sent without a message.
     send({ ok: false, kind: 'failed', message: (cause as Error).message });
   }
 });

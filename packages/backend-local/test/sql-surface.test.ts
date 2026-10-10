@@ -422,3 +422,27 @@ describe('a misspelled first word', () => {
     }
   });
 });
+
+/**
+ * #560. A build removed after its scope opened made the child's setup fail, and its error,
+ * `Cannot open /home/someone/.../context.sqlite for reading.`, reached the model verbatim.
+ */
+describe('a build that cannot be opened', () => {
+  it('is reported without the path it lives at', async () => {
+    const missing = join(directory, 'gone', 'context.sqlite');
+    const caught = await executeQuery({
+      databasePath: missing,
+      allowedTables: [ordersTable],
+      sql: 'SELECT 1',
+    }).catch((error: unknown) => error);
+
+    expect(caught).toBeInstanceOf(LoreError);
+    const failure = caught as LoreError;
+    expect(failure.code).toBe('LORE_E_SQLITE_UNAVAILABLE');
+    for (const text of [failure.message, failure.remediation ?? '', failure.subject ?? '']) {
+      expect(text).not.toContain(directory);
+      expect(text).not.toContain('context.sqlite');
+    }
+    expect(failure.cause).toBeUndefined();
+  });
+});

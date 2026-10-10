@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ERROR_CODES, type ErrorCode, EXIT_CODES, exitCodeFor } from '../src/errors/codes.js';
 import { causeChain, LoreError } from '../src/errors/lore-error.js';
 import { REDACTED, redact, redactDeep, secretsFromEnv } from '../src/errors/redact.js';
-import { renderAsJson, renderForCli, renderForProtocol } from '../src/errors/render.js';
+import { forClient, renderAsJson, renderForCli, renderForProtocol } from '../src/errors/render.js';
 
 describe('error codes', () => {
   it('maps every code to an exit code', () => {
@@ -170,6 +170,29 @@ describe('redaction', () => {
   it('redacts nested structures', () => {
     const out = redactDeep({ a: [{ b: 'super-secret-token-value' }] }, secrets);
     expect(JSON.stringify(out)).not.toContain('super-secret-token-value');
+  });
+});
+
+describe('what a client across a trust boundary sees, #560', () => {
+  it('replaces an unclassified error whole, and hands the original back for the log', () => {
+    const raw = new Error('D1_ERROR: no such column: secret_internal_col (query: SELECT 1)');
+    const { error, hidden } = forClient(raw);
+    expect(error.code).toBe('LORE_E_INTERNAL');
+    expect(JSON.stringify(renderAsJson(error))).not.toContain('secret_internal_col');
+    expect(hidden).toBe(raw);
+  });
+
+  it('keeps a classified error, without its cause or an absolute path', () => {
+    const typed = new LoreError(
+      'LORE_E_SQLITE_UNAVAILABLE',
+      'Cannot open /private/tmp/u/proj/.lore/builds/b/context.sqlite for reading.',
+      { remediation: 'Check C:\\Users\\u\\proj.', cause: new Error('SQLITE_CANTOPEN /home/u/x') },
+    );
+    const { error, hidden } = forClient(typed);
+    const rendered = JSON.stringify(renderAsJson(error));
+    expect(error.code).toBe('LORE_E_SQLITE_UNAVAILABLE');
+    expect(rendered).not.toMatch(/private\/tmp|Users|home\/u|causes/);
+    expect(hidden).toBeUndefined();
   });
 });
 
