@@ -80,6 +80,10 @@ Every archive member MUST use a POSIX path. Every member timestamp MUST be norma
 `1980-01-01T00:00:00Z`, and file entries SHOULD use mode `100644`. The current writer uses
 deflate compression.
 
+The current writer writes the archive to a temporary file beside the destination, syncs it,
+and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any
+earlier archive at that path intact rather than truncated (#572).
+
 `checksums.json` has this shape:
 
 ```json

@@ -1,15 +1,26 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
+  closeSync,
   createWriteStream,
   existsSync,
+  fsyncSync,
   lstatSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
+  rmSync,
   statSync,
 } from 'node:fs';
-import { isAbsolute, join, posix, relative, sep } from 'node:path';
-import { checksumIndexSchema, LoreError, sha256Hex } from '@lorepack/core';
+import { basename, dirname, isAbsolute, join, posix, relative, sep } from 'node:path';
+import {
+  checksumIndexSchema,
+  diskFullError,
+  fsyncDirectory,
+  LoreError,
+  sha256Hex,
+} from '@lorepack/core';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
 
@@ -148,13 +159,30 @@ export async function writeArchive(
   }
   zip.end();
 
-  await new Promise<void>((resolve, reject) => {
-    const out = createWriteStream(destination);
-    out.on('error', reject);
-    out.on('close', resolve);
-    zip.outputStream.on('error', reject);
-    zip.outputStream.pipe(out);
-  });
+  // Written beside the destination and renamed over it, so a pack that is killed or runs
+  // out of space leaves the previous archive intact rather than a truncated one (#572). The
+  // same directory keeps the rename atomic.
+  const temporary = join(dirname(destination), `.${basename(destination)}.${randomUUID()}.tmp`);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const out = createWriteStream(temporary, { flags: 'wx' });
+      out.on('error', reject);
+      out.on('close', resolve);
+      zip.outputStream.on('error', reject);
+      zip.outputStream.pipe(out);
+    });
+    const fd = openSync(temporary, 'r+');
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(temporary, destination);
+    fsyncDirectory(dirname(destination));
+  } catch (cause) {
+    rmSync(temporary, { force: true });
+    throw diskFullError(cause) ?? cause;
+  }
 }
 
 export interface VerificationFailure {
