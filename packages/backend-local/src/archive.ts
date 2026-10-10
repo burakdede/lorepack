@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
-import { createWriteStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, posix, relative, sep } from 'node:path';
+import {
+  createWriteStream,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
+import { isAbsolute, join, posix, relative, sep } from 'node:path';
 import { checksumIndexSchema, LoreError, sha256Hex } from '@lorepack/core';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
@@ -422,21 +430,76 @@ function limitExceeded(
   );
 }
 
-/** Original source files, for `package.includeOriginals`. Paths are archive-relative. */
+export interface OriginalSource {
+  /** POSIX path relative to the project root: the artifact's display path. */
+  readonly path: string;
+  /** The artifact's recorded `content_hash`, the SHA-256 of the bytes the build read. */
+  readonly contentHash: string;
+}
+
+/**
+ * Original source files, for `package.includeOriginals`, at `originals/<project path>`.
+ *
+ * They are read from the live tree, long after discovery checked it, so each one is checked
+ * again: it must not be a link, its real path must stay inside the project, and its bytes must
+ * hash to what the build recorded. Anything else refuses the pack. An archive presents these
+ * as the build's originals (invariant 5), and packing whatever is there now, or quietly leaving
+ * a file out, would make that claim false. Retaining originals at build time (#420) removes
+ * the live read altogether.
+ */
 export function collectOriginals(
   projectRoot: string,
-  relativePaths: readonly string[],
+  originals: readonly OriginalSource[],
 ): ArchiveMember[] {
+  const realRoot = realpathSync(projectRoot);
   const members: ArchiveMember[] = [];
-  for (const relativePath of [...relativePaths].sort()) {
-    const absolute = join(projectRoot, ...relativePath.split('/'));
-    if (!existsSync(absolute)) continue;
-    members.push({
-      path: posix.join('originals', relativePath),
-      bytes: new Uint8Array(readFileSync(absolute)),
-    });
+  for (const original of [...originals].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    const absolute = join(projectRoot, ...original.path.split('/'));
+    const changed = (detail: string, cause?: unknown): LoreError =>
+      new LoreError(
+        'LORE_E_STALE_SOURCES',
+        `${original.path} ${detail} since the build, so its original cannot be packed.`,
+        {
+          remediation:
+            'Run `lorepack build` and pack the new build, or set package.includeOriginals: false to pack this build without originals.',
+          path: original.path,
+          ...(cause === undefined ? {} : { cause }),
+        },
+      );
+
+    let link: ReturnType<typeof lstatSync>;
+    let real: string;
+    try {
+      link = lstatSync(absolute);
+      real = realpathSync(absolute);
+    } catch (cause) {
+      throw changed('was removed or became unreadable', cause);
+    }
+    if (link.isSymbolicLink() || !isWithin(realRoot, real)) {
+      throw new LoreError(
+        'LORE_E_PATH_ESCAPE',
+        link.isSymbolicLink()
+          ? `${original.path} is now a symbolic link, so its original cannot be packed.`
+          : `${original.path} now resolves outside the project, so its original cannot be packed.`,
+        {
+          remediation:
+            'Replace the link with the file itself and rebuild, or set package.includeOriginals: false.',
+          path: original.path,
+        },
+      );
+    }
+    if (!link.isFile()) throw changed('is no longer a regular file');
+
+    const bytes = new Uint8Array(readFileSync(real));
+    if (sha256Hex(bytes) !== original.contentHash) throw changed('changed');
+    members.push({ path: posix.join('originals', original.path), bytes });
   }
   return members;
+}
+
+function isWithin(root: string, candidate: string): boolean {
+  const path = relative(root, candidate).split(sep).join('/');
+  return path !== '' && path !== '..' && !path.startsWith('../') && !isAbsolute(path);
 }
 
 /** Normalizes a filesystem path into the POSIX form used inside an archive. */

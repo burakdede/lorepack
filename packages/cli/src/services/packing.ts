@@ -4,6 +4,7 @@ import {
   collectBuildMembers,
   collectObjects,
   collectOriginals,
+  type OriginalSource,
   openReadOnly,
   writeArchive,
 } from '@lorepack/backend-local';
@@ -60,7 +61,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
     }
 
     const directory = buildDirectory(loreDirectory, buildId);
-    const { objectHashes, sourcePaths } = readReferences(directory);
+    const { objectHashes, originals } = readReferences(directory);
 
     const members: ArchiveMember[] = collectBuildMembers(
       directory,
@@ -70,7 +71,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
     // someone's document folder, and shipping binaries by default would be a surprise the
     // user did not ask for.
     if (config.effective.includeOriginals) {
-      members.push(...collectOriginals(config.projectRoot, sourcePaths));
+      members.push(...collectOriginals(config.projectRoot, originals));
     }
 
     const destination =
@@ -100,19 +101,23 @@ function activeOrFail(buildId: BuildId | undefined): BuildId {
   return buildId;
 }
 
-/** The objects and source paths a build references, read from the build itself. */
+/** The objects and original sources a build references, read from the build itself. */
 function readReferences(directory: string): {
   objectHashes: string[];
-  sourcePaths: string[];
+  originals: OriginalSource[];
 } {
   const db = openReadOnly(join(directory, 'context.sqlite'));
   try {
+    // `display_path`, not `relative_path`: the latter is relative to its source root, so it
+    // names the wrong file whenever a source is not the project root.
     const rows = db
-      .prepare('SELECT object_hash AS objectHash, relative_path AS relativePath FROM artifacts')
-      .all() as Array<{ objectHash: string; relativePath: string }>;
+      .prepare(
+        'SELECT object_hash AS objectHash, display_path AS path, content_hash AS contentHash FROM artifacts',
+      )
+      .all() as Array<{ objectHash: string; path: string; contentHash: string }>;
     return {
       objectHashes: rows.map((row) => row.objectHash),
-      sourcePaths: rows.map((row) => row.relativePath),
+      originals: rows.map((row) => ({ path: row.path, contentHash: row.contentHash })),
     };
   } finally {
     db.close();
