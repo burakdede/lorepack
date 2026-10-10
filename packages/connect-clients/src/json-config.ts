@@ -77,19 +77,58 @@ export function writeJsonAtomically(
   writeFileAtomically(path, `${JSON.stringify(value, null, 2)}\n`, options);
 }
 
+/**
+ * Where a client keeps its servers: one key (`mcpServers`), or a path to a nested object.
+ *
+ * Claude Code's local scope is the nested case, `projects[<project>].mcpServers` inside
+ * `.claude.json`, beside a great deal of client state that must survive the edit untouched.
+ */
+export type ContainerPath = string | readonly string[];
+
+const segmentsOf = (path: ContainerPath): readonly string[] =>
+  typeof path === 'string' ? [path] : path;
+
+const asObject = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
+/** The servers object at `path`, or undefined when any step of the way is missing. */
+export function serversAt(
+  document: Record<string, unknown>,
+  path: ContainerPath,
+): Record<string, unknown> | undefined {
+  let current: Record<string, unknown> | undefined = document;
+  for (const segment of segmentsOf(path)) {
+    current = asObject(current?.[segment]);
+    if (current === undefined) return undefined;
+  }
+  return current;
+}
+
+/** Replaces the object at `path`, creating each missing step and keeping every sibling. */
+function withObjectAt(
+  document: Record<string, unknown>,
+  path: readonly string[],
+  update: (current: Record<string, unknown>) => Record<string, unknown>,
+): Record<string, unknown> {
+  const [head, ...rest] = path;
+  if (head === undefined) return update(document);
+  const child = asObject(document[head]) ?? {};
+  return { ...document, [head]: withObjectAt(child, rest, update) };
+}
+
 /** Sets one server entry inside a nested container, leaving every sibling untouched. */
 export function withServerEntry(
   document: Record<string, unknown>,
-  containerKey: string,
+  containerPath: ContainerPath,
   serverName: string,
   entry: Record<string, unknown>,
 ): Record<string, unknown> {
-  const container = document[containerKey];
-  const servers =
-    typeof container === 'object' && container !== null && !Array.isArray(container)
-      ? (container as Record<string, unknown>)
-      : {};
-  return { ...document, [containerKey]: { ...servers, [serverName]: entry } };
+  return withObjectAt(document, segmentsOf(containerPath), (servers) => ({
+    ...servers,
+    [serverName]: entry,
+  }));
 }
 
 /**
@@ -100,25 +139,20 @@ export function withServerEntry(
  */
 export function withoutServerEntry(
   document: Record<string, unknown>,
-  containerKey: string,
+  containerPath: ContainerPath,
   serverName: string,
   projectRoot?: string,
 ): { readonly document: Record<string, unknown>; readonly removed: boolean } {
-  const container = document[containerKey];
-  if (typeof container !== 'object' || container === null || Array.isArray(container)) {
-    return { document, removed: false };
-  }
-
-  const servers = container as Record<string, unknown>;
-  const existing = servers[serverName];
+  const servers = serversAt(document, containerPath);
+  const existing = servers?.[serverName];
   if (existing === undefined || !isOwned(existing, projectRoot)) {
     // Present but not ours: leaving it is the only defensible choice. A user who configured
     // a server with this name by hand did not ask us to delete it.
     return { document, removed: false };
   }
 
-  const remaining = Object.fromEntries(
-    Object.entries(servers).filter(([name]) => name !== serverName),
+  const after = withObjectAt(document, segmentsOf(containerPath), (current) =>
+    Object.fromEntries(Object.entries(current).filter(([name]) => name !== serverName)),
   );
-  return { document: { ...document, [containerKey]: remaining }, removed: true };
+  return { document: after, removed: true };
 }

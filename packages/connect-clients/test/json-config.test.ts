@@ -183,3 +183,41 @@ describe('writing', () => {
     expect(JSON.parse(readFileSync(nested, 'utf8'))).toEqual({ ok: true });
   });
 });
+
+describe('a container nested inside the document', () => {
+  const PATH = ['projects', '/work/a', 'mcpServers'];
+  const STATE = {
+    numStartups: 3,
+    projects: {
+      '/work/a': { allowedTools: ['Bash'], mcpServers: { theirs: { command: 'x' } } },
+      '/work/b': { mcpServers: { lorepack: markOwned({ command: 'lorepack' }, '/work/b') } },
+    },
+  };
+
+  it('adds an entry at the path, creating missing steps and keeping every sibling', () => {
+    const merged = withServerEntry(STATE, PATH, 'lorepack', { command: 'lorepack' });
+    const projects = merged.projects as Record<string, Record<string, unknown>>;
+
+    expect(projects['/work/a']?.allowedTools).toEqual(['Bash']);
+    expect(projects['/work/a']?.mcpServers).toEqual({
+      theirs: { command: 'x' },
+      lorepack: { command: 'lorepack' },
+    });
+    expect(projects['/work/b']).toEqual(STATE.projects['/work/b']);
+    expect(merged.numStartups).toBe(3);
+
+    const fresh = withServerEntry({}, ['projects', '/new', 'mcpServers'], 'lorepack', {});
+    expect(fresh).toEqual({ projects: { '/new': { mcpServers: { lorepack: {} } } } });
+  });
+
+  it('removes only the entry at the path, and only when this project owns it', () => {
+    const document = withServerEntry(STATE, PATH, 'lorepack', markOwned({}, '/work/a'));
+
+    const elsewhere = withoutServerEntry(document, PATH, 'lorepack', '/work/b');
+    expect(elsewhere.removed).toBe(false);
+
+    const { document: after, removed } = withoutServerEntry(document, PATH, 'lorepack', '/work/a');
+    expect(removed).toBe(true);
+    expect(after).toEqual(STATE);
+  });
+});
