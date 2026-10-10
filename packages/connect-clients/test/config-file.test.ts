@@ -76,15 +76,31 @@ describe('backing up', () => {
     expect(modeOf(copy)).toBe(0o600);
   });
 
-  posixOnly('refuses to write through a link planted at the backup name', () => {
+  it('never overwrites an earlier backup taken in the same millisecond', () => {
+    const path = join(directory, 'config.toml');
+    const now = () => new Date('2026-10-10T00:00:00.000Z');
+    writeFileSync(path, 'original\n');
+    const first = backup(path, now) as string;
+    writeFileSync(path, 'edited\n');
+    const second = backup(path, now) as string;
+
+    expect(second).not.toBe(first);
+    expect(readFileSync(first, 'utf8')).toBe('original\n');
+    expect(readFileSync(second, 'utf8')).toBe('edited\n');
+  });
+
+  posixOnly('never writes through a link planted at the backup name', () => {
     const path = join(directory, 'config.toml');
     writeFileSync(path, 'x = 1\n');
     const victim = join(directory, 'victim');
     writeFileSync(victim, 'untouched');
     const now = () => new Date('2026-10-10T00:00:00.000Z');
-    symlinkSync(victim, `${path}.lorepack-2026-10-10T00-00-00-000Z.bak`);
+    const planted = `${path}.lorepack-2026-10-10T00-00-00-000Z.bak`;
+    symlinkSync(victim, planted);
 
-    expect(() => backup(path, now)).toThrow(/EEXIST/);
+    const copy = backup(path, now) as string;
+    expect(copy).not.toBe(planted);
+    expect(readFileSync(copy, 'utf8')).toBe('x = 1\n');
     expect(readFileSync(victim, 'utf8')).toBe('untouched');
   });
 });

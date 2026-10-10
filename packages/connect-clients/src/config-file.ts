@@ -104,15 +104,26 @@ function refuseProjectSymlinks(path: string, projectRoot: string): void {
   }
 }
 
-/** A timestamped copy beside the original, returned so a receipt can name it. */
+/**
+ * A timestamped copy beside the original, returned so a receipt can name it.
+ *
+ * Never overwrites: a connect and a disconnect can land in the same millisecond, and the
+ * second backup replacing the first would lose the only copy of the original. A taken name,
+ * including a link planted at it, moves on to a numbered one instead. The copy keeps the
+ * original's mode, which matters because the original may be holding a token.
+ */
 export function backup(path: string, now: () => Date = () => new Date()): string | undefined {
   if (!existsSync(path)) return undefined;
   const stamp = now().toISOString().replace(/[:.]/g, '-');
-  const target = `${path}.lorepack-${stamp}.bak`;
-  // Exclusive, so a link planted at the backup name cannot redirect the copy. The copy keeps
-  // the original's mode, which matters because the original may be holding a token.
-  copyFileSync(path, target, constants.COPYFILE_EXCL);
-  return target;
+  for (let attempt = 0; ; attempt += 1) {
+    const target = `${path}.lorepack-${stamp}${attempt === 0 ? '' : `-${attempt}`}.bak`;
+    try {
+      copyFileSync(path, target, constants.COPYFILE_EXCL);
+      return target;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
 }
 
 /**
