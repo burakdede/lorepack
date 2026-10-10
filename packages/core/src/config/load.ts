@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, parse as parsePath, relative, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { LoreError } from '../errors/lore-error.js';
@@ -96,7 +96,10 @@ function positionOf(source: string, offset: number | undefined): YamlPosition | 
   return { line: lines.length, column: (lines.at(-1)?.length ?? 0) + 1 };
 }
 
-export function readConfigFile(configPath: string): { config: LoreConfig; raw: string } {
+export function readConfigFile(configPath: string): {
+  config: LoreConfig;
+  raw: string;
+} {
   let raw: string;
   try {
     raw = readFileSync(configPath, 'utf8');
@@ -141,7 +144,10 @@ export function readConfigFile(configPath: string): { config: LoreConfig; raw: s
         remediation: suggestionFor(issue?.code, keyPath),
         path: CONFIG_FILENAME,
         details: {
-          issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+          issues: parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          })),
         },
       },
     );
@@ -164,7 +170,11 @@ function suggestionFor(code: string | undefined, keyPath: string): string {
 
 function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource[] {
   const sources: ResolvedSource[] = [];
+  const realRoots: string[] = [];
   const seen = new Set<string>();
+  // The project root may itself sit behind a link (/tmp is /private/tmp on macOS), so the
+  // sources are compared with its real path, never with the spelling the walk-up found.
+  const realProjectRoot = realpathSync(projectRoot);
 
   for (const declared of config.sources) {
     // lore.yaml is committed and therefore portable. A path written on Windows as
@@ -197,10 +207,41 @@ function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource
       });
     }
 
-    // Containment is checked against the project root using the same rules as discovery,
-    // so a source cannot reach outside the project by any spelling.
+    // Containment is checked twice. The lexical check refuses `../elsewhere` by any
+    // spelling; the real-path check refuses a source that is, or passes through, a symbolic
+    // link out of the project. Discovery only inspects entries below a root, so without the
+    // second check `docs -> ../../` would carry the whole build outside (issue 583).
     const relativeRoot =
       resolve(absolute) === resolve(projectRoot) ? '.' : toCanonical(projectRoot, absolute);
+    const realRoot = realpathSync(absolute);
+    if (!isWithin(realProjectRoot, realRoot)) {
+      throw new LoreError(
+        'LORE_E_PATH_ESCAPE',
+        `Source ${declared} resolves outside the project through a symbolic link.`,
+        {
+          remediation:
+            'Point the link inside the project, or copy the content in. A source must live inside the project so the build can be reproduced from it.',
+          path: CONFIG_FILENAME,
+          subject: declared,
+          details: { target: toPosix(realRoot) },
+        },
+      );
+    }
+
+    // Stat the real target rather than the link, and accept only the two kinds discovery
+    // knows how to read. A FIFO or a device as a file source would block or never end.
+    const stats = statSync(realRoot);
+    if (!stats.isDirectory() && !stats.isFile()) {
+      throw new LoreError(
+        'LORE_E_CONFIG_INVALID',
+        `Source ${declared} is not a regular file or a directory.`,
+        {
+          remediation: 'Name a directory or a regular file in `sources` in lore.yaml.',
+          path: CONFIG_FILENAME,
+          subject: declared,
+        },
+      );
+    }
 
     if (seen.has(relativeRoot)) {
       throw new LoreError('LORE_E_CONFIG_INVALID', `Duplicate source: ${declared}`, {
@@ -226,7 +267,8 @@ function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource
       );
     }
 
-    const overlapping = sources.find((source) => rootsOverlap(source.root, absolute));
+    // Overlap on real paths too: two names for one directory would index each file twice.
+    const overlapping = sources[realRoots.findIndex((root) => rootsOverlap(root, realRoot))];
     if (overlapping !== undefined) {
       throw new LoreError(
         'LORE_E_CONFIG_INVALID',
@@ -240,9 +282,10 @@ function resolveSources(projectRoot: string, config: LoreConfig): ResolvedSource
       );
     }
 
+    realRoots.push(realRoot);
     sources.push({
       id: sourceId,
-      kind: statSync(absolute).isDirectory() ? 'directory' : 'file',
+      kind: stats.isDirectory() ? 'directory' : 'file',
       root: absolute,
       relativeRoot,
     });
