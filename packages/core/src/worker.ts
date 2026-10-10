@@ -18,6 +18,7 @@ export {
 export { causeChain, LoreError, type LoreErrorOptions } from './errors/lore-error.js';
 export { REDACTED, redact, redactDeep, secretsFromEnv } from './errors/redact.js';
 export {
+  forClient,
   type JsonError,
   type RenderOptions,
   renderAsJson,

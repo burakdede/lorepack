@@ -6,6 +6,7 @@ export {
   EXIT_CODES,
   type ExitCode,
   exitCodeFor,
+  forClient,
   type JsonError,
   LoreError,
   type LoreErrorOptions,

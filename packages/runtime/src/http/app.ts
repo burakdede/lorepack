@@ -1,5 +1,6 @@
 import {
   type BuildId,
+  forClient,
   LoreError,
   type LoreRuntime,
   renderAsJson,
@@ -720,9 +721,14 @@ function tooLarge(limit: number): LoreError {
 }
 
 function failure(context: Context, error: unknown, status: number): Response {
+  // What a client may see of it: an unclassified exception, such as raw D1 text quoting SQL
+  // and schema, becomes a generic internal error, and no cause chain or absolute path leaves
+  // (#560). The original goes to the operator's log, which on a Worker is Workers Logs.
+  const { error: visible, hidden } = forClient(error);
+  if (hidden !== undefined) console.error('lorepack: internal error while answering', hidden);
   // Rendered through the Phase 0 taxonomy, so redaction happens once rather than at every
   // call site, and an accidentally embedded token cannot leave the process.
-  const rendered = renderAsJson(error, { secrets: secretsFromEnv() });
+  const rendered = renderAsJson(visible, { secrets: secretsFromEnv() });
   return context.json(rendered, status as 400);
 }
 

@@ -103,10 +103,44 @@ export function renderForProtocol(
   return { code: err.code, message: stripAbsolutePaths(redact(message, secrets)) };
 }
 
-const ABSOLUTE_PATH = /(?:[A-Za-z]:\\[^\s"']*|\/(?:home|Users|var|tmp|opt|etc|root)\/[^\s"']*)/g;
+const ABSOLUTE_PATH =
+  /(?:[A-Za-z]:\\[^\s"']*|\/(?:home|Users|var|tmp|private|opt|etc|root|mnt|srv|Volumes|run|media)\/[^\s"']*)/g;
 
 export function stripAbsolutePaths(text: string): string {
   return text.replace(ABSOLUTE_PATH, '<path>');
+}
+
+/** What a client across a trust boundary is told when the server itself broke. */
+const HIDDEN_MESSAGE = 'The server could not complete this request.';
+const HIDDEN_REMEDIATION =
+  'The detail was logged where this server runs. Retry, and report it with that log if it persists.';
+
+/**
+ * The error a remote or model-facing client may see, and what was withheld from it (#560).
+ *
+ * A failure Lorepack classified is a `LoreError`, written for its reader: it keeps its code
+ * and wording, with absolute paths removed and its cause chain dropped, because a cause is
+ * whatever a dependency said. Anything unclassified, such as a raw D1 or SQLite exception, is
+ * replaced whole by a generic internal error: its text can quote SQL, schema and file paths.
+ * `hidden` is the original, for the caller to log where an operator can read it. It is also
+ * set for a classified internal error, which by definition nobody expected.
+ */
+export function forClient(error: unknown): { error: LoreError; hidden: unknown } {
+  if (!LoreError.is(error)) {
+    return {
+      error: new LoreError('LORE_E_INTERNAL', HIDDEN_MESSAGE, { remediation: HIDDEN_REMEDIATION }),
+      hidden: error,
+    };
+  }
+  const visible = new LoreError(error.code, stripAbsolutePaths(error.message), {
+    ...(error.remediation === undefined
+      ? {}
+      : { remediation: stripAbsolutePaths(error.remediation) }),
+    ...(error.path === undefined ? {} : { path: stripAbsolutePaths(error.path) }),
+    ...(error.subject === undefined ? {} : { subject: stripAbsolutePaths(error.subject) }),
+    ...(error.details === undefined ? {} : { details: error.details }),
+  });
+  return { error: visible, hidden: error.code === 'LORE_E_INTERNAL' ? error : undefined };
 }
 
 /** A field worth rendering: set, and not the empty string. */
