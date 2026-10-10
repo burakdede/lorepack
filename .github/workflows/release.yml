@@ -1,5 +1,21 @@
 name: Release
 
+# A real release takes two dispatches, both from `main`:
+#
+# 1. `resume_existing: false` versions the packages, opens the release PR, waits for its CI and
+#    merges it. It publishes nothing.
+# 2. `resume_existing: true`, dispatched on the merged release commit, builds and checks the
+#    tarball, publishes it, and only then tags and creates the GitHub release.
+#
+# Publishing happens only in step 2 so that the commit npm's provenance names (the run's own
+# commit), the tarball's `gitHead` and the git tag are the same commit (#619). Step 1 cannot
+# publish: its run's commit is the one before the version bump.
+#
+# The jobs are split by what they may do (#604). Only `publish` can mint the npm OIDC token, and
+# it runs no workspace install and no dev dependency: it reads two node-only scripts from a
+# sparse checkout and publishes the tarball `build` uploaded. It runs in the `npm-release`
+# environment, which needs a reviewer's approval and only accepts `main`.
+
 on:
   workflow_dispatch:
     inputs:
@@ -30,19 +46,86 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 env:
   NODE_VERSION: '24.21.0'
   RELEASE_COMMIT: ${{ github.sha }}
+  RELEASE_VERSION: ${{ inputs.version }}
+  RELEASE_CHANNEL: ${{ inputs.channel }}
+  DRY_RUN: ${{ inputs.dry_run }}
+  RESUME_EXISTING: ${{ inputs.resume_existing }}
+  PERFORMANCE_REPORT_URL: ${{ inputs.performance_report_url }}
 
 jobs:
-  release:
-    name: changesets release
+  guard:
+    name: validate release inputs
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Validate inputs before anything reads them
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$'; then
+            echo "::error::version must look like 1.2.3 or 1.2.3-rc.1"
+            exit 1
+          fi
+          case "$RELEASE_CHANNEL" in
+            latest | next) ;;
+            *) echo "::error::channel must be latest or next"; exit 1 ;;
+          esac
+          case "$RELEASE_VERSION" in
+            *-*)
+              if [ "$RELEASE_CHANNEL" = latest ]; then
+                echo "::error::prerelease $RELEASE_VERSION cannot be published to latest; use next"
+                exit 1
+              fi
+              ;;
+          esac
+          if [ -n "$PERFORMANCE_REPORT_URL" ] && ! printf '%s' "$PERFORMANCE_REPORT_URL" | grep -Eq '^https://[A-Za-z0-9./?=&_%#:~+-]+$'; then
+            echo "::error::performance_report_url must be an https URL"
+            exit 1
+          fi
+
+      - name: Require the reference-machine performance report for stable publish
+        if: ${{ !inputs.dry_run && inputs.channel == 'latest' }}
+        shell: bash
+        run: |
+          if [ -z "$PERFORMANCE_REPORT_URL" ]; then
+            echo "::error::stable publish requires the green issue #101 performance report URL"
+            exit 1
+          fi
+
+      - name: Restrict every real release to main
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
+            echo "::error::a real release must be dispatched from main, not ${GITHUB_REF}"
+            exit 1
+          fi
+
+      - name: Require npm Trusted Publishing for real release
+        if: ${{ !inputs.dry_run }}
+        run: echo "real release publishes from the npm-release environment with GitHub OIDC"
+
+  release-pr:
+    # Versions the packages and merges the release PR. Holds write access to the repository
+    # and runs the workspace install, so it has no `id-token` and publishes nothing.
+    name: release PR
+    needs: guard
+    if: ${{ !inputs.dry_run && !inputs.resume_existing }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
-      actions: write
       pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -54,7 +137,100 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Preflight npm package bootstrap
+        run: node scripts/preflight-npm-packages.mjs
+
+      - name: Apply Changesets version
+        run: pnpm changeset version && node scripts/stamp-release-version.mjs
+
+      - run: pnpm build
+
+      - name: Generate dependency health report and CycloneDX SBOM
+        env:
+          LOREPACK_VERSION: ${{ inputs.version }}
+        run: pnpm supply-chain:report
+
+      - name: Commit version and generated release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .changeset package.json packages/*/package.json reports/dependency-health.json reports/sbom.cyclonedx.json
+          git add packages/*/CHANGELOG.md 2>/dev/null || true
+          git commit -m "Release v${RELEASE_VERSION} [no release]"
+          release_branch="release/v${RELEASE_VERSION}"
+          release_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/${release_branch}"
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$release_branch" \
+            --title "Release v${RELEASE_VERSION}" \
+            --body "Refs #455. This release PR records the generated package versions, changelogs and supply-chain evidence before publishing.")"
+          gh workflow run ci.yml --ref "$release_branch"
+          gh workflow run commit-hygiene.yml --ref "$release_branch"
+          wait_for_workflow() {
+            workflow="$1"
+            run_id=""
+            for attempt in $(seq 1 30); do
+              run_id="$(gh run list \
+                --workflow "$workflow" \
+                --branch "$release_branch" \
+                --event workflow_dispatch \
+                --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" | head -n 1)"
+              if [ -n "$run_id" ]; then
+                break
+              fi
+              echo "waiting for $workflow run (attempt $attempt/30)"
+              sleep 10
+            done
+            test -n "$run_id"
+            gh run watch "$run_id" --exit-status
+          }
+          wait_for_workflow ci.yml
+          wait_for_workflow commit-hygiene.yml
+          gh pr merge "$pr_url" --squash --delete-branch=false
+          release_target="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
+          test -n "$release_target"
+          {
+            echo "### Release PR merged"
+            echo
+            echo "v${RELEASE_VERSION} is versioned at \`${release_target}\`. Nothing was published."
+            echo
+            echo "Dispatch this workflow again from \`main\` with \`resume_existing: true\` once"
+            echo "\`main\` is at that commit and its checks are green, to build, publish, tag and"
+            echo "release it. The tag, the npm \`gitHead\` and the provenance commit will all be"
+            echo "the commit that run is dispatched on."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    # Install, verify, build and pack. Runs every dev dependency, so it can read the repository
+    # and nothing else: no write token, no `id-token`.
+    name: build and check release artifacts
+    needs: guard
+    if: ${{ inputs.dry_run || inputs.resume_existing }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
@@ -118,38 +294,24 @@ jobs:
           echo "::error::required release gates did not all finish for $RELEASE_COMMIT"
           exit 1
 
-      - name: Require the reference-machine performance report for stable publish
-        if: ${{ !inputs.dry_run && inputs.channel == 'latest' }}
-        run: |
-          if [ -z "${{ inputs.performance_report_url }}" ]; then
-            echo "::error::stable publish requires the green issue #101 performance report URL"
-            exit 1
-          fi
-
-      - name: Require npm Trusted Publishing for real release
-        if: ${{ !inputs.dry_run }}
-        run: |
-          echo "real release uses GitHub OIDC for npm Trusted Publishing"
-
       - name: Preflight npm package bootstrap
         if: ${{ !inputs.dry_run }}
         run: node scripts/preflight-npm-packages.mjs
 
-      - name: Restrict existing-release recovery to main
-        if: ${{ !inputs.dry_run && inputs.resume_existing }}
-        run: |
-          if [ "${GITHUB_REF}" != 'refs/heads/main' ]; then
-            echo "::error::existing-release recovery must run from main"
-            exit 1
-          fi
-
       - run: pnpm verify
 
-      - name: Apply Changesets version
-        if: ${{ !inputs.resume_existing }}
+      - name: Preview the Changesets version for a dry run
+        if: ${{ inputs.dry_run && !inputs.resume_existing }}
         run: pnpm changeset version && node scripts/stamp-release-version.mjs
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
+
+      - name: Require the release commit to carry the requested version
+        if: ${{ inputs.resume_existing }}
+        run: |
+          actual="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "$actual" != "$RELEASE_VERSION" ]; then
+            echo "::error::packages/cli is $actual at $RELEASE_COMMIT, not $RELEASE_VERSION"
+            exit 1
+          fi
 
       - run: pnpm build
 
@@ -178,12 +340,11 @@ jobs:
         run: |
           mkdir -p release-artifacts
           {
-            echo "# v${{ inputs.version }}"
+            echo "# v${RELEASE_VERSION}"
             echo
             echo "Released from ${RELEASE_COMMIT}."
             echo
-            release_version="${{ inputs.version }}"
-            if printf '%s' "$release_version" | grep -q -- '-'; then
+            if printf '%s' "$RELEASE_VERSION" | grep -q -- '-'; then
               cat <<'EOF' | sed 's/^  //'
             ## Alpha status
 
@@ -209,15 +370,19 @@ jobs:
             sed -n '1,220p' docs/compatibility/v0.1-upgrade.md
           } > release-artifacts/release-notes.md
 
-      - name: Upload dry-run release artifacts
+      - name: Collect release artifacts
+        run: |
+          mkdir -p release-artifacts/assets
+          cp reports/dependency-health.json reports/sbom.cyclonedx.json release-artifacts/assets/
+          cp examples/product-research/product-research.lorepack release-artifacts/assets/
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: release-dry-run
+          name: release-artifacts
           path: |
             release-artifacts/npm/*.tgz
-            reports/dependency-health.json
-            reports/sbom.cyclonedx.json
-            examples/product-research/product-research.lorepack
+            release-artifacts/assets/*
             release-artifacts/release-notes.md
           if-no-files-found: error
           retention-days: 90
@@ -225,97 +390,94 @@ jobs:
       - name: Stop before side effects during dry run
         if: ${{ inputs.dry_run }}
         run: |
-          git diff --exit-code -- . ':(exclude)reports/dependency-health.json' ':(exclude)reports/sbom.cyclonedx.json' || true
           echo "dry run complete: no commit, tag, GitHub release or npm publish was created"
 
-      - name: Commit version and generated release artifacts
-        if: ${{ !inputs.dry_run && !inputs.resume_existing }}
+  publish:
+    # The only job that can mint the npm OIDC token. No workspace install and no dev
+    # dependency runs here: the publisher and its helper use node builtins only, and the
+    # tarball is the one `build` packed and checked. The environment requires an approval and
+    # accepts only `main`, and the npm Trusted Publisher is bound to it.
+    name: publish to npm
+    needs: build
+    if: ${{ !inputs.dry_run && inputs.resume_existing }}
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/publish-packages.mjs
+            scripts/release-packages.mjs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # Moving a dist-tag through OIDC needs npm 11.21.0 or later; Node 24 bundles an older npm.
+      - name: Install the npm CLI that supports OIDC dist-tags
+        run: npm install --global --ignore-scripts npm@11.21.0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-artifacts
+          path: release-artifacts
+
+      - name: Publish npm packages with Trusted Publishing
+        run: node scripts/publish-packages.mjs --tag "$RELEASE_CHANNEL" --tarballs release-artifacts/npm
+
+  github-release:
+    # Tags and releases only after npm accepted the tarball, so a failed publish leaves no tag
+    # pointing at code that was never published (#619).
+    name: tag and GitHub release
+    needs: publish
+    if: ${{ !inputs.dry_run && inputs.resume_existing }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-artifacts
+          path: release-artifacts
+
+      - name: Create GitHub release with SBOM and example artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .changeset package.json packages/*/package.json reports/dependency-health.json reports/sbom.cyclonedx.json
-          git add packages/*/CHANGELOG.md 2>/dev/null || true
-          git commit -m "Release v${{ inputs.version }} [no release]"
-          release_branch="release/v${{ inputs.version }}"
-          release_head="$(git rev-parse HEAD)"
-          git push origin "HEAD:refs/heads/${release_branch}"
-          pr_url="$(gh pr create \
-            --base main \
-            --head "$release_branch" \
-            --title "Release v${{ inputs.version }}" \
-            --body "Refs #455. This release PR records the generated package versions, changelogs and supply-chain evidence before publishing.")"
-          gh workflow run ci.yml --ref "$release_branch"
-          gh workflow run commit-hygiene.yml --ref "$release_branch"
-          wait_for_workflow() {
-            workflow="$1"
-            run_id=""
-            for attempt in $(seq 1 30); do
-              run_id="$(gh run list \
-                --workflow "$workflow" \
-                --branch "$release_branch" \
-                --event workflow_dispatch \
-                --limit 20 \
-                --json databaseId,headSha \
-                --jq ".[] | select(.headSha == \"$release_head\") | .databaseId" | head -n 1)"
-              if [ -n "$run_id" ]; then
-                break
-              fi
-              echo "waiting for $workflow run (attempt $attempt/30)"
-              sleep 10
-            done
-            test -n "$run_id"
-            gh run watch "$run_id" --exit-status
-          }
-          wait_for_workflow ci.yml
-          wait_for_workflow commit-hygiene.yml
-          gh pr merge "$pr_url" --squash --delete-branch=false
-          release_target="$(gh pr view "$pr_url" --json mergeCommit --jq '.mergeCommit.oid')"
-          test -n "$release_target"
-          echo "RELEASE_TARGET=$release_target" >> "$GITHUB_ENV"
-
-      - name: Use the merged commit as the existing release target
-        if: ${{ !inputs.dry_run && inputs.resume_existing }}
-        run: echo "RELEASE_TARGET=${GITHUB_SHA}" >> "$GITHUB_ENV"
-
-      - name: Create GitHub release with SBOM and example artifact
-        if: ${{ !inputs.dry_run }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
+          release_tag="v${RELEASE_VERSION}"
           release_options=()
-          if printf '%s' "${{ inputs.version }}" | grep -q -- '-'; then
+          if printf '%s' "$RELEASE_VERSION" | grep -q -- '-'; then
             release_options+=(--prerelease)
           fi
-          release_tag="v${{ inputs.version }}"
-          if existing_release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" 2>/dev/null)"; then
-            existing_target="$(printf '%s' "$existing_release" | jq -r '.target_commitish')"
-            if [ "$existing_target" != "$RELEASE_TARGET" ]; then
-              if [ "${{ inputs.resume_existing }}" != 'true' ] || ! git merge-base --is-ancestor "$existing_target" "$RELEASE_TARGET"; then
-                echo "::error::existing $release_tag targets $existing_target, expected $RELEASE_TARGET"
-                exit 1
-              fi
-              echo "retargeting existing $release_tag from ancestor $existing_target to $RELEASE_TARGET"
-              gh release edit "$release_tag" --target "$RELEASE_TARGET"
+          assets=(release-artifacts/assets/*)
+          if tag_ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_tag}" 2>/dev/null)"; then
+            # A tag is never moved. An existing one is only reused when it already names this
+            # commit, which is a retry of this same release.
+            tag_sha="$(printf '%s' "$tag_ref" | jq -r '.object.sha')"
+            if [ "$(printf '%s' "$tag_ref" | jq -r '.object.type')" = tag ]; then
+              tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
             fi
-            gh release upload "$release_tag" \
-              reports/dependency-health.json \
-              reports/sbom.cyclonedx.json \
-              examples/product-research/product-research.lorepack \
-              --clobber
+            if [ "$tag_sha" != "$RELEASE_COMMIT" ]; then
+              echo "::error::existing $release_tag targets $tag_sha, expected $RELEASE_COMMIT"
+              exit 1
+            fi
+          fi
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$release_tag" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
           else
             gh release create "$release_tag" \
-              --target "$RELEASE_TARGET" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$RELEASE_COMMIT" \
               "${release_options[@]}" \
               --title "$release_tag" \
               --notes-file release-artifacts/release-notes.md \
-              reports/dependency-health.json \
-              reports/sbom.cyclonedx.json \
-              examples/product-research/product-research.lorepack
+              "${assets[@]}"
           fi
-
-      - name: Publish npm packages with Trusted Publishing
-        if: ${{ !inputs.dry_run }}
-        run: node scripts/publish-packages.mjs --tag "${{ inputs.channel }}"

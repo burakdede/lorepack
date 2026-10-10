@@ -84,24 +84,51 @@ The public `@lorepack/cli` package sets:
 }
 ```
 
-The release workflow grants `id-token: write`, uses `actions/setup-node` with the npm registry,
-and publishes the CLI through `scripts/publish-packages.mjs` using npm Trusted Publishing.
-The publisher checks the registry first so a retry skips versions already published, then invokes
-`npm publish <tarball>` for every missing version, on the tarball that was packed and checked
-rather than on the package directory, which would re-pack it without its bundled tree. npm obtains the provenance statement from GitHub's OIDC
-identity, so the workflow has no long-lived npm publish token.
+Publishing is gated three ways (#604):
 
-Before the first real release, configure Trusted Publishing in the npm settings for
-`@lorepack/cli`. Select GitHub Actions and set organization `burakdede`, repository
-`lorepack`, workflow filename `release.yml`, and permission for direct `npm publish`. The
-workflow uses the `next` or `latest` dist tag, so allow dist-tag management when npm asks for
-that permission. After the publisher is verified, set the package to require two-factor
-authentication and disallow token-based publishing, then revoke obsolete automation tokens.
+- **One job can mint the npm OIDC token.** `release.yml` splits into `guard` (input validation,
+  main-only), `release PR` (versioning, repository write, no OIDC), `build` (install, verify,
+  build, pack, check; read-only token), `publish` and `tag and GitHub release`. Only `publish`
+  has `id-token: write`. It runs no workspace install and no dev dependency: it sparse-checks
+  out `scripts/publish-packages.mjs` and its node-only helper, installs the pinned npm CLI the
+  dist-tag step needs, downloads the tarball `build` packed and checked, and runs
+  `npm publish <tgz> --provenance`. A compromised dev dependency runs in `build`, where there is
+  no publish capability to steal.
+- **The `npm-release` environment.** `publish` runs in it. The environment requires an approval
+  from the repository owner and accepts deployments from `main` only, and the npm Trusted
+  Publisher is bound to it, so a token minted anywhere else cannot publish.
+- **Read-only defaults.** Every workflow declares a read-only top-level `permissions` block and
+  grants more per job; the repository default token permission is read.
+
+`scripts/check-release-policy.mjs` parses the workflow (`scripts/release-structure.mjs`) and
+fails if more than one job can mint the token, if that job runs pnpm, leaves the environment
+or does a full checkout, if any job tags or releases without needing the publish job, if any
+job skips the main-only guard, or if an input is pasted into a `run:` script rather than passed
+through `env:`.
+
+`scripts/publish-packages.mjs` never skips a version on its name alone (#619). When the version
+already exists, it compares the registry's `dist.integrity` with the local tarball and fails on
+a mismatch; on a match it runs `npm dist-tag add` for the requested channel, so a re-run that
+promotes a version to `latest` does so. It refuses `latest` for a prerelease, and a tarball
+whose `gitHead` is not the run's commit. Moving a dist-tag through OIDC needs npm 11.21.0 or
+later, newer than the npm bundled with Node 24, so `publish` installs `npm@11.21.0` (released
+2026-09-30) with scripts disabled.
+
+### Settings outside the repository
+
+Recorded so the next person can check them, with the date they were last changed:
+
+| Setting | Value | Where |
+|---|---|---|
+| `npm-release` environment | required reviewer `burakdede`; deployment branches: `main` only | GitHub repository settings |
+| Default `GITHUB_TOKEN` permission | read; Actions may not approve pull requests | GitHub repository settings |
+| npm Trusted Publisher for `@lorepack/cli` | GitHub Actions, `burakdede/lorepack`, `release.yml`, environment `npm-release`, **Allow npm dist-tag** on | npmjs.com package settings (owner only) |
+| npm publishing access | require two-factor authentication and disallow tokens | npmjs.com package settings (owner only) |
 
 The CLI package must exist in the npm registry before its Trusted Publisher can be configured.
 Bootstrap it once through npm staged publishing, then approve the staged placeholder with 2FA.
-The real release runs `scripts/preflight-npm-packages.mjs` before creating a release commit or
-GitHub release and reports a missing package without publishing anything.
+The real release runs `scripts/preflight-npm-packages.mjs` before creating a release commit and
+reports a missing package without publishing anything.
 
 For dependencies, the health report reads npm registry `dist.attestations.provenance` metadata
 for exact production direct dependencies. Missing attestations are reported by package name, not
@@ -138,12 +165,26 @@ generation, example package creation, CLI npm tarball packing (`scripts/pack-cli
 packed-install check (`scripts/check-packed-cli.mjs`), then uploads the artifacts without
 committing, tagging, creating a GitHub release or publishing to npm.
 
-A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and
-publishes the CLI with npm provenance through `scripts/publish-packages.mjs --tag <channel>`.
-If a retry finds an existing release from an earlier failed recovery, it retargets that release
-only when the old target is an ancestor of the current green commit and recovery mode is enabled.
+A real release takes two dispatches from `main`. The first (`resume_existing: false`) versions
+the packages and merges the release PR, and publishes nothing. The second
+(`resume_existing: true`), dispatched on the merged release commit, builds and checks the
+tarball, publishes it after the `npm-release` approval, and only then tags `vX.Y.Z` and creates
+the GitHub release. Two dispatches, because npm's provenance names the commit of the run that
+publishes: a single run started before the version bump would publish a tarball built from
+the merge commit under provenance naming its parent. (`0.1.0-alpha.0` shows the cost of
+letting these drift: its `gitHead` differs from its tag by 144 files and it has no provenance,
+#619.) Now the tag, the tarball's `gitHead` (set by `scripts/pack-cli.mjs`) and the provenance
+source are one commit.
+
+A failed publish leaves no tag and no GitHub release. A retry reuses an existing tag only when
+it already names the run's commit; a tag is never moved.
+
 The `Public registry smoke` workflow then installs the published CLI from npm on Ubuntu,
-Windows and macOS and exercises the shipped binary without installing the workspace.
+Windows and macOS, runs `npm audit signatures`, asserts with
+`scripts/check-registry-provenance.mjs` that the package `gitHead` and its SLSA provenance
+(source commit, workflow `release.yml`, and a subject digest equal to the published tarball)
+all name the release tag's commit, and exercises the shipped binary without installing the
+workspace.
 
 The GitHub release receives:
 
