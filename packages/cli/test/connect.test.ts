@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { run } from './helpers.js';
 
 /**
@@ -28,6 +28,26 @@ import { run } from './helpers.js';
  * because the developer happens to have Codex on their path is a test that fails for the wrong
  * reason on somebody else's machine.
  */
+
+/**
+ * Claude Code keeps its local scope in `$CLAUDE_CONFIG_DIR/.claude.json`, so every test here
+ * points that at a temporary directory. Without it, `disconnect` would read the developer's
+ * own `~/.claude.json`.
+ */
+let claudeConfig: string;
+let previousClaudeConfig: string | undefined;
+
+beforeEach(() => {
+  previousClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
+  claudeConfig = mkdtempSync(join(tmpdir(), 'lore-claude-config-'));
+  process.env.CLAUDE_CONFIG_DIR = claudeConfig;
+});
+
+afterEach(() => {
+  if (previousClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfig;
+  rmSync(claudeConfig, { recursive: true, force: true });
+});
 
 const FILES = { 'lore.yaml': 'version: 1\nname: connect\nsources:\n  - .\n', 'a.md': '# A\n' };
 
@@ -71,9 +91,34 @@ describe('disconnect', () => {
       const result = await run(['--cwd', temp.root, 'disconnect']);
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain(join('.claude', 'settings.local.json'));
+      // Claude Code's local scope is its own state file, keyed by project (#575).
+      expect(result.stdout).toContain(join(claudeConfig, '.claude.json'));
       expect(result.stdout).toContain(join('.codex', 'config.toml'));
       expect(result.stdout).toContain(join('.vscode', 'mcp.json'));
+    });
+  });
+
+  it('takes back a Claude Code entry an earlier version wrote where the client never looked', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const legacy = join(temp.root, '.claude', 'settings.local.json');
+      mkdirSync(join(temp.root, '.claude'));
+      writeFileSync(
+        legacy,
+        JSON.stringify({
+          permissions: { allow: [] },
+          mcpServers: {
+            lorepack: {
+              command: 'lorepack',
+              'x-lorepack': { projectRoot: temp.root, createdAt: '2026-08-01T00:00:00.000Z' },
+            },
+          },
+        }),
+      );
+
+      const result = await run(['--cwd', temp.root, 'disconnect', 'claude-code']);
+
+      expect(result.code).toBe(0);
+      expect(JSON.parse(readFileSync(legacy, 'utf8'))).toEqual({ permissions: { allow: [] } });
     });
   });
 

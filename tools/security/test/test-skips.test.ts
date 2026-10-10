@@ -19,6 +19,11 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'packages/connect-clients/test/claude-code.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'project links need administrator rights or Developer Mode, and chmod modes are POSIX-only',
+  },
+  {
     file: 'packages/cli/test/build.test.ts',
     line: 'it.skipIf(posixOnly)(',
     why: 'chmod is POSIX; Windows needs an ACL API Node does not expose',

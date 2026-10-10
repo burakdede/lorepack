@@ -134,3 +134,9 @@ Benchmarks are **reported, never enforced**. The reference machine and the gates
 backlog issue #101 in Phase 7; a shared CI runner is not that machine, so failing a build on
 its timings would produce noise rather than signal. Every recorded result carries
 `provisional: true` and the machine that produced it.
+
+Shared Claude Code configuration is `.mcp.json` at the project root, so it has
+no intermediate directory to replace with a link. The connector safety contract
+checks that layout explicitly. File-link and permission evidence runs for every
+connector; intermediate-directory link evidence runs for Codex and VS Code,
+whose configuration is nested inside the project.

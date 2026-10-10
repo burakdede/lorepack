@@ -79,7 +79,7 @@ const REPORT = {
       supported: true,
       configured: true,
       ownedByLorepack: true,
-      configPath: '/home/dev/demo/.claude/settings.local.json',
+      configPath: '/home/dev/.claude.json',
     },
   ],
 };
@@ -159,7 +159,7 @@ describe('what this route must never do', () => {
     renderRoute();
 
     await waitFor(() => expect(screen.getByText('Claude Code')).toBeInTheDocument());
-    expect(screen.getByText('/home/dev/demo/.claude/settings.local.json')).toBeInTheDocument();
+    expect(screen.getByText('/home/dev/.claude.json')).toBeInTheDocument();
     // Section 15.6: those files hold other people's servers and other people's credentials.
     expect(document.body.textContent).not.toMatch(/token|secret|password|api[_-]?key/i);
   });

@@ -21,7 +21,7 @@ The delivered-epic reliability scope and evidence plan is [`reliability-audit-v0
 
 | Client or target | Status | Verified version and date | Guide |
 |---|---|---|---|
-| Claude Code | supported | Claude Code 2.1.220 on 2026-08-03; local version smoke 2.1.228 on 2026-08-13 | [`../integrations/claude-code.md`](../integrations/claude-code.md) |
+| Claude Code | supported | Claude Code 2.1.296 on 2026-10-10 (`claude mcp list` lists the server after `lorepack connect`) | [`../integrations/claude-code.md`](../integrations/claude-code.md) |
 | Codex | supported | `codex-cli` 0.146.1 on 2026-08-05; local version smoke 0.147.0 on 2026-08-13 | [`../integrations/codex.md`](../integrations/codex.md) |
 | VS Code | supported | VS Code 1.132.0 on 2026-08-05 | [`../integrations/vscode.md`](../integrations/vscode.md) |
 | Generic MCP stdio clients | supported when they can launch a command with argument array | MCP protocol 2026-07-28, server package 2.0.0 on 2026-08-03 | [`../integrations/mcp.md`](../integrations/mcp.md) |

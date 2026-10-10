@@ -306,7 +306,7 @@ const EVIDENCE: readonly Evidence[] = [
     path: 'packages/connect-clients/test/contract.ts',
     tests: [
       "the file's permissions and links refuses a project file that is a link, and reads, writes and backs up nothing",
-      "the file's permissions and links refuses a project file reached through a linked directory",
+      "the file's permissions and links declares whether the project config has an intermediate directory",
       "the file's permissions and links keeps a private user file private through connect and disconnect",
       "the file's permissions and links edits a linked user file at its target, and keeps the link",
     ],
@@ -325,6 +325,21 @@ const EVIDENCE: readonly Evidence[] = [
       /keeps a private user file private through connect and disconnect/,
       /edits a linked user file at its target, and keeps the link/,
     ],
+  },
+  {
+    name: 'connect refuses linked intermediate config directories',
+    path: 'packages/connect-clients/test/contract.ts',
+    tests: [
+      "the file's permissions and links refuses a project file reached through a linked directory",
+    ],
+    runFrom: [
+      'packages/connect-clients/test/codex.test.ts',
+      'packages/connect-clients/test/vscode.test.ts',
+    ],
+    skippedOn: {
+      win32: 'symbolic links need administrator rights or Developer Mode',
+    },
+    patterns: [/refuses a project file reached through a linked directory/],
   },
   {
     name: 'connect refuses a linked project config end to end',

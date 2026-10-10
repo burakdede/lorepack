@@ -2,6 +2,8 @@ export {
   CLAUDE_CODE_ID,
   type ClaudeCodeOptions,
   claudeCodeSnippet,
+  claudeConfigDirectory,
+  claudeProjectKey,
   createClaudeCodeConnector,
   SERVER_NAME,
 } from './claude-code.js';
