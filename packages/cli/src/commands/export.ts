@@ -95,7 +95,7 @@ export function exportCommand(): CommandDefinition {
         if (output === null) {
           // stdout carries the export and nothing else, so `lorepack export ... > file.md` and
           // `--output file.md` produce the same bytes.
-          return { human: rendered.trimEnd(), json: bundle };
+          return { human: rendered.trimEnd(), json: bundle, verbatim: true };
         }
 
         // Atomic, because a half-written context file that looks complete is worse than no

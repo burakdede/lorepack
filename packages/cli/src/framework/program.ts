@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { EXIT_CODES, LoreError, renderAsJson, renderForCli } from '@lorepack/core';
+import {
+  EXIT_CODES,
+  LoreError,
+  renderAsJson,
+  renderForCli,
+  sanitizeForTerminal,
+} from '@lorepack/core';
 import { Command, CommanderError } from 'commander';
 import { registerCommands } from '../commands/index.js';
 import {
@@ -20,6 +26,12 @@ export interface CommandResult {
   readonly json?: unknown;
   /** Overrides the success exit code, for flags like `--exit-code`. */
   readonly exitCode?: number;
+  /**
+   * `human` is a document the user asked for, such as an export, rather than a report about
+   * one. Redirected, it is written byte for byte, so `> file.md` matches `--output file.md`;
+   * to a terminal it is made inert like every other human string (#579).
+   */
+  readonly verbatim?: boolean;
 }
 
 /** Returning nothing means the command wrote its own output and has no structured result. */
@@ -201,7 +213,13 @@ export async function runCli(argv: readonly string[], options: RunOptions = {}):
           if (result.json !== undefined)
             streams.stdout.write(`${JSON.stringify(result.json, null, 2)}\n`);
         } else if (result.human !== undefined && result.human !== '') {
-          streams.stdout.write(result.human.endsWith('\n') ? result.human : `${result.human}\n`);
+          // File names and document text in a report come from the corpus, so control
+          // sequences in them are shown, never obeyed (#579).
+          const human =
+            result.verbatim === true && !streams.isTty
+              ? result.human
+              : sanitizeForTerminal(result.human);
+          streams.stdout.write(human.endsWith('\n') ? human : `${human}\n`);
         }
         if (result.exitCode !== undefined) code = result.exitCode;
       },
@@ -261,7 +279,8 @@ function handleFailure(
       }
       return EXIT_CODES.USER;
     }
-    streams.stderr.write(error.message.endsWith('\n') ? error.message : `${error.message}\n`);
+    const message = sanitizeForTerminal(error.message);
+    streams.stderr.write(message.endsWith('\n') ? message : `${message}\n`);
     return error.exitCode === 0 ? EXIT_CODES.USER : error.exitCode;
   }
 

@@ -241,3 +241,48 @@ describe('entry point', () => {
     expect(staticImports).toEqual(['@lorepack/core/engine']);
   });
 });
+
+describe('corpus text on its way to a terminal (#579)', () => {
+  const ESC = '\u001b';
+  const hostile = `docs/evil${ESC}]0;PWNED\u0007.md`;
+  const reporting = [
+    ...commands,
+    {
+      name: 'report',
+      description: 'Reports a file name, through every human channel.',
+      handler: (_args, _flags, context) => {
+        context.write(`writing ${hostile}\n`);
+        context.warn(`warning ${hostile}\n`);
+        return { human: `result ${hostile}`, json: { path: hostile } };
+      },
+    },
+    {
+      name: 'document',
+      description: 'Returns a document the user asked for.',
+      handler: () => ({ human: `body ${hostile}`, verbatim: true }),
+    },
+  ] satisfies typeof commands;
+
+  it('shows control sequences in every human channel rather than sending them', async () => {
+    const result = await run(['report'], { commands: reporting });
+
+    expect(`${result.stdout}${result.stderr}`).not.toContain(ESC);
+    expect(result.stdout).toContain('result docs/evil\\x1b]0;PWNED\\x07.md');
+    expect(result.stdout).toContain('writing docs/evil\\x1b]0;PWNED\\x07.md');
+    expect(result.stderr).toContain('warning docs/evil\\x1b]0;PWNED\\x07.md');
+  });
+
+  it('leaves --json to JSON, which already escapes every control character', async () => {
+    const result = await run(['--json', 'report'], { commands: reporting });
+
+    expect(result.stdout).not.toContain(ESC);
+    expect(JSON.parse(result.stdout)).toEqual({ path: hostile });
+  });
+
+  it('writes a requested document byte for byte when it is redirected', async () => {
+    const result = await run(['document'], { commands: reporting });
+
+    // Not a terminal, so `lorepack export > file.md` matches `--output file.md`.
+    expect(result.stdout).toBe(`body ${hostile}\n`);
+  });
+});

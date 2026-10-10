@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { ProgressBus, ProgressRenderer, shouldUseColor } from '@lorepack/core';
+import { ProgressBus, ProgressRenderer, sanitizeForTerminal, shouldUseColor } from '@lorepack/core';
 
 export interface GlobalOptions {
   readonly json: boolean;
@@ -93,7 +93,9 @@ export function createContext(
     streams,
     progress,
     ...(signal === undefined ? {} : { signal }),
-    write: (text) => humanTarget.write(text),
-    warn: (text) => streams.stderr.write(text),
+    // Prompts, plans and warnings name files from the corpus, so they are made inert like a
+    // command's result (#579). Progress goes through the renderer, which does the same.
+    write: (text) => humanTarget.write(sanitizeForTerminal(text)),
+    warn: (text) => streams.stderr.write(sanitizeForTerminal(text)),
   };
 }

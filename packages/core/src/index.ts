@@ -20,6 +20,7 @@ export {
   secretsFromEnv,
   stripAbsolutePaths,
 } from './errors/index.js';
+export { sanitizeForTerminal } from './format/ansi.js';
 export { count, noun } from './format/count.js';
 export {
   classifyBytes,

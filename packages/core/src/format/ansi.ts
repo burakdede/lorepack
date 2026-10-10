@@ -41,3 +41,32 @@ export function visibleLength(text: string): number {
 export function stripAnsi(text: string): string {
   return text.replaceAll(new RegExp(`${ESC}\\[[0-9;]*[A-Za-z]`, 'g'), '');
 }
+
+/**
+ * Text from outside Lorepack, made safe to print to a terminal (#579).
+ *
+ * File names and document content come from a corpus that is often someone else's. Printed
+ * raw, an escape sequence in either can set the terminal title, plant an OSC 8 hyperlink whose
+ * visible text differs from its target, clear the screen, or, where the terminal allows it,
+ * write the clipboard (OSC 52). So every C0 control except tab and newline, DEL, and every C1
+ * control is replaced with a visible `\xNN`, which a person can still read and report. A
+ * Windows line ending is a newline, not a control to show.
+ *
+ * Applied to every human string on its way out, and before Lorepack's own styling, which is
+ * the only escape sequence that reaches the terminal. `--json` never needs it: `JSON.stringify`
+ * already escapes every control character.
+ */
+export function sanitizeForTerminal(text: string): string {
+  let out = '';
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code === 0x09 || code === 0x0a) continue;
+    if (code >= 0x20 && code !== 0x7f && (code < 0x80 || code > 0x9f)) continue;
+    out += text.slice(start, index);
+    start = index + 1;
+    if (code === 0x0d && text.charCodeAt(index + 1) === 0x0a) continue;
+    out += `\\x${code.toString(16).padStart(2, '0')}`;
+  }
+  return start === 0 ? text : out + text.slice(start);
+}

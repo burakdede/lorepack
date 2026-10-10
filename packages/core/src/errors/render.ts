@@ -1,4 +1,4 @@
-import { style } from '../format/ansi.js';
+import { sanitizeForTerminal, style } from '../format/ansi.js';
 import { causeChain, LoreError } from './lore-error.js';
 import { redact, redactDeep, secretsFromEnv } from './redact.js';
 
@@ -18,30 +18,34 @@ export function renderForCli(error: unknown, options: RenderOptions = {}): strin
   const err = LoreError.from(error);
   const secrets = options.secrets ?? secretsFromEnv();
   const color = options.color === true;
+  // A message names paths and quotes input, so it is made inert before it is styled (#579).
+  const shown = (text: string): string => sanitizeForTerminal(redact(text, secrets));
   const lines: string[] = [
-    `${style('error:', 'red', color)} ${redact(err.message, secrets)}`,
+    `${style('error:', 'red', color)} ${shown(err.message)}`,
     style(`  code: ${err.code}`, 'dim', color),
   ];
 
   // An empty value is not a subject. Rendering `subject:` with nothing after it tells the
   // reader the error is about something and then refuses to say what (#166).
-  if (present(err.path)) lines.push(`  path: ${redact(err.path as string, secrets)}`);
-  if (present(err.subject)) lines.push(`  subject: ${redact(err.subject as string, secrets)}`);
+  if (present(err.path)) lines.push(`  path: ${shown(err.path as string)}`);
+  if (present(err.subject)) lines.push(`  subject: ${shown(err.subject as string)}`);
 
   const causes = causeChain(err);
   if (causes.length > 0) {
     lines.push('  caused by:');
-    for (const cause of causes) lines.push(`    ${redact(cause, secrets)}`);
+    for (const cause of causes) lines.push(`    ${shown(cause)}`);
   }
 
   if (options.verbose === true && err.details !== undefined) {
-    lines.push(`  details: ${JSON.stringify(redactDeep(err.details, secrets))}`);
+    lines.push(
+      `  details: ${sanitizeForTerminal(JSON.stringify(redactDeep(err.details, secrets)))}`,
+    );
   }
 
   lines.push('');
   lines.push(
     err.remediation !== undefined
-      ? `${style('next:', 'green', color)} ${redact(err.remediation, secrets)}`
+      ? `${style('next:', 'green', color)} ${shown(err.remediation)}`
       : // `lorepack doctor` names what is wrong with an environment and how to fix it, which is
         // the most useful thing to offer when the failure itself carried no remediation.
         //

@@ -498,6 +498,15 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/existsSync\(marker\)/, /'\.bat', '\.cmd'/],
   },
   {
+    name: 'human CLI output never sends a corpus control sequence to the terminal, issue 579',
+    path: 'packages/cli/test/terminal-output.e2e.test.ts',
+    tests: [
+      'human output with a hostile corpus (#579) stays inert through init, build, inspect, search, plan, status and diff',
+      'human output with a hostile corpus (#579) keeps an error naming a hostile path inert too',
+    ],
+    patterns: [/expectInert\(output\)/, /http:\/\/evil\.example/],
+  },
+  {
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     tests: [
