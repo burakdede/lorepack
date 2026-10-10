@@ -379,6 +379,36 @@ describe('changing which build is live, from Studio', () => {
     expect(body.error.remediation).toContain(first);
   }, 180_000);
 
+  it('refuses an activation whose confirmation saw a different active build (#610)', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const first = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    const second = await rebuild(base, first);
+    const activate = (body: Record<string, unknown>) =>
+      fetch(`${base}/v1/builds/activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    // Studio showed some other build as active, then something moved the pointer.
+    const stale = await activate({ build: first, expectActive: `lore_${'0'.repeat(64)}` });
+    expect(stale.status).toBe(400);
+    const refusal = (await stale.json()) as { error: { code: string; remediation: string } };
+    expect(refusal.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+    expect(refusal.error.remediation).toContain(second);
+    const after = (await (await fetch(`${base}/v1/build`)).json()) as { buildId: string };
+    expect(after.buildId, 'a refused activation must not move the pointer').toBe(second);
+
+    // The same request, made with what is actually live, goes through.
+    const fresh = await activate({ build: first, expectActive: second });
+    expect(fresh.status).toBe(200);
+    expect(((await fresh.json()) as { buildId: string }).buildId).toBe(first);
+
+    // And a script that names no expectation is unaffected.
+    expect((await activate({ build: second })).status).toBe(200);
+  }, 180_000);
+
   it('refuses these actions to any origin but this machine', async () => {
     const started = await dev();
     const base = `http://127.0.0.1:${started.port}`;
