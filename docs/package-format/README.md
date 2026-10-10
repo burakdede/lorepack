@@ -91,6 +91,15 @@ verification when a listed member is missing, when its SHA-256 digest differs, o
 archive contains an unlisted member. Member checksums detect corruption. They are not build
 identity.
 
+A reader SHOULD decide from the central directory before inflating anything: refuse an
+archive whose declared member count or uncompressed sizes exceed its limits, and report an
+unlisted member without reading it. It SHOULD hash members as they stream and look up names
+in a map rather than an object, so that a member named `constructor` or `__proto__` is
+unlisted like any other. Lorepack's reader refuses more than 100,000 members, a member
+declaring more than 4 GiB, an archive declaring more than 16 GiB in total, or a
+`checksums.json` over 16 MiB, with `LORE_E_LIMIT_EXCEEDED` (`ARCHIVE_LIMITS` in
+`packages/backend-local/src/archive.ts`).
+
 ## Manifest Fields
 
 The manifest is strict: unknown fields are invalid for `formatVersion: 1`.

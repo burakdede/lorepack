@@ -17,6 +17,7 @@ security-affecting change before release.
 | Oversized requests and responses | `packages/runtime/test/http.test.ts`, export/context budget tests | Covered |
 | Repeated or excessive query terms cannot multiply FTS5 work, locally or on D1 | `packages/core/test/fts-query.test.ts`, `packages/deploy-cloudflare/test/ranking-parity.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Cloudflare table queries materialize only the shared bounded row window | `packages/deploy-cloudflare/test/tables.test.ts`, `packages/deploy-cloudflare/test/project-table-data.test.ts` | Covered |
+| Archive verification is bounded and has no prototype-name bypass (#567) | `packages/backend-local/test/archive.test.ts`, `packages/cli/test/pack-verify.e2e.test.ts` | Covered |
 | Localhost Origin validation | `packages/runtime/test/http.test.ts` | Covered |
 | Local write CSRF from other localhost ports, preflight-free bodies, pack output path | `packages/runtime/test/http.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | DNS rebinding: Host allowlist on REST and MCP | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
