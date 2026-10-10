@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { LoreError } from '@lorepack/core';
+import { diskFullError, LoreError } from '@lorepack/core';
 
 /**
  * Raw SQL migrations, applied in order inside a transaction. No ORM in v0.1: versioned
@@ -139,7 +139,11 @@ export function runMigrations(
   now: () => string = () => new Date().toISOString(),
 ): MigrationResult {
   assertMigrationsKnown(db, migrations);
-  db.exec(SCHEMA_TABLE);
+  try {
+    db.exec(SCHEMA_TABLE);
+  } catch (cause) {
+    throw diskFullError(cause) ?? cause;
+  }
   const existing = new Map(appliedMigrations(db).map((row) => [row.id, row]));
 
   const applied: string[] = [];
@@ -171,7 +175,11 @@ export function runMigrations(
       db.exec('COMMIT');
       applied.push(migration.id);
     } catch (cause) {
-      db.exec('ROLLBACK');
+      // SQLite may already have ended the transaction (on SQLITE_FULL, for one), and a
+      // ROLLBACK then would replace the real cause with its own error (#572).
+      if (db.isTransaction) db.exec('ROLLBACK');
+      const full = diskFullError(cause);
+      if (full !== null) throw full;
       throw new LoreError(
         'LORE_E_INTERNAL',
         `Migration ${migration.id}_${migration.name} failed and was rolled back.`,

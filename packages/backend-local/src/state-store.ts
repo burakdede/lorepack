@@ -10,7 +10,7 @@ import {
   LoreError,
 } from '@lorepack/core';
 import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
-import { openReadOnly, openWritable } from './sqlite.js';
+import { inTransaction, openReadOnly, openWritable } from './sqlite.js';
 
 /**
  * The one mutable database in a project. Sealed builds are opened read-only forever, so
@@ -97,14 +97,9 @@ export class LocalStateStore {
    */
   forgetBuilds(buildIds: readonly BuildId[]): void {
     if (buildIds.length === 0) return;
-    this.#db.exec('BEGIN IMMEDIATE');
-    try {
+    inTransaction(this.#db, () => {
       for (const buildId of buildIds) this.forgetBuild(buildId);
-      this.#db.exec('COMMIT');
-    } catch (cause) {
-      this.#db.exec('ROLLBACK');
-      throw cause;
-    }
+    });
   }
 
   listBuilds(): BuildSummary[] {
@@ -141,20 +136,20 @@ export class LocalStateStore {
       );
     }
 
-    this.#db.exec('BEGIN IMMEDIATE');
     try {
-      this.#db
-        .prepare(
-          `UPDATE active_build
+      inTransaction(this.#db, () => {
+        this.#db
+          .prepare(
+            `UPDATE active_build
              SET build_id = ?, generation = generation + 1, activated_at = ?
            WHERE id = 1`,
-        )
-        .run(buildId, now());
-      this.#db.prepare("UPDATE builds SET state = 'verified' WHERE state = 'active'").run();
-      this.#db.prepare("UPDATE builds SET state = 'active' WHERE build_id = ?").run(buildId);
-      this.#db.exec('COMMIT');
+          )
+          .run(buildId, now());
+        this.#db.prepare("UPDATE builds SET state = 'verified' WHERE state = 'active'").run();
+        this.#db.prepare("UPDATE builds SET state = 'active' WHERE build_id = ?").run(buildId);
+      });
     } catch (cause) {
-      this.#db.exec('ROLLBACK');
+      if (cause instanceof LoreError) throw cause;
       throw new LoreError('LORE_E_INTERNAL', `Could not activate ${buildId}.`, { cause });
     }
     return this.currentGeneration();
