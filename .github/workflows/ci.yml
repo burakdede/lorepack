@@ -235,6 +235,7 @@ jobs:
     timeout-minutes: 35
     concurrency:
       group: cloudflare-acceptance
+      queue: max
       cancel-in-progress: false
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -124,6 +124,12 @@ build identity (section 11.3).
 `checkDeterminism` in `tools/test-support` remains the helper for unit-level determinism,
 where the value under test is a hash rather than a command.
 
+Cloudflare acceptance shares one remote runtime, so its CI job uses a shared concurrency
+group with `queue: max` and `cancel-in-progress: false`. Serialization protects the runtime
+from overlapping deployments. Retaining waiting jobs matters separately: GitHub's default
+queue keeps only one pending job and cancels it when another arrives, which can prevent a
+PR from ever completing its Cloudflare gate during concurrent work.
+
 ## Benchmarks
 
 `pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
