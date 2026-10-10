@@ -46,8 +46,32 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
     { versionNegotiation: { mode: 'auto' } },
   );
 
+  // Held so the cleanup can wait for it. In `'auto'` mode the SDK probes on a disposable
+  // sibling process and reaps it only when this promise settles, so returning before it does
+  // would leave that sibling running.
+  const connecting = client.connect(transport);
+  connecting.catch(() => undefined);
+
   try {
-    await withTimeout(client.connect(transport), options.timeoutMs ?? DEFAULT_TIMEOUT_MS, 'spawn');
+    return await check(client, connecting, options);
+  } finally {
+    // Every path, not only success. A server stuck in a long `--ensure-current` build holds
+    // the project lock, and a timeout that walked away from it left it holding the lock after
+    // `connect` had returned (#578). Closing the session transport also aborts a probe still
+    // in flight, which is what lets `connecting` settle and reap the sibling.
+    await client.close().catch(() => undefined);
+    await transport.close().catch(() => undefined);
+    await connecting.catch(() => undefined);
+  }
+}
+
+async function check(
+  client: Client,
+  connecting: Promise<void>,
+  options: VerifyOptions,
+): Promise<ConnectionCheck> {
+  try {
+    await withTimeout(connecting, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, 'spawn');
   } catch (error) {
     return {
       ok: false,
@@ -104,8 +128,6 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
       detail: `The server started but did not list its tools: ${message(error)}`,
       ...(protocolVersion === undefined ? {} : { protocolVersion }),
     };
-  } finally {
-    await client.close().catch(() => undefined);
   }
 }
 

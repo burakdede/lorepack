@@ -166,3 +166,15 @@ describe('consent before a client configuration changes (#576)', () => {
     expect(written()).toEqual([]);
   });
 });
+
+describe('a connection that does not work (#578)', () => {
+  it('exits non-zero, so a script can tell', () => {
+    // A `lorepack` that starts and exits at once, which is what a broken install looks like.
+    fake('lorepack', 'exit 1');
+
+    const result = connect(['connect', 'vscode', '--yes']);
+
+    expect(result.stdout).toContain('Not working yet');
+    expect(result.code).toBe(3);
+  });
+});

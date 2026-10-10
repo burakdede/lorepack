@@ -308,3 +308,34 @@ describe('asking before writing (#576)', () => {
     });
   });
 });
+
+describe('the exit code after verification (#578)', () => {
+  it('is non-zero when the written server does not start', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording({ ok: false, step: 'spawn', detail: 'spawn timed out' });
+      const commands = [connectCommand({ connectors: () => [fake.connector] })];
+
+      const result = await run(['--cwd', temp.root, '--json', 'connect', '--yes'], { commands });
+
+      expect(result.code).toBe(3);
+      const parsed = JSON.parse(result.stdout) as { checks: ConnectionCheck[] };
+      expect(parsed.checks).toEqual([{ ok: false, step: 'spawn', detail: 'spawn timed out' }]);
+    });
+  });
+
+  it('is zero when only a trust step in the client remains', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording({
+        ok: false,
+        step: 'trust',
+        detail: 'Approve it in the client.',
+        pendingTrust: true,
+      });
+      const commands = [connectCommand({ connectors: () => [fake.connector] })];
+
+      const result = await run(['--cwd', temp.root, 'connect', '--yes'], { commands });
+
+      expect(result.code).toBe(0);
+    });
+  });
+});

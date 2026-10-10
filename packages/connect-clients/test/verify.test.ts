@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -87,5 +87,41 @@ describe('a command that starts and is not a server', () => {
 
     expect(check.ok).toBe(false);
     expect(['spawn', 'tools']).toContain(check.step);
+  }, 120_000);
+});
+
+/** Whether a process is still running. Signal 0 checks without delivering anything. */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+describe('a server that never answers (#578)', () => {
+  it('is stopped when verification gives up, along with any probe it started', async () => {
+    // Each process the verifier starts records its pid and then hangs, which is what a real
+    // `lorepack mcp --ensure-current` stuck behind a long build looks like from outside.
+    const pids = join(project, 'pids');
+    mkdirSync(pids);
+    const hang = `require('node:fs').writeFileSync(require('node:path').join(${JSON.stringify(
+      pids,
+    )}, String(process.pid)), ''); setInterval(() => {}, 1000);`;
+
+    const check = await verifyStdioServer({
+      executable: process.execPath,
+      args: ['-e', hang],
+      timeoutMs: 2000,
+    });
+
+    expect(check.ok).toBe(false);
+    expect(check.step).toBe('spawn');
+    expect(check.detail).toContain('timed out');
+
+    const started = readdirSync(pids).map(Number);
+    expect(started.length).toBeGreaterThan(0);
+    expect(started.filter(alive)).toEqual([]);
   }, 120_000);
 });

@@ -102,7 +102,8 @@ line breaks.
 ## Verification, and the trust dialog
 
 `lorepack connect` spawns the server exactly as VS Code will, calls `server/discover` and
-`tools/list`, and reports which step failed if one does.
+`tools/list`, and reports which step failed if one does. When one does, `connect` exits 3, so a script can
+tell.
 
 VS Code then asks you to confirm you trust the server the first time it starts, and chat runs
 without these tools until you do. That is a step you take, not a bug, so it is printed rather
