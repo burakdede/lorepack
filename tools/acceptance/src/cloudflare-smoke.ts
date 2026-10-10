@@ -683,6 +683,14 @@ async function deployAcceptanceWorker(
             remote: true,
           },
         ],
+        // The deployed Worker refuses table queries without it (#558).
+        ratelimits: [
+          {
+            name: 'TABLE_QUERY_LIMITER',
+            namespace_id: '1558',
+            simple: { limit: 20, period: 60 },
+          },
+        ],
       },
       null,
       2,

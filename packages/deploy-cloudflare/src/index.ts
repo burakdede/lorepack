@@ -56,6 +56,7 @@ export {
   createCloudflareRequestAuthorizer,
   resolveCloudflareAccessConfigFromBindings,
 } from './access-auth.js';
+export type { D1TableStoreOptions } from './tables.js';
 export type {
   CloudflareBindings,
   CloudflareBoundWorkerOptions,
@@ -66,11 +67,13 @@ export type {
   D1DatabaseLike,
   D1QueryDatabaseLike,
   D1TableNamespace,
+  RateLimitLike,
 } from './worker-app.js';
 export {
   createCloudflareWorker,
   createCloudflareWorkerApp,
   createCloudflareWorkerFromBindings,
+  tableQueryCaller,
 } from './worker-app.js';
 
 export type {

@@ -32,8 +32,40 @@ backend, local and Cloudflare, must pass.
 | A comment that swallows the result wrapper | The guard removes comments before wrapping |
 | `readfile`, `writefile` | They do not exist: `node:sqlite` is built without them |
 | A statement above 100,000 characters | The request schema, before anything is parsed |
-| A runaway recursive CTE | Locally, a five-second deadline enforced by killing the child process; remotely, refused, since D1 cannot be interrupted before its 30 second limit |
-| An aggregate used as a window, or a FROM clause multiplying past 5,000,000 rows | Remotely only, refused by the guard's cost bound |
+| A runaway recursive CTE, with or without the `RECURSIVE` keyword | Locally, a five-second deadline enforced by killing the child process; remotely, refused, since D1 cannot be interrupted before its 30 second limit |
+| An aggregate used as a window, or a statement whose estimated rows pass 5,000,000 | Remotely only, refused by the guard's cost bound (below) |
+| A `printf` or `format` width or precision of `*` or above 100, or a format that is not a string literal | The statement guard, on both backends |
+| A CTE named like the table, which would shadow it | The statement guard, on both backends |
+
+### What the remote cost bound does and does not bound
+
+D1 cannot be interrupted before its own 30 second limit, and it runs one query at a time per
+database, so one slow table query stalls every other table read on that deployment. Two
+controls apply, and neither is complete on its own.
+
+**The guard bounds rows, not cost.** It estimates the rows a statement can form: the table
+counts its row count, a VALUES list or a SELECT without FROM the rows it spells out, a subquery
+or CTE its own estimate (once per reference), a compound SELECT the sum of its parts, and a
+subquery in an expression is charged once per row of the query around it. A statement whose
+estimate passes 5,000,000 is refused (#558). It does **not** bound what one row costs. String
+functions can grow a value geometrically (nested `replace`, `hex`, `||` through a chain of
+CTEs), up to D1's 2 MB value limit, and no static rule over a statement this short can see
+that. The guard refuses the one cheap amplifier it can read, a large `printf` width.
+
+**The Worker rate-limits table queries per caller.** Every table query, over REST or MCP,
+first passes the `TABLE_QUERY_LIMITER` Workers Rate Limiting binding, keyed on a SHA-256 of
+the caller's credential: 20 queries per 60 seconds. Past it the caller gets `LORE_E_BUSY`
+(HTTP 429) and D1 never sees the query. A Worker deployed without the binding refuses table
+queries (`LORE_E_TARGET_NOT_CONFIGURED`) rather than serving them unbounded. The binding's
+counters are per Cloudflare location and eventually consistent, so this bounds sustained
+abuse by one token, not the worst single query: one caller can still hold D1 for up to 30
+seconds per admitted query. Rotating or revoking the token (`lorepack target token`) is the
+response to a token that is being abused.
+
+Coverage: `packages/core/test/sql-guard.test.ts` (estimate and format rules),
+`packages/deploy-cloudflare/test/table-query-cost.test.ts` (the guard against the projected
+store, and the rate limit on the assembled Worker and its module entry), and the shared
+runtime contract (`printf` amplification refused on both backends).
 
 The Cloudflare table adapter applies the same table-query contract before D1 runs the caller's
 statement: 100 rows by default, 10,000 rows maximum, and a 1 MB serialized response ceiling.

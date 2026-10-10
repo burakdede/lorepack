@@ -22,7 +22,7 @@ interface NormalizedCloudflareAccessConfig {
   readonly jwksUrl: URL;
 }
 
-const ACCESS_JWT_HEADER = 'Cf-Access-Jwt-Assertion';
+export const ACCESS_JWT_HEADER = 'Cf-Access-Jwt-Assertion';
 const UNAUTHORIZED_MESSAGE = 'This request is not authorized for this build.';
 
 export function resolveCloudflareAccessConfigFromBindings(

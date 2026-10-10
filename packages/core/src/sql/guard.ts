@@ -31,8 +31,15 @@ import { validateStatement } from './statement.js';
  * 4. **Calls and qualifiers.** A word called as a function must be a keyword or an allowed
  *    function; a name used as a qualifier (`x.`) must be the table or a declared alias.
  * 5. **Cost** (remote only). D1 cannot be interrupted before its 30 second limit, so recursive
- *    common table expressions, aggregates used as windows, and FROM clauses whose row product
- *    exceeds a bound are refused there. Locally the 5 second kill bounds them.
+ *    common table expressions (with or without the keyword), aggregates used as windows, and
+ *    statements whose estimated row product exceeds a bound are refused there. Locally the 5
+ *    second kill bounds them. The estimate charges the table its row count, a VALUES list or a
+ *    SELECT without FROM the rows it spells out, and a subquery or common table expression its
+ *    own estimate (`estimate` below). It bounds rows, not the work done per row: see
+ *    `docs/architecture/security.md` for what remains and the Worker's rate limit.
+ * 6. **Format widths** (both profiles). `printf` and `format` take a literal format whose widths
+ *    and precisions are small literals, because `%.*c` makes one row cost what a million rows
+ *    would and no row bound sees it.
  *
  * Every refusal is the same `LORE_E_SQL_REJECTED` message, so the reason for a refusal cannot
  * be used to learn which names exist.
@@ -57,8 +64,10 @@ export const QUERY_GUARD_LIMITS = {
   maxBytes: 8_192,
   maxTokens: 2_000,
   maxDepth: 32,
-  /** The largest row product one FROM clause may form remotely. */
+  /** The largest row product one statement may form remotely. */
   maxJoinRows: 5_000_000,
+  /** The largest width or precision a `printf` or `format` conversion may ask for. */
+  maxFormatWidth: 100,
 } as const;
 
 /**
@@ -206,8 +215,20 @@ interface Frame {
   expectSource: boolean;
   /** The previous token ended a row source, so an alias may follow. */
   afterSource: boolean;
-  /** Common table expressions declared at this depth, which SQLite scopes to it. */
-  ctes: Set<string>;
+  /**
+   * Common table expressions declared at this depth, which SQLite scopes to it, with the rows
+   * each is estimated to produce. `null` while its own body is being read: a reference then
+   * makes it recursive.
+   */
+  ctes: Map<string, number | null>;
+  /** The CTE whose body the next `cteBody` frame holds. */
+  pendingCte: string | null;
+  /** The row estimate of the SELECT core being read: the product of its sources. */
+  core: number;
+  /** The summed estimates of the cores before it in a compound SELECT. */
+  compound: number;
+  /** In a VALUES list: the rows it has listed so far. */
+  values: number | null;
   /** In a WITH list: expecting a name, after a name, or after a body. */
   withState: 'name' | 'afterName' | 'afterBody' | null;
   /** In a WINDOW clause: expecting a name, after a name, or after a body. */
@@ -223,7 +244,11 @@ function frame(overrides: Partial<Frame> = {}): Frame {
     from: false,
     expectSource: false,
     afterSource: false,
-    ctes: new Set(),
+    ctes: new Map(),
+    pendingCte: null,
+    core: 1,
+    compound: 0,
+    values: null,
     withState: null,
     windowState: null,
     declaring: false,
@@ -293,18 +318,36 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
     if (stack.length > QUERY_GUARD_LIMITS.maxDepth) throw refuseQuery();
     stack.push(frame({ closes, ...overrides }));
   };
-  const isCte = (name: string): boolean => stack.some((level) => level.ctes.has(name));
-  // Every reference to the table, at every depth, counts toward one bound. Per-clause counts
-  // would let nested subqueries multiply each other unseen, and D1 cannot stop a query early.
-  let references = 0;
-  const countSource = (current: Frame): void => {
-    references += 1;
-    current.afterSource = true;
-    if (query.profile === 'remote') {
-      const rows = Math.max(query.rowCount ?? 0, 1);
-      if (rows ** references > QUERY_GUARD_LIMITS.maxJoinRows) throw refuseQuery();
-    }
+  const cteLevel = (name: string): Frame | undefined =>
+    [...stack].reverse().find((level) => level.ctes.has(name));
+  // Every row source, and every nested query, multiplies the estimate of the query around it,
+  // at every depth. Per-clause counts would let nested subqueries multiply each other unseen,
+  // and D1 cannot stop a query early. A subquery in an expression is charged as though it ran
+  // once per row, because the guard cannot tell whether it is correlated.
+  const remote = query.profile === 'remote';
+  const charge = (current: Frame, rows: number): void => {
+    current.core *= rows;
+    if (remote && current.core > QUERY_GUARD_LIMITS.maxJoinRows) throw refuseQuery();
   };
+  const countSource = (current: Frame, rows: number): void => {
+    current.afterSource = true;
+    charge(current, rows);
+  };
+  // A VALUES list ends where its core does: at a compound operator, ORDER BY, LIMIT, or the
+  // end of its query.
+  const endValues = (current: Frame): void => {
+    if (current.values === null) return;
+    const rows = current.values;
+    current.values = null;
+    charge(current, rows);
+  };
+  const estimate = (closed: Frame): number => {
+    endValues(closed);
+    const rows = closed.compound + closed.core;
+    if (remote && rows > QUERY_GUARD_LIMITS.maxJoinRows) throw refuseQuery();
+    return rows;
+  };
+  const tableRows = Math.max(query.rowCount ?? 0, 1);
   // WINDOW opens a clause only when a definition follows; otherwise it is a plain name.
   const opensWindow = (index: number): boolean =>
     isName(body[index + 1]) && body[index + 2]?.value === 'as';
@@ -330,8 +373,16 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
         open('source');
         continue;
       }
-      if (word !== table && !isCte(word)) throw refuseQuery();
-      countSource(current);
+      if (word === table) {
+        countSource(current, tableRows);
+        continue;
+      }
+      const level = cteLevel(word);
+      if (level === undefined) throw refuseQuery();
+      const rows = level.ctes.get(word) ?? null;
+      // A CTE named inside its own body is recursive to SQLite, keyword or not.
+      if (rows === null && remote) throw refuseQuery();
+      countSource(current, rows ?? 1);
       continue;
     }
 
@@ -368,7 +419,11 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
         if (query.profile === 'remote') throw refuseQuery();
         continue;
       }
-      current.ctes.add(token.value);
+      // A CTE named like the table shadows it, so every later reference would be charged as
+      // the table while reading whatever the CTE produces, recursion included.
+      if (token.value === table) throw refuseQuery();
+      current.ctes.set(token.value, null);
+      current.pendingCte = token.value;
       declared.add(token.value);
       // A CTE name may be followed by its column list, which is not a call.
       declarations.add(index);
@@ -398,9 +453,18 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
     if (token.text === ')') {
       const closed = stack.pop() as Frame;
       const parent = top();
-      if (closed.closes === 'source') countSource(parent);
-      else if (closed.closes === 'cteBody') parent.withState = 'afterBody';
-      else if (closed.closes === 'windowBody') parent.windowState = 'afterBody';
+      const rows = estimate(closed);
+      if (closed.closes === 'source') {
+        countSource(parent, rows);
+      } else if (closed.closes === 'cteBody') {
+        // Charged where it is read, once per reference, not where it is declared.
+        if (parent.pendingCte !== null) parent.ctes.set(parent.pendingCte, rows);
+        parent.pendingCte = null;
+        parent.withState = 'afterBody';
+      } else {
+        if (closed.closes === 'windowBody') parent.windowState = 'afterBody';
+        charge(parent, rows);
+      }
       continue;
     }
 
@@ -408,6 +472,7 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
       if (current.withState === 'afterBody') current.withState = 'name';
       else if (current.windowState === 'afterBody') current.windowState = 'name';
       else if (current.from) current.expectSource = true;
+      else if (current.values !== null) current.values += 1;
       continue;
     }
 
@@ -427,8 +492,15 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
     } else if (word === 'window' && opensWindow(index)) {
       current.from = false;
       current.windowState = 'name';
+    } else if (word === 'values') {
+      current.values ??= 1;
     } else if (FROM_ENDERS.has(word)) {
       current.from = false;
+      endValues(current);
+      if (word === 'union' || word === 'intersect' || word === 'except') {
+        current.compound += current.core;
+        current.core = 1;
+      }
     } else if (word === 'in' && next?.text !== '(') {
       // `x IN name` reads a table, exactly as FROM does.
       current.expectSource = true;
@@ -443,7 +515,9 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
     }
   }
 
-  // Rules 4 and 5.
+  if (remote) estimate(top());
+
+  // Rules 4, 5 and 6.
   for (let index = 0; index < body.length; index += 1) {
     const token = body[index] as Token;
     const next = body[index + 1];
@@ -452,6 +526,7 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
       if (declarations.has(index)) continue;
       if (token.kind === 'word' && KEYWORDS.has(token.value)) continue;
       if (!functions.has(token.value)) throw refuseQuery();
+      if (FORMAT_FUNCTIONS.has(token.value)) assertFormatBounded(body, index + 2);
       if (
         query.profile === 'remote' &&
         AGGREGATE_FUNCTIONS.has(token.value) &&
@@ -488,6 +563,41 @@ function isDistinctOperator(body: readonly Token[], index: number): boolean {
   };
   if (!keyword(1, 'distinct')) return false;
   return keyword(2, 'is') || (keyword(2, 'not') && keyword(3, 'is'));
+}
+
+const FORMAT_FUNCTIONS = new Set(['printf', 'format']);
+
+/**
+ * Rule 6: the call's first argument, at `first`, is a single string literal, and none of its
+ * conversions asks for a width or precision of `*` or above `maxFormatWidth`.
+ *
+ * Mirrors SQLite's `printf.c`: after `%`, any of the flags `-+ 0#,!`, then a width, then `.`
+ * and a precision. A `%%` is a literal percent sign.
+ */
+function assertFormatBounded(body: readonly Token[], first: number): void {
+  const format = body[first];
+  const after = body[first + 1]?.text;
+  if (format?.kind !== 'string' || (after !== ',' && after !== ')')) throw refuseQuery();
+  const text = format.value;
+  const bounded = (from: number): number => {
+    let at = from;
+    if (text[at] === '*') throw refuseQuery();
+    while (at < text.length && /[0-9]/.test(text[at] as string)) at += 1;
+    if (at > from && Number(text.slice(from, at)) > QUERY_GUARD_LIMITS.maxFormatWidth) {
+      throw refuseQuery();
+    }
+    return at;
+  };
+  for (let at = text.indexOf('%'); at !== -1; at = text.indexOf('%', at)) {
+    at += 1;
+    if (text[at] === '%') {
+      at += 1;
+      continue;
+    }
+    while (at < text.length && '-+ 0#,!'.includes(text[at] as string)) at += 1;
+    at = bounded(at);
+    if (text[at] === '.') at = bounded(at + 1);
+  }
 }
 
 function assertBalanced(tokens: readonly Token[]): void {

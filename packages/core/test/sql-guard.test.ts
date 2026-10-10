@@ -261,6 +261,93 @@ describe('cost, remotely', () => {
     refuses(`SELECT 1 IS [distinct] FROM ${TABLE}, nowhere`, 'remote');
   });
 
+  // A VALUES list or a SELECT without FROM produces the rows it spells out, whatever the table
+  // holds. Counting it as the table's rows let a ten-way cross join of ten literal rows through
+  // whenever the table had four rows or fewer (#558).
+  const TEN = Array.from({ length: 10 }, (_, index) => `(${String(index)})`).join(', ');
+  const TEN_SELECTS = Array.from({ length: 10 }, (_, index) => `SELECT ${String(index)}`).join(
+    ' UNION ALL ',
+  );
+  const TEN_WAY = 'abcdefghij'
+    .split('')
+    .map((alias) => `v ${alias}`)
+    .join(', ');
+
+  it.each([0, 1, 2, 4, 100])('counts VALUES rows literally at a row count of %i', (rowCount) => {
+    for (const sql of [
+      `WITH v(x) AS (VALUES ${TEN}) SELECT count(*) FROM ${TEN_WAY}`,
+      `WITH v(x) AS (${TEN_SELECTS}) SELECT count(*) FROM ${TEN_WAY}`,
+      `SELECT count(*) FROM ${'abcdefghij'
+        .split('')
+        .map((alias) => `(VALUES ${TEN}) ${alias}`)
+        .join(', ')}`,
+      `WITH v(x) AS (VALUES ${TEN}) SELECT count(*) FROM ${TABLE}, ${TEN_WAY}`,
+    ]) {
+      expect(() => guard(sql, 'remote', { rowCount }), sql).toThrow(
+        expect.objectContaining(REFUSED),
+      );
+    }
+  });
+
+  it('admits a small literal row source joined to the table', () => {
+    expect(() =>
+      guard(`WITH v(x) AS (VALUES (1), (2), (3)) SELECT p.sku, v.x FROM ${TABLE} p, v`, 'remote', {
+        rowCount: 1_000_000,
+      }),
+    ).not.toThrow();
+    // Six of ten literal rows is 1e6, inside the bound; seven is 1e7, outside it.
+    const ways = (count: number): string =>
+      `WITH v(x) AS (VALUES ${TEN}) SELECT count(*) FROM ${TEN_WAY.split(', ').slice(0, count).join(', ')}`;
+    expect(() => guard(ways(6), 'remote', { rowCount: 1 })).not.toThrow();
+    expect(() => guard(ways(7), 'remote', { rowCount: 1 })).toThrow(
+      expect.objectContaining(REFUSED),
+    );
+  });
+
+  // SQLite makes a common table expression recursive when its body names itself, with or
+  // without the RECURSIVE keyword, so refusing only the keyword let an unbounded recursion
+  // reach D1 (#558).
+  it.each([
+    `WITH c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c) SELECT count(*) FROM c`,
+    `WITH c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 10) SELECT n FROM c`,
+    `WITH a AS (SELECT 1 AS n), c(n) AS (SELECT n FROM a UNION ALL SELECT n + 1 FROM c) SELECT n FROM c`,
+    `SELECT n FROM (WITH c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c) SELECT n FROM c)`,
+  ])('refuses a CTE that names itself without RECURSIVE: %s', (sql) => {
+    refuses(sql, 'remote');
+    expect(() => guard(sql, 'local')).not.toThrow();
+  });
+
+  it.each([
+    `WITH ${TABLE}(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM ${TABLE}) SELECT count(*) FROM ${TABLE}`,
+    `WITH ${TABLE}(n) AS (VALUES ${TEN}) SELECT count(*) FROM ${TABLE} a, ${TABLE} b`,
+    `WITH "${TABLE}"(n) AS (VALUES (1)) SELECT n FROM ${TABLE}`,
+  ])('refuses a CTE that shadows the table: %s', (sql) => {
+    refuses(sql, 'remote');
+    refuses(sql, 'local');
+  });
+
+  it('charges a subquery in FROM its own estimate, not the table again', () => {
+    const rows = { rowCount: 5_000 };
+    expect(() =>
+      guard(`SELECT n FROM (SELECT 1 AS n FROM ${TABLE}) AS q`, 'remote', rows),
+    ).not.toThrow();
+    expect(() =>
+      guard(`WITH q AS (SELECT sku FROM ${TABLE}) SELECT sku FROM q`, 'remote', rows),
+    ).not.toThrow();
+    // Two references through a CTE still multiply: 5,000 squared is 2.5e7.
+    expect(() =>
+      guard(`WITH q AS (SELECT sku FROM ${TABLE}) SELECT a.sku FROM q a, q b`, 'remote', rows),
+    ).toThrow(expect.objectContaining(REFUSED));
+  });
+
+  it('sums the cores of a compound SELECT rather than multiplying them', () => {
+    expect(() =>
+      guard(`SELECT sku FROM ${TABLE} UNION ALL SELECT sku FROM ${TABLE}`, 'remote', {
+        rowCount: 1_000_000,
+      }),
+    ).not.toThrow();
+  });
+
   it('bounds a self-join by the rows it would multiply', () => {
     const rows = { rowCount: 2_000 };
     // 2,000 squared is 4e6, inside the bound; cubed is 8e9, far outside it.
@@ -274,6 +361,47 @@ describe('cost, remotely', () => {
         rows,
       ),
     ).toThrow(expect.objectContaining(REFUSED));
+  });
+});
+
+/**
+ * `printf` and `format` can make one short row arbitrarily expensive: `%.*c` with a million
+ * repeats a character a million times per row, which no row bound sees (#558, #559). A width
+ * or precision is therefore a small literal, never `*`, and the format is a literal the guard
+ * can read, on both profiles so the two backends agree.
+ */
+describe('format widths', () => {
+  it.each([
+    `SELECT printf('%.*c', 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf('%*c', 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf('%1000000c', sku) FROM ${TABLE}`,
+    `SELECT printf('%.1000000c', sku) FROM ${TABLE}`,
+    `SELECT printf('%0000001000000d', 1) FROM ${TABLE}`,
+    `SELECT printf('%-1000000s', sku) FROM ${TABLE}`,
+    `SELECT format('%.*c', 1000000, sku) FROM ${TABLE}`,
+    `SELECT "printf"('%.*c', 1000000, sku) FROM ${TABLE}`,
+    `SELECT PRINTF('%.*C', 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf('ok %d then %.*c', 1, 1000000, sku) FROM ${TABLE}`,
+    // A format the guard cannot read could hold any of the above.
+    `SELECT printf(sku, 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf('%' || '.*c', 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf(('%.*c'), 1000000, sku) FROM ${TABLE}`,
+    `SELECT printf() FROM ${TABLE}`,
+  ])('refuses %s', (sql) => {
+    refuses(sql, 'remote');
+    refuses(sql, 'local');
+  });
+
+  it.each([
+    `SELECT printf('%.2f', list_price) FROM ${TABLE}`,
+    `SELECT printf('%5d|%-10s|%,d', 1, sku, 1234567) FROM ${TABLE}`,
+    `SELECT format('%s-%s', sku, region) FROM ${TABLE}`,
+    `SELECT printf('100%%') FROM ${TABLE}`,
+    `SELECT printf('%08.3f', list_price) FROM ${TABLE}`,
+    `SELECT printf('%100s', sku) FROM ${TABLE}`,
+  ])('answers %s', (sql) => {
+    expect(() => guard(sql, 'remote')).not.toThrow();
+    expect(() => guard(sql, 'local')).not.toThrow();
   });
 });
 

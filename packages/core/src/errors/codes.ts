@@ -32,6 +32,7 @@ export const ERROR_CODES = {
 
   // Concurrency (exit 4)
   LORE_E_LOCK_HELD: 'Another Lorepack process holds the project lock.',
+  LORE_E_BUSY: 'Too many table queries are running, or were made recently, to accept another.',
 
   // Runtime safety (exit 1)
   LORE_E_SQL_REJECTED: 'The query was rejected by the read-only SQL policy.',
@@ -80,6 +81,7 @@ const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_STALE_SOURCES: EXIT_CODES.BUILD,
   LORE_E_SCHEMA_MISMATCH: EXIT_CODES.BUILD,
   LORE_E_LOCK_HELD: EXIT_CODES.CONCURRENCY,
+  LORE_E_BUSY: EXIT_CODES.CONCURRENCY,
   LORE_E_SQL_REJECTED: EXIT_CODES.USER,
   LORE_E_LIMIT_EXCEEDED: EXIT_CODES.USER,
   LORE_E_TARGET_NOT_CONFIGURED: EXIT_CODES.REMOTE,

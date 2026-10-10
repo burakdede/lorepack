@@ -128,5 +128,17 @@ builds' tables and `runtime_tokens`. The guard reads `sqlite_master` on every qu
 the query if it cannot. It returns the statement without comments, and the wrapper puts it on its
 own lines, so nothing in the statement can reach the closing parenthesis. Because D1 cannot be
 interrupted before its own 30 second limit, the remote profile also refuses recursive common
-table expressions, `json_each` and `json_tree`, aggregates used as windows, and FROM clauses whose
-row product would exceed 5,000,000.
+table expressions (a CTE that names itself is recursive to SQLite with or without the keyword),
+`json_each` and `json_tree`, aggregates used as windows, and statements whose estimated row
+product would exceed 5,000,000. The estimate counts a VALUES list by its literal rows, never by
+the table's row count (#558).
+
+That bounds rows, not what a row costs: a statement can make each row expensive with string
+functions, and no static rule sees all of them. So the Worker also rate-limits table queries,
+20 per 60 seconds per caller, through the `TABLE_QUERY_LIMITER` Workers Rate Limiting binding
+declared in `packages/deploy-cloudflare/wrangler.jsonc`. The key is a SHA-256 of the caller's
+bearer token or Access assertion. A caller past the limit gets `LORE_E_BUSY` (HTTP 429), and a
+Worker deployed without the binding refuses table queries with `LORE_E_TARGET_NOT_CONFIGURED`.
+Counters are per Cloudflare location and eventually consistent (Cloudflare's own description),
+so the limit bounds sustained use by one token; it does not shorten a single query, which D1
+can still run for up to 30 seconds. [`security.md`](security.md) states what remains open.

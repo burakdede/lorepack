@@ -419,6 +419,16 @@ export function runRuntimeContract(options: ContractOptions): void {
               (t: string, c: string) => `SELECT ${c} AS ${alias} FROM ${t}, generate_series`,
             ] as const,
         ),
+        // One short row that costs a megabyte (#558, #559). Aggregated, so an unguarded backend
+        // answers with a number instead of tripping the response size cap.
+        [
+          'a printf width that repeats a character a million times',
+          (t, c) => `SELECT sum(length(printf('%.*c', 1000000, ${c}))) AS n FROM ${t}`,
+        ],
+        [
+          'a printf format the guard cannot read',
+          (t, c) => `SELECT sum(length(printf('%' || '1000000c', ${c}))) AS n FROM ${t}`,
+        ],
       ];
 
       for (const [label, build] of HOSTILE) {
@@ -473,6 +483,12 @@ export function runRuntimeContract(options: ContractOptions): void {
           (t, c) => `SELECT ${c} FROM ${t} WHERE ${c} IS NOT DISTINCT FROM ${c}`,
         ],
         ['an alias spelled distinct', (t, c) => `SELECT ${c} AS [distinct] FROM ${t}`],
+        ['a bounded printf width', (t, c) => `SELECT printf('%-12s|%8.2f', ${c}, 1.5) FROM ${t}`],
+        [
+          'a small literal row source joined to the table',
+          (t, c) => `WITH v(x) AS (VALUES (1), (2)) SELECT a.${c}, v.x FROM ${t} a, v`,
+        ],
+        ['a subquery in FROM', (t, c) => `SELECT n FROM (SELECT ${c} AS n FROM ${t}) AS q`],
       ];
 
       for (const [label, build] of ORDINARY) {

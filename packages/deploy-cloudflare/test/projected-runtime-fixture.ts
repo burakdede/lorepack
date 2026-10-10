@@ -120,6 +120,9 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
   readonly knownArtifactId: string;
   readonly matchingQuery: string;
   readonly knownTableId: string;
+  /** The projection and bucket, for a test that assembles the Worker from bindings. */
+  readonly projection: SqliteProjectionDatabase;
+  readonly bucket: R2BucketLike;
   readonly close: () => Promise<void>;
 }> {
   const root = mkdtempSync(join(tmpdir(), 'lore-cloudflare-contract-'));
@@ -198,6 +201,8 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
       knownArtifactId: ARTIFACT_ID,
       matchingQuery: MATCHING_QUERY,
       knownTableId: TABLE_ID,
+      projection,
+      bucket,
       close,
     };
   } catch (error) {
