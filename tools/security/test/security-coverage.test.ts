@@ -159,7 +159,9 @@ const EVIDENCE: readonly Evidence[] = [
     name: 'a build leaves out a file over a parse limit and still activates, issue 594',
     path: 'packages/cli/test/parse-limits.test.ts',
     tests: [
-      'a file that exceeds a parse limit is left out with a typed warning, and the build activates without it',
+      'a file that exceeds a parse limit leaves out brackets.md with parse-timeout, and activates without it',
+      'a file that exceeds a parse limit leaves out rows.csv with parse-memory, and activates without it',
+      'a file that exceeds a parse limit leaves out cmap.pdf with parse-memory, and activates without it',
       'a file that exceeds a parse limit leaves out a document nested past the parser stack, issue 595',
       'the published binary parses in its own child and leaves out a file over the deadline',
     ],
