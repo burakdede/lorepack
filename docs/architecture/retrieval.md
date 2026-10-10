@@ -15,6 +15,15 @@ assembly.
 | Weights | `core` | Two things need them and neither may import the other |
 | Steps 2 to 9 | `runtime` | Ranking is portable, so it must not need a database to run |
 
+**Query text reaches FTS5 through one function.** `escapeFtsQuery` in `@lorepack/core` is
+used by the local catalog and the D1 catalog alike, so a query matches the same chunks on
+both. It quotes every term, so nothing a caller types is FTS5 syntax. It keeps one copy of
+each term as the `unicode61` tokenizer would read it (case, diacritics and punctuation
+folded), because FTS5 evaluates every copy and one common word repeated twenty times cost
+over a minute on an 800-file corpus (#625). More than 64 distinct terms
+(`SEARCH_QUERY_LIMITS.maxDistinctTerms`) is refused with `LORE_E_INVALID_ARGUMENT`, a 400
+over HTTP, rather than truncated, since a shortened query answers a different question.
+
 **Ranking weights are never stored in a build.** Architecture 12.9: baking them into the
 index would make retuning ranking a rebuild, and would make two builds of the same sources
 disagree because differently tuned compilers produced them. `RANKING_WEIGHTS` in
