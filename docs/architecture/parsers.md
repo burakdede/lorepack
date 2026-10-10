@@ -81,16 +81,20 @@ first kind hangs the build with the project lock held and Ctrl-C ignored, and th
 the process with nothing a `try` can catch.
 
 So every built-in parse runs in a **child process**, `packages/parsers/src/isolation.ts`, under
-two limits:
+two limits. [ADR 0001](../adr/0001-parser-process-isolation.md) records the isolation boundary
+and its limitations:
 
 | Limit | Default | Override | When reached |
 |---|---|---|---|
 | Wall-clock time per file | 30 s | `LORE_PARSE_TIMEOUT_MS`, 100 to 3600000 | `parse-timeout` warning, file left out |
 | V8 heap of the parse process | 2048 MB | `LORE_PARSE_MEMORY_MB`, 64 to 32768 | `parse-memory` warning, file left out |
 
-Both warnings have class `envelope`, name the file, and say which variable to raise. They reach
-the manifest, `lorepack inspect warnings` and Studio like every other warning, and the build is
-also told at the moment it happens, because it has just spent the whole deadline on one file. A
+Both warnings have class `envelope`, name the file, and say which variable to raise. A newly
+sealed build records them in its manifest for `lorepack inspect warnings` and Studio. The
+build also reports them as they happen. If the retained content matches an existing build,
+the no-op reuses that immutable manifest; the new exclusion appears only in live output.
+[Issue #662](https://github.com/burakdede/lorepack/issues/662) tracks persistent diagnostics
+for those attempts. A
 process that dies any other way, such as the operating system's out-of-memory killer, is a
 `parse-crashed` warning and the file is also left out.
 
@@ -105,13 +109,14 @@ each file's bytes and result across the IPC channel.
 **What the ceiling covers.** `--max-old-space-size` bounds the JavaScript heap. It does not bound
 `ArrayBuffer` memory, which is where pdfjs inflates a compressed stream, so a decompression bomb
 is stopped by the deadline rather than the ceiling: the 1.5 GB PDF above reached about 3.2 GB of
-resident memory in its 30 s. Capping decompressed bytes inside the PDF parser is #599. Peak
-memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever buffers
-the parse allocates before its deadline.
+resident memory in its 30 s. Issue #599 covers extracted-text amplification, which does not
+bound those buffers. A total resident-memory ceiling remains an acceptance gap in #594.
+Peak memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever
+buffers the parse allocates before its deadline.
 
 **Ctrl-C stops a parse, not just the build after it.** The parent's event loop stays free while
 a file parses, so the interrupt is heard immediately, the child is killed, and the build ends
-with `LORE_E_CANCELLED` before anything is written. The terminal also delivers the interrupt to
+with `LORE_E_CANCELLED` before candidate activation. The terminal also delivers the interrupt to
 the child, which can die of it first; that is reported as the same cancellation rather than as
 a broken file.
 
@@ -130,6 +135,18 @@ use instead (see [security](./security.md)).
 **Only registered parsers are isolated.** The child builds its own registry and finds the parser
 by id, so a parser that exists only in the calling process (an embedder's, or a test's) runs
 in-process, as every parser did before.
+
+### Manual CLI verification
+
+Verified on 2026-10-10 with the bundled CLI 0.1.0, Node 24.21.0, macOS arm64:
+
+- Create `ready.md` with ordinary text and `slow.md` with 100,000 opening brackets, `x`,
+  and 100,000 closing brackets. Run `build` with `LORE_PARSE_TIMEOUT_MS=100` and
+  `LORE_PARSE_MEMORY_MB=128`. The first build exits 0, activates one artifact and reports
+  `parse-timeout` for `slow.md`. `inspect warnings --json` returns that file and code.
+- Build `ready.md` first, then add the same `slow.md` and run with those limits. The command
+  exits 0, reports the exclusion and preserves the active build ID. Persistent inspection
+  returns zero warnings, reproducing #662; this case remains unresolved.
 
 ## HTML
 

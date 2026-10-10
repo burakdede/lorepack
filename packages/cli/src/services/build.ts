@@ -363,7 +363,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           }
 
           // The child was stopped because the build was, or it died of the same Ctrl-C the
-          // terminal sent the whole process group. Either way nothing has been written.
+          // terminal sent the whole process group. Either way the active build is unchanged.
           if (outcome.kind === 'interrupted')
             throw cancelledError({ hasActiveBuild: active !== null });
           if (outcome.kind === 'excluded') {
