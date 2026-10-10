@@ -164,7 +164,15 @@ jobs:
           node packages/cli/dist/public-entry.js --cwd examples/product-research pack --out product-research.lorepack
 
       - name: Pack npm tarballs for dry-run and release review
-        run: pnpm --filter @lorepack/cli pack --pack-destination release-artifacts/npm
+        run: node scripts/pack-cli.mjs --out release-artifacts/npm
+
+      - name: Install the packed CLI with npm and check what a user gets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tarball in release-artifacts/npm/*.tgz; do
+            node scripts/check-packed-cli.mjs --tarball "$tarball"
+          done
 
       - name: Prepare GitHub release notes
         run: |

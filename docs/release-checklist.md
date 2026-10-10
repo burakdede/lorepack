@@ -28,7 +28,9 @@ This checklist is for the person dispatching `.github/workflows/release.yml`.
 2. Use `channel: next` for a release candidate and `channel: latest` for a stable release.
 3. Paste the issue #101 performance report URL for a stable release.
 4. Download the `release-dry-run` artifact.
-5. Inspect the npm tarballs under `release-artifacts/npm`.
+5. Inspect the npm tarballs under `release-artifacts/npm`. Each must bundle its dependency
+   tree, and the run must show `check:packed-cli: clean` for it: no native add-on, the tested
+   production tree, and a clean `npm audit --omit=dev`.
 6. Inspect `reports/sbom.cyclonedx.json` and `reports/dependency-health.json`.
 7. Build and open `examples/product-research/product-research.lorepack` with the current CLI.
 

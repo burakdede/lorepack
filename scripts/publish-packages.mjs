@@ -1,5 +1,12 @@
 #!/usr/bin/env node
-import { discoverPublishablePackages, runNpm } from './release-packages.mjs';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { discoverPublishablePackages, ROOT, runNpm } from './release-packages.mjs';
+
+// The tarballs `scripts/pack-cli.mjs` produced and `scripts/check-packed-cli.mjs` checked.
+// Publishing a package directory instead would re-pack it without the bundled, tested
+// dependency tree, and npm users would resolve `@napi-rs/canvas` again (#603).
+const TARBALLS = join(ROOT, 'release-artifacts', 'npm');
 
 const tag = parseTag(process.argv.slice(2));
 
@@ -28,7 +35,11 @@ for (const packageJson of discoverPublishablePackages()) {
     continue;
   }
 
-  const result = runNpm(['publish', '--access', 'public', '--tag', tag], packageDir);
+  const tarball = join(TARBALLS, `${name.replace(/^@/, '').replace('/', '-')}-${version}.tgz`);
+  if (!existsSync(tarball)) {
+    throw new Error(`${tarball} is missing: run scripts/pack-cli.mjs before publishing`);
+  }
+  const result = runNpm(['publish', tarball, '--access', 'public', '--tag', tag], packageDir);
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
   if (result.status !== 0) {

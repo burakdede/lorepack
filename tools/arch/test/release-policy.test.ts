@@ -216,7 +216,7 @@ describe('release policy', () => {
     expect(publisher).toContain(
       "['view', `" + '$' + '{name}@' + '$' + "{version}`, 'version', '--json']",
     );
-    expect(publisher).toContain("['publish', '--access', 'public', '--tag', tag]");
+    expect(publisher).toContain("['publish', tarball, '--access', 'public', '--tag', tag]");
     expect(publisher).toContain('cannot publish over the previously published version');
   });
 
@@ -454,7 +454,8 @@ function releaseWorkflow(): string {
     'examples/product-research/product-research.lorepack',
     'reports/sbom.cyclonedx.json',
     'stable publish requires the green issue #101 performance report URL',
-    'pack --pack-destination',
+    'scripts/pack-cli.mjs --out',
+    'scripts/check-packed-cli.mjs --tarball',
     'LOREPACK_VERSION',
     'CHANGELOG.md',
     'scripts/stamp-release-version.mjs',
