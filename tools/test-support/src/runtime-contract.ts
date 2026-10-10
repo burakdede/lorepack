@@ -213,6 +213,83 @@ export function runRuntimeContract(options: ContractOptions): void {
     });
 
     /**
+     * Oversized request fields (#554).
+     *
+     * Unbounded, a 48,001-character glob reached SQLite as `500 LIKE or GLOB pattern too
+     * complex`, and 500 duplicate statuses became 508 bound placeholders against D1's limit of
+     * 100. Each must be a typed refusal that names the field, on every backend, before any
+     * storage is asked.
+     */
+    describe('oversized request fields', () => {
+      const long = (length: number): string => 'a'.repeat(length);
+      const search = { query: 'x', limit: 5, includeArchived: false, debug: false };
+      const task = { task: 'x', includeArchived: false, allowUnsupportedBudget: false };
+      const cases: Array<[string, string, (runtime: LoreRuntime, id: string) => Promise<unknown>]> =
+        [
+          ['pathGlob', 'pathGlob', (r) => r.search({ ...search, pathGlob: long(48_001) })],
+          ['fileType', 'fileType', (r) => r.search({ ...search, fileType: long(48_001) })],
+          ['artifactId', 'artifactId', (r) => r.search({ ...search, artifactId: long(48_001) })],
+          [
+            'duplicate status values',
+            'status',
+            (r) => r.search({ ...search, status: Array(500).fill('active') }),
+          ],
+          [
+            'a repeated status value',
+            'status',
+            (r) => r.search({ ...search, status: ['active', 'active'] }),
+          ],
+          [
+            'a filter value',
+            'filters.0.value',
+            (r) => r.contextForTask({ ...task, filters: [{ kind: 'path', value: long(48_001) }] }),
+          ],
+          [
+            'too many filters',
+            'filters',
+            (r) =>
+              r.contextForTask({
+                ...task,
+                filters: Array(500).fill({ kind: 'status', value: 'active' }),
+              }),
+          ],
+          [
+            'a source read artifact id',
+            'artifactId',
+            (r) => r.readSource({ artifactId: long(48_001) }),
+          ],
+          [
+            'a heading path segment',
+            'headingPath.0',
+            (r, id) => r.readSource({ artifactId: id, headingPath: [long(48_001)] }),
+          ],
+          [
+            'a heading path depth',
+            'headingPath',
+            (r, id) => r.readSource({ artifactId: id, headingPath: Array(500).fill('a') }),
+          ],
+          [
+            'a table id',
+            'tableId',
+            (r) => r.queryTable({ tableId: long(48_001), sql: 'SELECT 1' }),
+          ],
+        ];
+
+      for (const [label, field, call] of cases) {
+        it(`refuses ${label} as a typed error naming \`${field}\``, async () => {
+          await withFixture(async ({ runtime, knownArtifactId }) => {
+            const failure = await call(runtime, knownArtifactId).then(
+              () => undefined,
+              (error: unknown) => error as { code?: string; message?: string },
+            );
+            expect(failure?.code).toBe('LORE_E_INVALID_ARGUMENT');
+            expect(failure?.message).toContain(`\`${field}\``);
+          });
+        });
+      }
+    });
+
+    /**
      * Hostile query text (#625).
      *
      * A term repeated a few dozen times used to cost minutes of FTS5 work on every backend,

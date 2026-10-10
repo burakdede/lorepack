@@ -167,6 +167,14 @@ one-document filter is usually nothing.
 | `status` | one or more declared statuses |
 | `artifactId` | exactly one document, by artifact id **or** by canonical path |
 
+Every filter is bounded in the shared request schema, so an oversized one is refused as
+`LORE_E_INVALID_ARGUMENT` naming the field before any storage is asked (#554): `pathGlob`,
+`fileType` and each context filter value at 1,000 characters, `artifactId` at 4,096, `status`
+as each value at most once, and at most 10 context filters. The runtime checks the same
+schemas REST and MCP do, so the bounds hold on every backend. Unbounded, a 48,001-character
+glob reached SQLite as a 500, and 500 repeated statuses became 508 bound placeholders against
+D1's limit of 100.
+
 `artifactId` is exact on both forms and never widens to a prefix. A caller holds whichever
 form the previous answer gave it (the locator carries both), and asking for a document that
 does not exist returns nothing rather than the document it nearly names. The CLI spells it

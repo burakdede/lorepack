@@ -15,6 +15,7 @@
       "type": "string"
     },
     "tableId": {
+      "maxLength": 4096,
       "minLength": 1,
       "type": "string"
     }

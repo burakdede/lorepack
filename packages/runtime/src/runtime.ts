@@ -15,11 +15,16 @@ import {
   type SourceReadRequest,
   type SourceReadResult,
   type SourceState,
+  searchRequestSchema,
+  sourceReadRequestSchema,
   type TableDescription,
   type TableQueryRequest,
   type TableQueryResult,
   type TaskContextRequest,
+  tableQueryRequestSchema,
+  taskContextRequestSchema,
 } from '@lorepack/core/worker';
+import type { ZodType } from 'zod';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
@@ -81,7 +86,8 @@ class PortedRuntime implements LoreRuntime {
     });
   }
 
-  async search(request: SearchRequest): Promise<SearchResult> {
+  async search(unchecked: SearchRequest): Promise<SearchResult> {
+    const request = checked(searchRequestSchema, unchecked);
     return this.#withBuild(async ({ scope, envelope }) => {
       // Ranking can only reorder what it was given, so the index is asked for more than
       // the page: a page of ten taken straight from BM25 would make every boost decorative.
@@ -137,7 +143,8 @@ class PortedRuntime implements LoreRuntime {
     });
   }
 
-  async contextForTask(request: TaskContextRequest): Promise<ContextBundle> {
+  async contextForTask(unchecked: TaskContextRequest): Promise<ContextBundle> {
+    const request = checked(taskContextRequestSchema, unchecked);
     return this.#withBuild(async ({ scope, envelope }) => {
       const profile = request.profile ?? DEFAULT_PROFILE;
       const budget = resolveBudget(profile, request.budget, request.allowUnsupportedBudget);
@@ -179,7 +186,8 @@ class PortedRuntime implements LoreRuntime {
     });
   }
 
-  async readSource(request: SourceReadRequest): Promise<SourceReadResult> {
+  async readSource(unchecked: SourceReadRequest): Promise<SourceReadResult> {
+    const request = checked(sourceReadRequestSchema, unchecked);
     return this.#withBuild(async ({ scope, envelope }) => ({
       ...envelope,
       ...(await readSourceFrom(scope, request)),
@@ -203,7 +211,8 @@ class PortedRuntime implements LoreRuntime {
     });
   }
 
-  async queryTable(request: TableQueryRequest): Promise<TableQueryResult> {
+  async queryTable(unchecked: TableQueryRequest): Promise<TableQueryResult> {
+    const request = checked(tableQueryRequestSchema, unchecked);
     return this.#withBuild(async ({ scope, envelope }) => ({
       ...(await scope.tables.query(request)),
       ...envelope,
@@ -254,6 +263,29 @@ class PortedRuntime implements LoreRuntime {
       return 'unknown';
     }
   }
+}
+
+/**
+ * A request, held to the shared contract before any storage is asked (#554).
+ *
+ * REST and MCP validate the same schemas at their boundary, but the runtime is the one place
+ * every caller passes through, the CLI and an embedding host included. Bounds checked here
+ * hold for every backend, which is what keeps an oversized glob away from SQLite and a list
+ * of statuses under D1's bound-parameter limit.
+ */
+function checked<T>(schema: ZodType<T>, request: unknown): T {
+  const result = schema.safeParse(request);
+  if (result.success) return result.data;
+  const first = result.error.issues[0];
+  const path = first === undefined ? '' : first.path.join('.');
+  throw new LoreError(
+    'LORE_E_INVALID_ARGUMENT',
+    `The request is invalid${path === '' ? '' : ` at \`${path}\``}: ${first?.message ?? 'unknown reason'}.`,
+    {
+      remediation: 'Correct the named field and try again.',
+      ...(path === '' ? {} : { subject: path }),
+    },
+  );
 }
 
 /** Request filters, translated into the criteria the catalog understands. */

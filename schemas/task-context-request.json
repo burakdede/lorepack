@@ -25,6 +25,7 @@
             "type": "string"
           },
           "value": {
+            "maxLength": 1000,
             "type": "string"
           }
         },
@@ -34,6 +35,7 @@
         ],
         "type": "object"
       },
+      "maxItems": 10,
       "type": "array"
     },
     "includeArchived": {
