@@ -11,7 +11,7 @@ security-affecting change before release.
 
 | Check | Evidence | Result |
 |---|---|---|
-| Path traversal and symlink escape | `packages/cli/test/security.e2e.test.ts`, `packages/compiler/test/discover.test.ts` | Covered |
+| Path traversal and symlink escape | `packages/cli/test/security.e2e.test.ts`, `packages/compiler/test/discover.test.ts`, `packages/core/test/config.test.ts` | Covered |
 | Malformed PDF and Office inputs | `packages/parsers/test/pdf.test.ts`, `packages/parsers/test/docx.test.ts`, `packages/parsers/test/xlsx.test.ts` | Covered |
 | SQL injection and multi-statement attempts | `packages/cli/test/security.e2e.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
 | Oversized requests and responses | `packages/runtime/test/http.test.ts`, export/context budget tests | Covered |

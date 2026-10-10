@@ -30,6 +30,21 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/outside\/secret\.md/, /symlink/i, /outside/i],
   },
   {
+    name: 'a source root linked outside the project is refused, issue 583',
+    path: 'packages/core/test/config.test.ts',
+    patterns: [
+      /refuses a directory root that links outside the project/,
+      /refuses a file root that links outside the project/,
+      /refuses a root reached through a linked intermediate directory/,
+      /LORE_E_PATH_ESCAPE/,
+    ],
+  },
+  {
+    name: 'an escaping source root fails the real build command',
+    path: 'packages/cli/test/security.e2e.test.ts',
+    patterns: [/refuses a symlinked source root that escapes, and builds nothing/, /zebrafish/],
+  },
+  {
     name: 'malformed PDFs are parser fixtures, not crashes',
     path: 'packages/parsers/test/pdf.test.ts',
     patterns: [/malformed input, per section 20\.9/, /encrypted/i, /deeply nested document/],
