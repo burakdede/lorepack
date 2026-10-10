@@ -22,6 +22,20 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'Windows lock creation retries preserve the wait bound and filesystem errors',
+    path: 'packages/backend-local/test/lock_create.test.ts',
+    tests: [
+      'lock directory creation errors retries a transient Windows EPERM and acquires the lock',
+      'lock directory creation errors returns persistent Windows EPERM at the original wait deadline',
+      'lock directory creation errors returns darwin EPERM immediately',
+      'lock directory creation errors returns linux EPERM immediately',
+      'lock directory creation errors returns other Windows creation errors immediately',
+      'lock directory creation errors returns parent-directory EPERM immediately',
+      'lock directory creation errors returns owner-record EPERM immediately',
+    ],
+    patterns: [/EPERM/, /advanceTimersByTimeAsync/, /toBe\(cause\)/],
+  },
+  {
     name: 'lock process probes do not execute a relative PATH entry',
     path: 'packages/backend-local/test/process-start.test.ts',
     tests: ['process start identity does not execute a process probe from a relative PATH entry'],

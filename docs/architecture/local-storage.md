@@ -99,6 +99,12 @@ Builds, activation and prune serialise on `.lore/lock`, created with `mkdir`, wh
 everywhere we support. The record inside names the owning pid, the host it runs on, when that
 process started, when the lock was taken and a unique ownership token.
 
+On Windows, directory removal can remain pending until its last handle closes
+([Microsoft's directory-removal semantics](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-removedirectoryw)).
+An `EPERM` while creating the lock directory is retried within the existing lock wait deadline.
+If it persists, the original filesystem error is returned. Parent-directory and owner-record
+errors fail immediately; POSIX creation errors keep their existing behavior.
+
 A lock is reclaimed when its owner is no longer running. "No longer running" means the pid is
 gone, or the pid is alive but names a process that started at a different time: pids are
 reused, and a lock must not outlive its owner because an unrelated process (or pid 1) inherited
