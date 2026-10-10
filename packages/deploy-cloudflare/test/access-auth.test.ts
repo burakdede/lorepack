@@ -11,6 +11,7 @@ import {
   resolveCloudflareAccessConfigFromBindings,
   storeRuntimeTokenHash,
 } from '../src/index.js';
+import worker from '../src/worker.js';
 
 class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   readonly #db: DatabaseSync;
@@ -58,6 +59,25 @@ afterEach(() => {
   }
   globalThis.fetch = originalFetch;
 });
+
+/** Records every statement the Worker prepares, standing in for D1 billing. */
+class RecordingRuntimeDatabase implements RuntimeAuthDatabaseLike {
+  readonly statements: string[] = [];
+  readonly #inner: SqliteRuntimeDatabase;
+
+  constructor(inner: SqliteRuntimeDatabase) {
+    this.#inner = inner;
+  }
+
+  prepare(query: string): RuntimeAuthStatementLike {
+    this.statements.push(query.trim());
+    return this.#inner.prepare(query);
+  }
+
+  writes(): string[] {
+    return this.statements.filter((query) => !/^select\b/i.test(query));
+  }
+}
 
 function openRuntimeDatabase(): SqliteRuntimeDatabase {
   const db = new DatabaseSync(':memory:');
@@ -195,5 +215,95 @@ describe('cloudflare access auth, issue 90', () => {
         CLOUDFLARE_ACCESS_AUD: 'cf-access-aud',
       }),
     ).toThrow(/CLOUDFLARE_ACCESS_TEAM_DOMAIN/);
+  });
+});
+
+async function accessKeyFixture(teamDomain: string) {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = 'issue-561';
+  let certFetches = 0;
+  globalThis.fetch = async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (url !== `https://${teamDomain}/cdn-cgi/access/certs`) {
+      throw new Error(`unexpected fetch ${url}`);
+    }
+    certFetches += 1;
+    return new Response(JSON.stringify({ keys: [{ ...jwk, use: 'sig' }] }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  return {
+    privateKey,
+    certFetches: () => certFetches,
+    token: () =>
+      new SignJWT({ email: 'owner@example.com' })
+        .setProtectedHeader({ alg: 'RS256', kid: 'issue-561' })
+        .setIssuer(`https://${teamDomain}`)
+        .setAudience('cf-access-aud')
+        .setSubject('owner@example.com')
+        .setIssuedAt(),
+  };
+}
+
+describe('unauthenticated Worker requests cost no backend work, issue 561', () => {
+  it('fetches Access keys at most once per isolate and never writes to D1', async () => {
+    const teamDomain = 'issue-561-worker.cloudflareaccess.com';
+    const keys = await accessKeyFixture(teamDomain);
+    const { privateKey: strangerKey } = await generateKeyPair('RS256');
+    const forged = await keys.token().setExpirationTime('10m').sign(strangerKey);
+    const unsigned = `${btoa(JSON.stringify({ alg: 'none', kid: 'issue-561' }))}.${btoa('{}')}.`;
+
+    const sqlite = openRuntimeDatabase();
+    await storeRuntimeTokenHash(
+      sqlite,
+      await hashRuntimeToken('lore_rt_good'),
+      '2026-08-09T00:00:00.000Z',
+    );
+    const db = new RecordingRuntimeDatabase(sqlite);
+    const env = {
+      CATALOG_DB: db as never,
+      TABLES_DB: {} as never,
+      OBJECTS: {} as never,
+      PROJECT_ID: 'demo',
+      CLOUDFLARE_ACCESS_TEAM_DOMAIN: teamDomain,
+      CLOUDFLARE_ACCESS_AUD: 'cf-access-aud',
+    };
+
+    // The Worker builds a fresh app for every request, as it does in production.
+    for (const access of [forged, unsigned, 'garbage', forged]) {
+      const response = await worker.fetch(
+        new Request('https://worker.example/v1/build', {
+          headers: {
+            Authorization: 'Bearer lore_rt_guessed',
+            'Cf-Access-Jwt-Assertion': access,
+          },
+        }),
+        env,
+      );
+      expect(response.status).toBe(401);
+    }
+
+    expect(keys.certFetches()).toBeLessThanOrEqual(1);
+    expect(db.writes()).toEqual([]);
+  });
+
+  it('rejects an Access JWT that carries no expiry', async () => {
+    const teamDomain = 'issue-561-exp.cloudflareaccess.com';
+    const keys = await accessKeyFixture(teamDomain);
+    const authorize = createCloudflareAccessAuthorizer({ teamDomain, audience: 'cf-access-aud' });
+    const request = (token: string) => ({
+      method: 'GET',
+      path: '/v1/build',
+      headers: new Headers({ 'Cf-Access-Jwt-Assertion': token }),
+      authorization: undefined,
+    });
+
+    expect(await authorize(request(await keys.token().sign(keys.privateKey)))).toBe(
+      'This request is not authorized for this build.',
+    );
+    expect(
+      await authorize(request(await keys.token().setExpirationTime('10m').sign(keys.privateKey))),
+    ).toBe(true);
   });
 });

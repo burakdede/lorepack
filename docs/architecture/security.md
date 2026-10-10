@@ -198,8 +198,10 @@ fetch from a worker thread) is loaded into the real build process and must fail 
 `packages/deploy-cloudflare/test/access-auth.test.ts` and
 `packages/deploy-cloudflare/test/worker-app.test.ts` cover the remote projection boundary.
 Missing bearer tokens, malformed bearer tokens, deployment credentials, expired rotated tokens
-and rejected Cloudflare Access JWTs fail before a build is read. Rejected token material is not
-echoed in the Worker 401 response.
+and rejected Cloudflare Access JWTs (including ones without `exp`) fail before a build is read.
+Rejected token material is not echoed in the Worker 401 response. Unauthenticated requests
+cost no D1 writes and at most one Access key fetch per isolate (#561); failed authentication is
+not rate limited.
 
 ## What is not covered here
 
