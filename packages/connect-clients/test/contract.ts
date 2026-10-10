@@ -52,6 +52,7 @@ export interface ConnectorFixture {
    * contract checks the exact file instead of "somewhere under the project root".
    */
   defaultConfigPath?(project: string): string;
+  projectConfigAtRoot?: boolean;
   /** Writes a configuration holding a server someone else set up, plus one unrelated setting. */
   seedForeign(project: string): string;
   /** The unrelated setting `seedForeign` wrote, read back from the file. */
@@ -452,20 +453,24 @@ export function runConfigFileSafetyContract(
       expect(backupsIn(outside)).toEqual([]);
     });
 
-    symlinkOnly('refuses a project file reached through a linked directory', async (context) => {
+    it('declares whether the project config has an intermediate directory', () => {
       const path = fixture.seedForeign(project());
-      const directory = dirname(path);
-      // A file at the project root (`.mcp.json`) has no directory between it and the root,
-      // and the root itself is where the user chose to run, so there is nothing to link.
-      if (directory === project()) context.skip();
-      const elsewhere = join(outside, 'linked-directory');
-      renameSync(directory, elsewhere);
-      symlinkSync(elsewhere, directory, 'dir');
-      const before = readdirSync(elsewhere);
-
-      await expect(fixture.create(project()).plan(input())).rejects.toThrow(/symbolic link/);
-      expect(readdirSync(elsewhere)).toEqual(before);
+      expect(dirname(path) === project()).toBe(fixture.projectConfigAtRoot === true);
     });
+
+    if (fixture.projectConfigAtRoot !== true) {
+      symlinkOnly('refuses a project file reached through a linked directory', async () => {
+        const path = fixture.seedForeign(project());
+        const directory = dirname(path);
+        const elsewhere = join(outside, 'linked-directory');
+        renameSync(directory, elsewhere);
+        symlinkSync(elsewhere, directory, 'dir');
+        const before = readdirSync(elsewhere);
+
+        await expect(fixture.create(project()).plan(input())).rejects.toThrow(/symbolic link/);
+        expect(readdirSync(elsewhere)).toEqual(before);
+      });
+    }
 
     symlinkOnly('edits a linked user file at its target, and keeps the link', async () => {
       const home = mkdtempSync(join(tmpdir(), 'lore-home-'));

@@ -118,6 +118,7 @@ const localFixture: ConnectorFixture = {
 const sharedFixture: ConnectorFixture = {
   id: 'claude-code',
   title: 'Claude Code (--shared)',
+  projectConfigAtRoot: true,
   create: () => createClaudeCodeConnector({ runClient: installed, configDirectory, shared: true }),
   createMissing: () =>
     createClaudeCodeConnector({
