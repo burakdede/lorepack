@@ -85,3 +85,8 @@ gh api -X PUT repos/burakdede/lorepack/branches/main/protection \
 
 The budget is under 10 minutes per job. There is no remote build cache, per architecture
 section 8.1: add one only when measured timings demand it.
+
+The credentialed Cloudflare acceptance harness shares one Worker across runs.
+After Wrangler deploys it, the harness writes that Worker's actual endpoint into
+the target receipt alongside its name. Deploy and resume confirm activation
+against the same Worker that serves the acceptance requests.
