@@ -102,8 +102,13 @@ export function createActivateEndpoint(
         return { buildId: target, generation: active.generation, changed: false };
       }
 
-      // Held only across the pointer change itself, which is one transaction.
-      const generation = await lock.withLock(() => state.activate(target));
+      // Held only across the check and the pointer change, which is one transaction. The
+      // expectation is compared under the lock, so nothing can activate another build between
+      // the comparison and the move.
+      const generation = await lock.withLock(() => {
+        assertExpectedActive(request, state.current()?.buildId ?? null);
+        return state.activate(target);
+      });
       return { buildId: target, generation, changed: true };
     } finally {
       state.close();
@@ -162,6 +167,27 @@ export function createRollbackEndpoint(
       state.close();
     }
   };
+}
+
+/**
+ * Refuses an activation confirmed against a different live build than the one live now (#610).
+ *
+ * Studio's plan reads "serving moves from A to B". If the CLI or the watcher activated C while
+ * that plan was open, applying it would move serving from C, silently undoing C. Rollback has
+ * the same guard with `expect`; this is the activation half of it.
+ */
+function assertExpectedActive(request: unknown, active: string | null): void {
+  if (request === null || typeof request !== 'object' || !('expectActive' in request)) return;
+  const expected = (request as { expectActive?: unknown }).expectActive ?? null;
+  if (expected === active) return;
+  throw new LoreError(
+    'LORE_E_INVALID_ARGUMENT',
+    'The active build changed while this confirmation was open.',
+    {
+      remediation: `${active ?? 'No build'} is active now, not ${String(expected ?? 'no build')}. Check the plan and confirm again.`,
+      subject: String(expected),
+    },
+  );
 }
 
 function readBuildReference(request: unknown): string {

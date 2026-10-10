@@ -193,7 +193,15 @@ export type AuthorizationDecision = boolean | string | Promise<boolean | string>
  * Defined here rather than in `@lorepack/core` because this is not part of the runtime
  * contract every backend implements. It is the shape of two local requests.
  */
-const activateRequestSchema = z.object({ build: z.string().min(1) }).strict();
+/**
+ * `expectActive` is the build the caller was shown as live when it confirmed, or `null` for
+ * none. Optional, because a script activating a build has nothing to have been shown. Studio
+ * supplies it, so a confirmation that went stale while it was open (another build activated
+ * from the CLI or the watcher) is refused instead of silently undoing that newer build (#610).
+ */
+const activateRequestSchema = z
+  .object({ build: z.string().min(1), expectActive: z.string().min(1).nullable().optional() })
+  .strict();
 /**
  * No `out`: an HTTP caller never chooses where a file is written (#548). The archive goes to
  * the default name in the project root, and `lorepack pack --out` remains the way to pick
