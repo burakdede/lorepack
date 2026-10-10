@@ -277,6 +277,29 @@ ORDER BY name, id`,
     }
   });
 
+  /**
+   * D1 cannot interrupt a running query, so a statement over the join bound or naming a
+   * table-valued function must never reach it. An alias spelling `distinct` once made the guard
+   * read the FROM after it as `IS DISTINCT FROM` and skip the whole clause (#556).
+   */
+  const sources = Array.from({ length: 15 }, (_, i) => `t_products_active t${i}`).join(', ');
+  it.each([
+    `SELECT count(*) AS [distinct] FROM ${sources}`,
+    `SELECT count(*) AS "distinct" FROM ${sources}`,
+    `SELECT count(*) AS \`distinct\` FROM ${sources}`,
+    `SELECT count(*) AS 'DISTINCT' FROM ${sources}`,
+    `SELECT count(*) AS [distinct] FROM json_each AS a, json_each AS b WHERE a.json = '[1]'`,
+    `SELECT 1 AS [distinct] FROM t_products_active, generate_series`,
+  ])('refuses %s before it reaches D1', async (sql) => {
+    const db = new FakeD1Database();
+    installTableHandlers(db);
+
+    await expect(
+      new D1TableStore(db, namespace()).query({ tableId: TABLE_ID, sql }),
+    ).rejects.toMatchObject({ code: 'LORE_E_SQL_REJECTED' });
+    expect(db.calls.some((call) => call.query.includes(sql))).toBe(false);
+  });
+
   it('returns relabelled rows for the resolved physical table and truncates in D1', async () => {
     const db = new FakeD1Database();
     installTableHandlers(db);

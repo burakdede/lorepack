@@ -417,9 +417,8 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
 
     if (word === 'with') {
       current.withState = 'name';
-    } else if (word === 'from' && body[index - 1]?.value === 'distinct') {
-      // `a IS [NOT] DISTINCT FROM b` is a comparison, not a FROM clause. DISTINCT directly
-      // before FROM occurs nowhere else in SQLite's grammar.
+    } else if (word === 'from' && isDistinctOperator(body, index)) {
+      // `a IS [NOT] DISTINCT FROM b` is a comparison, not a FROM clause.
     } else if (word === 'from') {
       current.from = true;
       current.expectSource = true;
@@ -473,6 +472,22 @@ export function guardSingleTableQuery(sql: string, query: SingleTableQuery): str
   }
 
   return statement.sql;
+}
+
+/**
+ * Whether the FROM at `index` ends the operator `IS [NOT] DISTINCT FROM`.
+ *
+ * Only keywords qualify. A quoted name or a string spelling `distinct` is not the keyword, and
+ * reading it as one would skip the FROM clause after it, with every source in it unchecked and
+ * uncounted (#556). Every FROM this does not match is a source clause.
+ */
+function isDistinctOperator(body: readonly Token[], index: number): boolean {
+  const keyword = (offset: number, value: string): boolean => {
+    const token = body[index - offset];
+    return token?.kind === 'word' && token.value === value;
+  };
+  if (!keyword(1, 'distinct')) return false;
+  return keyword(2, 'is') || (keyword(2, 'not') && keyword(3, 'is'));
 }
 
 function assertBalanced(tokens: readonly Token[]): void {

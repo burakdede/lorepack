@@ -160,6 +160,9 @@ table expression the statement declared, or a subquery. Around that:
 - a function call must be on the allowlist, which moved to `packages/core/src/sql/functions.ts`;
 - a qualifier must be the table or a declared alias;
 - comments are removed before the result wrapper is added;
+- FROM is read as the comparison `IS [NOT] DISTINCT FROM` only after those keywords; a quoted
+  name or string spelling `distinct` is not the keyword, so the FROM after it is a source clause
+  (#556);
 - every refusal is one identical message.
 
 **Remote only.** D1 cannot be interrupted before its 30 second limit, and one long query stalls
