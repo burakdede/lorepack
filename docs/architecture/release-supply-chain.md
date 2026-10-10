@@ -118,14 +118,19 @@ later, newer than the npm bundled with Node 24, so `publish` installs `npm@11.21
 
 ### Settings outside the repository
 
-Recorded so the next person can check them, with the date they were last changed:
+Recorded so the next person can check them. "Pending" means the setting is required but has
+not been confirmed applied; a release must not run until it is.
 
-| Setting | Value | Where |
-|---|---|---|
-| `npm-release` environment | required reviewer `burakdede`; deployment branches: `main` only | GitHub repository settings |
-| Default `GITHUB_TOKEN` permission | read; Actions may not approve pull requests | GitHub repository settings |
-| npm Trusted Publisher for `@lorepack/cli` | GitHub Actions, `burakdede/lorepack`, `release.yml`, environment `npm-release`, **Allow npm dist-tag** on | npmjs.com package settings (owner only) |
-| npm publishing access | require two-factor authentication and disallow tokens | npmjs.com package settings (owner only) |
+| Setting | Value | Where | Status |
+|---|---|---|---|
+| `npm-release` environment | required reviewer `burakdede`; deployment branches: `main` only | GitHub repository settings | applied 2026-10-10 (#604) |
+| Default `GITHUB_TOKEN` permission | read; Actions may not approve pull requests | GitHub repository settings | applied 2026-10-10 (#604) |
+| Repository secrets | no npm token of any kind; `NPM_TOKEN` was deleted (no workflow used it) | GitHub repository settings | applied 2026-10-10 (#620) |
+| npm Trusted Publisher for `@lorepack/cli` | GitHub Actions, `burakdede/lorepack`, `release.yml`, environment `npm-release`, **Allow npm dist-tag** on | npmjs.com package settings (owner only) | pending |
+| npm publishing access | require two-factor authentication and disallow tokens; the token behind the deleted `NPM_TOKEN` revoked | npmjs.com package and account settings (owner only) | pending |
+
+Check the GitHub half with `gh api repos/burakdede/lorepack/environments/npm-release`,
+`gh api repos/burakdede/lorepack/actions/permissions/workflow` and `gh secret list`.
 
 The CLI package must exist in the npm registry before its Trusted Publisher can be configured.
 Bootstrap it once through npm staged publishing, then approve the staged placeholder with 2FA.
