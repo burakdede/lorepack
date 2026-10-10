@@ -74,6 +74,12 @@ type Pending = {
   readonly build: string;
 };
 
+/** What is sent when a pending action is confirmed. */
+type Confirmed = Pending & {
+  /** The build the plan said serving moves from, for an activation (#610). */
+  readonly expectActive?: string | null;
+};
+
 /**
  * One verb per action, in both tenses it is read in.
  *
@@ -106,7 +112,7 @@ export function Versions(): React.JSX.Element {
   });
 
   const act = useMutation({
-    mutationFn: async (action: Pending) => {
+    mutationFn: async (action: Confirmed) => {
       const response = await fetch(endpointFor(action), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -123,6 +129,12 @@ export function Versions(): React.JSX.Element {
       // rather than patched. An inspector showing a build that is no longer active is the
       // one failure this route cannot afford.
       await queryClient.invalidateQueries();
+    },
+    // A refusal is most often the history having moved while the plan was open (#610). The
+    // confirmation stays open and the history is fetched again, so the plan the reader sees
+    // next is drawn from what is live now, and confirming it again is a decision about that.
+    onError: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['builds'] });
     },
   });
 
@@ -203,7 +215,9 @@ export function Versions(): React.JSX.Element {
           active={active}
           busy={act.isPending}
           onCancel={() => setPending(null)}
-          onConfirm={() => act.mutate(pending)}
+          onConfirm={() =>
+            act.mutate(pending.kind === 'activate' ? { ...pending, expectActive: active } : pending)
+          }
         />
       )}
 
@@ -691,14 +705,17 @@ function previousBuild(builds: readonly Build[], active: string | null): string 
   return candidates[0]?.buildId ?? null;
 }
 
-function endpointFor(action: Pending): string {
+function endpointFor(action: Confirmed): string {
   if (action.kind === 'activate') return '/v1/builds/activate';
   if (action.kind === 'rollback') return '/v1/builds/rollback';
   return '/v1/builds/pack';
 }
 
-function bodyFor(action: Pending): Record<string, string> {
+function bodyFor(action: Confirmed): Record<string, string | null> {
   if (action.kind === 'rollback') return { expect: action.build };
+  if (action.kind === 'activate' && action.expectActive !== undefined) {
+    return { build: action.build, expectActive: action.expectActive };
+  }
   return { build: action.build };
 }
 

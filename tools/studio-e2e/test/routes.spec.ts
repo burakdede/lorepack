@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ENCODED_NAMES, expect, test } from './fixture.js';
 
 /**
@@ -446,4 +448,51 @@ test.describe('Tables', () => {
       expect(nav?.x ?? -1).toBeGreaterThanOrEqual(0);
     });
   }
+});
+
+/**
+ * #610. Last in this file on purpose: it makes a third build, and the Versions tests above
+ * assert there are two.
+ *
+ * The confirmation read "serving moves from A to B" while the CLI or the watcher activated C,
+ * and confirming moved serving from C, silently undoing it. Now the server refuses and the
+ * plan is redrawn from what is live.
+ */
+test.describe('a confirmation that went stale', () => {
+  test('is refused, and the plan is redrawn from the build that is live now', async ({
+    page,
+    session,
+  }) => {
+    const live = async (): Promise<string> =>
+      ((await (await fetch(`${session.url}/v1/builds`)).json()) as { activeBuildId: string })
+        .activeBuildId;
+    await page.goto(`${session.url}/#/versions`);
+
+    const activate = page.getByRole('button', { name: /^Activate lore_/ }).first();
+    const target = ((await activate.getAttribute('aria-label')) ?? '').replace('Activate ', '');
+    const shown = await live();
+    await activate.click();
+    const confirmation = page.getByRole('region', { name: `Activate ${target}` });
+    await expect(confirmation).toContainText(`Serving moves from ${shown.slice(0, 17)}`);
+
+    // While the panel is open, an edit lands and the watcher builds and activates it.
+    writeFileSync(
+      join(session.projectRoot, 'docs', 'stale-confirmation.md'),
+      '# Stale\n\nA third build, activated behind the open confirmation.\n',
+      'utf8',
+    );
+    await expect.poll(live, { timeout: 60_000 }).not.toBe(shown);
+    const third = await live();
+
+    await confirmation.getByRole('button', { name: `Activate ${target}` }).click();
+    await expect(
+      page.getByText('The active build changed while this confirmation was open.'),
+    ).toBeVisible();
+    expect(await live(), 'a refused activation must leave the newer build serving').toBe(third);
+
+    // The plan now starts from the build that is actually live, and confirming it works.
+    await expect(confirmation).toContainText(`Serving moves from ${third.slice(0, 17)}`);
+    await confirmation.getByRole('button', { name: `Activate ${target}` }).click();
+    await expect(page.locator('.outcome')).toContainText(`Activated ${target}`);
+  });
 });

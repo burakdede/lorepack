@@ -68,7 +68,11 @@ let mutationResult: { status: number; body: unknown } = {
   body: { buildId: OLD, generation: 7, changed: true },
 };
 
+/** What `GET /v1/builds` answers, which a test may move on as the CLI would. */
+let history: typeof HISTORY = HISTORY;
+
 beforeEach(() => {
+  history = HISTORY;
   posted = [];
   mutationResult = { status: 200, body: { buildId: OLD, generation: 7, changed: true } };
 
@@ -81,7 +85,7 @@ beforeEach(() => {
         return new Response(JSON.stringify(mutationResult.body), { status: mutationResult.status });
       }
       if (path.includes('/diff/')) return new Response(JSON.stringify(DIFF), { status: 200 });
-      return new Response(JSON.stringify(HISTORY), { status: 200 });
+      return new Response(JSON.stringify(history), { status: 200 });
     }),
   );
 });
@@ -179,7 +183,11 @@ describe('confirmation, per section 15.6', () => {
     // "Activate" produces "Activated". A result that said "Switched" would leave a person
     // guessing whether it belonged to the button they pressed.
     expect(await screen.findByText(/^Activated /)).toBeInTheDocument();
-    expect(posted).toEqual([{ url: '/v1/builds/activate', body: { build: OLD } }]);
+    // `expectActive` is the build the plan said serving moves *from*, so a confirmation that
+    // went stale is refused rather than applied to whatever is live now (#610).
+    expect(posted).toEqual([
+      { url: '/v1/builds/activate', body: { build: OLD, expectActive: NEW } },
+    ]);
   });
 
   it('closes on Escape without sending anything', async () => {
@@ -196,6 +204,53 @@ describe('confirmation, per section 15.6', () => {
       ).not.toBeInTheDocument(),
     );
     expect(posted).toHaveLength(0);
+  });
+});
+
+describe('a confirmation that went stale, #610', () => {
+  it('re-plans from the build that is live now when the server refuses the activation', async () => {
+    const THIRD = `lore_${'c'.repeat(60)}0003`;
+    renderRoute();
+    await waitFor(() => expect(screen.getAllByRole('rowheader')).toHaveLength(2));
+    await userEvent.click(screen.getByRole('button', { name: `Activate ${OLD.slice(0, 17)}` }));
+    const confirm = await screen.findByRole('region', { name: `Activate ${OLD.slice(0, 17)}` });
+    expect(confirm).toHaveTextContent(`Serving moves from ${NEW.slice(0, 17)}`);
+
+    // Meanwhile the CLI activated a third build, and the server says so.
+    history = {
+      activeBuildId: THIRD,
+      builds: [
+        { ...HISTORY.builds[0], buildId: THIRD } as (typeof HISTORY.builds)[number],
+        {
+          ...(HISTORY.builds[0] as (typeof HISTORY.builds)[number]),
+          state: 'verified',
+          active: false,
+        },
+        HISTORY.builds[1] as (typeof HISTORY.builds)[number],
+      ],
+    };
+    mutationResult = {
+      status: 400,
+      body: {
+        error: {
+          code: 'LORE_E_INVALID_ARGUMENT',
+          message: 'The active build changed while this confirmation was open.',
+          remediation: `${THIRD} is active now, not ${NEW}. Check the plan and confirm again.`,
+        },
+      },
+    };
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: `Activate ${OLD.slice(0, 17)}` }),
+    );
+
+    expect(
+      await screen.findByText('The active build changed while this confirmation was open.'),
+    ).toBeInTheDocument();
+    const replanned = await screen.findByRole('region', { name: `Activate ${OLD.slice(0, 17)}` });
+    await waitFor(() =>
+      expect(replanned).toHaveTextContent(`Serving moves from ${THIRD.slice(0, 17)}`),
+    );
+    expect(screen.queryByText(/^Activated /)).not.toBeInTheDocument();
   });
 });
 

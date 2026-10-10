@@ -213,6 +213,15 @@ is refused with `LORE_E_OBJECT_CORRUPT` while the previous one is still serving.
 before confirming. If the history moved in between, the request is refused rather than
 applied to a different build than the one that was confirmed.
 
+`POST /v1/builds/activate` accepts the same kind of guard as `expectActive`: the build the
+caller was shown as live (or `null` for none) when it confirmed (#610). Studio's plan reads
+"serving moves from A to B", and if the CLI or the watcher activated C while the plan was
+open, applying it would silently undo C. A mismatch is refused with `LORE_E_INVALID_ARGUMENT`
+and the live build named in the remediation; the comparison runs under the project lock, so
+nothing can move the pointer between the check and the activation. Studio then fetches the
+history again and redraws the plan from what is live. A script that omits the field is
+unaffected.
+
 ### Host checking
 
 DNS rebinding makes a hostname the attacker controls resolve to `127.0.0.1`. The attacker's
