@@ -383,6 +383,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
     });
     const receipt = await target.apply(plan);
+    await target.verify(receipt);
     await target.activate(receipt);
 
     const worker = createCloudflareWorkerFromBindings({
@@ -467,6 +468,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
     });
     const receipt = await target.apply(plan);
+    await target.verify(receipt);
     await target.activate(receipt);
 
     fixture.projection.raw
@@ -537,6 +539,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
     });
     const activeReceipt = await activeTarget.apply(activePlan);
+    await activeTarget.verify(activeReceipt);
     await activeTarget.activate(activeReceipt);
 
     const candidateTarget = createCloudflareDeploymentTarget({
@@ -584,6 +587,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     );
     expect(((await beforeSearch.json()) as { hits: unknown[] }).hits).toHaveLength(0);
 
+    await candidateTarget.verify(candidateReceipt);
     const activation = await candidateTarget.activate(candidateReceipt);
     expect(activation.confirmedBuildId).toBe(CANDIDATE_BUILD);
 
@@ -639,6 +643,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
     });
     const activeReceipt = await activeTarget.apply(activePlan);
+    await activeTarget.verify(activeReceipt);
     await activeTarget.activate(activeReceipt);
 
     const worker = createCloudflareWorkerFromBindings({
@@ -678,6 +683,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
 
     await bucket.waitUntilBlocked();
 
+    await candidateTarget.verify(candidateReceipt);
     const activation = await candidateTarget.activate(candidateReceipt);
     expect(activation.confirmedBuildId).toBe(CANDIDATE_BUILD);
 

@@ -43,6 +43,7 @@ import { D1TableStore } from './tables.js';
 import {
   CloudflareApplyError,
   type CloudflareDeploymentTargetOptions,
+  CloudflareUnverifiedBuildError,
   createCloudflareDeploymentTarget,
 } from './target.js';
 
@@ -96,6 +97,7 @@ export {
   applyRemoteRetention,
   applyRemoteRetentionPlan,
   CloudflareApplyError,
+  CloudflareUnverifiedBuildError,
   createCloudflareDeploymentTarget,
   createRuntimeTokenAuthorizer,
   D1ActiveBuildProvider,

@@ -227,6 +227,8 @@ describe('the sequence architecture 18.5 fixes', () => {
       expect((failure as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
       expect((failure as LoreError).remediation).toContain('previous build is still serving');
       expect(fake.calls).not.toContain('activate');
+      // Resuming would replay the same candidate against the same checks, so it is not offered.
+      expect((failure as LoreError).details?.resumable).toBe(false);
     });
   });
 
@@ -565,6 +567,73 @@ describe('resume', () => {
 
       expect(resuming.calls).toEqual(['detect', 'plan', 'verify', 'activate']);
       expect(result.receipt.transfer).toEqual(APPLIED_TRANSFER);
+    });
+  });
+
+  /**
+   * The resume that the verification failure itself invites (#555).
+   *
+   * The first version recorded `verify` as a completed step before it looked at the outcome, so
+   * `--resume` skipped straight to activation and put the build that failed verification live.
+   */
+  it('never activates on resume when the earlier verification failed', async () => {
+    await deploying(async (root) => {
+      const failing = fakeTarget({
+        verification: { search: 'failed', sourceRead: 'passed', tableQuery: 'skipped' },
+      });
+      const first = await runDeploy(base(root, failing.target)).catch((error: unknown) => error);
+      expect((first as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
+
+      const recorded = readReceipt(root, 'fake-aaaaaaaaaaaa');
+      expect(recorded.state).toBe('failed');
+      expect(recorded.completedSteps).not.toContain('verify');
+
+      const stillFailing = fakeTarget({
+        verification: { search: 'failed', sourceRead: 'passed', tableQuery: 'skipped' },
+      });
+      const resumed = await runDeploy(base(root, stillFailing.target, { resume: recorded })).catch(
+        (error: unknown) => error,
+      );
+
+      expect((resumed as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
+      expect(stillFailing.calls).toEqual(['detect', 'plan', 'verify']);
+      expect(readReceipt(root, 'fake-aaaaaaaaaaaa').state).toBe('failed');
+    });
+  });
+
+  it('re-verifies a failed receipt that claims verify, rather than trusting it', async () => {
+    await deploying(async (root) => {
+      // A receipt written before #555, or edited by hand: `verify` listed, outcome failed.
+      const legacy: DeploymentReceipt = {
+        formatVersion: 1,
+        receiptId: 'fake-aaaaaaaaaaaa',
+        target: 'fake',
+        project: 'deployed',
+        buildId: BUILD,
+        previousBuildId: null,
+        state: 'failed',
+        deployedAt: '2026-08-06T00:00:00.000Z',
+        endpoint: 'https://fake.example/mcp',
+        capabilityLossAccepted: [],
+        completedSteps: ['plan', 'project', 'verify'],
+        verification: { search: 'failed', sourceRead: 'passed', tableQuery: 'skipped' },
+      };
+
+      const failing = fakeTarget({
+        verification: { search: 'failed', sourceRead: 'passed', tableQuery: 'skipped' },
+      });
+      const refused = await runDeploy(base(root, failing.target, { resume: legacy })).catch(
+        (error: unknown) => error,
+      );
+      expect((refused as LoreError).code).toBe('LORE_E_REMOTE_DEPLOY');
+      expect(failing.calls).not.toContain('activate');
+
+      // Once the candidate verifies, the same resume goes through, verified this time.
+      const passing = fakeTarget();
+      const result = await runDeploy(base(root, passing.target, { resume: legacy }));
+      expect(passing.calls).toEqual(['detect', 'plan', 'verify', 'activate']);
+      expect(result.receipt.state).toBe('active');
+      expect(result.receipt.verification.search).toBe('passed');
     });
   });
 

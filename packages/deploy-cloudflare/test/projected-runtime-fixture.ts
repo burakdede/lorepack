@@ -161,6 +161,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
       buildCapabilities: ['lexical-search', 'structured-context', 'table-query'],
     });
     const activeReceipt = await target.apply(activePlan);
+    await target.verify(activeReceipt);
     await target.activate(activeReceipt);
 
     const candidatePlan = await target.plan({
@@ -217,6 +218,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
 export async function activateProjectedWorkerRuntimeFixture(): Promise<string> {
   if (currentFixture === null)
     throw new Error('No projected Cloudflare runtime fixture is active.');
+  await currentFixture.target.verify(currentFixture.candidateReceipt as never);
   await currentFixture.target.activate(currentFixture.candidateReceipt as never);
   return CANDIDATE_BUILD;
 }

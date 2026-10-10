@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import type {
   Capability,
   DeployApplyProgress,
@@ -23,6 +23,7 @@ function fakeTarget(
     readonly applyProgress?: readonly DeployApplyProgress[];
     readonly applyProgressDelayMs?: number;
     readonly capabilityLoss?: readonly Capability[];
+    readonly failVerification?: boolean;
   } = {},
 ): DeploymentTarget {
   const calls = options.calls ?? [];
@@ -93,7 +94,11 @@ function fakeTarget(
     },
     verify: async () => {
       calls.push('verify');
-      return { search: 'passed', sourceRead: 'passed', tableQuery: 'skipped' };
+      return {
+        search: options.failVerification === true ? 'failed' : 'passed',
+        sourceRead: 'passed',
+        tableQuery: 'skipped',
+      };
     },
     activate: async (receipt) => {
       calls.push('activate');
@@ -401,6 +406,52 @@ describe('lorepack deploy command, issue 91', () => {
         expect(resumedCalls).not.toContain(`apply:${receiptId}`);
         expect(resumedCalls).toEqual(expect.arrayContaining(['detect', 'verify', 'activate']));
         expect(resumed.stdout).toContain('Active build:');
+      },
+    );
+  });
+
+  it('does not offer --resume after a verification failure, and a resume never activates', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const initial = await run(['--cwd', temp.root, 'build']);
+        expect(initial.code).toBe(0);
+
+        const calls: string[] = [];
+        const failed = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () => fakeTarget({ calls, failVerification: true }),
+              confirm: async () => true,
+            }),
+          ],
+        });
+
+        expect(failed.code ?? 1).toBeGreaterThan(0);
+        expect(failed.stderr).toContain('The candidate failed verification: search.');
+        expect(failed.stderr).not.toContain('--resume');
+        expect(calls).not.toContain('activate');
+
+        // Following the old advice anyway must re-verify, not activate.
+        const receiptId = readdirSync(`${temp.root}/.lore/receipts`)[0]?.replace(/\.json$/, '');
+        expect(receiptId).toMatch(/^cloudflare-[0-9a-f]{12}$/);
+        const resumedCalls: string[] = [];
+        const resumed = await run(
+          ['--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--resume', receiptId ?? ''],
+          {
+            commands: [
+              deployCommand({
+                resolveTarget: async () =>
+                  fakeTarget({ calls: resumedCalls, failVerification: true }),
+                confirm: async () => true,
+              }),
+            ],
+          },
+        );
+
+        expect(resumed.code ?? 1).toBeGreaterThan(0);
+        expect(resumedCalls).toContain('verify');
+        expect(resumedCalls).not.toContain('activate');
       },
     );
   });

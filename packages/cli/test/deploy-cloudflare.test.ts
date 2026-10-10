@@ -374,6 +374,7 @@ async function seedActiveBuild(
     buildCapabilities: ['lexical-search', 'structured-context'] as Capability[],
   });
   const receipt = await target.apply(plan);
+  await target.verify(receipt);
   await target.activate(receipt);
 }
 

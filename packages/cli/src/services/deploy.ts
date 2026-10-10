@@ -125,6 +125,21 @@ function done(receipt: DeploymentReceipt | undefined, step: DeployStep): boolean
   return receipt?.completedSteps.includes(step) === true;
 }
 
+/**
+ * Whether a resume may skip verification, which is stricter than `done`.
+ *
+ * Skipping `verify` is the one skip that can put an unchecked build live, so the receipt has to
+ * record outcomes with no failure in them, not just the step name. Receipts written before #555
+ * listed `verify` even when it failed. A `failed` receipt whose verification passed (the smoke
+ * check failed after activation) still qualifies, because its candidate did pass. A receipt
+ * edited by hand to claim a pass is caught by the target, which refuses to activate a build it
+ * never marked verified.
+ */
+function verifiedAlready(receipt: DeploymentReceipt | undefined): boolean {
+  if (receipt === undefined || !done(receipt, 'verify')) return false;
+  return !Object.values(receipt.verification).includes('failed');
+}
+
 export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   const { target, progress } = options;
   const now = options.now ?? (() => new Date());
@@ -279,31 +294,35 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
    * was not verified first, and a verification that failed stops here with the previous build
    * still serving.
    */
-  if (!done(options.resume, 'verify')) {
+  if (!verifiedAlready(options.resume)) {
     progress.start('verifying', 'Verifying', 1);
     const verification = await target.verify(receipt);
+    const outcomes = {
+      search: verification.search,
+      sourceRead: verification.sourceRead,
+      tableQuery: verification.tableQuery,
+    };
+    const failed = Object.entries(outcomes)
+      .filter(([, outcome]) => outcome === 'failed')
+      .map(([what]) => what);
+    // `verify` is recorded as done only when it passed, so no resume can read a failure back as
+    // permission to activate (#555).
     receipt = {
       ...receipt,
-      state: 'verified',
+      state: failed.length > 0 ? 'failed' : 'verified',
       ...(verification.capabilities === undefined
         ? {}
         : { verifiedCapabilities: [...verification.capabilities] }),
-      verification: {
-        search: verification.search,
-        sourceRead: verification.sourceRead,
-        tableQuery: verification.tableQuery,
-      },
-      completedSteps: steps(receipt, 'verify'),
+      verification: outcomes,
+      completedSteps:
+        failed.length > 0
+          ? receipt.completedSteps.filter((step) => step !== 'verify')
+          : steps(receipt, 'verify'),
     };
     writeReceipt(options.projectRoot, receipt);
     progress.finish('verifying', 1);
 
-    const failed = Object.entries(receipt.verification)
-      .filter(([, outcome]) => outcome === 'failed')
-      .map(([what]) => what);
     if (failed.length > 0) {
-      const failedReceipt = { ...receipt, state: 'failed' as const };
-      writeReceipt(options.projectRoot, failedReceipt);
       throw new LoreError(
         'LORE_E_REMOTE_DEPLOY',
         `The candidate failed verification: ${failed.join(', ')}.`,
@@ -311,7 +330,8 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
           remediation: `Nothing was activated and the previous build is still serving. ${
             verification.failures?.join(' ') ?? ''
           }`.trim(),
-          details: { receiptId: receipt.receiptId, failed },
+          // Not resumable: a resume would replay the same candidate against the same checks.
+          details: { receiptId: receipt.receiptId, failed, resumable: false },
         },
       );
     }

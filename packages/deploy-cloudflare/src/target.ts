@@ -82,6 +82,29 @@ export class CloudflareApplyError extends LoreError {
   }
 }
 
+/**
+ * Activation was asked for a projected build whose verification never passed.
+ *
+ * The orchestration verifies before it activates, so this should be unreachable from
+ * `lorepack deploy`. It exists for what the orchestration cannot see: a receipt edited by hand,
+ * a receipt written before #555, or a second client sharing the catalog. The pointer is the one
+ * write a reader sees, so the remote side checks for itself.
+ */
+export class CloudflareUnverifiedBuildError extends LoreError {
+  constructor(buildId: BuildId) {
+    super(
+      'LORE_E_REMOTE_DEPLOY',
+      `Refusing to activate ${buildId}: it has not passed verification.`,
+      {
+        remediation:
+          'Nothing was switched publicly. Deploy the build again so it is verified before activation.',
+        subject: buildId,
+        details: { buildId, reason: 'unverified' },
+      },
+    );
+  }
+}
+
 export function createCloudflareDeploymentTarget(
   options: CloudflareDeploymentTargetOptions,
 ): DeploymentTarget {
@@ -653,7 +676,7 @@ async function activateCandidateBuild(
   options: CloudflareDeploymentTargetOptions,
   receipt: DeploymentReceipt,
 ): Promise<ActivationReceipt> {
-  return await switchActiveBuild(options, receipt.buildId as BuildId);
+  return await switchActiveBuild(options, receipt.buildId as BuildId, { requireVerified: true });
 }
 
 async function rollbackProjectedBuild(
@@ -661,17 +684,23 @@ async function rollbackProjectedBuild(
   buildId: BuildId,
 ): Promise<ActivationReceipt> {
   await assertProjectionReadable(options.catalogDb, { projectId: options.projectId, buildId });
-  return await switchActiveBuild(options, buildId);
+  // Not `requireVerified`: rollback targets a build that already served, and builds projected
+  // before the `verified_at` column existed carry NULL there.
+  return await switchActiveBuild(options, buildId, { requireVerified: false });
 }
 
 async function switchActiveBuild(
   options: CloudflareDeploymentTargetOptions,
   buildId: BuildId,
+  guard: { readonly requireVerified: boolean },
 ): Promise<ActivationReceipt> {
   const switchedAt = options.now?.() ?? new Date().toISOString();
   let previous: { readonly buildId: BuildId; readonly generation: number } | null = null;
   try {
     await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
+    if (guard.requireVerified && !(await projectedBuildVerified(options, buildId))) {
+      throw new CloudflareUnverifiedBuildError(buildId);
+    }
     previous = await currentActiveBuild(options.catalogDb);
     if (previous?.buildId !== buildId) {
       const nextGeneration = (previous?.generation ?? 0) + 1;
@@ -694,6 +723,7 @@ WHERE project_id = ? AND build_id = ?`,
     try {
       await options.catalogDb.prepare('ROLLBACK').run();
     } catch {}
+    if (cause instanceof CloudflareUnverifiedBuildError) throw cause;
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
       `Could not switch the active cloudflare build to ${buildId}.`,
@@ -714,6 +744,20 @@ WHERE project_id = ? AND build_id = ?`,
     confirmedBuildId,
     endpoint: options.endpoint,
   };
+}
+
+async function projectedBuildVerified(
+  options: CloudflareDeploymentTargetOptions,
+  buildId: BuildId,
+): Promise<boolean> {
+  const rows = await options.catalogDb
+    .prepare(
+      `SELECT verified_at AS verifiedAt FROM projected_builds WHERE project_id = ? AND build_id = ?`,
+    )
+    .bind(options.projectId, buildId)
+    .run<{ verifiedAt: string | null }>();
+  const verifiedAt = rows.results?.[0]?.verifiedAt;
+  return verifiedAt !== undefined && verifiedAt !== null;
 }
 
 async function markProjectedBuildVerified(
