@@ -22,6 +22,16 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'secret redaction is linear on adversarial input',
+    path: 'packages/core/test/errors.test.ts',
+    patterns: [/runs in linear time on a 1 MB/, /toBeLessThan\(1_000\)/],
+  },
+  {
+    name: 'an adversarial request key cannot stall the server',
+    path: 'packages/runtime/test/http.test.ts',
+    patterns: [/keeps \/health responsive/, /TOKEN'\.repeat\(40_000\)/],
+  },
+  {
     name: 'path traversal is refused at the served source boundary',
     path: 'packages/cli/test/security.e2e.test.ts',
     tests: [
