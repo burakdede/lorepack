@@ -1,4 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXIT_CODES } from '@lorepack/core';
 import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
@@ -35,6 +36,7 @@ import {
   staleCloudflareWorkerNames,
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
+  writeCloudflareSingletonWorkerReceipt,
 } from '../src/cloudflare-smoke.js';
 import {
   missingCloudflareTestingEnv,
@@ -186,6 +188,43 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     );
   });
 
+  it('persists the deployed singleton endpoint in the target receipt', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-singleton-receipt-'));
+    const path = join(root, '.lore', 'targets', 'cloudflare.json');
+    const receipt = {
+      accountId: 'account',
+      workerName: 'project-runtime',
+      catalogDatabaseName: 'project-catalog',
+      tablesDatabaseName: 'project-tables',
+      objectsBucketName: 'project-objects',
+    };
+    mkdirSync(join(root, '.lore', 'targets'), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        ...receipt,
+        endpoint: 'https://project-runtime.account.workers.dev',
+        runtimeToken: 'preserved-token',
+      }),
+    );
+    try {
+      writeCloudflareSingletonWorkerReceipt(
+        root,
+        receipt,
+        'singleton-runtime',
+        'https://singleton-runtime.account.workers.dev',
+      );
+      expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+        ...receipt,
+        workerName: 'singleton-runtime',
+        endpoint: 'https://singleton-runtime.account.workers.dev',
+        runtimeToken: 'preserved-token',
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('uses one singleton Worker name for credentialed acceptance', () => {
     expect(activeCloudflareWorkerName({ testPrefix: 'lorepack-ci' })).toBe(
       'lorepack-ci-acceptance-runtime',
@@ -318,6 +357,26 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
 
   it('depends on the built CLI binary', () => {
     expect(existsSync(BINARY), `${BINARY} is missing. Run \`pnpm build\` first.`).toBe(true);
+  });
+
+  it('includes JSON errors in deploy and resume failures', async () => {
+    const project = {
+      root: '/tmp/lorepack-cloudflare-smoke',
+      projectName: 'Cloudflare Acceptance',
+      cleanup() {},
+      lore: async () => ({
+        code: EXIT_CODES.USER,
+        stderr: 'activation progress',
+        stdout: JSON.stringify({ error: { message: 'endpoint could not confirm' } }),
+      }),
+    };
+    for (const attempt of [
+      deployCloudflareTarget(project, null),
+      resumeCloudflareTarget(project, 'receipt', null),
+    ]) {
+      await expect(attempt).rejects.toThrow('endpoint could not confirm');
+      await expect(attempt).rejects.toThrow('activation progress');
+    }
   });
 
   it('includes stdout and stderr when target setup fails', async () => {

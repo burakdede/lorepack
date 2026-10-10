@@ -372,11 +372,7 @@ export async function addCloudflareTarget(
   }
 
   const receipt = parseCloudflareTargetReceipt(result.stdout);
-  const singletonReceipt = writeCloudflareSingletonWorkerReceipt(
-    project.root,
-    receipt,
-    target.workerName,
-  );
+  const singletonReceipt = { ...receipt, workerName: target.workerName };
   const configuredNames = {
     ...target,
     accountId: singletonReceipt.accountId,
@@ -401,6 +397,12 @@ export async function addCloudflareTarget(
     tablesDatabaseId,
   };
   const deployed = await deployAcceptanceWorker(configuredTarget, project.projectName);
+  writeCloudflareSingletonWorkerReceipt(
+    project.root,
+    receipt,
+    target.workerName,
+    deployed.endpointBase,
+  );
   return {
     ...configuredTarget,
     endpointBase: deployed.endpointBase,
@@ -430,7 +432,7 @@ export async function deployCloudflareTarget(
       : {}),
   });
   if (result.code !== 0) {
-    throw new Error(`lorepack deploy cloudflare failed:\n${result.stderr}`);
+    throw new Error(`lorepack deploy cloudflare failed:\n${commandFailureOutput(result)}`);
   }
   const payload = JSON.parse(result.stdout) as {
     readonly buildId?: unknown;
@@ -474,7 +476,9 @@ export async function resumeCloudflareTarget(
     runtimeTokenEnv(token),
   );
   if (result.code !== 0) {
-    throw new Error(`lorepack deploy cloudflare --resume ${receiptId} failed:\n${result.stderr}`);
+    throw new Error(
+      `lorepack deploy cloudflare --resume ${receiptId} failed:\n${commandFailureOutput(result)}`,
+    );
   }
   const payload = JSON.parse(result.stdout) as {
     readonly buildId?: unknown;
@@ -602,15 +606,20 @@ export function activeCloudflareWorkerName(env: { readonly testPrefix: string })
   return withSuffix(sanitizeName(env.testPrefix), 'acceptance-runtime', 63);
 }
 
-function writeCloudflareSingletonWorkerReceipt(
+export function writeCloudflareSingletonWorkerReceipt(
   projectRoot: string,
   receipt: CloudflareTargetReceiptJson,
   workerName: string,
+  endpointBase: string,
 ): CloudflareTargetReceiptJson {
   const path = join(projectRoot, '.lore', 'targets', 'cloudflare.json');
   const fullReceipt = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
   const patched = { ...receipt, workerName };
-  writeFileSync(path, `${JSON.stringify({ ...fullReceipt, workerName }, null, 2)}\n`, 'utf8');
+  writeFileSync(
+    path,
+    `${JSON.stringify({ ...fullReceipt, workerName, endpoint: endpointBase }, null, 2)}\n`,
+    'utf8',
+  );
   return patched;
 }
 
