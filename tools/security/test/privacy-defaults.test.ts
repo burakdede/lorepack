@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -158,6 +158,7 @@ describe.runIf(IN_NETWORK_NAMESPACE)('inside a network namespace, issue 616', ()
           ?.map((m) => m.trim().slice(0, -1)),
       ),
     ).toEqual(new Set(['lo', 'dummy0']));
+    expect(new Set(readdirSync('/sys/class/net'))).toEqual(new Set(['lo', 'dummy0']));
     expect(readFileSync('/etc/resolv.conf', 'utf8')).toMatch(/^nameserver 10\.203\.0\.2$/m);
   });
 
@@ -182,5 +183,9 @@ describe.runIf(IN_NETWORK_NAMESPACE)('inside a network namespace, issue 616', ()
     expect(run.attempts).toEqual([]);
     expect(run.packets).toBeGreaterThan(0);
     expect(egressProblems(run).join('\n')).toMatch(/packets left the build's network namespace/);
+
+    const clean = runSandboxedBuild(await project(`netns-after-${file}`));
+    expect(egressProblems(clean)).toEqual([]);
+    expect(clean.packets).toBe(0);
   });
 });

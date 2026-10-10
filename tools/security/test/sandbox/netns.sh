@@ -9,11 +9,17 @@
 # which a network namespace would not stop.
 set -euo pipefail
 
+# An inherited sysfs mount retains its original network namespace's devices.
+mount -t sysfs sysfs /sys
+
 ip link set lo up
 ip link add dummy0 type dummy
+ip link set dummy0 addrgenmode none
 ip addr add 10.203.0.1/24 dev dummy0
 ip link set dummy0 up
 ip route add default via 10.203.0.2 dev dummy0
+# Avoid ARP retries from one counterexample appearing during the next build.
+ip neigh add 10.203.0.2 lladdr 02:00:00:00:00:02 nud permanent dev dummy0
 
 scratch="$(mktemp -d)"
 printf 'nameserver 10.203.0.2\n' >"$scratch/resolv.conf"

@@ -101,3 +101,9 @@ The privacy namespace invokes the already installed Vitest entry point with
 Node directly. Running pnpm under sudo would change its environment and trigger
 dependency installation inside the offline namespace. Installation and build
 finish in the unprivileged setup steps before entering the namespace.
+
+The namespace mounts a fresh sysfs so its packet counters describe its own
+interfaces, rather than the runner's inherited network devices. The dummy
+interface has no automatic IPv6 address and uses a permanent gateway neighbor,
+so interface setup and ARP retries cannot contribute unrelated packets during a
+build. Counterexamples must transmit packets, then leave a clean build at zero.
