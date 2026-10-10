@@ -70,6 +70,12 @@ Members MUST be written in this order:
 5. `objects/sha256/xx/yy/rest`, sorted lexicographically by archive path
 6. `originals/*`, only when `package.includeOriginals: true`, sorted lexicographically by archive path
 
+`originals/<path>` uses the source's path relative to the project root, and its bytes MUST be
+the bytes the build read: their SHA-256 equals the artifact's `content_hash`. Lorepack reads
+originals from the project at pack time, so it refuses to pack (`LORE_E_PATH_ESCAPE` or
+`LORE_E_STALE_SOURCES`) when a source has since become a link, resolves outside the project,
+changed or disappeared. It never packs the current bytes or leaves the file out.
+
 Every archive member MUST use a POSIX path. Every member timestamp MUST be normalized to
 `1980-01-01T00:00:00Z`, and file entries SHOULD use mode `100644`. The current writer uses
 deflate compression.
