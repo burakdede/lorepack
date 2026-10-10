@@ -1,4 +1,4 @@
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
@@ -332,5 +332,30 @@ describe('a source root cannot carry the build outside the project', () => {
         expect(search.stdout).not.toContain('zebrafish');
       },
     );
+  }, 120_000);
+});
+
+describe('the build directory cannot be redirected outside the project', () => {
+  /**
+   * #572: a repository that ships `.lore` as a link would have every build, object (a copy of
+   * every source) and state file written wherever it points, while `doctor` reported "ok".
+   */
+  it('refuses a .lore link out of the project, writes nothing there, and doctor says so', async () => {
+    await withTempProject({ files: { 'p/notes.md': '# Notes\n\nText.\n' } }, async (temp) => {
+      const root = join(temp.root, 'p');
+      const elsewhere = join(temp.root, 'elsewhere');
+      mkdirSync(elsewhere, { recursive: true });
+      writeFileSync(join(root, 'lore.yaml'), 'version: 1\nname: p\nsources:\n  - .\n');
+      symlinkSync(elsewhere, join(root, '.lore'), platform() === 'win32' ? 'junction' : 'dir');
+
+      const build = await run(['--cwd', root, '--json', 'build']);
+      expect(build.code).not.toBe(0);
+      expect(`${build.stdout}${build.stderr}`).toContain('LORE_E_PATH_ESCAPE');
+      expect(readdirSync(elsewhere)).toEqual([]);
+
+      const doctor = await run(['--cwd', root, '--json', 'doctor']);
+      const checks = JSON.parse(doctor.stdout).checks as Array<{ id: string; status: string }>;
+      expect(checks.find((check) => check.id === 'lore-writable')?.status).toBe('fail');
+    });
   }, 120_000);
 });

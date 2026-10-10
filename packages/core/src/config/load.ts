@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, parse as parsePath, relative, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { LoreError } from '../errors/lore-error.js';
@@ -344,12 +344,61 @@ export interface LoadOptions {
   readonly defaults?: ProductDefaults;
 }
 
+/**
+ * Where `.lore` really lives when it is a link out of the project, or null when it is not.
+ *
+ * A repository can ship `.lore` as a symbolic link, and every write Lorepack makes (objects
+ * holding copies of every source, state, builds) would then land wherever it points, silently
+ * (#572). A link that stays inside the project is harmless and allowed.
+ */
+export function loreDirectoryEscape(projectRoot: string): string | null {
+  const path = join(projectRoot, LORE_DIRECTORY);
+  let stats: ReturnType<typeof lstatSync>;
+  try {
+    stats = lstatSync(path);
+  } catch {
+    return null;
+  }
+  if (!stats.isSymbolicLink()) return null;
+  let target: string;
+  try {
+    target = realpathSync(path);
+  } catch {
+    // A dangling link would be followed by the first `mkdir`, so it is refused too.
+    return toPosix(resolve(dirname(path), String(readlinkTarget(path))));
+  }
+  return isWithin(realpathSync(projectRoot), target) ? null : toPosix(target);
+}
+
+function readlinkTarget(path: string): string {
+  try {
+    return readlinkSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function assertLoreDirectoryContained(projectRoot: string): void {
+  const target = loreDirectoryEscape(projectRoot);
+  if (target === null) return;
+  throw new LoreError(
+    'LORE_E_PATH_ESCAPE',
+    `${LORE_DIRECTORY} is a link to a directory outside the project.`,
+    {
+      remediation: `Remove the link and let Lorepack create ${LORE_DIRECTORY} inside the project. Builds hold copies of every source, so they must not be written somewhere the project does not control.`,
+      path: LORE_DIRECTORY,
+      details: { target },
+    },
+  );
+}
+
 /** Layers one and two of the precedence in architecture section 6.8. Phase 3 adds the rest. */
 export function loadConfig(options: LoadOptions = {}): LoadedConfig {
   const start = resolve(options.cwd ?? process.cwd());
   const projectRoot = findProjectRoot(start);
   if (projectRoot === null) throw notInitialized(start);
 
+  assertLoreDirectoryContained(projectRoot);
   const configPath = join(projectRoot, CONFIG_FILENAME);
   const { config } = readConfigFile(configPath);
   const defaults = options.defaults ?? PRODUCT_DEFAULTS;
