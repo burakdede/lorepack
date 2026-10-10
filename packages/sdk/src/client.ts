@@ -114,8 +114,9 @@ export class LoreClient {
     if (options.page !== undefined) query.set('page', String(options.page));
     if (options.lineStart !== undefined) query.set('lineStart', String(options.lineStart));
     if (options.lineEnd !== undefined) query.set('lineEnd', String(options.lineEnd));
-    if (options.headingPath !== undefined)
-      query.set('headingPath', options.headingPath.join(' > '));
+    // One parameter per heading, so a heading containing `>` or surrounding spaces arrives
+    // exactly as written. Joining them into one string could not be split back (#611).
+    for (const heading of options.headingPath ?? []) query.append('headingPath', heading);
     const suffix = query.size === 0 ? '' : `?${query.toString()}`;
     return this.#get(`/v1/sources/${encodeURIComponent(artifactId)}${suffix}`, signal);
   }

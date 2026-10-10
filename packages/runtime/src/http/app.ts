@@ -507,14 +507,16 @@ export function createApiApp(options: ApiOptions): Hono {
     answer(context, async () => {
       const artifactId = context.req.param('artifactId');
       const query = context.req.query();
+      // One `headingPath` parameter per heading, in order, taken verbatim. A single joined
+      // value split on `>` and trimmed could not carry a heading such as "Input > Output", or
+      // one whose spaces matter, which is part of the citation it names (#611).
+      const headingPath = context.req.queries('headingPath');
       return options.runtime.readSource({
         artifactId,
         ...numeric('page', query.page),
         ...numeric('lineStart', query.lineStart),
         ...numeric('lineEnd', query.lineEnd),
-        ...(query.headingPath === undefined
-          ? {}
-          : { headingPath: query.headingPath.split('>').map((part) => part.trim()) }),
+        ...(headingPath === undefined ? {} : { headingPath }),
       });
     }),
   );

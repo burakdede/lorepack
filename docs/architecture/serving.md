@@ -147,6 +147,13 @@ a surface a client has to probe.
 Anything else is a `404` in the same typed error shape as every other failure, so a client
 has one error format rather than two.
 
+`GET /v1/sources/:artifactId` takes its range as query parameters: `page`, `lineStart`,
+`lineEnd`, and `headingPath` repeated once per heading, outermost first
+(`?headingPath=Guide&headingPath=Input%20%3E%20Output`). Each heading is taken verbatim. It
+used to be one value joined with ` > ` and split on `>` with trimming, which could not carry a
+heading that contains `>` or whose spaces matter, and a heading path is part of a citation
+(#611). The artifact id is the path segment, percent-encoded once.
+
 Every `POST` route under `/v1` takes a JSON body and requires `Content-Type: application/json`
 (parameters such as `charset` are fine). Any other type, or none, is a typed `415`, checked
 before the body is read. `text/plain` and the form encodings are exactly what a web page can
