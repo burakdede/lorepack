@@ -374,6 +374,7 @@ describe('plan and deployment receipt', () => {
         remove: [`lore_${'b'.repeat(64)}`],
         archiveKeysToRemove: ['sarjbot/builds/lore_b/archive.lorepack'],
         objectKeysToRemove: ['sarjbot/objects/sha256/aa/bb/cc'],
+        orphanTablesToRemove: ['budget_0123456789abcdef'],
       },
       d1: {
         projectedBuildsRemoved: 1,
