@@ -28,6 +28,8 @@ const EVIDENCE: readonly Evidence[] = [
       'redaction runs in linear time on a 1 MB repeated keyword',
       'redaction runs in linear time on a 1 MB keyword in a word',
       'redaction runs in linear time on a 1 MB near-miss pair',
+      'redaction runs in linear time on a 1 MB hyphenated name',
+      'redaction redacts token shapes it was never told about',
       'redaction redacts every secret-named pair, including one inside another value and with odd spacing',
     ],
     patterns: [/runs in linear time on a 1 MB/, /toBeLessThan\(1_000\)/],
