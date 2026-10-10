@@ -79,8 +79,14 @@ still return a value directly.
 The load-bearing detail is at the call site, and it is not the value:
 
 ```ts
-result = await parser.parse({ ... });   // inside the try
+outcome = await host.parse(parser, { ... }, signal);   // inside the try
 ```
+
+Built-in parsers run in a separate process under a deadline and a memory ceiling (see
+[parsers](./parsers.md#every-parse-has-a-deadline-and-a-memory-ceiling)); the host rebuilds a
+parser's error on this side with its class, so the `catch` sees what an in-process call would
+have thrown. A parser the child does not know, such as the injected one below, runs in-process
+through the same call.
 
 Without the `await`, the `try` catches nothing when the parser is asynchronous. The promise is
 returned, the block exits, and a later rejection surfaces as an unhandled rejection that ends
