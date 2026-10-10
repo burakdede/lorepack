@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { resolveExecutable } from './executable.js';
 import type { ConnectionCheck } from './port.js';
 
 /**
@@ -33,8 +34,19 @@ export interface VerifyOptions {
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 export async function verifyStdioServer(options: VerifyOptions): Promise<ConnectionCheck> {
+  // Found on `PATH` and started by absolute path, so a `lorepack.cmd` planted in the project
+  // is never what runs (#577). See `executable.ts`.
+  const command = resolveExecutable(options.executable);
+  if (command === undefined) {
+    return {
+      ok: false,
+      step: 'spawn',
+      detail: `The server could not be started: \`${options.executable}\` was not found on the PATH. Check that \`${options.executable}\` is on the path.`,
+    };
+  }
+
   const transport = new StdioClientTransport({
-    command: options.executable,
+    command,
     args: [...options.args],
     stderr: 'pipe',
   });
