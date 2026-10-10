@@ -1,4 +1,14 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { type BuildId, LoreError, writeFileAtomic } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
@@ -10,6 +20,7 @@ import {
 } from '../src/atomic.js';
 import { ProjectLock } from '../src/lock.js';
 import { FileObjectStore } from '../src/object-store.js';
+import { ownProcessStart } from '../src/process-start.js';
 import { openWritable } from '../src/sqlite.js';
 import { LocalActiveBuildProvider, LocalStateStore } from '../src/state-store.js';
 
@@ -21,6 +32,29 @@ const BUILD_A = buildId('a');
 const BUILD_B = buildId('b');
 const LIVE_OWNER = { ownerPid: 999_004, isProcessAlive: () => true };
 const REPLACEMENT_OPTIONS = { waitMs: 100, pollIntervalMs: 5, isProcessAlive: () => false };
+
+function seedLock(
+  path: string,
+  fields: {
+    pid: number;
+    start?: string;
+    hostname?: string;
+    acquiredAt?: number;
+    token?: string;
+  },
+): void {
+  mkdirSync(path, { recursive: true });
+  writeFileSync(
+    join(path, 'owner.json'),
+    JSON.stringify({
+      start: 'epoch:0',
+      hostname: hostname(),
+      acquiredAt: Date.now(),
+      token: randomUUID(),
+      ...fields,
+    }),
+  );
+}
 
 function denyRename(): never {
   throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
@@ -593,6 +627,149 @@ describe('ProjectLock', () => {
       expect(replacement.held).toBe(true);
       expect(existsSync(path)).toBe(true);
       replacement.release();
+    });
+  });
+
+  it('records the host and when its owner started, so either can be checked later', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      const lock = new ProjectLock(path);
+      await lock.acquire();
+      const record = JSON.parse(readFileSync(join(path, 'owner.json'), 'utf8'));
+      expect(record).toMatchObject({
+        pid: process.pid,
+        hostname: hostname(),
+        start: ownProcessStart(),
+      });
+      lock.release();
+    });
+  });
+
+  it('reclaims a lock whose pid now belongs to a different process', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      seedLock(path, { pid: 1, start: 'epoch:1000' });
+      // Pid 1 is alive (and answers EPERM to an unprivileged signal), but it started long
+      // after the recorded owner did, so the owner is gone and the pid was reused (#565).
+      const next = new ProjectLock(path, {
+        waitMs: 200,
+        pollIntervalMs: 5,
+        isProcessAlive: () => true,
+        processStart: () => 'epoch:9000000',
+      });
+      await expect(next.acquire()).resolves.toBeUndefined();
+      next.release();
+    });
+  });
+
+  it('keeps a lock whose pid still names the process that took it', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      seedLock(path, { pid: 4242, start: 'linux:777' });
+      const next = new ProjectLock(path, {
+        waitMs: 30,
+        pollIntervalMs: 5,
+        isProcessAlive: () => true,
+        processStart: () => 'linux:777',
+      });
+      await expect(next.acquire()).rejects.toMatchObject({ code: 'LORE_E_LOCK_HELD' });
+    });
+  });
+
+  it('never reclaims a lock taken on another host, however old', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      seedLock(path, { pid: 999_999, hostname: 'other-host-nfs', acquiredAt: 0 });
+      const old = new Date(0);
+      utimesSync(path, old, old);
+      const next = new ProjectLock(path, {
+        waitMs: 30,
+        pollIntervalMs: 5,
+        isProcessAlive: () => false,
+      });
+      await expect(next.acquire()).rejects.toMatchObject({
+        code: 'LORE_E_LOCK_HELD',
+        message: expect.stringContaining('on host other-host-nfs'),
+        remediation: expect.stringContaining('.lore/lock'),
+      });
+      expect(JSON.parse(readFileSync(join(path, 'owner.json'), 'utf8')).hostname).toBe(
+        'other-host-nfs',
+      );
+    });
+  });
+
+  it('treats a record from another host as foreign even when it is incomplete', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      mkdirSync(path, { recursive: true });
+      writeFileSync(
+        join(path, 'owner.json'),
+        JSON.stringify({ pid: 999_999, hostname: 'other-host-nfs', acquiredAt: Date.now() }),
+      );
+      const old = new Date(0);
+      utimesSync(path, old, old);
+      const next = new ProjectLock(path, { waitMs: 30, pollIntervalMs: 5 });
+      await expect(next.acquire()).rejects.toThrow(/on host other-host-nfs/);
+    });
+  });
+
+  it('never lets a token from the record name a path', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      seedLock(path, { pid: 999_999, token: '../../escaped' });
+      const next = new ProjectLock(path, {
+        waitMs: 30,
+        pollIntervalMs: 5,
+        isProcessAlive: () => false,
+      });
+      // An invalid record is unreadable, so it waits out the staleness window instead.
+      await expect(next.acquire()).rejects.toMatchObject({ code: 'LORE_E_LOCK_HELD' });
+      expect(existsSync(project.path('escaped'))).toBe(false);
+      expect(readdirSync(project.path('.lore'))).toEqual(['lock']);
+    });
+  });
+
+  it('reclaims a lock once, leaving a tombstone named after the lock it moved', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/lock');
+      const token = randomUUID();
+      seedLock(path, { pid: 999_999, token });
+      const next = new ProjectLock(path, { ...REPLACEMENT_OPTIONS, waitMs: 200 });
+      await next.acquire();
+      expect(readdirSync(project.path('.lore')).sort()).toEqual([
+        'lock',
+        `lock.reclaimed-token-${token}`,
+      ]);
+
+      // A process that judged the same lock stale a moment ago renames onto the same
+      // tombstone. The design depends on that rename failing on every platform rather than
+      // moving the new holder's lock.
+      expect(() => renameSync(path, `${path}.reclaimed-token-${token}`)).toThrow();
+      expect(next.held).toBe(true);
+      expect(existsSync(join(path, 'owner.json'))).toBe(true);
+      next.release();
+    });
+  });
+
+  it('removes tombstones only after they have been marked for the retention period', async () => {
+    await withTempProject({}, async (project) => {
+      const lore = project.path('.lore');
+      const marked = join(lore, `lock.reclaimed-token-${randomUUID()}`);
+      const unmarked = join(lore, `lock.reclaimed-token-${randomUUID()}`);
+      mkdirSync(marked, { recursive: true });
+      mkdirSync(unmarked);
+      writeFileSync(join(marked, 'reclaimed-at'), '0');
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      utimesSync(join(marked, 'reclaimed-at'), twoHoursAgo, twoHoursAgo);
+
+      const lock = new ProjectLock(join(lore, 'lock'));
+      await lock.acquire();
+      lock.release();
+
+      expect(existsSync(marked)).toBe(false);
+      // A tombstone without a marker may belong to a reclaim still in progress.
+      expect(existsSync(unmarked)).toBe(true);
+      expect(existsSync(join(unmarked, 'reclaimed-at'))).toBe(true);
     });
   });
 
