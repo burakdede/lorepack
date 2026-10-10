@@ -291,6 +291,82 @@ describe('artifact ids are decoded exactly once, #608', () => {
   });
 });
 
+/**
+ * Headings that a joined-and-split encoding cannot carry (#611).
+ *
+ * The SDK joined the path with ` > ` and the server split on `>` and trimmed, so `Input >
+ * Output` became two headings and ` Padded ` lost its spaces: the read missed.
+ */
+const HEADED_NODES: readonly CatalogNode[] = [
+  ['Guide', 'Input > Output'],
+  ['Guide', ' Padded '],
+  ['Guide', 'Plain'],
+].map((headingPath, ordinal) => ({
+  nodeId: `h${ordinal}`,
+  artifactId: 'p:guides/a.md',
+  kind: 'paragraph',
+  ordinal,
+  title: null,
+  text: `under ${headingPath.join(' / ')}`,
+  headingPath,
+  page: null,
+  sheet: null,
+  cellRange: null,
+  lineStart: 10 + ordinal,
+  lineEnd: 10 + ordinal,
+}));
+
+function clientOverHeadings(): LoreClient {
+  const scope: BuildScope = {
+    buildId: BUILD,
+    catalog: { ...catalog, nodes: async () => HEADED_NODES },
+    tables,
+    objects: {
+      async get() {
+        return new TextEncoder().encode('the whole normalized body');
+      },
+      async put() {
+        return '';
+      },
+      async has() {
+        return true;
+      },
+    },
+  };
+  const app = createApiApp({
+    runtime: createRuntime({
+      provider: {
+        async current() {
+          return { buildId: BUILD, generation: 3 };
+        },
+        async acquire(): Promise<BuildHandle> {
+          return { buildId: BUILD, generation: 3, release() {} };
+        },
+      },
+      open: async () => scope,
+      freshness: async () => 'clean',
+    }),
+    currentBuild: async () => ({ buildId: BUILD, generation: 3 }),
+  });
+  return new LoreClient({
+    baseUrl: 'http://runtime.test',
+    fetch: async (input, init) => app.request(String(input), init as RequestInit),
+  });
+}
+
+describe('a heading path survives the trip from SDK to REST, #611', () => {
+  it.each(HEADED_NODES.map((node) => [node.headingPath.join(' / '), node] as const))(
+    'reads the section under %s',
+    async (_label, node) => {
+      const read = await clientOverHeadings().readSource('p:guides/a.md', {
+        headingPath: [...node.headingPath],
+      });
+      expect(read.text).toBe(node.text);
+      expect(read.locator.headingPath).toEqual(node.headingPath);
+    },
+  );
+});
+
 describe('errors keep the server code', () => {
   it('maps a server failure to a typed client error', async () => {
     try {
