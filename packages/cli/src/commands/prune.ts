@@ -32,11 +32,17 @@ import {
   applyRetention,
   DEFAULT_KEEP_PREVIOUS,
   planRetention,
+  reconcileRetention,
   renderRetentionPlan,
 } from '../services/retention.js';
 
 export interface PruneCommandOptions {
   readonly cloudflareAdapter?: CloudflareResolverAdapter;
+  /**
+   * Runs after the plan is computed and before the lock is taken. Tests use it to seal a
+   * build in exactly the window #564 raced through.
+   */
+  readonly beforeApply?: () => void | Promise<void>;
 }
 
 export function pruneCommand(options: PruneCommandOptions = {}): CommandDefinition {
@@ -103,20 +109,34 @@ export function pruneCommand(options: PruneCommandOptions = {}): CommandDefiniti
           };
         }
 
+        await options.beforeApply?.();
+
+        // The plan above was computed without the lock, and history can move before the lock
+        // is ours. What is applied is re-derived under it (#564).
         const lock = new ProjectLock(join(loreDirectory, 'lock'));
-        await lock.withLock(() => {
-          for (const id of plan.remove) state.forgetBuild(id);
-          applyRetention(loreDirectory, plan);
+        const applied = await lock.withLock(() => {
+          const reconciled = reconcileRetention(
+            loreDirectory,
+            plan,
+            state.listBuilds(),
+            state.current()?.buildId ?? null,
+            keep,
+          );
+          // Records go first and all together: a build directory without a record is
+          // invisible garbage, a record without its directory is a build that cannot open.
+          state.forgetBuilds(reconciled.remove);
+          applyRetention(loreDirectory, reconciled);
+          return reconciled;
         });
 
         // "Removed." after "Nothing to remove." claimed a deletion that never happened.
         const outcome =
-          plan.remove.length === 0
+          applied.remove.length === 0
             ? ''
-            : `\n\nRemoved ${count(plan.remove.length, 'build')} and ${count(plan.objectsToRemove.length, 'object')}.`;
+            : `\n\nRemoved ${count(applied.remove.length, 'build')} and ${count(applied.objectsToRemove.length, 'object')}.`;
         return {
-          human: `${renderRetentionPlan(plan)}${outcome}`,
-          json: { ...plan, applied: true },
+          human: `${renderRetentionPlan(applied)}${outcome}`,
+          json: { ...applied, applied: true },
         };
       } finally {
         state.close();
