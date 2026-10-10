@@ -32,6 +32,7 @@ backend, local and Cloudflare, must pass.
 | A comment that swallows the result wrapper | The guard removes comments before wrapping |
 | `readfile`, `writefile` | They do not exist: `node:sqlite` is built without them |
 | A statement above 100,000 characters | The request schema, before anything is parsed |
+| A result that grows past 1 MB, or a query run many times at once | Locally, the child streams rows and stops at the 1 MB cap, its JavaScript heap is capped at 128 MB, and at most four run at once (`LORE_E_BUSY` past that); remotely, the response cap and the per-caller rate limit |
 | A runaway recursive CTE, with or without the `RECURSIVE` keyword | Locally, a five-second deadline enforced by killing the child process; remotely, refused, since D1 cannot be interrupted before its 30 second limit |
 | An aggregate used as a window, or a statement whose estimated rows pass 5,000,000 | Remotely only, refused by the guard's cost bound (below) |
 | A `printf` or `format` width or precision of `*` or above 100, or a format that is not a string literal | The statement guard, on both backends |

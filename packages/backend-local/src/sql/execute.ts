@@ -24,7 +24,23 @@ export const QUERY_LIMITS = {
   deadlineMs: 5_000,
   /** How long the child is given to open the build and report ready. */
   startupMs: 10_000,
+  /**
+   * The child's JavaScript heap, in megabytes. A result is at most `maxBytes` and is streamed,
+   * so this is far more than a well-formed query needs; it is the ceiling on one that is not.
+   */
+  childHeapMb: 128,
+  /**
+   * The resident memory one child is expected to stay under, asserted by the integration test
+   * against the #559 reproduction: the heap cap, Node's own baseline, and SQLite's allocations,
+   * which the heap flag does not cover and the per-value length limit bounds.
+   */
+  childRssCeilingBytes: 256 * 1024 * 1024,
+  /** Children running at once. Past this a query is refused, not queued. */
+  maxConcurrent: 4,
 } as const;
+
+/** Queries whose child is running now, across every caller in this process. */
+let running = 0;
 
 export interface QueryRequest {
   readonly databasePath: string;
@@ -42,7 +58,7 @@ export interface QueryOutcome {
 
 type ChildReply =
   | { ok: true; columns: string[]; rows: Record<string, unknown>[]; truncated: boolean }
-  | { ok: false; kind: 'too-large'; bytes: number }
+  | { ok: false; kind: 'too-large'; bytes: number; peakRssBytes: number }
   | { ok: false; kind: 'failed'; message: string }
   | { ready: true };
 
@@ -77,21 +93,51 @@ function childEntry(): string {
  * A process per query rather than a pool. A pool would be faster and would also mean a query
  * observing state left by the previous one, which for a surface whose entire purpose is
  * isolation is the wrong trade. Startup is tens of milliseconds against a five-second deadline.
+ *
+ * At most `maxConcurrent` run at once (#559). A model can issue table queries in parallel, and
+ * each child may hold its heap cap, so past the limit a query is refused with `LORE_E_BUSY`
+ * before any process starts, rather than queued behind work it cannot see.
  */
 export async function executeQuery(request: QueryRequest): Promise<QueryOutcome> {
   const statement = validateStatement(request.sql);
   const limit = boundedLimit(request.limit);
 
+  if (running >= QUERY_LIMITS.maxConcurrent) {
+    throw new LoreError(
+      'LORE_E_BUSY',
+      `${String(QUERY_LIMITS.maxConcurrent)} table queries are already running.`,
+      {
+        remediation:
+          'Wait for the running queries to finish, then retry. Run table queries one after another rather than all at once. Nothing was changed.',
+      },
+    );
+  }
+  running += 1;
+  try {
+    return await runInChild(request, statement.sql, limit);
+  } finally {
+    running -= 1;
+  }
+}
+
+async function runInChild(
+  request: QueryRequest,
+  sql: string,
+  limit: number,
+): Promise<QueryOutcome> {
   const child = fork(childEntry(), [], {
     // Nothing from the parent's environment is inherited, and no stdio is wired through: a
     // query has no business reading configuration or writing to the console.
     env: {},
+    // Replaces the parent's flags rather than adding to them, so a loader or inspector the
+    // parent runs under never reaches the child.
+    execArgv: [`--max-old-space-size=${String(QUERY_LIMITS.childHeapMb)}`],
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
   });
   child.send({ databasePath: request.databasePath, allowedTables: [...request.allowedTables] });
 
   try {
-    return await run(child, statement.sql, limit);
+    return await run(child, sql, limit);
   } finally {
     // `SIGKILL`, and deliberately not awaited. A child running a pathological query will not
     // handle a signal, because it is inside a native call; the kernel stops it regardless.
@@ -156,7 +202,11 @@ function run(child: ChildProcess, sql: string, limit: number): Promise<QueryOutc
           resolve({ columns: reply.columns, rows: reply.rows, truncated: reply.truncated });
           return;
         }
-        reject(reply.kind === 'too-large' ? tooLarge(reply.bytes) : classify(reply.message));
+        reject(
+          reply.kind === 'too-large'
+            ? tooLarge(reply.bytes, reply.peakRssBytes)
+            : classify(reply.message),
+        );
       });
     });
 
@@ -184,13 +234,15 @@ function run(child: ChildProcess, sql: string, limit: number): Promise<QueryOutc
   });
 }
 
-function tooLarge(bytes: number): LoreError {
+/** `bytes` is how far the result had grown when it passed the cap: a lower bound, not its size. */
+function tooLarge(bytes: number, childPeakRssBytes: number): LoreError {
   return new LoreError(
     'LORE_E_LIMIT_EXCEEDED',
-    `The result is ${Math.round(bytes / 1024).toLocaleString('en-US')} KB, above the ${String(QUERY_LIMITS.maxBytes / 1_000_000)} MB a single response may carry.`,
+    `The result passed ${String(QUERY_LIMITS.maxBytes / 1_000_000)} MB, the most a single response may carry (stopped at ${Math.round(bytes / 1024).toLocaleString('en-US')} KB).`,
     {
       remediation:
         'Select fewer columns, or aggregate. A response larger than this is not something a model can read, so truncating it silently would be worse than saying so.',
+      details: { childPeakRssBytes },
     },
   );
 }
