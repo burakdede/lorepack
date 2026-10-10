@@ -23,6 +23,39 @@ Patterns are gitignore-style, evaluated with picomatch:
 The always-on exclusions from architecture section 19.2 are applied first, then
 `.loreignore`.
 
+## Credentials and client configuration are always excluded
+
+`ALWAYS_EXCLUDE` in `packages/core/src/config/defaults.ts` is built from two named lists, so
+each can be reasoned about on its own and neither can drift from the rules discovery runs:
+
+| List | Patterns | Why |
+|---|---|---|
+| `SECRET_SHAPED` | `.env*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `*.pfx`, `*.jks`, `*credentials*.json` | Section 19.2's filename guardrail. `lorepack init` names any it finds and promises they will not be indexed |
+| `CLIENT_CONFIG` | `.mcp.json`, `.claude/`, `.codex/`, `.cursor/`, `.vscode/`, `*.lorepack-*.bak` | MCP client configuration, which `lorepack connect` itself writes into the project, and the backups it takes before each edit |
+
+Both are spread into `ALWAYS_EXCLUDE` rather than repeated, and a unit test asserts each is a
+subset of it. They were separate literals until #585, and `*.jks` and `*credentials*.json`
+were warned about at init and then built. `init` also matches with discovery's own matcher
+rather than a regex of its own, so the files it names are exactly the files the build leaves
+out: matching is case-sensitive, as everywhere else in discovery.
+
+The client entries exist because `init` makes the whole project a source and `connect` then
+writes into it. Those files routinely carry tokens in a server's `env` block, and before
+#573 the next build indexed them and served them to every connected model. Whole
+directories are excluded because a client keeps more than one file there and none of it is
+project context.
+
+Each one is reported like any other default, under `defaults` in `lorepack inspect
+exclusions`, so a missing `.vscode/` is visible rather than silent.
+
+To index something under one of these directories anyway, re-include it in `.loreignore`
+and name the configuration file again after it, since the last matching rule wins:
+
+```gitignore
+!.vscode/
+.vscode/mcp.json
+```
+
 ## Source roots are disjoint identities
 
 Each configured source root gets an ID from its canonical project-relative path, or from

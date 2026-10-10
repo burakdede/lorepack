@@ -266,6 +266,19 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/no-secrets-in-manifest/, /without echoing the secret/, /not\.toContain/],
   },
   {
+    name: 'client configuration and credential-shaped files never reach a build, issues 573 and 585',
+    path: 'packages/cli/test/secret-exclusions.e2e.test.ts',
+    tests: [
+      'what init and connect put in a project stays out of the build indexes none of the client configuration, its backups, or credential-shaped files',
+      'what init and connect put in a project stays out of the build names only files the build then leaves out',
+    ],
+    patterns: [
+      /indexes none of the client configuration, its backups, or credential-shaped files/,
+      /names only files the build then leaves out/,
+      /No matches/,
+    ],
+  },
+  {
     name: 'malicious config values are rendered through redaction',
     path: 'packages/cli/test/config-resolve.test.ts',
     tests: ['secrets never prints a value whose name looks like a credential'],

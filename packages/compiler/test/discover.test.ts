@@ -597,6 +597,10 @@ describe('the default exclusions apply at every depth', () => {
     'id_ed25519.pub',
     'store.p12',
     'store.pfx',
+    'keystore.jks',
+    'credentials.json',
+    'gcp-credentials.json',
+    '.envrc',
     '.DS_Store',
     'Thumbs.db',
   ])('excludes the credential-shaped name %s at depth', (name) => {
@@ -618,12 +622,40 @@ describe('the default exclusions apply at every depth', () => {
     }
   });
 
+  /**
+   * Issues 573 and 585. `lorepack connect` writes these files into the project, and they
+   * routinely hold tokens in MCP `env` blocks; the backups it takes hold the same.
+   */
+  it.each([
+    '.mcp.json',
+    '.mcp.json.lorepack-20261010T020000Z.bak',
+    '.codex/config.toml',
+    '.vscode/mcp.json',
+    '.claude/settings.local.json',
+    '.cursor/mcp.json',
+  ])('excludes the client configuration file %s at depth', (path) => {
+    expect(matcher.excludes(path), path).toBe(true);
+    expect(matcher.excludes(`packages/app/${path}`), path).toBe(true);
+  });
+
+  it.each(['.codex', '.vscode', '.claude', '.cursor'])(
+    'prunes a %s directory instead of walking it',
+    (directory) => {
+      expect(matcher.decideDirectory(directory)).not.toBeNull();
+      expect(matcher.decideDirectory(`nested/${directory}`)).not.toBeNull();
+    },
+  );
+
   it('still indexes ordinary documents that merely sit near an excluded name', () => {
     for (const path of [
       'docs/building-a-release.md',
       'docs/distribution.md',
       'notes/coverage-notes.md',
       'node_modules.md',
+      'docs/mcp.json.md',
+      'docs/vscode-setup.md',
+      'docs/credentials-policy.md',
+      'docs/environment.md',
     ]) {
       expect(matcher.excludes(path), path).toBe(false);
     }
@@ -639,5 +671,48 @@ describe('the default exclusions apply at every depth', () => {
     ]);
     expect(withOverride.excludes('vendor/dist/other.md')).toBe(true);
     expect(withOverride.excludes('vendor/dist/notes.md')).toBe(false);
+  });
+});
+
+describe('client configuration in the corpus', () => {
+  const PLANTED = {
+    'a.md': '# A',
+    '.mcp.json': '{"mcpServers":{"pg":{"env":{"PGPASSWORD":"hunter2pw"}}}}',
+    '.mcp.json.lorepack-20261010T020000Z.bak': '{"PGPASSWORD":"hunter2pw"}',
+    '.codex/config.toml': '[mcp_servers.github]\nenv = { GITHUB_TOKEN = "ghp_LEAKME123" }\n',
+    '.vscode/mcp.json': '{"servers":{}}',
+    '.claude/settings.local.json': '{}',
+    '.cursor/mcp.json': '{}',
+    'gcp-credentials.json': '{"private_key":"-----BEGIN PRIVATE KEY-----"}',
+  };
+
+  it('is excluded, and each exclusion is reported against the default that made it', async () => {
+    await withProject(PLANTED, (root) => {
+      const result = discoverIn(root);
+      expect(paths(result)).toEqual(['a.md']);
+
+      const byPattern = new Map(result.exclusions.map((one) => [one.pattern, one]));
+      for (const pattern of ['.mcp.json', '*.lorepack-*.bak', '*credentials*.json']) {
+        expect(byPattern.get(pattern)?.source, pattern).toBe('defaults');
+      }
+      for (const directory of ['.codex/', '.vscode/', '.claude/', '.cursor/']) {
+        expect(byPattern.get(directory)?.sample, directory).toEqual([directory]);
+      }
+    });
+  });
+
+  it('can be re-included explicitly from .loreignore, which is the documented opt-in', async () => {
+    await withProject(
+      {
+        ...PLANTED,
+        '.vscode/notes.md': '# Notes',
+        // Negating the directory re-includes all of it, so the file that holds the client's
+        // servers has to be named again after it. Order matters: the last match wins.
+        '.loreignore': '!.vscode/\n.vscode/mcp.json\n',
+      },
+      (root) => {
+        expect(paths(discoverIn(root))).toEqual(['.vscode/notes.md', 'a.md']);
+      },
+    );
   });
 });
