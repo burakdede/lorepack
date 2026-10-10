@@ -141,6 +141,50 @@ describe('runtime token auth, issue 90', () => {
     ).toBe('This token is not valid for this build.');
   });
 
+  // #562: a second rotation moved the first token's expiry later, so a token rotated out
+  // after a suspected leak outlived its documented 10 minute overlap.
+  it('never moves an expiry later when tokens are rotated twice', async () => {
+    const { auth } = openRuntimeDatabase();
+    const tokenA = `${RUNTIME_TOKEN_PREFIX}a`;
+    const tokenB = `${RUNTIME_TOKEN_PREFIX}b`;
+    const tokenC = `${RUNTIME_TOKEN_PREFIX}c`;
+    const overlapFrom = (at: string) =>
+      new Date(Date.parse(at) + RUNTIME_TOKEN_OVERLAP_MS).toISOString();
+
+    await storeRuntimeTokenHash(auth, await hashRuntimeToken(tokenA), '2026-08-09T00:00:00.000Z');
+    await rotateRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken(tokenB),
+      '2026-08-09T00:00:00.000Z',
+      overlapFrom('2026-08-09T00:00:00.000Z'),
+    );
+    await rotateRuntimeTokenHash(
+      auth,
+      await hashRuntimeToken(tokenC),
+      '2026-08-09T00:09:00.000Z',
+      overlapFrom('2026-08-09T00:09:00.000Z'),
+    );
+
+    const expiries = new Map(
+      (await listRuntimeTokens(auth)).map((row) => [row.tokenHash, row.expiresAt]),
+    );
+    expect(expiries.get(await hashRuntimeToken(tokenA))).toBe('2026-08-09T00:10:00.000Z');
+    expect(expiries.get(await hashRuntimeToken(tokenB))).toBe('2026-08-09T00:19:00.000Z');
+    expect(expiries.get(await hashRuntimeToken(tokenC))).toBeNull();
+
+    const at = (now: string) => createRuntimeTokenAuthorizer(auth, () => now);
+    const request = (token: string) => ({
+      method: 'GET',
+      path: '/v1/build',
+      authorization: `Bearer ${token}`,
+    });
+    expect(await at('2026-08-09T00:15:00.000Z')(request(tokenA))).toBe(
+      'This token is not valid for this build.',
+    );
+    expect(await at('2026-08-09T00:15:00.000Z')(request(tokenB))).toBe(true);
+    expect(await at('2026-08-09T00:15:00.000Z')(request(tokenC))).toBe(true);
+  });
+
   it('keeps the previous token valid through the overlap window, then expires it', async () => {
     const { db, auth } = openRuntimeDatabase();
     const firstToken = `${RUNTIME_TOKEN_PREFIX}first`;
