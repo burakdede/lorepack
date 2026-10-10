@@ -92,6 +92,8 @@ export function packCli({ outDir, root = ROOT }) {
     // workspace lockfile. The CLI's workspace dependencies are dev-only and already bundled
     // into dist by esbuild, so injecting them changes nothing that ships. Hoisted, because
     // npm bundles a flat `node_modules` and cannot follow pnpm's symlinked store.
+    // Copied, not hardlinked from the store: npm pack crashed with "Exit handler never
+    // called" on hardlinked files, which is pnpm's default on Linux and Windows.
     // `CI=true` stops pnpm from asking, on a non-TTY, to purge a modules directory.
     runTool(
       'pnpm',
@@ -104,6 +106,7 @@ export function packCli({ outDir, root = ROOT }) {
         '--ignore-scripts',
         '--config.inject-workspace-packages=true',
         '--config.node-linker=hoisted',
+        '--config.package-import-method=copy',
         stage,
       ],
       workspace,
