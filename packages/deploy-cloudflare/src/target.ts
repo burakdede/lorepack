@@ -45,7 +45,8 @@ const DEFAULT_CAPABILITIES = ['lexical-search', 'structured-context', 'table-que
 
 export interface CloudflareDeploymentTargetOptions {
   readonly projectId: string;
-  readonly endpoint: string;
+  /** Null when the public origin is not known, which a rollback tolerates and a deploy does not. */
+  readonly endpoint: string | null;
   readonly workerName?: string;
   readonly catalogDatabaseName?: string;
   readonly tablesDatabaseName?: string;
@@ -118,12 +119,12 @@ export function createCloudflareDeploymentTarget(
     capabilities: async () =>
       (await options.capabilities?.()) ?? {
         supported: [...DEFAULT_CAPABILITIES] as Capability[],
-        endpoint: options.endpoint,
+        ...(options.endpoint === null ? {} : { endpoint: options.endpoint }),
       },
     plan: async (input): Promise<DeployPlan> => {
       const capabilities = await ((await options.capabilities?.()) ?? {
         supported: [...DEFAULT_CAPABILITIES] as Capability[],
-        endpoint: options.endpoint,
+        ...(options.endpoint === null ? {} : { endpoint: options.endpoint }),
       });
       const currentBuildId = await readCurrentPublicBuildId(options.publicBuildId);
       const preflight = (options.preflight ?? preflightProjection)(input.buildDirectory);

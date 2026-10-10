@@ -462,9 +462,9 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "26.6.4",
+      "latestVersion": "26.6.5",
       "pinnedPublishedAt": "2026-07-08T06:48:03.261Z",
-      "latestReleaseAt": "2026-10-01T22:39:22.769Z",
+      "latestReleaseAt": "2026-10-09T18:46:47.657Z",
       "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
@@ -1366,6 +1366,7 @@
         "devDependencies"
       ],
       "references": [
+        "packages/cli/package.json:devDependencies",
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
       "latestVersion": "4.149.0",

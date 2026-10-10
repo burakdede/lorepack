@@ -56,6 +56,14 @@ export interface DeployOptions {
    * from a deployment is exactly what capability negotiation exists to prevent.
    */
   readonly allowCapabilityLoss?: readonly Capability[];
+  /**
+   * Accept an activation the target could not confirm, by name.
+   *
+   * Without it an unconfirmed smoke check fails the deploy (#580). A target that can never
+   * confirm (no public endpoint, or an endpoint behind a gate the CLI cannot pass) is a real
+   * setup, but it is one the user says out loud rather than one that passes silently.
+   */
+  readonly skipSmoke?: boolean;
   /** A receipt to continue from, so a partial deploy resumes rather than restarts. */
   readonly resume?: DeploymentReceipt;
   /**
@@ -187,6 +195,19 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
           .map((capability) => `--allow-capability-loss ${capability}`)
           .join(' ')}`,
         details: { lost: unaccepted },
+      },
+    );
+  }
+
+  // Refused before anything is written: the smoke check needs an endpoint to ask, and finding
+  // that out after activation is finding it out too late.
+  if (plan.endpoint === null && options.skipSmoke !== true) {
+    throw new LoreError(
+      'LORE_E_TARGET_NOT_CONFIGURED',
+      `The ${target.id} target has no public endpoint to confirm a deploy against.`,
+      {
+        remediation: `Configure the ${target.id} target's endpoint, or pass --skip-smoke to deploy without confirmation.`,
+        subject: target.id,
       },
     );
   }
@@ -354,9 +375,33 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
    *
    * A target confirms by querying its own public endpoint, so a pointer that was written and
    * not picked up is caught here rather than by a user. A target that cannot confirm returns
-   * null, and that is recorded rather than treated as success.
+   * null, and that is a failure unless `--skip-smoke` said so in advance. Treating null as a
+   * pass is what let an endpoint that never resolved go unnoticed (#580).
    */
-  if (activation.confirmedBuildId !== null && activation.confirmedBuildId !== options.buildId) {
+  if (options.skipSmoke === true) {
+    receipt = {
+      ...activatedReceipt,
+      state: 'active',
+      deployedAt: now().toISOString(),
+    };
+    writeReceipt(options.projectRoot, receipt);
+    return { receipt, plan, activation, dryRun: false };
+  }
+
+  if (activation.confirmedBuildId === null) {
+    const failedReceipt = { ...activatedReceipt, state: 'failed' as const };
+    writeReceipt(options.projectRoot, failedReceipt);
+    throw new LoreError(
+      'LORE_E_REMOTE_DEPLOY',
+      `The pointer now names ${options.buildId}, but the endpoint could not confirm it is serving that build.`,
+      {
+        remediation: `Check that ${activation.endpoint ?? 'the endpoint'} is reachable and that LORE_REMOTE_BEARER_TOKEN is set, then deploy again; the projected candidate will be reused. Pass --skip-smoke only if this target can never confirm.`,
+        details: { receiptId: receipt.receiptId, expected: options.buildId },
+      },
+    );
+  }
+
+  if (activation.confirmedBuildId !== options.buildId) {
     const failedReceipt = { ...activatedReceipt, state: 'failed' as const };
     writeReceipt(options.projectRoot, failedReceipt);
     throw new LoreError(

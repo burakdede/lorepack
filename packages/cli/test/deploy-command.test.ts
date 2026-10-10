@@ -105,7 +105,7 @@ function fakeTarget(
       return {
         buildId: receipt.buildId,
         previousBuildId: null,
-        confirmedBuildId: receipt.buildId,
+        confirmedBuildId: options.unconfirmed === true ? null : receipt.buildId,
         endpoint: 'https://example.workers.dev/mcp',
       };
     },
@@ -164,6 +164,7 @@ function fakeCloudflareAdapter(
       accountName: 'Example',
     }),
     listDatabases: async () => [{ name: 'deployed-catalog' }, { name: 'deployed-tables' }],
+    workersSubdomain: async () => 'acct',
     openCatalogDatabase: () => ({
       prepare: () => ({
         bind() {
@@ -626,13 +627,98 @@ describe('lorepack deploy command, issue 91', () => {
           target: 'cloudflare',
           project: 'deployed',
           buildId: expect.stringMatching(/^lore_[0-9a-f]{64}$/),
-          endpoint: 'https://deployed-runtime.workers.dev/mcp',
+          endpoint: 'https://deployed-runtime.acct.workers.dev/mcp',
           state: 'planned',
         });
         expect(result.stdout).not.toContain('Target: cloudflare / personal');
         expect(result.stdout).not.toContain('Dry run only. Nothing remote was changed.');
         expect(result.stderr).toContain('Discovering');
         expect(result.stderr).toContain('Validating');
+      },
+    );
+  });
+
+  it('uses the endpoint recorded by target add over the subdomain lookup', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        writeCloudflareReceipt(temp.root, { endpoint: 'https://lore.example.com' });
+        const lookups: string[] = [];
+
+        const result = await run(
+          ['--json', '--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--dry-run'],
+          {
+            commands: [
+              deployCommand({
+                cloudflareAdapter: fakeCloudflareAdapter({
+                  workersSubdomain: async (accountId) => {
+                    lookups.push(accountId);
+                    return 'acct';
+                  },
+                }),
+              }),
+            ],
+          },
+        );
+
+        expect(result.code).toBe(0);
+        expect((JSON.parse(result.stdout) as DeploymentReceipt).endpoint).toBe(
+          'https://lore.example.com/mcp',
+        );
+        expect(lookups).toEqual([]);
+      },
+    );
+  });
+
+  it('refuses before any remote write when the Workers endpoint cannot be determined', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        writeCloudflareReceipt(temp.root);
+
+        const result = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              cloudflareAdapter: fakeCloudflareAdapter({ workersSubdomain: async () => null }),
+            }),
+          ],
+        });
+
+        expect(result.code ?? 1).toBe(5);
+        expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
+        expect(result.stderr).toContain('lorepack target add cloudflare --endpoint');
+      },
+    );
+  });
+
+  it('fails an unconfirmed deploy unless --skip-smoke is passed', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'docs/a.md': '# A\n' } },
+      async (temp) => {
+        const failed = await run(['--cwd', temp.root, 'deploy', 'cloudflare', '--yes'], {
+          commands: [
+            deployCommand({
+              resolveTarget: async () => fakeTarget({ unconfirmed: true }),
+              confirm: async () => true,
+            }),
+          ],
+        });
+        expect(failed.code ?? 1).toBeGreaterThan(0);
+        expect(failed.stderr).toContain('could not confirm');
+
+        const skipped = await run(
+          ['--cwd', temp.root, 'deploy', 'cloudflare', '--yes', '--skip-smoke'],
+          {
+            commands: [
+              deployCommand({
+                resolveTarget: async () => fakeTarget({ unconfirmed: true }),
+                confirm: async () => true,
+              }),
+            ],
+          },
+        );
+        expect(skipped.code).toBe(0);
+        expect(skipped.stdout).toContain('Active build:');
       },
     );
   });

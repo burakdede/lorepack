@@ -9,6 +9,7 @@ import {
   WranglerD1TransactionBatch,
   wranglerD1ExecutionMode,
 } from '../src/services/cloudflare-target.js';
+import { lookupWorkersSubdomain, workersDevEndpoint } from '../src/services/workers-endpoint.js';
 
 describe('the Wrangler-backed Cloudflare D1 adapter, issue 280', () => {
   it('suppresses explicit transaction control statements for remote D1', () => {
@@ -105,5 +106,83 @@ describe('the Wrangler-backed Cloudflare D1 adapter, issue 280', () => {
     ).toBe(true);
     expect(isRetryableWranglerRemoteR2Failure('{"error":{"text":"fetch failed"}}')).toBe(true);
     expect(isRetryableWranglerRemoteR2Failure('The specified key does not exist.')).toBe(false);
+  });
+});
+
+/**
+ * The account subdomain lookup behind the Workers endpoint, #580.
+ *
+ * Mocked rather than live: the request shape is what is under test, and CI must not depend on
+ * a Cloudflare account to prove it.
+ */
+describe('looking up the workers.dev subdomain', () => {
+  it('asks the Cloudflare API for the account subdomain with the API token', async () => {
+    const requests: Array<{ url: string; authorization: string | null }> = [];
+    const subdomain = await lookupWorkersSubdomain('acct_123', {
+      token: 'cf-token',
+      fetch: async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get('authorization'),
+        });
+        return Response.json({ success: true, errors: [], result: { subdomain: 'acme' } });
+      },
+    });
+
+    expect(subdomain).toBe('acme');
+    expect(requests).toEqual([
+      {
+        url: 'https://api.cloudflare.com/client/v4/accounts/acct_123/workers/subdomain',
+        authorization: 'Bearer cf-token',
+      },
+    ]);
+  });
+
+  it('does not call the API without a token', async () => {
+    let called = false;
+    const subdomain = await lookupWorkersSubdomain('acct_123', {
+      token: undefined,
+      fetch: async () => {
+        called = true;
+        return Response.json({});
+      },
+    });
+
+    expect(subdomain).toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it('returns null for a failed call or a subdomain that is not a hostname label', async () => {
+    for (const response of [
+      new Response('nope', { status: 403 }),
+      Response.json({ success: false, errors: [{ code: 10000 }], result: null }),
+      Response.json({ success: true, result: { subdomain: 'evil.example.com/x' } }),
+      Response.json({ success: true, result: {} }),
+    ]) {
+      const subdomain = await lookupWorkersSubdomain('acct_123', {
+        token: 'cf-token',
+        fetch: async () => response,
+      });
+      expect(subdomain).toBeNull();
+    }
+  });
+
+  it('refuses an account id that would change the request path', async () => {
+    let called = false;
+    const subdomain = await lookupWorkersSubdomain('../../user/tokens', {
+      token: 'cf-token',
+      fetch: async () => {
+        called = true;
+        return Response.json({});
+      },
+    });
+    expect(subdomain).toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it('builds the endpoint from worker name and subdomain', () => {
+    expect(workersDevEndpoint('demo-runtime', 'acme')).toBe(
+      'https://demo-runtime.acme.workers.dev',
+    );
   });
 });

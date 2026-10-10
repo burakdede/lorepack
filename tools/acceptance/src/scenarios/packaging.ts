@@ -50,4 +50,44 @@ export const PACKAGING_SCENARIOS: readonly Scenario[] = [
       },
     ],
   },
+  {
+    id: 'packaging/the-installed-cli-finds-the-projects-wrangler',
+    title: "The installed CLI runs the project's own Wrangler",
+    proves:
+      'Invariant 7 keeps Wrangler out of the published install, so deploy must find the one the user installed, by package name, and never by walking out of its own package.',
+    mode: 'auto',
+    regression: 580,
+    runFrom: 'installed',
+    fixture: {
+      files: {
+        ...CORPUS,
+        // A stand-in with the real package name and bin layout. It answers the two commands
+        // `target add --dry-run` needs and fails the rest, which reads as "nothing exists yet".
+        'node_modules/wrangler/package.json': JSON.stringify({
+          name: 'wrangler',
+          version: '9.9.9-fixture',
+          bin: { wrangler: './bin/wrangler.js' },
+        }),
+        'node_modules/wrangler/bin/wrangler.js': [
+          'const [command] = process.argv.slice(2);',
+          "if (command === '--version') console.log('9.9.9-fixture');",
+          "else if (command === 'whoami') console.log(JSON.stringify({ email: 'fixture@example.com', accounts: [{ id: 'fixture-account', name: 'Fixture' }] }));",
+          'else process.exit(1);',
+          '',
+        ].join('\n'),
+      },
+      setup: ['init'],
+    },
+    steps: [
+      {
+        action: 'run',
+        args: ['target', 'add', 'cloudflare', '--dry-run'],
+        describe: 'Plan a Cloudflare target from the staged install, which ships no Wrangler',
+        expect: {
+          exitCode: 0,
+          stdout: { contains: ['Wrangler 9.9.9-fixture', 'dry run, nothing was changed'] },
+        },
+      },
+    ],
+  },
 ];

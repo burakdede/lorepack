@@ -183,13 +183,13 @@ async function pruneRemote(
       config.projectRoot,
       keepRaw,
       resumeId,
-      cloudflareAdapter ?? createWranglerDeployAdapter(),
+      cloudflareAdapter ?? createWranglerDeployAdapter(config.projectRoot),
     );
   }
 
   const resolved = await resolveCloudflareResourcesWithAdapter(
     config.projectRoot,
-    cloudflareAdapter ?? createWranglerDeployAdapter(),
+    cloudflareAdapter ?? createWranglerDeployAdapter(config.projectRoot),
   );
   const keep = parseKeep(keepRaw);
   if (!apply) {
