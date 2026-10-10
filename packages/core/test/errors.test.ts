@@ -16,6 +16,7 @@ describe('error codes', () => {
     ['LORE_E_BUILD_VALIDATION', EXIT_CODES.BUILD],
     ['LORE_E_FTS5_UNAVAILABLE', EXIT_CODES.ENVIRONMENT],
     ['LORE_E_LOCK_HELD', EXIT_CODES.CONCURRENCY],
+    ['LORE_E_BUSY', EXIT_CODES.CONCURRENCY],
     ['LORE_E_REMOTE_DEPLOY', EXIT_CODES.REMOTE],
   ] as const)('%s exits %i', (code, exit) => {
     expect(exitCodeFor(code)).toBe(exit);

@@ -583,6 +583,7 @@ function statusFor(error: unknown): number {
   if (code === 'LORE_E_BUILD_NOT_FOUND') return 404;
   if (code === 'LORE_E_INVALID_ARGUMENT') return 400;
   if (code === 'LORE_E_LIMIT_EXCEEDED') return 413;
+  if (code === 'LORE_E_BUSY') return 429;
   if (code === 'LORE_E_SQL_REJECTED') return 400;
   if (code === 'LORE_E_INTERNAL') return 500;
   return 500;
