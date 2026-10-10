@@ -22,4 +22,4 @@ mount --bind "$scratch/resolv.conf" /etc/resolv.conf
 mount --bind "$scratch/nsswitch.conf" /etc/nsswitch.conf
 
 export LORE_PRIVACY_NETNS=1
-exec pnpm exec vitest run --root tools/security test/privacy-defaults.test.ts
+exec node node_modules/vitest/vitest.mjs run --root tools/security test/privacy-defaults.test.ts

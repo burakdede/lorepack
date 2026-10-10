@@ -96,3 +96,8 @@ The credentialed Cloudflare acceptance harness shares one Worker across runs.
 After Wrangler deploys it, the harness writes that Worker's actual endpoint into
 the target receipt alongside its name. Deploy and resume confirm activation
 against the same Worker that serves the acceptance requests.
+
+The privacy namespace invokes the already installed Vitest entry point with
+Node directly. Running pnpm under sudo would change its environment and trigger
+dependency installation inside the offline namespace. Installation and build
+finish in the unprivileged setup steps before entering the namespace.
