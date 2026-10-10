@@ -101,6 +101,7 @@ client's trust prompts.
 | Command or action | Observed result |
 |---|---|
 | `lorepack connect vscode` with piped stdin | Prints the plan, exits 1 with `LORE_E_INVALID_ARGUMENT`, writes no config, and points to `--yes` and `--dry-run`. |
+| `lorepack connect vscode --json` with piped stdin | Exits 1, keeps stdout parseable as a JSON error, and prints the plan on stderr. |
 | `lorepack connect vscode --dry-run` | Prints the plan, exits 0, writes no config. |
 | `lorepack connect vscode` in a terminal, then answer `n` | Prints `Apply these changes? [y/N]`, reports cancellation, exits 0, writes no config. |
 | `lorepack connect vscode --yes --json` with the failing server | Writes `.vscode/mcp.json`, exits 3, returns its receipt and `checks` with `ok: false` and `step: spawn`. |
