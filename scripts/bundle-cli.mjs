@@ -9,6 +9,11 @@ const entry = join(dist, 'entry.js');
 const publicEntry = join(dist, 'public-entry.js');
 const index = join(dist, 'index.js');
 const publicIndex = join(dist, 'public-index.js');
+// The table query runs in a forked process, so its entry is a file on disk that the bundle
+// cannot inline. Emitted beside `public-entry.js`, where `childEntry()` in
+// `packages/backend-local/src/sql/execute.ts` looks first (#639).
+const queryChild = join(root, 'packages', 'backend-local', 'dist', 'sql', 'query-child.js');
+const publicQueryChild = join(dist, 'query-child.js');
 const sourceMigrations = join(root, 'packages', 'backend-local', 'migrations');
 const targetMigrations = join(cli, 'dist', 'migrations');
 const externalDependencies = [
@@ -35,13 +40,16 @@ const externalDependencies = [
   'yazl',
 ];
 
-if (!existsSync(entry)) {
-  throw new Error('CLI TypeScript output is missing. Run tsc -b before bundling.');
+for (const compiled of [entry, queryChild]) {
+  if (!existsSync(compiled)) {
+    throw new Error(`${compiled} is missing. Run tsc -b before bundling.`);
+  }
 }
 
 for (const [entryPoint, outfile] of [
   [entry, publicEntry],
   [index, publicIndex],
+  [queryChild, publicQueryChild],
 ]) {
   await build({
     bundle: true,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Installs the CLI the way a user does, with npm into an empty directory, and checks what
 // arrived: no native add-on, the production tree CI tested, a PDF build that loads nothing
-// native, and a clean `npm audit --omit=dev`.
+// native, a table query answered by the bundled query child, and a clean `npm audit --omit=dev`.
 //
 // The workspace checks (`check:no-native`, the clean-install job) inspect the pnpm install,
 // which applies workspace overrides that never reach a published manifest. Only an npm install
@@ -13,7 +13,7 @@
 //   node scripts/check-packed-cli.mjs --spec <spec>      check a published version, such as
 //                                                        @lorepack/cli@0.1.0 (no lockfile
 //                                                        comparison: the checkout may differ)
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -25,6 +25,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -169,7 +170,87 @@ function runInstalledCli(installDir, projectDir, args, hookPath, logPath) {
   return result.stdout;
 }
 
-function main() {
+function freePort() {
+  return new Promise((settle, fail) => {
+    const probe = createServer();
+    probe.once('error', fail);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => settle(port));
+    });
+  });
+}
+
+/**
+ * One table query through the installed binary's HTTP server, returning what went wrong.
+ *
+ * The query runs in a forked child whose entry the bundle must ship as a file of its own. Every
+ * other check here passes without it, which is how #639 reached a release candidate.
+ */
+async function checkTableQuery(installDir, projectDir) {
+  const entry = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');
+  const inspected = spawnSync(process.execPath, [entry, 'inspect', 'tables', '--json'], {
+    cwd: projectDir,
+    encoding: 'utf8',
+  });
+  if (inspected.status !== 0) return [`lorepack inspect tables failed: ${inspected.stderr}`];
+  const { tables } = JSON.parse(inspected.stdout);
+  const table = tables?.find((candidate) => candidate.relativePath === 'docs/products.csv');
+  if (table === undefined) return ['the build has no table for products.csv'];
+
+  const port = await freePort();
+  const server = spawn(process.execPath, [entry, 'serve', '--port', String(port)], {
+    cwd: projectDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  server.stdout.on('data', (chunk) => {
+    output += chunk;
+  });
+  server.stderr.on('data', (chunk) => {
+    output += chunk;
+  });
+  try {
+    const deadline = Date.now() + 30_000;
+    while (!output.includes('REST') && server.exitCode === null && Date.now() < deadline) {
+      await new Promise((settle) => setTimeout(settle, 100));
+    }
+    if (!output.includes('REST')) return [`lorepack serve never started:\n${output}`];
+
+    const base = `http://127.0.0.1:${port}/v1/tables/${encodeURIComponent(table.id)}`;
+    const described = await (await fetch(base)).json();
+    const column = (name) => described.columns.find((each) => each.name === name).sqlName;
+    const sql = `SELECT ${column('sku')} AS sku FROM ${described.sqlName} ORDER BY sku`;
+    const response = await fetch(`${base}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql }),
+    });
+    const body = await response.text();
+    const problems = [];
+    if (response.status !== 200) {
+      problems.push(`a table query through the installed CLI answered ${response.status}: ${body}`);
+    } else if (JSON.stringify(JSON.parse(body).rows) !== '[{"sku":"A-1"},{"sku":"B-2"}]') {
+      problems.push(`a table query through the installed CLI returned the wrong rows: ${body}`);
+    }
+    for (const path of [installDir, projectDir]) {
+      if (body.includes(path) || body.includes(JSON.stringify(path).slice(1, -1))) {
+        problems.push(`a table query response disclosed the absolute path ${path}`);
+      }
+    }
+    if (problems.length === 0) console.log('table query answered by the bundled query child');
+    return problems;
+  } finally {
+    // Waited for, so Windows releases the project before the work directory is removed.
+    const exited = new Promise((settle) => server.once('exit', settle));
+    if (server.exitCode === null) {
+      server.kill();
+      await exited;
+    }
+  }
+}
+
+async function main() {
   const args = process.argv.slice(2);
   const value = (flag) => {
     const index = args.indexOf(flag);
@@ -227,6 +308,7 @@ function main() {
     const project = join(work, 'project');
     mkdirSync(join(project, 'docs'), { recursive: true });
     copyFileSync(PDF_FIXTURE, join(project, 'docs', 'release-notes.pdf'));
+    writeFileSync(join(project, 'docs', 'products.csv'), 'sku,price\nA-1,10\nB-2,25\n');
     const hookPath = join(work, 'dlopen-hook.cjs');
     const logPath = join(work, 'dlopen.log');
     writeFileSync(hookPath, DLOPEN_HOOK);
@@ -241,6 +323,8 @@ function main() {
     const loaded = readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
     for (const file of loaded) problems.push(`PDF build loaded native module ${file}`);
     if (cited && loaded.length === 0) console.log('PDF build and search loaded no native module');
+
+    problems.push(...(await checkTableQuery(installDir, project)));
 
     const audit = runTool('npm', ['audit', '--omit=dev', '--json'], installDir, {
       allowFailure: true,
@@ -266,4 +350,4 @@ function main() {
   console.log('check:packed-cli: clean');
 }
 
-if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? '')).href) main();
+if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? '')).href) await main();
