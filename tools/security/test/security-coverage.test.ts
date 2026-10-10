@@ -373,6 +373,15 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/LORE_E_PATH_ESCAPE/, /sk-ant-SECRET/, /isSymbolicLink\(\)\)\.toBe\(true\)/],
   },
   {
+    name: 'connect writes no client configuration without consent, issue 576',
+    path: 'packages/cli/test/connect.e2e.test.ts',
+    tests: [
+      'consent before a client configuration changes (#576) writes nothing and exits non-zero without a terminal or --yes',
+      'consent before a client configuration changes (#576) refuses user scope just the same, leaving the home directory untouched',
+    ],
+    patterns: [/written\(\)\)\.toEqual\(\[\]\)/, /readdirSync\(home\)\)\.toEqual\(\[\]\)/],
+  },
+  {
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     tests: [

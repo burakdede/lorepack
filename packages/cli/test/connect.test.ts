@@ -11,8 +11,10 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ClientConnector, ConnectionCheck } from '@lorepack/connect-clients';
 import { withTempProject } from '@lorepack/test-support';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { connectCommand } from '../src/commands/connect.js';
 import { run } from './helpers.js';
 
 /**
@@ -178,4 +180,131 @@ describe('a project configuration that is a link', () => {
       }
     },
   );
+});
+
+/**
+ * A connector that records what it was asked to do, and answers verification as told.
+ *
+ * The real adapters are covered by their own suites. What these tests pin is the order the
+ * command imposes on them: every plan before any write, and no write without a yes.
+ */
+function recording(check: ConnectionCheck): { connector: ClientConnector; applied: string[] } {
+  const applied: string[] = [];
+  const connector: ClientConnector = {
+    id: 'fake',
+    title: 'Fake Client',
+    detect: async () => ({ installed: true, supported: true, version: '9.9.9' }),
+    status: async () => ({
+      installed: true,
+      supported: true,
+      configured: false,
+      ownedByLorepack: false,
+    }),
+    plan: async (input) => ({
+      clientId: 'fake',
+      scope: input.scope,
+      projectRoot: input.projectRoot,
+      configPath: join(input.projectRoot, 'fake.json'),
+      changes: ['Add an MCP server named lorepack to fake.json'],
+      entry: {},
+      serverName: input.serverName,
+    }),
+    apply: async (plan) => {
+      applied.push(plan.configPath ?? '');
+      return {
+        clientId: 'fake',
+        scope: plan.scope,
+        projectRoot: plan.projectRoot,
+        serverName: plan.serverName,
+        configPath: plan.configPath,
+        connectedAt: new Date(0).toISOString(),
+      };
+    },
+    verify: async () => check,
+    remove: async () => undefined,
+  };
+  return { connector, applied };
+}
+
+const WORKS: ConnectionCheck = { ok: true, step: 'none', detail: 'Answered with 7 tools.' };
+
+describe('asking before writing (#576)', () => {
+  it('refuses without a terminal or --yes, and writes nothing', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording(WORKS);
+      const commands = [connectCommand({ connectors: () => [fake.connector] })];
+
+      const result = await run(['--cwd', temp.root, 'connect'], { commands });
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+      expect(result.stderr).toContain('--yes');
+      // The plan is still printed, so a refused script shows what it would have done.
+      expect(result.stdout).toContain('Add an MCP server named lorepack to fake.json');
+      expect(fake.applied).toEqual([]);
+    });
+  });
+
+  it('shows the whole plan, then applies it once the answer is yes', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording(WORKS);
+      const asked: string[] = [];
+      const commands = [
+        connectCommand({
+          connectors: () => [fake.connector],
+          confirm: async (plan) => {
+            // Nothing may have been written yet when the question is asked.
+            expect(fake.applied).toEqual([]);
+            asked.push(plan);
+            return true;
+          },
+        }),
+      ];
+
+      const result = await run(['--cwd', temp.root, 'connect'], { commands });
+
+      expect(result.code).toBe(0);
+      expect(asked).toHaveLength(1);
+      expect(asked[0]).toContain('Add an MCP server named lorepack to fake.json');
+      expect(fake.applied).toEqual([join(temp.root, 'fake.json')]);
+      expect(result.stdout).toContain('Verified: Answered with 7 tools.');
+      // Already read at the prompt, so not printed a second time.
+      expect(result.stdout).not.toContain('Add an MCP server');
+    });
+  });
+
+  it('writes nothing when the answer is no', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording(WORKS);
+      const commands = [
+        connectCommand({ connectors: () => [fake.connector], confirm: async () => false }),
+      ];
+
+      const result = await run(['--cwd', temp.root, 'connect'], { commands });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Cancelled. Nothing was changed.');
+      expect(fake.applied).toEqual([]);
+    });
+  });
+
+  it('does not ask with --yes, or with --dry-run', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const fake = recording(WORKS);
+      const never = async (): Promise<boolean> => {
+        throw new Error('asked');
+      };
+      const commands = [connectCommand({ connectors: () => [fake.connector], confirm: never })];
+
+      const dry = await run(['--cwd', temp.root, 'connect', '--dry-run'], { commands });
+      expect(dry.code).toBe(0);
+      expect(dry.stdout).toContain('(dry run, nothing was changed)');
+      expect(fake.applied).toEqual([]);
+
+      const yes = await run(['--cwd', temp.root, 'connect', '--yes'], { commands });
+      expect(yes.code).toBe(0);
+      expect(yes.stdout).toContain('Add an MCP server named lorepack to fake.json');
+      expect(fake.applied).toHaveLength(1);
+    });
+  });
 });

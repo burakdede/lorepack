@@ -85,8 +85,10 @@ parse-and-rewrite**, which was measured for three of them, so Lorepack does not 
 - **It parses to understand, and splices to write.** Only the lines of the Lorepack table
   change. Every comment, every section, every blank line and your file's line endings survive
   exactly as they were.
-- **Nothing is written until you have seen it.** `--dry-run` prints the plan and touches
-  nothing.
+- **Nothing is written until you have agreed to it.** `connect` plans every client first,
+  prints the plan, and asks `Apply these changes? [y/N]`. Without a terminal, in a script or
+  CI job, it prints the plan, writes nothing and exits 1 unless you pass `--yes`. `--dry-run`
+  prints the plan and touches nothing.
 - **The file is backed up first**, with a timestamp, beside the original.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.
 - **Permissions are kept.** The rewritten file and its backup keep the original's mode, so a

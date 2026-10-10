@@ -200,8 +200,10 @@ lorepack mcp
 ```
 
 `lorepack serve` never rebuilds or edits sources. `lorepack mcp` is useful as the command in an
-MCP client's stdio configuration. `lorepack connect <client>` writes the client configuration
-for you and supports `--dry-run` when you want to inspect the proposed change first.
+MCP client's stdio configuration. `lorepack connect <client>` shows the change it would make
+to the client configuration and asks before writing it. `--dry-run` only shows it, and `--yes`
+applies it without asking, which a script or CI job has to pass because there is no terminal
+to ask on.
 
 ### 5. Update safely
 
