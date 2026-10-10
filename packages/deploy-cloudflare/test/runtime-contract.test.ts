@@ -5,6 +5,7 @@ import {
 } from './projected-runtime-fixture.js';
 
 runRuntimeContract({
+  sqlProfile: 'remote',
   name: 'Cloudflare projected SQLite and object ports',
   create: async (): Promise<ContractFixture> => await createProjectedWorkerRuntimeFixture(),
   activateAnother: async (): Promise<string> => await activateProjectedWorkerRuntimeFixture(),

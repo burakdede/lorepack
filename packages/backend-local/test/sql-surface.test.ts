@@ -247,6 +247,9 @@ describe('the authorizer, which is the control', () => {
       `SELECT writefile('/tmp/x', 'y')`,
       `SELECT sqlite_version()`,
       `SELECT random()`,
+      // The clock, which the guard also refuses on both profiles (#452).
+      `SELECT CURRENT_TIMESTAMP`,
+      `SELECT CURRENT_DATE`,
     ]) {
       const error = await failure(sql);
       expect(error.code, sql).toBe('LORE_E_SQL_REJECTED');
@@ -264,6 +267,24 @@ describe('the authorizer, which is the control', () => {
       `SELECT count(*) AS n, sum(c_1_qty) AS total, upper(min(c_0_sku)) AS first FROM ${ordersTable}`,
     );
     expect(result.rows[0]).toMatchObject({ n: 3, total: 15 });
+  });
+
+  /**
+   * What the guard admits, the authorizer must too (#563). The JSON operators reach the engine
+   * as the functions `->` and `->>`, and a table-valued JSON function as a read of a virtual
+   * table named after it, so neither matched the allowlist the guard reads.
+   */
+  it('allows the JSON operators and table-valued JSON functions the guard admits', async () => {
+    const operators = await query(
+      `SELECT '{"a":[1,2]}' -> '$.a' AS a, '{"a":1}' ->> '$.a' AS b FROM ${ordersTable} LIMIT 1`,
+    );
+    expect(operators.rows[0]).toMatchObject({ a: '[1,2]', b: 1 });
+    const each = await query(`SELECT key, value FROM json_each('[1,2,3]')`);
+    expect(each.rows).toHaveLength(3);
+    const tree = await query(
+      `SELECT j.key FROM ${ordersTable}, json_tree('{"a":1}') AS j WHERE ${ordersTable}.c_1_qty = 5`,
+    );
+    expect(tree.rows.length).toBeGreaterThan(0);
   });
 
   it('allows a window function, which the parser we rejected could not even parse', async () => {

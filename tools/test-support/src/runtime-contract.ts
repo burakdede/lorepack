@@ -1,4 +1,4 @@
-import type { LoreRuntime } from '@lorepack/core';
+import { type LoreRuntime, QUERY_FUNCTIONS } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -41,6 +41,12 @@ export interface ContractOptions {
    * backend that cannot do this in a test skips those cases, and says so here.
    */
   readonly activateAnother?: () => Promise<string>;
+  /**
+   * The SQL profile the backend's statement guard runs. The remote one is a documented subset
+   * of the local one (`docs/architecture/adr-sql-surface.md`), and the cases that differ by
+   * design assert the difference rather than skip it.
+   */
+  readonly sqlProfile: 'local' | 'remote';
 }
 
 const CONTRACT_TIMEOUT_MS = 30_000;
@@ -429,6 +435,23 @@ export function runRuntimeContract(options: ContractOptions): void {
           'a printf format the guard cannot read',
           (t, c) => `SELECT sum(length(printf('%' || '1000000c', ${c}))) AS n FROM ${t}`,
         ],
+        // Clock and time zone reads, so an answer never depends on when or where it ran (#452,
+        // #563). Each backend once answered some of these and refused others.
+        ...[
+          'CURRENT_TIMESTAMP',
+          'CURRENT_DATE',
+          'CURRENT_TIME',
+          "date('now')",
+          "strftime('%s', 'now')",
+          "datetime('2024-01-01', 'localtime')",
+          'unixepoch()',
+        ].map(
+          (expression) =>
+            [
+              `a clock read through ${expression}`,
+              (t: string) => `SELECT ${expression} AS v FROM ${t}`,
+            ] as const,
+        ),
       ];
 
       for (const [label, build] of HOSTILE) {
@@ -489,6 +512,14 @@ export function runRuntimeContract(options: ContractOptions): void {
           (t, c) => `WITH v(x) AS (VALUES (1), (2)) SELECT a.${c}, v.x FROM ${t} a, v`,
         ],
         ['a subquery in FROM', (t, c) => `SELECT n FROM (SELECT ${c} AS n FROM ${t}) AS q`],
+        [
+          'the JSON operators',
+          (t) => `SELECT '{"a":[1,2]}' -> '$.a' AS a, '{"a":1}' ->> '$.a' AS b FROM ${t}`,
+        ],
+        [
+          'a date computed from a fixed value',
+          (t) => `SELECT date('2024-02-28', '+1 day') AS d FROM ${t}`,
+        ],
       ];
 
       for (const [label, build] of ORDINARY) {
@@ -504,6 +535,52 @@ export function runRuntimeContract(options: ContractOptions): void {
           });
         });
       }
+
+      /**
+       * Every function on the allowlist, called once, on every backend (#563). The guard and the
+       * local authorizer read one list (`packages/core/src/sql/functions.ts`); this proves both
+       * engines then answer each entry, so a function added to the list without working on one
+       * of them fails here instead of in front of a model.
+       */
+      describe('the function allowlist', () => {
+        it('has an example for every allowlisted function', () => {
+          expect(Object.keys(FUNCTION_EXAMPLES).sort()).toEqual([...QUERY_FUNCTIONS].sort());
+        });
+
+        it('answers every allowlisted function', async () => {
+          await withTable(async ({ runtime, knownTableId }) => {
+            const described = await runtime.describeTable(knownTableId);
+            const failures: string[] = [];
+            for (const [name, expression] of Object.entries(FUNCTION_EXAMPLES)) {
+              try {
+                await runtime.queryTable({
+                  tableId: knownTableId,
+                  sql: `SELECT ${expression} AS v FROM ${described.sqlName}`,
+                });
+              } catch (error) {
+                failures.push(`${name}: ${(error as Error).message}`);
+              }
+            }
+            expect(failures).toEqual([]);
+          });
+        });
+
+        it(`treats a table-valued JSON function as the ${options.sqlProfile} profile allows`, async () => {
+          await withTable(async ({ runtime, knownTableId }) => {
+            const described = await runtime.describeTable(knownTableId);
+            const ask = runtime.queryTable({
+              tableId: knownTableId,
+              sql: `SELECT j.value FROM ${described.sqlName}, json_each('[1,2,3]') AS j`,
+            });
+            // Locally the deadline bounds it; remotely nothing could, so it is refused.
+            if (options.sqlProfile === 'local') {
+              expect((await ask).rowCount).toBeGreaterThan(0);
+            } else {
+              await expect(ask).rejects.toMatchObject({ code: 'LORE_E_SQL_REJECTED' });
+            }
+          });
+        });
+      });
     });
 
     describe('determinism', () => {
@@ -555,3 +632,94 @@ export function runRuntimeContract(options: ContractOptions): void {
     });
   });
 }
+
+/** One call per allowlisted function, over values any table's query can produce. */
+const FUNCTION_EXAMPLES: Readonly<Record<string, string>> = {
+  count: 'count(*)',
+  sum: 'sum(1)',
+  total: 'total(1)',
+  avg: 'avg(1)',
+  min: 'min(1)',
+  max: 'max(1)',
+  group_concat: "group_concat('a')",
+  string_agg: "string_agg('a', ',')",
+  length: "length('abc')",
+  lower: "lower('A')",
+  upper: "upper('a')",
+  substr: "substr('abc', 2)",
+  substring: "substring('abc', 2)",
+  trim: "trim(' a ')",
+  ltrim: "ltrim(' a')",
+  rtrim: "rtrim('a ')",
+  replace: "replace('abc', 'b', 'x')",
+  instr: "instr('abc', 'b')",
+  printf: "printf('%5.2f', 1.5)",
+  format: "format('%s', 'a')",
+  concat: "concat('a', 'b')",
+  concat_ws: "concat_ws('-', 'a', 'b')",
+  char: 'char(65)',
+  unicode: "unicode('A')",
+  hex: "hex('a')",
+  quote: "quote('a')",
+  abs: 'abs(-1)',
+  round: 'round(1.25, 1)',
+  ceil: 'ceil(1.2)',
+  ceiling: 'ceiling(1.2)',
+  floor: 'floor(1.8)',
+  sign: 'sign(-2)',
+  sqrt: 'sqrt(4)',
+  pow: 'pow(2, 3)',
+  power: 'power(2, 3)',
+  exp: 'exp(1)',
+  ln: 'ln(2)',
+  log: 'log(100)',
+  log2: 'log2(8)',
+  log10: 'log10(100)',
+  mod: 'mod(7, 3)',
+  trunc: 'trunc(1.7)',
+  acos: 'acos(1)',
+  asin: 'asin(0)',
+  atan: 'atan(1)',
+  atan2: 'atan2(1, 1)',
+  cos: 'cos(0)',
+  sin: 'sin(0)',
+  tan: 'tan(0)',
+  degrees: 'degrees(1)',
+  radians: 'radians(90)',
+  pi: 'pi()',
+  coalesce: 'coalesce(NULL, 1)',
+  ifnull: 'ifnull(NULL, 1)',
+  nullif: 'nullif(1, 2)',
+  iif: 'iif(1 > 0, 1, 2)',
+  typeof: 'typeof(1)',
+  likely: 'likely(1)',
+  unlikely: 'unlikely(1)',
+  date: "date('2024-01-31', '+1 day')",
+  time: "time('12:00:00')",
+  datetime: "datetime('2024-01-01 12:00:00')",
+  julianday: "julianday('2024-01-01')",
+  unixepoch: "unixepoch('2024-01-01')",
+  strftime: "strftime('%Y', '2024-01-01')",
+  timediff: "timediff('2024-01-02', '2024-01-01')",
+  json: "json('[1]')",
+  json_array: 'json_array(1, 2)',
+  json_array_length: "json_array_length('[1,2]')",
+  json_extract: `json_extract('{"a":1}', '$.a')`,
+  json_object: "json_object('a', 1)",
+  json_type: "json_type('[1]')",
+  json_valid: "json_valid('[1]')",
+  json_quote: "json_quote('a')",
+  row_number: 'row_number() OVER ()',
+  rank: 'rank() OVER (ORDER BY 1)',
+  dense_rank: 'dense_rank() OVER (ORDER BY 1)',
+  percent_rank: 'percent_rank() OVER (ORDER BY 1)',
+  cume_dist: 'cume_dist() OVER (ORDER BY 1)',
+  ntile: 'ntile(2) OVER (ORDER BY 1)',
+  lag: 'lag(1) OVER (ORDER BY 1)',
+  lead: 'lead(1) OVER (ORDER BY 1)',
+  first_value: 'first_value(1) OVER (ORDER BY 1)',
+  last_value: 'last_value(1) OVER (ORDER BY 1)',
+  nth_value: 'nth_value(1, 1) OVER (ORDER BY 1)',
+  like: "like('a%', 'abc')",
+  glob: "glob('a*', 'abc')",
+};

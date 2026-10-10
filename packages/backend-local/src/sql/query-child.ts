@@ -1,5 +1,5 @@
 import { constants, type DatabaseSync } from 'node:sqlite';
-import { bound, QUERY_FUNCTIONS } from '@lorepack/core';
+import { bound, ENGINE_FUNCTIONS, ROW_FUNCTIONS } from '@lorepack/core';
 import { openReadOnly } from '../sqlite.js';
 
 /**
@@ -72,11 +72,16 @@ function install(setup: Setup): DatabaseSync {
           // itself authorized, with `main`, before this. Denying it instead made every `WITH`
           // query fail, including the ones the statement validator deliberately accepts.
           if (database === null) return constants.SQLITE_OK;
-          return arg1 !== null && allowed.has(arg1) ? constants.SQLITE_OK : constants.SQLITE_DENY;
+          if (arg1 === null) return constants.SQLITE_DENY;
+          // A table-valued JSON function is read as a virtual table named after it. It reads
+          // only its arguments, and anything those name is authorized on its own (#563).
+          return allowed.has(arg1) || ROW_FUNCTIONS.has(arg1)
+            ? constants.SQLITE_OK
+            : constants.SQLITE_DENY;
         case constants.SQLITE_FUNCTION: {
           // arg2 carries the function name for this action code; arg1 is null.
           const name = (arg2 ?? arg1 ?? '').toLowerCase();
-          return QUERY_FUNCTIONS.has(name) ? constants.SQLITE_OK : constants.SQLITE_DENY;
+          return ENGINE_FUNCTIONS.has(name) ? constants.SQLITE_OK : constants.SQLITE_DENY;
         }
         case constants.SQLITE_RECURSIVE:
           // Allowed, and bounded by the deadline rather than by refusal: a recursive CTE is a
