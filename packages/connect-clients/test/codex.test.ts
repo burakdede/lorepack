@@ -328,3 +328,33 @@ describe('the fallback for a Codex this adapter will not edit', () => {
     expect(snippet).not.toContain('x-lorepack');
   });
 });
+
+describe('the user configuration stays loadable (#581)', () => {
+  it('writes a parseable file for a project path holding DEL, and reads its owner back', async () => {
+    const root = join(project, 'del\u007fproj');
+    mkdirSync(root);
+    const connector = createCodexConnector({ runClient: installed, home });
+
+    const receipt = await connector.apply(
+      await connector.plan(input({ scope: 'user', projectRoot: root })),
+    );
+
+    expect(() => parse(readFileSync(receipt.configPath as string, 'utf8'))).not.toThrow();
+    const status = await connector.status(input({ scope: 'user', projectRoot: root }));
+    expect(status.ownedByLorepack).toBe(true);
+  });
+
+  it('gives back a multi-line string with its blank lines after connect and disconnect', async () => {
+    const before = `${FOREIGN}developer_instructions = """\nOne.\n\n\nTwo.\n"""\n`.replace(
+      '[sandbox_workspace_write]',
+      'notes = """\nkeep\n\n\nthese\n"""\n\n[sandbox_workspace_write]',
+    );
+    const path = write(project, before);
+    const connector = createCodexConnector({ runClient: installed, home });
+
+    const receipt = await connector.apply(await connector.plan(input()));
+    await connector.remove(receipt);
+
+    expect(readFileSync(path, 'utf8')).toBe(before);
+  });
+});

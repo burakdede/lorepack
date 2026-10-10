@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import {
   applyEdits,
   type FormattingOptions,
@@ -9,6 +10,7 @@ import {
   parseTree,
   printParseErrorCode,
 } from 'jsonc-parser';
+import { asciiJson } from './config-file.js';
 
 /**
  * Editing a JSON-with-comments configuration without losing the comments.
@@ -42,11 +44,16 @@ export interface JsoncOwner {
 }
 
 export interface JsoncConfig {
+  /** The file without its byte order mark, which is what gets edited. */
   readonly text: string;
   readonly document: Record<string, unknown>;
   readonly formatting: FormattingOptions;
   readonly newline: '\n' | '\r\n';
+  /** Restored on write. Windows editors save one, and dropping it is a diff nobody asked for. */
+  readonly bom: boolean;
 }
+
+const BOM = '\ufeff';
 
 const DEFAULT_FORMATTING: FormattingOptions = {
   // Tabs, because that is what VS Code writes when it creates the file itself. A file we
@@ -61,6 +68,7 @@ const EMPTY: JsoncConfig = {
   document: {},
   formatting: DEFAULT_FORMATTING,
   newline: '\n',
+  bom: false,
 };
 
 /**
@@ -74,8 +82,12 @@ const EMPTY: JsoncConfig = {
 export function readJsoncConfig(path: string): JsoncConfig {
   if (!existsSync(path)) return EMPTY;
 
-  const text = readFileSync(path, 'utf8');
-  if (text.trim() === '') return { ...EMPTY, text };
+  // `jsonc-parser` reports a leading byte order mark as `InvalidSymbol at offset 0`, so a
+  // file saved by a Windows editor was refused as broken (#581).
+  const raw = readFileSync(path, 'utf8');
+  const bom = raw.startsWith(BOM);
+  const text = bom ? raw.slice(1) : raw;
+  if (text.trim() === '') return { ...EMPTY, text, bom };
 
   const errors: ParseError[] = [];
   const parsed = parse(text, errors, { allowTrailingComma: true, disallowComments: false }) as
@@ -92,7 +104,13 @@ export function readJsoncConfig(path: string): JsoncConfig {
     throw new Error(`${path} is not a JSON object, so it will not be edited.`);
   }
 
-  return { text, document: parsed, formatting: formattingOf(text), newline: newlineOf(text) };
+  return {
+    text,
+    document: parsed,
+    formatting: formattingOf(text),
+    newline: newlineOf(text),
+    bom,
+  };
 }
 
 const newlineOf = (text: string): '\n' | '\r\n' => (text.includes('\r\n') ? '\r\n' : '\n');
@@ -215,11 +233,56 @@ export function withOwnedEntry(config: JsoncConfig, input: OwnedEntryInput): str
   };
   const comment = [
     `${indent}${OWNERSHIP_NOTE} \`${input.removeWith}\` removes exactly this entry.`,
-    `${indent}${JSONC_OWNERSHIP_PREFIX}${JSON.stringify(marker)}`,
+    `${indent}${JSONC_OWNERSHIP_PREFIX}${asciiJson(marker)}`,
     '',
   ].join(config.newline);
 
-  return edited.slice(0, start) + comment + indent + edited.slice(start + indent.length);
+  const result = edited.slice(0, start) + comment + indent + edited.slice(start + indent.length);
+  assertOnlyEntryChanged(result, config.document, input.path, input.value);
+  return result;
+}
+
+/** The document with `path` set to `value`, or without it when `value` is undefined. */
+function withValueAt(
+  document: unknown,
+  path: readonly (string | number)[],
+  value: unknown,
+): unknown {
+  const [head, ...rest] = path;
+  if (head === undefined) return value;
+  const container =
+    typeof document === 'object' && document !== null ? (document as Record<string, unknown>) : {};
+  const copy: Record<string, unknown> = { ...container };
+  const next = withValueAt(container[head], rest, value);
+  if (next === undefined) delete copy[head];
+  else copy[head] = next;
+  return copy;
+}
+
+/**
+ * Parses the edited text and checks that only our entry changed.
+ *
+ * The edit is a minimal text splice, so its result is checked the same way as the TOML side's:
+ * a result that does not parse, or parses to anything but the original with our one entry
+ * changed, is refused before it reaches the disk.
+ */
+function assertOnlyEntryChanged(
+  edited: string,
+  original: Record<string, unknown>,
+  path: readonly (string | number)[],
+  value: unknown,
+): void {
+  const errors: ParseError[] = [];
+  const parsed = parse(edited, errors, { allowTrailingComma: true, disallowComments: false });
+  const plain = (data: unknown): unknown => JSON.parse(JSON.stringify(data ?? null));
+  if (
+    errors.length > 0 ||
+    !isDeepStrictEqual(plain(parsed), plain(withValueAt(original, path, value)))
+  ) {
+    throw new Error(
+      'Editing this file would change more than the Lorepack entry, so it was left as it is. Run `lorepack connect vscode --snippet` and edit it by hand.',
+    );
+  }
 }
 
 /**
@@ -232,11 +295,11 @@ export function withoutOwnedEntry(
   config: JsoncConfig,
   path: readonly (string | number)[],
   projectRoot?: string,
-): { readonly text: string; readonly removed: boolean } {
+): { readonly text: string; readonly removed: boolean; readonly owner?: JsoncOwner } {
   const owner = ownerOfEntry(config.text, path);
   if (owner === undefined) return { text: config.text, removed: false };
   if (projectRoot !== undefined && owner.projectRoot !== projectRoot) {
-    return { text: config.text, removed: false };
+    return { text: config.text, removed: false, owner };
   }
 
   const stripped = withoutOwnershipComment(config.text, path);
@@ -244,5 +307,6 @@ export function withoutOwnedEntry(
     stripped,
     modify(stripped, [...path], undefined, { formattingOptions: config.formatting }),
   );
-  return { text, removed: true };
+  assertOnlyEntryChanged(text, config.document, path, undefined);
+  return { text, removed: true, owner };
 }

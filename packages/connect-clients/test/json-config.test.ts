@@ -221,3 +221,16 @@ describe('a container nested inside the document', () => {
     expect(after).toEqual(STATE);
   });
 });
+
+describe('a byte order mark, which Windows editors write (#581)', () => {
+  it('is read past, and kept when the file is written back', () => {
+    writeFileSync(path, `\ufeff${JSON.stringify(THIRD_PARTY, null, 2)}\r\n`, 'utf8');
+
+    const document = readJsonConfig(path);
+    expect(document).toEqual(THIRD_PARTY);
+
+    writeJsonAtomically(path, withServerEntry(document, 'mcpServers', 'lorepack', {}));
+    expect(readFileSync(path, 'utf8').startsWith('\ufeff{')).toBe(true);
+    expect(readJsonConfig(path).mcpServers).toHaveProperty('lorepack');
+  });
+});
