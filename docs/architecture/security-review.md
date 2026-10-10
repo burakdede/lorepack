@@ -27,6 +27,7 @@ security-affecting change before release.
 | HTTP and MCP errors carry no raw D1 or SQLite text and no absolute path (#560) | `packages/deploy-cloudflare/test/worker-app.test.ts` (local and Worker, REST and MCP), `packages/core/test/errors.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
 | Oversized request fields are typed refusals on every backend (#554) | `tools/test-support/src/runtime-contract.ts` (local and D1), `packages/runtime/test/http.test.ts` | Covered |
 | Studio cannot be framed and runs only its own scripts (#553) | `packages/cli/test/studio-assets.test.ts`, `tools/studio-e2e/test/routes.spec.ts` (every e2e test fails on a CSP violation) | Covered |
+| Exported Markdown passages cannot forge headings or citations (#552) | `packages/cli/test/export.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |

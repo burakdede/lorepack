@@ -200,6 +200,18 @@ worth knowing:
   near-duplicate removed before packing is still nameable. Without it the report would have
   been a partial account dressed as a complete one.
 
+## The Markdown export keeps documents out of its own structure
+
+`lorepack export` and `POST /v1/export` render a bundle as Markdown for chat products that
+have no structured channel, so the headings and citation lines are the only provenance a
+reader gets. Every passage is therefore inside a fenced block one backtick longer than the
+longest run in its text, which the text cannot close (#552). Appended raw, a plain-text,
+code or HTML-derived source could write `## Citations` and `### some/other/file.md` and pass
+its claim off as another document's. Paths and heading labels are kept to one line, and the
+"getting more" command single-quotes the task, because the double quotes it used still let a
+shell run `$(...)` and backticks. The cost is that Markdown inside a passage shows as source
+rather than rendering, which is the point: it is quoted, not Lorepack's.
+
 ## Measured cost
 
 Provisional, on the development machine, since the reference machine is #101:

@@ -242,7 +242,7 @@ Activated in <elapsed> ms.
 lorepack export --task "How should the sync worker recover after a failed deploy?"
 ```
 
-```text
+````text
 # Context for: How should the sync worker recover after a failed deploy?
 
 Project **coding-project**, build `lore_<build-id>`.
@@ -257,29 +257,36 @@ Search considered up to 500 candidates using any-term matching.
 
 **ADR 0001: Context Boundary > Consequences, lines 13-14**
 
+```text
 ADR 0001: Context Boundary > Consequences
 
 A failed deploy can leave a receipt, but it cannot corrupt the active build. Recovery resumes
 from the receipt or rolls back the pointer.
+```
 
 **ADR 0001: Context Boundary, lines 3-4**
 
+```text
 ADR 0001: Context Boundary
 
 The sync worker reads from an immutable build directory. It must not read source files directly
 after activation.
+```
 
 **ADR 0001: Context Boundary > Decision, lines 8-9**
 
+```text
 ADR 0001: Context Boundary > Decision
 
 Activation changes a pointer to a verified build. Rollback changes the pointer back to a
 previous verified build. Neither operation recompiles.
+```
 
 ### notes/current/sync-worker.md
 
 **Sync Worker Notes, lines 3-9**
 
+```text
 Sync Worker Notes
 
 The worker stages candidate data first, verifies the candidate, then activates the remote
@@ -289,17 +296,20 @@ If verification fails, leave the previous build serving and keep the receipt. Th
 resume from the recorded receipt id.
 
 The worker should log the build id, target id and receipt id for every deployment attempt.
+```
 
 ### notes/drafts/cache-plan.md
 
 **Draft Cache Plan, lines 3-6** [draft]
 
+```text
 Draft Cache Plan
 
 This draft suggests caching source files during runtime reads.
 
 Do not implement it for v0.1. Runtime reads must use the active immutable build rather than the
 mutable source tree.
+```
 
 ## Citations
 
@@ -318,9 +328,9 @@ Nothing from the candidates considered was omitted.
 To widen this context, raise the budget or name a profile with a larger one:
 
 ```bash
-lorepack export --task "How should the sync worker recover after a failed deploy?" --profile deep
+lorepack export --task 'How should the sync worker recover after a failed deploy?' --profile deep
 ```
 
 Token counts are conservative estimates from a deterministic counter, not a model tokenizer. Treat them as a bound, not a measurement.
-```
+````
 
