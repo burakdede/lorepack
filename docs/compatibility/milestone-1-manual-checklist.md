@@ -91,6 +91,20 @@ Fill this in each time. An integration page with no date is a claim, not a recor
 | 2026-08-04 | Claude Code 2.1.221 | Linux x64 | Step 1 re-run by hand on a five-document project during the Phase 4 closing pass, including the Studio line this checklist had been asserting the absence of. Step 5 verified by hand: an edit produced a new build within one watch interval and the served build id followed. Steps 3 and 4 still require a human at the client and remain unrecorded. |
 | 2026-10-10 | Claude Code 2.1.296 | macOS arm64 | Steps 2 and 6, plus the `claude mcp list` check in step 3, run against a temporary `HOME` and `CLAUDE_CONFIG_DIR` (#575): connect reported `Verified: Answered with 7 tools`, `claude mcp list` in the project showed `lorepack ... ✔ Connected`, and after disconnect it showed `No MCP servers configured.` The 2026-08-03 and 2026-08-04 records predate #575 and wrote a file Claude Code does not read servers from. Steps 4 and 5 still need a human at the client. |
 
+## Confirmation and failure-output checks
+
+Verified 2026-10-10 on macOS arm64 with Lorepack 0.1.0 and Node 24.21.0 (#576, #578).
+These checks used a temporary project, a stand-in `code` reporting 1.120.0, and a stand-in
+`lorepack` that exits immediately. They verify the CLI experience, without testing a real
+client's trust prompts.
+
+| Command or action | Observed result |
+|---|---|
+| `lorepack connect vscode` with piped stdin | Prints the plan, exits 1 with `LORE_E_INVALID_ARGUMENT`, writes no config, and points to `--yes` and `--dry-run`. |
+| `lorepack connect vscode --dry-run` | Prints the plan, exits 0, writes no config. |
+| `lorepack connect vscode` in a terminal, then answer `n` | Prints `Apply these changes? [y/N]`, reports cancellation, exits 0, writes no config. |
+| `lorepack connect vscode --yes --json` with the failing server | Writes `.vscode/mcp.json`, exits 3, returns its receipt and `checks` with `ok: false` and `step: spawn`. |
+
 ## If a step fails
 
 ```bash
