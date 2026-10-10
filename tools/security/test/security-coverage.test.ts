@@ -122,12 +122,40 @@ const EVIDENCE: readonly Evidence[] = [
   {
     name: 'a parse that hangs or exhausts memory is bounded and excluded, issue 594',
     path: 'packages/parsers/test/isolation.test.ts',
+    tests: [
+      'a parse in the child process returns exactly what the parser returns in-process, for every format',
+      "a parse in the child process keeps a parser's own LoreError, with its code, across the boundary",
+      'a parse that exceeds its limits, issue 594 stops Markdown of nested brackets at the deadline and names it a timeout',
+      'a parse that exceeds its limits, issue 594 stops HTML of nested lists at the deadline and names it a timeout',
+      'a parse that exceeds its limits, issue 594 stops a PDF whose content stream inflates to 400 MB at the deadline and names it a timeout',
+      'a parse that exceeds its limits, issue 594 stops a CSV of millions of one-character rows at the memory ceiling, and this process survives',
+      'a parse that exceeds its limits, issue 594 stops a DOCX whose document inflates to 64 MB at the memory ceiling, and this process survives',
+      'a parse that exceeds its limits, issue 594 stops a PDF whose ToUnicode CMap declares a 2^24 code range at the memory ceiling, and this process survives',
+      'a parse that exceeds its limits, issue 594 replaces a killed child, so the next file parses normally',
+      'a parse that exceeds its limits, issue 594 stops promptly when the caller is cancelled mid-parse',
+    ],
     patterns: [/parse-timeout/, /parse-memory/, /cmapBombPdf/, /docxBomb/, /flateBombPdf/],
   },
   {
-    name: 'a build leaves out a file over a parse limit and Ctrl-C stops a parse',
+    name: 'a build leaves out a file over a parse limit and still activates, issue 594',
     path: 'packages/cli/test/parse-limits.test.ts',
-    patterns: [/class: 'envelope'/, /LORE_E_CANCELLED/, /outlived the build/],
+    tests: [
+      'a file that exceeds a parse limit is left out with a typed warning, and the build activates without it',
+      'the published binary parses in its own child and leaves out a file over the deadline',
+    ],
+    patterns: [/class: 'envelope'/, /parse-memory/, /public-entry\.js/],
+  },
+  {
+    name: 'Ctrl-C stops a running parse and leaves the active build, issue 594',
+    path: 'packages/cli/test/parse-limits.test.ts',
+    tests: [
+      'Ctrl-C during a long parse cancels within a second, ends the parse process, and keeps the active build',
+    ],
+    patterns: [/LORE_E_CANCELLED/, /outlived the build/],
+    skippedOn: {
+      win32:
+        'Windows cannot deliver SIGINT to one process from another, so there is no Ctrl-C to send.',
+    },
   },
   {
     name: 'malformed Office files are parser fixtures, not crashes',

@@ -118,6 +118,35 @@ describe('parse limits from the environment', () => {
   }
 });
 
+describe('the published binary', () => {
+  /**
+   * Through `public-entry.js`, the bundle users run, not `entry.js`. Bundling moves the host's
+   * `import.meta.url` to the bundle, so the child has to be emitted beside it; a build through
+   * `entry.js` would pass with the child missing from the package (the trap #639 found for
+   * the query child).
+   */
+  it('parses in its own child and leaves out a file over the deadline', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG, 'readme.md': README } }, async (temp) => {
+      writeFileSync(join(temp.root, 'brackets.md'), nestedBracketsMarkdown(100_000));
+      const run = (args: readonly string[]) =>
+        JSON.parse(
+          execFileSync(process.execPath, [BINARY, '--cwd', temp.root, '--json', ...args], {
+            encoding: 'utf8',
+            env: { ...process.env, LORE_PARSE_TIMEOUT_MS: '2000' },
+            stdio: ['ignore', 'pipe', 'pipe'],
+          }),
+        ) as Record<string, unknown>;
+
+      const built = run(['build']);
+      expect(built).toMatchObject({ activated: true, counts: { artifacts: 1 } });
+      const manifest = manifestOf(temp.root, built.buildId as string);
+      expect(manifest.warnings).toEqual([
+        expect.objectContaining({ code: 'parse-timeout', path: 'brackets.md' }),
+      ]);
+    });
+  });
+});
+
 /** POSIX only: Windows has no way to deliver SIGINT to one process from another. */
 const CAN_SIGNAL_GRACEFULLY = platform() !== 'win32';
 
