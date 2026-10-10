@@ -18,7 +18,10 @@ export {
   docxBomb,
   flateBombPdf,
   nestedBracketsMarkdown,
+  nestedHtml,
   nestedListHtml,
+  nestedQuoteMarkdown,
+  nestedTablesDocx,
   singleCharacterCsv,
 } from './hostile-fixtures.js';
 export {
