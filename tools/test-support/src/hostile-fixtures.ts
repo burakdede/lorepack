@@ -20,6 +20,29 @@ export function nestedListHtml(depth: number): Uint8Array {
   return utf8(`<!doctype html><html><body>${'<ul><li>'.repeat(depth)}x</body></html>`);
 }
 
+/** `>` repeated: one blockquote inside the next, `depth` deep. */
+export function nestedQuoteMarkdown(depth: number): Uint8Array {
+  return utf8(`${'>'.repeat(depth)} x\n`);
+}
+
+/** An element nested `depth` deep, the shape that overflows HTML tree conversion (#595). */
+export function nestedHtml(open: string, depth: number): Uint8Array {
+  return utf8(`<!doctype html><html><body>${open.repeat(depth)}x</body></html>`);
+}
+
+/**
+ * A DOCX table whose only cell holds the next table, `depth` deep. Each outer cell ends with an
+ * empty paragraph after its nested table, as Word requires and writes.
+ */
+export function nestedTablesDocx(depth: number): Promise<Uint8Array> {
+  const open = '<w:tbl><w:tr><w:tc>';
+  const innermost = '<w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const closeOuter = '<w:p/></w:tc></w:tr></w:tbl>';
+  return makeDocx({
+    body: `${open.repeat(depth)}${innermost}${closeOuter.repeat(depth - 1)}<w:p/>`,
+  });
+}
+
 /** A CSV of single-character rows: every row costs an array, so the heap fills fast. */
 export function singleCharacterCsv(rows: number): Uint8Array {
   return utf8(`a\n${'a\n'.repeat(rows)}`);

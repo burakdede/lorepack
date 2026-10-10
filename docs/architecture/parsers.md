@@ -42,6 +42,7 @@ Three outcomes, and the difference between them is what the failure says about t
 | **Excluded before parsing** | No parser handles the extension, or the bytes are not readable text | Warning, build succeeds (#165) |
 | **Excluded by a limit** | The file parsed, and a scale limit means part of it is not imported | Warning, build succeeds (#242) |
 | **Excluded by a resource limit** | Parsing the file exceeded the deadline or the memory ceiling | Warning, build succeeds (#594) |
+| **Excluded by nesting** | The document is nested deeper than its parser can recurse | Warning, build succeeds (#595) |
 | **Fails the build** | A supported, included file whose bytes could not be read | `LORE_E_PARSE_FAILED`, exit 2 |
 
 The middle row is the one that changed. A CSV of 101 columns or a sheet of 500,001 rows used to
@@ -131,6 +132,16 @@ else: no file writes, no child process, no worker, no add-on. A parser reads onl
 sent, so a hostile document that reaches a parser bug cannot write to the project or start a
 program. Node 24 has no network permission; the privacy sandbox observes the child's network
 use instead (see [security](./security.md)).
+
+**Nesting deeper than a parser can recurse is a limit too (#595).** A few kilobytes of `>` in
+Markdown, of `<span>` or `<div>` in HTML, or of tables nested in a Word document overflow the
+stack in remark, in `hast-util-from-parse5`, or in our own walkers. That `RangeError` is not a
+`LoreError`, so it used to fail the whole build as `LORE_E_PARSE_FAILED`, and every later build
+of the project failed with it until someone found the file. The host now recognises V8's stack
+overflow, including when a parser wrapped it (DOCX reports it as the cause of its own error),
+and leaves the file out with a `nesting-too-deep` warning of class `envelope`. Any other
+`RangeError` is still a parser bug and still fails the build. Making our own walkers iterative
+would not remove the limit, because the recursion that overflows first is upstream.
 
 **Only registered parsers are isolated.** The child builds its own registry and finds the parser
 by id, so a parser that exists only in the calling process (an embedder's, or a test's) runs

@@ -137,10 +137,24 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/parse-timeout/, /parse-memory/, /cmapBombPdf/, /docxBomb/, /flateBombPdf/],
   },
   {
+    name: 'a document nested past the parser stack is excluded, not a failed build, issue 595',
+    path: 'packages/parsers/test/isolation.test.ts',
+    tests: [
+      'a document nested deeper than its parser can recurse, issue 595 leaves out Markdown blockquotes as a typed nesting exclusion',
+      'a document nested deeper than its parser can recurse, issue 595 leaves out HTML spans as a typed nesting exclusion',
+      'a document nested deeper than its parser can recurse, issue 595 leaves out HTML divs as a typed nesting exclusion',
+      'a document nested deeper than its parser can recurse, issue 595 leaves out HTML tables as a typed nesting exclusion',
+      'a document nested deeper than its parser can recurse, issue 595 leaves out DOCX tables as a typed nesting exclusion',
+      'a document nested deeper than its parser can recurse, issue 595 still fails on any other RangeError, which is a parser bug and not a limit',
+    ],
+    patterns: [/nesting-too-deep/, /nestedQuoteMarkdown/, /nestedTablesDocx/],
+  },
+  {
     name: 'a build leaves out a file over a parse limit and still activates, issue 594',
     path: 'packages/cli/test/parse-limits.test.ts',
     tests: [
       'a file that exceeds a parse limit is left out with a typed warning, and the build activates without it',
+      'a file that exceeds a parse limit leaves out a document nested past the parser stack, issue 595',
       'the published binary parses in its own child and leaves out a file over the deadline',
     ],
     patterns: [/class: 'envelope'/, /parse-memory/, /public-entry\.js/],

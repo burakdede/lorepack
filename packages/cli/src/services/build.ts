@@ -112,7 +112,8 @@ function warningClass(code: string): BuildWarning['class'] {
   if (code === 'unsupported-format' || code === 'undecodable-content') return 'unsupported-file';
   // A file left out because parsing it exceeded the time or memory a build allows one file.
   // The bytes may be perfectly valid, which is why it is a limit and not a parse failure.
-  if (code === 'parse-timeout' || code === 'parse-memory') return 'envelope';
+  if (code === 'parse-timeout' || code === 'parse-memory' || code === 'nesting-too-deep')
+    return 'envelope';
   return 'parser';
 }
 
