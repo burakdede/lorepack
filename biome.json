@@ -37,7 +37,9 @@
         "noNonNullAssertion": "error"
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noSkippedTests": "error",
+        "noFocusedTests": "error"
       }
     }
   },
