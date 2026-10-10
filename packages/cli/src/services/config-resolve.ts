@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { closestMatch, type LoadedConfig, RUNTIME_LIMITS } from '@lorepack/core';
 import { DEV_PORT } from './dev-session.js';
 import { DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
+import {
+  DEV_PORT_VARIABLE,
+  parseInterval,
+  parsePort,
+  REVALIDATE_INTERVAL_VARIABLE,
+} from './serving.js';
 
 /**
  * Every resolved value, with the layer that supplied it and where that layer said it.
@@ -148,25 +154,30 @@ function withEnvironment(
   buildId: boolean,
 ): ResolvedValue {
   const variable = environmentKeyFor(path);
-  const raw = variable === null ? undefined : environment[variable];
+  const raw = variable === null ? undefined : environment[variable.name];
   if (variable === null || raw === undefined) {
     return { path, value: fallback, layer: 'defaults', source: 'built-in', buildId };
   }
 
-  const parsed = Number(raw);
   return {
     path,
-    value: Number.isFinite(parsed) ? parsed : raw,
+    // Parsed exactly as the command that reads it parses it, so the value shown is the value
+    // that runs, and a value the command would refuse is refused here too (#582).
+    value: variable.parse(raw, variable.name),
     layer: 'environment',
-    source: variable,
+    source: variable.name,
     buildId,
-    ...(SECRET_PATTERN.test(variable) ? { secret: true } : {}),
+    ...(SECRET_PATTERN.test(variable.name) ? { secret: true } : {}),
   };
 }
 
-function environmentKeyFor(path: string): string | null {
-  if (path === 'runtime.devPort') return 'LORE_DEV_PORT';
-  if (path === 'runtime.revalidateIntervalMs') return 'LORE_REVALIDATE_INTERVAL_MS';
+function environmentKeyFor(
+  path: string,
+): { readonly name: string; readonly parse: (raw: unknown, name: string) => number } | null {
+  if (path === 'runtime.devPort') return { name: DEV_PORT_VARIABLE, parse: parsePort };
+  if (path === 'runtime.revalidateIntervalMs') {
+    return { name: REVALIDATE_INTERVAL_VARIABLE, parse: parseInterval };
+  }
   return null;
 }
 

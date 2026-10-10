@@ -59,6 +59,25 @@ describe('where a value came from', () => {
   });
 });
 
+describe('an environment value the command would refuse (#582)', () => {
+  it('is refused here too, so the report never shows a value that does not run', async () => {
+    await withTempProject({ files: MINIMAL }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+
+      expect(() => resolveConfiguration(config, { LORE_DEV_PORT: 'eighty' })).toThrow(
+        /LORE_DEV_PORT must be a port number/,
+      );
+      expect(() => resolveConfiguration(config, { LORE_REVALIDATE_INTERVAL_MS: '' })).toThrow(
+        /LORE_REVALIDATE_INTERVAL_MS must be a number of milliseconds/,
+      );
+      const interval = resolveConfiguration(config, {
+        LORE_REVALIDATE_INTERVAL_MS: '250',
+      }).values.find((entry) => entry.path === 'runtime.revalidateIntervalMs');
+      expect(interval?.value).toBe(250);
+    });
+  });
+});
+
 describe('what the build id is computed from', () => {
   it('marks every value in the hashed effective configuration', async () => {
     await withTempProject({ files: MINIMAL }, async (project) => {

@@ -293,7 +293,7 @@ lorepack dev [path]
 
 | Name | Description |
 |---|---|
-| `--port <number>` | port to listen on (default 43110) |
+| `--port <number>` | port to listen on (default LORE_DEV_PORT or 43110) |
 | `--host <address>` | address to bind (default 127.0.0.1); off loopback, serves read-only |
 | `--yes` | accept defaults without asking (the default path asks nothing) |
 | `--allow-large-project` | continue past the supported file count |
@@ -415,7 +415,7 @@ None.
 | Name | Description |
 |---|---|
 | `--ci` | exit non-zero when any check fails, for use in a pipeline |
-| `--port <number>` | the dev port to test (default 43110) |
+| `--port <number>` | the dev port to test (default LORE_DEV_PORT or 43110) |
 
 ## `lorepack config`
 
@@ -476,7 +476,7 @@ None.
 | `--allow-stale` | serve the existing build even when sources changed |
 | `--active-only` | skip source checks entirely, for pinned or CI use |
 | `--project <path>` | the project to serve |
-| `--revalidate-interval <ms>` | how often to recheck the sources while serving (default 5000, 0 every request, off never) |
+| `--revalidate-interval <ms>` | how often to recheck the sources while serving (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request, off never) |
 
 ## `lorepack serve`
 
@@ -496,7 +496,7 @@ None.
 |---|---|
 | `--port <number>` | port to listen on (default 4321) |
 | `--host <address>` | address to bind (default 127.0.0.1) |
-| `--revalidate-interval <ms>` | how often to recheck the sources (default 5000, 0 every request) |
+| `--revalidate-interval <ms>` | how often to recheck the sources (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request) |
 
 ## `lorepack export`
 

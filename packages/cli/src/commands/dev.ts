@@ -11,7 +11,7 @@ import {
   writeReceipt,
 } from '../services/dev-session.js';
 import { enclosingProject, type InitResult, planInit, runInit } from '../services/init.js';
-import { parsePort, startServing, untilInterrupted } from '../services/serving.js';
+import { resolveDevPort, startServing, untilInterrupted } from '../services/serving.js';
 import { startWatching } from '../services/watch.js';
 
 /**
@@ -43,7 +43,10 @@ export function devCommand(): CommandDefinition {
     description: 'Turn a folder into a running context runtime. Builds, serves, and connects.',
     arguments: [{ name: 'path', description: 'project directory (default: .)', required: false }],
     flags: [
-      { flags: '--port <number>', description: `port to listen on (default ${DEV_PORT})` },
+      {
+        flags: '--port <number>',
+        description: `port to listen on (default LORE_DEV_PORT or ${DEV_PORT})`,
+      },
       {
         flags: '--host <address>',
         description: 'address to bind (default 127.0.0.1); off loopback, serves read-only',
@@ -108,7 +111,8 @@ export function devCommand(): CommandDefinition {
         // Architecture 15.3 fixes the preferred dev port, which is not the one `lorepack serve`
         // uses: a dev session and a read-only server are different things and a developer
         // may want both at once.
-        port: flags.port === undefined ? DEV_PORT : parsePort(flags.port),
+        // `--port`, else `LORE_DEV_PORT`, else the default (#582).
+        port: resolveDevPort(flags.port),
         warn: context.warn,
         studio: true,
         // The hook #112 named. A supervisor that is watching the filesystem already knows

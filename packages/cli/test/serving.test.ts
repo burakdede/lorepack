@@ -3,11 +3,48 @@ import { describe, expect, it } from 'vitest';
 import {
   allowedHostsFor,
   bindWarning,
+  environmentInterval,
   isLoopback,
   parseInterval,
   parsePort,
+  resolveDevPort,
   SERVE_DEFAULTS,
 } from '../src/services/serving.js';
+
+/**
+ * A flag, else its `LORE_*` variable, else the default (#582).
+ *
+ * The variables were reported by `lorepack config explain` and read by nothing that ran. The
+ * end-to-end suite proves the servers honour them; this pins the precedence and the refusals.
+ */
+describe('settings from the environment', () => {
+  it('takes the dev port from LORE_DEV_PORT, and lets --port win', () => {
+    expect(resolveDevPort(undefined, {})).toBe(43_110);
+    expect(resolveDevPort(undefined, { LORE_DEV_PORT: '45000' })).toBe(45_000);
+    expect(resolveDevPort('46000', { LORE_DEV_PORT: '45000' })).toBe(46_000);
+  });
+
+  it('refuses a dev port that is not one, naming the variable rather than a flag', () => {
+    for (const bad of ['', 'eighty', '0', '70000']) {
+      expect(() => resolveDevPort(undefined, { LORE_DEV_PORT: bad }), bad).toThrow(
+        /^LORE_DEV_PORT must be a port number/,
+      );
+    }
+    // A flag is checked as a flag, and the variable beside it is never read.
+    expect(() => resolveDevPort('nope', { LORE_DEV_PORT: '45000' })).toThrow(/^--port/);
+    expect(resolveDevPort('45001', { LORE_DEV_PORT: 'nope' })).toBe(45_001);
+  });
+
+  it('takes the interval from LORE_REVALIDATE_INTERVAL_MS, and refuses one that is not', () => {
+    expect(environmentInterval({})).toBeUndefined();
+    expect(environmentInterval({ LORE_REVALIDATE_INTERVAL_MS: '250' })).toBe(250);
+    for (const bad of ['', 'soon', '-5']) {
+      expect(() => environmentInterval({ LORE_REVALIDATE_INTERVAL_MS: bad }), bad).toThrow(
+        /^LORE_REVALIDATE_INTERVAL_MS must be a number of milliseconds/,
+      );
+    }
+  });
+});
 
 /**
  * The policy both servers share, asserted once.

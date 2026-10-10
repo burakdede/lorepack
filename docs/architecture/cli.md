@@ -117,8 +117,8 @@ of them still produce identical builds. `lorepack config` prints each with the l
 
 | Variable | Effect | Default |
 |---|---|---|
-| `LORE_DEV_PORT` | Port `lorepack dev` listens on | 43110 |
-| `LORE_REVALIDATE_INTERVAL_MS` | How often a long-lived server rechecks freshness | see `serve` |
+| `LORE_DEV_PORT` | Port `lorepack dev` listens on, and the one `lorepack doctor` checks. `--port` wins | 43110 |
+| `LORE_REVALIDATE_INTERVAL_MS` | How often `lorepack serve` and `lorepack mcp` recheck freshness. `--revalidate-interval` wins | 5000 |
 | `LORE_LOCK_WAIT_MS` | How long a command waits for the project lock before reporting it held | 30000 |
 | `LORE_PARSE_TIMEOUT_MS` | How long one file may take to parse before it is left out, 100 to 3600000 | 30000 |
 | `LORE_PARSE_MEMORY_MB` | Heap ceiling of the process a file is parsed in, 64 to 32768 | 2048 |
@@ -129,6 +129,13 @@ to build. The two came apart on a Windows CI runner, where a 500-document build 
 wait and the second command correctly reported the lock as held (#229). Raising the default
 would make a genuinely stale lock hang a session for longer, so the environment says what it is
 willing to wait for instead.
+
+**On the serving variables.** Each is parsed by the same function as its flag, and
+`lorepack config explain` resolves it through that function too, so the value it reports is
+the value that runs. An invalid one fails with `LORE_E_INVALID_ARGUMENT` naming the variable,
+in the command and in the report alike. Both used to be reported as effective while `dev`,
+`serve` and `mcp` read only their flags (#582). `lorepack dev` does not use the interval: it
+watches the filesystem instead.
 
 An empty value is refused rather than read as zero. `Number('')` is 0, an unset variable
 expands to the empty string in a shell, and 0 means "do not wait at all": the opposite of what
