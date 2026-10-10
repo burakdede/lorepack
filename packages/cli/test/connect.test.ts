@@ -1,4 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -81,4 +92,45 @@ describe('disconnect', () => {
       expect(readFileSync(path, 'utf8')).toBe(theirs);
     });
   });
+});
+
+/**
+ * A repository can ship a client configuration as a link to the user's own secrets (#574).
+ *
+ * `disconnect` is the command that reaches every adapter whether or not its client is
+ * installed, so it is the one that proves the refusal on a machine with no clients at all.
+ * Skipped on Windows, where creating a symbolic link needs administrator rights or Developer
+ * Mode; the adapter suites cover the same refusal on macOS and Linux.
+ */
+describe('a project configuration that is a link', () => {
+  it.skipIf(process.platform === 'win32')(
+    'is refused, and the file it points at is neither read into the project nor changed',
+    async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'lore-secrets-'));
+      try {
+        const secret = join(outside, 'claude.json');
+        const text = '{\n  "primaryApiKey": "sk-ant-SECRET",\n  "mcpServers": {}\n}\n';
+        writeFileSync(secret, text, { mode: 0o600 });
+
+        await withTempProject({ files: FILES }, async (temp) => {
+          const link = join(temp.root, '.vscode', 'mcp.json');
+          mkdirSync(join(temp.root, '.vscode'));
+          symlinkSync(secret, link);
+
+          const result = await run(['--cwd', temp.root, 'disconnect', 'vscode']);
+
+          expect(result.code).toBe(1);
+          expect(result.stderr).toContain('LORE_E_PATH_ESCAPE');
+          expect(result.stderr).toContain('symbolic link');
+          expect(lstatSync(link).isSymbolicLink()).toBe(true);
+          expect(readdirSync(join(temp.root, '.vscode'))).toEqual(['mcp.json']);
+        });
+
+        expect(readFileSync(secret, 'utf8')).toBe(text);
+        expect(readdirSync(outside)).toEqual(['claude.json']);
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    },
+  );
 });

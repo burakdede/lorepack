@@ -5,7 +5,11 @@ import { parse } from 'jsonc-parser';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ConnectInput } from '../src/port.js';
 import { createVsCodeConnector, userConfigDirectory, vsCodeSnippet } from '../src/vscode.js';
-import { type ConnectorFixture, runConnectorContract } from './contract.js';
+import {
+  type ConnectorFixture,
+  runConfigFileSafetyContract,
+  runConnectorContract,
+} from './contract.js';
 
 /**
  * The VS Code adapter, against recorded `.vscode/mcp.json` shapes.
@@ -84,6 +88,9 @@ const fixture: ConnectorFixture = {
   id: 'vscode',
   title: 'VS Code',
   create: () => createVsCodeConnector({ runClient: installed, userConfigDirectory: userDirectory }),
+  createForUser: (directory) =>
+    createVsCodeConnector({ runClient: installed, userConfigDirectory: directory }),
+  userConfigPath: (directory) => join(directory, 'mcp.json'),
   createMissing: () =>
     createVsCodeConnector({
       userConfigDirectory: userDirectory,
@@ -109,6 +116,7 @@ afterEach(() => {
 });
 
 runConnectorContract(fixture, () => project);
+runConfigFileSafetyContract(fixture, () => project);
 
 describe('the key VS Code actually reads', () => {
   it('is `servers`, and never `mcpServers`', async () => {

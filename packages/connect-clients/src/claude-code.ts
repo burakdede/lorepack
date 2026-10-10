@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
 import {
   backup,
   isOwned,
@@ -54,10 +55,24 @@ export const CLAUDE_CODE_ID = 'claude-code';
 export const SERVER_NAME = 'lorepack';
 
 /** Where each scope stores its servers, per the documented configuration surface. */
-function configPathFor(projectRoot: string, scope: ConnectInput['scope'], shared: boolean): string {
+function configPathFor(
+  projectRoot: string,
+  scope: ConnectInput['scope'],
+  shared: boolean,
+  home: string,
+): string {
   if (shared) return join(projectRoot, '.mcp.json');
-  if (scope === 'user') return join(homedir(), '.claude.json');
+  if (scope === 'user') return join(home, '.claude.json');
   return join(projectRoot, '.claude', 'settings.local.json');
+}
+
+/** Who owns the directory the file is in, which decides whether a link may be followed. */
+function locationFor(
+  projectRoot: string,
+  scope: ConnectInput['scope'],
+  shared: boolean,
+): ConfigLocation {
+  return scope === 'user' && !shared ? { owner: 'user' } : { owner: 'project', projectRoot };
 }
 
 export interface ClaudeCodeOptions {
@@ -70,6 +85,10 @@ export interface ClaudeCodeOptions {
 
 export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): ClientConnector {
   const shared = options.shared === true;
+  const home = options.home ?? homedir();
+  /** The file actually read and written, refusing a link out of the project (#574). */
+  const fileFor = (path: string, projectRoot: string, scope: ConnectInput['scope']): string =>
+    resolveConfigFile(path, locationFor(projectRoot, scope, shared));
   const runClient =
     options.runClient ??
     (async (args: readonly string[]) => {
@@ -104,7 +123,11 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
 
     async status(input: ConnectInput): Promise<ClientStatus> {
       const detected = await this.detect();
-      const path = configPathFor(input.projectRoot, input.scope, shared);
+      const path = fileFor(
+        configPathFor(input.projectRoot, input.scope, shared, home),
+        input.projectRoot,
+        input.scope,
+      );
 
       // Reads the file and nothing else. A status check that spawned the server to be sure
       // would make opening a diagnostics page a side effect.
@@ -120,7 +143,11 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
     },
 
     async plan(input: ConnectInput): Promise<ConnectPlan> {
-      const path = configPathFor(input.projectRoot, input.scope, shared);
+      const path = fileFor(
+        configPathFor(input.projectRoot, input.scope, shared, home),
+        input.projectRoot,
+        input.scope,
+      );
       const entry = markOwned(
         {
           type: 'stdio',
@@ -166,8 +193,9 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
     },
 
     async apply(plan: ConnectPlan): Promise<ConnectReceipt> {
-      const path = plan.configPath;
-      if (path === null) throw new Error('This plan has no file to write.');
+      if (plan.configPath === null) throw new Error('This plan has no file to write.');
+      // Resolved again: the plan was shown to a person, and the file may have changed since.
+      const path = fileFor(plan.configPath, plan.projectRoot, plan.scope);
 
       // Read, back up, merge, rename. Never replace: the file holds servers a person
       // configured by hand, and losing one is discovered much later (architecture 24.8).
@@ -179,7 +207,11 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
         plan.serverName,
         plan.entry as Record<string, unknown>,
       );
-      writeJsonAtomically(path, merged);
+      writeJsonAtomically(
+        path,
+        merged,
+        writeOptionsFor(locationFor(plan.projectRoot, plan.scope, shared)),
+      );
 
       return {
         clientId: CLAUDE_CODE_ID,
@@ -238,8 +270,9 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
     },
 
     async remove(receipt: ConnectReceipt): Promise<void> {
-      const path = receipt.configPath;
-      if (path === null || !existsSync(path)) return;
+      if (receipt.configPath === null) return;
+      const path = fileFor(receipt.configPath, receipt.projectRoot, receipt.scope);
+      if (!existsSync(path)) return;
 
       const document = readJsonConfig(path);
       const { document: after, removed } = withoutServerEntry(
@@ -252,7 +285,11 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       if (!removed) return;
 
       backup(path);
-      writeJsonAtomically(path, after);
+      writeJsonAtomically(
+        path,
+        after,
+        writeOptionsFor(locationFor(receipt.projectRoot, receipt.scope, shared)),
+      );
     },
   };
 }

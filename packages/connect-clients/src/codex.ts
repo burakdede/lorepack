@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
 import { backup } from './json-config.js';
 import type {
   ClientConnector,
@@ -96,6 +97,11 @@ function configPathFor(projectRoot: string, scope: ConnectInput['scope'], home: 
   return join(projectRoot, '.codex', 'config.toml');
 }
 
+/** Who owns the directory the file is in, which decides whether a link may be followed. */
+function locationFor(projectRoot: string, scope: ConnectInput['scope']): ConfigLocation {
+  return scope === 'user' ? { owner: 'user' } : { owner: 'project', projectRoot };
+}
+
 /** Whether the user has trusted this project, which decides if the file is read at all. */
 export function projectTrust(home: string, projectRoot: string): 'trusted' | 'unknown' {
   const path = join(home, 'config.toml');
@@ -159,7 +165,10 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
 
     async status(input: ConnectInput): Promise<ClientStatus> {
       const detected = await this.detect();
-      const path = configPathFor(input.projectRoot, input.scope, home);
+      const path = resolveConfigFile(
+        configPathFor(input.projectRoot, input.scope, home),
+        locationFor(input.projectRoot, input.scope),
+      );
 
       // Reads the file and nothing else. Studio's Diagnostics route calls this on every visit,
       // and opening a page must never write a configuration or spawn a server.
@@ -176,7 +185,10 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
     },
 
     async plan(input: ConnectInput): Promise<ConnectPlan> {
-      const path = configPathFor(input.projectRoot, input.scope, home);
+      const path = resolveConfigFile(
+        configPathFor(input.projectRoot, input.scope, home),
+        locationFor(input.projectRoot, input.scope),
+      );
       const config = readTomlConfig(path);
       assertServersAreTables(config.document, path);
       assertEditable(config.text, config.document, input.serverName, path);
@@ -226,15 +238,17 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
     },
 
     async apply(plan: ConnectPlan): Promise<ConnectReceipt> {
-      const path = plan.configPath;
-      if (path === null) throw new Error('This plan has no file to write.');
+      if (plan.configPath === null) throw new Error('This plan has no file to write.');
+      // Resolved again: the plan was shown to a person, and the file may have changed since.
+      const location = locationFor(plan.projectRoot, plan.scope);
+      const path = resolveConfigFile(plan.configPath, location);
 
       // Read, back up, splice, rename. The splice replaces our own lines and nothing else,
       // so a comment someone wrote above their sandbox settings is still there afterwards.
       const config = readTomlConfig(path);
       const backupPath = backup(path);
       const merged = withTomlTable(config, tablePathOf(plan), plan.entry as string);
-      writeTextAtomically(path, merged, config.bom);
+      writeTextAtomically(path, merged, config.bom, writeOptionsFor(location));
 
       return {
         clientId: CODEX_ID,
@@ -296,8 +310,10 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
     },
 
     async remove(receipt: ConnectReceipt): Promise<void> {
-      const path = receipt.configPath;
-      if (path === null || !existsSync(path)) return;
+      if (receipt.configPath === null) return;
+      const location = locationFor(receipt.projectRoot, receipt.scope);
+      const path = resolveConfigFile(receipt.configPath, location);
+      if (!existsSync(path)) return;
 
       const config = readTomlConfig(path);
       const { text, removed } = withoutTomlTable(config, tablePath(receipt.serverName));
@@ -306,7 +322,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       if (!removed) return;
 
       backup(path);
-      writeTextAtomically(path, text, config.bom);
+      writeTextAtomically(path, text, config.bom, writeOptionsFor(location));
     },
   };
 }
