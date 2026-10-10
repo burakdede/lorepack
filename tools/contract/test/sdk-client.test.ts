@@ -212,6 +212,85 @@ describe('every route has a typed method', () => {
   });
 });
 
+/**
+ * Files whose names look like percent-encoding, each with a body naming itself.
+ *
+ * `a%20b.md` and `a b.md` are the pair a second decode confuses (#608): the read of the first
+ * returned the second's text under the first's name. `100%.md` has a bare `%`, which a second
+ * decode cannot parse at all.
+ */
+const ENCODED_NAMES: Readonly<Record<string, string>> = {
+  'p:docs/a%20b.md': 'ENCODED-NAME',
+  'p:docs/a b.md': 'SPACED-NAME',
+  'p:docs/a%2520b.md': 'DOUBLY-ENCODED-NAME',
+  'p:docs/100%.md': 'PERCENT-NAME',
+};
+
+function clientOverEncodedNames(): LoreClient {
+  const byHash = new Map<string, string>();
+  const artifacts = new Map<string, CatalogArtifact>();
+  Object.entries(ENCODED_NAMES).forEach(([artifactId, body], index) => {
+    const hash = String(index).repeat(64);
+    const relativePath = artifactId.slice('p:'.length);
+    byHash.set(hash, body);
+    artifacts.set(artifactId, {
+      artifactId,
+      relativePath,
+      displayPath: relativePath,
+      title: body,
+      status: 'active',
+      authority: 50,
+      mediaType: 'text/markdown',
+      objectHash: hash,
+    });
+  });
+
+  const scope: BuildScope = {
+    buildId: BUILD,
+    catalog: { ...catalog, artifact: async (id: string) => artifacts.get(id) ?? null },
+    tables,
+    objects: {
+      async get(hash: string) {
+        const body = byHash.get(hash);
+        return body === undefined ? null : new TextEncoder().encode(body);
+      },
+      async put() {
+        return '';
+      },
+      async has() {
+        return true;
+      },
+    },
+  };
+  const app = createApiApp({
+    runtime: createRuntime({
+      provider: {
+        async current() {
+          return { buildId: BUILD, generation: 3 };
+        },
+        async acquire(): Promise<BuildHandle> {
+          return { buildId: BUILD, generation: 3, release() {} };
+        },
+      },
+      open: async () => scope,
+      freshness: async () => 'clean',
+    }),
+    currentBuild: async () => ({ buildId: BUILD, generation: 3 }),
+  });
+  return new LoreClient({
+    baseUrl: 'http://runtime.test',
+    fetch: async (input, init) => app.request(String(input), init as RequestInit),
+  });
+}
+
+describe('artifact ids are decoded exactly once, #608', () => {
+  it.each(Object.entries(ENCODED_NAMES))('reads %s as its own file', async (artifactId, body) => {
+    const read = await clientOverEncodedNames().readSource(artifactId);
+    expect(read.text).toBe(body);
+    expect(read.locator.artifactId).toBe(artifactId);
+  });
+});
+
 describe('errors keep the server code', () => {
   it('maps a server failure to a typed client error', async () => {
     try {

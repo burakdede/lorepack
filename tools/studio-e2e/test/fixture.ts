@@ -64,6 +64,13 @@ const PRICING = [
   '',
 ].join('\n');
 
+/** File names under `docs/` and the word each body is made of. */
+export const ENCODED_NAMES: Readonly<Record<string, string>> = {
+  'a%20b.md': 'ENCODEDNAME',
+  'a b.md': 'SPACEDNAME',
+  '100%.md': 'PERCENTNAME',
+};
+
 const require = createRequire(import.meta.url);
 
 export interface Session {
@@ -124,6 +131,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       // A file no parser handles, so the exclusion list on Sources has something real in it.
       writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));
       writeFileSync(join(projectRoot, 'docs', 'pricing.csv'), PRICING, 'utf8');
+      // Names that look like percent-encoding, each with a body naming itself. A second decode
+      // of the source route's parameter read one of these as another (#608).
+      for (const [name, body] of Object.entries(ENCODED_NAMES)) {
+        writeFileSync(join(projectRoot, 'docs', name), `# ${body}\n\n${body}\n`, 'utf8');
+      }
       // And a document removed by a rule, which is the other and more common way to be
       // missing from a build. Sources listed only the first kind until #202.
       mkdirSync(join(projectRoot, 'drafts'));
