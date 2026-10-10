@@ -52,6 +52,13 @@ discovered late: the file also holds servers you configured by hand.
 - **The file is backed up first**, with a timestamp, beside the original.
 - **Edits merge and never replace.** Servers you configured stay exactly where they were.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.
+- **Permissions are kept.** The rewritten file and its backup keep the original's mode, so a
+  0600 file holding tokens stays 0600. A user-scope file Lorepack creates is 0600.
+- **Links are never followed out of a project.** If a project configuration file, or any
+  directory on the way to it, is a symbolic link, `connect` and `disconnect` refuse with
+  `LORE_E_PATH_ESCAPE` and read, back up and write nothing: a repository could otherwise link
+  it to your home configuration and have your tokens copied into the project. A user-scope
+  file that is a link (a dotfile manager's) is edited at its target, and the link stays.
 - **A file that will not parse is refused**, not overwritten.
 - **`x-lorepack` marks what we created**, so `lorepack disconnect` removes exactly that. A server
   called `lorepack` that you wrote yourself is left alone.

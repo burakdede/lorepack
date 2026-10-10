@@ -117,6 +117,21 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/declares every tool read-only/, /destructiveHint/, /TOOL_NAMES/],
   },
   {
+    name: 'connect refuses project config links and keeps client config modes',
+    path: 'packages/connect-clients/test/contract.ts',
+    patterns: [
+      /refuses a project file that is a link, and reads, writes and backs up nothing/,
+      /refuses a project file reached through a linked directory/,
+      /keeps a private user file private through connect and disconnect/,
+      /edits a linked user file at its target, and keeps the link/,
+    ],
+  },
+  {
+    name: 'connect refuses a linked project config end to end',
+    path: 'packages/cli/test/connect.test.ts',
+    patterns: [/LORE_E_PATH_ESCAPE/, /sk-ant-SECRET/, /isSymbolicLink\(\)\)\.toBe\(true\)/],
+  },
+  {
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     patterns: [/fetch and sockets blocked/, /network\.calls/, /toEqual\(\[\]\)/],

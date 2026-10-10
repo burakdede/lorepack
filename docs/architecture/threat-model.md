@@ -29,6 +29,7 @@ changes, and which threats are intentionally not solved.
 | Local write surface | `lorepack dev` host process | Browser origins | Register writes only when supplied by host, and only loopback origins may call them |
 | Remote Worker runtime | Active projected build and D1/R2 bindings | Internet clients | Authenticate before reading build data |
 | Deployment control plane | Local CLI and Wrangler credentials | Remote platform state | Deployment writes are CLI-only, never model-facing |
+| AI client configuration (`lorepack connect`) | Files in the user's home (`~/.claude.json`, `$CODEX_HOME/config.toml`, the VS Code profile) | Client configuration files inside a project directory, which arrive with the repository | Never follow a link inside the project; follow a user's own dotfile link to its target; never widen a file's mode |
 
 ## Threats And Mitigations
 
@@ -43,6 +44,8 @@ changes, and which threats are intentionally not solved.
 | Cross-origin browser writes activate or rollback a build | Local action routes are absent unless supplied and reject non-loopback origins | `packages/runtime/test/http.test.ts` |
 | Remote auth bypass exposes a deployed build | Worker authorization runs before route handling and accepts only valid Lore runtime tokens or configured Access JWTs | `packages/deploy-cloudflare/test/*auth*.test.ts` |
 | Secrets appear in manifests, logs or protocol errors | Manifest validation and shared redaction renderers remove secret values and token shapes | `packages/compiler/test/validate.test.ts`, runtime and Worker tests |
+| A repository links its client configuration to the user's secrets, so `connect` copies tokens into the project | Every project-scope configuration path is checked component by component with `lstat`; a link is refused with `LORE_E_PATH_ESCAPE` before anything is read, backed up or written. User-scope links are resolved and edited at their target | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts`, `packages/cli/test/connect.test.ts` |
+| `connect` makes a 0600 client configuration world-readable | Atomic writes copy the existing file's mode onto the replacement; new user-scope files are created 0600; backups keep the original's mode | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts` |
 | Model-facing tools mutate the project | MCP tool list is exactly the documented read-only set | `tools/contract/test/mcp.test.ts` |
 | Build path sends source content over the network | There is no telemetry path; the security suite blocks `fetch` and socket connects during build | `tools/security/test/privacy-defaults.test.ts` |
 
