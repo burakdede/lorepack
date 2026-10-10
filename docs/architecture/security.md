@@ -169,9 +169,14 @@ link and a remote image. It asserts the build succeeds and that nothing reached 
 There are two layers (#616).
 
 **The permission sandbox, on every platform.** The build runs under Node's permission model with
-read access, write access to the project only, and no `--allow-child-process`, `--allow-worker`,
-`--allow-addons` or `--allow-wasi`, so Node refuses a child process or worker thread outright:
-neither can carry a request the monitor does not see. A preloaded monitor
+read access, write access to the project only, and no `--allow-worker`, `--allow-addons` or
+`--allow-wasi`, so Node refuses a worker thread outright. It does grant `--allow-child-process`,
+because every parse runs in a forked `parse-child.js` (#594), so the monitor does the refusing
+for processes: it lets that one fork through only while the child is itself under the
+permission model with no write, process or worker grant, and reports and refuses every other
+spawn, exec or fork with `ERR_ACCESS_DENIED`. The preloads reach the child through
+`NODE_OPTIONS`, so the parsers, the code that reads hostile documents, run under the monitor
+too, and an attempt there ends the child and fails the build. A preloaded monitor
 (`tools/security/test/sandbox/monitor.mjs`) subscribes to Node's own diagnostics channels for
 TCP, TLS, UDP, HTTP, HTTP/2 and fetch, which fire inside Node whatever API reached them, wraps
 the DNS resolver, which has no channel, and reports the refused process and thread APIs too, so a

@@ -49,6 +49,11 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
     why: 'a machine with no non-loopback interface has no LAN address to bind or expose',
   },
   {
+    file: 'packages/cli/test/parse-limits.test.ts',
+    line: "describe.runIf(CAN_SIGNAL_GRACEFULLY)('Ctrl-C during a long parse', () => {",
+    why: 'Windows cannot deliver SIGINT to one process from another, so there is no Ctrl-C to send',
+  },
+  {
     file: 'packages/cli/test/windows.test.ts',
     line: "it.runIf(!WINDOWS && platform() !== 'darwin')(",
     why: 'a case-only collision exists only on a case-sensitive filesystem',
