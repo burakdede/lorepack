@@ -24,11 +24,20 @@ const EVIDENCE: readonly Evidence[] = [
   {
     name: 'secret redaction is linear on adversarial input',
     path: 'packages/core/test/errors.test.ts',
+    tests: [
+      'redaction runs in linear time on a 1 MB repeated keyword',
+      'redaction runs in linear time on a 1 MB keyword in a word',
+      'redaction runs in linear time on a 1 MB near-miss pair',
+      'redaction redacts every secret-named pair, including one inside another value and with odd spacing',
+    ],
     patterns: [/runs in linear time on a 1 MB/, /toBeLessThan\(1_000\)/],
   },
   {
     name: 'an adversarial request key cannot stall the server',
     path: 'packages/runtime/test/http.test.ts',
+    tests: [
+      'an adversarial key in a request body, #551 answers quickly, keeps /health responsive, and echoes only a bounded key',
+    ],
     patterns: [/keeps \/health responsive/, /TOKEN'\.repeat\(40_000\)/],
   },
   {
