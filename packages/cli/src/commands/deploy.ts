@@ -129,7 +129,9 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
           error instanceof LoreError && typeof error.details?.receiptId === 'string'
             ? (error.details.receiptId as string)
             : resume?.receiptId;
-        if (receiptId === undefined) throw error;
+        // A failed verification is not resumable: the same candidate would fail the same
+        // checks, and advising `--resume` there is how #555 activated an unverified build.
+        if (receiptId === undefined || original.details?.resumable === false) throw error;
         throw new LoreError('LORE_E_REMOTE_DEPLOY', original.message, {
           remediation: `${original.remediation ?? 'The previous remote build is still serving.'} Resume with \`lorepack deploy ${target.id} --resume ${receiptId}\`.`,
           ...(original.details === undefined ? {} : { details: original.details }),
