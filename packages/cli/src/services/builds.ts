@@ -17,6 +17,7 @@ import {
   type ColumnTypeName,
   count,
   LoreError,
+  objectKey,
   type TableValue,
 } from '@lorepack/core';
 
@@ -213,7 +214,7 @@ export function readSnapshot(loreDirectory: string, buildId: BuildId): BuildSnap
 
 /**
  * Pre-flight before a pointer change: the build exists, passed validation, its database
- * opens, and its integrity check passes.
+ * opens, its integrity check passes, and every object it references is present.
  *
  * Activation is cheap, but activating a corrupt build is not, so the check happens before
  * the pointer moves rather than at the first request that fails.
@@ -256,6 +257,28 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
           remediation:
             'Run `lorepack build` to produce a fresh build. The active build is unchanged.',
           subject: build.buildId,
+        },
+      );
+    }
+
+    // A sound database can still point at normalized bodies that are gone, and such a build
+    // fails at its first source read or pack (#564). Presence is checked, not checksums:
+    // every read verifies the bytes, and hashing every object would make activation slow.
+    const hashes = db.prepare('SELECT DISTINCT object_hash FROM artifacts').all() as Array<{
+      object_hash: string;
+    }>;
+    const missing = hashes
+      .map((row) => row.object_hash)
+      .filter((hash) => !existsSync(join(loreDirectory, 'objects', ...objectKey(hash).split('/'))));
+    if (missing.length > 0) {
+      throw new LoreError(
+        'LORE_E_OBJECT_CORRUPT',
+        `Build ${build.buildId} references ${count(missing.length, 'object')} that ${missing.length === 1 ? 'is' : 'are'} missing: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', ...' : ''}`,
+        {
+          remediation:
+            'Run `lorepack build` to restore the objects from the sources. The active build is unchanged.',
+          subject: build.buildId,
+          details: { missing },
         },
       );
     }

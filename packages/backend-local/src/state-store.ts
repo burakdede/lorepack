@@ -74,6 +74,22 @@ export class LocalStateStore {
     this.#db.prepare('DELETE FROM builds WHERE build_id = ?').run(buildId);
   }
 
+  /**
+   * Removes several build records in one transaction, so a failure part-way through leaves
+   * every record in place rather than some of them.
+   */
+  forgetBuilds(buildIds: readonly BuildId[]): void {
+    if (buildIds.length === 0) return;
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const buildId of buildIds) this.forgetBuild(buildId);
+      this.#db.exec('COMMIT');
+    } catch (cause) {
+      this.#db.exec('ROLLBACK');
+      throw cause;
+    }
+  }
+
   listBuilds(): BuildSummary[] {
     const rows = this.#db
       .prepare('SELECT * FROM builds ORDER BY created_at DESC, build_id DESC')

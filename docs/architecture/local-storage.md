@@ -45,6 +45,13 @@ than returning wrong bytes, and `quarantine` removes the object so the next buil
 regenerates it instead of failing identically forever. Writing content that already exists
 verifies rather than trusts, which is what makes an interrupted build cheap to resume.
 
+Because writing existing content is a no-op, a build that reuses an object never re-creates
+it. `lorepack prune` therefore decides which objects to delete under the project lock: it
+prints a plan computed without the lock, then, holding it, re-reads history and deletes only
+the builds and objects that the plan named and that nothing surviving still references
+(every directory under `builds/`, the active build and any leftover candidate under
+`tmp/`). Build records are forgotten in one transaction before any file is removed (#564).
+
 ## State store and activation
 
 `state.sqlite` holds build history, the active pointer, and operational receipts.
@@ -87,7 +94,7 @@ cost without benefit; older builds close as soon as they drain.
 
 ## Project lock
 
-Builds and activation serialise on `.lore/lock`, created with `mkdir`, which is atomic
+Builds, activation and prune serialise on `.lore/lock`, created with `mkdir`, which is atomic
 everywhere we support. The record inside names the owning pid, when it was taken and a
 unique ownership token.
 

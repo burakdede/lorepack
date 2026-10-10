@@ -176,8 +176,9 @@ for `lorepack dev`. Three things keep them local:
 
 Each one calls the same code path the equivalent command does, so a build activated in a
 browser and one activated in a terminal are the same operation with the same pre-flight and
-the same lock. Activation checks the target build opens and passes its integrity check
-*before* the pointer moves, so a corrupt build fails with the previous one still serving.
+the same lock. Activation checks the target build opens, passes its integrity check and
+has every object it references *before* the pointer moves. A build that fails either check
+is refused with `LORE_E_OBJECT_CORRUPT` while the previous one is still serving.
 
 `POST /v1/builds/rollback` accepts an optional `expect`, the build id the caller was shown
 before confirming. If the history moved in between, the request is refused rather than

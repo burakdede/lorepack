@@ -69,6 +69,66 @@ export function planRetention(
   };
 }
 
+/**
+ * The part of a previewed plan that is still safe to apply. Callers hold the project lock.
+ *
+ * The preview was computed without the lock, so a build may have sealed, been activated or
+ * been rolled back to since (#564). History is re-read here and a build is removed only if
+ * both the preview and a fresh plan remove it, so nothing the user was not shown is deleted.
+ * An object is removed only if the preview listed it and no build that survives references
+ * it, counting every directory under `builds/` rather than only recorded ones, and any
+ * candidate left under `tmp/`. A build reusing an object never re-creates it (`put` is a
+ * no-op for an existing hash), so this recheck is the only thing protecting it.
+ */
+export function reconcileRetention(
+  loreDirectory: string,
+  preview: RetentionPlan,
+  builds: readonly BuildSummary[],
+  active: BuildId | null,
+  keepPrevious: number,
+): RetentionPlan {
+  const fresh = new Set(planRetention(loreDirectory, builds, active, keepPrevious).remove);
+  const remove = preview.remove.filter((id) => fresh.has(id) && id !== active);
+  const removing = new Set<string>(remove);
+
+  const referenced = new Set<string>();
+  for (const directory of survivingBuildDirectories(loreDirectory, removing)) {
+    for (const hash of objectHashesIn(directory)) referenced.add(hash);
+  }
+
+  return {
+    keep: builds.map((build) => build.buildId).filter((id) => !removing.has(id)),
+    remove,
+    objectsToRemove: preview.objectsToRemove.filter((hash) => !referenced.has(hash)),
+    bytesFreed: remove.reduce(
+      (sum, id) => sum + directorySize(buildDirectory(loreDirectory, id)),
+      0,
+    ),
+  };
+}
+
+function survivingBuildDirectories(loreDirectory: string, removing: ReadonlySet<string>): string[] {
+  const directories: string[] = [];
+  const builds = join(loreDirectory, 'builds');
+  if (existsSync(builds)) {
+    for (const entry of readdirSync(builds, { withFileTypes: true })) {
+      if (entry.isDirectory() && !removing.has(entry.name)) {
+        directories.push(join(builds, entry.name));
+      }
+    }
+  }
+  // A build holds the lock from creating its candidate until it seals, so under the lock a
+  // candidate is one an interrupted build left behind. Its objects are kept anyway: the cost
+  // is a few unreclaimed files, and the alternative is reasoning about a build in flight.
+  const temporary = join(loreDirectory, 'tmp');
+  if (existsSync(temporary)) {
+    for (const entry of readdirSync(temporary, { withFileTypes: true })) {
+      if (entry.isDirectory()) directories.push(join(temporary, entry.name));
+    }
+  }
+  return directories;
+}
+
 export function applyRetention(loreDirectory: string, plan: RetentionPlan): void {
   for (const id of plan.remove) {
     rmSync(buildDirectory(loreDirectory, id), { recursive: true, force: true, maxRetries: 3 });
@@ -93,7 +153,11 @@ export function renderRetentionPlan(plan: RetentionPlan): string {
 }
 
 function objectHashesOf(loreDirectory: string, buildId: BuildId): string[] {
-  const path = join(buildDirectory(loreDirectory, buildId), 'context.sqlite');
+  return objectHashesIn(buildDirectory(loreDirectory, buildId));
+}
+
+function objectHashesIn(directory: string): string[] {
+  const path = join(directory, 'context.sqlite');
   if (!existsSync(path)) return [];
   const db = openReadOnly(path);
   try {
