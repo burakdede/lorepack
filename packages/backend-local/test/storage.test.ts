@@ -351,6 +351,32 @@ describe('LocalStateStore', () => {
   });
 });
 
+describe('LocalStateStore written by a newer Lorepack', () => {
+  it('refuses to open it and leaves the file byte for byte unchanged', async () => {
+    // #570. A v0.1 binary opened a state database a later version had migrated and wrote
+    // to it, so a build that version had pinned could be pruned.
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      state.close();
+
+      const raw = openWritable(join(lore, 'state.sqlite'));
+      raw.exec(`
+        CREATE TABLE build_pins (build_id TEXT PRIMARY KEY) STRICT;
+        INSERT INTO schema_migrations (id, name, checksum, applied_at)
+          VALUES ('0002', 'build-pins', 'future', '2027-01-01T00:00:00Z');
+      `);
+      raw.close();
+      const before = readFileSync(join(lore, 'state.sqlite'));
+
+      expect(() => LocalStateStore.open(lore, STATE_MIGRATIONS)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_SCHEMA_MISMATCH' }),
+      );
+      expect(readFileSync(join(lore, 'state.sqlite')).equals(before)).toBe(true);
+    });
+  });
+});
+
 describe('LocalActiveBuildProvider', () => {
   async function withProvider(
     run: (

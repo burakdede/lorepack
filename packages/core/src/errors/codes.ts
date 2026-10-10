@@ -28,7 +28,7 @@ export const ERROR_CODES = {
   LORE_E_OBJECT_CORRUPT: 'A content-addressed object failed its checksum.',
   LORE_E_LOCKFILE_DRIFT: 'The lockfile would change, but the build was run with --frozen.',
   LORE_E_STALE_SOURCES: 'Sources changed and the project could not be rebuilt.',
-  LORE_E_SCHEMA_MISMATCH: 'A build was written at a catalog schema this version does not read.',
+  LORE_E_SCHEMA_MISMATCH: 'A build or local state uses a schema this version does not read.',
 
   // Concurrency (exit 4)
   LORE_E_LOCK_HELD: 'Another Lorepack process holds the project lock.',

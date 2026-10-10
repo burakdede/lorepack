@@ -303,6 +303,35 @@ describe('migrations', () => {
     });
   });
 
+  it('refuses a database that records a migration this binary does not know, before writing', async () => {
+    // #570. Unknown applied ids were skipped, so an older binary went on writing a database
+    // a newer one had migrated, under a schema it does not understand.
+    await withMigrations(
+      { 'migrations/0001_catalog.sql': first, 'migrations/0002_chunks.sql': second },
+      (dir, db) => {
+        runMigrations(db, loadMigrations(dir).slice(0, 1));
+        db.prepare(
+          "INSERT INTO schema_migrations (id, name, checksum, applied_at) VALUES ('0003', 'build-pins', 'x', 'now')",
+        ).run();
+
+        try {
+          runMigrations(db, loadMigrations(dir));
+          expect.unreachable('should have thrown');
+        } catch (error) {
+          expect((error as LoreError).code).toBe('LORE_E_SCHEMA_MISMATCH');
+          expect((error as LoreError).message).toContain('0003_build-pins');
+          expect((error as LoreError).remediation).toContain('Upgrade Lorepack');
+        }
+
+        // 0002 is pending and known, and still was not applied: the refusal came first.
+        const tables = db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chunks'")
+          .all();
+        expect(tables).toHaveLength(0);
+      },
+    );
+  });
+
   it('rolls back a failing migration and leaves the database unchanged', async () => {
     await withMigrations(
       {
