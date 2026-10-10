@@ -19,7 +19,11 @@ import {
   type VerificationResult,
 } from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CloudflareApplyError, createCloudflareDeploymentTarget } from '../src/index.js';
+import {
+  CloudflareApplyError,
+  CloudflareUnverifiedBuildError,
+  createCloudflareDeploymentTarget,
+} from '../src/index.js';
 import type {
   ProjectionMigrationDatabaseLike,
   ProjectionMigrationStatementLike,
@@ -752,6 +756,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
     });
     const previousReceipt = await previousTarget.apply(previousPlan);
+    await previousTarget.verify(previousReceipt);
     await previousTarget.activate(previousReceipt);
 
     const target = createCloudflareDeploymentTarget({
@@ -935,6 +940,49 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
   });
 
+  /**
+   * Defence in depth for #555: the orchestration should never ask, but a hand-edited receipt or
+   * a second client could, and the pointer is the one write a reader sees.
+   */
+  it('refuses to activate a projected build that was never verified, and leaves the pointer', async () => {
+    const fixture = makeBuildFixture();
+    const target = createCloudflareDeploymentTarget({
+      projectId: PROJECT,
+      endpoint: ENDPOINT,
+      catalogDb: fixture.projection,
+      objects: fixture.bucket,
+      publicBuildId: async () => BUILD,
+    });
+
+    const plan = await target.plan({
+      projectName: PROJECT,
+      buildId: BUILD,
+      buildDirectory: fixture.buildDirectory,
+      buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
+    });
+    const receipt = await target.apply(plan);
+    fixture.projection.raw
+      .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+      .run(BUILD_B, 7);
+
+    const failure = await target.activate(receipt).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CloudflareUnverifiedBuildError);
+    expect(failure).toMatchObject({ code: 'LORE_E_REMOTE_DEPLOY', subject: BUILD });
+    expect(
+      fixture.projection.raw
+        .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+        .get(),
+    ).toEqual({ build_id: BUILD_B, generation: 7 });
+    expect(
+      fixture.projection.raw
+        .prepare(
+          'SELECT verified_at, activated_at FROM projected_builds WHERE project_id = ? AND build_id = ?',
+        )
+        .get(PROJECT, BUILD),
+    ).toEqual({ verified_at: null, activated_at: null });
+  });
+
   it('activates atomically by switching the pointer and incrementing generation', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
@@ -956,6 +1004,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     fixture.projection.raw
       .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
       .run(`lore_${'b'.repeat(64)}`, 7);
+    await target.verify(receipt);
     const activation = await target.activate(receipt);
 
     expect(activation).toEqual({
@@ -1014,6 +1063,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
     });
     const currentReceipt = await target.apply(currentPlan);
+    await target.verify(currentReceipt);
     await target.activate(currentReceipt);
 
     const activation = await target.rollback(BUILD_B);
@@ -1057,6 +1107,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
     });
     const currentReceipt = await target.apply(currentPlan);
+    await target.verify(currentReceipt);
     await target.activate(currentReceipt);
 
     const failure = await target.rollback(BUILD_B).catch((error: unknown) => error);
@@ -1121,6 +1172,8 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
       .run(BUILD_C, 7);
 
+    await firstTarget.verify(firstReceipt);
+    await secondTarget.verify(secondReceipt);
     const settled = await Promise.allSettled([
       firstTarget.activate(firstReceipt),
       secondTarget.activate(secondReceipt),
