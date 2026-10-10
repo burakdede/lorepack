@@ -111,7 +111,8 @@ lorepack disconnect claude-code
 ```
 
 Removes this project's Lorepack entry and leaves every other server, every other project's
-entry, and every unrelated setting where they were.
+entry, and every unrelated setting where they were. With `--scope user`, an entry another project created is
+left, and the output names that project.
 
 ## If your version is not supported
 

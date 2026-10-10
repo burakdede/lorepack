@@ -9,6 +9,7 @@ import {
   type ContainerPath,
   isOwned,
   markOwned,
+  ownerOf,
   readJsonConfig,
   serversAt,
   withoutServerEntry,
@@ -23,6 +24,7 @@ import type {
   ConnectionCheck,
   ConnectPlan,
   ConnectReceipt,
+  RemoveOutcome,
 } from './port.js';
 import { type VerifyOptions, verifyStdioServer } from './verify.js';
 
@@ -189,9 +191,9 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
     projectRoot: string,
     scope: ConnectInput['scope'],
     serverName: string,
-  ): void => {
+  ): boolean => {
     const path = legacyEntryFor(projectRoot, scope, serverName);
-    if (path === undefined) return;
+    if (path === undefined) return false;
     const { document } = withoutServerEntry(
       readJsonConfig(path),
       'mcpServers',
@@ -205,6 +207,7 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
         : document;
     backup(path);
     writeJsonAtomically(path, tidied);
+    return true;
   };
 
   return {
@@ -386,15 +389,15 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       return check;
     },
 
-    async remove(receipt: ConnectReceipt): Promise<void> {
-      if (receipt.configPath === null) return;
+    async remove(receipt: ConnectReceipt): Promise<RemoveOutcome> {
+      if (receipt.configPath === null) return { removed: false };
       // An entry an earlier version left where the client never read it goes too, so
       // `disconnect` after an upgrade leaves nothing of ours behind.
-      removeLegacyEntry(receipt.projectRoot, receipt.scope, receipt.serverName);
+      const legacy = removeLegacyEntry(receipt.projectRoot, receipt.scope, receipt.serverName);
 
       const target = targetFor(receipt.projectRoot, receipt.scope);
       const path = resolved(target, receipt.configPath);
-      if (!existsSync(path)) return;
+      if (!existsSync(path)) return { removed: legacy };
 
       const document = readJsonConfig(path);
       const { document: after, removed } = withoutServerEntry(
@@ -407,10 +410,14 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       );
       // Only when something actually changed: rewriting the file to remove nothing would
       // reformat a user's configuration for no reason.
-      if (!removed) return;
+      if (!removed) {
+        const ownedBy = ownerOf(serversAt(document, target.container)?.[receipt.serverName]);
+        return ownedBy === undefined ? { removed: legacy } : { removed: legacy, ownedBy };
+      }
 
       backup(path);
       writeJsonAtomically(path, after, writeOptionsFor(target.location));
+      return { removed: true };
     },
   };
 }

@@ -19,6 +19,7 @@ import type {
   ConnectionCheck,
   ConnectPlan,
   ConnectReceipt,
+  RemoveOutcome,
 } from './port.js';
 import { writeTextAtomically } from './toml-config.js';
 import { type VerifyOptions, verifyStdioServer } from './verify.js';
@@ -212,7 +213,7 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
         value: plan.entry,
         removeWith: 'lorepack disconnect vscode',
       });
-      writeTextAtomically(path, text, false, writeOptionsFor(location));
+      writeTextAtomically(path, text, config.bom, writeOptionsFor(location));
 
       return {
         clientId: VSCODE_ID,
@@ -251,18 +252,29 @@ export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnec
       };
     },
 
-    async remove(receipt: ConnectReceipt): Promise<void> {
-      if (receipt.configPath === null) return;
+    async remove(receipt: ConnectReceipt): Promise<RemoveOutcome> {
+      if (receipt.configPath === null) return { removed: false };
       const location = locationFor(receipt.projectRoot, receipt.scope);
       const path = resolveConfigFile(receipt.configPath, location);
-      if (!existsSync(path)) return;
+      if (!existsSync(path)) return { removed: false };
 
       const config = readJsoncConfig(path);
-      const { text, removed } = withoutOwnedEntry(config, entryPath(receipt.serverName));
-      if (!removed) return;
+      // Scoped to this project: the user profile's `mcp.json` is shared by every window, and
+      // another project's entry under the same name is not this disconnect's to take (#581).
+      const { text, removed, owner } = withoutOwnedEntry(
+        config,
+        entryPath(receipt.serverName),
+        receipt.projectRoot,
+      );
+      if (!removed) {
+        return owner === undefined
+          ? { removed: false }
+          : { removed: false, ownedBy: owner.projectRoot };
+      }
 
       backup(path);
-      writeTextAtomically(path, text, false, writeOptionsFor(location));
+      writeTextAtomically(path, text, config.bom, writeOptionsFor(location));
+      return { removed: true };
     },
   };
 }

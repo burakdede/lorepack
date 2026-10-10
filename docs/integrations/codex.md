@@ -112,7 +112,16 @@ lorepack disconnect codex
 ```
 
 Removes the Lorepack block and leaves every other server, comment and setting where they
-were. On a file Lorepack wrote into, connect followed by disconnect returns it byte for byte.
+were. On a file Lorepack wrote into, connect followed by disconnect returns it byte for byte:
+only the block and the one blank line placed before it go, so blank lines inside a multi-line
+string such as `developer_instructions = """ ... """` stay. Before any edit is written, the
+result is parsed and compared with the original; if anything other than the Lorepack entry
+would change, nothing is written.
+
+In `$CODEX_HOME/config.toml`, which every project shares, `disconnect --scope user` removes
+only the entry this project created. One another project created is left, and the output
+names that project. The ownership comment is plain ASCII, so a project path holding a control
+character such as DEL cannot make the file unparseable.
 
 ## Verified by hand
 

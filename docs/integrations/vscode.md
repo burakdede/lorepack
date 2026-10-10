@@ -88,6 +88,8 @@ is a legal line and `JSON.parse` would refuse the whole file over it.
   file that is a link (a dotfile manager's) is edited at its target, and the link stays.
 - **A file that will not parse is refused**, not overwritten. So is one whose `servers` is not
   an object.
+  Every edit is parsed again before it is written, and refused if anything but the Lorepack
+  entry would change.
 - **The ownership comment marks what we created**, so `lorepack disconnect` removes exactly that.
   A server called `lorepack` that you wrote yourself is left alone. It is a comment rather
   than a key because VS Code's schema for a server is `additionalProperties: false`, so an
@@ -132,6 +134,9 @@ lorepack disconnect vscode
 ```
 
 Removes the Lorepack entry and leaves every other server, comment and setting where they were.
+A file saved with a byte order mark, which Windows editors write, keeps it. In the user
+profile's `mcp.json`, which every window shares, `disconnect --scope user` removes only the
+entry this project created and names the project that owns any other.
 
 ## If your version is not supported
 

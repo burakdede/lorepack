@@ -153,6 +153,7 @@ export function disconnectCommand(): CommandDefinition {
       const chosen = select(args[0], { shared: flags.shared === true });
 
       const lines: string[] = [];
+      const outcomes: unknown[] = [];
       for (const connector of chosen) {
         const plan = await connector.plan({
           projectRoot: config.projectRoot,
@@ -161,7 +162,7 @@ export function disconnectCommand(): CommandDefinition {
           scope,
         });
 
-        await connector.remove({
+        const outcome = await connector.remove({
           clientId: connector.id,
           scope,
           projectRoot: config.projectRoot,
@@ -169,14 +170,23 @@ export function disconnectCommand(): CommandDefinition {
           configPath: plan.configPath,
           connectedAt: new Date().toISOString(),
         });
-        // Deliberately unconditional wording: `remove` leaves anything it did not create, so
-        // claiming to have removed something would sometimes be untrue.
-        lines.push(
-          `${connector.title}: any Lorepack entry in ${plan.configPath} has been removed.`,
-        );
+        outcomes.push({ client: connector.id, configPath: plan.configPath, ...outcome });
+        // `remove` takes back only what this project's connect created, so an entry another
+        // project wrote into a shared user file is left, and named, rather than taken (#581).
+        if (outcome.removed) {
+          lines.push(`${connector.title}: removed the Lorepack entry from ${plan.configPath}.`);
+        } else if (outcome.ownedBy !== undefined) {
+          lines.push(
+            `${connector.title}: left the Lorepack entry in ${plan.configPath}, which belongs to ${outcome.ownedBy}. Run \`lorepack disconnect\` there to remove it.`,
+          );
+        } else {
+          lines.push(
+            `${connector.title}: no Lorepack entry for this project in ${plan.configPath}.`,
+          );
+        }
       }
 
-      return { human: lines.join('\n'), json: undefined };
+      return { human: lines.join('\n'), json: { outcomes } };
     },
   };
 }

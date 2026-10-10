@@ -105,6 +105,22 @@ function refuseProjectSymlinks(path: string, projectRoot: string): void {
 }
 
 /**
+ * JSON with every character outside printable ASCII escaped, for an ownership marker that
+ * lives inside a comment.
+ *
+ * `JSON.stringify` leaves DEL, the C1 controls and every non-ASCII character as they are. A
+ * TOML comment may not hold a control character at all, so a project path containing one made
+ * the marker, and with it the user's whole configuration, unparseable (#581). Escaped, the
+ * marker is plain ASCII in any comment syntax and `JSON.parse` reads the path back unchanged.
+ */
+export function asciiJson(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[^\x20-\x7e]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
+/**
  * A timestamped copy beside the original, returned so a receipt can name it.
  *
  * Never overwrites: a connect and a disconnect can land in the same millisecond, and the

@@ -59,6 +59,21 @@ One caveat found by measurement and worked around rather than reported to the us
 stripped before parsing and restored on write, because telling somebody their configuration
 is broken when it is not would be worse than the three lines it costs.
 
+## Every edit is checked by parsing it
+
+The splice works on lines, and TOML is not line-oriented everywhere: a header-shaped line
+inside a multi-line string is not a header, and a blank line inside one is content. So the
+splice touches only the lines of our own table and the one blank line an append puts before
+it, never collapses blank lines elsewhere, and leaves comments that trail our table for the
+table that follows. The result is then parsed and compared with the original document with
+only our entry changed; any other difference refuses the edit before it reaches the disk. A
+version that collapsed blank runs across the whole file deleted lines inside a user's
+`developer_instructions` string (#581), which this check now catches as a class.
+
+The ownership marker is written as ASCII-only JSON. `JSON.stringify` leaves DEL and the C1
+controls raw, TOML forbids them in a comment, and a project path containing one made the
+whole file unparseable.
+
 ## Why ownership is a comment
 
 The JSON adapters mark ownership with an `x-lorepack` key inside the entry, and Codex 0.146.1
