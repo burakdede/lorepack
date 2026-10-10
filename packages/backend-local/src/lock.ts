@@ -89,6 +89,7 @@ const DEFAULTS = {
  * is a margin against a suspended process rather than an estimate.
  */
 const TOMBSTONE_RETENTION_MS = 60 * 60_000;
+const TRANSIENT_DENIAL_MS = 2_000;
 const TOMBSTONE_MARKER = 'reclaimed-at';
 
 /** Tokens are UUIDs this module generated; anything else never reaches a path. */
@@ -110,6 +111,7 @@ export class ProjectLock {
   readonly #recordPath: string;
   readonly #options: Required<LockOptions>;
   #held = false;
+  #deniedSince: number | null = null;
   #ownerToken: string | null = null;
 
   constructor(lockPath: string, options: LockOptions = {}) {
@@ -142,9 +144,15 @@ export class ProjectLock {
     try {
       mkdirSync(this.#directory);
     } catch (cause) {
-      if ((cause as { code?: string }).code !== 'EEXIST') throw cause;
-      return false;
+      const code = (cause as { code?: string }).code;
+      if (code === 'EEXIST') {
+        this.#deniedSince = null;
+        return false;
+      }
+      if (this.#isTransientDenial(code)) return false;
+      throw cause;
     }
+    this.#deniedSince = null;
     const token = randomUUID();
     const record: LockRecord = {
       pid: this.#options.ownerPid,
@@ -158,6 +166,19 @@ export class ProjectLock {
     this.#ownerToken = token;
     this.#sweepTombstones();
     return true;
+  }
+
+  /**
+   * Windows refuses `mkdir` with EPERM while another process is renaming or deleting a
+   * directory at the same path, which is exactly what a reclaim or a release does. That is
+   * contention, so it is retried like a held lock; a denial that lasts is a real permission
+   * problem and is rethrown rather than reported as a held lock.
+   */
+  #isTransientDenial(code: string | undefined): boolean {
+    if (process.platform !== 'win32' || (code !== 'EPERM' && code !== 'EACCES')) return false;
+    const now = Date.now();
+    this.#deniedSince ??= now;
+    return now - this.#deniedSince < TRANSIENT_DENIAL_MS;
   }
 
   #readOwner(path = this.#recordPath): LockRecord | null {
