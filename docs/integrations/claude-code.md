@@ -71,8 +71,10 @@ actually does.
 Architecture 24.8 names client-configuration corruption as a real risk, and it is the kind
 discovered late: the file also holds servers you configured by hand.
 
-- **Nothing is written until you have seen it.** `--dry-run` prints the plan and touches
-  nothing.
+- **Nothing is written until you have agreed to it.** `connect` plans every client first,
+  prints the plan, and asks `Apply these changes? [y/N]`. Without a terminal, in a script or
+  CI job, it prints the plan, writes nothing and exits 1 unless you pass `--yes`. `--dry-run`
+  prints the plan and touches nothing.
 - **The file is backed up first**, with a timestamp, beside the original.
 - **Edits merge and never replace.** Servers you configured stay exactly where they were.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.
@@ -98,6 +100,11 @@ a question and get nothing:
   Not working yet: The server could not be started: spawn lorepack ENOENT.
   Check that `lorepack` is on the path.
 ```
+
+The server is spawned and then stopped on every outcome, including a timeout, so a server stuck
+in a long first build is not left holding the project lock after `connect` returns. When it
+does not start or does not list its tools, `connect` exits 3, so a script can tell; a trust
+step the client still asks for is reported but is not a failure.
 
 It then runs `claude mcp list` from the project directory, which is where a local-scope server
 is listed. With `--shared`, a server the client has registered but you have not yet approved

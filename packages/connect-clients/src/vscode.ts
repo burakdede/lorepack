@@ -1,9 +1,8 @@
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
+import { runExecutable } from './executable.js';
 import { backup } from './json-config.js';
 import {
   ownerOfEntry,
@@ -47,8 +46,6 @@ import { type VerifyOptions, verifyStdioServer } from './verify.js';
  * configured themselves. That is exactly the quiet damage architecture 24.8 is about, and it
  * is why [`jsonc-config.ts`](./jsonc-config.ts) edits minimally instead.
  */
-
-const execute = promisify(execFile);
 
 export const VSCODE_ID = 'vscode';
 
@@ -96,12 +93,7 @@ function locationFor(projectRoot: string, scope: ConnectInput['scope']): ConfigL
 export function createVsCodeConnector(options: VsCodeOptions = {}): ClientConnector {
   const userDirectory = options.userConfigDirectory ?? userConfigDirectory();
   const probe = options.probe ?? verifyStdioServer;
-  const runClient =
-    options.runClient ??
-    (async (args: readonly string[]) => {
-      const { stdout, stderr } = await execute('code', [...args], { timeout: 20_000 });
-      return { stdout, stderr };
-    });
+  const runClient = options.runClient ?? ((args: readonly string[]) => runExecutable('code', args));
 
   const entryPath = (serverName: string): readonly string[] => [SERVERS_KEY, serverName];
 

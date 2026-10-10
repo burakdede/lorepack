@@ -27,6 +27,8 @@ security-affecting change before release.
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |
 | `connect` refuses linked project configs and keeps client config modes (#574) | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts`, `packages/cli/test/connect.test.ts` | Covered |
+| `connect` writes no client configuration without a terminal confirmation or `--yes` (#576) | `packages/cli/test/connect.e2e.test.ts`, `packages/cli/test/connect.test.ts` | Covered |
+| `connect` never runs a client or server executable planted in the project (#577) | `packages/cli/test/connect.e2e.test.ts`, `packages/connect-clients/test/executable.test.ts` | Covered |
 | Model-facing tools are read-only | `tools/contract/test/mcp.test.ts` | Covered |
 
 ## Commands To Run For Sign-off
