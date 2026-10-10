@@ -142,6 +142,13 @@
           },
           "type": "array"
         },
+        "orphanTablesToRemove": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
         "remove": {
           "items": {
             "description": "Content-derived build identifier",
@@ -156,7 +163,8 @@
         "keep",
         "remove",
         "archiveKeysToRemove",
-        "objectKeysToRemove"
+        "objectKeysToRemove",
+        "orphanTablesToRemove"
       ],
       "type": "object"
     },
