@@ -1,6 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { hashBytes, LoreError, type ObjectStore, objectKey, writeFileAtomic } from '@lorepack/core';
+import { dirname, join } from 'node:path';
+import {
+  fsyncDirectory,
+  hashBytes,
+  LoreError,
+  type ObjectStore,
+  objectKey,
+  writeFileAtomic,
+} from '@lorepack/core';
+
+export interface FileObjectStoreDependencies {
+  /** Injectable so a test can observe which directories were made durable. */
+  readonly fsyncDirectory?: (path: string) => void;
+}
 
 /**
  * Content-addressed objects on the filesystem, two levels of fan-out so no directory
@@ -9,9 +21,11 @@ import { hashBytes, LoreError, type ObjectStore, objectKey, writeFileAtomic } fr
  */
 export class FileObjectStore implements ObjectStore {
   readonly #root: string;
+  readonly #fsyncDirectory: (path: string) => void;
 
-  constructor(root: string) {
+  constructor(root: string, dependencies: FileObjectStoreDependencies = {}) {
     this.#root = root;
+    this.#fsyncDirectory = dependencies.fsyncDirectory ?? fsyncDirectory;
   }
 
   #pathFor(hash: string): string {
@@ -36,8 +50,19 @@ export class FileObjectStore implements ObjectStore {
       this.#readVerified(hash, path);
       return hash;
     }
-    mkdirSync(join(path, '..'), { recursive: true });
+    const directory = dirname(path);
+    const firstCreated = mkdirSync(directory, { recursive: true });
     writeFileAtomic(path, data);
+    // `writeFileAtomic` makes the file's entry durable in its directory, but a directory
+    // created here is itself only an entry in its parent. Without syncing each new one, a
+    // power loss after the build record commits could lose the path to an object the
+    // active build references (#572).
+    if (firstCreated !== undefined) {
+      for (let created = directory; ; created = dirname(created)) {
+        this.#fsyncDirectory(dirname(created));
+        if (created === firstCreated || dirname(created) === created) break;
+      }
+    }
     return hash;
   }
 
