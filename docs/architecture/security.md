@@ -162,11 +162,35 @@ check would either exclude the query route or admit a genuine write that happene
 
 ## Privacy defaults
 
-`tools/security/test/privacy-defaults.test.ts` blocks `fetch` and Node socket connection
-attempts inside a real `lorepack build` invocation. The fixture includes an external URL and a
-script tag, so the test proves the core build path treats source content as bytes and never
-executes or fetches it. There is no telemetry path in the compiler, and the test would fail if
-one were added through Node's standard network path.
+`tools/security/test/privacy-defaults.test.ts` runs the real `lorepack build` binary, in its
+own process, over a corpus with one file per built-in parser: Markdown, HTML, plain text, CSV,
+PDF, DOCX and XLSX, each naming an external URL, and the HTML carrying a script, a stylesheet
+link and a remote image. It asserts the build succeeds and that nothing reached for the network.
+There are two layers (#616).
+
+**The permission sandbox, on every platform.** The build runs under Node's permission model with
+read access, write access to the project only, and no `--allow-child-process`, `--allow-worker`,
+`--allow-addons` or `--allow-wasi`, so Node refuses a child process or worker thread outright:
+neither can carry a request the monitor does not see. A preloaded monitor
+(`tools/security/test/sandbox/monitor.mjs`) subscribes to Node's own diagnostics channels for
+TCP, TLS, UDP, HTTP, HTTP/2 and fetch, which fire inside Node whatever API reached them, wraps
+the DNS resolver, which has no channel, and reports the refused process and thread APIs too, so a
+refusal the build catches and ignores still fails. Node 24's permission model has no network
+grant (that arrived in Node 25), which is why the network side is observed rather than denied
+here. It also refuses `fsync`, so the sandbox replaces `fsync` with a no-op: durability is not what
+this test measures.
+
+**The network namespace, on Linux in CI.** The `privacy sandbox (ubuntu-latest)` job runs the
+same file inside a fresh network and mount namespace
+(`tools/security/test/sandbox/netns.sh`) whose only interfaces are loopback and a dummy
+interface holding the default route, with `resolv.conf` pointing at that dummy network. Any
+packet to any address, DNS included, is counted by the kernel and dropped. The build must
+transmit zero packets, and the DNS, UDP and fetch counterexamples are shown to raise the count
+with the in-process monitor switched off. It needs root, so it is a CI job rather than part of
+`pnpm test:security`; macOS and Windows have no unprivileged equivalent.
+
+Each egress route #616 found (a DNS lookup, a UDP datagram, a child process that connects, and a
+fetch from a worker thread) is loaded into the real build process and must fail the test.
 
 ## Remote runtime authentication
 

@@ -24,6 +24,12 @@ Steps, in order:
 
 Test results and coverage upload as artifacts on every run, including failures.
 
+The `privacy sandbox (ubuntu-latest)` job builds the project and runs
+`tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
+counts every packet (`tools/security/test/sandbox/netns.sh`). It is a separate job because it
+needs `sudo`, and Linux only because that namespace has no macOS or Windows equivalent. See
+[`security.md`](security.md#privacy-defaults).
+
 ## `benchmarks.yml`
 
 Runs the shared evidence protocol on `ubuntu-latest`, `windows-latest` and `macos-latest`. Pull
@@ -90,3 +96,14 @@ The credentialed Cloudflare acceptance harness shares one Worker across runs.
 After Wrangler deploys it, the harness writes that Worker's actual endpoint into
 the target receipt alongside its name. Deploy and resume confirm activation
 against the same Worker that serves the acceptance requests.
+
+The privacy namespace invokes the already installed Vitest entry point with
+Node directly. Running pnpm under sudo would change its environment and trigger
+dependency installation inside the offline namespace. Installation and build
+finish in the unprivileged setup steps before entering the namespace.
+
+The namespace mounts a fresh sysfs so its packet counters describe its own
+interfaces, rather than the runner's inherited network devices. The dummy
+interface has no automatic IPv6 address and uses a permanent gateway neighbor,
+so interface setup and ARP retries cannot contribute unrelated packets during a
+build. Counterexamples must transmit packets, then leave a clean build at zero.

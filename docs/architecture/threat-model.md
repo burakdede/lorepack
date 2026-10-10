@@ -51,7 +51,7 @@ changes, and which threats are intentionally not solved.
 | `connect` makes a 0600 client configuration world-readable | Atomic writes copy the existing file's mode onto the replacement; new user-scope files are created 0600; backups keep the original's mode | `packages/connect-clients/test/contract.ts`, `packages/connect-clients/test/config-file.test.ts` |
 | `lorepack deploy` executes a package an attacker published under a guessable name | Wrangler is resolved by Node's own algorithm for the package named `wrangler`, from the project and then from the CLI's install, and its manifest name is checked. The old relative walk to `node_modules/deploy-cloudflare/...` is gone (#580) | `packages/cli/test/wrangler.test.ts`, acceptance `packaging/the-installed-cli-finds-the-projects-wrangler` |
 | Model-facing tools mutate the project | MCP tool list is exactly the documented read-only set | `tools/contract/test/mcp.test.ts` |
-| Build path sends source content over the network | There is no telemetry path; the security suite blocks `fetch` and socket connects during build | `tools/security/test/privacy-defaults.test.ts` |
+| Build path sends source content over the network | There is no telemetry path. The security suite runs the real build over every parser's format under Node's permission model (no child processes, workers, add-ons or WASI) with a monitor on every network channel and the DNS resolver; on Linux CI the same build runs in a network namespace that must transmit zero packets | `tools/security/test/privacy-defaults.test.ts`, `privacy sandbox (ubuntu-latest)` job |
 
 ## Non-goals
 
