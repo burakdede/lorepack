@@ -22,6 +22,12 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'lock process probes do not execute a relative PATH entry',
+    path: 'packages/backend-local/test/process-start.test.ts',
+    tests: ['process start identity does not execute a process probe from a relative PATH entry'],
+    patterns: [/processStart\(process.pid\)/, /expect\(existsSync\(marker\)\)\.toBe\(false\)/],
+  },
+  {
     name: 'secret redaction is linear on adversarial input',
     path: 'packages/core/test/errors.test.ts',
     tests: [

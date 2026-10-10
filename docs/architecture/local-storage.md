@@ -106,6 +106,10 @@ the number. The start is compared as clock ticks since boot on Linux, read from 
 wall time from `ps` on macOS and from PowerShell on Windows, within five seconds. When the start
 of a live process cannot be read, the lock is kept.
 
+Process probes never search PATH or the project directory. macOS uses `/bin/ps`; Windows
+uses `System32/WindowsPowerShell/v1.0/powershell.exe` under an absolute `SystemRoot`.
+An unavailable probe keeps the lock rather than running a project-supplied executable.
+
 A lock taken on another host is never reclaimed automatically, whatever its age: its owner's
 liveness cannot be checked from here, which matters on NFS and synced folders. The command
 fails with `LORE_E_LOCK_HELD` naming the host, and the remedy is to remove `.lore/lock` once
@@ -124,6 +128,10 @@ first rename can succeed: every later one targets a directory that already exist
 empty, which fails on POSIX and Windows alike, so a late reclaimer cannot move the new holder's
 lock. Tombstones are removed an hour after they are marked, by whichever process next takes
 the lock.
+
+The retention interval bounds protection against a reclaimer suspended between reading and
+renaming. A process paused for longer than one hour can outlive its tombstone. See the
+[lock reclamation decision](../adr/0002-lock-reclamation.md) for this trade-off.
 
 Two deliberate details. The owner pid is injectable, so the reclamation paths can be tested
 as a genuinely different process rather than approximated. The wait deadline uses wall
