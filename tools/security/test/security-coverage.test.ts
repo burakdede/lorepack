@@ -65,6 +65,24 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/refuses an oversized body/, /DEFAULT_MAX_REQUEST_BYTES/, /413/],
   },
   {
+    name: 'repeated query terms cannot multiply FTS5 work',
+    path: 'packages/cli/test/security.e2e.test.ts',
+    patterns: [
+      /a query cannot be made expensive by repeating it/,
+      /past the distinct-term cap with a typed 400/,
+      /\/v1\/context/,
+    ],
+  },
+  {
+    name: 'repeated query terms cost what one term costs on both adapters',
+    path: 'packages/deploy-cloudflare/test/ranking-parity.test.ts',
+    patterns: [
+      /repeated query terms cost what one term costs/,
+      /runtimes\.local, runtimes\.remote/,
+      /toBeLessThan\(single/,
+    ],
+  },
+  {
     name: 'localhost Origin validation protects the local write surface',
     path: 'packages/runtime/test/http.test.ts',
     patterns: [/refuses a non-loopback browser origin/, /allowLoopbackOrigin/, /127\.0\.0\.1/],

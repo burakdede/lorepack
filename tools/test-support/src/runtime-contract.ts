@@ -207,6 +207,54 @@ export function runRuntimeContract(options: ContractOptions): void {
     });
 
     /**
+     * Hostile query text (#625).
+     *
+     * A term repeated a few dozen times used to cost minutes of FTS5 work on every backend,
+     * because each copy became its own phrase. The property is that repetition adds nothing
+     * to what the index is asked: the same chunks match. Scores may differ, because an exact
+     * title or heading match compares the whole query text and a repeated query is not one.
+     */
+    describe('hostile query text', () => {
+      const overCap = Array.from({ length: 65 }, (_, index) => `term${index}`).join(' ');
+
+      it('matches the same chunks for a repeated term as for the term once', async () => {
+        await withFixture(async ({ runtime, matchingQuery }) => {
+          // Three spellings the tokenizer folds into one token, sixty times over.
+          const repeated = Array(20)
+            .fill(`${matchingQuery} ${matchingQuery.toUpperCase()} ${matchingQuery}.`)
+            .join(' ');
+          const request = { limit: 10, includeArchived: false, debug: false };
+          const once = await runtime.search({ ...request, query: matchingQuery });
+          const many = await runtime.search({ ...request, query: repeated });
+          const chunks = (hits: readonly { chunkId: string }[]): string[] =>
+            hits.map((hit) => hit.chunkId).sort();
+          expect(once.hits.length).toBeGreaterThan(0);
+          expect(chunks(many.hits)).toEqual(chunks(once.hits));
+        });
+      });
+
+      it('refuses a search past the distinct-term cap with a typed error', async () => {
+        await withFixture(async ({ runtime }) => {
+          await expect(
+            runtime.search({ query: overCap, limit: 5, includeArchived: false, debug: false }),
+          ).rejects.toMatchObject({ code: 'LORE_E_INVALID_ARGUMENT' });
+        });
+      });
+
+      it('refuses a task past the distinct-term cap with a typed error', async () => {
+        await withFixture(async ({ runtime }) => {
+          await expect(
+            runtime.contextForTask({
+              task: overCap,
+              includeArchived: false,
+              allowUnsupportedBudget: false,
+            }),
+          ).rejects.toMatchObject({ code: 'LORE_E_INVALID_ARGUMENT' });
+        });
+      });
+    });
+
+    /**
      * Typed tables, as a caller actually uses them (#235).
      *
      * Every assertion here is an **equality between two representations**, because that is the
