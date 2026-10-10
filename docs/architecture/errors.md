@@ -90,6 +90,16 @@ embeds a token cannot leak it however it was built. Three layers:
 `redactDeep` applies the same rules through nested objects and arrays, which is what
 protects `details` payloads.
 
+Every rendered error passes through these rules, and a caller controls much of what is in
+one: Zod echoes an unknown request key into the message. So redaction must stay linear in
+its input. The third layer once used one pattern with the keyword in the middle of the name,
+which backtracked across the whole word for every keyword in it; a 200 KB key held the local
+server's event loop for 23 s (#551). It now finds a `name=value` pair first and tests the
+name afterwards. Names include hyphens, so `API-KEY` remains protected; scanning skips the
+whole name rather than retrying at every hyphen. `packages/core/test/errors.test.ts` times
+each rule on 1 MB adversarial input. The HTTP layer also clips caller text it echoes to 256 characters and reports at most
+20 validation issues.
+
 ## Adding a code
 
 1. Add it to `ERROR_CODES` with a one-line description.

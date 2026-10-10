@@ -122,6 +122,40 @@ describe('redaction', () => {
     expect(redact('use ghp_abcdefghijklmnopqrstuvwxyz012345', [])).toContain(REDACTED);
     expect(redact('Authorization: Bearer abcdefghijklmnop', [])).toContain(REDACTED);
     expect(redact('API_KEY=abcdefghijklmnop', [])).toContain(REDACTED);
+    expect(redact('API-KEY=abcdefghijklmnop', [])).toBe(`API-KEY=${REDACTED}`);
+  });
+
+  it('redacts every secret-named pair, including one inside another value and with odd spacing', () => {
+    expect(redact('a=MY_TOKEN=abcdefgh', [])).toBe(`a=MY_TOKEN=${REDACTED}`);
+    expect(redact('db_password : "two words"', [])).toBe(`db_password=${REDACTED}`);
+    expect(redact("x.client_secret='quoted'", [])).toBe(`x.client_secret=${REDACTED}`);
+    expect(redact('keep=this and AUTH_TOKEN=gone', [])).toBe(
+      `keep=this and AUTH_TOKEN=${REDACTED}`,
+    );
+    expect(redact('the token is fine, colon: not a pair', [])).toBe(
+      'the token is fine, colon: not a pair',
+    );
+  });
+
+  /**
+   * #551. The secret-pair pattern backtracked across a whole word for every keyword inside it,
+   * so one long identifier-like word cost quadratic time: 16,000 characters took 93 ms, a
+   * 200 KB request key held the local server's event loop for 30 s, and 1 MB would be minutes.
+   * Each shape here is an adversarial word with no separator, at the request cap.
+   */
+  it.each([
+    ['repeated keyword', 'TOKEN'],
+    ['keyword in a word', 'xTOKENx_'],
+    ['bearer prefix', 'Bearer '],
+    ['provider prefix', 'sk_'],
+    ['near-miss pair', 'TOKEN :'],
+    ['many short pairs', 'a='],
+    ['hyphenated name', 'name-name-'],
+  ])('runs in linear time on a 1 MB %s', (_shape, unit) => {
+    const input = unit.repeat(Math.ceil((1024 * 1024) / unit.length));
+    const started = performance.now();
+    redact(input, []);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   it('collects secret-shaped environment values only', () => {

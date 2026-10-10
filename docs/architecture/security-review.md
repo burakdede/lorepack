@@ -23,6 +23,7 @@ security-affecting change before release.
 | Local write CSRF from other localhost ports, preflight-free bodies, pack output path | `packages/runtime/test/http.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | DNS rebinding: Host allowlist on REST and MCP | `packages/runtime/test/http.test.ts`, `packages/cli/test/serving.test.ts`, `tools/security/test/local-server.test.ts` | Covered |
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
+| Redaction runs in linear time on caller-controlled error text (#551) | `packages/core/test/errors.test.ts`, `packages/runtime/test/http.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |

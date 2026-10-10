@@ -674,22 +674,35 @@ async function body<T>(
   const result = schema.safeParse({ ...(raw as Record<string, unknown>), ...extra });
   if (result.success) return result.data;
 
+  // Clipped, because both are the caller's own text: an unknown key is echoed into the
+  // message, and a 200 KB key came back twice in every error (#551).
   const first = result.error.issues[0];
-  const path = first === undefined ? '' : first.path.join('.');
+  const path = first === undefined ? '' : clip(first.path.join('.'));
   throw new LoreError(
     'LORE_E_INVALID_ARGUMENT',
-    `The request body is invalid${path === '' ? '' : ` at \`${path}\``}: ${first?.message ?? 'unknown reason'}.`,
+    `The request body is invalid${path === '' ? '' : ` at \`${path}\``}: ${clip(first?.message ?? 'unknown reason')}.`,
     {
       remediation: 'Correct the named field and try again.',
       ...(path === '' ? {} : { subject: path }),
       details: {
-        issues: result.error.issues.map((issue) => ({
-          path: issue.path.join('.'),
-          message: issue.message,
+        issues: result.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
+          path: clip(issue.path.join('.')),
+          message: clip(issue.message),
         })),
       },
     },
   );
+}
+
+/** Enough issues to fix a body by, and a bound on how many a caller can make us render. */
+const MAX_REPORTED_ISSUES = 20;
+const MAX_ECHOED_CHARACTERS = 256;
+
+/** Caller-supplied text, shortened to what an error message needs to point at it. */
+function clip(text: string): string {
+  return text.length <= MAX_ECHOED_CHARACTERS
+    ? text
+    : `${text.slice(0, MAX_ECHOED_CHARACTERS)}... (${text.length} characters)`;
 }
 
 /** The media type before any parameter, so `application/json; charset=utf-8` qualifies. */
