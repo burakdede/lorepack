@@ -33,6 +33,11 @@ interface Job {
   needs?: string | string[];
   environment?: string;
   permissions?: Record<string, string>;
+  concurrency?: {
+    group: string;
+    queue?: string;
+    'cancel-in-progress': boolean;
+  };
   steps?: Step[];
 }
 interface Workflow {
@@ -61,6 +66,15 @@ describe('the checked-in release workflow', () => {
       expect(topLevelPermissionProblems(name, workflow(name))).toEqual([]);
     },
   );
+
+  it('retains queued Cloudflare checks while serializing the shared runtime', () => {
+    const ci = parse(workflow('ci.yml'));
+    expect(ci.jobs['cloudflare-acceptance']?.concurrency).toEqual({
+      group: 'cloudflare-acceptance',
+      queue: 'max',
+      'cancel-in-progress': false,
+    });
+  });
 });
 
 describe('the rules catch', () => {
