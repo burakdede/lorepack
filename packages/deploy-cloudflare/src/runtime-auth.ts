@@ -118,7 +118,8 @@ async function readRuntimeTokenHashes(
   db: RuntimeAuthDatabaseLike,
   now: string,
 ): Promise<readonly string[]> {
-  await db.prepare(RUNTIME_TOKENS_TABLE).run();
+  // No `CREATE TABLE IF NOT EXISTS` here: this runs for every unauthenticated request, and the
+  // projection migrations already create `runtime_tokens` before a build can be served (#561).
   const rows = await db
     .prepare(
       'SELECT token_hash AS tokenHash FROM runtime_tokens WHERE expires_at IS NULL OR expires_at > ? ORDER BY token_hash',

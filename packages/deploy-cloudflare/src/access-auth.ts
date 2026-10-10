@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from 'jose';
 import {
   createRuntimeTokenAuthorizer,
   type RuntimeAuthDatabaseLike,
@@ -24,6 +24,23 @@ interface NormalizedCloudflareAccessConfig {
 
 export const ACCESS_JWT_HEADER = 'Cf-Access-Jwt-Assertion';
 const UNAUTHORIZED_MESSAGE = 'This request is not authorized for this build.';
+
+/**
+ * One key set per JWKS URL for the life of the isolate. The Worker builds its app per request,
+ * so a key set created there lost jose's key cache every time and any request carrying an
+ * Access header cost a fetch of the team's certs (#561). Kept here, jose's own cache and
+ * cooldown bound refetches to one per isolate per cache period.
+ */
+const remoteKeySets = new Map<string, JWTVerifyGetKey>();
+
+function remoteKeySetFor(jwksUrl: URL): JWTVerifyGetKey {
+  let keySet = remoteKeySets.get(jwksUrl.href);
+  if (keySet === undefined) {
+    keySet = createRemoteJWKSet(jwksUrl);
+    remoteKeySets.set(jwksUrl.href, keySet);
+  }
+  return keySet;
+}
 
 export function resolveCloudflareAccessConfigFromBindings(
   bindings: CloudflareAccessBindings,
@@ -89,11 +106,12 @@ export function createCloudflareRequestAuthorizer(
 function createAccessTokenVerifier(
   config: NormalizedCloudflareAccessConfig,
 ): (token: string) => Promise<boolean> {
-  const jwks = createRemoteJWKSet(config.jwksUrl);
+  const jwks = remoteKeySetFor(config.jwksUrl);
   return async (token) => {
     await jwtVerify(token, jwks, {
       issuer: config.issuer,
       audience: config.audience,
+      requiredClaims: ['exp'],
     });
     return true;
   };
