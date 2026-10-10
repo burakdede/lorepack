@@ -4,6 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "artifactId": {
+      "maxLength": 4096,
       "minLength": 1,
       "type": "string"
     },
@@ -12,6 +13,7 @@
       "type": "boolean"
     },
     "fileType": {
+      "maxLength": 1000,
       "type": "string"
     },
     "includeArchived": {
@@ -25,6 +27,7 @@
       "type": "integer"
     },
     "pathGlob": {
+      "maxLength": 1000,
       "type": "string"
     },
     "query": {
@@ -41,6 +44,7 @@
         ],
         "type": "string"
       },
+      "maxItems": 3,
       "type": "array"
     }
   },

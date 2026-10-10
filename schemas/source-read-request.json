@@ -4,13 +4,16 @@
   "additionalProperties": false,
   "properties": {
     "artifactId": {
+      "maxLength": 4096,
       "minLength": 1,
       "type": "string"
     },
     "headingPath": {
       "items": {
+        "maxLength": 1000,
         "type": "string"
       },
+      "maxItems": 64,
       "type": "array"
     },
     "lineEnd": {
@@ -30,6 +33,7 @@
     },
     "path": {
       "description": "POSIX-style path relative to a source root",
+      "maxLength": 4096,
       "minLength": 1,
       "type": "string"
     }

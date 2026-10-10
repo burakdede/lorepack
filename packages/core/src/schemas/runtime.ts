@@ -19,6 +19,32 @@ import { contextProfileSchema } from './config.js';
 /** Freshness travels with every result, so a consumer never has to ask. */
 export const sourceStateSchema = z.enum(['clean', 'dirty', 'unknown']);
 
+/**
+ * Upper bounds on request text, so an oversized value is a typed refusal naming the field
+ * rather than work sent to the database (#554).
+ *
+ * Unbounded, a 48,001-character glob reached SQLite as `LIKE or GLOB pattern too complex`, and
+ * a list of 500 statuses became 508 bound placeholders against D1's limit of 100. The limits
+ * are far above any real value: a path or an identifier, then a glob or a filter value.
+ */
+export const REQUEST_LIMITS = {
+  identifier: 4096,
+  pattern: 1000,
+  filters: 10,
+  headingDepth: 64,
+} as const;
+
+const identifier = z.string().min(1).max(REQUEST_LIMITS.identifier);
+const pattern = z.string().max(REQUEST_LIMITS.pattern);
+
+/** Each status at most once: three values, and a repeat adds a placeholder and no meaning. */
+const statusList = z
+  .array(artifactStatusSchema)
+  .max(artifactStatusSchema.options.length)
+  .refine((values) => new Set(values).size === values.length, {
+    message: 'Each status may appear only once',
+  });
+
 const responseEnvelope = {
   buildId: buildIdSchema,
   sourceState: sourceStateSchema,
@@ -29,11 +55,11 @@ export const searchRequestSchema = z
     query: z.string().min(1).max(1000),
     limit: z.int().positive().max(100).default(10),
     includeArchived: z.boolean().default(false),
-    pathGlob: z.string().optional(),
-    fileType: z.string().optional(),
+    pathGlob: pattern.optional(),
+    fileType: pattern.optional(),
     /** Narrows to one document, which is how a follow-up question stays on topic. */
-    artifactId: z.string().min(1).optional(),
-    status: z.array(artifactStatusSchema).optional(),
+    artifactId: identifier.optional(),
+    status: statusList.optional(),
     debug: z.boolean().default(false),
   })
   .strict();
@@ -77,7 +103,8 @@ export const taskContextRequestSchema = z
     allowUnsupportedBudget: z.boolean().default(false),
     includeArchived: z.boolean().default(false),
     filters: z
-      .array(z.object({ kind: z.enum(['path', 'type', 'status']), value: z.string() }).strict())
+      .array(z.object({ kind: z.enum(['path', 'type', 'status']), value: pattern }).strict())
+      .max(REQUEST_LIMITS.filters)
       .optional(),
   })
   .strict();
@@ -127,11 +154,11 @@ export const contextBundleSchema = z
 
 export const sourceReadRequestSchema = z
   .object({
-    artifactId: z.string().min(1).optional(),
-    path: canonicalPathSchema.optional(),
+    artifactId: identifier.optional(),
+    path: canonicalPathSchema.max(REQUEST_LIMITS.identifier).optional(),
     lineStart: z.int().positive().optional(),
     lineEnd: z.int().positive().optional(),
-    headingPath: z.array(z.string()).optional(),
+    headingPath: z.array(pattern).max(REQUEST_LIMITS.headingDepth).optional(),
     page: z.int().positive().optional(),
   })
   .strict()
@@ -203,7 +230,7 @@ export const tableDescriptionSchema = z
 
 export const tableQueryRequestSchema = z
   .object({
-    tableId: z.string().min(1),
+    tableId: identifier,
     sql: z.string().min(1).max(100_000).describe('Exactly one SELECT or WITH ... SELECT'),
     limit: z.int().positive().max(10_000).optional(),
   })

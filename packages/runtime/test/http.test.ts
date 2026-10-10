@@ -312,6 +312,37 @@ describe('validation names the field that was wrong', () => {
     );
   });
 
+  it.each([
+    ['/v1/search', { query: 'x', pathGlob: 'a'.repeat(48_001) }, 'pathGlob'],
+    ['/v1/search', { query: 'x', status: Array(500).fill('active') }, 'status'],
+    [
+      '/v1/context',
+      { task: 'x', filters: [{ kind: 'path', value: 'a'.repeat(48_001) }] },
+      'filters.0.value',
+    ],
+  ])(
+    'refuses an oversized field on %s as a typed 400 naming it (#554)',
+    async (path, body, field) => {
+      const response = await appFor().request(path, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(response.status).toBe(400);
+      const parsed = (await response.json()) as { error: { code: string; subject?: string } };
+      expect(parsed.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+      expect(parsed.error.subject).toBe(field);
+    },
+  );
+
+  it('refuses an oversized heading path on a source read as a typed 400 (#554)', async () => {
+    const response = await appFor().request(
+      `/v1/sources/p%3Aguides%2Fa.md?headingPath=${'a'.repeat(48_001)}`,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_INVALID_ARGUMENT' } });
+  });
+
   it('refuses a query string range that is not a line number', async () => {
     const response = await appFor().request('/v1/sources/p%3Aguides%2Fa.md?lineStart=nonsense');
     expect(response.status).toBe(400);
