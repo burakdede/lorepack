@@ -25,6 +25,7 @@ security-affecting change before release.
 | Remote auth bypass | `packages/deploy-cloudflare/test/runtime-auth.test.ts`, `packages/deploy-cloudflare/test/access-auth.test.ts`, `packages/deploy-cloudflare/test/worker-app.test.ts` | Covered |
 | Redaction runs in linear time on caller-controlled error text (#551) | `packages/core/test/errors.test.ts`, `packages/runtime/test/http.test.ts` | Covered |
 | HTTP and MCP errors carry no raw D1 or SQLite text and no absolute path (#560) | `packages/deploy-cloudflare/test/worker-app.test.ts` (local and Worker, REST and MCP), `packages/core/test/errors.test.ts`, `packages/backend-local/test/sql-surface.test.ts` | Covered |
+| Oversized request fields are typed refusals on every backend (#554) | `tools/test-support/src/runtime-contract.ts` (local and D1), `packages/runtime/test/http.test.ts` | Covered |
 | Secret exclusion from manifests and logs | `packages/compiler/test/validate.test.ts`, `packages/core/test/errors.test.ts` | Covered |
 | Malicious config redaction | `packages/cli/test/config-resolve.test.ts` | Covered |
 | No telemetry or source egress in core build path | `tools/security/test/privacy-defaults.test.ts` | Covered |
