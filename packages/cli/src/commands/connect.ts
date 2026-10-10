@@ -3,6 +3,7 @@ import {
   type ClientConnector,
   CODEX_ID,
   type ConnectInput,
+  type ConnectionCheck,
   type ConnectPlan,
   type ConnectReceipt,
   type ConnectScope,
@@ -15,7 +16,7 @@ import {
   type Snippet,
   VSCODE_ID,
 } from '@lorepack/connect-clients';
-import { LoreError, loadConfig } from '@lorepack/core';
+import { EXIT_CODES, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 
@@ -169,6 +170,7 @@ export function connectCommand(options: ConnectCommandOptions = {}): CommandDefi
 
       const lines: string[] = [];
       const receipts: ConnectReceipt[] = [];
+      const checks: ConnectionCheck[] = [];
       for (const section of sections) {
         const { connector, plan } = section;
         // A plan the person has just read at the prompt is not repeated, only its outcome.
@@ -183,10 +185,19 @@ export function connectCommand(options: ConnectCommandOptions = {}): CommandDefi
         if (receipt.backupPath !== undefined) lines.push(`  Backed up to ${receipt.backupPath}`);
 
         const check = await connector.verify(receipt);
+        checks.push(check);
         lines.push(check.ok ? `  Verified: ${check.detail}` : `  Not working yet: ${check.detail}`);
       }
 
-      return { human: lines.join('\n'), json: { receipts } };
+      // A trust prompt the client will show is one step left for the person, not a failure.
+      // Anything else means the configuration was written and does not start, which a script
+      // has to be able to see without parsing the text (#578).
+      const failed = checks.some((check) => !check.ok && check.pendingTrust !== true);
+      return {
+        human: lines.join('\n'),
+        json: { receipts, checks },
+        ...(failed ? { exitCode: EXIT_CODES.ENVIRONMENT } : {}),
+      };
     },
   };
 }
