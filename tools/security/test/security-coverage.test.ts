@@ -141,6 +141,23 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/refuses a symlinked source root that escapes, and builds nothing/, /zebrafish/],
   },
   {
+    name: 'a .lore directory linked outside the project is refused, issue 572',
+    path: 'packages/core/test/config.test.ts',
+    tests: [
+      'a source root behind a symbolic link refuses a .lore directory that links outside the project (#572)',
+      'a source root behind a symbolic link refuses a dangling .lore link, which the first write would follow',
+    ],
+    patterns: [/refuses a \.lore directory that links outside the project/, /LORE_E_PATH_ESCAPE/],
+  },
+  {
+    name: 'a linked .lore fails the real build command and doctor, issue 572',
+    path: 'packages/cli/test/security.e2e.test.ts',
+    tests: [
+      'the build directory cannot be redirected outside the project refuses a .lore link out of the project, writes nothing there, and doctor says so',
+    ],
+    patterns: [/refuses a \.lore link out of the project/, /lore-writable/],
+  },
+  {
     name: 'pack refuses originals that became links or changed, issue 568',
     path: 'packages/cli/test/pack.test.ts',
     tests: [
