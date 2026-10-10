@@ -7,6 +7,7 @@ import {
   type ParsedTable,
   type SourceLocator,
 } from '@lorepack/core';
+import { inTransaction } from '../sqlite.js';
 import { TABLE_CATALOG_TABLES, writeTables } from './tables.js';
 
 /**
@@ -97,8 +98,7 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
   let tableCount = 0;
   let tableRowCount = 0;
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  inTransaction(db, () => {
     for (const entry of artifacts) {
       const { artifact } = entry;
       insertArtifact.run(
@@ -183,12 +183,7 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
     for (const warning of options.warnings ?? []) {
       insertWarning.run(warning.code, warning.class, warning.path ?? null, warning.message);
     }
-
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
+  });
 
   return {
     artifacts: artifacts.length,
