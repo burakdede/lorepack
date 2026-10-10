@@ -71,8 +71,10 @@ actually does.
 Architecture 24.8 names client-configuration corruption as a real risk, and it is the kind
 discovered late: the file also holds servers you configured by hand.
 
-- **Nothing is written until you have seen it.** `--dry-run` prints the plan and touches
-  nothing.
+- **Nothing is written until you have agreed to it.** `connect` plans every client first,
+  prints the plan, and asks `Apply these changes? [y/N]`. Without a terminal, in a script or
+  CI job, it prints the plan, writes nothing and exits 1 unless you pass `--yes`. `--dry-run`
+  prints the plan and touches nothing.
 - **The file is backed up first**, with a timestamp, beside the original.
 - **Edits merge and never replace.** Servers you configured stay exactly where they were.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.

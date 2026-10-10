@@ -75,8 +75,10 @@ is a legal line and `JSON.parse` would refuse the whole file over it.
 
 - **Edits are minimal.** Only the Lorepack entry changes. Comments, unrelated servers, other
   settings, your indentation and your line endings survive as they were.
-- **Nothing is written until you have seen it.** `--dry-run` prints the plan and touches
-  nothing.
+- **Nothing is written until you have agreed to it.** `connect` plans every client first,
+  prints the plan, and asks `Apply these changes? [y/N]`. Without a terminal, in a script or
+  CI job, it prints the plan, writes nothing and exits 1 unless you pass `--yes`. `--dry-run`
+  prints the plan and touches nothing.
 - **The file is backed up first**, with a timestamp, beside the original.
 - **Writes are atomic.** An interrupted run leaves the old file, not half of a new one.
 - **Permissions are kept.** The rewritten file and its backup keep the original's mode, so a
