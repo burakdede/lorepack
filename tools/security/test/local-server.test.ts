@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -218,4 +219,87 @@ describe('another localhost page cannot write through the local server (#548)', 
     expect(archive).toMatch(/\.lorepack$/);
     expect(existsSync(archive)).toBe(true);
   });
+});
+
+/**
+ * Resource exhaustion through the request body (#550).
+ *
+ * A chunked upload declares no length. Before the fix the server read all of it into memory
+ * and only then compared its size to the cap: 400 MB took the process past 2 GB of RSS.
+ */
+describe('a request body is capped while it streams (#550)', () => {
+  /**
+   * Streams up to `limit` bytes in 1 MB chunks, as `Transfer-Encoding: chunked`, and reports
+   * the status and how much had been written when the answer came back.
+   */
+  function streamUntilAnswered(
+    path: string,
+    limit: number,
+  ): Promise<{ status: number; written: number }> {
+    return new Promise((resolve, reject) => {
+      let written = 0;
+      let answered = false;
+      const chunk = Buffer.alloc(1024 * 1024, 0x20);
+      const outgoing = request(
+        {
+          host: '127.0.0.1',
+          port: PORT,
+          path,
+          method: 'POST',
+          headers: {
+            Host: `127.0.0.1:${PORT}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'Transfer-Encoding': 'chunked',
+          },
+        },
+        (response) => {
+          answered = true;
+          resolve({ status: response.statusCode ?? 0, written });
+          response.resume();
+          outgoing.destroy();
+        },
+      );
+      outgoing.on('error', (error) => {
+        if (!answered) reject(error);
+      });
+      const pump = (): void => {
+        while (!answered && written < limit) {
+          written += chunk.byteLength;
+          if (!outgoing.write(chunk)) {
+            outgoing.once('drain', pump);
+            return;
+          }
+        }
+        if (!answered) outgoing.end();
+      };
+      pump();
+    });
+  }
+
+  it.each(['/v1/search', '/mcp'])(
+    'answers 413 on %s long before an oversized chunked body has been sent',
+    async (path) => {
+      const { status, written } = await streamUntilAnswered(path, 256 * 1024 * 1024);
+      expect(status).toBe(413);
+      // The cap is 1 MB. What the client wrote beyond it sat in socket buffers, not in the
+      // server, and before the fix the answer came only after all 256 MB had arrived.
+      expect(written).toBeLessThan(64 * 1024 * 1024);
+    },
+    60_000,
+  );
+
+  it('drops a connection that never finishes sending its headers', async () => {
+    const socket = connect(PORT, '127.0.0.1');
+    socket.write(`POST /v1/search HTTP/1.1\r\nHost: 127.0.0.1:${PORT}\r\n`);
+    const started = Date.now();
+    await new Promise<void>((resolve) => {
+      socket.on('close', () => resolve());
+      socket.on('error', () => undefined);
+      socket.resume();
+    });
+    // Node's default would hold it for a minute. Bounded by the headers timeout, checked
+    // every second.
+    expect(Date.now() - started).toBeLessThan(20_000);
+  }, 40_000);
 });

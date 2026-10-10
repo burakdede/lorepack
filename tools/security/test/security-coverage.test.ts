@@ -210,6 +210,16 @@ const EVIDENCE: readonly Evidence[] = [
     ],
   },
   {
+    name: 'request bodies are capped while they stream, before MCP parses them',
+    path: 'tools/security/test/local-server.test.ts',
+    patterns: [/Transfer-Encoding/, /toBe\(413\)/, /\/mcp/, /never finishes sending its headers/],
+  },
+  {
+    name: 'an anonymous /mcp request is refused before its body is read',
+    path: 'packages/runtime/test/http.test.ts',
+    patterns: [/refuses an anonymous \/mcp request as 401 without reading its body/],
+  },
+  {
     name: 'a Host allowlist stops DNS rebinding on REST and MCP',
     path: 'tools/security/test/local-server.test.ts',
     tests: [

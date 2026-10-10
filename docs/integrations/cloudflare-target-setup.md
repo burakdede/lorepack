@@ -197,7 +197,9 @@ checks only read D1: the Worker issues no schema statements on the authenticatio
 Cloudflare's current `workers.dev` docs also note that the Access gate can use policy rules
 over the request before it reaches the Worker. For Lorepack's MCP surface, the relevant safe
 policy hints are the mirrored `Mcp-Method` and `Mcp-Name` headers. The body remains the source
-of truth, and the Worker still rejects header and body mismatches before authorization.
+of truth, and the Worker rejects a header and body mismatch before the MCP handler runs. It
+checks after its own authorization, so an unauthenticated request is refused without its body
+being parsed (#550).
 
 ## Manual verification for the Access path
 
