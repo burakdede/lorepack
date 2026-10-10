@@ -172,6 +172,8 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   });
 }
 
+const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
+
 function registeredRoutes(app: ReturnType<typeof appFor>): string[] {
   return app.routes.map((route) => `${route.method} ${route.path}`);
 }
@@ -398,8 +400,6 @@ describe('safety, architecture 19.4 and 20.9', () => {
  * attacker's hostname, because that is the URL the page fetched.
  */
 describe('the Host header, which DNS rebinding cannot forge', () => {
-  const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
-
   it.each([
     ['GET', '/v1/sources/p%3Aguides%2Fa.md'],
     ['GET', '/v1/build'],
@@ -610,13 +610,72 @@ describe('the write surface, architecture 15.6 and 19.4', () => {
 
   it('accepts a page served from this machine, which is what Studio is', async () => {
     const { calls, actions } = actionsFor();
-    const app = appFor({ localActions: actions, allowLoopbackOrigin: true });
+    const app = appFor({ localActions: actions, allowedHosts: LOOPBACK, allowSameOrigin: true });
 
     const response = await app.request('/v1/builds', {
-      headers: { Origin: 'http://127.0.0.1:4321' },
+      headers: { Host: '127.0.0.1:4321', Origin: 'http://127.0.0.1:4321' },
     });
     expect(response.status).toBe(200);
     expect(calls).toEqual(['builds']);
+  });
+
+  /**
+   * Another server on this machine is not Studio (#548).
+   *
+   * A dev server with an XSS, a malicious package's preview, a local HTML file served on some
+   * port: each is a loopback origin, and none of them is the page this server served.
+   */
+  it.each(WRITES)('refuses a loopback page on another port: %s %s', async (method, path, body) => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({ localActions: actions, allowedHosts: LOOPBACK, allowSameOrigin: true });
+
+    for (const origin of ['http://localhost:8080', 'http://127.0.0.1:9999']) {
+      const response = await app.request(path, {
+        method,
+        headers: {
+          Host: '127.0.0.1:4321',
+          Origin: origin,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body }),
+      });
+      expect(response.status, origin).toBe(403);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('accepts Studio through a dev proxy, where page and Host share the proxy port', async () => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({ localActions: actions, allowedHosts: LOOPBACK, allowSameOrigin: true });
+
+    const response = await app.request('/v1/builds/rollback', {
+      method: 'POST',
+      headers: {
+        Host: 'localhost:5173',
+        Origin: 'http://localhost:5173',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(['rollback']);
+  });
+
+  it('will not let an HTTP caller choose where an archive is written', async () => {
+    const { calls, actions } = actionsFor();
+    const app = appFor({ localActions: actions });
+
+    for (const out of ['/tmp/victim.txt', '../../outside.lorepack', 'archive.lorepack']) {
+      const response = await app.request('/v1/builds/pack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ out }),
+      });
+      const parsed = (await response.json()) as { error: { code: string; message: string } };
+      expect(response.status, out).toBe(400);
+      expect(parsed.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+    }
+    expect(calls).toEqual([]);
   });
 
   it('validates the body before anything is activated', async () => {
@@ -631,6 +690,78 @@ describe('the write surface, architecture 15.6 and 19.4', () => {
 
     expect(response.status).toBe(400);
     expect(calls).toEqual([]);
+  });
+});
+
+/**
+ * A JSON route takes JSON, and says so to anything else (#548).
+ *
+ * `text/plain`, `application/x-www-form-urlencoded` and `multipart/form-data` are the content
+ * types a page can send cross-origin without a CORS preflight. Refusing them means a hostile
+ * page has to ask first, and the server never says yes to a foreign origin.
+ */
+describe('the request media type', () => {
+  const JSON_ROUTES = [
+    ['/v1/search', JSON.stringify({ query: 'a' })],
+    ['/v1/context', JSON.stringify({ task: 'a' })],
+    ['/v1/export', JSON.stringify({ task: 'a' })],
+    ['/v1/tables/sales/query', JSON.stringify({ sql: 'SELECT 1' })],
+    ['/v1/builds/activate', JSON.stringify({ build: BUILD })],
+    ['/v1/builds/rollback', '{}'],
+    ['/v1/builds/pack', '{}'],
+  ] as const;
+
+  function fullApp(calls: string[]): ReturnType<typeof appFor> {
+    const record = async (name: string) => {
+      calls.push(name);
+      return { ok: true };
+    };
+    return appFor({
+      exportBundle: async () => {
+        calls.push('export');
+        return '# bundle';
+      },
+      localActions: {
+        builds: () => record('builds'),
+        diff: () => record('diff'),
+        activate: () => record('activate'),
+        rollback: () => record('rollback'),
+        pack: () => record('pack'),
+      },
+    });
+  }
+
+  it.each(JSON_ROUTES)('refuses a simple-request body with 415: %s', async (path, body) => {
+    const calls: string[] = [];
+    const app = fullApp(calls);
+    for (const type of [
+      'text/plain',
+      'text/plain;charset=UTF-8',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data; boundary=x',
+      undefined,
+    ]) {
+      const response = await app.request(path, {
+        method: 'POST',
+        body,
+        ...(type === undefined ? {} : { headers: { 'Content-Type': type } }),
+      });
+      const parsed = (await response.json()) as { error: { code: string } };
+      expect(response.status, String(type)).toBe(415);
+      expect(parsed.error.code).toBe('LORE_E_INVALID_ARGUMENT');
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it('accepts JSON with parameters and in any case', async () => {
+    for (const type of ['application/json; charset=utf-8', 'Application/JSON']) {
+      const response = await appFor().request('/v1/search', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'rollback' }),
+        headers: { 'Content-Type': type },
+      });
+      expect(response.status, type).toBe(200);
+    }
   });
 });
 

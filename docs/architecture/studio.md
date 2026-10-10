@@ -19,8 +19,9 @@ are recorded here.
 | Diagnostics | Why is this not working, and what should be run to fix it |
 
 Studio is read-mostly. The only actions that change anything are on Versions:
-activate, roll back, and pack. They exist only under `lorepack dev` and refuse any
-browser origin that is not a loopback literal.
+activate, roll back, and pack. They exist only under `lorepack dev` on a loopback address
+and refuse any browser page that is not Studio itself (same host and port). Pack always
+writes to the default name in the project root.
 
 ## Running it
 

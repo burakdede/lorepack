@@ -127,9 +127,16 @@ and `packages/cli/test/serving.test.ts` pin the check and the list.
 
 ## The write surface
 
-There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`, refusing every browser
-origin that is not a loopback literal. A runtime built without it has **no mutating route at
-all**, which the end-to-end suite asserts by requesting each one and expecting a typed 404.
+There is one: `ApiOptions.localActions`, supplied only by `lorepack dev`. A browser caller must
+be the page this server served: its `Origin` must match the request's `Host`, port included,
+and name a loopback host, so a page on another `localhost` port is refused (#548). Every JSON
+route refuses a `text/plain`, form-encoded or untyped body with `415`, which forces a CORS
+preflight on any cross-origin page, and the HTTP pack route has no `out` field, so no caller
+chooses which file is written. `tools/security/test/local-server.test.ts` replays the
+original attack, a `text/plain` POST naming an output path from `http://localhost:8080`,
+against the real binary and asserts the target file is untouched. A runtime built without
+`localActions` has **no mutating route at all**, which the end-to-end suite asserts by
+requesting each one and expecting a typed 404.
 
 That is checked by **registration rather than by HTTP method**, because
 `POST /v1/tables/:id/query` is a read: a SQL statement does not belong in a URL. A method-based
@@ -160,4 +167,6 @@ echoed in the Worker 401 response.
 - **Live credentialed Cloudflare drift.** The checked-in remote auth and Worker tests run
   locally without credentials. The credentialed Cloudflare smoke remains the live-account proof.
 - **Local authentication.** There is none locally, by design: the server binds loopback and
-  serves one project. Browser-origin checks protect the local write surface.
+  serves one project. The `Host` allowlist, same-origin checks and the JSON content-type
+  requirement protect it from web pages. A process running as the same user can call it
+  freely, which the threat model lists as a non-goal.

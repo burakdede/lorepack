@@ -175,7 +175,7 @@ export async function startServing(
       ...(serveStudio
         ? {
             assets: createStudioAssets(),
-            allowLoopbackOrigin: true,
+            allowSameOrigin: true,
             // The one Studio read that is **not** a read of the build: planning walks the
             // source tree. `lorepack serve` promises never to rebuild and has no business reading
             // sources, so this belongs to `lorepack dev` alone.
@@ -197,10 +197,10 @@ export async function startServing(
               diff: (from, to) => comparer.compare(from, to),
               activate: createActivateEndpoint(options.config),
               rollback: createRollbackEndpoint(options.config),
-              pack: async (request) => {
-                const asked = request as { build?: string; out?: string };
-                return packBuild(options.config, { build: asked.build, out: asked.out });
-              },
+              // No `out`: the request schema refuses one, so an HTTP caller can never pick
+              // the file this writes (#548).
+              pack: async (request) =>
+                packBuild(options.config, { build: (request as { build?: string }).build }),
             },
           }
         : {}),

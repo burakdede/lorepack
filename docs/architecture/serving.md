@@ -137,6 +137,13 @@ a surface a client has to probe.
 Anything else is a `404` in the same typed error shape as every other failure, so a client
 has one error format rather than two.
 
+Every `POST` route under `/v1` takes a JSON body and requires `Content-Type: application/json`
+(parameters such as `charset` are fine). Any other type, or none, is a typed `415`, checked
+before the body is read. `text/plain` and the form encodings are exactly what a web page can
+send cross-origin without a CORS preflight, so refusing them means a hostile page has to ask
+first, and the server never approves a foreign origin (#548). The SDK, Studio and the `curl`
+equivalents Studio prints all send the header already.
+
 Five more routes exist only where the host supplied them, because each reads something a
 deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
 `GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
@@ -161,17 +168,24 @@ The only routes in this API that change anything:
 | `GET /v1/builds/:from/diff/:to` | section 18.3's comparison of any two builds |
 | `POST /v1/builds/activate` | move the active pointer to a named build |
 | `POST /v1/builds/rollback` | move it back to the previous verified build |
-| `POST /v1/builds/pack` | write a `.lorepack` archive |
+| `POST /v1/builds/pack` | write a `.lorepack` archive to the default name in the project root |
 
 They exist only where a host passes `localActions`, which only the local CLI does, and only
-for `lorepack dev`. Three things keep them local:
+for `lorepack dev`. Four things keep them local:
 
 1. **A remote deployment cannot register them.** It holds one build and no history, so it has
    nothing to supply. A route that does not exist cannot be reached by getting past a check.
-2. **They refuse any browser origin that is not a loopback literal**, and `allowedOrigins`
-   cannot widen this. Adding a remote origin so a team can read a deployment is not the same
-   as letting it activate a build.
-3. **No model-facing tool reaches them.** MCP stays read-only (invariant 10). These are
+2. **They refuse every browser page but Studio.** A request with an `Origin` must be
+   same-origin with the `Host` it was sent to (scheme aside, the same host and port) and
+   name a loopback host. Another server on `localhost:8080` is a loopback origin, but it is not
+   Studio, and it is refused (#548). `allowedOrigins` cannot widen this: adding a remote
+   origin so a team can read a deployment is not the same as letting it activate a build.
+   A request with no `Origin` (curl, a script) is admitted, because only the person at this
+   machine can send one to a loopback address.
+3. **An HTTP caller cannot choose a file to write.** `POST /v1/builds/pack` accepts only
+   `build`; an `out` field is refused with a `400`. The archive goes to the same default name
+   `lorepack pack` uses, and `lorepack pack --out` is how to put it elsewhere.
+4. **No model-facing tool reaches them.** MCP stays read-only (invariant 10). These are
    Studio's, and Studio is served from loopback.
 
 Each one calls the same code path the equivalent command does, so a build activated in a

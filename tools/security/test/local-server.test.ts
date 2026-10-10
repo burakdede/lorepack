@@ -1,12 +1,12 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
- * The local server's request guards, attacked the way a hostile web page would (#547).
+ * The local server's request guards, attacked the way a hostile web page would (#547, #548).
  *
  * Driven against the real `lorepack dev` binary over real sockets, because each attack depends
  * on a header a browser sets and `fetch` will not let a test forge: the `Host` a rebound page
@@ -134,5 +134,88 @@ describe('DNS rebinding: a foreign Host header reaches nothing (#547)', () => {
       expect(answer.status, host).toBe(200);
       expect(answer.body).toContain('launch date');
     }
+  });
+});
+
+/**
+ * Cross-site request forgery from another localhost page (#548).
+ *
+ * The request a page on `http://localhost:8080` can make with `mode: 'no-cors'`: a `text/plain`
+ * body, its own `Origin`, and the server's real `Host`. Before the fix it overwrote any file the
+ * user could write with a ZIP archive.
+ */
+describe('another localhost page cannot write through the local server (#548)', () => {
+  it('cannot pack over a file of its choosing, with or without a preflight-free body', async () => {
+    const victim = join(project, '..', `lore-victim-${PORT}.txt`);
+    writeFileSync(victim, 'precious\n', 'utf8');
+    try {
+      for (const type of ['text/plain', 'application/json']) {
+        const answer = await send('/v1/builds/pack', {
+          method: 'POST',
+          headers: {
+            Host: `127.0.0.1:${PORT}`,
+            Origin: 'http://localhost:8080',
+            'Content-Type': type,
+          },
+          body: JSON.stringify({ out: victim }),
+        });
+        expect(answer.status, type).toBe(403);
+      }
+      // A page that does share the origin still cannot send a preflight-free body.
+      const simple = await send('/v1/builds/pack', {
+        method: 'POST',
+        headers: {
+          Host: `127.0.0.1:${PORT}`,
+          Origin: `http://127.0.0.1:${PORT}`,
+          'Content-Type': 'text/plain',
+        },
+        body: '{}',
+      });
+      expect(simple.status).toBe(415);
+      // Even a caller with no Origin at all, which the guard admits, cannot name the file.
+      const direct = await send('/v1/builds/pack', {
+        method: 'POST',
+        headers: { Host: `127.0.0.1:${PORT}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ out: victim }),
+      });
+      expect(direct.status).toBe(400);
+      expect(readFileSync(victim, 'utf8')).toBe('precious\n');
+    } finally {
+      rmSync(victim, { force: true });
+    }
+  });
+
+  it.each(['/v1/builds/activate', '/v1/builds/rollback'])(
+    'refuses %s from a localhost page on another port',
+    async (path) => {
+      for (const type of ['text/plain', 'application/json']) {
+        const answer = await send(path, {
+          method: 'POST',
+          headers: {
+            Host: `127.0.0.1:${PORT}`,
+            Origin: 'http://localhost:8080',
+            'Content-Type': type,
+          },
+          body: JSON.stringify({ build: 'lore_0' }),
+        });
+        expect(answer.status, type).toBe(403);
+      }
+    },
+  );
+
+  it('still lets Studio, which is same-origin, pack to the default place', async () => {
+    const answer = await send('/v1/builds/pack', {
+      method: 'POST',
+      headers: {
+        Host: `127.0.0.1:${PORT}`,
+        Origin: `http://127.0.0.1:${PORT}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    expect(answer.status, answer.body).toBe(200);
+    const archive = (JSON.parse(answer.body) as { archive: string }).archive;
+    expect(archive).toMatch(/\.lorepack$/);
+    expect(existsSync(archive)).toBe(true);
   });
 });
