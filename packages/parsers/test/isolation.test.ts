@@ -45,6 +45,13 @@ const FAST: ParseLimits = { timeoutMs: 1_500, memoryMb: 256 };
 /** Generous enough that only a pathological input reaches it, even on a slow runner. */
 const SETTLE_MS = 10_000;
 
+/**
+ * Per test. Every case here starts Node and most drive a parser to a limit, so the package's
+ * 5 s unit-test default is the wrong budget: a hosted runner took longer than that to reach a
+ * 128 MB ceiling that a laptop reaches in two seconds.
+ */
+const SUITE = { timeout: 90_000 };
+
 const hosts: ParserHost[] = [];
 function host(limits?: ParseLimits): ParserHost {
   const created = new ParserHost(limits);
@@ -122,7 +129,7 @@ async function samples(): Promise<[ArtifactParser, ParseInput][]> {
   ];
 }
 
-describe('a parse in the child process', () => {
+describe('a parse in the child process', SUITE, () => {
   it('returns exactly what the parser returns in-process, for every format', async () => {
     const isolated = host();
     for (const [parser, input] of await samples()) {
@@ -156,7 +163,7 @@ describe('a parse in the child process', () => {
   });
 });
 
-describe('a parse that exceeds its limits, issue 594', () => {
+describe('a parse that exceeds its limits, issue 594', SUITE, () => {
   const timeouts: [string, () => ParseInput][] = [
     [
       'Markdown of nested brackets',
