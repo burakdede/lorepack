@@ -4,6 +4,7 @@ import {
   type ProjectionMigrationDatabaseLike,
   type ProjectionMigrationStatementLike,
   runProjectionMigrations,
+  runTableProjectionMigrations,
 } from '../src/projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from '../src/r2-keys.js';
 import {
@@ -125,7 +126,7 @@ describe('remote retention planning, issue 92', () => {
         .run('demo', buildId, 1, '0.1.0', 4, projectedAt, verifiedAt, verifiedAt);
     }
 
-    const plan = await planRemoteRetention(db, 'demo', 5);
+    const plan = await planRemoteRetention(db, db, 'demo', 5);
 
     expect(plan.activeBuildId).toBe(`lore_${'f'.repeat(64)}`);
     expect(plan.keep).toEqual([
@@ -242,7 +243,7 @@ describe('remote retention planning, issue 92', () => {
         '{}',
       );
 
-    const plan = await planRemoteRetention(db, 'demo', 2);
+    const plan = await planRemoteRetention(db, db, 'demo', 2);
 
     expect(plan.remove).toEqual([`lore_${'d'.repeat(64)}`]);
     expect(plan.objectKeysToRemove).toEqual([r2ObjectKey('demo', 'unique'.padEnd(64, 'u'))]);
@@ -446,7 +447,7 @@ describe('remote retention planning, issue 92', () => {
     await bucket.put(removeArchiveKey, new Uint8Array([1]));
     await bucket.put(removeObjectKey, new Uint8Array([2]));
 
-    const result = await applyRemoteRetention(db, bucket, 'demo', 2);
+    const result = await applyRemoteRetention(db, db, bucket, 'demo', 2);
 
     expect(result.remove).toEqual([`lore_${'c'.repeat(64)}`]);
     expect(result.d1).toEqual({
@@ -535,14 +536,16 @@ describe('remote retention planning, issue 92', () => {
         '{}',
       );
 
-    const plan = await planRemoteRetention(db, 'demo', 2);
+    const plan = await planRemoteRetention(db, db, 'demo', 2);
     const archiveKey = r2ArchiveKey('demo', `lore_${'c'.repeat(64)}`);
     const objectKey = r2ObjectKey('demo', 'unique'.padEnd(64, 'u'));
     await bucket.put(archiveKey, new Uint8Array([1]));
     await bucket.put(objectKey, new Uint8Array([2]));
     bucket.failOnDeleteKey = objectKey;
 
-    const first = await applyRemoteRetentionPlan(db, bucket, plan).catch((error: unknown) => error);
+    const first = await applyRemoteRetentionPlan(db, db, bucket, plan).catch(
+      (error: unknown) => error,
+    );
 
     expect(first).toBeInstanceOf(RemoteRetentionApplyError);
     const failure = first as RemoteRetentionApplyError;
@@ -554,10 +557,188 @@ describe('remote retention planning, issue 92', () => {
     expect(bucket.deletedKeys).toEqual([archiveKey]);
 
     bucket.failOnDeleteKey = null;
-    const resumed = await applyRemoteRetentionPlan(db, bucket, plan, failure.progress);
+    const resumed = await applyRemoteRetentionPlan(db, db, bucket, plan, failure.progress);
 
     expect(resumed.r2.archiveKeysRemoved).toEqual([archiveKey]);
     expect(resumed.r2.objectKeysRemoved).toEqual([objectKey]);
     expect(bucket.deletedKeys).toEqual([archiveKey, objectKey]);
+  });
+});
+
+const ACTIVE_BUILD = `lore_${'b'.repeat(64)}`;
+const KEPT_BUILD = `lore_${'a'.repeat(64)}`;
+const PRUNED_BUILD = `lore_${'c'.repeat(64)}`;
+const PRUNED_TABLE = 'prod_0123456789abcdef';
+const KEPT_TABLE = 'budget_fedcba9876543210';
+const ORPHAN_TABLE = 'old_budget_00112233445566ff';
+
+async function seedSplitDeployment(): Promise<{
+  readonly catalog: SqliteProjectionDatabase;
+  readonly tables: SqliteProjectionDatabase;
+  readonly bucket: FakeR2Bucket;
+}> {
+  const catalog = openDatabase();
+  const tables = openDatabase();
+  const bucket = new FakeR2Bucket();
+  await runProjectionMigrations(catalog, () => '2026-08-09T12:00:00.000Z');
+  await runTableProjectionMigrations(tables, () => '2026-08-09T12:00:00.000Z');
+
+  catalog.raw
+    .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
+    .run(ACTIVE_BUILD, 3);
+  for (const [buildId, projectedAt, verifiedAt] of [
+    [PRUNED_BUILD, '2026-08-09T12:02:00.000Z', null],
+    [ACTIVE_BUILD, '2026-08-09T12:01:00.000Z', '2026-08-09T12:01:30.000Z'],
+    [KEPT_BUILD, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z'],
+  ] as const) {
+    catalog.raw
+      .prepare(
+        `INSERT INTO projected_builds
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('demo', buildId, 1, '0.1.0', 4, projectedAt, verifiedAt, verifiedAt);
+  }
+  insertProjectedTable(catalog, PRUNED_BUILD, 'table-pruned', PRUNED_TABLE);
+  insertProjectedTable(catalog, KEPT_BUILD, 'table-kept', KEPT_TABLE);
+  await bucket.put(r2ArchiveKey('demo', PRUNED_BUILD), new Uint8Array([1]));
+
+  tables.raw.exec(`CREATE TABLE ${PRUNED_TABLE} (c_0 TEXT) STRICT`);
+  tables.raw.exec(`INSERT INTO ${PRUNED_TABLE} (c_0) VALUES ('alice 250000')`);
+  tables.raw.exec(`CREATE TABLE ${KEPT_TABLE} (c_0 TEXT) STRICT`);
+  return { catalog, tables, bucket };
+}
+
+function insertProjectedTable(
+  catalog: SqliteProjectionDatabase,
+  buildId: string,
+  tableId: string,
+  sqlName: string,
+): void {
+  catalog.raw
+    .prepare(
+      `INSERT INTO tables
+        (id, project_id, build_id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      tableId,
+      'demo',
+      buildId,
+      'artifact',
+      'Budget',
+      null,
+      sqlName,
+      1,
+      'budget.csv',
+      1,
+      2,
+      null,
+      '{}',
+    );
+}
+
+function hasTable(db: SqliteProjectionDatabase, name: string): boolean {
+  return (
+    db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !==
+    undefined
+  );
+}
+
+describe('remote retention with separate catalog and tables databases, issue 557', () => {
+  it('drops a pruned build physical tables from the tables database, not the catalog', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+
+    const result = await applyRemoteRetention(catalog, tables, bucket, 'demo', 1);
+
+    expect(result.remove).toEqual([PRUNED_BUILD]);
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(false);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(result.d1.physicalTablesDropped).toEqual([PRUNED_TABLE]);
+    expect(result.d1.projectedTablesRemoved).toBe(1);
+  });
+
+  it('reports only tables it verified were dropped', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    tables.raw.exec(`DROP TABLE ${PRUNED_TABLE}`);
+
+    const result = await applyRemoteRetention(catalog, tables, bucket, 'demo', 1);
+
+    expect(result.d1.physicalTablesDropped).toEqual([]);
+    expect(result.d1.projectedTablesRemoved).toBe(1);
+  });
+
+  it('fails instead of claiming success when a drop leaves the table in place', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const ignoresDrops: ProjectionMigrationDatabaseLike = {
+      prepare: (query) =>
+        query.startsWith('DROP TABLE')
+          ? { bind: () => ignoresDrops.prepare('SELECT 1'), run: async () => ({}) }
+          : tables.prepare(query),
+    };
+
+    const error = await applyRemoteRetention(catalog, ignoresDrops, bucket, 'demo', 1).catch(
+      (cause: unknown) => cause,
+    );
+
+    expect(error).toBeInstanceOf(RemoteRetentionApplyError);
+    const failure = error as RemoteRetentionApplyError;
+    expect(failure.progress.d1Completed).toBe(false);
+    expect(failure.progress.d1.physicalTablesDropped).toEqual([]);
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(true);
+    expect(
+      catalog.raw
+        .prepare('SELECT count(*) AS count FROM tables WHERE build_id = ?')
+        .get(PRUNED_BUILD),
+    ).toEqual({ count: 1 });
+  });
+
+  it('refuses a catalog sql name that is not a safe identifier', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    catalog.raw
+      .prepare('UPDATE tables SET sql_name = ? WHERE build_id = ?')
+      .run(`${KEPT_TABLE}; --`, PRUNED_BUILD);
+
+    const error = await applyRemoteRetention(catalog, tables, bucket, 'demo', 1).catch(
+      (cause: unknown) => cause,
+    );
+
+    expect(error).toBeInstanceOf(RemoteRetentionApplyError);
+    expect(String((error as RemoteRetentionApplyError).cause)).toContain('Refusing to use');
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(true);
+  });
+
+  it('plans and removes orphaned tables no catalog row references', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    await applyRemoteRetention(catalog, tables, bucket, 'demo', 5);
+    tables.raw.exec(`CREATE TABLE ${ORPHAN_TABLE} (c_0 TEXT) STRICT`);
+    tables.raw.exec(`INSERT INTO ${ORPHAN_TABLE} (c_0) VALUES ('left behind')`);
+
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 5);
+
+    expect(plan.remove).toEqual([]);
+    expect(plan.orphanTablesToRemove).toEqual([ORPHAN_TABLE]);
+
+    const result = await applyRemoteRetentionPlan(catalog, tables, bucket, plan);
+
+    expect(result.d1.physicalTablesDropped).toEqual([ORPHAN_TABLE]);
+    expect(hasTable(tables, ORPHAN_TABLE)).toBe(false);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(hasTable(tables, 'schema_migrations')).toBe(true);
+  });
+
+  it('keeps a planned orphan that a deploy referenced before the cleanup ran', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    tables.raw.exec(`CREATE TABLE ${ORPHAN_TABLE} (c_0 TEXT) STRICT`);
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 5);
+    expect(plan.remove).toEqual([PRUNED_BUILD]);
+    expect(plan.orphanTablesToRemove).toEqual([ORPHAN_TABLE]);
+
+    insertProjectedTable(catalog, ACTIVE_BUILD, 'table-new', ORPHAN_TABLE);
+    const result = await applyRemoteRetentionPlan(catalog, tables, bucket, plan);
+
+    expect(result.d1.physicalTablesDropped).toEqual([PRUNED_TABLE]);
+    expect(hasTable(tables, ORPHAN_TABLE)).toBe(true);
   });
 });

@@ -193,7 +193,12 @@ async function pruneRemote(
   );
   const keep = parseKeep(keepRaw);
   if (!apply) {
-    const plan = await planRemoteRetention(resolved.catalogDb, resolved.receipt.project, keep);
+    const plan = await planRemoteRetention(
+      resolved.catalogDb,
+      resolved.tablesDb,
+      resolved.receipt.project,
+      keep,
+    );
     return {
       human: renderRemoteRetentionPlan(plan),
       json: {
@@ -204,8 +209,13 @@ async function pruneRemote(
     };
   }
 
-  const plan = await planRemoteRetention(resolved.catalogDb, resolved.receipt.project, keep);
-  if (plan.remove.length === 0) {
+  const plan = await planRemoteRetention(
+    resolved.catalogDb,
+    resolved.tablesDb,
+    resolved.receipt.project,
+    keep,
+  );
+  if (isEmptyRemotePlan(plan)) {
     return {
       human: `Nothing to remove remotely. ${count(plan.keep.length, 'build')} retained.`,
       json: {
@@ -221,17 +231,17 @@ async function pruneRemote(
     config.projectRoot,
     receipt,
     resolved.catalogDb,
+    resolved.tablesDb,
     resolved.objects,
   );
 }
 
-function renderRemoteRetentionPlan(plan: {
-  readonly keep: readonly string[];
-  readonly remove: readonly string[];
-  readonly archiveKeysToRemove: readonly string[];
-  readonly objectKeysToRemove: readonly string[];
-}): string {
-  if (plan.remove.length === 0) {
+function isEmptyRemotePlan(plan: RemoteRetentionPlan): boolean {
+  return plan.remove.length === 0 && plan.orphanTablesToRemove.length === 0;
+}
+
+function renderRemoteRetentionPlan(plan: RemoteRetentionPlan): string {
+  if (isEmptyRemotePlan(plan)) {
     return `Nothing to remove remotely. ${count(plan.keep.length, 'build')} retained.`;
   }
 
@@ -243,13 +253,19 @@ function renderRemoteRetentionPlan(plan: {
   lines.push('');
   lines.push(`  ${count(plan.archiveKeysToRemove.length, 'build archive')}`);
   lines.push(`  ${count(plan.objectKeysToRemove.length, 'unreferenced object')}`);
+  if (plan.orphanTablesToRemove.length > 0) {
+    lines.push(
+      `  ${count(plan.orphanTablesToRemove.length, 'orphaned table')} no build references:`,
+    );
+    for (const table of plan.orphanTablesToRemove) lines.push(`    - ${table}`);
+  }
   lines.push('');
   lines.push('Nothing was removed. Re-run with --yes to apply.');
   return lines.join('\n');
 }
 
 function renderRemoteRetentionApplyResult(result: RemoteRetentionApplyResult): string {
-  if (result.remove.length === 0) {
+  if (isEmptyRemotePlan(result)) {
     return `Nothing to remove remotely. ${count(result.keep.length, 'build')} retained.`;
   }
 
@@ -317,6 +333,7 @@ async function resumeRemotePrune(
     projectRoot,
     receipt,
     resolved.catalogDb,
+    resolved.tablesDb,
     resolved.objects,
   );
 }
@@ -325,6 +342,7 @@ async function applyRemotePruneWithReceipt(
   projectRoot: string,
   receipt: RemoteRetentionReceipt,
   catalogDb: Parameters<typeof planRemoteRetention>[0],
+  tablesDb: Parameters<typeof planRemoteRetention>[1],
   objects: CloudflareResolverAdapter['openObjectsBucket'] extends (...args: never[]) => infer T
     ? T
     : never,
@@ -338,6 +356,7 @@ async function applyRemotePruneWithReceipt(
   try {
     const result = await applyRemoteRetentionPlan(
       catalogDb,
+      tablesDb,
       objects,
       receipt.plan as RemoteRetentionPlan,
       resumeStateFromReceipt(receipt),
@@ -450,6 +469,7 @@ function resultFromReceipt(receipt: RemoteRetentionReceipt): RemoteRetentionAppl
     remove: [...receipt.plan.remove] as RemoteRetentionPlan['remove'],
     archiveKeysToRemove: [...receipt.plan.archiveKeysToRemove],
     objectKeysToRemove: [...receipt.plan.objectKeysToRemove],
+    orphanTablesToRemove: [...receipt.plan.orphanTablesToRemove],
     d1: cloneD1Report(receipt.d1),
     r2: cloneR2Report(receipt.r2),
   };
@@ -488,6 +508,7 @@ function clonePlanForReceipt(plan: RemoteRetentionPlan): RemoteRetentionReceipt[
     remove: [...plan.remove],
     archiveKeysToRemove: [...plan.archiveKeysToRemove],
     objectKeysToRemove: [...plan.objectKeysToRemove],
+    orphanTablesToRemove: [...plan.orphanTablesToRemove],
   };
 }
 
