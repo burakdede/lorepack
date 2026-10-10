@@ -141,6 +141,27 @@ The root is resolved too, since it may itself sit behind a link. On macOS `/tmp`
 `/private/tmp`, and comparing an unresolved root against a resolved target would reject
 every file in a temp directory.
 
+### A source root that is itself a link
+
+The walk only inspects entries *below* a root, so the root is checked earlier, when
+configuration loads (`packages/core/src/config/load.ts`). Every source is resolved with
+`realpath`, and so is the project root, and the source must stay inside the project on
+those real paths. A root that is a link out of the project (`docs -> ../outside`), a file
+root that links to a file outside (`notes.md -> ~/.ssh/id_ed25519`), or a root reached
+through a linked parent (`a/docs` where `a` links out) fails with `LORE_E_PATH_ESCAPE` naming
+the entry in `lore.yaml`. Windows junctions resolve the same way. Before this check (#583),
+a cloned repository could ship such a link beside its `lore.yaml` and the build indexed
+whatever it pointed at.
+
+A linked root that stays inside the project still works, and its identity is the declared
+spelling, so retargeting the link inside the project is not a configuration change. Two
+roots that are one directory under two names are rejected as overlapping, since every file
+would otherwise be indexed twice.
+
+The real target must be a directory or a regular file. A FIFO or a device named as a file
+source fails with `LORE_E_CONFIG_INVALID` instead of blocking the build on a read that
+never ends.
+
 ## Fingerprinting
 
 **Content decides freshness. Metadata never does.** A file can change without its

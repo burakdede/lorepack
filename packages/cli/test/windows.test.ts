@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { platform, tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { renderSnippet } from '@lorepack/connect-clients';
@@ -171,4 +171,24 @@ describe('a project in a directory with a space', () => {
     // The build id must not depend on where the project happens to live.
     expect(built.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
   }, 120_000);
+});
+
+describe('a junction as a source root', () => {
+  /**
+   * Issue 583. A junction needs no privilege on Windows, so it is the link a cloned repository
+   * would actually carry there, and `realpath` has to see through it like a symlink. On POSIX
+   * the junction type is ignored and this is an ordinary directory link.
+   */
+  it('cannot carry the build outside the project', async () => {
+    await withTempProject({ files: { 'outside/secret.md': '# secret' } }, (temp) => {
+      const root = join(temp.root, 'project');
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, 'lore.yaml'), 'version: 1\nname: p\nsources:\n  - docs\n');
+      symlinkSync(join(temp.root, 'outside'), join(root, 'docs'), 'junction');
+
+      expect(() => loadConfig({ cwd: root })).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_PATH_ESCAPE' }),
+      );
+    });
+  });
 });

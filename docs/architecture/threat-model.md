@@ -35,7 +35,7 @@ changes, and which threats are intentionally not solved.
 | Threat | Mitigation | Verification |
 |---|---|---|
 | Path traversal reads host files | Runtime source reads resolve artifact IDs in the catalog, not filesystem paths | `packages/cli/test/security.e2e.test.ts`, `pnpm test:security` |
-| Symlink escape during discovery | Discovery rejects symlinks escaping the source root | `packages/compiler/test/discover.test.ts` |
+| Symlink escape during discovery | Discovery rejects symlinks escaping the source root; configuration loading rejects a source root that is, or passes through, a link out of the project | `packages/compiler/test/discover.test.ts`, `packages/core/test/config.test.ts`, `packages/cli/test/security.e2e.test.ts` |
 | Malformed archives, XML or PDFs crash or expand unboundedly | Parser caps and DOCTYPE rejection fail safely with warnings or typed errors | `packages/parsers/test/*.test.ts` |
 | SQL injection reaches catalog or filesystem | One `SELECT` statement, one table authorizer, no filesystem functions, worker deadline | `packages/cli/test/security.e2e.test.ts` |
 | Oversized request or response exhausts memory | Request size caps and export/context budgets bound runtime payloads | `packages/runtime/test/http.test.ts`, export tests |

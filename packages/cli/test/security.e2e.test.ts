@@ -1,10 +1,13 @@
-import { tmpdir } from 'node:os';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { platform, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { run } from './helpers.js';
 
 /**
  * Hostile input against the **assembled** product (#83, architecture section 20.9).
@@ -253,4 +256,35 @@ describe('the served surface writes nothing', () => {
       });
     });
   }
+});
+
+describe('a source root cannot carry the build outside the project', () => {
+  /**
+   * Issue 583's reproduction, driven through the command a user runs. A cloned repository can
+   * ship `lore.yaml` beside `docs -> ../outside`; the build must refuse it rather than index
+   * `outside/secret.md` and hand it to every connected model.
+   */
+  it('refuses a symlinked source root that escapes, and builds nothing', async () => {
+    await withTempProject(
+      { files: { 'outside/secret.md': '# Secret\n\nTOP SECRET zebrafish\n' } },
+      async (temp) => {
+        const root = join(temp.root, 'p');
+        mkdirSync(root, { recursive: true });
+        writeFileSync(join(root, 'lore.yaml'), 'version: 1\nname: p\nsources:\n  - docs\n');
+        symlinkSync(
+          join(temp.root, 'outside'),
+          join(root, 'docs'),
+          platform() === 'win32' ? 'junction' : 'dir',
+        );
+
+        const build = await run(['--cwd', root, '--json', 'build']);
+        expect(build.code).not.toBe(0);
+        expect(`${build.stdout}${build.stderr}`).toContain('LORE_E_PATH_ESCAPE');
+
+        const search = await run(['--cwd', root, '--json', 'search', 'zebrafish']);
+        expect(search.code).not.toBe(0);
+        expect(search.stdout).not.toContain('zebrafish');
+      },
+    );
+  }, 120_000);
 });

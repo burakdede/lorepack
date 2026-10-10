@@ -1,4 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { platform } from 'node:os';
 import { join } from 'node:path';
 import { checkDeterminism, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -60,7 +62,10 @@ describe('loadConfig', () => {
 
   it('accepts a file source as well as a directory', async () => {
     await withProject(
-      { 'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./notes.md\n', 'notes.md': '# Notes' },
+      {
+        'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./notes.md\n',
+        'notes.md': '# Notes',
+      },
       (root) => {
         expect(loadConfig({ cwd: root }).sources[0]?.kind).toBe('file');
       },
@@ -109,7 +114,9 @@ describe('validation errors', () => {
 
   it('reports the position of a semantically invalid value', async () => {
     await withProject(
-      { 'lore.yaml': `${MINIMAL}rules:\n  - match: "**"\n    authority: 500\n` },
+      {
+        'lore.yaml': `${MINIMAL}rules:\n  - match: "**"\n    authority: 500\n`,
+      },
       (root) => {
         try {
           loadConfig({ cwd: root });
@@ -143,7 +150,9 @@ describe('validation errors', () => {
 
   it('rejects duplicate sources', async () => {
     await withProject(
-      { 'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./docs\n  - ./docs\n' },
+      {
+        'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./docs\n  - ./docs\n',
+      },
       (root) => {
         expect(() => loadConfig({ cwd: root })).toThrowError(/Duplicate source/);
       },
@@ -237,7 +246,9 @@ describe('effective configuration', () => {
 
   it('lets the config override a default it owns', async () => {
     await withProject(
-      { 'lore.yaml': `${MINIMAL}strictRules: true\ncontext:\n  defaultProfile: chat\n` },
+      {
+        'lore.yaml': `${MINIMAL}strictRules: true\ncontext:\n  defaultProfile: chat\n`,
+      },
       (root) => {
         const { effective } = loadConfig({ cwd: root });
         expect(effective.strictRules).toBe(true);
@@ -303,4 +314,102 @@ describe('portable configuration paths', () => {
       }
     });
   });
+});
+
+/**
+ * Issue 583. Discovery refuses a symlink *below* a source root, but the root itself used to
+ * be classified with `statSync` and contained by its path string, so a link planted as the
+ * root (`docs -> ../outside`) carried the build out of the project. Containment is now
+ * decided on real paths.
+ */
+describe('a source root behind a symbolic link', () => {
+  // A directory link on Windows needs a privilege a junction does not, and Node treats a
+  // junction as a symlink everywhere it matters. On POSIX the type argument is ignored.
+  const DIRECTORY_LINK = platform() === 'win32' ? 'junction' : 'dir';
+
+  /** `outside/secret.md` next to `project/`, the layout of the issue's reproduction. */
+  async function withOutside<T>(sources: string, run: (root: string, outside: string) => T) {
+    return withTempProject(
+      { files: { 'outside/secret.md': 'TOP SECRET zebrafish' } },
+      (project) => {
+        const root = join(project.root, 'project');
+        mkdirSync(root, { recursive: true });
+        writeFileSync(join(root, 'lore.yaml'), `version: 1\nname: p\nsources:\n${sources}`, 'utf8');
+        return run(root, join(project.root, 'outside'));
+      },
+    );
+  }
+
+  function loadError(root: string): LoreError {
+    try {
+      loadConfig({ cwd: root });
+    } catch (error) {
+      return error as LoreError;
+    }
+    return expect.unreachable('the source should have been refused');
+  }
+
+  it('refuses a directory root that links outside the project', async () => {
+    await withOutside('  - docs\n', (root, outside) => {
+      symlinkSync(outside, join(root, 'docs'), DIRECTORY_LINK);
+      const error = loadError(root);
+      expect(error.code).toBe('LORE_E_PATH_ESCAPE');
+      expect(error.subject).toBe('docs');
+      expect(error.path).toBe('lore.yaml');
+    });
+  });
+
+  it('refuses a file root that links outside the project', async () => {
+    await withOutside('  - notes.md\n', (root, outside) => {
+      symlinkSync(join(outside, 'secret.md'), join(root, 'notes.md'), 'file');
+      const error = loadError(root);
+      expect(error.code).toBe('LORE_E_PATH_ESCAPE');
+      expect(error.subject).toBe('notes.md');
+    });
+  });
+
+  it('refuses a root reached through a linked intermediate directory', async () => {
+    await withOutside('  - a/docs\n', (root, outside) => {
+      mkdirSync(join(outside, 'docs'), { recursive: true });
+      symlinkSync(outside, join(root, 'a'), DIRECTORY_LINK);
+      const error = loadError(root);
+      expect(error.code).toBe('LORE_E_PATH_ESCAPE');
+      expect(error.subject).toBe('a/docs');
+    });
+  });
+
+  it('accepts a linked root that stays inside the project', async () => {
+    await withOutside('  - docs\n', (root) => {
+      mkdirSync(join(root, 'real'), { recursive: true });
+      symlinkSync(join(root, 'real'), join(root, 'docs'), DIRECTORY_LINK);
+      const loaded = loadConfig({ cwd: root });
+      // Identity is the declared spelling, so retargeting an in-project link is not a
+      // configuration change.
+      expect(loaded.effective.sources).toEqual(['docs']);
+      expect(loaded.sources[0]?.kind).toBe('directory');
+    });
+  });
+
+  it('refuses two roots that are one directory under two names', async () => {
+    await withOutside('  - docs\n  - real\n', (root) => {
+      mkdirSync(join(root, 'real'), { recursive: true });
+      symlinkSync(join(root, 'real'), join(root, 'docs'), DIRECTORY_LINK);
+      expect(() => loadConfig({ cwd: root })).toThrowError(/overlap/);
+    });
+  });
+
+  // mkfifo has no Windows equivalent: a named pipe there lives in its own namespace
+  // (\\.\pipe\) and cannot appear inside a project directory at all.
+  it.skipIf(platform() === 'win32')(
+    'refuses a file root that is not a regular file, such as a FIFO',
+    async () => {
+      await withOutside('  - pipe.md\n', (root) => {
+        execFileSync('mkfifo', [join(root, 'pipe.md')]);
+        const error = loadError(root);
+        expect(error.code).toBe('LORE_E_CONFIG_INVALID');
+        expect(error.subject).toBe('pipe.md');
+        expect(error.message).toContain('not a regular file');
+      });
+    },
+  );
 });
