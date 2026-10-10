@@ -30,7 +30,7 @@ body:
     id: node
     attributes:
       label: Node version
-      description: Output of `node --version`. Lorepack supports >=24.15 <25.
+      description: Output of `node --version`. Lorepack supports >=24.19.0 <25.
     validations: {required: true}
   - type: textarea
     id: doctor

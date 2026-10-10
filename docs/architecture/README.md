@@ -75,7 +75,7 @@ same code. See [`errors.md`](errors.md).
 The minimum gate is `pnpm verify`. The current suite combines architecture rules, formatting,
 typechecking, unit and integration tests, schema drift checks, docs checks, source tracking,
 SQLite FTS5 probing and acceptance-doc generation. Cross-platform CI runs the verify job on
-Ubuntu, Windows and macOS with Node 24.18.1. See [`testing.md`](testing.md) and
+Ubuntu, Windows and macOS with Node 24.21.0. See [`testing.md`](testing.md) and
 [`ci.md`](ci.md).
 
 ## ADR table

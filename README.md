@@ -74,7 +74,7 @@ and the actions behind each view.
 
 ## Start in two commands
 
-Requires Node.js `>=24.15 <25`. The first alpha is published on npm's `next` channel:
+Requires Node.js `>=24.19.0 <25`. The first alpha is published on npm's `next` channel:
 
 ```bash
 npm install -g @lorepack/cli@next

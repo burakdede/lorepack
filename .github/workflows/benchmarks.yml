@@ -28,7 +28,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '24.18.1'
+  NODE_VERSION: '24.21.0'
   BENCHMARK_PROFILE: ${{ github.event_name == 'pull_request' && 'small' || inputs.profile || 'medium' }}
 
 jobs:

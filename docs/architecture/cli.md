@@ -5,13 +5,21 @@ exit codes and output modes belong to the shell so no command reinvents them.
 
 ## Entry point
 
-`packages/cli/src/entry.ts` does one thing before anything else:
+`packages/cli/src/entry.ts` checks the runtime before anything else:
 
 ```ts
-import { assertSupportedNode } from '@lorepack/core/engine';
+import { assertSupportedNode, assertSupportedSqlite } from '@lorepack/core/engine';
 assertSupportedNode();
-const { runCli } = await import('../framework/program.js');
+const { DatabaseSync } = await import('node:sqlite');
+// ... read sqlite_version() from an in-memory database
+assertSupportedSqlite(version);
+const { runCli } = await import('./framework/program.js');
 ```
+
+The SQLite check refuses anything below 3.53.2, the release that fixes the FTS5 CVEs, because a
+Node linked against a shared system SQLite can carry an older library than its version implies
+(see [`sqlite-fts5.md`](../compatibility/sqlite-fts5.md)). `node:sqlite` is imported only after
+the Node check, so a Node too old to have it is refused by that check rather than crashing.
 
 The import ordering is load-bearing. `@lorepack/core/engine` is a subpath export with no
 transitive imports beyond node builtins, so on an unsupported runtime the user gets one

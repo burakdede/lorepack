@@ -14,7 +14,7 @@ does not restate those rules. It explains how to carry them out locally.
 
 Requirements:
 
-- Node.js `>=24.15 <25`
+- Node.js `>=24.19.0 <25`
 - pnpm `11.18.0`
 - GitHub CLI `gh`, for backlog and PR work
 
