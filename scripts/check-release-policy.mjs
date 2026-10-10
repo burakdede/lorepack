@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { releaseStructureProblems, topLevelPermissionProblems } from './release-structure.mjs';
 
 const ROOT = process.env.LOREPACK_ROOT ?? join(import.meta.dirname, '..');
 const RELEASE = readFileSync(join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
@@ -8,6 +9,7 @@ const PUBLIC_SMOKE = readFileSync(
   join(ROOT, '.github', 'workflows', 'public-registry-smoke.yml'),
   'utf8',
 );
+const WORKFLOWS_WITH_READ_DEFAULT = ['ci.yml', 'commit-hygiene.yml'];
 const CHANGESETS = readFileSync(join(ROOT, '.changeset', 'config.json'), 'utf8');
 const SUPPLY_CHAIN = readFileSync(
   join(ROOT, 'docs', 'architecture', 'release-supply-chain.md'),
@@ -34,6 +36,18 @@ const REQUIRED = [
 ];
 
 const problems = [];
+
+// Which job holds which capability, from the parsed workflow rather than from substrings (#604).
+problems.push(...releaseStructureProblems(RELEASE));
+for (const name of WORKFLOWS_WITH_READ_DEFAULT) {
+  const path = join(ROOT, '.github', 'workflows', name);
+  if (existsSync(path)) {
+    problems.push(...topLevelPermissionProblems(name, readFileSync(path, 'utf8')));
+  } else {
+    problems.push(`${name} is missing`);
+  }
+}
+
 const changesetConfig = JSON.parse(CHANGESETS);
 
 if (changesetConfig.fixed?.length !== 0) {
@@ -63,7 +77,7 @@ if (existsSync(UPGRADE_NOTES)) {
 } else if (!process.env.LOREPACK_ROOT) {
   problems.push('v0.1 upgrade notes must document schemaVersion compatibility');
 }
-if (!RELEASE.includes('scripts/publish-packages.mjs --tag')) {
+if (!RELEASE.includes('scripts/publish-packages.mjs --tag "$RELEASE_CHANNEL" --tarballs')) {
   problems.push('release.yml must publish packages with an explicit npm dist tag');
 }
 if (!RELEASE.includes('scripts/preflight-npm-packages.mjs')) {
@@ -138,6 +152,8 @@ for (const [name, contents] of [
 for (const phrase of [
   'release:',
   'types: [published]',
+  'npm audit signatures',
+  'scripts/check-registry-provenance.mjs',
   'workflow_dispatch:',
   'ubuntu-latest',
   'windows-latest',

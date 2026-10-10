@@ -174,6 +174,12 @@ describe('release policy', () => {
       join(root, '.github', 'workflows', 'public-registry-smoke.yml'),
       publicRegistryWorkflow(),
     );
+    for (const name of ['ci.yml', 'commit-hygiene.yml']) {
+      writeFileSync(
+        join(root, '.github', 'workflows', name),
+        readFileSync(join(REPO_ROOT, '.github', 'workflows', name), 'utf8'),
+      );
+    }
   });
 
   afterEach(() => {
@@ -200,24 +206,15 @@ describe('release policy', () => {
   it('requires an idempotent recovery path for an already-merged release', () => {
     const workflow = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
     expect(workflow).toContain('resume_existing:');
-    expect(workflow).toContain('Use the merged commit as the existing release target');
+    expect(workflow).toContain('Require the release commit to carry the requested version');
+    // A retry reuses a tag only when it already names this commit; a tag is never moved (#619).
     expect(workflow).toContain('existing $release_tag targets');
-    expect(workflow).toContain('git merge-base --is-ancestor');
-    expect(workflow).toContain('gh release edit "$release_tag" --target "$RELEASE_TARGET"');
+    expect(workflow).not.toContain('gh release edit');
     expect(workflow).toContain('gh release upload "$release_tag"');
     expect(workflow).toContain('scripts/publish-packages.mjs --tag');
     expect(workflow).toContain('Require npm Trusted Publishing for real release');
     expect(workflow).not.toContain('NPM_TOKEN');
     expect(workflow).not.toContain('NODE_AUTH_TOKEN');
-  });
-
-  it('requires the publisher to use npm provenance and support retries', () => {
-    const publisher = readFileSync(join(REPO_ROOT, 'scripts', 'publish-packages.mjs'), 'utf8');
-    expect(publisher).toContain(
-      "['view', `" + '$' + '{name}@' + '$' + "{version}`, 'version', '--json']",
-    );
-    expect(publisher).toContain("['publish', tarball, '--access', 'public', '--tag', tag]");
-    expect(publisher).toContain('cannot publish over the previously published version');
   });
 
   it('requires an npm package bootstrap preflight before release side effects', () => {
@@ -432,58 +429,12 @@ function run(script: string, root: string, env: NodeJS.ProcessEnv = {}) {
   }
 }
 
+/**
+ * The checked-in release workflow. The policy now parses it (#604), so a fixture built from
+ * a list of required phrases is no longer a workflow the check could accept.
+ */
 function releaseWorkflow(): string {
-  return [
-    'workflow_dispatch:',
-    'dry_run:',
-    'resume_existing:',
-    'channel:',
-    'performance_report_url:',
-    'pnpm changeset version',
-    'scripts/publish-packages.mjs --tag',
-    'npm publish',
-    'npm view',
-    'Trusted Publishing',
-    'id-token: write',
-    'check-runs',
-    '$conclusion" != "success"',
-    'gh release create',
-    'gh release upload',
-    'existing $release_tag targets',
-    '--prerelease',
-    'examples/product-research/product-research.lorepack',
-    'reports/sbom.cyclonedx.json',
-    'stable publish requires the green issue #101 performance report URL',
-    'scripts/pack-cli.mjs --out',
-    'scripts/check-packed-cli.mjs --tarball',
-    'LOREPACK_VERSION',
-    'CHANGELOG.md',
-    'scripts/stamp-release-version.mjs',
-    'Alpha status',
-    'Cloudflare deploy is experimental',
-    '1 GiB scale envelope is untested',
-    'Approvals, evidence capture and semantic search are not in v0.1',
-    'docs/limitations.md',
-    'GHSA-c53f-24h5-74qj',
-    'Require npm Trusted Publishing for real release',
-    'Preflight npm package bootstrap',
-    'scripts/preflight-npm-packages.mjs',
-    'Commit version and generated release artifacts',
-    'Create GitHub release with SBOM and example artifact',
-    'Publish npm packages with Trusted Publishing',
-    'verify (ubuntu-latest)',
-    'verify (windows-latest)',
-    'verify (macos-latest)',
-    'acceptance (ubuntu-latest)',
-    'acceptance (windows-latest)',
-    'acceptance (macos-latest)',
-    'clean install (ubuntu-latest)',
-    'clean install (windows-latest)',
-    'clean install (macos-latest)',
-    'cloudflare acceptance (ubuntu-latest)',
-    'studio e2e (ubuntu-latest)',
-    'benchmarks (reported)',
-  ].join('\n');
+  return readFileSync(join(REPO_ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
 }
 
 function publicRegistryWorkflow(): string {
@@ -498,6 +449,8 @@ function publicRegistryWorkflow(): string {
     'seq 1 30',
     'sleep 10',
     'npm install --global --ignore-scripts',
+    'npm audit signatures',
+    'scripts/check-registry-provenance.mjs',
     'scripts/public-registry-smoke.mjs',
     'GITHUB_STEP_SUMMARY',
   ].join('\n');
