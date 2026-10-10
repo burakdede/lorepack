@@ -99,8 +99,11 @@ if (!RELEASE.includes('reports/sbom.cyclonedx.json')) {
 if (!RELEASE.includes('stable publish requires the green issue #101 performance report URL')) {
   problems.push('release.yml must block stable publish without a green performance report');
 }
-if (!RELEASE.includes('pack --pack-destination')) {
-  problems.push('release.yml dry runs must create package tarballs without publishing');
+if (!RELEASE.includes('scripts/pack-cli.mjs --out')) {
+  problems.push('release.yml must pack the CLI with its tested dependency tree bundled');
+}
+if (!RELEASE.includes('scripts/check-packed-cli.mjs --tarball')) {
+  problems.push('release.yml must check the packed CLI with an npm install before publishing');
 }
 if (!RELEASE.includes('LOREPACK_VERSION')) {
   problems.push('release.yml must stamp the requested version into release evidence');

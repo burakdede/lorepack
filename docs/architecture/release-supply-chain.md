@@ -21,6 +21,56 @@ Update the committed reports with:
 pnpm supply-chain:report
 ```
 
+## What npm users install
+
+`@lorepack/cli` is published with its production dependency tree **bundled in the tarball**
+(`bundleDependencies`), so `npm install @lorepack/cli` installs exactly the tree CI tested and
+resolves nothing.
+
+Without it, npm users got a different tree from the one the workspace tests (#603):
+
+- `pdfjs-dist` declares `@napi-rs/canvas` as an optional dependency. The workspace removes it
+  with a pnpm override, but pnpm overrides are not part of a published manifest, so npm installed
+  27 MB of native Skia and pdfjs `dlopen`ed it on every PDF parse. That breaks invariant 7.
+- The `mammoth>argparse` and `@xmldom/xmldom` overrides did not ship either, so users' `npm audit
+  --omit=dev` reported 4 moderate findings (GHSA-hp3w-g68c-fv3c through `argparse@1.0.10`).
+- 17 packages resolved to versions CI never ran, including a second copy of `zod`.
+
+`scripts/pack-cli.mjs` builds the tarball. It runs `pnpm deploy --prod` for the CLI from a
+copy of the workspace (lockfile, workspace configuration and manifests), with injected workspace
+packages and a hoisted `node_modules`, so the frozen lockfile and every workspace override
+apply. It then sets `bundleDependencies` to the CLI's dependencies, drops the workspace-only
+`devDependencies`, and runs `npm pack`. The injected deploy matters: `pnpm deploy --legacy`
+re-resolved the ranges and drifted 17 packages from the lockfile when tried.
+
+`scripts/check-packed-cli.mjs` is the gate. It installs the tarball with **npm** into an empty
+directory and fails on any `*.node` file or `@napi-rs/*` package, on any difference from the
+CLI's production tree in the frozen lockfile (an optional peer the workspace happens to resolve,
+such as `supports-color` for `debug`, is excused), on a PDF build and search with the installed
+CLI that `dlopen`s anything, and on any `npm audit --omit=dev` finding. It runs:
+
+- in the `packed install` CI job on Ubuntu, Windows and macOS (`pnpm check:packed-cli`);
+- in the release workflow, against the exact tarball that is then published;
+- in `Public registry smoke`, against the published version (`--spec`), without the lockfile
+  comparison because that checkout need not match the release.
+
+### Alternatives rejected
+
+- **A published `npm-shrinkwrap.json`.** npm 11 honours one inside a dependency tarball, but npm
+  12 (released 2026-09-30) no longer reads or writes `npm-shrinkwrap.json` at all and its
+  release notes point publishers at `bundleDependencies` instead. A shrinkwrap would protect
+  users only until they upgrade npm. Verified 2026-10-10: npm 12.2.0 also refuses to pack the
+  file even when `files` lists it. A shrinkwrap also cannot express the argparse override: npm
+  treats `argparse@2.0.1` under `mammoth` (which asks for `~1.0.3`) as an invalid edge.
+- **Bundling `pdfjs-dist` into `public-entry.js` with esbuild.** It removes the optional
+  dependency but hides pdfjs from users' `npm audit` and leaves the other 17 drifts.
+- **Documenting `--omit=optional`.** Fragile, and it does nothing for the argparse override or
+  version drift.
+
+The cost is a larger tarball (18 MB packed, 81 MB unpacked, about 4,900 files, measured
+2026-10-10), which users download once instead of resolving 145 packages. `npm audit` still
+covers the bundled packages: npm reads them from `node_modules` like any other.
+
 ## Provenance
 
 The public `@lorepack/cli` package sets:
@@ -37,7 +87,8 @@ The public `@lorepack/cli` package sets:
 The release workflow grants `id-token: write`, uses `actions/setup-node` with the npm registry,
 and publishes the CLI through `scripts/publish-packages.mjs` using npm Trusted Publishing.
 The publisher checks the registry first so a retry skips versions already published, then invokes
-`npm publish` for every missing version. npm obtains the provenance statement from GitHub's OIDC
+`npm publish <tarball>` for every missing version, on the tarball that was packed and checked
+rather than on the package directory, which would re-pack it without its bundled tree. npm obtains the provenance statement from GitHub's OIDC
 identity, so the workflow has no long-lived npm publish token.
 
 Before the first real release, configure Trusted Publishing in the npm settings for
@@ -83,7 +134,8 @@ required CI, clean-install, security, Cloudflare, Studio and benchmark check-run
 successfully for the exact release commit.
 
 A dry run performs the same install, verification, Changesets versioning, build, SBOM
-generation, example package creation and CLI npm tarball packing, then uploads the artifacts without
+generation, example package creation, CLI npm tarball packing (`scripts/pack-cli.mjs`) and the
+packed-install check (`scripts/check-packed-cli.mjs`), then uploads the artifacts without
 committing, tagging, creating a GitHub release or publishing to npm.
 
 A real release then commits the version changes, tags `vX.Y.Z`, creates the GitHub release, and

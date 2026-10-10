@@ -69,6 +69,12 @@ jobs:
             sleep 10
           done
 
+      - name: Install the published CLI with npm and check it carries no native add-on
+        shell: bash
+        env:
+          LOREPACK_VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/check-packed-cli.mjs --spec "@lorepack/cli@${LOREPACK_VERSION}"
+
       - name: Install the published CLI without lifecycle scripts
         shell: bash
         env:
