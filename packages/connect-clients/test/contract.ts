@@ -45,6 +45,13 @@ export interface ConnectorFixture {
   createForUser(home: string): ClientConnector;
   /** Where that connector keeps its user-scope configuration. */
   userConfigPath(home: string): string;
+  /**
+   * Where the default (project) scope writes, when that is not a file inside the project.
+   *
+   * Claude Code keeps its local scope in its own `.claude.json`, keyed by the project, so the
+   * contract checks the exact file instead of "somewhere under the project root".
+   */
+  defaultConfigPath?(project: string): string;
   /** Writes a configuration holding a server someone else set up, plus one unrelated setting. */
   seedForeign(project: string): string;
   /** The unrelated setting `seedForeign` wrote, read back from the file. */
@@ -174,7 +181,11 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
         // A connector that quietly writes a user-scope entry configures every project on the
         // machine to read one project's documents (architecture 6.6).
         expect(plan.scope).toBe('project');
-        expect(plan.configPath).toContain(project());
+        if (fixture.defaultConfigPath === undefined) {
+          expect(plan.configPath).toContain(project());
+        } else {
+          expect(plan.configPath).toBe(fixture.defaultConfigPath(project()));
+        }
       });
 
       it('says it is updating, not adding, when Lorepack already configured this project', async () => {
@@ -441,9 +452,12 @@ export function runConfigFileSafetyContract(
       expect(backupsIn(outside)).toEqual([]);
     });
 
-    symlinkOnly('refuses a project file reached through a linked directory', async () => {
+    symlinkOnly('refuses a project file reached through a linked directory', async (context) => {
       const path = fixture.seedForeign(project());
       const directory = dirname(path);
+      // A file at the project root (`.mcp.json`) has no directory between it and the root,
+      // and the root itself is where the user chose to run, so there is nothing to link.
+      if (directory === project()) context.skip();
       const elsewhere = join(outside, 'linked-directory');
       renameSync(directory, elsewhere);
       symlinkSync(elsewhere, directory, 'dir');
