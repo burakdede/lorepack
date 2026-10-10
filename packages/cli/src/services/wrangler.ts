@@ -1,7 +1,8 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { existsSync, mkdtempSync, readFileSync, realpathSync } from 'node:fs';
+import { findPackageJSON } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { LoreError } from '@lorepack/core';
 
 /**
@@ -40,8 +41,12 @@ export function locateWrangler(directories: readonly string[]): WranglerLocation
 function resolveFrom(directory: string): WranglerLocation | null {
   let manifestPath: string;
   try {
-    // `createRequire` wants a file path; the file need not exist, only its directory matters.
-    manifestPath = createRequire(join(directory, 'noop.js')).resolve('wrangler/package.json');
+    const resolved = findPackageJSON(
+      'wrangler/package.json',
+      pathToFileURL(join(directory, 'noop.js')),
+    );
+    if (resolved === undefined) return null;
+    manifestPath = realpathSync(resolved);
   } catch {
     return null;
   }
