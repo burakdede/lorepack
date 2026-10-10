@@ -122,6 +122,12 @@ minutes**, then expires it automatically. That overlap window is there so an alr
 client can swap credentials without being cut off mid-session. During the window, both the old
 and new runtime tokens work; after the window, only the new token does.
 
+Rotating again never extends a token that is already retiring. Its expiry is fixed at the
+rotation that retired it, so after a suspected leak each further rotation only shortens how long
+any old token stays valid. Rotating twice in quick succession can therefore leave three tokens
+valid for a few minutes, each with its own fixed expiry. Use `--revoke` to cut every token off
+at once.
+
 ## Browser origins and Worker headers
 
 The deployed Worker is **closed to browsers by default**. A tool or SDK that sends no
