@@ -14,6 +14,14 @@ export {
   updateMode,
 } from './golden.js';
 export {
+  cmapBombPdf,
+  docxBomb,
+  flateBombPdf,
+  nestedBracketsMarkdown,
+  nestedListHtml,
+  singleCharacterCsv,
+} from './hostile-fixtures.js';
+export {
   boolean_,
   empty,
   errorCell,
