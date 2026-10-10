@@ -42,6 +42,33 @@ function active(root: string): string | null {
   return readActiveBuild(join(root, '.lore'))?.buildId ?? null;
 }
 
+function objectHashes(root: string, buildId: string): string[] {
+  const db = new DatabaseSync(join(root, '.lore', 'builds', buildId, 'context.sqlite'), {
+    readOnly: true,
+  });
+  try {
+    return (
+      db.prepare('SELECT DISTINCT object_hash FROM artifacts').all() as Array<{
+        object_hash: string;
+      }>
+    ).map((row) => row.object_hash);
+  } finally {
+    db.close();
+  }
+}
+
+function objectFile(root: string, hash: string): string {
+  return join(
+    root,
+    '.lore',
+    'objects',
+    'sha256',
+    hash.slice(0, 2),
+    hash.slice(2, 4),
+    hash.slice(4),
+  );
+}
+
 function fakeRemoteRollbackTarget(
   calls: string[] = [],
   buildId: BuildId = `lore_${'b'.repeat(64)}` as BuildId,
@@ -501,6 +528,24 @@ describe('lorepack activate', () => {
     });
   });
 
+  it('refuses a build whose referenced object is missing, with a typed error', async () => {
+    // #564. Pre-flight checked the database and nothing it points at, so a build whose
+    // normalized bodies had been deleted was made live and failed at the first source read.
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const { first, third } = await threeBuilds(root);
+      const [hash] = objectHashes(root, first).filter(
+        (candidate) => !objectHashes(root, third).includes(candidate),
+      );
+      rmSync(objectFile(root, hash ?? ''));
+
+      const result = await lore(['activate', first]);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_OBJECT_CORRUPT');
+      expect(result.stderr).toContain(hash);
+      expect(active(root)).toBe(third);
+    });
+  });
+
   it('says so and changes nothing when the build is already active', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { third } = await threeBuilds(root);
@@ -557,6 +602,21 @@ describe('lorepack rollback', () => {
 
       expect(two.generation).toBeGreaterThan(one.generation);
       expect(three.generation).toBeGreaterThan(two.generation);
+    });
+  });
+
+  it('refuses to roll back onto a build whose referenced object is missing', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const { second, third } = await threeBuilds(root);
+      const [hash] = objectHashes(root, second).filter(
+        (candidate) => !objectHashes(root, third).includes(candidate),
+      );
+      rmSync(objectFile(root, hash ?? ''));
+
+      const result = await lore(['rollback']);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_OBJECT_CORRUPT');
+      expect(active(root)).toBe(third);
     });
   });
 
@@ -816,6 +876,55 @@ describe('lorepack prune', () => {
         const status = JSON.parse((await lore(['--json', 'status'])).stdout);
         expect(status.activeBuildId).toBe(active?.buildId);
         expect(status.sourceState).toBe('clean');
+      },
+    );
+  });
+
+  it('keeps every object of a build sealed between planning and applying', async () => {
+    // #564. The plan was computed outside the project lock and applied as computed. A build
+    // that sealed in between reused an object the plan had marked unreferenced, and prune
+    // then deleted it out from under the new active build. `beforeApply` pauses prune at
+    // exactly that point, so the interleaving is deterministic rather than timed.
+    await project(
+      { 'x.md': '# X\n\nOnly the first build has this.', 'keep.md': '# Keep\n\nStable.' },
+      async (root) => {
+        const first = await build(root);
+        rmSync(join(root, 'x.md'));
+        const second = await build(root);
+        const xHash = objectHashes(root, first.buildId).find(
+          (hash) => !objectHashes(root, second.buildId).includes(hash),
+        );
+        expect(xHash).toBeDefined();
+
+        let sealed: string | null = null;
+        const result = await run(['--cwd', root, 'prune', '--keep', '0', '--yes'], {
+          commands: [
+            pruneCommand({
+              beforeApply: async () => {
+                writeFileSync(join(root, 'x.md'), '# X\n\nOnly the first build has this.');
+                writeFileSync(join(root, 'y.md'), '# Y\n\nNew.');
+                sealed = (await build(root)).buildId;
+              },
+            }),
+          ],
+        });
+
+        expect(result.code).toBe(0);
+        expect(sealed).not.toBeNull();
+        expect(active(root)).toBe(sealed);
+        for (const hash of objectHashes(root, sealed ?? '')) {
+          expect(existsSync(objectFile(root, hash))).toBe(true);
+        }
+
+        // The build the preview kept stays; the one it removed is gone, record and files.
+        expect(existsSync(join(root, '.lore', 'builds', first.buildId))).toBe(false);
+        expect(existsSync(join(root, '.lore', 'builds', second.buildId))).toBe(true);
+        expect(result.stdout).toContain('Removed 1 build and 0 objects.');
+
+        // Packing reads every referenced object, which is what failed in the reproduction.
+        const packed = await run(['--cwd', root, 'pack']);
+        expect(packed.stderr).not.toContain('LORE_E_OBJECT_CORRUPT');
+        expect(packed.code).toBe(0);
       },
     );
   });
