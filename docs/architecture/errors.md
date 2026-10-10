@@ -31,7 +31,7 @@ throw new LoreError('LORE_E_PATH_ESCAPE', 'archive/../../etc/passwd escapes the 
 |---:|---|---|
 | 1 | User or configuration error | `LORE_E_CONFIG_INVALID`, `LORE_E_PATH_ESCAPE`, `LORE_E_SQL_REJECTED`, `LORE_E_CANCELLED` |
 | 2 | Build integrity failure | `LORE_E_PARSE_FAILED`, `LORE_E_BUILD_VALIDATION`, `LORE_E_STALE_SOURCES`, `LORE_E_SCHEMA_MISMATCH` |
-| 3 | Environment or capability | `LORE_E_UNSUPPORTED_NODE`, `LORE_E_FTS5_UNAVAILABLE` |
+| 3 | Environment or capability | `LORE_E_UNSUPPORTED_NODE`, `LORE_E_UNSUPPORTED_SQLITE`, `LORE_E_FTS5_UNAVAILABLE` |
 | 4 | Concurrency | `LORE_E_LOCK_HELD`, `LORE_E_BUSY` |
 | 5 | Remote or deployment | `LORE_E_REMOTE_DEPLOY`, `LORE_E_CAPABILITY_LOSS` |
 

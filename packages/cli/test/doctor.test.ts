@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { doctorReportSchema } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
-import { runDoctor } from '../src/services/doctor.js';
+import { runDoctor, sqliteVersionCheck } from '../src/services/doctor.js';
 
 /**
  * `lorepack doctor`, whose entire value is the remediation.
@@ -30,7 +30,7 @@ describe('a healthy environment', () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       const report = await runDoctor({ cwd: project.root });
 
-      for (const id of ['node-version', 'sqlite-capabilities', 'fts5']) {
+      for (const id of ['node-version', 'sqlite-version', 'sqlite-capabilities', 'fts5']) {
         const check = report.checks.find((candidate) => candidate.id === id);
         expect(check?.status, `${id}: ${check?.detail}`).toBe('pass');
       }
@@ -58,6 +58,43 @@ describe('a healthy environment', () => {
       expect(capabilities?.values?.enableDefensive).toBe(true);
       expect(capabilities?.values?.limits).toBe(true);
     });
+  });
+});
+
+describe('the SQLite version, because the FTS5 CVEs are fixed in 3.53.2', () => {
+  it('reports the version this Node actually links, and passes it on a supported runtime', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const report = await runDoctor({ cwd: project.root });
+      const check = report.checks.find((candidate) => candidate.id === 'sqlite-version');
+
+      expect(check?.status).toBe('pass');
+      expect(check?.values?.detected).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(check?.values?.minimum).toBe('3.53.2');
+      expect(check?.values?.execPath).toBe(process.execPath);
+    });
+  });
+
+  it('fails below 3.53.2 and says how to get a fixed build', () => {
+    // A Node linked against a shared system SQLite can carry an older SQLite than the
+    // Node version implies, which is the case the version floor alone cannot catch.
+    const check = sqliteVersionCheck('3.53.1');
+
+    expect(check.status).toBe('fail');
+    expect(check.detail).toContain('3.53.1');
+    expect(check.values?.code).toBe('LORE_E_UNSUPPORTED_SQLITE');
+    expect(check.remediation).toContain('CVE-2026-11822');
+    expect(check.remediation).toContain('https://nodejs.org/en/download');
+  });
+
+  it.each(['3.53.2', '3.53.4'])('passes %s', (version) => {
+    const check = sqliteVersionCheck(version);
+    expect(check.status).toBe('pass');
+    expect(check.remediation).toBeUndefined();
+    expect(check.detail).toContain(version);
+  });
+
+  it('fails a version string it cannot read rather than guessing', () => {
+    expect(sqliteVersionCheck('unknown').status).toBe('fail');
   });
 });
 

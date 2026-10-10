@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { checkNodeVersion, parseNodeVersion, SUPPORTED_NODE_RANGE } from '../src/runtime/engine.js';
+import {
+  checkNodeVersion,
+  checkSqliteVersion,
+  MINIMUM_SQLITE_VERSION,
+  parseNodeVersion,
+  SUPPORTED_NODE_RANGE,
+} from '../src/runtime/engine.js';
 
 describe('parseNodeVersion', () => {
   it.each([
@@ -16,13 +22,14 @@ describe('parseNodeVersion', () => {
 });
 
 describe('checkNodeVersion', () => {
-  it.each(['24.15.0', '24.18.1', '24.99.0'])('accepts %s', (version) => {
+  it.each(['24.19.0', '24.21.0', '24.99.0'])('accepts %s', (version) => {
     expect(checkNodeVersion(version).supported).toBe(true);
   });
 
   it.each([
     ['22.14.0', 'too-old'],
     ['24.14.9', 'too-old'],
+    ['24.18.1', 'too-old'],
     ['23.11.0', 'too-old'],
     ['25.0.0', 'too-new'],
     ['banana', 'unparseable'],
@@ -41,7 +48,44 @@ describe('checkNodeVersion', () => {
     expect(result.message).not.toContain('at Object.');
   });
 
-  it('explains why the floor is 24.15 rather than stating it bluntly', () => {
-    expect(checkNodeVersion('24.14.9').message).toMatch(/authorizer|limits/i);
+  it('explains that the floor is the bundled SQLite, not version hygiene', () => {
+    // 24.18.1 bundles SQLite 3.53.1, which carries the FTS5 memory-corruption CVEs.
+    const message = checkNodeVersion('24.18.1').message ?? '';
+    expect(message).toContain('3.53.2');
+    expect(message).toContain('CVE-2026-11822');
+  });
+});
+
+describe('checkSqliteVersion', () => {
+  it('names 3.53.2 as the floor, the first release with the FTS5 fixes', () => {
+    expect(MINIMUM_SQLITE_VERSION).toBe('3.53.2');
+  });
+
+  it.each(['3.53.2', '3.53.3', '3.53.4', '3.54.0', '4.0.0'])('accepts %s', (version) => {
+    expect(checkSqliteVersion(version)).toEqual({ supported: true, detected: version });
+  });
+
+  it.each([
+    ['3.53.1', 'too-old'],
+    ['3.52.9', 'too-old'],
+    ['3.45.0', 'too-old'],
+    ['2.99.99', 'too-old'],
+    ['3.53', 'unparseable'],
+    ['', 'unparseable'],
+  ] as const)('rejects %s as %s', (version, reason) => {
+    const result = checkSqliteVersion(version);
+    expect(result.supported).toBe(false);
+    expect(result.reason).toBe(reason);
+    expect(result.code).toBe('LORE_E_UNSUPPORTED_SQLITE');
+  });
+
+  it('names the detected version, the advisories, and an official build to install', () => {
+    const message = checkSqliteVersion('3.53.1').message ?? '';
+    expect(message).toContain('3.53.1');
+    expect(message).toContain('3.53.2');
+    expect(message).toContain('CVE-2026-11822');
+    expect(message).toContain('CVE-2026-11824');
+    expect(message).toContain('https://nodejs.org/en/download');
+    expect(message).toContain('docs/compatibility/sqlite-fts5.md');
   });
 });

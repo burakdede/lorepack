@@ -87,6 +87,7 @@ describe('lorepack binary', () => {
   it('starts on this Node version, so the engine guard admits a supported runtime', async () => {
     const result = await lore(['--help']);
     expect(result.stderr).not.toContain('LORE_E_UNSUPPORTED_NODE');
+    expect(result.stderr).not.toContain('LORE_E_UNSUPPORTED_SQLITE');
     expect(result.code).toBe(0);
   });
 });

@@ -6,6 +6,8 @@
 export const ERROR_CODES = {
   // Environment and capability (exit 3)
   LORE_E_UNSUPPORTED_NODE: 'The Node runtime is outside the supported range.',
+  LORE_E_UNSUPPORTED_SQLITE:
+    'The linked SQLite predates 3.53.2, which fixes FTS5 memory corruption reachable from search.',
   LORE_E_FTS5_UNAVAILABLE: 'The SQLite build has no FTS5 module, so lexical search cannot work.',
   LORE_E_SQLITE_UNAVAILABLE: 'The node:sqlite module is unavailable or failed to open a database.',
 
@@ -61,6 +63,7 @@ export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
 
 const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_UNSUPPORTED_NODE: EXIT_CODES.ENVIRONMENT,
+  LORE_E_UNSUPPORTED_SQLITE: EXIT_CODES.ENVIRONMENT,
   LORE_E_FTS5_UNAVAILABLE: EXIT_CODES.ENVIRONMENT,
   LORE_E_SQLITE_UNAVAILABLE: EXIT_CODES.ENVIRONMENT,
   LORE_E_NOT_INITIALIZED: EXIT_CODES.USER,

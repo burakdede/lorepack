@@ -227,6 +227,15 @@ describe('entry point', () => {
     expect(guardCall).toBeGreaterThan(guardImport);
     expect(dynamicImport).toBeGreaterThan(guardCall);
 
+    // The SQLite floor is checked before the program is loaded, so no command can reach an
+    // FTS5 MATCH on a SQLite with the 3.53.2 FTS5 fixes missing.
+    const sqliteImport = source.indexOf("await import('node:sqlite')");
+    const sqliteCall = source.indexOf('assertSupportedSqlite(version)');
+    const programImport = source.indexOf("await import('./framework/program.js')");
+    expect(sqliteImport).toBeGreaterThan(guardCall);
+    expect(sqliteCall).toBeGreaterThan(sqliteImport);
+    expect(programImport).toBeGreaterThan(sqliteCall);
+
     // Everything except the guard must be loaded dynamically, after the check.
     const staticImports = [...source.matchAll(/^import .* from '(.+)';$/gm)].map((m) => m[1]);
     expect(staticImports).toEqual(['@lorepack/core/engine']);
