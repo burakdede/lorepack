@@ -26,7 +26,16 @@ The package graph is one-way:
 | CLI and Studio hosts | public ports and adapters | private implementation files across package boundaries |
 | deployment adapters | runtime ports and target-specific code | source compiler internals |
 
-`pnpm test:arch` enforces the import direction. Dependency additions are recorded in
+`pnpm test:arch` enforces the import direction for every package under `packages/` and for
+`apps/studio`, which may reach only `@lorepack/sdk` and no Node built-in. It reads imports with
+the TypeScript compiler's parser (`tools/arch/src/scan.ts`), not with patterns over the text, so
+an import laid out over several lines is still an import. Three things fail it outright, because
+no rule over specifiers can see what they load: a module loaded by a computed name
+(`import(name)`, `require(name)`), a loader reached by name (`process.getBuiltinModule`,
+`createRequire`), and a relative or absolute path that leaves the package's own directory. Another
+package is imported by its `@lorepack` name, which the edges check (#617).
+
+Dependency additions are recorded in
 [`dependencies.md`](dependencies.md), including why the package does not violate the
 zero-surprise install rule.
 

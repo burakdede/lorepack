@@ -1,3 +1,5 @@
+import { builtinModules } from 'node:module';
+
 /**
  * The allowed dependency edges, as data. Architecture section 9.1.
  *
@@ -16,9 +18,28 @@ export const PACKAGES = [
   'connect-clients',
   'deploy-cloudflare',
   'sdk',
+  'studio',
 ] as const;
 
 export type PackageName = (typeof PACKAGES)[number];
+
+/**
+ * Where each package lives, relative to the repository root. Studio is an app rather than a
+ * library, and it went unchecked for as long as the list assumed `packages/` (#617).
+ */
+export const PACKAGE_DIRS: Readonly<Record<PackageName, string>> = {
+  core: 'packages/core',
+  parsers: 'packages/parsers',
+  compiler: 'packages/compiler',
+  'backend-local': 'packages/backend-local',
+  runtime: 'packages/runtime',
+  mcp: 'packages/mcp',
+  cli: 'packages/cli',
+  'connect-clients': 'packages/connect-clients',
+  'deploy-cloudflare': 'packages/deploy-cloudflare',
+  sdk: 'packages/sdk',
+  studio: 'apps/studio',
+};
 
 /** Workspace packages each package may import from. */
 /** Test-only workspace packages, permitted as devDependencies anywhere. */
@@ -40,6 +61,9 @@ export const ALLOWED_WORKSPACE_EDGES: Readonly<Record<PackageName, readonly Pack
   // local builds through backend-local without reaching into compiler internals.
   'deploy-cloudflare': ['core', 'backend-local', 'runtime', 'mcp'],
   sdk: [],
+  // Architecture 9.1: "studio communicates only through HTTP APIs". The SDK is the HTTP
+  // client, so it is the one workspace package Studio may reach.
+  studio: ['sdk'],
   // parsers is reachable through compiler, but the CLI names parser versions in the
   // lockfile, so the edge is explicit rather than transitive.
   // backend-local is reachable because the CLI owns the build orchestration: it opens the
@@ -84,6 +108,20 @@ export const FORBIDDEN_EXTERNAL: Readonly<Record<string, readonly (string | RegE
   runtime: [/^react/, /^@modelcontextprotocol\//],
   'deploy-cloudflare': [/^react/],
   sdk: ['node:sqlite', /^hono/, /^react/, /^@modelcontextprotocol\//],
+  // A browser bundle: no Node built-in, and nothing that serves, stores or parses.
+  studio: [
+    /^node:/,
+    ...builtinModules,
+    /^hono/,
+    /^@modelcontextprotocol\//,
+    /^@cloudflare\//,
+    /^wrangler/,
+    /^pdfjs-dist/,
+    /^mammoth/,
+    /^exceljs/,
+    /^csv-parse/,
+    /^chokidar/,
+  ],
 };
 
 /**

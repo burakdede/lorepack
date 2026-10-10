@@ -137,7 +137,7 @@ provenance when two candidates are otherwise equivalent.
 | `remark-parse` | Markdown parser. | Replace only with a maintained parser that preserves line positions. |
 | `sax` | Streaming XML for XLSX. | Replace if it loses safe streaming behaviour or a better maintained equivalent appears. |
 | `smol-toml` | Codex TOML parse-only adapter. | Replace if Codex config format changes or a comment-preserving TOML editor becomes viable. |
-| `typescript` | Typechecker and project references. | Replace only when the language toolchain changes. |
+| `typescript` | Typechecker and project references; its parser API (`typescript/unstable/*`) reads imports for the architecture rules. Pinned exactly because that API is published as unstable. | Replace only when the language toolchain changes; if the API changes shape, `pnpm test:arch` fails rather than passing silently. |
 | `unified` | Shared parser pipeline for Markdown and HTML. | Replace if the parser stack stops being maintained together. |
 | `vite` | Studio build tooling. | Replace if it adds install-time surprises or cannot keep the bundle deterministic. |
 | `vitest` | Unit and integration test runner. | Replace if it cannot run the workspace projects on all supported platforms. |

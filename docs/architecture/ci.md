@@ -107,3 +107,7 @@ interfaces, rather than the runner's inherited network devices. The dummy
 interface has no automatic IPv6 address and uses a permanent gateway neighbor,
 so interface setup and ARP retries cannot contribute unrelated packets during a
 build. Counterexamples must transmit packets, then leave a clean build at zero.
+
+The repository architecture scan opens one TypeScript snapshot for all package
+and Studio source files. Package rules still apply separately to every import;
+sharing the snapshot avoids starting a compiler process per package.

@@ -1,14 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   ALLOWED_WORKSPACE_EDGES,
   FORBIDDEN_EXTERNAL,
   NO_BARE_ERROR_PACKAGES,
+  PACKAGE_DIRS,
   PACKAGES,
   type PackageName,
   TEST_ONLY_PACKAGES,
 } from './rules.js';
-import { collectImports, listSourceFiles, workspaceDependency } from './scan.js';
+import {
+  collectImports,
+  collectReferences,
+  type ImportRecord,
+  listSourceFiles,
+  workspaceDependency,
+} from './scan.js';
 
 export interface Violation {
   readonly file: string;
@@ -21,15 +28,51 @@ function matches(specifier: string, pattern: string | RegExp): boolean {
   return typeof pattern === 'string' ? specifier === pattern : pattern.test(specifier);
 }
 
+/** Absolute paths and URLs name a file without saying which package it belongs to. */
+const ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/]|\\\\|file:)/;
+
 export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
-  const dir = join(repoRoot, 'packages', name, 'src');
+  const packageRoot = join(repoRoot, PACKAGE_DIRS[name]);
+  const dir = join(packageRoot, 'src');
   if (!existsSync(dir)) return [];
 
+  return checkReferences(repoRoot, name, collectImports(dir, repoRoot));
+}
+
+function checkReferences(
+  repoRoot: string,
+  name: PackageName,
+  records: readonly ImportRecord[],
+): Violation[] {
+  const packageRoot = join(repoRoot, PACKAGE_DIRS[name]);
   const violations: Violation[] = [];
   const allowed = ALLOWED_WORKSPACE_EDGES[name];
   const forbidden = FORBIDDEN_EXTERNAL[name] ?? [];
 
-  for (const record of collectImports(dir, repoRoot)) {
+  for (const record of records) {
+    if (record.computed) {
+      violations.push({
+        ...record,
+        rule: `@lorepack/${name} may not load a module by a name the source does not spell out, because no rule can see what it loads. Import it by a string literal.`,
+      });
+      continue;
+    }
+    if (record.specifier.startsWith('.') || ABSOLUTE.test(record.specifier)) {
+      const target = ABSOLUTE.test(record.specifier)
+        ? null
+        : resolve(dirname(join(repoRoot, record.file)), record.specifier);
+      const inside =
+        target !== null &&
+        !relative(packageRoot, target).startsWith('..') &&
+        !isAbsolute(relative(packageRoot, target));
+      if (!inside) {
+        violations.push({
+          ...record,
+          rule: `@lorepack/${name} may not reach a file outside ${PACKAGE_DIRS[name]} by path. Another package is imported by its @lorepack name, which the allowed edges check.`,
+        });
+      }
+      continue;
+    }
     const workspace = workspaceDependency(record.specifier);
     if (workspace !== null) {
       if (workspace === name) continue;
@@ -57,14 +100,24 @@ export function checkPackage(repoRoot: string, name: PackageName): Violation[] {
 }
 
 export function checkAll(repoRoot: string): Violation[] {
-  return PACKAGES.flatMap((name) => checkPackage(repoRoot, name));
+  const files = PACKAGES.flatMap((name) =>
+    listSourceFiles(join(repoRoot, PACKAGE_DIRS[name], 'src')),
+  );
+  const records = collectReferences(files, repoRoot);
+  return PACKAGES.flatMap((name) =>
+    checkReferences(
+      repoRoot,
+      name,
+      records.filter((record) => record.file.startsWith(`${PACKAGE_DIRS[name]}/src/`)),
+    ),
+  );
 }
 
 /** Declared workspace dependencies must not exceed the allowed edges either. */
 export function checkManifests(repoRoot: string): Violation[] {
   const violations: Violation[] = [];
   for (const name of PACKAGES) {
-    const manifestPath = join(repoRoot, 'packages', name, 'package.json');
+    const manifestPath = join(repoRoot, PACKAGE_DIRS[name], 'package.json');
     if (!existsSync(manifestPath)) continue;
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
       dependencies?: Record<string, string>;
@@ -77,7 +130,7 @@ export function checkManifests(repoRoot: string): Violation[] {
       if (TEST_ONLY_PACKAGES.includes(workspace)) continue;
       if (!ALLOWED_WORKSPACE_EDGES[name].includes(workspace as PackageName)) {
         violations.push({
-          file: `packages/${name}/package.json`,
+          file: `${PACKAGE_DIRS[name]}/package.json`,
           line: 1,
           specifier: dep,
           rule: `@lorepack/${name} declares a dependency on ${dep}, which the allowed edges forbid.`,
