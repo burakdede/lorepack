@@ -15,6 +15,7 @@ physical: a sealed build never changes, and everything that does change lives el
   tmp/                      candidate builds, never mistaken for real ones
   state.sqlite              the only mutable database
   lock/                     cross-process build and activation lock
+  lock.reclaimed-*/         tombstones of reclaimed locks, removed after an hour
 ```
 
 ## Atomic directories
@@ -95,14 +96,34 @@ cost without benefit; older builds close as soon as they drain.
 ## Project lock
 
 Builds, activation and prune serialise on `.lore/lock`, created with `mkdir`, which is atomic
-everywhere we support. The record inside names the owning pid, when it was taken and a
-unique ownership token.
+everywhere we support. The record inside names the owning pid, the host it runs on, when that
+process started, when the lock was taken and a unique ownership token.
 
-A lock is reclaimed when its owner is no longer running. An unreadable lock record is
-reclaimed only after the staleness window. A lock held by a live process is never reclaimed
-because a build can legitimately run longer than that window: the caller waits and then
-fails with `LORE_E_LOCK_HELD` naming the pid and how to recover. The ownership token also
-prevents a former holder from removing a replacement lock during cleanup.
+A lock is reclaimed when its owner is no longer running. "No longer running" means the pid is
+gone, or the pid is alive but names a process that started at a different time: pids are
+reused, and a lock must not outlive its owner because an unrelated process (or pid 1) inherited
+the number. The start is compared as clock ticks since boot on Linux, read from `/proc`, and as
+wall time from `ps` on macOS and from PowerShell on Windows, within five seconds. When the start
+of a live process cannot be read, the lock is kept.
+
+A lock taken on another host is never reclaimed automatically, whatever its age: its owner's
+liveness cannot be checked from here, which matters on NFS and synced folders. The command
+fails with `LORE_E_LOCK_HELD` naming the host, and the remedy is to remove `.lore/lock` once
+nothing is running there. An unreadable lock record is reclaimed only after the staleness
+window. A lock held by a live process is never reclaimed because a build can legitimately run
+longer than that window: the caller waits and then fails with `LORE_E_LOCK_HELD` naming the
+pid and how to recover. The ownership token also prevents a former holder from removing a
+replacement lock during cleanup.
+
+Reclaiming is a rename, not a delete (#565). Deciding a lock is stale and then removing
+`.lore/lock` removes whatever is there by then, which can be the lock a second reclaimer has
+just taken; eight processes racing for one dead owner's lock had two or three holders in a
+third of trials. Instead the stale lock is renamed to `.lore/lock.reclaimed-token-<token>` (or
+`-inode-<n>` for an unreadable record), a name derived from the lock that was judged. Only the
+first rename can succeed: every later one targets a directory that already exists and is not
+empty, which fails on POSIX and Windows alike, so a late reclaimer cannot move the new holder's
+lock. Tombstones are removed an hour after they are marked, by whichever process next takes
+the lock.
 
 Two deliberate details. The owner pid is injectable, so the reclamation paths can be tested
 as a genuinely different process rather than approximated. The wait deadline uses wall
