@@ -40,7 +40,7 @@ const PREFIXED_KEY = /\b(?:sk|pk|ghp|gho|ghs|ghu|github_pat|xox[baprs])[-_][A-Za
  * word: a JSON key echoed into a validation error is enough. So the pair is found by a pattern
  * that never has to guess where the keyword is, and the name is tested afterwards.
  */
-const PAIR_NAME = /\b([A-Za-z0-9_]+)\s*[=:]\s*/y;
+const PAIR_NAME = /\b([A-Za-z0-9_-]+)\s*[=:]\s*/y;
 const PAIR_VALUE = /"[^"\n]+"|'[^'\n]+'|\S+/y;
 const SECRET_NAME = /TOKEN|SECRET|PASSWORD|API[_-]?KEY|CREDENTIAL/i;
 /** Where a pair name can start: the first word character after a non-word one. */
@@ -54,8 +54,8 @@ function redactPairs(text: string): string {
     PAIR_NAME.lastIndex = start.index;
     const pair = PAIR_NAME.exec(text);
     if (pair === null) {
-      // Skip the rest of this word: a name can only start where a word does.
-      WORD_START.lastIndex = endOfWord(text, start.index);
+      // Retrying after each hyphen would rescan the remaining name quadratically.
+      WORD_START.lastIndex = endOfName(text, start.index);
       continue;
     }
     const name = pair[1] as string;
@@ -64,7 +64,7 @@ function redactPairs(text: string): string {
     if (value === null) {
       // Not a secret: the value is ordinary text and is scanned like the rest, so a secret
       // pair inside it (`a=MY_TOKEN=x`) is still found.
-      WORD_START.lastIndex = endOfWord(text, start.index);
+      WORD_START.lastIndex = endOfName(text, start.index);
       continue;
     }
     output += `${text.slice(copied, start.index)}${name}=${REDACTED}`;
@@ -74,9 +74,9 @@ function redactPairs(text: string): string {
   return output + text.slice(copied);
 }
 
-function endOfWord(text: string, from: number): number {
+function endOfName(text: string, from: number): number {
   let index = from;
-  while (index < text.length && /[A-Za-z0-9_]/.test(text[index] as string)) index += 1;
+  while (index < text.length && /[A-Za-z0-9_-]/.test(text[index] as string)) index += 1;
   return index;
 }
 

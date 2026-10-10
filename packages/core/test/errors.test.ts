@@ -122,6 +122,7 @@ describe('redaction', () => {
     expect(redact('use ghp_abcdefghijklmnopqrstuvwxyz012345', [])).toContain(REDACTED);
     expect(redact('Authorization: Bearer abcdefghijklmnop', [])).toContain(REDACTED);
     expect(redact('API_KEY=abcdefghijklmnop', [])).toContain(REDACTED);
+    expect(redact('API-KEY=abcdefghijklmnop', [])).toBe(`API-KEY=${REDACTED}`);
   });
 
   it('redacts every secret-named pair, including one inside another value and with odd spacing', () => {
@@ -149,6 +150,7 @@ describe('redaction', () => {
     ['provider prefix', 'sk_'],
     ['near-miss pair', 'TOKEN :'],
     ['many short pairs', 'a='],
+    ['hyphenated name', 'name-name-'],
   ])('runs in linear time on a 1 MB %s', (_shape, unit) => {
     const input = unit.repeat(Math.ceil((1024 * 1024) / unit.length));
     const started = performance.now();
