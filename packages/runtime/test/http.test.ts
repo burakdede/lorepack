@@ -963,14 +963,18 @@ describe('the authorization hook, architecture 18.4', () => {
     expect(reads).toBe(0);
   });
 
-  it('rejects an MCP method-header mismatch before the auth hook can inspect it', async () => {
+  it('rejects an MCP method-header mismatch before the handler sees it', async () => {
     let authorized = 0;
+    let handled = 0;
     const app = appFor({
       authorize: () => {
         authorized += 1;
         return true;
       },
-      mcpHandler: () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+      mcpHandler: () => {
+        handled += 1;
+        return new Response('{}', { headers: { 'Content-Type': 'application/json' } });
+      },
     });
 
     const response = await app.request('/mcp', {
@@ -994,17 +998,24 @@ describe('the authorization hook, architecture 18.4', () => {
       error: { code: -32020 },
       id: 1,
     });
-    expect(authorized).toBe(0);
+    // After the hook since #550: parsing a body for an anonymous caller is the cost an
+    // attacker controls. The forged header still never reaches the handler.
+    expect(authorized).toBe(1);
+    expect(handled).toBe(0);
   });
 
-  it('rejects an MCP name-header mismatch before the auth hook can inspect it', async () => {
+  it('rejects an MCP name-header mismatch before the handler sees it', async () => {
     let authorized = 0;
+    let handled = 0;
     const app = appFor({
       authorize: () => {
         authorized += 1;
         return true;
       },
-      mcpHandler: () => new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+      mcpHandler: () => {
+        handled += 1;
+        return new Response('{}', { headers: { 'Content-Type': 'application/json' } });
+      },
     });
 
     const response = await app.request('/mcp', {
@@ -1029,7 +1040,99 @@ describe('the authorization hook, architecture 18.4', () => {
       error: { code: -32020 },
       id: 1,
     });
-    expect(authorized).toBe(0);
+    // After the hook since #550: parsing a body for an anonymous caller is the cost an
+    // attacker controls. The forged header still never reaches the handler.
+    expect(authorized).toBe(1);
+    expect(handled).toBe(0);
+  });
+});
+
+describe('request bodies are capped as they stream, #550', () => {
+  const LIMIT = 1024;
+  const CHUNK = 256;
+
+  /**
+   * A body with no `Content-Length`, as a chunked upload arrives, that counts what was read.
+   *
+   * Effectively endless: a reader that buffers before checking would run until the test times
+   * out, which is the defect, and one that stops at the cap pulls little more than it.
+   */
+  function endlessBody(): { body: ReadableStream<Uint8Array>; pulled: () => number } {
+    let pulled = 0;
+    const chunk = new TextEncoder().encode(`{"query":"${'x'.repeat(CHUNK)}`.slice(0, CHUNK));
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += chunk.byteLength;
+        if (pulled > 64 * 1024 * 1024) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    return { body, pulled: () => pulled };
+  }
+
+  function chunkedPost(path: string, body: ReadableStream<Uint8Array>, headers = {}): Request {
+    return new Request(`http://runtime.test${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+  }
+
+  it.each(['/v1/search', '/v1/context', '/mcp'])(
+    'stops reading a chunked body to %s once it crosses the cap',
+    async (path) => {
+      let handled = 0;
+      const app = appFor({
+        maxRequestBytes: LIMIT,
+        mcpHandler: async (request) => {
+          handled += 1;
+          await request.text();
+          return new Response('{}', { headers: { 'Content-Type': 'application/json' } });
+        },
+      });
+      const { body, pulled } = endlessBody();
+
+      const response = await app.request(chunkedPost(path, body));
+
+      expect(response.status).toBe(413);
+      expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_LIMIT_EXCEEDED' } });
+      expect(pulled()).toBeLessThanOrEqual(LIMIT + 2 * CHUNK);
+      expect(handled).toBe(0);
+    },
+  );
+
+  it('refuses an anonymous /mcp request as 401 without reading its body', async () => {
+    let handled = 0;
+    const app = appFor({
+      authorize: () => false,
+      mcpHandler: () => {
+        handled += 1;
+        return new Response('{}', { headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    const { body, pulled } = endlessBody();
+
+    const response = await app.request(
+      chunkedPost('/mcp', body, { 'Mcp-Method': 'tools/list', Accept: 'application/json' }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(pulled()).toBeLessThanOrEqual(CHUNK);
+    expect(handled).toBe(0);
+  });
+
+  it('still admits a chunked body under the cap', async () => {
+    const app = appFor({ maxRequestBytes: LIMIT });
+    const payload = new TextEncoder().encode(JSON.stringify({ query: 'rollback' }));
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(payload);
+        controller.close();
+      },
+    });
+    const response = await app.request(chunkedPost('/v1/search', body));
+    expect(response.status).toBe(200);
   });
 });
 
