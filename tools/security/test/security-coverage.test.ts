@@ -22,6 +22,39 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'Windows lock creation retries preserve the wait bound and filesystem errors',
+    path: 'packages/backend-local/test/lock_create.test.ts',
+    tests: [
+      'lock directory creation errors retries a transient Windows EPERM and acquires the lock',
+      'lock directory creation errors returns persistent Windows EPERM at the original wait deadline',
+      'lock directory creation errors returns darwin EPERM immediately',
+      'lock directory creation errors returns linux EPERM immediately',
+      'lock directory creation errors returns other Windows creation errors immediately',
+      'lock directory creation errors returns parent-directory EPERM immediately',
+      'lock directory creation errors returns owner-record EPERM immediately',
+    ],
+    patterns: [/EPERM/, /advanceTimersByTimeAsync/, /toBe\(cause\)/],
+  },
+  {
+    name: 'lock process probes do not execute a relative PATH entry',
+    path: 'packages/backend-local/test/process-start.test.ts',
+    tests: ['process start identity does not execute a process probe from a relative PATH entry'],
+    patterns: [/processStart\(process.pid\)/, /expect\(existsSync\(marker\)\)\.toBe\(false\)/],
+  },
+  {
+    name: 'export passages cannot forge provenance and tasks stay literal, issue 552',
+    path: 'packages/cli/test/export.test.ts',
+    tests: [
+      'a passage cannot forge the structure around it keeps every passage inside a fence, whatever it contains',
+      'a passage cannot forge the structure around it renders the "getting more" command so a shell takes the task literally',
+    ],
+    patterns: [
+      /structure\).not.toContain\('### policies\/security-policy\.md'\)/,
+      /structure\).not.toContain\('## Escaped the fence'\)/,
+      /argv\.split\('\\n'\)\)\.toEqual/,
+    ],
+  },
+  {
     name: 'secret redaction is linear on adversarial input',
     path: 'packages/core/test/errors.test.ts',
     tests: [
@@ -153,7 +186,9 @@ const EVIDENCE: readonly Evidence[] = [
     name: 'a build leaves out a file over a parse limit and still activates, issue 594',
     path: 'packages/cli/test/parse-limits.test.ts',
     tests: [
-      'a file that exceeds a parse limit is left out with a typed warning, and the build activates without it',
+      'a file that exceeds a parse limit leaves out brackets.md with parse-timeout, and activates without it',
+      'a file that exceeds a parse limit leaves out rows.csv with parse-memory, and activates without it',
+      'a file that exceeds a parse limit leaves out cmap.pdf with parse-memory, and activates without it',
       'a file that exceeds a parse limit leaves out a document nested past the parser stack, issue 595',
       'the published binary parses in its own child and leaves out a file over the deadline',
     ],

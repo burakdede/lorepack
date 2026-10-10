@@ -212,6 +212,12 @@ its claim off as another document's. Paths and heading labels are kept to one li
 shell run `$(...)` and backticks. The cost is that Markdown inside a passage shows as source
 rather than rendering, which is the point: it is quoted, not Lorepack's.
 
+Manual CLI check, 2026-10-11, Lorepack 0.1.0, Node 24.21.0, macOS arm64: build a
+`rollout.txt` containing the forged citation lines from #552, a four-backtick line and
+`## Escaped the fence`, then run `lorepack export --task 'rollout sign-off'`. The inspected
+output kept all source lines inside a five-backtick fence and cited `rollout.txt` lines
+1-8. `tools/contract/test/serve.test.ts` verifies HTTP and CLI export byte parity.
+
 ## Measured cost
 
 Provisional, on the development machine, since the reference machine is #101:

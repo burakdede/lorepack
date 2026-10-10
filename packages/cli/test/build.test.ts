@@ -1,12 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { buildManifestSchema, loadConfig, ProgressBus, sha256Hex } from '@lorepack/core';
@@ -344,6 +347,54 @@ describe('concurrency', () => {
       } finally {
         lock.release();
       }
+    });
+  });
+
+  it('refuses a lock taken on another host instead of reclaiming it (#565)', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const lock = join(root, '.lore', 'lock');
+      mkdirSync(lock, { recursive: true });
+      writeFileSync(
+        join(lock, 'owner.json'),
+        JSON.stringify({ pid: 999_999, hostname: 'other-host-nfs', acquiredAt: Date.now() }),
+      );
+      await expect(
+        runBuild({
+          config: loadConfig({ cwd: root }),
+          progress: new ProgressBus(),
+          lockWaitMs: 50,
+        }),
+      ).rejects.toMatchObject({
+        code: 'LORE_E_LOCK_HELD',
+        message: expect.stringContaining('on host other-host-nfs'),
+      });
+      expect(existsSync(join(lock, 'owner.json'))).toBe(true);
+    });
+  });
+
+  it('reclaims a lock whose pid was reused by a process that started later (#565)', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const lock = join(root, '.lore', 'lock');
+      mkdirSync(lock, { recursive: true });
+      // The pid is this test's parent, which is alive. The recorded start is not its start,
+      // so whatever took the lock has exited and the pid now names something else.
+      writeFileSync(
+        join(lock, 'owner.json'),
+        JSON.stringify({
+          pid: process.ppid,
+          start: process.platform === 'linux' ? 'linux:0' : 'epoch:0',
+          hostname: hostname(),
+          acquiredAt: Date.now(),
+          token: randomUUID(),
+        }),
+      );
+      await expect(
+        runBuild({
+          config: loadConfig({ cwd: root }),
+          progress: new ProgressBus(),
+          lockWaitMs: 5_000,
+        }),
+      ).resolves.toMatchObject({ created: true });
     });
   });
 

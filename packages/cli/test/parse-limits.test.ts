@@ -21,9 +21,8 @@ import { readActiveBuild } from '../src/services/project.js';
  * Issue 594: a file that hangs or exhausts its parser is left out with a warning, and the
  * build still ends, activates, and says which file it was.
  *
- * The limits are set low so the fixtures exceed them in a second. What is under test is the
- * build's handling of an exceeded limit; the limits themselves are covered in the parsers
- * package.
+ * Deadline and heap cases have separate budgets so a slow runner cannot turn the expected
+ * memory warning into a timeout. The parser package covers the limits themselves.
  */
 
 const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
@@ -37,40 +36,35 @@ function manifestOf(root: string, buildId: string) {
 }
 
 describe('a file that exceeds a parse limit', () => {
-  it('is left out with a typed warning, and the build activates without it', async () => {
-    await withTempProject({ files: { 'lore.yaml': CONFIG, 'readme.md': README } }, async (temp) => {
-      writeFileSync(join(temp.root, 'brackets.md'), nestedBracketsMarkdown(100_000));
-      writeFileSync(join(temp.root, 'rows.csv'), singleCharacterCsv(4_000_000));
-      writeFileSync(join(temp.root, 'cmap.pdf'), cmapBombPdf(1));
+  for (const [path, fixture, timeoutMs, code] of [
+    ['brackets.md', () => nestedBracketsMarkdown(100_000), 5_000, 'parse-timeout'],
+    ['rows.csv', () => singleCharacterCsv(4_000_000), 60_000, 'parse-memory'],
+    ['cmap.pdf', () => cmapBombPdf(1), 60_000, 'parse-memory'],
+  ] as const) {
+    it(`leaves out ${path} with ${code}, and activates without it`, async () => {
+      await withTempProject(
+        { files: { 'lore.yaml': CONFIG, 'readme.md': README } },
+        async (temp) => {
+          writeFileSync(join(temp.root, path), fixture());
 
-      const started = Date.now();
-      const result = await runBuild({
-        config: loadConfig({ cwd: temp.root }),
-        progress: new ProgressBus(),
-        // Long enough for the memory fixtures to reach the ceiling first on a slow runner;
-        // the bracket file needs minutes, so it still meets the deadline.
-        parseLimits: { timeoutMs: 5_000, memoryMb: 128 },
-      });
+          const started = Date.now();
+          const result = await runBuild({
+            config: loadConfig({ cwd: temp.root }),
+            progress: new ProgressBus(),
+            parseLimits: { timeoutMs, memoryMb: 128 },
+          });
 
-      expect(Date.now() - started).toBeLessThan(60_000);
-      expect(result.activated).toBe(true);
-      expect(result.counts.artifacts).toBe(1);
-      expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(result.buildId);
-
-      const warnings = manifestOf(temp.root, result.buildId).warnings;
-      expect(warnings).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'parse-timeout',
-            path: 'brackets.md',
-            class: 'envelope',
-          }),
-          expect.objectContaining({ code: 'parse-memory', path: 'rows.csv', class: 'envelope' }),
-          expect.objectContaining({ code: 'parse-memory', path: 'cmap.pdf', class: 'envelope' }),
-        ]),
+          expect(Date.now() - started).toBeLessThan(60_000);
+          expect(result.activated).toBe(true);
+          expect(result.counts.artifacts).toBe(1);
+          expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(result.buildId);
+          expect(manifestOf(temp.root, result.buildId).warnings).toEqual([
+            expect.objectContaining({ code, path, class: 'envelope' }),
+          ]);
+        },
       );
     });
-  });
+  }
 
   it('leaves out a document nested past the parser stack, issue 595', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG, 'readme.md': README } }, async (temp) => {

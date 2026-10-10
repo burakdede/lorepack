@@ -161,6 +161,7 @@ row above with the capability it provides, not the problem it solves in general.
 existing dependency or a Node builtin can do the job, that is the answer.
 
 Prefer a small amount of our own code over a dormant dependency when the code is
-genuinely small and fully testable. `ProjectLock` is the standing example: `proper-lockfile`
-has had no release since 2022, and the mkdir-based lock it replaces is under a hundred
-lines with cross-platform tests of its own.
+small and fully testable. `ProjectLock` has grown beyond its original directory lock to cover
+host identity, PID reuse and concurrent reclamation. Its current trade-offs are recorded in
+[ADR 0002](../adr/0002-lock-reclamation.md), with real cross-process tests on every supported
+platform.
