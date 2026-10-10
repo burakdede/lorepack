@@ -9,6 +9,7 @@ import {
   projectionWriteOptions,
   runProjectionBatch,
 } from './projection-write.js';
+import { SAFE_IDENTIFIER } from './tables.js';
 
 interface BuildTableRow {
   readonly id: string;
@@ -56,7 +57,11 @@ export interface ProjectTableDataResult {
   readonly projectedRows: number;
 }
 
-const SAFE_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
+/**
+ * The shape `projectedSqlNameFor` produces. Retention uses it to tell a projected table that
+ * no catalog row references any more from SQLite and D1 system tables.
+ */
+export const PROJECTED_TABLE_NAME = /^[a-z][a-z0-9_]{0,44}_[0-9a-f]{16}$/;
 const MAX_D1_BOUND_PARAMETERS = 100;
 const MAX_D1_SQL_BYTES = 95_000;
 

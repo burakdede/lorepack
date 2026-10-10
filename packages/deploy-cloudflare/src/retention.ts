@@ -1,7 +1,9 @@
-import { assertBuildId, type BuildId } from '@lorepack/core';
+import { assertBuildId, type BuildId, LoreError } from '@lorepack/core';
+import { PROJECTED_TABLE_NAME } from './project-table-data.js';
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
 import type { R2BucketLike } from './storage.js';
+import { SAFE_IDENTIFIER } from './tables.js';
 
 interface ActiveBuildRow {
   readonly buildId: string | null;
@@ -23,6 +25,11 @@ export interface RemoteRetentionPlan {
   readonly remove: readonly BuildId[];
   readonly archiveKeysToRemove: readonly string[];
   readonly objectKeysToRemove: readonly string[];
+  /**
+   * Physical tables in `TABLES_DB` that no catalog row references, such as those an earlier
+   * prune left behind when it dropped tables from the wrong database (#557).
+   */
+  readonly orphanTablesToRemove: readonly string[];
 }
 
 export interface RemoteRetentionApplyResult extends RemoteRetentionPlan {
@@ -84,6 +91,8 @@ interface SqlNameRow {
   readonly sqlName: string;
 }
 
+type CatalogD1RetentionCounts = Omit<MutableD1RetentionReport, 'physicalTablesDropped'>;
+
 interface CountRow {
   readonly count: number;
 }
@@ -102,21 +111,33 @@ const LOOKUP_PROJECTED_SQL_NAMES = `SELECT sql_name AS sqlName
 FROM tables
 WHERE project_id = ? AND build_id = ?
 ORDER BY sql_name`;
+// Every project whose catalog lives in this D1 database shares its tables database, so a
+// physical table is an orphan only when no project references it.
+const LOOKUP_REFERENCED_SQL_NAMES = 'SELECT DISTINCT sql_name AS sqlName FROM tables';
+const LOOKUP_PHYSICAL_TABLE = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?";
+const LIST_PHYSICAL_TABLES = "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name";
 
+/**
+ * `catalogDb` is `CATALOG_DB`, which holds the build metadata; `tablesDb` is `TABLES_DB`, which
+ * holds the projected physical tables (docs/architecture/adr-d1-table-query-isolation.md).
+ */
 export async function planRemoteRetention(
-  db: ProjectionMigrationDatabaseLike,
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
   projectId: string,
   keepPrevious: number,
 ): Promise<RemoteRetentionPlan> {
-  if (!(await hasProjectedBuildsTable(db))) {
+  if (!(await hasProjectedBuildsTable(catalogDb))) {
     return {
       activeBuildId: null,
       keep: [],
       remove: [],
       archiveKeysToRemove: [],
       objectKeysToRemove: [],
+      orphanTablesToRemove: [],
     };
   }
+  const db = catalogDb;
 
   const active = await db
     .prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1')
@@ -172,26 +193,29 @@ ORDER BY projected_at DESC, build_id DESC`,
     remove,
     archiveKeysToRemove: remove.map((buildId) => r2ArchiveKey(projectId, buildId)),
     objectKeysToRemove: doomedObjectKeys,
+    orphanTablesToRemove: await findOrphanTables(catalogDb, tablesDb),
   };
 }
 
 export async function applyRemoteRetention(
-  db: ProjectionMigrationDatabaseLike,
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
   bucket: R2BucketLike,
   projectId: string,
   keepPrevious: number,
 ): Promise<RemoteRetentionApplyResult> {
-  const plan = await planRemoteRetention(db, projectId, keepPrevious);
-  return await applyRemoteRetentionPlan(db, bucket, plan);
+  const plan = await planRemoteRetention(catalogDb, tablesDb, projectId, keepPrevious);
+  return await applyRemoteRetentionPlan(catalogDb, tablesDb, bucket, plan);
 }
 
 export async function applyRemoteRetentionPlan(
-  db: ProjectionMigrationDatabaseLike,
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
   bucket: R2BucketLike,
   plan: RemoteRetentionPlan,
   resume?: RemoteRetentionResumeState,
 ): Promise<RemoteRetentionApplyResult> {
-  if (plan.remove.length === 0) {
+  if (plan.remove.length === 0 && plan.orphanTablesToRemove.length === 0) {
     return {
       ...plan,
       d1: emptyD1Report(),
@@ -203,7 +227,29 @@ export async function applyRemoteRetentionPlan(
 
   try {
     if (!progress.d1Completed) {
-      progress.d1 = await deleteProjectedBuildsFromD1(db, projectIdForPlan(plan), plan.remove);
+      // Physical tables go first: if the catalog delete then fails, the rows that name them
+      // survive for the resume, whereas the reverse order would forget which tables to drop.
+      if (plan.remove.length > 0) {
+        await dropBuildTables(
+          catalogDb,
+          tablesDb,
+          projectIdForPlan(plan),
+          plan.remove,
+          progress.d1.physicalTablesDropped,
+        );
+      }
+      await dropOrphanTables(
+        catalogDb,
+        tablesDb,
+        plan.orphanTablesToRemove,
+        progress.d1.physicalTablesDropped,
+      );
+      if (plan.remove.length > 0) {
+        Object.assign(
+          progress.d1,
+          await deleteProjectedBuildsFromCatalog(catalogDb, projectIdForPlan(plan), plan.remove),
+        );
+      }
       progress.d1Completed = true;
     }
     if (!progress.archivesCompleted) {
@@ -224,7 +270,9 @@ export async function applyRemoteRetentionPlan(
     }
   } catch (cause) {
     throw new RemoteRetentionApplyError(
-      `The cloudflare target failed while cleaning up ${plan.remove.length} remote build${plan.remove.length === 1 ? '' : 's'}.`,
+      plan.remove.length === 0
+        ? `The cloudflare target failed while removing ${plan.orphanTablesToRemove.length} orphaned table${plan.orphanTablesToRemove.length === 1 ? '' : 's'}.`
+        : `The cloudflare target failed while cleaning up ${plan.remove.length} remote build${plan.remove.length === 1 ? '' : 's'}.`,
       progress,
       cause,
     );
@@ -267,25 +315,121 @@ ORDER BY object_hash`,
   return new Set((rows.results ?? []).map((row) => row.objectHash));
 }
 
-async function deleteProjectedBuildsFromD1(
+async function findOrphanTables(
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
+): Promise<string[]> {
+  const referenced = await readReferencedSqlNames(catalogDb);
+  const physical = await tablesDb.prepare(LIST_PHYSICAL_TABLES).run<{ name: string }>();
+  return (physical.results ?? [])
+    .map((row) => row.name)
+    .filter((name) => isProjectedTableName(name) && !referenced.has(name));
+}
+
+async function readReferencedSqlNames(
+  catalogDb: ProjectionMigrationDatabaseLike,
+): Promise<ReadonlySet<string>> {
+  const rows = await catalogDb.prepare(LOOKUP_REFERENCED_SQL_NAMES).run<SqlNameRow>();
+  return new Set((rows.results ?? []).map((row) => row.sqlName));
+}
+
+async function dropBuildTables(
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
+  projectId: string,
+  buildIds: readonly BuildId[],
+  dropped: string[],
+): Promise<void> {
+  for (const buildId of buildIds) {
+    const sqlNames = await catalogDb
+      .prepare(LOOKUP_PROJECTED_SQL_NAMES)
+      .bind(projectId, buildId)
+      .run<SqlNameRow>();
+    const names = (sqlNames.results ?? []).map((row) => assertSafeIdentifier(row.sqlName));
+    for (const name of names) await dropVerifiedTable(tablesDb, name, dropped);
+  }
+}
+
+async function dropOrphanTables(
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
+  orphans: readonly string[],
+  dropped: string[],
+): Promise<void> {
+  if (orphans.length === 0) return;
+  for (const name of orphans) {
+    if (!isProjectedTableName(name)) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        `Refusing to drop ${name}: it is not a projected table name.`,
+        {
+          remediation:
+            'The cleanup receipt was edited or corrupted. Start the cleanup again from the beginning.',
+          subject: name,
+        },
+      );
+    }
+  }
+  // The plan may be old (a dry run, or a resumed receipt). A deploy that has since claimed a
+  // table must keep it, so references are read again immediately before dropping.
+  const referenced = await readReferencedSqlNames(catalogDb);
+  for (const name of orphans) {
+    if (referenced.has(name)) continue;
+    await dropVerifiedTable(tablesDb, name, dropped);
+  }
+}
+
+/**
+ * `DROP TABLE IF EXISTS` succeeds silently on a missing table, which is how #557 reported drops
+ * that never happened. A table is reported only when it existed and `sqlite_master` no longer
+ * lists it afterwards.
+ */
+async function dropVerifiedTable(
+  tablesDb: ProjectionMigrationDatabaseLike,
+  name: string,
+  dropped: string[],
+): Promise<void> {
+  if (!(await hasPhysicalTable(tablesDb, name))) return;
+  await tablesDb.prepare(`DROP TABLE IF EXISTS ${assertSafeIdentifier(name)}`).run();
+  if (await hasPhysicalTable(tablesDb, name)) {
+    throw new Error(`Table ${name} is still present in the tables database after DROP TABLE.`);
+  }
+  if (!dropped.includes(name)) dropped.push(name);
+}
+
+async function hasPhysicalTable(
+  tablesDb: ProjectionMigrationDatabaseLike,
+  name: string,
+): Promise<boolean> {
+  const rows = await tablesDb.prepare(LOOKUP_PHYSICAL_TABLE).bind(name).run<{ name: string }>();
+  return (rows.results?.length ?? 0) > 0;
+}
+
+function isProjectedTableName(name: string): boolean {
+  return SAFE_IDENTIFIER.test(name) && PROJECTED_TABLE_NAME.test(name);
+}
+
+function assertSafeIdentifier(name: string): string {
+  if (!SAFE_IDENTIFIER.test(name)) {
+    throw new LoreError('LORE_E_INTERNAL', `Refusing to use ${name} as a SQL identifier.`, {
+      remediation:
+        'The remote catalog names a table Lorepack could not have projected. Inspect the catalog database before retrying the cleanup.',
+      subject: name,
+    });
+  }
+  return name;
+}
+
+async function deleteProjectedBuildsFromCatalog(
   db: ProjectionMigrationDatabaseLike,
   projectId: string,
   buildIds: readonly BuildId[],
-): Promise<MutableD1RetentionReport> {
-  const deleted: MutableD1RetentionReport = emptyD1Report();
+): Promise<CatalogD1RetentionCounts> {
+  const deleted: CatalogD1RetentionCounts = emptyCatalogCounts();
 
   try {
     await db.prepare('BEGIN IMMEDIATE').run();
     for (const buildId of buildIds) {
-      const sqlNames = await db
-        .prepare(LOOKUP_PROJECTED_SQL_NAMES)
-        .bind(projectId, buildId)
-        .run<SqlNameRow>();
-      for (const row of sqlNames.results ?? []) {
-        await db.prepare(`DROP TABLE IF EXISTS ${row.sqlName}`).run();
-        deleted.physicalTablesDropped.push(row.sqlName);
-      }
-
       deleted.projectedTableColumnsRemoved += await deleteRows(
         db,
         'table_columns',
@@ -388,6 +532,10 @@ async function deletePlannedR2Keys(
 }
 
 function emptyD1Report(): MutableD1RetentionReport {
+  return { ...emptyCatalogCounts(), physicalTablesDropped: [] };
+}
+
+function emptyCatalogCounts(): CatalogD1RetentionCounts {
   return {
     projectedBuildsRemoved: 0,
     buildManifestsRemoved: 0,
@@ -399,7 +547,6 @@ function emptyD1Report(): MutableD1RetentionReport {
     ftsRowsRemoved: 0,
     projectedTablesRemoved: 0,
     projectedTableColumnsRemoved: 0,
-    physicalTablesDropped: [],
   };
 }
 

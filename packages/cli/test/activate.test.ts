@@ -219,8 +219,10 @@ function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObj
 function fakeCloudflareRollbackAdapter(
   db: DatabaseSync,
   objectsBucket = createFakeCloudflareObjectsBucket(),
+  tablesDb: DatabaseSync = db,
 ): CloudflareResolverAdapter {
   const catalog = new SqliteCloudflareDatabase(db);
+  const tables = new SqliteCloudflareDatabase(tablesDb);
   return {
     detect: async () => ({ installed: true, version: '4.119.0', path: '/tmp/wrangler.js' }),
     whoami: async () => ({
@@ -231,16 +233,18 @@ function fakeCloudflareRollbackAdapter(
     }),
     listDatabases: async () => [{ name: 'demo-catalog' }, { name: 'demo-tables' }],
     openCatalogDatabase: () => catalog,
-    openTablesDatabase: () => catalog,
+    openTablesDatabase: () => tables,
     openObjectsBucket: () => objectsBucket,
   };
 }
 
+/** The catalog and the physical tables live in separate D1 databases, as they do on Cloudflare. */
 function seedRemoteCleanupFixture(
   db: DatabaseSync,
   objects = createFakeCloudflareObjectsBucket(),
 ): {
   readonly db: DatabaseSync;
+  readonly tables: DatabaseSync;
   readonly objects: FakeCloudflareObjectsBucket;
   readonly archiveKey: string;
   readonly objectKey: string;
@@ -414,14 +418,18 @@ function seedRemoteCleanupFixture(
     INSERT INTO table_columns
       (project_id, build_id, table_id, ordinal, name, sql_name, type, nullable, null_count, distinct_estimate, distinct_is_exact, min_value, max_value)
     VALUES ('demo', 'lore_${'c'.repeat(64)}', 'table-remove', 0, 'amount', 'amount', 'TEXT', 0, 0, 1, 1, '1', '1');
+  `);
+  const tables = new DatabaseSync(':memory:');
+  tables.exec(`
     CREATE TABLE projected_demo_remove (amount TEXT NOT NULL);
+    INSERT INTO projected_demo_remove (amount) VALUES ('250000');
   `);
 
   const archiveKey = `demo/builds/lore_${'c'.repeat(64)}/archive.lorepack`;
   const objectKey = `demo/objects/sha256/${'unique'.padEnd(64, 'u').slice(0, 2)}/${'unique'.padEnd(64, 'u').slice(2, 4)}/${'unique'.padEnd(64, 'u').slice(4)}`;
   objects.seed(archiveKey);
   objects.seed(objectKey);
-  return { db, objects, archiveKey, objectKey };
+  return { db, tables, objects, archiveKey, objectKey };
 }
 
 describe('lorepack builds', () => {
@@ -968,6 +976,11 @@ describe('lorepack prune', () => {
         );
         INSERT INTO active_build (id, build_id, generation)
         VALUES (1, 'lore_${'f'.repeat(64)}', 4);
+        CREATE TABLE tables (
+          project_id TEXT NOT NULL,
+          build_id TEXT NOT NULL,
+          sql_name TEXT NOT NULL
+        );
         CREATE TABLE projected_builds (
           project_id TEXT NOT NULL,
           build_id TEXT NOT NULL,
@@ -1133,7 +1146,11 @@ describe('lorepack prune', () => {
       const result = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'], {
         commands: [
           pruneCommand({
-            cloudflareAdapter: fakeCloudflareRollbackAdapter(humanFixture.db, humanFixture.objects),
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(
+              humanFixture.db,
+              humanFixture.objects,
+              humanFixture.tables,
+            ),
           }),
         ],
       });
@@ -1156,7 +1173,11 @@ describe('lorepack prune', () => {
         {
           commands: [
             pruneCommand({
-              cloudflareAdapter: fakeCloudflareRollbackAdapter(jsonFixture.db, jsonFixture.objects),
+              cloudflareAdapter: fakeCloudflareRollbackAdapter(
+                jsonFixture.db,
+                jsonFixture.objects,
+                jsonFixture.tables,
+              ),
             }),
           ],
         },
@@ -1172,8 +1193,57 @@ describe('lorepack prune', () => {
       expect(parsed.d1.physicalTablesDropped).toEqual(['projected_demo_remove']);
       expect(parsed.r2.archiveKeysRemoved).toEqual([jsonFixture.archiveKey]);
       expect(parsed.r2.objectKeysRemoved).toEqual([jsonFixture.objectKey]);
-      humanFixture.db.close();
-      jsonFixture.db.close();
+      for (const fixture of [humanFixture, jsonFixture]) {
+        expect(
+          fixture.tables
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all()
+            .map((row) => row.name),
+        ).toEqual([]);
+        fixture.db.close();
+        fixture.tables.close();
+      }
+    });
+  });
+
+  // #557: prune dropped physical tables on the catalog database, where they no longer live,
+  // and reported them as dropped. Tables an earlier prune left behind must now be found.
+  it('lists orphaned tables in the Cloudflare cleanup plan and removes them on --yes', async () => {
+    await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+      writeCloudflareReceipt(temp.root);
+      const fixture = seedRemoteCleanupFixture(new DatabaseSync(':memory:'));
+      const orphan = 'budget_0123456789abcdef';
+      fixture.tables.exec(`CREATE TABLE ${orphan} (c_0 TEXT); INSERT INTO ${orphan} VALUES ('x')`);
+      const adapter = fakeCloudflareRollbackAdapter(fixture.db, fixture.objects, fixture.tables);
+
+      const dryRun = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare'], {
+        commands: [pruneCommand({ cloudflareAdapter: adapter })],
+      });
+
+      expect(dryRun.code).toBe(0);
+      expect(dryRun.stdout).toContain('1 orphaned table no build references:');
+      expect(dryRun.stdout).toContain(`- ${orphan}`);
+
+      const applied = await run(
+        ['--json', '--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'],
+        { commands: [pruneCommand({ cloudflareAdapter: adapter })] },
+      );
+
+      expect(applied.code).toBe(0);
+      const parsed = JSON.parse(applied.stdout) as {
+        orphanTablesToRemove: string[];
+        d1: { physicalTablesDropped: string[] };
+      };
+      expect(parsed.orphanTablesToRemove).toEqual([orphan]);
+      expect(parsed.d1.physicalTablesDropped).toEqual(['projected_demo_remove', orphan]);
+      expect(
+        fixture.tables
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+          .all()
+          .map((row) => row.name),
+      ).toEqual([]);
+      fixture.db.close();
+      fixture.tables.close();
     });
   });
 
@@ -1208,7 +1278,11 @@ describe('lorepack prune', () => {
       const failed = await run(['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'], {
         commands: [
           pruneCommand({
-            cloudflareAdapter: fakeCloudflareRollbackAdapter(fixture.db, fixture.objects),
+            cloudflareAdapter: fakeCloudflareRollbackAdapter(
+              fixture.db,
+              fixture.objects,
+              fixture.tables,
+            ),
           }),
         ],
       });
@@ -1247,7 +1321,11 @@ describe('lorepack prune', () => {
         {
           commands: [
             pruneCommand({
-              cloudflareAdapter: fakeCloudflareRollbackAdapter(fixture.db, fixture.objects),
+              cloudflareAdapter: fakeCloudflareRollbackAdapter(
+                fixture.db,
+                fixture.objects,
+                fixture.tables,
+              ),
             }),
           ],
         },
@@ -1272,6 +1350,7 @@ describe('lorepack prune', () => {
       expect(finished.r2.objectKeysRemoved).toEqual([fixture.objectKey]);
 
       fixture.db.close();
+      fixture.tables.close();
     });
   });
 });

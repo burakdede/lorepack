@@ -136,6 +136,7 @@ export const remoteRetentionPlanSchema = z
     remove: z.array(buildIdSchema),
     archiveKeysToRemove: z.array(z.string().min(1)),
     objectKeysToRemove: z.array(z.string().min(1)),
+    orphanTablesToRemove: z.array(z.string().min(1)),
   })
   .strict();
 

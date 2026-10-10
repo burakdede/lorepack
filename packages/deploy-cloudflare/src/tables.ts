@@ -70,7 +70,8 @@ interface ColumnRow {
   readonly max_value: string | null;
 }
 
-const SAFE_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
+/** Every physical table and column name interpolated into D1 SQL must match this. */
+export const SAFE_IDENTIFIER = /^[a-z][a-z0-9_]{0,62}$/;
 const DESCRIBE_SAMPLE_ROWS = 5;
 
 const LIST_TABLES_QUERY = `SELECT id, name
