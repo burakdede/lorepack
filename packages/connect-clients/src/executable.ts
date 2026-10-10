@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { accessSync, constants, statSync } from 'node:fs';
+import { accessSync, constants, readdirSync, statSync } from 'node:fs';
 import { posix, win32 } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -93,10 +93,28 @@ export function resolveExecutable(name: string, options: ResolveOptions = {}): s
   for (const entry of entries) {
     for (const candidate of candidates) {
       const path = paths.join(entry, candidate);
-      if (isExecutableFile(path, windows)) return path;
+      if (isExecutableFile(path, windows)) return windows ? onDiskSpelling(entry, candidate) : path;
     }
   }
   return undefined;
+}
+
+/**
+ * The file's own name, not the spelling that found it.
+ *
+ * Windows matches names case-insensitively, so `codex` plus `.CMD` from `PATHEXT` finds
+ * `codex.cmd` and would be reported as `codex.CMD`, a path that names the file without being
+ * its name. The directory is asked for the entry that matched.
+ */
+function onDiskSpelling(directory: string, candidate: string): string {
+  const wanted = candidate.toLowerCase();
+  let name = candidate;
+  try {
+    name = readdirSync(directory).find((entry) => entry.toLowerCase() === wanted) ?? candidate;
+  } catch {
+    // Found by `stat` but not listable: the spelling that found it still names the file.
+  }
+  return win32.join(directory, name);
 }
 
 const execute = promisify(execFile);
