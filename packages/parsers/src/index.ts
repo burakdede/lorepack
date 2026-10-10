@@ -3,6 +3,13 @@ export { DOCX_PARSER_ID, DOCX_PARSER_VERSION, docxParser } from './docx/parser.j
 export { HTML_PARSER_ID, HTML_PARSER_VERSION, htmlParser, parseHtmlSource } from './html/parser.js';
 export { HTML_NOISE_POLICY_VERSION } from './html/policy.js';
 export {
+  type IsolatedParse,
+  PARSE_LIMITS,
+  type ParseExclusionCode,
+  type ParseLimits,
+  ParserHost,
+} from './isolation.js';
+export {
   MARKDOWN_PARSER_ID,
   MARKDOWN_PARSER_VERSION,
   markdownParser,
