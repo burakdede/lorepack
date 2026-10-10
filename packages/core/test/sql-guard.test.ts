@@ -220,6 +220,47 @@ describe('cost, remotely', () => {
     ).toThrow(expect.objectContaining(REFUSED));
   });
 
+  // A name or string that spells `distinct` is not the DISTINCT keyword, so the FROM after it
+  // is a real clause whose sources are checked and counted (#556).
+  const DISTINCT_SPELLINGS = [
+    '[distinct]',
+    '"distinct"',
+    '`distinct`',
+    "'distinct'",
+    '[DisTinct]',
+    '"DISTINCT"',
+  ];
+
+  describe.each(DISTINCT_SPELLINGS)('after an alias spelled %s', (alias) => {
+    it.each([
+      `SELECT count(*) AS ${alias} FROM ${TABLE} a, ${TABLE} b, ${TABLE} c, ${TABLE} d`,
+      `SELECT 1 AS ${alias} FROM json_each`,
+      `SELECT 1 AS ${alias} FROM ${TABLE}, json_each`,
+      `SELECT 1 AS ${alias} FROM generate_series`,
+      `SELECT 1 ${alias} FROM ${TABLE}, nowhere`,
+    ])('refuses %s remotely', (sql) => refuses(sql, 'remote'));
+
+    it.each([
+      `SELECT 1 AS ${alias} FROM generate_series`,
+      `SELECT 1 AS ${alias} FROM ${TABLE}, nowhere`,
+    ])('refuses %s locally', (sql) => refuses(sql, 'local'));
+
+    it('still counts every reference toward the join bound', () => {
+      expect(() =>
+        guard(`SELECT count(*) AS ${alias} FROM ${TABLE} a, ${TABLE} b, ${TABLE} c`, 'remote', {
+          rowCount: 2_000,
+        }),
+      ).toThrow(expect.objectContaining(REFUSED));
+    });
+  });
+
+  it('treats only IS [NOT] DISTINCT as the comparison', () => {
+    // DISTINCT without IS before FROM is not the operator, whatever the spelling.
+    refuses(`SELECT x distinct FROM ${TABLE}, nowhere`, 'remote');
+    refuses(`SELECT 1 IS NOT 'distinct' FROM ${TABLE}, nowhere`, 'remote');
+    refuses(`SELECT 1 IS [distinct] FROM ${TABLE}, nowhere`, 'remote');
+  });
+
   it('bounds a self-join by the rows it would multiply', () => {
     const rows = { rowCount: 2_000 };
     // 2,000 squared is 4e6, inside the bound; cubed is 8e9, far outside it.
@@ -262,6 +303,11 @@ describe('ordinary SQL a model writes', () => {
     `SELECT json_extract(sku, '$.a') AS a FROM ${TABLE}`,
     `SELECT sku FROM ${TABLE};`,
     `SELECT sku FROM ${TABLE} WHERE region IS NOT DISTINCT FROM 'eu'`,
+    `SELECT sku FROM ${TABLE} WHERE region IS DISTINCT FROM 'eu'`,
+    `SELECT sku FROM ${TABLE} WHERE region is not Distinct from sku`,
+    `SELECT region IS DISTINCT FROM 'eu' AS changed FROM ${TABLE}`,
+    `SELECT count(*) AS [distinct] FROM ${TABLE}`,
+    `SELECT sku AS "distinct" FROM ${TABLE} a, ${TABLE} b`,
     `SELECT window.sku FROM ${TABLE} window`,
     `VALUES (1), (2)`,
   ])('answers %s', (sql) => {

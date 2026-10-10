@@ -361,6 +361,16 @@ export function runRuntimeContract(options: ContractOptions): void {
         ],
         ['an extension load', (t, c) => `SELECT load_extension('x'), ${c} FROM ${t}`],
         ['an engine introspection function', (t, c) => `SELECT sqlite_version(), ${c} FROM ${t}`],
+        // A name or string spelling `distinct` is not the keyword of `IS DISTINCT FROM`, so the
+        // FROM after it is a real clause and its sources are checked (#556). The bare
+        // table-valued function is refused on both profiles by the row-source rule alone.
+        ...['[distinct]', '"distinct"', '`distinct`', "'distinct'", '[DisTinct]'].map(
+          (alias) =>
+            [
+              `a source after an alias spelled ${alias}`,
+              (t: string, c: string) => `SELECT ${c} AS ${alias} FROM ${t}, generate_series`,
+            ] as const,
+        ),
       ];
 
       for (const [label, build] of HOSTILE) {
@@ -409,6 +419,12 @@ export function runRuntimeContract(options: ContractOptions): void {
         // Safe because comments are removed before the result wrapper is added, not because the
         // comment is refused: a comment is whitespace to SQLite, and a model writes them.
         ['a trailing line comment', (t, c) => `SELECT ${c} FROM ${t} -- the first column`],
+        ['IS DISTINCT FROM', (t, c) => `SELECT ${c} FROM ${t} WHERE ${c} IS DISTINCT FROM NULL`],
+        [
+          'IS NOT DISTINCT FROM',
+          (t, c) => `SELECT ${c} FROM ${t} WHERE ${c} IS NOT DISTINCT FROM ${c}`,
+        ],
+        ['an alias spelled distinct', (t, c) => `SELECT ${c} AS [distinct] FROM ${t}`],
       ];
 
       for (const [label, build] of ORDINARY) {
