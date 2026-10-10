@@ -111,6 +111,10 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
         ...CORPUS,
         '.env': 'API_KEY=sk-live-not-a-real-key\n',
         id_rsa: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n',
+        // Issue 585: warned about at init and, until the lists were merged, built anyway.
+        'gcp-credentials.json': '{"private_key":"gcp-not-a-real-key"}\n',
+        // Issue 573: the file `lorepack connect --shared` writes, holding another server's token.
+        '.mcp.json': '{"mcpServers":{"pg":{"env":{"PGPASSWORD":"pg-not-a-real-password"}}}}\n',
       },
     },
     steps: [
@@ -119,18 +123,39 @@ export const INIT_SCENARIOS: readonly Scenario[] = [
         args: ['init'],
         expect: {
           exitCode: 0,
-          stdout: { contains: ['look like credentials', '.env', 'id_rsa', 'not a secret scanner'] },
+          stdout: {
+            contains: [
+              'look like credentials',
+              '.env',
+              'id_rsa',
+              'gcp-credentials.json',
+              'not a secret scanner',
+            ],
+          },
         },
       },
       { action: 'run', args: ['build'], expect: { exitCode: 0 } },
       {
         action: 'run',
         args: ['inspect', 'sources'],
-        expect: { exitCode: 0, stdout: { excludes: ['.env', 'id_rsa'] } },
+        expect: {
+          exitCode: 0,
+          stdout: { excludes: ['.env', 'id_rsa', 'gcp-credentials.json', '.mcp.json'] },
+        },
       },
       {
         action: 'run',
         args: ['search', 'sk-live-not-a-real-key'],
+        expect: { exitCode: 0, stdout: { contains: ['No matches'] } },
+      },
+      {
+        action: 'run',
+        args: ['search', 'gcp-not-a-real-key'],
+        expect: { exitCode: 0, stdout: { contains: ['No matches'] } },
+      },
+      {
+        action: 'run',
+        args: ['search', 'pg-not-a-real-password'],
         expect: { exitCode: 0, stdout: { contains: ['No matches'] } },
       },
     ],

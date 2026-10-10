@@ -91,6 +91,22 @@ Adding an input, changing the canonicalization, or changing the normalization po
 changes every build ID in existence. Each is therefore a versioned constant, and the
 change is a reviewed, format-affecting act that needs a changeset.
 
+## The default exclusions are part of identity
+
+`effectiveConfig` carries `exclude`, which is the always-on list `ALWAYS_EXCLUDE` from
+`packages/core/src/config/defaults.ts`. A project's own `.loreignore` is not hashed: what it
+removes reaches identity through the canonical roots, as an artifact that is no longer there.
+The product defaults are hashed directly, so **changing them moves the build id of every
+project**, including one that contains none of the affected files.
+
+That is deliberate rather than an accident to engineer around. A default exclusion decides
+what a build of the same directory contains, so two releases that disagree about it should
+not claim the same identity, and the cost is the same one-time rebuild a `compilerVersion`
+change already causes. The client configuration and credential patterns added for #573 and
+#585 moved every id once, before `0.1.0` was published; no published build carries the
+earlier list. The next change to the list should bump `DEFAULTS_VERSION` and say so in a
+changeset.
+
 ## Rules in build identity
 
 Resolved rules are an input to `deriveBuildId` (section 11.4), so editing a rule produces a

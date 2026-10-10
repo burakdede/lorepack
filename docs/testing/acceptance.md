@@ -75,15 +75,19 @@ Starting point: 3 source files, already set up with `lorepack init`.
 
 Proves: Section 19.2: a filename guardrail, stated to the user rather than silent.
 
-Starting point: 5 source files.
+Starting point: 7 source files.
 
 1. Run `lorepack init`.
-   Expect: it succeeds, stdout mentions "look like credentials", ".env", "id_rsa", "not a secret scanner".
+   Expect: it succeeds, stdout mentions "look like credentials", ".env", "id_rsa", "gcp-credentials.json", "not a secret scanner".
 2. Run `lorepack build`.
    Expect: it succeeds.
 3. Run `lorepack inspect sources`.
-   Expect: it succeeds, stdout never mentions ".env", "id_rsa".
+   Expect: it succeeds, stdout never mentions ".env", "id_rsa", "gcp-credentials.json", ".mcp.json".
 4. Run `lorepack search sk-live-not-a-real-key`.
+   Expect: it succeeds, stdout mentions "No matches".
+5. Run `lorepack search gcp-not-a-real-key`.
+   Expect: it succeeds, stdout mentions "No matches".
+6. Run `lorepack search pg-not-a-real-password`.
    Expect: it succeeds, stdout mentions "No matches".
 
 ### `init/unreadable-bytes-are-excluded-not-fatal`
