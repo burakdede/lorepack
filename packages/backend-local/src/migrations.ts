@@ -65,25 +65,63 @@ export interface MigrationResult {
   readonly alreadyApplied: readonly string[];
 }
 
+interface AppliedMigration {
+  readonly id: string;
+  readonly name: string;
+  readonly checksum: string;
+}
+
+function appliedMigrations(db: DatabaseSync): AppliedMigration[] {
+  const table = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+    .get();
+  if (table === undefined) return [];
+  return db
+    .prepare('SELECT id, name, checksum FROM schema_migrations ORDER BY id')
+    .all() as unknown as AppliedMigration[];
+}
+
+/**
+ * Refuses a database that records a migration this binary does not ship (#570).
+ *
+ * Such a database was written by a newer Lorepack. Reading it may misread a table this code
+ * has never heard of, and writing it can break a rule the newer version depends on: a v0.1
+ * prune deleting a build a later version pinned. Failing closed is the only safe answer, and
+ * it only protects anyone if the oldest binary in circulation already does it, which is why
+ * it exists before there is a second migration to guard.
+ *
+ * Reads only, so a caller can run it on a read-only connection before opening for writing.
+ */
+export function assertMigrationsKnown(db: DatabaseSync, migrations: readonly Migration[]): void {
+  const known = new Set(migrations.map((migration) => migration.id));
+  const unknown = appliedMigrations(db).filter((row) => !known.has(row.id));
+  if (unknown.length === 0) return;
+
+  const latest = migrations.reduce((highest, one) => (one.id > highest ? one.id : highest), '0000');
+  throw new LoreError(
+    'LORE_E_SCHEMA_MISMATCH',
+    `This database records ${unknown.map((row) => `${row.id}_${row.name}`).join(', ')}, a schema written by a newer Lorepack. This version knows migrations up to ${latest}.`,
+    {
+      remediation:
+        'Upgrade Lorepack to the version that last wrote this project. Nothing was changed.',
+      details: { unknown: unknown.map((row) => row.id), latest },
+    },
+  );
+}
+
 /**
  * Idempotent and transactional. An applied migration whose file later changes is a
- * hard error: silently diverging schemas are far worse than a loud refusal.
+ * hard error: silently diverging schemas are far worse than a loud refusal. So is one this
+ * binary does not know at all, checked before anything is applied.
  */
 export function runMigrations(
   db: DatabaseSync,
   migrations: readonly Migration[],
   now: () => string = () => new Date().toISOString(),
 ): MigrationResult {
+  assertMigrationsKnown(db, migrations);
   db.exec(SCHEMA_TABLE);
-  const existing = new Map(
-    (
-      db.prepare('SELECT id, name, checksum FROM schema_migrations').all() as Array<{
-        id: string;
-        name: string;
-        checksum: string;
-      }>
-    ).map((row) => [row.id, row]),
-  );
+  const existing = new Map(appliedMigrations(db).map((row) => [row.id, row]));
 
   const applied: string[] = [];
   const alreadyApplied: string[] = [];

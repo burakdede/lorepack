@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -9,7 +9,7 @@ import {
   type BuildSummary,
   LoreError,
 } from '@lorepack/core';
-import { loadMigrations, runMigrations } from './migrations.js';
+import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
 import { openReadOnly, openWritable } from './sqlite.js';
 
 /**
@@ -28,8 +28,25 @@ export class LocalStateStore {
 
   static open(loreDirectory: string, migrationsDirectory: string): LocalStateStore {
     mkdirSync(loreDirectory, { recursive: true });
-    const db = openWritable(join(loreDirectory, 'state.sqlite'));
-    runMigrations(db, loadMigrations(migrationsDirectory));
+    const path = join(loreDirectory, 'state.sqlite');
+    const migrations = loadMigrations(migrationsDirectory);
+    // Checked on a read-only connection first, because opening for writing already writes:
+    // it sets the journal mode. State from a newer Lorepack is refused untouched (#570).
+    if (existsSync(path)) {
+      const probe = openReadOnly(path);
+      try {
+        assertMigrationsKnown(probe, migrations);
+      } finally {
+        probe.close();
+      }
+    }
+    const db = openWritable(path);
+    try {
+      runMigrations(db, migrations);
+    } catch (cause) {
+      db.close();
+      throw cause;
+    }
     return new LocalStateStore(db, loreDirectory);
   }
 

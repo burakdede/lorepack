@@ -217,6 +217,13 @@ against a hand-kept number. A build older or newer than the code reading it is r
 whatever statement happens to name a column that does not exist yet, from inside a query, with
 nothing to connect it to the cause.
 
+`state.sqlite` is the one database that *is* migrated, and the rule there runs the other way.
+The migration runner refuses any database that records a migration this binary does not
+ship, before applying anything, and the state store makes that check on a read-only
+connection before opening for writing. State written by a newer Lorepack is therefore never
+read or written by an older one (#570). Activation applies the same check to the target
+build's catalog.
+
 ### Querying a table
 
 `queryTable` accepts **one read-only SELECT** over **one table**, and everything about it is

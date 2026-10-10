@@ -1275,3 +1275,56 @@ describe('lorepack prune', () => {
     });
   });
 });
+
+describe('a project written by a newer Lorepack', () => {
+  function recordFutureMigration(database: string, sql = ''): void {
+    const db = new DatabaseSync(database);
+    try {
+      db.exec(`${sql}
+        INSERT INTO schema_migrations (id, name, checksum, applied_at)
+          VALUES ('9999', 'from-the-future', 'future', '2027-01-01T00:00:00Z');`);
+    } finally {
+      db.close();
+    }
+  }
+
+  it('refuses to read or prune state it does not understand, and changes nothing', async () => {
+    // #570, the reproduction from the issue: a later version adds build pins, and this one
+    // listed the history and then pruned the pinned build.
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const { first } = await threeBuilds(root);
+      recordFutureMigration(
+        join(root, '.lore', 'state.sqlite'),
+        `CREATE TABLE build_pins (build_id TEXT PRIMARY KEY) STRICT;
+         INSERT INTO build_pins VALUES ('${first}');`,
+      );
+      const before = readFileSync(join(root, '.lore', 'state.sqlite'));
+
+      const builds = await lore(['builds']);
+      expect(builds.code).toBe(2);
+      expect(builds.stderr).toContain('LORE_E_SCHEMA_MISMATCH');
+      expect(builds.stderr).toContain('Upgrade Lorepack');
+
+      const pruned = await lore(['prune', '--yes', '--keep', '0']);
+      expect(pruned.code).toBe(2);
+      expect(pruned.stderr).toContain('LORE_E_SCHEMA_MISMATCH');
+      expect(existsSync(join(root, '.lore', 'builds', first))).toBe(true);
+
+      const built = await lore(['build']);
+      expect(built.code).toBe(2);
+      expect(readFileSync(join(root, '.lore', 'state.sqlite')).equals(before)).toBe(true);
+    });
+  });
+
+  it('refuses to activate a build whose catalog a newer version wrote', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
+      const { first, third } = await threeBuilds(root);
+      recordFutureMigration(join(root, '.lore', 'builds', first, 'context.sqlite'));
+
+      const result = await lore(['activate', first]);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('LORE_E_SCHEMA_MISMATCH');
+      expect(active(root)).toBe(third);
+    });
+  });
+});
