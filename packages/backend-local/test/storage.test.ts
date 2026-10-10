@@ -666,7 +666,11 @@ describe('ProjectLock', () => {
     await withTempProject({}, async (project) => {
       const path = project.path('.lore/lock');
       seedLock(path, { pid: 4242, start: 'linux:777' });
+      // An explicit identity for this side, so a CI runner where the test process really is
+      // pid 4242 cannot turn the seeded lock into "this process's own lock".
       const next = new ProjectLock(path, {
+        ownerPid: 999_777,
+        ownerStart: 'linux:1',
         waitMs: 30,
         pollIntervalMs: 5,
         isProcessAlive: () => true,
