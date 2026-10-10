@@ -31,6 +31,15 @@ export interface D1QueryDatabaseLike {
   prepare(query: string): D1PreparedStatementLike;
 }
 
+export interface D1TableStoreOptions {
+  /**
+   * Called before each table query touches D1, and throws to refuse it. The Worker passes its
+   * per-caller rate limit here: the statement guard bounds rows, not the work a row costs, and
+   * D1 cannot be interrupted once a query starts (#558).
+   */
+  readonly admitQuery?: () => Promise<void>;
+}
+
 export interface D1TableNamespace {
   readonly projectId: string;
   readonly buildId: string;
@@ -85,15 +94,18 @@ export class D1TableStore implements TableStore {
   readonly #catalogDb: D1QueryDatabaseLike;
   readonly #queryDb: D1QueryDatabaseLike;
   readonly #namespace: D1TableNamespace;
+  readonly #admitQuery: (() => Promise<void>) | undefined;
 
   constructor(
     catalogDb: D1QueryDatabaseLike,
     namespace: D1TableNamespace,
     queryDb: D1QueryDatabaseLike = catalogDb,
+    options: D1TableStoreOptions = {},
   ) {
     this.#catalogDb = catalogDb;
     this.#queryDb = queryDb;
     this.#namespace = namespace;
+    this.#admitQuery = options.admitQuery;
   }
 
   async list(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
@@ -137,6 +149,7 @@ export class D1TableStore implements TableStore {
   }
 
   async query(request: TableQueryRequest): Promise<TableQueryResult> {
+    await this.#admitQuery?.();
     const resolved = await this.#resolve(request.tableId);
     if (resolved === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {

@@ -23,6 +23,16 @@
       "remote": false
     }
   ],
+  // Table queries per caller (#558). The SQL guard bounds the rows a query can form, not what
+  // each row costs, and D1 cannot stop a query before its 30 second limit. Counters are per
+  // Cloudflare location and keyed on a hash of the caller's credential.
+  "ratelimits": [
+    {
+      "name": "TABLE_QUERY_LIMITER",
+      "namespace_id": "1558",
+      "simple": { "limit": 20, "period": 60 }
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "OBJECTS",

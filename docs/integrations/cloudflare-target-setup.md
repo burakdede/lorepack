@@ -17,6 +17,14 @@ The current Phase 6 reference path works with three account-scoped Cloudflare re
 Lorepack does not create or manage zones for this path, and it does not need Pages, KV, Queues,
 Vectorize, Durable Objects, or AI permissions.
 
+The Worker configuration also declares one Workers Rate Limiting binding, `TABLE_QUERY_LIMITER`
+(see `packages/deploy-cloudflare/wrangler.jsonc`): 20 table queries per 60 seconds per caller.
+It is part of the Worker script, not a separate resource, and the deployed Worker refuses table
+queries without it. Why it exists is in
+[`docs/architecture/deployment.md`](../architecture/deployment.md#cloudflare-table-query-bounds).
+Its `namespace_id` is shared by every Worker on the account that uses the same value; keys are
+per credential, so two Lorepack Workers sharing it only share a counter for the same token.
+
 ## Least-privilege token shape
 
 The smallest current account-scoped token for the checked-in Phase 6 setup and deploy path is:

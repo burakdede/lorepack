@@ -1,8 +1,15 @@
-import type { BuildComparer, BuildId, LoreRuntime, SourceState } from '@lorepack/core/worker';
+import {
+  type BuildComparer,
+  type BuildId,
+  LoreError,
+  type LoreRuntime,
+  type SourceState,
+} from '@lorepack/core/worker';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { type ApiOptions, createApiApp, createRuntime } from '@lorepack/runtime';
 import type { Hono } from 'hono';
 import {
+  ACCESS_JWT_HEADER,
   type CloudflareAccessBindings,
   type CloudflareAccessConfig,
   createCloudflareRequestAuthorizer,
@@ -45,9 +52,16 @@ export interface CloudflareWorkerApp {
   readonly close: () => Promise<void>;
 }
 
+/** A Workers Rate Limiting binding, as the runtime provides it. */
+export interface RateLimitLike {
+  limit(options: { readonly key: string }): Promise<{ readonly success: boolean }>;
+}
+
 export interface CloudflareBindings {
   readonly CATALOG_DB: D1DatabaseLike & D1CatalogDatabaseLike & D1QueryDatabaseLike;
   readonly TABLES_DB: D1QueryDatabaseLike;
+  /** Table queries per caller, declared in `wrangler.jsonc` (#558). */
+  readonly TABLE_QUERY_LIMITER?: RateLimitLike;
   readonly OBJECTS: R2BucketLike;
   readonly PROJECT_ID: string;
   readonly ALLOWED_ORIGINS?: string;
@@ -62,6 +76,13 @@ export interface CloudflareBoundWorkerOptions {
   readonly allowedOrigins?: readonly string[];
   readonly access?: CloudflareAccessConfig;
   readonly comparer?: BuildComparer;
+  /**
+   * Who is asking, as `tableQueryCaller` derives it from the request. When set, every table
+   * query is counted against that caller by `TABLE_QUERY_LIMITER`, and refused when the
+   * binding is missing. The deployed Worker always sets it; an assembly that serves no
+   * untrusted caller, such as a test, may leave it out.
+   */
+  readonly tableQueryCaller?: string;
 }
 
 const WORKER_SECURITY_HEADERS = {
@@ -149,7 +170,19 @@ export function createCloudflareWorkerFromBindings(
           db: bindings.CATALOG_DB,
           namespace,
         }),
-        tables: new D1TableStore(bindings.CATALOG_DB, namespace, bindings.TABLES_DB),
+        tables: new D1TableStore(
+          bindings.CATALOG_DB,
+          namespace,
+          bindings.TABLES_DB,
+          options.tableQueryCaller === undefined
+            ? {}
+            : {
+                admitQuery: tableQueryAdmission(
+                  bindings.TABLE_QUERY_LIMITER,
+                  options.tableQueryCaller,
+                ),
+              },
+        ),
         objects: new R2ObjectStore(bindings.PROJECT_ID, bindings.OBJECTS),
       };
     },
@@ -164,6 +197,60 @@ export function createCloudflareWorkerFromBindings(
     ...(authorize === undefined ? {} : { authorize }),
     ...(options.comparer === undefined ? {} : { comparer: options.comparer }),
   });
+}
+
+/**
+ * The key a caller's table queries are counted under: a SHA-256 of the credential it
+ * presented, so the limit follows a runtime token or an Access session rather than an IP
+ * address that many callers may share, and the key never holds the credential itself.
+ * Authorization still decides whether the request runs at all; this only names who sent it.
+ */
+export async function tableQueryCaller(request: Request): Promise<string> {
+  const credential =
+    request.headers.get('Authorization') ?? request.headers.get(ACCESS_JWT_HEADER) ?? '';
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(credential));
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return `table-query:${hex}`;
+}
+
+/**
+ * The runtime bound on remote table queries (#558).
+ *
+ * The statement guard bounds the rows a statement can form, but not what each row costs, and
+ * D1 runs one query at a time per database without any way to stop it before its own 30
+ * second limit. So the number of queries one caller may start is limited here, before any
+ * reaches D1. Fails closed: a Worker deployed without the binding refuses table queries
+ * rather than serving them unbounded.
+ */
+function tableQueryAdmission(
+  limiter: RateLimitLike | undefined,
+  caller: string,
+): () => Promise<void> {
+  return async () => {
+    if (limiter === undefined) {
+      throw new LoreError(
+        'LORE_E_TARGET_NOT_CONFIGURED',
+        'This deployment has no table query rate limit, so table queries are refused.',
+        {
+          remediation:
+            'Add the `TABLE_QUERY_LIMITER` rate limit binding from `packages/deploy-cloudflare/wrangler.jsonc` to the Worker configuration and deploy it again.',
+        },
+      );
+    }
+    const { success } = await limiter.limit({ key: caller });
+    if (!success) {
+      throw new LoreError(
+        'LORE_E_BUSY',
+        'This caller has made too many table queries in the last minute.',
+        {
+          remediation:
+            'Wait a minute before querying again, and combine questions into fewer queries where you can. The build was not modified.',
+        },
+      );
+    }
+  };
 }
 
 function withWorkerHeaders(response: Response, origin: string | null, url?: string): Response {
