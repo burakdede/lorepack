@@ -224,6 +224,8 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
       });
     }
 
+    this.#closeIdle(active.buildId);
+
     let entry = this.#open.get(active.buildId);
     if (entry === undefined) {
       entry = {
@@ -273,6 +275,23 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     if (this.#state.current()?.buildId === buildId) return;
     entry.db.close();
     this.#open.delete(buildId);
+  }
+
+  /**
+   * Closes every database no request holds, except the active build's.
+   *
+   * `#release` keeps the active build open when it drains, which is right until the pointer
+   * moves; after that nothing revisited the entry, so a long-running `dev` or `serve` kept one
+   * database per activation open, and a pruned build's file stayed open and undeletable on
+   * Windows (#566). The pointer is re-read at every acquisition, so that is where a build that
+   * stopped being active is noticed.
+   */
+  #closeIdle(activeBuildId: BuildId): void {
+    for (const [buildId, entry] of this.#open) {
+      if (buildId === activeBuildId || entry.refs > 0) continue;
+      entry.db.close();
+      this.#open.delete(buildId);
+    }
   }
 
   closeAll(): void {

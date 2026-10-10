@@ -99,7 +99,16 @@ The contract from architecture section 15.2:
 
 Concurrent readers of the same build share one open database. The currently active build
 stays open when its refcount reaches zero, since reopening it for the next request would
-cost without benefit; older builds close as soon as they drain.
+cost without benefit; older builds close as soon as they drain. A build that drained while
+it was active is closed by the first request after the pointer moves, because every
+acquisition re-reads the pointer and closes any database no request holds except the active
+one (#566). Before that, a long-running `lorepack dev` kept one database open per rebuild, and
+a pruned build's file stayed open, its space never freed and, on Windows, undeletable.
+
+One gap remains by design: if the pointer moves and no request arrives before `lorepack prune`
+runs, the previous build is still open, since nothing in the server observes the move until a
+request does. On POSIX the delete succeeds and the space is freed at the next request; on
+Windows the delete of that one build fails until then.
 
 ## Project lock
 

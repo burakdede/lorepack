@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -442,6 +443,60 @@ describe('LocalActiveBuildProvider', () => {
         expect((error as LoreError).code).toBe('LORE_E_BUILD_NOT_FOUND');
         expect((error as LoreError).remediation).toContain('lorepack build');
       }
+    });
+  });
+
+  it('keeps one build open after many activations with no request in flight (#566)', async () => {
+    await withProvider(async (provider, state, builds) => {
+      const ids = ['1', '2', '3', '4', '5', '6'].map(buildId);
+      ids.forEach((id, index) => {
+        materializeBuild(builds, id);
+        state.recordBuild(summary(id, 'verified', `2026-07-31T1${index}:00:00Z`));
+      });
+      for (const id of ids) {
+        state.activate(id);
+        (await provider.acquire()).release();
+        // A long-running server rebuilds on every save. Each activation used to leave the
+        // previous build's database open, one file descriptor and page cache per save.
+        expect(provider.openBuildCount).toBe(1);
+      }
+    });
+  });
+
+  it('closes a previously served build at the next request, so prune can delete it (#566)', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      materializeBuild(builds, BUILD_B);
+      state.recordBuild(summary(BUILD_A));
+      state.recordBuild(summary(BUILD_B, 'verified', '2026-07-31T11:00:00Z'));
+      state.activate(BUILD_A);
+      (await provider.acquire()).release();
+      state.activate(BUILD_B);
+      (await provider.acquire()).release();
+
+      // Windows refuses to delete a file another handle has open, so on Windows this is the
+      // failure prune hit; elsewhere it is the open count that proves the handle is gone.
+      rmSync(join(builds, BUILD_A), { recursive: true });
+      expect(existsSync(join(builds, BUILD_A))).toBe(false);
+      expect(provider.openBuildCount).toBe(1);
+    });
+  });
+
+  it('keeps an older build open while a request still holds it', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      materializeBuild(builds, BUILD_B);
+      state.recordBuild(summary(BUILD_A));
+      state.recordBuild(summary(BUILD_B, 'verified', '2026-07-31T11:00:00Z'));
+      state.activate(BUILD_A);
+      const inFlight = await provider.acquire();
+      state.activate(BUILD_B);
+      (await provider.acquire()).release();
+
+      expect(provider.openBuildCount).toBe(2);
+      expect(() => provider.database(inFlight).prepare('SELECT 1').get()).not.toThrow();
+      inFlight.release();
+      expect(provider.openBuildCount).toBe(1);
     });
   });
 
