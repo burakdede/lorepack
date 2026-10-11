@@ -31,9 +31,15 @@ const BUILD: ReadonlyArray<readonly [string, Uint8Array]> = [
 async function writeZip(
   path: string,
   members: ReadonlyArray<readonly [string, Uint8Array]>,
+  modes: ReadonlyMap<string, number> = new Map(),
 ): Promise<void> {
   const zip = new yazl.ZipFile();
-  for (const [name, bytes] of members) zip.addBuffer(Buffer.from(bytes), name);
+  for (const [name, bytes] of members) {
+    const mode = modes.get(name);
+    const options = mode === undefined ? {} : { mode };
+    if (name.endsWith('/')) zip.addEmptyDirectory(name, options);
+    else zip.addBuffer(Buffer.from(bytes), name, options);
+  }
   zip.end();
   await new Promise<void>((resolve, reject) => {
     const output = createWriteStream(path);
@@ -58,6 +64,20 @@ function declareSize(path: string, member: string, size: number): void {
     const nameLength = bytes.readUInt16LE(offset + 28);
     if (bytes.toString('utf8', offset + 46, offset + 46 + nameLength) !== member) continue;
     bytes.writeUInt32LE(size, offset + 24);
+    patched = true;
+  }
+  if (!patched) throw new Error(`${member} has no central directory record in ${path}`);
+  writeFileSync(path, bytes);
+}
+
+function declareHost(path: string, member: string, host: number): void {
+  const bytes = readFileSync(path);
+  let patched = false;
+  for (let offset = 0; offset + 46 <= bytes.length; offset += 1) {
+    if (bytes.readUInt32LE(offset) !== 0x02014b50) continue;
+    const nameLength = bytes.readUInt16LE(offset + 28);
+    if (bytes.toString('utf8', offset + 46, offset + 46 + nameLength) !== member) continue;
+    bytes[offset + 5] = host;
     patched = true;
   }
   if (!patched) throw new Error(`${member} has no central directory record in ${path}`);
@@ -274,6 +294,99 @@ describe('archive verification', () => {
           expected: sha256Hex(DATABASE),
           actual: sha256Hex(new TextEncoder().encode('SQLite format 4')),
         },
+      ]);
+    });
+  });
+
+  it.each([
+    ['a symbolic link', 0o120777, 3],
+    ['a Darwin symbolic link', 0o120777, 19],
+    ['a named pipe', 0o010644, 3],
+    ['a character device', 0o020644, 3],
+  ])('refuses %s entry before reading anything', async (_label, mode, host) => {
+    // A link to /etc/passwd is a few harmless bytes to a verifier and a traversal to anything
+    // that extracts the archive (#419), so it is refused from the central directory.
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'link.lorepack');
+      const target = new TextEncoder().encode('/etc/passwd');
+      const listed = [...BUILD, ['reports/link', target] as const];
+      await writeZip(
+        archive,
+        [...listed, ['checksums.json', indexOf(listed)]],
+        new Map([['reports/link', mode]]),
+      );
+      declareHost(archive, 'reports/link', host);
+
+      for (const read of [verifyArchive, readArchive]) {
+        await expect(read(archive)).rejects.toMatchObject<Partial<LoreError>>({
+          code: 'LORE_E_OBJECT_CORRUPT',
+          subject: 'reports/link',
+        });
+      }
+    });
+  });
+
+  it('fails an archive that carries no build, however consistent its index', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'empty.lorepack');
+      await writeZip(archive, [['checksums.json', indexOf([])]]);
+
+      const result = await verifyArchive(archive);
+
+      expect(result.ok).toBe(false);
+      expect(result.failures).toEqual([
+        { member: 'manifest.json', reason: 'missing' },
+        { member: 'context.sqlite', reason: 'missing' },
+      ]);
+    });
+  });
+
+  it('refuses a link disguised as a directory before skipping directory entries (#418)', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'directory-link.lorepack');
+      await writeZip(
+        archive,
+        [...BUILD, ['checksums.json', indexOf(BUILD)], ['reports/link/', new Uint8Array()]],
+        new Map([['reports/link/', 0o120777]]),
+      );
+      for (const read of [verifyArchive, readArchive]) {
+        await expect(read(archive)).rejects.toMatchObject({
+          code: 'LORE_E_OBJECT_CORRUPT',
+          subject: 'reports/link/',
+        });
+      }
+    });
+  });
+
+  it.each([0, 3, 19])(
+    'preserves regular files from ZIP host %i and harmless directories',
+    async (host) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'directory.lorepack');
+        await writeZip(archive, [
+          ...BUILD,
+          ['checksums.json', indexOf(BUILD)],
+          ['reports/', new Uint8Array()],
+        ]);
+        declareHost(archive, 'manifest.json', host);
+        expect(await verifyArchive(archive)).toMatchObject({
+          ok: true,
+          memberCount: 3,
+          failures: [],
+        });
+        expect((await readArchive(archive)).get('manifest.json')).toEqual(MANIFEST);
+      });
+    },
+  );
+
+  it('fails an archive whose index leaves out the catalog it does not carry', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'no-catalog.lorepack');
+      const listed = [['manifest.json', MANIFEST] as const];
+      await writeZip(archive, [...listed, ['checksums.json', indexOf(listed)]]);
+
+      expect((await verifyArchive(archive)).failures).toEqual([
+        { member: 'context.sqlite', reason: 'missing' },
       ]);
     });
   });

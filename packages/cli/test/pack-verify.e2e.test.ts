@@ -32,6 +32,33 @@ const RSS_CEILING = 256 * 1024 * 1024;
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
 const DATABASE = new TextEncoder().encode('SQLite format 3');
 
+describe('required build members, issue 418', () => {
+  it.each(['checksums-only', 'extra-only', 'missing-catalog'])(
+    'refuses a self-consistent %s archive through the packaged CLI',
+    async (kind) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'incomplete.lorepack');
+        const members: Array<readonly [string, Uint8Array]> = [];
+        if (kind === 'extra-only') members.push(['extra.txt', new TextEncoder().encode('extra')]);
+        if (kind === 'missing-catalog') members.push(['manifest.json', MANIFEST]);
+        const digests = Object.fromEntries(
+          members.map(([name, bytes]) => [name, sha256Hex(bytes)]),
+        );
+        await writeZip(archive, [...members, ['checksums.json', indexOf(digests)]]);
+        await expect(
+          execute(process.execPath, [BIN, '--json', 'pack', '--verify', archive], {
+            cwd: project.root,
+            timeout: 120_000,
+          }),
+        ).rejects.toMatchObject({
+          code: 2,
+          stdout: expect.stringContaining('LORE_E_OBJECT_CORRUPT'),
+        });
+      });
+    },
+  );
+});
+
 interface Measured {
   readonly code: number;
   readonly stdout: string;

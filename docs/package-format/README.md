@@ -80,6 +80,19 @@ Every archive member MUST use a POSIX path. Every member timestamp MUST be norma
 `1980-01-01T00:00:00Z`, and file entries SHOULD use mode `100644`. The current writer uses
 deflate compression.
 
+Readers MUST require `manifest.json` and `context.sqlite`, even when the checksum index
+does not name them. An archive with only a consistent checksum index is not a build.
+Payload entries MUST be regular files. Lorepack refuses Unix and Darwin link, pipe and
+device modes from the central directory before reading payloads or skipping directory
+records. Zero file-type bits are accepted when a writer omits them; harmless directory
+records are ignored. ZIP attributes depend on the creator's host, as defined in
+[PKWARE's ZIP specification, sections 4.4.2 and 4.4.15](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT).
+
+Member checksums and required-entry checks establish neither builder identity nor
+authenticity. Packages are unsigned; the current checksum verifier is not a proof that
+catalog values agree with the build's canonical logical identity. Logical verification
+is tracked in [#418](https://github.com/burakdede/lorepack/issues/418).
+
 The current writer writes the archive to a temporary file beside the destination, syncs it,
 and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any
 earlier archive at that path intact rather than truncated (#572). Replacement preserves the

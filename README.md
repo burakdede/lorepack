@@ -319,6 +319,10 @@ parsers), compiler version, configuration, and structure. The
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
 
+Archive checks require both `manifest.json` and `context.sqlite` and refuse link or device
+entries before reading payloads. Member checksums detect corruption; they do not authenticate
+the builder. See the [package format](docs/package-format/README.md#archive-structure).
+
 ### Provenance on every result
 
 Search results, exported context items, and table rows carry a `SourceLocator`. A locator can

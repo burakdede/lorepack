@@ -42,6 +42,7 @@ import yazl from 'yazl';
 const NORMALIZED_MTIME = new Date(Date.UTC(1980, 0, 1, 0, 0, 0));
 
 export const CHECKSUM_MEMBER = 'checksums.json' as const;
+const REQUIRED_MEMBERS = ['manifest.json', 'context.sqlite'] as const;
 
 export interface ArchiveMember {
   /** POSIX path inside the archive. */
@@ -282,6 +283,9 @@ export async function verifyArchive(
     for (const [member, expected] of index) {
       if (!present.has(member)) failures.push({ member, reason: 'missing', expected });
     }
+    for (const member of REQUIRED_MEMBERS) {
+      if (!present.has(member) && !index.has(member)) failures.push({ member, reason: 'missing' });
+    }
 
     return { ok: failures.length === 0, memberCount: entries.length, failures };
   } finally {
@@ -374,6 +378,15 @@ function listEntries(
     archive.on('end', () => resolve(entries));
     archive.on('entry', (entry: yauzl.Entry) => {
       const name = entry.fileName;
+      if (!isRegularEntry(entry)) {
+        reject(
+          new LoreError('LORE_E_OBJECT_CORRUPT', `${name} in ${path} is not a regular file.`, {
+            remediation: 'The archive contains a link or device entry. Pack the build again.',
+            subject: name,
+          }),
+        );
+        return;
+      }
       if (name.endsWith('/')) {
         archive.readEntry();
         return;
@@ -402,6 +415,14 @@ function listEntries(
     });
     archive.readEntry();
   });
+}
+
+function isRegularEntry(entry: yauzl.Entry): boolean {
+  const host = entry.versionMadeBy >> 8;
+  if (host !== 3 && host !== 19) return true;
+  const type = (entry.externalFileAttributes >>> 16) & 0o170000;
+  if (entry.fileName.endsWith('/')) return type === 0 || type === 0o040000;
+  return type === 0 || type === 0o100000;
 }
 
 async function readEntry(
