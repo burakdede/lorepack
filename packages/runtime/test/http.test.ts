@@ -28,6 +28,11 @@ import { createRuntime } from '../src/runtime.js';
  * routing, the validation and the safety rules, none of which need a port.
  */
 
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
+
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
 const HIT: CatalogSearchHit = {
@@ -135,6 +140,7 @@ const tables: TableStore = {
 
 function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog,
     tables,
@@ -157,7 +163,7 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
         return { buildId: BUILD, generation: 7 };
       },
       async acquire(): Promise<BuildHandle> {
-        return { buildId: BUILD, generation: 7, release() {} };
+        return { ...IDENTITY, buildId: BUILD, generation: 7, release() {} };
       },
     },
     open: async () => scope,
@@ -859,6 +865,7 @@ describe('concurrency', () => {
     let acquired = 0;
     let released = 0;
     const scope: BuildScope = {
+      ...IDENTITY,
       buildId: BUILD,
       catalog,
       tables,
@@ -882,6 +889,7 @@ describe('concurrency', () => {
         async acquire() {
           acquired += 1;
           return {
+            ...IDENTITY,
             buildId: BUILD,
             generation: 1,
             release() {

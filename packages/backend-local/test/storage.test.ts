@@ -365,6 +365,27 @@ describe('LocalStateStore', () => {
     });
   });
 
+  it('refuses a missing identity table as damaged state without recreating it (#697)', async () => {
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      LocalStateStore.open(lore, STATE_MIGRATIONS).close();
+      const raw = openWritable(join(lore, 'state.sqlite'));
+      raw.exec('DROP TABLE runtime_identity');
+      raw.close();
+      expect(() => LocalStateStore.open(lore, STATE_MIGRATIONS)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_SCHEMA_MISMATCH' }),
+      );
+      const probe = openWritable(join(lore, 'state.sqlite'));
+      try {
+        expect(
+          probe.prepare("SELECT name FROM sqlite_master WHERE name = 'runtime_identity'").get(),
+        ).toBeUndefined();
+      } finally {
+        probe.close();
+      }
+    });
+  });
+
   it.each(['missing', 'malformed'])(
     'refuses %s identity without replacing it (#697)',
     async (kind) => {

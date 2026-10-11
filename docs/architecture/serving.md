@@ -12,6 +12,18 @@ without editing a single file per surface (invariant 10).
 `@lorepack/runtime`. REST, MCP and the CLI all call the same object, so a capability cannot
 exist in one interface and be missing from another.
 
+Build descriptions, search results, context bundles, source reads, table descriptions and
+table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. The runtime
+captures them from one acquired handle and checks that the opened scope belongs to the same
+corpus, namespace and build before reading its catalog. The table-name listing and health
+response retain their own existing shapes. Public JSON schemas and SDK types require the
+identity fields on the result envelopes.
+
+A missing or malformed provider identity is `LORE_E_SCHEMA_MISMATCH`; an adapter that opens
+a different binding is an internal contract violation. Acquired handles are opaque owner
+objects, not serializable access grants. Foreign, forged, released and closed handles are
+refused with `LORE_E_INVALID_ARGUMENT` by their provider. IDs never authorize a request.
+
 | Surface | Started by | Speaks |
 |---|---|---|
 | stdio MCP | `lorepack mcp` | MCP 2026-07-28 over stdin/stdout |

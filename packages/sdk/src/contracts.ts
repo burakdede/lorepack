@@ -12,6 +12,11 @@
  * ticket asks for; the types are simply checked rather than generated.
  */
 
+export interface RuntimeIdentity {
+  corpusId: string;
+  namespaceId: string;
+}
+
 export type SourceState = 'clean' | 'dirty' | 'unknown';
 export type ArtifactStatus = 'active' | 'draft' | 'archived';
 export type ContextProfile = 'agent' | 'coding' | 'chat' | 'deep';
@@ -44,7 +49,7 @@ export interface SearchHit {
   scoreComponents?: Record<string, number> | undefined;
 }
 
-export interface SearchResult {
+export interface SearchResult extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   hits: SearchHit[];
@@ -67,7 +72,7 @@ export interface OmittedItem {
   locator: SourceLocator;
 }
 
-export interface ContextBundle {
+export interface ContextBundle extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   task: string;
@@ -86,7 +91,7 @@ export interface ContextBundle {
   citations: SourceLocator[];
 }
 
-export interface BuildDescription {
+export interface BuildDescription extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   projectName: string;
@@ -105,7 +110,7 @@ export interface BuildDescription {
   createdAt?: string | undefined;
 }
 
-export interface SourceReadResult {
+export interface SourceReadResult extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   text: string;
@@ -129,7 +134,7 @@ export interface ColumnStatistics {
   max?: string | number | boolean | undefined;
 }
 
-export interface TableDescription {
+export interface TableDescription extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   tableId: string;
@@ -155,7 +160,7 @@ export interface TableDescription {
   locator: SourceLocator;
 }
 
-export interface TableQueryResult {
+export interface TableQueryResult extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
   columns: string[];

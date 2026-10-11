@@ -56,6 +56,7 @@ export interface TargetCapabilities {
 
 /** What the orchestration hands a target when asking what a deploy would do. */
 export interface DeployInput {
+  readonly corpusId: string;
   readonly projectName: string;
   readonly buildId: BuildId;
   /** The sealed build directory. A target reads from it and never writes to it. */

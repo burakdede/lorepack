@@ -97,6 +97,10 @@
       },
       "type": "array"
     },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "locator": {
       "additionalProperties": false,
       "description": "Exact location of content within a source artifact",
@@ -148,6 +152,10 @@
       "minLength": 1,
       "type": "string"
     },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "rowCount": {
       "maximum": 9007199254740991,
       "minimum": 0,
@@ -184,6 +192,8 @@
     }
   },
   "required": [
+    "corpusId",
+    "namespaceId",
     "buildId",
     "sourceState",
     "tableId",

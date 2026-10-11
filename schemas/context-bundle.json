@@ -171,11 +171,19 @@
       },
       "type": "array"
     },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "estimatedTokens": {
       "description": "Conservative estimate, never an exact count",
       "maximum": 9007199254740991,
       "minimum": 0,
       "type": "integer"
+    },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
     },
     "omitted": {
       "items": {
@@ -491,6 +499,8 @@
     }
   },
   "required": [
+    "corpusId",
+    "namespaceId",
     "buildId",
     "sourceState",
     "task",

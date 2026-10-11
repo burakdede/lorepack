@@ -12,6 +12,9 @@ They cannot edit sources, build, deploy, or run shell commands through the Lorep
 Local project state keeps a persistent corpus ID and runtime namespace separately from the
 content digest and display name. These identify the collection; local owner access remains
 the trust boundary. See [local storage](docs/architecture/local-storage.md).
+Build, search, context, source-read and table-result envelopes expose these identifiers
+consistently over CLI JSON, HTTP, MCP and the SDK. A deployment retains the corpus ID and
+gets its own persistent namespace; the IDs never replace authentication.
 
 ## Why teams use it
 

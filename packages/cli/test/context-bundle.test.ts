@@ -196,10 +196,39 @@ describe('nothing is invented and nothing is hidden', () => {
 });
 
 describe('determinism', () => {
-  it('assembles an identical bundle for an identical task on an identical build', async () => {
+  it('assembles an identical response after reopening the same corpus and build', async () => {
+    const task = 'how do I roll back a release';
+    await withTempProject({ files: CORPUS }, async (project) => {
+      await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
+      const results: ContextBundle[] = [];
+      for (let index = 0; index < 2; index += 1) {
+        const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+        try {
+          const runtime = createRuntime(backend);
+          const first = await runtime.contextForTask({ task, includeArchived: false });
+          const repeated = await runtime.contextForTask({ task, includeArchived: false });
+          expect(JSON.stringify(repeated)).toBe(JSON.stringify(first));
+          results.push(first);
+        } finally {
+          backend.close();
+        }
+      }
+      expect(JSON.stringify(results[1])).toBe(JSON.stringify(results[0]));
+    });
+  });
+
+  it('keeps equivalent build content identical across independent corpus identities (#697)', async () => {
     const task = 'how do I roll back a release';
     const [first, second] = await Promise.all([bundleFor(task), bundleFor(task)]);
     expect(first.buildId).toBe(second.buildId);
-    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+    expect(first.corpusId).not.toBe(second.corpusId);
+    expect(first.namespaceId).not.toBe(second.namespaceId);
+    const { corpusId: firstCorpus, namespaceId: firstNamespace, ...firstContent } = first;
+    const { corpusId: secondCorpus, namespaceId: secondNamespace, ...secondContent } = second;
+    for (const corpusId of [firstCorpus, secondCorpus])
+      expect(corpusId).toMatch(/^corpus_[0-9a-f]{32}$/);
+    for (const namespaceId of [firstNamespace, secondNamespace])
+      expect(namespaceId).toMatch(/^namespace_[0-9a-f]{32}$/);
+    expect(JSON.stringify(secondContent)).toBe(JSON.stringify(firstContent));
   });
 });

@@ -29,6 +29,7 @@ export type {
   LoreRuntime,
   RuntimeDeps,
   StoredTableDescription,
+  StoredTableQueryResult,
   TableStore,
 } from './runtime.js';
 export type {

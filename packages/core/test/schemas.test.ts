@@ -249,6 +249,8 @@ describe('runtime contracts', () => {
 
   it('refuses a context bundle that exceeds its own budget', () => {
     const bundle = {
+      corpusId: `corpus_${'c'.repeat(32)}`,
+      namespaceId: `namespace_${'d'.repeat(32)}`,
       buildId: BUILD_ID,
       sourceState: 'clean' as const,
       task: 'Review pricing',

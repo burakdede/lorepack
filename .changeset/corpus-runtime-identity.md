@@ -1,6 +1,9 @@
 ---
 '@lorepack/cli': patch
+'@lorepack/sdk': patch
 ---
 
-Persist corpus and runtime namespace identity outside content hashes, and reject
-foreign, forged, released or closed local build handles before reading catalogs.
+Expose persistent corpus and runtime namespace IDs in runtime result envelopes,
+separately from content hashes and display names. Refuse foreign, forged,
+released or closed local handles. Cloudflare deployments retain the corpus ID,
+use a distinct namespace and validate their project binding before serving.

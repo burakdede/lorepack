@@ -30,6 +30,7 @@ import type {
 } from '../src/projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from '../src/r2-keys.js';
 
+const CORPUS_ID = `corpus_${'c'.repeat(32)}`;
 const PROJECT = 'contracted';
 const BUILD = `lore_${'a'.repeat(64)}` as DeploymentReceipt['buildId'];
 const BUILD_B = `lore_${'b'.repeat(64)}` as DeploymentReceipt['buildId'];
@@ -74,6 +75,10 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
   bind(...values: unknown[]): SqliteStatement {
     this.#bindings = values;
     return this;
+  }
+
+  async first<T = Record<string, unknown>>(): Promise<T | null> {
+    return (this.#db.prepare(this.#query).get(...this.#bindings) as T | undefined) ?? null;
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
@@ -128,6 +133,10 @@ class TrackingSqliteStatement implements ProjectionMigrationStatementLike {
   bind(...values: unknown[]): TrackingSqliteStatement {
     this.#bindings = values;
     return this;
+  }
+
+  async first<T = Record<string, unknown>>(): Promise<T | null> {
+    return (this.#db.prepare(this.#query).get(...this.#bindings) as T | undefined) ?? null;
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
@@ -492,6 +501,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('plans and applies a candidate projection with archive and object transfer state', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -506,6 +516,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -542,6 +553,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('leaves the sealed build byte for byte identical while projecting it', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -550,6 +562,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
 
     const before = digestDirectory(fixture.buildDirectory);
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -564,12 +577,14 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('skips archive and object uploads when the candidate payload is already present', async () => {
     const fixture = makeBuildFixture();
     const firstTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
     });
     const secondTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -577,6 +592,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const firstPlan = await firstTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -585,6 +601,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     await firstTarget.apply(firstPlan);
 
     const secondPlan = await secondTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -614,6 +631,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('reports projection steps and upload bytes while applying', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -621,6 +639,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -704,6 +723,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       trackDatabase(new DatabaseSync(':memory:')),
     );
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: projection,
@@ -711,6 +731,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -740,6 +761,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     previousDb.close();
 
     const previousTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       workerName: 'contracted-runtime',
@@ -750,6 +772,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       publicBuildId: async () => BUILD_B,
     });
     const previousPlan = await previousTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD_B,
       buildDirectory: previousDirectory,
@@ -760,6 +783,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     await previousTarget.activate(previousReceipt);
 
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       workerName: 'contracted-runtime',
@@ -771,6 +795,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -800,6 +825,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('warns when the projected D1 size approaches the free-tier limit and names the largest contributors', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       workerName: 'contracted-runtime',
@@ -818,6 +844,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -841,6 +868,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('refuses plan-time projection when one chunk text is above the D1 value limit', async () => {
     const fixture = makeBuildFixture({ chunkText: 'x'.repeat(2_000_001) });
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -849,6 +877,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
 
     const failure = await target
       .plan({
+        corpusId: CORPUS_ID,
         projectName: PROJECT,
         buildId: BUILD,
         buildDirectory: fixture.buildDirectory,
@@ -873,6 +902,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('refuses plan-time projection when one table row is above the D1 row limit', async () => {
     const fixture = makeBuildFixture({ tableName: 'x'.repeat(2_000_001) });
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -881,6 +911,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
 
     const failure = await target
       .plan({
+        corpusId: CORPUS_ID,
         projectName: PROJECT,
         buildId: BUILD,
         buildDirectory: fixture.buildDirectory,
@@ -905,6 +936,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('verifies the candidate through the projected runtime and records capabilities', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -914,6 +946,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -947,6 +980,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('refuses to activate a projected build that was never verified, and leaves the pointer', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -955,6 +989,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -986,6 +1021,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('activates atomically by switching the pointer and incrementing generation', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -995,6 +1031,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -1040,6 +1077,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     );
 
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -1049,6 +1087,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const previousPlan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD_B,
       buildDirectory: previousDirectory,
@@ -1057,6 +1096,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     await target.apply(previousPlan);
 
     const currentPlan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -1094,6 +1134,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('refuses to roll back to an incomplete projection and leaves activation unchanged', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -1101,6 +1142,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const currentPlan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -1139,6 +1181,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       trackDatabase(new DatabaseSync(projectionPath)),
     );
     const firstTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: firstProjection,
@@ -1146,6 +1189,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
       publicBuildId: async () => null,
     });
     const secondTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: secondProjection,
@@ -1154,12 +1198,14 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const firstPlan = await firstTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
       buildCapabilities: ['lexical-search', 'structured-context', 'table-query'] as Capability[],
     });
     const secondPlan = await secondTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD_B,
       buildDirectory: secondDirectory,
@@ -1200,6 +1246,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
   it('resumes from transfer state without re-uploading the archive', async () => {
     const fixture = makeBuildFixture();
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -1207,6 +1254,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,
@@ -1243,6 +1291,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     const fixture = makeBuildFixture();
     fixture.bucket.failOnPutPrefix = `${PROJECT}/objects/`;
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -1250,6 +1299,7 @@ describe('createCloudflareDeploymentTarget, issue 263', () => {
     });
 
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: BUILD,
       buildDirectory: fixture.buildDirectory,

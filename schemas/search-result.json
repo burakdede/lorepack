@@ -8,6 +8,10 @@
       "pattern": "^lore_[0-9a-f]{64}$",
       "type": "string"
     },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "hits": {
       "items": {
         "additionalProperties": false,
@@ -122,6 +126,10 @@
       },
       "type": "array"
     },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "sourceState": {
       "enum": [
         "clean",
@@ -137,6 +145,8 @@
     }
   },
   "required": [
+    "corpusId",
+    "namespaceId",
     "buildId",
     "sourceState",
     "hits",

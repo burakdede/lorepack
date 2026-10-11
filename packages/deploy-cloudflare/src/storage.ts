@@ -5,8 +5,10 @@ import {
   type BuildId,
   LoreError,
   type ObjectStore,
+  type RuntimeIdentity,
 } from '@lorepack/core/worker';
 import { r2ObjectKey } from './r2-keys.js';
+import { checkedRuntimeIdentity } from './runtime-identity.js';
 
 interface D1PreparedStatementLike {
   first<T = Record<string, unknown>>(): Promise<T | null>;
@@ -27,13 +29,15 @@ export interface R2BucketLike {
   delete?(key: string): Promise<unknown>;
 }
 
-interface ActiveBuildRow {
+interface ActiveBuildRow extends RuntimeIdentity {
+  readonly projectId: string;
   readonly buildId: string | null;
   readonly generation: number;
 }
 
-const ACTIVE_BUILD_QUERY =
-  'SELECT build_id AS buildId, generation FROM active_build WHERE id = 1' as const;
+export const ACTIVE_BUILD_QUERY = `SELECT a.build_id AS buildId, a.generation,
+  i.project_id AS projectId, i.corpus_id AS corpusId, i.namespace_id AS namespaceId
+FROM active_build a LEFT JOIN runtime_identity i ON i.id = a.id WHERE a.id = 1`;
 
 /**
  * Content-addressed build objects in an R2 bucket.
@@ -105,33 +109,68 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
  */
 export class D1ActiveBuildProvider implements ActiveBuildProvider {
   readonly #db: D1DatabaseLike;
+  readonly #projectId: string;
+  readonly #handles = new WeakSet<BuildHandle>();
 
-  constructor(db: D1DatabaseLike) {
+  constructor(db: D1DatabaseLike, projectId: string) {
     this.#db = db;
+    this.#projectId = projectId;
   }
 
   async current(): Promise<{ buildId: BuildId; generation: number } | null> {
     const row = await this.#activeRow();
     if (row === null || row.buildId === null) return null;
+    checkedRuntimeIdentity(row, this.#projectId);
     return { buildId: assertBuildId(row.buildId), generation: Number(row.generation) };
   }
 
   async acquire(): Promise<BuildHandle> {
-    const active = await this.current();
-    if (active === null) {
+    const active = await this.#activeRow();
+    if (active === null || active.buildId === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This deployment has no active build.', {
         remediation: 'Deploy and activate a verified build before serving requests from it.',
       });
     }
 
-    return {
-      buildId: active.buildId,
-      generation: active.generation,
-      release() {},
-    };
+    const identity = checkedRuntimeIdentity(active, this.#projectId);
+    const handle: BuildHandle = Object.freeze({
+      ...identity,
+      buildId: assertBuildId(active.buildId),
+      generation: Number(active.generation),
+      release: () => {
+        this.#handles.delete(handle);
+      },
+    });
+    this.#handles.add(handle);
+    return handle;
+  }
+
+  assertHandle(handle: BuildHandle): void {
+    if (!this.#handles.has(handle)) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'The build handle is foreign, forged or released.',
+        {
+          remediation: 'Acquire a new handle from this runtime provider.',
+          subject: handle.buildId,
+        },
+      );
+    }
   }
 
   async #activeRow(): Promise<ActiveBuildRow | null> {
-    return await this.#db.prepare(ACTIVE_BUILD_QUERY).first<ActiveBuildRow>();
+    try {
+      return await this.#db.prepare(ACTIVE_BUILD_QUERY).first<ActiveBuildRow>();
+    } catch (cause) {
+      throw new LoreError(
+        'LORE_E_SCHEMA_MISMATCH',
+        'The deployment runtime binding could not be read.',
+        {
+          remediation:
+            'Deploy the local corpus with this version, or restore damaged deployment state.',
+          cause,
+        },
+      );
+    }
   }
 }

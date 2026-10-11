@@ -38,6 +38,7 @@ import {
  */
 
 export interface DeployOptions {
+  readonly corpusId: string;
   readonly target: DeploymentTarget;
   readonly projectRoot: string;
   readonly projectName: string;
@@ -171,6 +172,7 @@ export async function runDeploy(options: DeployOptions): Promise<DeployResult> {
   if (plan === undefined) {
     progress.start('validating', 'Planning', 1);
     plan = await target.plan({
+      corpusId: options.corpusId,
       projectName: options.projectName,
       buildId: options.buildId as DeployPlan['input']['buildId'],
       buildDirectory: options.buildDirectory,

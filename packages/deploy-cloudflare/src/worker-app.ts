@@ -149,7 +149,7 @@ export function createCloudflareWorkerFromBindings(
   bindings: CloudflareBindings & CloudflareAccessBindings,
   options: CloudflareBoundWorkerOptions = {},
 ): CloudflareWorkerApp {
-  const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB);
+  const provider = new D1ActiveBuildProvider(bindings.CATALOG_DB, bindings.PROJECT_ID);
   const authMode = options.authMode ?? 'disabled';
   const access = options.access ?? resolveCloudflareAccessConfigFromBindings(bindings);
   const authorize =
@@ -162,9 +162,12 @@ export function createCloudflareWorkerFromBindings(
   const runtime = createRuntime({
     provider,
     open: async (handle) => {
+      provider.assertHandle(handle);
       const namespace = namespaceOf(bindings, handle.buildId);
       await assertProjectionReadable(bindings.CATALOG_DB, namespace);
       return {
+        corpusId: handle.corpusId,
+        namespaceId: handle.namespaceId,
         buildId: handle.buildId,
         catalog: new D1CatalogStore({
           db: bindings.CATALOG_DB,

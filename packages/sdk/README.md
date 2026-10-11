@@ -26,9 +26,11 @@ for (const citation of bundle.citations) {
 }
 ```
 
-Every response carries the `buildId` it was read from and the `sourceState` observed at that
-moment, so an agent always knows which version of the corpus it is holding and whether the
-sources have moved on.
+Build descriptions, search results, context bundles, source reads, table descriptions and
+table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. Corpus and
+namespace are persistent operational identifiers; the digest identifies immutable content
+and freshness reports whether sources have moved on. IDs are not credentials. Health and
+the table-name listing retain their own shapes.
 
 ## Methods
 
@@ -43,7 +45,7 @@ sources have moved on.
 | `describeTable(tableId)` | `GET /v1/tables/:tableId` |
 | `queryTable(tableId, sql)` | `POST /v1/tables/:tableId/query` |
 
-Table methods answer as a build without tables until typed tables land in Phase 5.
+Table methods require a build with the `table-query` capability.
 
 ## Options
 

@@ -63,11 +63,23 @@ export class LocalStateStore {
   }
 
   identity(): RuntimeIdentity {
-    const row = this.#db
-      .prepare(
-        'SELECT corpus_id AS corpusId, namespace_id AS namespaceId FROM runtime_identity WHERE id = 1',
-      )
-      .get();
+    let row: unknown;
+    try {
+      row = this.#db
+        .prepare(
+          'SELECT corpus_id AS corpusId, namespace_id AS namespaceId FROM runtime_identity WHERE id = 1',
+        )
+        .get();
+    } catch (cause) {
+      throw new LoreError(
+        'LORE_E_SCHEMA_MISMATCH',
+        'The project runtime identity could not be read.',
+        {
+          remediation: 'Restore the project state from a known-good backup.',
+          cause,
+        },
+      );
+    }
     const parsed = runtimeIdentitySchema.safeParse(row);
     if (!parsed.success) {
       throw new LoreError(

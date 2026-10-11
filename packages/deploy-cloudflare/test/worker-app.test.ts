@@ -24,6 +24,11 @@ import {
   storeRuntimeTokenHash,
 } from '../src/index.js';
 
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
+
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
 const HIT: CatalogSearchHit = {
@@ -136,6 +141,7 @@ const tables: TableStore = {
 
 function runtimeFor() {
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog,
     tables,
@@ -158,7 +164,7 @@ function runtimeFor() {
         return { buildId: BUILD, generation: 7 };
       },
       async acquire(): Promise<BuildHandle> {
-        return { buildId: BUILD, generation: 7, release() {} };
+        return { ...IDENTITY, buildId: BUILD, generation: 7, release() {} };
       },
     },
     open: async () => scope,
@@ -198,6 +204,7 @@ function encodedNamesRuntime() {
     });
   });
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog: { ...catalog, artifact: async (id: string) => artifacts.get(id) ?? null },
     tables,
@@ -220,7 +227,7 @@ function encodedNamesRuntime() {
         return { buildId: BUILD, generation: 7 };
       },
       async acquire(): Promise<BuildHandle> {
-        return { buildId: BUILD, generation: 7, release() {} };
+        return { ...IDENTITY, buildId: BUILD, generation: 7, release() {} };
       },
     },
     open: async () => scope,

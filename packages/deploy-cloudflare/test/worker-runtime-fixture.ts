@@ -8,10 +8,15 @@ import {
   type D1DatabaseLike,
   D1TableStore,
 } from '../src/index.js';
+import { ACTIVE_BUILD_QUERY } from '../src/storage.js';
 import type { D1QueryDatabaseLike } from '../src/tables.js';
 
 export const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 export const PROJECT = 'contracted';
+export const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
 export const TABLE_ID = 'contracted:pricing.xlsx#Products';
 export const MATCHING_QUERY = 'rollback';
 export const ARTIFACT_ID = 'contracted:guides/rollback.md';
@@ -115,8 +120,8 @@ function searchRows(count: number): Array<Record<string, unknown>> {
 function installHandlers(db: FakeD1Database, options: SearchFixtureOptions): void {
   const fallbackHitCount = options.fallbackHitCount ?? 1;
 
-  db.handlers.set('SELECT build_id AS buildId, generation FROM active_build WHERE id = 1', () => [
-    { buildId: BUILD, generation: 7 },
+  db.handlers.set(ACTIVE_BUILD_QUERY, () => [
+    { ...IDENTITY, projectId: PROJECT, buildId: BUILD, generation: 7 },
   ]);
 
   db.handlers.set(
@@ -415,10 +420,12 @@ export function createWorkerRuntimeFixture(
 ): WorkerRuntimeFixture {
   const db = new FakeD1Database();
   installHandlers(db, options);
-  const provider = new D1ActiveBuildProvider(db);
+  const provider = new D1ActiveBuildProvider(db, PROJECT);
   const runtime = createRuntime({
     provider,
     open: async (handle): Promise<BuildScope> => ({
+      corpusId: handle.corpusId,
+      namespaceId: handle.namespaceId,
       buildId: handle.buildId,
       catalog: new D1CatalogStore({ db, namespace: namespace() }),
       tables: new D1TableStore(db, { projectId: PROJECT, buildId: handle.buildId }),

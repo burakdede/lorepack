@@ -13,6 +13,7 @@ import {
   type DeployPlan,
   type DeployPlanDisplay,
   LoreError,
+  runtimeIdentitySchema,
   type TargetCapabilities,
   type TargetDetection,
   type VerificationResult,
@@ -38,12 +39,14 @@ import {
 import { assertProjectionReadable } from './projection-state.js';
 import { projectionWriteOptions } from './projection-write.js';
 import { r2ArchiveKey } from './r2-keys.js';
+import { readRuntimeIdentity } from './runtime-identity.js';
 import { type D1DatabaseLike, type R2BucketLike, R2ObjectStore } from './storage.js';
 import { type D1QueryDatabaseLike, D1TableStore } from './tables.js';
 
 const DEFAULT_CAPABILITIES = ['lexical-search', 'structured-context', 'table-query'] as const;
 
 export interface CloudflareDeploymentTargetOptions {
+  readonly corpusId: string;
   readonly projectId: string;
   /** Null when the public origin is not known, which a rollback tolerates and a deploy does not. */
   readonly endpoint: string | null;
@@ -109,6 +112,7 @@ export class CloudflareUnverifiedBuildError extends LoreError {
 export function createCloudflareDeploymentTarget(
   options: CloudflareDeploymentTargetOptions,
 ): DeploymentTarget {
+  const identityDb: D1DatabaseLike = options.catalogDb;
   return {
     id: 'cloudflare',
     detect: async () =>
@@ -122,6 +126,30 @@ export function createCloudflareDeploymentTarget(
         ...(options.endpoint === null ? {} : { endpoint: options.endpoint }),
       },
     plan: async (input): Promise<DeployPlan> => {
+      if (
+        input.corpusId !== options.corpusId ||
+        !runtimeIdentitySchema.shape.corpusId.safeParse(input.corpusId).success
+      ) {
+        throw new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          'The deploy input does not belong to this corpus.',
+          {
+            remediation: 'Plan a deployment using the current local corpus identity.',
+          },
+        );
+      }
+      const identityTable = await identityDb
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'runtime_identity'",
+        )
+        .first();
+      if (identityTable !== null) {
+        const binding = await identityDb
+          .prepare('SELECT id FROM runtime_identity WHERE id = 1')
+          .first();
+        if (binding !== null)
+          await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
+      }
       const capabilities = await ((await options.capabilities?.()) ?? {
         supported: [...DEFAULT_CAPABILITIES] as Capability[],
         ...(options.endpoint === null ? {} : { endpoint: options.endpoint }),
@@ -183,6 +211,18 @@ export function createCloudflareDeploymentTarget(
       });
 
       try {
+        if (
+          plan.input.corpusId !== options.corpusId ||
+          !runtimeIdentitySchema.shape.corpusId.safeParse(options.corpusId).success
+        ) {
+          throw new LoreError(
+            'LORE_E_INVALID_ARGUMENT',
+            'The deploy plan does not belong to this corpus.',
+            {
+              remediation: 'Create a deploy plan from the current local corpus.',
+            },
+          );
+        }
         if (transfer.state?.migrations_done !== true) {
           await runProjectionMigrations(options.catalogDb, options.now);
           await runTableProjectionMigrations(options.tablesDb ?? options.catalogDb, options.now);
@@ -192,6 +232,14 @@ export function createCloudflareDeploymentTarget(
           reportProjectionProgress(progress, projectedSteps, 'migrations');
         }
 
+        if (transfer.state?.metadata_done !== true) {
+          await options.catalogDb
+            .prepare(`INSERT OR IGNORE INTO runtime_identity (id, project_id, corpus_id, namespace_id)
+VALUES (1, ?, ?, 'namespace_' || lower(hex(randomblob(16))))`)
+            .bind(options.projectId, options.corpusId)
+            .run();
+        }
+        await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
         if (transfer.state?.metadata_done !== true) {
           await projectBuildMetadata({
             db: options.catalogDb,
@@ -337,14 +385,17 @@ export function createCloudflareDeploymentTarget(
       }
     },
     verify: async (receipt) => {
+      await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
       if (options.verifyCandidate !== undefined) return await options.verifyCandidate(receipt);
       return await verifyCandidateBuild(options, receipt);
     },
     activate: async (receipt) => {
+      await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
       if (options.activateCandidate !== undefined) return await options.activateCandidate(receipt);
       return await activateCandidateBuild(options, receipt);
     },
     rollback: async (buildId) => {
+      await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
       if (options.rollbackBuild !== undefined) return await options.rollbackBuild(buildId);
       return await rollbackProjectedBuild(options, buildId);
     },
@@ -570,6 +621,11 @@ async function verifyCandidateBuild(
   receipt: DeploymentReceipt,
 ): Promise<VerificationResult> {
   const buildId = receipt.buildId as BuildId;
+  const identity = await readRuntimeIdentity(
+    options.catalogDb,
+    options.projectId,
+    options.corpusId,
+  );
   await assertProjectionReadable(options.catalogDb, { projectId: options.projectId, buildId });
 
   const catalog = new D1CatalogStore({
@@ -583,10 +639,11 @@ async function verifyCandidateBuild(
         return { buildId, generation: 0 };
       },
       async acquire() {
-        return { buildId, generation: 0, release() {} };
+        return { ...identity, buildId, generation: 0, release() {} };
       },
     },
     open: async () => ({
+      ...identity,
       buildId,
       catalog,
       tables: new D1TableStore(

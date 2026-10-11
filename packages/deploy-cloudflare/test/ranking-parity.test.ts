@@ -127,6 +127,11 @@ async function withBothRuntimes(
 
     const projection = new SqliteProjectionDatabase(trackDatabase(new DatabaseSync(':memory:')));
     await runProjectionMigrations(projection, () => '2026-08-08T18:00:00.000Z');
+    const localIdentity = await local.describeBuild();
+    projection.raw
+      .prepare(`INSERT INTO runtime_identity (id, project_id, corpus_id, namespace_id)
+VALUES (1, 'parity', ?, 'namespace_' || lower(hex(randomblob(16))))`)
+      .run(localIdentity.corpusId);
     await projectBuildMetadata({
       db: projection,
       projectId: 'parity',
@@ -144,8 +149,10 @@ async function withBothRuntimes(
       .run(built.buildId, 1);
 
     const remote = createRuntime({
-      provider: new D1ActiveBuildProvider(projection),
+      provider: new D1ActiveBuildProvider(projection, 'parity'),
       open: async (handle) => ({
+        corpusId: handle.corpusId,
+        namespaceId: handle.namespaceId,
         buildId: handle.buildId,
         catalog: new D1CatalogStore({
           db: projection,

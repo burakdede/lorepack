@@ -66,7 +66,10 @@ describe('projection migrations, issue 87', () => {
     const projection = new SqliteProjectionDatabase(db);
 
     const result = await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
-    expect(result).toEqual({ applied: ['0001', '0002', '0003', '0004'], alreadyApplied: [] });
+    expect(result).toEqual({
+      applied: ['0001', '0002', '0003', '0004', '0005'],
+      alreadyApplied: [],
+    });
 
     const names = (
       db
@@ -131,7 +134,10 @@ describe('projection migrations, issue 87', () => {
 
     await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
     const second = await runProjectionMigrations(projection, () => '2026-08-08T12:05:00.000Z');
-    expect(second).toEqual({ applied: [], alreadyApplied: ['0001', '0002', '0003', '0004'] });
+    expect(second).toEqual({
+      applied: [],
+      alreadyApplied: ['0001', '0002', '0003', '0004', '0005'],
+    });
 
     const rows = db
       .prepare('SELECT id, checksum FROM schema_migrations ORDER BY id')
@@ -155,6 +161,10 @@ describe('projection migrations, issue 87', () => {
       {
         id: '0004',
         checksum: PROJECTION_MIGRATIONS[3]?.checksum ?? '',
+      },
+      {
+        id: '0005',
+        checksum: PROJECTION_MIGRATIONS[4]?.checksum ?? '',
       },
     ]);
     expect(PROJECTION_SCHEMA_VERSION).toBe(4);

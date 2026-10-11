@@ -13,7 +13,7 @@ import type {
   TableStore,
 } from '@lorepack/core';
 import { LoreError } from '@lorepack/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRuntime } from '../src/runtime.js';
 
 /**
@@ -27,6 +27,10 @@ import { createRuntime } from '../src/runtime.js';
 
 const BUILD_A = `lore_${'a'.repeat(64)}` as BuildId;
 const BUILD_B = `lore_${'b'.repeat(64)}` as BuildId;
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
 
 function manifestFor(buildId: BuildId): BuildManifest {
   return {
@@ -160,6 +164,7 @@ class TrackingProvider {
     let released = false;
     const self = this;
     return {
+      ...IDENTITY,
       buildId,
       generation,
       release(): void {
@@ -192,6 +197,7 @@ function runtimeOver(
 
 function scopeFor(buildId: BuildId): BuildScope {
   return {
+    ...IDENTITY,
     buildId,
     catalog: new FakeCatalog(buildId),
     tables: emptyTables,
@@ -210,6 +216,19 @@ function scopeFor(buildId: BuildId): BuildScope {
 }
 
 describe('the envelope', () => {
+  it('carries operational corpus and namespace identity in runtime responses (#697)', async () => {
+    const provider = new TrackingProvider();
+    const runtime = runtimeOver(provider);
+    for (const result of [
+      await runtime.describeBuild(),
+      await runtime.search({ query: 'a', limit: 5, includeArchived: false, debug: false }),
+      await runtime.contextForTask({ task: 'a match', includeArchived: false }),
+      await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 }),
+    ]) {
+      expect(result).toMatchObject(IDENTITY);
+    }
+    expect(provider.leaked).toBe(0);
+  });
   it('stamps the build and freshness on every response shape', async () => {
     const provider = new TrackingProvider();
     const runtime = runtimeOver(provider, { freshness: async () => 'clean' });
@@ -277,6 +296,38 @@ describe('provenance', () => {
 });
 
 describe('the handle', () => {
+  it.each(['corpusId', 'namespaceId'] as const)(
+    'refuses a matching digest opened in another %s before catalog reads (#697)',
+    async (field) => {
+      const provider = new TrackingProvider();
+      const opened = scopeFor(BUILD_A);
+      const read = vi.spyOn(opened.catalog, 'manifest');
+      const runtime = runtimeOver(provider, {
+        open: async () => ({
+          ...opened,
+          [field]: `${field === 'corpusId' ? 'corpus' : 'namespace'}_${'e'.repeat(32)}`,
+        }),
+      });
+      await expect(runtime.describeBuild()).rejects.toMatchObject({ code: 'LORE_E_INTERNAL' });
+      expect(read).not.toHaveBeenCalled();
+      expect(provider.leaked).toBe(0);
+    },
+  );
+
+  it('refuses an unsupported provider identity before opening a scope (#697)', async () => {
+    const provider = new TrackingProvider();
+    const open = vi.fn(async () => scopeFor(BUILD_A));
+    const runtime = createRuntime({
+      provider: {
+        current: () => provider.current(),
+        acquire: async () => ({ ...(await provider.acquire()), namespaceId: 'invalid' }),
+      },
+      open,
+    });
+    await expect(runtime.describeBuild()).rejects.toMatchObject({ code: 'LORE_E_SCHEMA_MISMATCH' });
+    expect(open).not.toHaveBeenCalled();
+    expect(provider.leaked).toBe(0);
+  });
   it('releases on the success path, on every capability', async () => {
     const provider = new TrackingProvider();
     const runtime = runtimeOver(provider);

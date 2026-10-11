@@ -10,6 +10,8 @@ import {
   type LoreRuntime,
   RANKING_WEIGHTS,
   type RuntimeDeps,
+  type RuntimeIdentity,
+  runtimeIdentitySchema,
   type SearchRequest,
   type SearchResult,
   type SourceReadRequest,
@@ -56,7 +58,7 @@ export function createRuntime(deps: RuntimeOptions): LoreRuntime {
 interface Call {
   readonly scope: BuildScope;
   readonly handle: BuildHandle;
-  readonly envelope: {
+  readonly envelope: RuntimeIdentity & {
     readonly buildId: BuildHandle['buildId'];
     readonly sourceState: SourceState;
   };
@@ -229,11 +231,28 @@ class PortedRuntime implements LoreRuntime {
   async #withBuild<T>(body: (call: Call) => Promise<T>): Promise<T> {
     const handle = await this.#deps.provider.acquire();
     try {
+      const identity = runtimeIdentitySchema.safeParse({
+        corpusId: handle.corpusId,
+        namespaceId: handle.namespaceId,
+      });
+      if (!identity.success) {
+        throw new LoreError(
+          'LORE_E_SCHEMA_MISMATCH',
+          'The runtime provider returned an invalid corpus or namespace identity.',
+          {
+            remediation: 'Use a runtime adapter that implements the current identity contract.',
+          },
+        );
+      }
       const scope = await this.#deps.open(handle);
-      if (scope.buildId !== handle.buildId) {
+      if (
+        scope.buildId !== handle.buildId ||
+        scope.corpusId !== handle.corpusId ||
+        scope.namespaceId !== handle.namespaceId
+      ) {
         throw new LoreError(
           'LORE_E_INTERNAL',
-          'The storage backend opened a different build than the one this request acquired.',
+          'The storage backend opened a different build or runtime binding than this request acquired.',
           {
             remediation: 'This is a defect in the storage adapter. Please report it.',
             subject: `${handle.buildId} acquired, ${scope.buildId} opened`,
@@ -245,7 +264,12 @@ class PortedRuntime implements LoreRuntime {
       return await body({
         scope,
         handle,
-        envelope: { buildId: handle.buildId, sourceState },
+        envelope: {
+          corpusId: handle.corpusId,
+          namespaceId: handle.namespaceId,
+          buildId: handle.buildId,
+          sourceState,
+        },
       });
     } finally {
       handle.release();

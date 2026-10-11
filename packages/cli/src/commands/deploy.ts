@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { LocalStateStore, stateMigrationsDirectory } from '@lorepack/backend-local';
 import { createPlan, readLockfile, renderPlan } from '@lorepack/compiler';
 import {
   type BuildId,
@@ -97,6 +98,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
         ...(resume === undefined ? {} : { resume }),
       });
       const deployPlan = await target.plan({
+        corpusId: preparation.corpusId,
         projectName: config.config.name,
         buildId: preparation.buildId,
         buildDirectory: preparation.buildDirectory,
@@ -115,6 +117,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
       const accepted = normalizeCapabilityLoss(flags.allowCapabilityLoss);
       const afterProject = testAfterProjectHookFromEnv();
       const result = await runDeploy({
+        corpusId: preparation.corpusId,
         target,
         projectRoot: config.projectRoot,
         projectName: config.config.name,
@@ -154,6 +157,7 @@ export function deployCommand(options: DeployCommandOptions = {}): CommandDefini
 }
 
 interface PreparedBuild {
+  readonly corpusId: string;
   readonly buildId: BuildId;
   readonly buildDirectory: string;
   readonly buildCapabilities: readonly Capability[];
@@ -240,7 +244,15 @@ function readBuildInputs(projectRoot: string, buildId: BuildId): PreparedBuild {
     });
   }
   const manifest = buildManifestSchema.parse(JSON.parse(readFileSync(manifestPath, 'utf8')));
+  const state = LocalStateStore.open(loreDirectory, stateMigrationsDirectory());
+  let corpusId: string;
+  try {
+    corpusId = state.identity().corpusId;
+  } finally {
+    state.close();
+  }
   return {
+    corpusId,
     buildId,
     buildDirectory,
     buildCapabilities: manifest.capabilities,

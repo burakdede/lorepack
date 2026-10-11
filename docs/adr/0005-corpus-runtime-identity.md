@@ -26,9 +26,17 @@ The local owner controls filesystem access. These IDs do not introduce tenants o
 replace remote token authentication. Destination runtimes must establish their own
 binding rather than accepting archived identity as an authorization grant.
 
+Runtime envelopes and SDK contracts expose the corpus and namespace captured by the
+handle. The shared runtime checks that the opened scope matches both before reading.
+Cloudflare's control plane persists a single project/corpus binding and allocates a
+separate deployment namespace. Reads validate this binding without writing it. Control
+operations reject another corpus, including an equivalent content digest.
+
 ## Consequences
 
 Renames preserve corpus identity and equivalent builds remain portable and content
 addressed. State backups must preserve identity alongside activation history. Losing
 the state means losing the original local identity; it cannot be inferred from the
 build. Cross-process build retention remains a separate lifecycle concern (#439).
+Existing remote projections lacking binding metadata need redeployment with this
+version. Archived identity cannot substitute for the destination owner's binding.

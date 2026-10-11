@@ -1,5 +1,6 @@
 import type { BuildId } from '../hash/build-id.js';
 import type { BuildState } from '../schemas/build.js';
+import type { RuntimeIdentity } from '../schemas/common.js';
 
 /**
  * Storage ports. Every implementation, local or remote, satisfies these and is held to
@@ -39,7 +40,7 @@ export interface BuildStore {
  * release it at their end, so activation is observed at the next request boundary and no
  * single response can mix two builds.
  */
-export interface BuildHandle {
+export interface BuildHandle extends RuntimeIdentity {
   readonly buildId: BuildId;
   readonly generation: number;
   release(): void;
