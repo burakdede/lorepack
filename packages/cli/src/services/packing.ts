@@ -8,7 +8,7 @@ import {
   openReadOnly,
   writeArchive,
 } from '@lorepack/backend-local';
-import { type BuildId, LORE_DIRECTORY, type LoadedConfig, LoreError } from '@lorepack/core';
+import { type BuildId, LORE_DIRECTORY, LoreError, type ProjectConfig } from '@lorepack/core';
 import { buildDirectory, openStateStore, resolveBuildId } from './builds.js';
 
 /**
@@ -36,7 +36,7 @@ export interface PackOptions {
   readonly relativeTo?: string | undefined;
 }
 
-export async function packBuild(config: LoadedConfig, options: PackOptions): Promise<PackResult> {
+export async function packBuild(config: ProjectConfig, options: PackOptions): Promise<PackResult> {
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
   const state = openStateStore(loreDirectory);
 
@@ -70,7 +70,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
     // Originals are excluded by default (section 11.2): an archive is a build, not a copy of
     // someone's document folder, and shipping binaries by default would be a surprise the
     // user did not ask for.
-    if (config.effective.includeOriginals) {
+    if (config.config.package?.includeOriginals ?? config.defaults.includeOriginals) {
       members.push(...collectOriginals(config.projectRoot, originals));
     }
 
@@ -85,7 +85,7 @@ export async function packBuild(config: LoadedConfig, options: PackOptions): Pro
       buildId,
       archive: destination,
       members: members.length + 1,
-      includeOriginals: config.effective.includeOriginals,
+      includeOriginals: config.config.package?.includeOriginals ?? config.defaults.includeOriginals,
     };
   } finally {
     state.close();

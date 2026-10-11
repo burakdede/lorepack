@@ -223,7 +223,15 @@ lorepack rollback
 lorepack status
 ```
 
-Rollback points at an existing immutable build. It does not recompile the sources.
+Rollback points at an existing immutable build. It does not recompile the sources, and it
+works after the source directory and parser cache are removed. Keep `lore.yaml` and `.lore/`:
+they identify the project and hold its retained builds and content objects. A missing or
+invalid target fails before the active pointer changes.
+
+Retained builds remain available to inspection, diff, search, export and read-only serving.
+When sources are unavailable, query freshness is `unknown`. Use `lorepack mcp --active-only`
+to serve retained content without checking or rebuilding sources. `plan`, `build`, `dev`,
+`status` and `mcp --ensure-current` still require live sources.
 
 ### 6. Package or deploy a build
 

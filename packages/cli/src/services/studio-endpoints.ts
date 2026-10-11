@@ -2,8 +2,9 @@ import { createPlan, readLockfile } from '@lorepack/compiler';
 import {
   type BuildExclusion,
   type BuildWarning,
-  type LoadedConfig,
+  loadSourceConfig,
   ProgressBus,
+  type ProjectConfig,
 } from '@lorepack/core';
 import { readPreviousBuild } from './project.js';
 import { lockInputs } from './versions.js';
@@ -30,8 +31,9 @@ import { lockInputs } from './versions.js';
  * a person is watching a terminal; an HTTP caller gets one JSON answer when it is ready, and
  * a half-rendered progress stream would be noise in it.
  */
-export function createPlanEndpoint(config: LoadedConfig): () => Promise<unknown> {
+export function createPlanEndpoint(project: ProjectConfig): () => Promise<unknown> {
   return async () => {
+    const config = loadSourceConfig(project);
     // `readPreviousBuild` reads the pointer without opening the state store for writing, so
     // there is no handle to release here and a plan cannot block a build.
     const { previous } = readPreviousBuild(config);

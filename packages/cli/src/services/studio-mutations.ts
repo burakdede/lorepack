@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import { type BuildId, LORE_DIRECTORY, type LoadedConfig, LoreError } from '@lorepack/core';
+import { type BuildId, LORE_DIRECTORY, LoreError, type ProjectConfig } from '@lorepack/core';
 import {
   assertActivatable,
   buildDirectory,
@@ -24,7 +24,7 @@ import {
  * pre-flight and the same lock.
  */
 
-export function createBuildsEndpoint(config: LoadedConfig): () => Promise<unknown> {
+export function createBuildsEndpoint(config: ProjectConfig): () => Promise<unknown> {
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
 
   return async () => {
@@ -76,7 +76,7 @@ function capabilitiesOf(loreDirectory: string, buildId: BuildId): readonly strin
  * to do from a browser without a progress indicator.
  */
 export function createActivateEndpoint(
-  config: LoadedConfig,
+  config: ProjectConfig,
 ): (request: unknown) => Promise<unknown> {
   return async (request) => {
     const reference = readBuildReference(request);
@@ -123,7 +123,7 @@ export function createActivateEndpoint(
  * and is why Studio does not style it as destructive.
  */
 export function createRollbackEndpoint(
-  config: LoadedConfig,
+  config: ProjectConfig,
 ): (request: unknown) => Promise<unknown> {
   return async (request) => {
     const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);

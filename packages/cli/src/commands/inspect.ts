@@ -8,7 +8,7 @@ import {
   count,
   LORE_DIRECTORY,
   LoreError,
-  loadConfig,
+  loadProjectConfig,
 } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { buildDirectory, openStateStore, resolveBuildId } from '../services/builds.js';
@@ -51,7 +51,7 @@ export function inspectCommand(): CommandDefinition {
     ],
     flags: [{ flags: '--build <id>', description: 'inspect a build other than the active one' }],
     handler: (args, flags, context): CommandResult => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
       const state = openStateStore(loreDirectory);
 

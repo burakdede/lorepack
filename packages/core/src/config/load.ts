@@ -22,18 +22,19 @@ export interface ResolvedSource {
   readonly relativeRoot: string;
 }
 
-/**
- * The configuration a build actually runs against.
- *
- * `effective` is a build id input, so it holds no absolute path, no timestamp and no
- * environment-dependent value. Anything machine-specific lives outside it.
- */
-export interface LoadedConfig {
+export interface ProjectConfig {
   readonly projectRoot: string;
   readonly configPath: string;
   readonly config: LoreConfig;
-  readonly sources: readonly ResolvedSource[];
   readonly defaults: ProductDefaults;
+}
+
+/**
+ * Validated source configuration for compilation. `effective` is a build ID input, so
+ * machine-specific paths and timestamps stay outside it.
+ */
+export interface LoadedConfig extends ProjectConfig {
+  readonly sources: readonly ResolvedSource[];
   readonly effective: EffectiveConfig;
 }
 
@@ -394,6 +395,11 @@ function assertLoreDirectoryContained(projectRoot: string): void {
 
 /** Layers one and two of the precedence in architecture section 6.8. Phase 3 adds the rest. */
 export function loadConfig(options: LoadOptions = {}): LoadedConfig {
+  return loadSourceConfig(loadProjectConfig(options));
+}
+
+/** Retained-build operations need project containment, not the original source tree. */
+export function loadProjectConfig(options: LoadOptions = {}): ProjectConfig {
   const start = resolve(options.cwd ?? process.cwd());
   const projectRoot = findProjectRoot(start);
   if (projectRoot === null) throw notInitialized(start);
@@ -402,14 +408,19 @@ export function loadConfig(options: LoadOptions = {}): LoadedConfig {
   const configPath = join(projectRoot, CONFIG_FILENAME);
   const { config } = readConfigFile(configPath);
   const defaults = options.defaults ?? PRODUCT_DEFAULTS;
-  const sources = resolveSources(projectRoot, config);
-
   return deepFreeze({
     projectRoot,
     configPath,
     config,
-    sources,
     defaults,
-    effective: buildEffective(config, sources, defaults),
+  });
+}
+
+export function loadSourceConfig(project: ProjectConfig): LoadedConfig {
+  const sources = resolveSources(project.projectRoot, project.config);
+  return deepFreeze({
+    ...project,
+    sources,
+    effective: buildEffective(project.config, sources, project.defaults),
   });
 }

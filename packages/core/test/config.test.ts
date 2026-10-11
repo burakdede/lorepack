@@ -10,7 +10,12 @@ import {
   PRODUCT_DEFAULTS,
   SECRET_SHAPED,
 } from '../src/config/defaults.js';
-import { findProjectRoot, loadConfig } from '../src/config/load.js';
+import {
+  findProjectRoot,
+  loadConfig,
+  loadProjectConfig,
+  loadSourceConfig,
+} from '../src/config/load.js';
 import { LoreError } from '../src/errors/lore-error.js';
 
 const MINIMAL = 'version: 1\nname: sarjbot\nsources:\n  - ./docs\n';
@@ -46,6 +51,24 @@ describe('findProjectRoot', () => {
 });
 
 describe('loadConfig', () => {
+  it('loads retained project configuration without pretending sources are validated', async () => {
+    await withTempProject({ files: { 'lore.yaml': MINIMAL } }, (temp) => {
+      const project = loadProjectConfig({ cwd: temp.root });
+      expect(project.config.name).toBe('sarjbot');
+      expect(project).not.toHaveProperty('sources');
+      expect(project).not.toHaveProperty('effective');
+      expect(Object.isFrozen(project)).toBe(true);
+      expect(() => loadSourceConfig(project)).toThrow('Source path does not exist');
+      expect(() => loadConfig({ cwd: temp.root })).toThrow('Source path does not exist');
+    });
+  });
+
+  it('still rejects malformed retained project configuration', async () => {
+    await withTempProject({ files: { 'lore.yaml': 'version: 1\n' } }, (temp) => {
+      expect(() => loadProjectConfig({ cwd: temp.root })).toThrow(LoreError);
+    });
+  });
+
   it('loads the minimal generated configuration', async () => {
     await withProject({ 'lore.yaml': MINIMAL }, (root) => {
       const loaded = loadConfig({ cwd: root });

@@ -234,7 +234,8 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
     );
   }
 
-  const databasePath = join(buildDirectory(loreDirectory, build.buildId), 'context.sqlite');
+  const directory = buildDirectory(loreDirectory, build.buildId);
+  const databasePath = join(directory, 'context.sqlite');
   if (!existsSync(databasePath)) {
     throw new LoreError(
       'LORE_E_BUILD_NOT_FOUND',
@@ -242,6 +243,28 @@ export function assertActivatable(loreDirectory: string, build: BuildSummary): v
       {
         remediation: 'Run `lorepack build` to recreate it. The active build is unchanged.',
         subject: build.buildId,
+      },
+    );
+  }
+
+  try {
+    const manifest = buildManifestSchema.parse(
+      JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8')),
+    );
+    if (manifest.buildId !== build.buildId) {
+      throw new LoreError('LORE_E_BUILD_VALIDATION', 'Manifest names a different build.', {
+        remediation: 'Select another verified build. The active build is unchanged.',
+        subject: build.buildId,
+      });
+    }
+  } catch (cause) {
+    throw new LoreError(
+      'LORE_E_BUILD_VALIDATION',
+      `Build ${build.buildId} has an invalid manifest.`,
+      {
+        remediation: 'Select another verified build. The active build is unchanged.',
+        subject: build.buildId,
+        cause,
       },
     );
   }

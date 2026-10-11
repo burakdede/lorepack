@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { verifyArchive } from '@lorepack/backend-local';
-import { count, LoreError, loadConfig } from '@lorepack/core';
+import { count, LoreError, loadProjectConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { packBuild } from '../services/packing.js';
 
@@ -23,7 +23,7 @@ export function packCommand(): CommandDefinition {
     handler: async (args, flags, context): Promise<CommandResult> => {
       if (typeof flags.verify === 'string') return verify(flags.verify, context.options.cwd);
 
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const result = await packBuild(config, {
         build: args[0],
         out: typeof flags.out === 'string' ? flags.out : undefined,

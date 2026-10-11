@@ -17,7 +17,10 @@ export {
   type LoadedConfig,
   type LoadOptions,
   loadConfig,
+  loadProjectConfig,
+  loadSourceConfig,
   loreDirectoryEscape,
+  type ProjectConfig,
   type ResolvedSource,
   readConfigFile,
 } from './load.js';
