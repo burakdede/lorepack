@@ -12,7 +12,15 @@ import {
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
-import { buildManifestSchema, loadConfig, ProgressBus, sha256Hex } from '@lorepack/core';
+import {
+  type BuildIdInputs,
+  buildManifestSchema,
+  deriveBuildId,
+  hashCanonical,
+  loadConfig,
+  ProgressBus,
+  sha256Hex,
+} from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { readStableSourceBytes, runBuild } from '../src/services/build.js';
@@ -80,6 +88,39 @@ describe('lorepack build', () => {
       expect(buildManifestSchema.safeParse(manifest).success).toBe(true);
       expect(manifest.buildId).toBe(result.buildId);
     });
+  });
+
+  it('seals complete build identity inputs independently of the source directory (#418)', async () => {
+    const reports: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+        const result = await build(root);
+        const directory = join(root, '.lore', 'builds', result.buildId);
+        const report = readFileSync(join(directory, 'reports', 'build-id-inputs.json'), 'utf8');
+        reports.push(report);
+        const inputs = JSON.parse(report) as BuildIdInputs;
+        const manifest = buildManifestSchema.parse(
+          JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8')),
+        );
+        expect(deriveBuildId(inputs)).toBe(result.buildId);
+        expect(inputs.canonicalRoots).toEqual(manifest.canonicalRoots);
+        expect(inputs.compilerVersion).toBe(manifest.compilerVersion);
+        expect(hashCanonical(inputs.effectiveConfig)).toBe(manifest.configurationHash);
+        expect(Object.keys(inputs.parserVersions).sort()).toEqual([
+          'csv',
+          'docx',
+          'html',
+          'markdown',
+          'pdf-text',
+          'text',
+          'xlsx',
+        ]);
+        expect(report).not.toContain(root);
+        expect(inputs).not.toHaveProperty('corpusId');
+        expect(inputs).not.toHaveProperty('namespaceId');
+      });
+    }
+    expect(reports[1]).toBe(reports[0]);
   });
 
   it('produces the same build id from identical sources in two different directories', async () => {

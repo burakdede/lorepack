@@ -35,6 +35,7 @@ import {
 } from '@lorepack/compiler';
 import {
   type BuildId,
+  type BuildIdInputs,
   type BuildManifest,
   buildManifestSchema,
   CANONICALIZATION_VERSION,
@@ -444,7 +445,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
       // Identity, derived before anything is written so the directory is named correctly.
-      const buildId = deriveBuildId({
+      const buildIdInputs: BuildIdInputs = {
         formatVersion: 1,
         schemaVersion: nextLock.schema,
         compilerVersion: nextLock.compiler,
@@ -455,7 +456,8 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         ruleResolution: ruleResolution.canonical,
         embeddingProfile: null,
         canonicalRoots: canonicalRoots(parsed),
-      });
+      };
+      const buildId = deriveBuildId(buildIdInputs);
 
       /**
        * Reuse only a build that is actually there and actually readable (#251).
@@ -601,6 +603,10 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           writeFileAtomic(
             join(candidate.path, 'reports', 'warnings.json'),
             `${JSON.stringify(warnings, null, 2)}\n`,
+          );
+          writeFileAtomic(
+            join(candidate.path, 'reports', 'build-id-inputs.json'),
+            `${JSON.stringify(buildIdInputs, null, 2)}\n`,
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'canonical-hashes.json'),

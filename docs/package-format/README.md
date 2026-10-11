@@ -51,6 +51,13 @@ A sealed build directory is named by its build ID and MUST contain:
 | `context.sqlite` | Read-only catalog database for this build. Physical SQLite bytes are excluded from build identity. |
 | `reports/warnings.json` | Build warnings shown after sources move or rollback occurs. |
 | `reports/canonical-hashes.json` | Hash algorithm, canonicalization version and canonical roots used by the build. |
+| `reports/build-id-inputs.json` | Complete inputs passed to `deriveBuildId`, including effective configuration, all registered parser versions and resolved rules. Recorded by newly compiled builds for independent identity verification. |
+
+Builds sealed before #418 may lack `build-id-inputs.json`. Reusing an unchanged build
+does not retrofit files into its immutable directory. Serving that build does not require
+this report; an archive verifier cannot independently derive its identity without the inputs.
+The report excludes runtime namespace/corpus identity and operational receipts. Its roots
+must be checked against catalog content before deriving an ID, rather than trusted as proof.
 
 The build directory MAY reference normalized source objects stored outside the build under
 `.lore/objects/sha256/`. Readers MUST treat the manifest and catalog as build data and
