@@ -22,6 +22,20 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'disk-full and interrupted archive writes preserve storage integrity, issue 572',
+    path: 'packages/backend-local/test/storage-faults.test.ts',
+    tests: [
+      'a full disk is reported as LORE_E_DISK_FULL by the catalog writer, not as a failed rollback',
+      'a full disk is reported as LORE_E_DISK_FULL by a migration',
+      'a full disk surfaces the original error when SQLite has already ended the transaction',
+      'a full disk maps ENOSPC from a file write to LORE_E_DISK_FULL',
+      'writing an archive replaces an existing archive only when the new one is complete',
+      'candidates from killed builds are swept, and nothing else in tmp is touched',
+      'object fan-out directories are made durable in their parents when they are created',
+    ],
+    patterns: [/PRAGMA max_page_count/, /writer.kill\('SIGKILL'\)/, /verifyArchive\(destination\)/],
+  },
+  {
     name: 'invalid runtime settings cannot initialize or activate a build, issue 684',
     path: 'packages/cli/test/serving-env.e2e.test.ts',
     tests: [

@@ -41,7 +41,9 @@ to a running build (#572). Before the sweep, these survived every later build an
 `.lore` itself must be inside the project. A repository can ship it as a symbolic link, and
 every write would then land wherever it points, so loading the configuration refuses a `.lore`
 that resolves outside the project with `LORE_E_PATH_ESCAPE`, and `lorepack doctor` fails its
-build-directory check. A link that stays inside the project is allowed.
+build-directory check. A link that stays inside the project is allowed. The decision to
+refuse even user-owned external targets is recorded in
+[ADR 0003](../adr/0003-project-contained-build-storage.md).
 
 Directory `fsync` is a POSIX guarantee with no Windows equivalent, so that call is best
 effort. What we actually depend on, atomic same-volume rename, holds on both.

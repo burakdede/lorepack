@@ -130,3 +130,20 @@ The successful commands exited 0; the missing-path command exited 1.
 Captured output contained no raw C0 controls except tab and newline, DEL or C1.
 Automated tests additionally cover plan, status, diff, terminal exports, unchanged
 JSON values and byte-for-byte redirected exports.
+
+## Storage refusals and packing (#572)
+
+Verified 2026-10-11 with the built CLI 0.1.0 containing #572 on macOS arm64,
+Node 24.21.0 and SQLite 3.53.4. Use a temporary project and an empty sibling
+directory as the target of its `.lore` link.
+
+| Command or action | Observed result |
+|---|---|
+| `lorepack build` with `.lore` linked outside the project | Exit 1, `LORE_E_PATH_ESCAPE`, no files written to the target. |
+| `lorepack doctor` in that project | Prints `FAIL` for the build directory and names its target; exits 0. |
+| `lorepack doctor --ci` in that project | The same failed check, exit 1, no target writes. |
+| Remove the link, then `lorepack build` | Exit 0 and an active build. |
+| `lorepack pack --out context.lorepack`, then `lorepack pack --verify context.lorepack` | Both exit 0; six members verified for the one-document fixture. |
+
+The real SQLite-full and killed-archive cases run in
+`packages/backend-local/test/storage-faults.test.ts` and the mandatory security gate.
