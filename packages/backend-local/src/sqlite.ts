@@ -52,6 +52,14 @@ export function assertSqliteApiSurface(db: DatabaseSync): void {
   );
 }
 
+/**
+ * How long a statement waits for another connection's lock before failing with
+ * `SQLITE_BUSY`. Set through the constructor so it is in force before the first statement:
+ * a pragma issued after `journal_mode` leaves the journal-mode change itself unprotected, and
+ * that is the statement a concurrent writer makes fail (#571).
+ */
+const BUSY_TIMEOUT_MS = 5_000;
+
 export interface OpenOptions {
   /** Bounded SQLite runtime limits. Architecture section 19.5. */
   readonly limits?: Partial<SqliteLimits>;
@@ -114,6 +122,7 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
       readOnly: true,
       allowExtension: false,
       enableDoubleQuotedStringLiterals: false,
+      timeout: BUSY_TIMEOUT_MS,
     });
   } catch (cause) {
     throw new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${path} for reading.`, {
@@ -125,7 +134,6 @@ export function openReadOnly(path: string, options: OpenOptions = {}): DatabaseS
   // Defensive mode is the default from Node 24.14, but stating it means a future default
   // change cannot silently weaken a read-only build handle.
   api(db).enableDefensive(true);
-  db.exec('PRAGMA busy_timeout = 5000');
   applyLimits(db, options.limits ?? SAFE_QUERY_LIMITS);
   return db;
 }
@@ -138,6 +146,7 @@ export function openWritable(path: string): DatabaseSync {
       allowExtension: false,
       enableDoubleQuotedStringLiterals: false,
       enableForeignKeyConstraints: true,
+      timeout: BUSY_TIMEOUT_MS,
     });
     assertSqliteApiSurface(db);
     api(db).enableDefensive(true);
@@ -148,7 +157,6 @@ export function openWritable(path: string): DatabaseSync {
     // nothing here; `busy_timeout` covers the reader that arrives mid-write.
     db.exec('PRAGMA journal_mode = DELETE');
     db.exec('PRAGMA synchronous = FULL');
-    db.exec('PRAGMA busy_timeout = 5000');
     return db;
   } catch (cause) {
     throw new LoreError('LORE_E_SQLITE_UNAVAILABLE', `Cannot open ${path} for writing.`, {

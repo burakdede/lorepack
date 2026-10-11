@@ -109,6 +109,25 @@ export function assertMigrationsKnown(db: DatabaseSync, migrations: readonly Mig
   );
 }
 
+function appliedMigration(db: DatabaseSync, id: string): AppliedMigration | undefined {
+  return db.prepare('SELECT id, name, checksum FROM schema_migrations WHERE id = ?').get(id) as
+    | AppliedMigration
+    | undefined;
+}
+
+function assertUnchanged(migration: Migration, previous: AppliedMigration | undefined): void {
+  if (previous === undefined || previous.checksum === migration.checksum) return;
+  throw new LoreError(
+    'LORE_E_INTERNAL',
+    `Migration ${migration.id}_${migration.name} changed after it was applied.`,
+    {
+      remediation:
+        'Never edit an applied migration. Add a new one, or delete the database if it is a disposable candidate build.',
+      details: { expected: previous.checksum, actual: migration.checksum },
+    },
+  );
+}
+
 /**
  * Idempotent and transactional. An applied migration whose file later changes is a
  * hard error: silently diverging schemas are far worse than a loud refusal. So is one this
@@ -127,24 +146,23 @@ export function runMigrations(
   const alreadyApplied: string[] = [];
 
   for (const migration of migrations) {
-    const previous = existing.get(migration.id);
-    if (previous !== undefined) {
-      if (previous.checksum !== migration.checksum) {
-        throw new LoreError(
-          'LORE_E_INTERNAL',
-          `Migration ${migration.id}_${migration.name} changed after it was applied.`,
-          {
-            remediation:
-              'Never edit an applied migration. Add a new one, or delete the database if it is a disposable candidate build.',
-            details: { expected: previous.checksum, actual: migration.checksum },
-          },
-        );
-      }
+    // The read above is a fast path that takes no write lock when everything is applied.
+    // Whether to apply is decided again inside the transaction, because another process
+    // opening the same database may have applied this migration since (#571).
+    if (existing.has(migration.id)) {
+      assertUnchanged(migration, existing.get(migration.id));
       alreadyApplied.push(migration.id);
       continue;
     }
 
     db.exec('BEGIN IMMEDIATE');
+    const previous = appliedMigration(db, migration.id);
+    if (previous !== undefined) {
+      db.exec('ROLLBACK');
+      assertUnchanged(migration, previous);
+      alreadyApplied.push(migration.id);
+      continue;
+    }
     try {
       db.exec(migration.sql);
       db.prepare(
