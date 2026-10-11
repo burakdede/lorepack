@@ -292,7 +292,41 @@ export function runConnectorContract(fixture: ConnectorFixture, project: () => s
         const connector = fixture.create(project());
         await expect(
           connector.remove(receiptFor(`${project()}/nothing-here.config`)),
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({ removed: false });
+      });
+
+      it('says it removed the entry, when it did', async () => {
+        const connector = fixture.create(project());
+        const receipt = await connector.apply(await connector.plan(input()));
+
+        await expect(connector.remove(receipt)).resolves.toEqual({ removed: true });
+      });
+
+      /**
+       * A user-scope file is shared by every project on the machine, so a disconnect from one
+       * project must not take the entry another project's connect wrote (#581).
+       */
+      it("leaves another project's entry in a user-scope file, and names that project", async () => {
+        const home = mkdtempSync(join(tmpdir(), 'lore-contract-user-'));
+        try {
+          const connector = fixture.createForUser(home);
+          const owner = join(project(), 'project-a');
+          const receipt = await connector.apply(
+            await connector.plan(input({ scope: 'user', projectRoot: owner })),
+          );
+          const path = receipt.configPath as string;
+          const before = read(path);
+
+          const outcome = await connector.remove({
+            ...receipt,
+            projectRoot: join(project(), 'project-b'),
+          });
+
+          expect(outcome).toEqual({ removed: false, ownedBy: owner });
+          expect(read(path)).toBe(before);
+        } finally {
+          rmSync(home, { recursive: true, force: true });
+        }
       });
     });
   });

@@ -249,3 +249,81 @@ describe('escaping, and the file on disk', () => {
     expect(readTomlConfig(blank).document).toEqual({});
   });
 });
+
+/**
+ * Connect and then disconnect must hand the file back exactly as it was (#581).
+ *
+ * The removal used to collapse every run of blank lines in the whole file and trim its end,
+ * which deleted blank lines inside a user's multi-line string. Each fixture is a shape a
+ * hand-written `config.toml` takes; the property is checked over every combination of them.
+ */
+describe('a connect followed by a disconnect (#581)', () => {
+  const INSTRUCTIONS =
+    'developer_instructions = """\nFirst paragraph.\n\n\nSecond, after two blank lines.\n"""\n';
+
+  it('keeps blank lines inside a multi-line string', () => {
+    const before = `model = "x"\n${INSTRUCTIONS}\n[other]\na = 1\n`;
+    const connected = withTomlTable(config(before), PATH, block());
+    const { text } = withoutTomlTable(config(connected), PATH);
+
+    expect(text).toBe(before);
+    expect((parse(text) as { developer_instructions: string }).developer_instructions).toBe(
+      'First paragraph.\n\n\nSecond, after two blank lines.\n',
+    );
+  });
+
+  it('keeps a comment written after our table for the table that follows it', () => {
+    const before = `${block()}\n\n# The notes server. Keep it last.\n[mcp_servers.notes]\ncommand = "notes"\n`;
+    const { text } = withoutTomlTable(config(before), PATH);
+
+    expect(text).toBe(
+      '# The notes server. Keep it last.\n[mcp_servers.notes]\ncommand = "notes"\n',
+    );
+  });
+
+  const HEADS = ['', '# mine\n', 'model = "x"\n\n\n', `${INSTRUCTIONS}`, '[other]\na = 1\n\n'];
+  const TAILS = ['', '\n', '\n\n\n', '# trailing note\n'];
+  const fixtures = HEADS.flatMap((head) =>
+    TAILS.flatMap((tail) => {
+      const text = `${head}${tail}`;
+      return text === '' ? [text] : [text, text.replace(/\n/g, '\r\n')];
+    }),
+  );
+
+  it.each(fixtures.map((text) => [JSON.stringify(text), text]))(
+    'is byte-identical for %s',
+    (_name, before) => {
+      const connected = withTomlTable(config(before), PATH, block());
+      expect(() => parse(connected)).not.toThrow();
+      const { text, removed } = withoutTomlTable(config(connected), PATH, '/p');
+
+      expect(removed).toBe(true);
+      expect(text).toBe(before);
+    },
+  );
+
+  it('refuses a splice that would change anything outside our table', () => {
+    // A header-shaped line inside a multi-line string is not a header. Splicing there would
+    // rewrite the string, so the edit is checked by parsing the result before it is used.
+    const before = `notes = """\n[mcp_servers.lorepack]\ncommand = "inside a string"\n"""\n`;
+
+    expect(() => withTomlTable(config(before), PATH, block())).toThrow(
+      /would change more than the Lorepack entry/,
+    );
+  });
+});
+
+describe('a project path TOML cannot hold in a comment (#581)', () => {
+  it('still writes a marker that parses, and reads the path back', () => {
+    // DEL and the C1 controls pass through `JSON.stringify` untouched, and TOML forbids them
+    // in a comment, so a raw marker made the user's whole Codex configuration unloadable.
+    const root = '/tmp/del\u007fproj/\u0085café/\u{1F600}';
+    const written = block(root);
+
+    expect(() => parse(written)).not.toThrow();
+    expect(written.split('\n').find((line) => line.startsWith('# x-lorepack'))).toMatch(
+      /^[\x20-\x7e]*$/,
+    );
+    expect(ownerOfTable(written, PATH)?.projectRoot).toBe(root);
+  });
+});

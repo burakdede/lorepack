@@ -43,6 +43,7 @@ export type {
   ConnectPlan,
   ConnectReceipt,
   ConnectScope,
+  RemoveOutcome,
 } from './port.js';
 export {
   renderSnippet,

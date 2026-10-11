@@ -117,6 +117,18 @@ export interface ConnectionCheck {
   readonly pendingTrust?: boolean;
 }
 
+/**
+ * What `remove` did, so `disconnect` can say so rather than guess.
+ *
+ * `ownedBy` names the project that created an entry `remove` left in place. A user-scope file
+ * is shared by every project on the machine, and one project's disconnect must never take an
+ * entry another project's connect wrote (#581).
+ */
+export interface RemoveOutcome {
+  readonly removed: boolean;
+  readonly ownedBy?: string;
+}
+
 export interface ClientConnector {
   readonly id: string;
   /** Shown in `lorepack connect --help` and in the plan. */
@@ -127,5 +139,5 @@ export interface ClientConnector {
   plan(input: ConnectInput): Promise<ConnectPlan>;
   apply(plan: ConnectPlan): Promise<ConnectReceipt>;
   verify(receipt: ConnectReceipt): Promise<ConnectionCheck>;
-  remove(receipt: ConnectReceipt): Promise<void>;
+  remove(receipt: ConnectReceipt): Promise<RemoveOutcome>;
 }

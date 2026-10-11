@@ -48,10 +48,18 @@ export function isOwned(entry: unknown, projectRoot?: string): boolean {
   return (marker as { projectRoot?: unknown }).projectRoot === projectRoot;
 }
 
+/** The project that created an entry, when Lorepack did. */
+export function ownerOf(entry: unknown): string | undefined {
+  if (!isOwned(entry)) return undefined;
+  const root = ((entry as Record<string, unknown>)[OWNERSHIP_KEY] as { projectRoot?: unknown })
+    .projectRoot;
+  return typeof root === 'string' ? root : undefined;
+}
+
 /** Reads a client configuration, tolerating absence but never silently tolerating damage. */
 export function readJsonConfig(path: string): Record<string, unknown> {
   if (!existsSync(path)) return {};
-  const text = readFileSync(path, 'utf8');
+  const text = withoutBom(readFileSync(path, 'utf8'));
   if (text.trim() === '') return {};
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -68,13 +76,22 @@ export function readJsonConfig(path: string): Record<string, unknown> {
   }
 }
 
-/** Writes atomically, keeping the existing file's mode (see `writeFileAtomically`). */
+const BOM = '\ufeff';
+
+/** `JSON.parse` refuses a byte order mark, and Windows editors write one (#581). */
+const withoutBom = (text: string): string => (text.startsWith(BOM) ? text.slice(1) : text);
+
+/**
+ * Writes atomically, keeping the existing file's mode (see `writeFileAtomically`) and its
+ * byte order mark, if it had one.
+ */
 export function writeJsonAtomically(
   path: string,
   value: unknown,
   options: { readonly newFileMode?: number } = {},
 ): void {
-  writeFileAtomically(path, `${JSON.stringify(value, null, 2)}\n`, options);
+  const bom = existsSync(path) && readFileSync(path, 'utf8').startsWith(BOM);
+  writeFileAtomically(path, `${bom ? BOM : ''}${JSON.stringify(value, null, 2)}\n`, options);
 }
 
 /**

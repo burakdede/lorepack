@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { parse } from 'smol-toml';
-import { writeFileAtomically } from './config-file.js';
+import { asciiJson, writeFileAtomically } from './config-file.js';
 
 /**
  * Editing someone else's TOML configuration without losing a byte of it.
@@ -239,7 +240,9 @@ export function renderOwnedTable(input: OwnedTableInput): string {
 
   const lines = [
     `${OWNERSHIP_NOTE} \`lorepack disconnect codex\` removes exactly this block.`,
-    `${TOML_OWNERSHIP_PREFIX}${JSON.stringify(marker)}`,
+    // ASCII only: a project path may hold DEL or a C1 control, which JSON leaves raw and
+    // TOML refuses in a comment, and the whole file would stop loading (#581).
+    `${TOML_OWNERSHIP_PREFIX}${asciiJson(marker)}`,
     `[${input.path.map(renderKey).join('.')}]`,
   ];
   for (const [key, value] of Object.entries(input.values)) {
@@ -255,10 +258,101 @@ export function renderOwnedTable(input: OwnedTableInput): string {
 const renderKey = (key: string): string => (/^[A-Za-z0-9_-]+$/.test(key) ? key : tomlString(key));
 
 /**
+ * Where our own lines end: the span minus the blank and comment lines that trail it.
+ *
+ * `tableSpan` runs to the next unrelated header, so it also covers a comment a person wrote
+ * for the table *after* ours. Those lines are theirs, and the splice leaves them where they are.
+ */
+function ownedEnd(lines: readonly string[], span: Span): number {
+  let end = span.end;
+  while (end > span.start) {
+    const line = (lines[end - 1] ?? '').trim();
+    if (line !== '' && !line.startsWith('#')) break;
+    end -= 1;
+  }
+  return end;
+}
+
+/**
+ * The parsed document with `path` set to `value`, or removed when `value` is undefined.
+ *
+ * With `prune`, a parent table left empty by the removal goes too, which is what the text
+ * says when the parent only existed as the prefix of our own header.
+ */
+function withValueAt(
+  document: Record<string, unknown>,
+  path: readonly string[],
+  value: unknown,
+  prune = false,
+): Record<string, unknown> {
+  const [head, ...rest] = path;
+  if (head === undefined) return document;
+  const copy = { ...document };
+  if (rest.length === 0) {
+    if (value === undefined) delete copy[head];
+    else copy[head] = value;
+    return copy;
+  }
+  const child = copy[head];
+  const next = withValueAt(
+    typeof child === 'object' && child !== null ? (child as Record<string, unknown>) : {},
+    rest,
+    value,
+    prune,
+  );
+  if (prune && value === undefined && Object.keys(next).length === 0) delete copy[head];
+  else copy[head] = next;
+  return copy;
+}
+
+/**
+ * Parses the edited text and compares it with what the edit was meant to produce.
+ *
+ * The splice works on lines, and TOML is not line-oriented everywhere: a header-shaped line
+ * inside a multi-line string is not a header. Any edit whose result parses differently from
+ * "the original, with only our entry changed" is refused before it reaches the disk, so the
+ * worst a wrong guess can do is decline to edit.
+ */
+function assertOnlyEntryChanged(
+  edited: string,
+  original: Record<string, unknown>,
+  path: readonly string[],
+  value: unknown,
+): void {
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    parsed = parse(edited) as Record<string, unknown>;
+  } catch {
+    parsed = undefined;
+  }
+  // Compared as plain data: the parser's objects and dates are not the same classes as the
+  // copies made here, and key order is not something TOML gives meaning to.
+  const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+  const acceptable = [withValueAt(original, path, value), withValueAt(original, path, value, true)];
+  if (
+    parsed === undefined ||
+    !acceptable.some((expected) => isDeepStrictEqual(plain(parsed), plain(expected)))
+  ) {
+    throw new Error(
+      'Editing this file would change more than the Lorepack entry, so it was left as it is. Run `lorepack connect codex --snippet` and edit it by hand.',
+    );
+  }
+}
+
+/** The value a rendered block declares, which is what the edited file must now contain. */
+function blockValue(block: string, path: readonly string[]): unknown {
+  let current: unknown = parse(block);
+  for (const segment of path) current = (current as Record<string, unknown>)[segment];
+  return current;
+}
+
+/**
  * Replaces the table's lines, or appends it, leaving every other line exactly as it was.
  *
  * Idempotent by construction: a second call finds the block the first one wrote and replaces
  * the same span, so re-running `lorepack connect` to fix a stale path never accumulates anything.
+ * Appending adds exactly one blank line before the block, which is the one removal takes back,
+ * so a connect followed by a disconnect returns the file byte for byte.
  */
 export function withTomlTable(config: TomlConfig, path: readonly string[], block: string): string {
   const body = config.text.replace(/\r\n/g, '\n');
@@ -267,31 +361,32 @@ export function withTomlTable(config: TomlConfig, path: readonly string[], block
 
   let merged: string;
   if (span === undefined) {
-    const before = body.trimEnd();
-    merged = before === '' ? `${rendered}\n` : `${before}\n\n${rendered}\n`;
+    merged =
+      body === '' ? `${rendered}\n` : `${body}${body.endsWith('\n') ? '' : '\n'}\n${rendered}\n`;
   } else {
     const lines = body.split('\n');
-    const after = lines.slice(span.end);
-    // The blank line before the next header is re-emitted rather than preserved, because the
-    // replaced span absorbed it. Doing it here is what keeps a second run byte-identical.
-    const tail = after.length === 0 ? [''] : ['', ...after];
-    merged = [...lines.slice(0, span.start), ...rendered.split('\n'), ...tail].join('\n');
+    const end = ownedEnd(lines, span);
+    merged = [...lines.slice(0, span.start), ...rendered.split('\n'), ...lines.slice(end)].join(
+      '\n',
+    );
   }
 
-  return config.newline === '\r\n' ? merged.replace(/\n/g, '\r\n') : merged;
+  const text = config.newline === '\r\n' ? merged.replace(/\n/g, '\r\n') : merged;
+  assertOnlyEntryChanged(text, config.document, path, blockValue(rendered, path));
+  return text;
 }
 
 /**
- * Removes a table, and only if Lorepack created it.
+ * Removes a table, and only if Lorepack created it for this project.
  *
  * Returns whether anything was removed, so the caller can say "nothing to do" rather than
- * claiming to have disconnected something it left in place.
+ * claiming to have disconnected something it left in place, and who owns a table it left.
  */
 export function withoutTomlTable(
   config: TomlConfig,
   path: readonly string[],
   projectRoot?: string,
-): { readonly text: string; readonly removed: boolean } {
+): { readonly text: string; readonly removed: boolean; readonly owner?: TomlOwner } {
   const body = config.text.replace(/\r\n/g, '\n');
   const span = tableSpan(body, path);
   if (span === undefined) return { text: config.text, removed: false };
@@ -301,16 +396,26 @@ export function withoutTomlTable(
   // defensible choice. Someone who wrote this table by hand did not ask us to delete it.
   if (owner === undefined) return { text: config.text, removed: false };
   if (projectRoot !== undefined && owner.projectRoot !== projectRoot) {
-    return { text: config.text, removed: false };
+    return { text: config.text, removed: false, owner };
   }
 
   const lines = body.split('\n');
-  const kept = [...lines.slice(0, span.start), ...lines.slice(span.end)];
-  const collapsed = `${kept
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trimEnd()}\n`;
-  const text = collapsed === '\n' ? '' : collapsed;
+  const end = ownedEnd(lines, span);
+  // One blank line separating the block goes with it, and nothing else does: collapsing blank
+  // lines anywhere else would reach into a user's multi-line string. It is the one an append
+  // put before the block, or, for a block at the top of the file, the one after it.
+  const blank = (index: number): boolean => (lines[index] ?? '').trim() === '';
+  let start = span.start;
+  let after = end;
+  if (start > 0 && blank(start - 1)) start -= 1;
+  else if (start === 0 && after < lines.length - 1 && blank(after)) after += 1;
+  const kept = [...lines.slice(0, start), ...lines.slice(after)].join('\n');
+  const text = config.newline === '\r\n' ? kept.replace(/\n/g, '\r\n') : kept;
 
-  return { text: config.newline === '\r\n' ? text.replace(/\n/g, '\r\n') : text, removed: true };
+  assertOnlyEntryChanged(text, config.document, path, undefined);
+  return {
+    text,
+    removed: true,
+    owner,
+  };
 }
