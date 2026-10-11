@@ -1,4 +1,4 @@
-import { CLEAR_LINE, style } from '../format/ansi.js';
+import { CLEAR_LINE, sanitizeForTerminal, style } from '../format/ansi.js';
 import type { ProgressEvent, StageName } from './events.js';
 
 export interface RendererOptions {
@@ -87,8 +87,10 @@ export class ProgressRenderer {
   handle(event: ProgressEvent): void {
     switch (event.type) {
       case 'stage-started':
+        // Labels, details and diagnostics can name a source file, so each is made inert on
+        // the way in; the renderer's own `\r`, line clear and colour are added afterwards.
         this.#stages.set(event.stage, {
-          label: event.label,
+          label: sanitizeForTerminal(event.label),
           completed: 0,
           total: event.total,
           unit: undefined,
@@ -105,7 +107,7 @@ export class ProgressRenderer {
         state.completed = event.completed;
         if (event.total !== undefined) state.total = event.total;
         if (event.unit !== undefined) state.unit = event.unit;
-        if (event.detail !== undefined) state.detail = event.detail;
+        if (event.detail !== undefined) state.detail = sanitizeForTerminal(event.detail);
         this.#render(event.stage, event.at, false);
         break;
       }
@@ -119,7 +121,7 @@ export class ProgressRenderer {
       }
       case 'diagnostic':
         this.#finishLine();
-        this.#options.write(`${event.level}: ${event.message}\n`);
+        this.#options.write(`${event.level}: ${sanitizeForTerminal(event.message)}\n`);
         break;
     }
   }
@@ -184,7 +186,9 @@ export class ProgressRenderer {
     this.#finishLine();
     this.#options.write('\n');
     for (const [key, value] of rows) {
-      this.#options.write(`${key.padEnd(LABEL_WIDTH)}${value}\n`);
+      this.#options.write(
+        `${sanitizeForTerminal(key).padEnd(LABEL_WIDTH)}${sanitizeForTerminal(value)}\n`,
+      );
     }
   }
 }

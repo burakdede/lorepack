@@ -113,3 +113,20 @@ lorepack doctor
 ```
 
 names what is wrong and what to do about it. Include `lorepack doctor --json` in any bug report.
+## Hostile corpus output (#579)
+
+Verified 2026-10-11 on macOS arm64 with Node 24.21.0 and the built CLI containing
+the #579 sanitizer. A temporary project used ESC and BEL in a Markdown filename,
+and OSC 8, screen-clear, C1 CSI and carriage-return sequences in its content.
+
+1. Run `init` with a credential-shaped hostile filename. Its warning shows visible
+   escapes such as `id_rsa\x1b[31m.pem`.
+2. Run `build`, `inspect sources` and `search rollback`. Paths and snippets show
+   visible escapes; the forged link and screen-clear remain readable text.
+3. Inspect a missing path containing ESC. The error message and subject both show
+   `\x1b[2J`.
+
+The successful commands exited 0; the missing-path command exited 1.
+Captured output contained no raw C0 controls except tab and newline, DEL or C1.
+Automated tests additionally cover plan, status, diff, terminal exports, unchanged
+JSON values and byte-for-byte redirected exports.
