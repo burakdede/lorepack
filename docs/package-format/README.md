@@ -197,7 +197,7 @@ lore_ + hashCanonical(buildIdInputs)
 | `canonicalizationVersion` | Canonical serializer version. |
 | `normalizationVersion` | Canonical path and text normalization version. |
 | `effectiveConfig` | Effective configuration with defaults applied and secrets or absolute paths removed. |
-| `parserVersions` | Parser identifier to version for every parser that contributed. |
+| `parserVersions` | Parser identifier to version for every registered parser, including unused parsers. |
 | `ruleResolution` | Resolved rule decisions per artifact in canonical sorted form. |
 | `embeddingProfile` | Complete semantic profile, or `null`. |
 | `canonicalRoots` | `artifacts`, `nodes`, `chunks`, `tables` and `objects` roots. |
@@ -205,6 +205,12 @@ lore_ + hashCanonical(buildIdInputs)
 These facts MUST NOT affect build identity: timestamps, hostname, absolute workspace path,
 temporary directory, deployment target, ZIP metadata, `checksums.json`, build receipts and
 physical SQLite bytes.
+
+The parser set is the compiler's full registered set, also recorded in `lore.lock`.
+Adding a registered parser or changing an unused parser's version MUST change the build ID,
+even when the canonical content roots stay identical. Reordering the same parser map MUST
+NOT change it. This preserves the existing v0.1 identity contract; it does not introduce a
+new hash policy or require rewriting retained builds.
 
 ## Lockfile
 
@@ -255,11 +261,18 @@ to derive or validate `buildId`.
 The committed example is [`worked-example.json`](worked-example.json). It contains a one-file
 Markdown build with one artifact, one node, one chunk and no tables.
 
+Its frozen registry has seven parsers: `markdown`, `html`, `docx`, `pdf-text`, `csv`, `xlsx`
+and `text`, all at `0.1.0`. Only Markdown contributes content. `parserVersionVectors`
+records two additional expected IDs with the same canonical roots: the parser map in reverse
+insertion order (same ID), and only the unused XLSX parser bumped to `0.2.0` (different ID).
+These are serializer conformance vectors, not installable archives. Their registry is frozen
+independently of future releases.
+
 The example records the member hashes, canonical roots, complete build ID inputs and manifest.
 Using the rules above, an implementation MUST derive:
 
 ```text
-lore_7109c946e90daf364dacd1699d807a84a2785df75bf1541ef57d9dcf67af184e
+lore_0714e4ef0af111e1e64aac341ddbbd154a51365ce48fb5cbfcefcb26d57ee0b5
 ```
 
 The manifest in the example is valid against
