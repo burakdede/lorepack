@@ -14,6 +14,7 @@ import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
 import { createLocalComparer } from '../services/comparer.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
+import { environmentInterval } from '../services/serving.js';
 import { readFreshness, readStatus } from '../services/status.js';
 
 /**
@@ -41,10 +42,14 @@ export function mcpCommand(): CommandDefinition {
       {
         flags: '--revalidate-interval <ms>',
         description:
-          'how often to recheck the sources while serving (default 5000, 0 every request, off never)',
+          'how often to recheck the sources while serving (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request, off never)',
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
+      const intervalMs =
+        flags.revalidateInterval === undefined
+          ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
+          : parseInterval(flags.revalidateInterval);
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
       const config = loadConfig({ cwd });
 
@@ -56,7 +61,8 @@ export function mcpCommand(): CommandDefinition {
       // it saw in its first second for all of it (#112).
       const revalidator = createRevalidator({
         config,
-        intervalMs: parseInterval(flags.revalidateInterval),
+        // `--revalidate-interval`, else `LORE_REVALIDATE_INTERVAL_MS`, else the default (#582).
+        intervalMs,
         frozen: mode !== 'ensure-current',
       });
       const backend = createLocalRuntimeBackend({
@@ -144,7 +150,6 @@ type Mode = 'ensure-current' | 'allow-stale' | 'active-only';
  * pinned deployment may want it, and named rather than implied.
  */
 function parseInterval(raw: unknown): number {
-  if (raw === undefined) return DEFAULT_REVALIDATE_INTERVAL_MS;
   if (raw === 'off') return Number.POSITIVE_INFINITY;
   // `Number('')` is 0, which here means "recheck every request", the most expensive setting
   // there is. An unset shell variable must not be able to select it (#195).

@@ -1,7 +1,8 @@
 import { count, loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
-import { DEV_PORT, isRunning, readReceipt } from '../services/dev-session.js';
+import { isRunning, readReceipt } from '../services/dev-session.js';
 import { type CheckResult, type DoctorReport, runDoctor } from '../services/doctor.js';
+import { resolveDevPort } from '../services/serving.js';
 
 /**
  * `lorepack doctor`: when something is wrong, one command names it and says what to do.
@@ -24,13 +25,17 @@ export function doctorCommand(): CommandDefinition {
         flags: '--ci',
         description: 'exit non-zero when any check fails, for use in a pipeline',
       },
-      { flags: '--port <number>', description: 'the dev port to test (default 43110)' },
+      {
+        flags: '--port <number>',
+        description: 'the dev port to test (default LORE_DEV_PORT or 43110)',
+      },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
-      const port = flags.port === undefined ? undefined : Number(flags.port);
+      // The port `lorepack dev` would take, by the same precedence dev itself uses (#582).
+      const port = resolveDevPort(flags.port);
       const report = await runDoctor({
         cwd: context.options.cwd,
-        ...(port === undefined ? {} : { port }),
+        port,
         // A dev session of this project holding the port is not a problem to report, and
         // running doctor while your own `lorepack dev` is up is the common case. Studio reaches
         // the same conclusion from the other side, so the two never disagree.
@@ -56,12 +61,12 @@ export function doctorCommand(): CommandDefinition {
  * receipt left behind by a crash names a process that is gone, and believing it would report
  * a genuinely occupied port as fine.
  */
-function heldByThisProject(cwd: string, port: number | undefined): boolean {
+function heldByThisProject(cwd: string, port: number): boolean {
   try {
     const config = loadConfig({ cwd });
     const receipt = readReceipt(config);
     if (receipt === null || !isRunning(receipt.pid)) return false;
-    return receipt.port === (port ?? DEV_PORT);
+    return receipt.port === port;
   } catch {
     // No project, or one that will not load. Either way there is no session to credit, and
     // doctor's whole job is to keep working in exactly those directories.

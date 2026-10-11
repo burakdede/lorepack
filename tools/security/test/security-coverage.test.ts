@@ -22,6 +22,21 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'invalid runtime settings cannot initialize or activate a build, issue 684',
+    path: 'packages/cli/test/serving-env.e2e.test.ts',
+    tests: [
+      ...['dev environment', 'dev flag', 'MCP environment', 'MCP flag'].flatMap((name) => [
+        `runtime settings before startup writes (#684) rejects '${name}' before creating build state`,
+        `runtime settings before startup writes (#684) rejects '${name}' without changing the active build`,
+      ]),
+      'runtime settings before startup writes (#684) rejects an invalid dev port before initializing a project',
+    ],
+    patterns: [
+      /activeBuildId\)\.toBe\(activeBuildId\)/,
+      /existsSync\(join\(project, '\.lore'\)\)\)\.toBe\(false\)/,
+    ],
+  },
+  {
     name: 'Windows lock creation retries preserve the wait bound and filesystem errors',
     path: 'packages/backend-local/test/lock_create.test.ts',
     tests: [

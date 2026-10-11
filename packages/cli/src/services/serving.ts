@@ -5,6 +5,7 @@ import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
+import { DEV_PORT } from './dev-session.js';
 import { moreCommandFor, renderBundleMarkdown } from './export.js';
 import { packBuild } from './packing.js';
 import { createRevalidator, DEFAULT_REVALIDATE_INTERVAL_MS } from './revalidate.js';
@@ -380,8 +381,12 @@ function asHostname(address: string): string {
   }
 }
 
-/** Milliseconds, or 0 for every request. `off` belongs to `lorepack mcp`, which can pin. */
-export function parseInterval(raw: unknown): number {
+/**
+ * Milliseconds, or 0 for every request. `off` belongs to `lorepack mcp`, which can pin.
+ *
+ * `name` is what the value came from, a flag or a variable, so a refusal names what to fix.
+ */
+export function parseInterval(raw: unknown, name = '--revalidate-interval'): number {
   // `Number('')` is 0, and 0 is the most expensive setting there is: it content-hashes the
   // corpus on every request. Reaching it by writing nothing, which is what a shell does
   // with an unset variable, is not a choice anyone made (#195).
@@ -390,20 +395,43 @@ export function parseInterval(raw: unknown): number {
   if (!Number.isFinite(value) || value < 0) {
     throw new LoreError(
       'LORE_E_INVALID_ARGUMENT',
-      `--revalidate-interval must be a number of milliseconds, got ${raw}.`,
-      { remediation: 'Pass milliseconds, or 0 to recheck on every request.' },
+      `${name} must be a number of milliseconds, got ${raw}.`,
+      { remediation: 'Pass milliseconds, or 0 to recheck on every request.', subject: name },
     );
   }
   return value;
 }
 
-export function parsePort(raw: unknown): number {
+export function parsePort(raw: unknown, name = '--port'): number {
   if (raw === undefined) return DEFAULT_PORT;
-  const value = Number(raw);
+  const blank = typeof raw === 'string' && raw.trim() === '';
+  const value = blank ? Number.NaN : Number(raw);
   if (!Number.isInteger(value) || value < 1 || value > 65_535) {
-    throw new LoreError('LORE_E_INVALID_ARGUMENT', `--port must be a port number, got ${raw}.`, {
-      remediation: `Pass a number between 1 and 65535, for example --port ${DEFAULT_PORT}.`,
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', `${name} must be a port number, got ${raw}.`, {
+      remediation: `Pass a number between 1 and 65535, for example ${name === '--port' ? '--port ' : `${name}=`}${DEFAULT_PORT}.`,
+      subject: name,
     });
   }
   return value;
+}
+
+/**
+ * The environment variables a server reads, and the one precedence they all follow: a flag,
+ * else the variable, else the default (#582). `lorepack config explain` resolves through the
+ * same functions, so what it reports is what runs, and an invalid value is refused by both.
+ */
+export const DEV_PORT_VARIABLE = 'LORE_DEV_PORT';
+export const REVALIDATE_INTERVAL_VARIABLE = 'LORE_REVALIDATE_INTERVAL_MS';
+
+/** The port `lorepack dev` listens on. */
+export function resolveDevPort(flag: unknown, env: NodeJS.ProcessEnv = process.env): number {
+  if (flag !== undefined) return parsePort(flag);
+  const raw = env[DEV_PORT_VARIABLE];
+  return raw === undefined ? DEV_PORT : parsePort(raw, DEV_PORT_VARIABLE);
+}
+
+/** The revalidation interval the environment sets, or undefined when it sets none. */
+export function environmentInterval(env: NodeJS.ProcessEnv = process.env): number | undefined {
+  const raw = env[REVALIDATE_INTERVAL_VARIABLE];
+  return raw === undefined ? undefined : parseInterval(raw, REVALIDATE_INTERVAL_VARIABLE);
 }

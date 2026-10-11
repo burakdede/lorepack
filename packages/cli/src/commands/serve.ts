@@ -2,6 +2,7 @@ import { loadConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 import {
+  environmentInterval,
   parseInterval,
   parsePort,
   SERVE_DEFAULTS,
@@ -37,7 +38,8 @@ export function serveCommand(): CommandDefinition {
       { flags: '--host <address>', description: 'address to bind (default 127.0.0.1)' },
       {
         flags: '--revalidate-interval <ms>',
-        description: 'how often to recheck the sources (default 5000, 0 every request)',
+        description:
+          'how often to recheck the sources (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request)',
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
@@ -53,7 +55,7 @@ export function serveCommand(): CommandDefinition {
         // left running all day stays honest without hashing the corpus per request (#112).
         revalidateIntervalMs:
           flags.revalidateInterval === undefined
-            ? DEFAULT_REVALIDATE_INTERVAL_MS
+            ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
             : parseInterval(flags.revalidateInterval),
       });
 
