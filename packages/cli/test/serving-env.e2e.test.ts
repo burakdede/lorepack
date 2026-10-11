@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -74,15 +74,25 @@ async function start(
 function run(
   args: readonly string[],
   env: Record<string, string>,
-): { code: number; output: string } {
+): { code: number; output: string; stdout: string } {
   const result = spawnSync(process.execPath, [ENTRY, ...args], {
     cwd: project,
     encoding: 'utf8',
     input: '',
     timeout: 90_000,
-    env: { ...process.env, NO_COLOR: '1', ...env },
+    env: {
+      ...process.env,
+      LORE_DEV_PORT: undefined,
+      LORE_REVALIDATE_INTERVAL_MS: undefined,
+      NO_COLOR: '1',
+      ...env,
+    },
   });
-  return { code: result.status ?? -1, output: `${result.stdout}${result.stderr}` };
+  return {
+    code: result.status ?? -1,
+    output: `${result.stdout}${result.stderr}`,
+    stdout: result.stdout,
+  };
 }
 
 async function sourceState(port: number): Promise<string> {
@@ -176,5 +186,82 @@ describe('LORE_REVALIDATE_INTERVAL_MS (#582)', () => {
       expect(code, `${args.join(' ')}\n${output}`).toBe(1);
       expect(output).toContain('LORE_REVALIDATE_INTERVAL_MS must be a number of milliseconds');
     }
+  });
+});
+
+const INVALID_STARTUP: readonly {
+  name: string;
+  args: readonly string[];
+  env: Record<string, string>;
+  subject: string;
+}[] = [
+  {
+    name: 'dev environment',
+    args: ['dev'],
+    env: { LORE_DEV_PORT: 'eighty' },
+    subject: 'LORE_DEV_PORT',
+  },
+  { name: 'dev flag', args: ['dev', '--port', 'eighty'], env: {}, subject: '--port' },
+  {
+    name: 'MCP environment',
+    args: ['mcp'],
+    env: { LORE_REVALIDATE_INTERVAL_MS: 'soon' },
+    subject: 'LORE_REVALIDATE_INTERVAL_MS',
+  },
+  {
+    name: 'MCP flag',
+    args: ['mcp', '--revalidate-interval', 'soon'],
+    env: {},
+    subject: '--revalidate-interval',
+  },
+];
+
+describe('runtime settings before startup writes (#684)', () => {
+  it.each(INVALID_STARTUP)(
+    'rejects $name before creating build state',
+    ({ args, env, subject }) => {
+      const result = run(args, env);
+
+      expect(result.code, result.output).toBe(1);
+      expect(result.output).toContain('LORE_E_INVALID_ARGUMENT');
+      expect(result.output).toContain(subject);
+      expect(existsSync(join(project, '.lore'))).toBe(false);
+    },
+  );
+
+  it.each(INVALID_STARTUP)(
+    'rejects $name without changing the active build',
+    ({ args, env, subject }) => {
+      const built = run(['build'], {});
+      expect(built.code, built.output).toBe(0);
+      const before = run(['--json', 'status'], {});
+      expect(before.code, before.output).toBe(0);
+      const activeBuildId = JSON.parse(before.stdout).activeBuildId;
+      expect(activeBuildId).toMatch(/^lore_[0-9a-f]{64}$/);
+      writeFileSync(
+        join(project, 'docs', 'a.md'),
+        '# A\n\nChanged content must not activate on an invalid startup request.\n',
+      );
+
+      const result = run(args, env);
+
+      expect(result.code, result.output).toBe(1);
+      expect(result.output).toContain('LORE_E_INVALID_ARGUMENT');
+      expect(result.output).toContain(subject);
+      const after = run(['--json', 'status'], {});
+      expect(after.code, after.output).toBe(0);
+      expect(JSON.parse(after.stdout).activeBuildId).toBe(activeBuildId);
+    },
+  );
+
+  it('rejects an invalid dev port before initializing a project', () => {
+    rmSync(join(project, 'lore.yaml'));
+
+    const result = run(['dev'], { LORE_DEV_PORT: 'eighty' });
+
+    expect(result.code, result.output).toBe(1);
+    expect(result.output).toContain('LORE_DEV_PORT');
+    expect(existsSync(join(project, 'lore.yaml'))).toBe(false);
+    expect(existsSync(join(project, '.lore'))).toBe(false);
   });
 });

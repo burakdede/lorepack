@@ -46,6 +46,10 @@ export function mcpCommand(): CommandDefinition {
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
+      const intervalMs =
+        flags.revalidateInterval === undefined
+          ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
+          : parseInterval(flags.revalidateInterval);
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
       const config = loadConfig({ cwd });
 
@@ -58,10 +62,7 @@ export function mcpCommand(): CommandDefinition {
       const revalidator = createRevalidator({
         config,
         // `--revalidate-interval`, else `LORE_REVALIDATE_INTERVAL_MS`, else the default (#582).
-        intervalMs:
-          flags.revalidateInterval === undefined
-            ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
-            : parseInterval(flags.revalidateInterval),
+        intervalMs,
         frozen: mode !== 'ensure-current',
       });
       const backend = createLocalRuntimeBackend({

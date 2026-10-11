@@ -58,6 +58,7 @@ export function devCommand(): CommandDefinition {
       { flags: '--allow-large-project', description: 'continue past the supported file count' },
     ],
     handler: async (args, flags, context): Promise<CommandResult> => {
+      const port = resolveDevPort(flags.port);
       const directory = resolveDirectory(args[0], context);
 
       // Step 1. Before anything is written. Node itself is checked in the entry point, which
@@ -112,7 +113,7 @@ export function devCommand(): CommandDefinition {
         // uses: a dev session and a read-only server are different things and a developer
         // may want both at once.
         // `--port`, else `LORE_DEV_PORT`, else the default (#582).
-        port: resolveDevPort(flags.port),
+        port,
         warn: context.warn,
         studio: true,
         // The hook #112 named. A supervisor that is watching the filesystem already knows

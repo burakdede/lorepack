@@ -137,6 +137,10 @@ in the command and in the report alike. Both used to be reported as effective wh
 `serve` and `mcp` read only their flags (#582). `lorepack dev` does not use the interval: it
 watches the filesystem instead.
 
+Startup validates the effective port or interval before initializing a project or
+building and activating context. Invalid flags or environment values leave an existing
+active build unchanged (#684).
+
 An empty value is refused rather than read as zero. `Number('')` is 0, an unset variable
 expands to the empty string in a shell, and 0 means "do not wait at all": the opposite of what
 someone setting a wait wants, reached by writing nothing.
