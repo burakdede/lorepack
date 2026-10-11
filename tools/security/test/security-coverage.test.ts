@@ -22,6 +22,39 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'archive replacement preserves POSIX permissions, issue 686',
+    path: 'packages/backend-local/test/storage-faults.test.ts',
+    tests: [
+      'writing an archive preserves a private archive mode on replacement',
+      'writing an archive preserves the existing mode under a stricter umask',
+    ],
+    patterns: [/chmodSync\(destination, 0o600\)/, /process.umask\(0o077\)/],
+    skippedOn: { win32: 'Windows chmod does not implement POSIX group and other permission bits.' },
+  },
+  {
+    name: 'the pack binary preserves private archive permissions, issue 686',
+    path: 'packages/cli/test/pack-verify.e2e.test.ts',
+    tests: [
+      'the pack binary preserves permissions replaces a private archive without widening its mode',
+    ],
+    patterns: [/execute\(process.execPath/, /chmodSync\(archive, 0o600\)/],
+    skippedOn: { win32: 'Windows chmod does not implement POSIX group and other permission bits.' },
+  },
+  {
+    name: 'disk-full and interrupted archive writes preserve storage integrity, issue 572',
+    path: 'packages/backend-local/test/storage-faults.test.ts',
+    tests: [
+      'a full disk is reported as LORE_E_DISK_FULL by the catalog writer, not as a failed rollback',
+      'a full disk is reported as LORE_E_DISK_FULL by a migration',
+      'a full disk surfaces the original error when SQLite has already ended the transaction',
+      'a full disk maps ENOSPC from a file write to LORE_E_DISK_FULL',
+      'writing an archive replaces an existing archive only when the new one is complete',
+      'candidates from killed builds are swept, and nothing else in tmp is touched',
+      'object fan-out directories are made durable in their parents when they are created',
+    ],
+    patterns: [/PRAGMA max_page_count/, /writer.kill\('SIGKILL'\)/, /verifyArchive\(destination\)/],
+  },
+  {
     name: 'invalid runtime settings cannot initialize or activate a build, issue 684',
     path: 'packages/cli/test/serving-env.e2e.test.ts',
     tests: [
@@ -139,6 +172,23 @@ const EVIDENCE: readonly Evidence[] = [
       'a source root cannot carry the build outside the project refuses a symlinked source root that escapes, and builds nothing',
     ],
     patterns: [/refuses a symlinked source root that escapes, and builds nothing/, /zebrafish/],
+  },
+  {
+    name: 'a .lore directory linked outside the project is refused, issue 572',
+    path: 'packages/core/test/config.test.ts',
+    tests: [
+      'a source root behind a symbolic link refuses a .lore directory that links outside the project (#572)',
+      'a source root behind a symbolic link refuses a dangling .lore link, which the first write would follow',
+    ],
+    patterns: [/refuses a \.lore directory that links outside the project/, /LORE_E_PATH_ESCAPE/],
+  },
+  {
+    name: 'a linked .lore fails the real build command and doctor, issue 572',
+    path: 'packages/cli/test/security.e2e.test.ts',
+    tests: [
+      'the build directory cannot be redirected outside the project refuses a .lore link out of the project, writes nothing there, and doctor says so',
+    ],
+    patterns: [/refuses a \.lore link out of the project/, /lore-writable/],
   },
   {
     name: 'pack refuses originals that became links or changed, issue 568',

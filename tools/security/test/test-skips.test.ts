@@ -19,6 +19,16 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'packages/backend-local/test/storage-faults.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'POSIX archive modes have no Windows equivalent; interrupted replacement still runs there (#686)',
+  },
+  {
+    file: 'packages/cli/test/pack-verify.e2e.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'Windows chmod does not implement POSIX group and other permission bits (#686)',
+  },
+  {
     file: 'packages/connect-clients/test/claude-code.test.ts',
     line: "it.skipIf(process.platform === 'win32')(",
     why: 'project links need administrator rights or Developer Mode, and chmod modes are POSIX-only',

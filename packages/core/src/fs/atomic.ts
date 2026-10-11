@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { diskFullError } from '../errors/disk-full.js';
 import { LoreError } from '../errors/lore-error.js';
 
 /**
@@ -63,6 +64,8 @@ export function writeFileAtomic(path: string, data: string | Uint8Array): void {
     fsyncDirectory(directory);
   } catch (cause) {
     rmSync(temporary, { force: true });
+    const full = diskFullError(cause);
+    if (full !== null) throw full;
     throw new LoreError('LORE_E_INTERNAL', `Could not write ${path}.`, {
       remediation: 'Check the directory exists and has free space.',
       cause,

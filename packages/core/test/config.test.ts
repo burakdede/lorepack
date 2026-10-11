@@ -383,6 +383,34 @@ describe('a source root behind a symbolic link', () => {
     });
   });
 
+  it('refuses a .lore directory that links outside the project (#572)', async () => {
+    await withOutside('  - docs\n', (root, outside) => {
+      mkdirSync(join(root, 'docs'), { recursive: true });
+      symlinkSync(outside, join(root, '.lore'), DIRECTORY_LINK);
+      const error = loadError(root);
+      expect(error.code).toBe('LORE_E_PATH_ESCAPE');
+      expect(error.path).toBe('.lore');
+      expect(error.message).toContain('outside the project');
+    });
+  });
+
+  it('refuses a dangling .lore link, which the first write would follow', async () => {
+    await withOutside('  - docs\n', (root, outside) => {
+      mkdirSync(join(root, 'docs'), { recursive: true });
+      symlinkSync(join(outside, 'not-yet'), join(root, '.lore'), DIRECTORY_LINK);
+      expect(loadError(root).code).toBe('LORE_E_PATH_ESCAPE');
+    });
+  });
+
+  it('accepts a .lore link that stays inside the project', async () => {
+    await withOutside('  - docs\n', (root) => {
+      mkdirSync(join(root, 'docs'), { recursive: true });
+      mkdirSync(join(root, 'state'), { recursive: true });
+      symlinkSync(join(root, 'state'), join(root, '.lore'), DIRECTORY_LINK);
+      expect(() => loadConfig({ cwd: root })).not.toThrow();
+    });
+  });
+
   it('accepts a linked root that stays inside the project', async () => {
     await withOutside('  - docs\n', (root) => {
       mkdirSync(join(root, 'real'), { recursive: true });

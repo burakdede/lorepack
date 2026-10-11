@@ -1,6 +1,7 @@
 export * from './config/index.js';
 export {
   causeChain,
+  diskFullError,
   ERROR_CODES,
   type ErrorCode,
   EXIT_CODES,

@@ -37,6 +37,9 @@ security-affecting change before release.
 | `connect` writes no client configuration without a terminal confirmation or `--yes` (#576) | `packages/cli/test/connect.e2e.test.ts`, `packages/cli/test/connect.test.ts` | Covered |
 | `connect` never runs a client or server executable planted in the project (#577) | `packages/cli/test/connect.e2e.test.ts`, `packages/connect-clients/test/executable.test.ts` | Covered |
 | Hostile file names and document text cannot drive the terminal through human CLI output (#579) | `packages/cli/test/terminal-output.e2e.test.ts`, `packages/core/test/terminal.test.ts`, `packages/cli/test/program.test.ts` | Covered |
+| `.lore` linked outside the project is refused, and doctor reports it (#572) | `packages/core/test/config.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
+| Archive replacement retains private permissions, including its temporary file (#686) | `packages/backend-local/test/storage-faults.test.ts`, `packages/cli/test/pack-verify.e2e.test.ts` | Covered on POSIX; Windows lacks POSIX mode semantics |
+| Disk-full causes survive rollback and interrupted pack writes preserve the previous archive (#572) | `packages/backend-local/test/storage-faults.test.ts` | Covered |
 | Model-facing tools are read-only | `tools/contract/test/mcp.test.ts` | Covered |
 
 ## Commands To Run For Sign-off

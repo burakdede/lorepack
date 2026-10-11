@@ -10,6 +10,7 @@ export const ERROR_CODES = {
     'The linked SQLite predates 3.53.2, which fixes FTS5 memory corruption reachable from search.',
   LORE_E_FTS5_UNAVAILABLE: 'The SQLite build has no FTS5 module, so lexical search cannot work.',
   LORE_E_SQLITE_UNAVAILABLE: 'The node:sqlite module is unavailable or failed to open a database.',
+  LORE_E_DISK_FULL: 'The disk filled up, so a write could not complete.',
 
   // User and configuration (exit 1)
   LORE_E_NOT_INITIALIZED: 'No Lorepack project was found at this path.',
@@ -66,6 +67,7 @@ const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_UNSUPPORTED_SQLITE: EXIT_CODES.ENVIRONMENT,
   LORE_E_FTS5_UNAVAILABLE: EXIT_CODES.ENVIRONMENT,
   LORE_E_SQLITE_UNAVAILABLE: EXIT_CODES.ENVIRONMENT,
+  LORE_E_DISK_FULL: EXIT_CODES.ENVIRONMENT,
   LORE_E_NOT_INITIALIZED: EXIT_CODES.USER,
   LORE_E_CONFIG_INVALID: EXIT_CODES.USER,
   LORE_E_PATH_ESCAPE: EXIT_CODES.USER,

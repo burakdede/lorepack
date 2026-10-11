@@ -1,4 +1,5 @@
 export { ERROR_CODES, type ErrorCode, EXIT_CODES, type ExitCode, exitCodeFor } from './codes.js';
+export { diskFullError } from './disk-full.js';
 export { causeChain, LoreError, type LoreErrorOptions } from './lore-error.js';
 export { REDACTED, redact, redactDeep, secretsFromEnv } from './redact.js';
 export {

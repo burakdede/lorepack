@@ -13,6 +13,7 @@ import {
   doctorReportSchema,
   type LoadedConfig,
   loadConfig,
+  loreDirectoryEscape,
   MINIMUM_SQLITE_VERSION,
 } from '@lorepack/core';
 import { DEV_PORT } from './dev-session.js';
@@ -385,6 +386,17 @@ function sourcesCheck(config: LoadedConfig | null): CheckResult {
 
 function writableCheck(root: string): CheckResult {
   const path = join(root, '.lore');
+  const linkedTo = loreDirectoryEscape(root);
+  if (linkedTo !== null) {
+    return {
+      id: 'lore-writable',
+      title: 'Build directory',
+      status: 'fail',
+      detail: `${path} is a link to ${linkedTo}, outside the project. Lorepack refuses to write there.`,
+      remediation: `Remove the link, and Lorepack creates the directory inside the project:\n  rm "${path}"`,
+      values: { path, target: linkedTo },
+    };
+  }
   try {
     if (existsSync(path)) accessSync(path, fsConstants.W_OK);
     else accessSync(root, fsConstants.W_OK);

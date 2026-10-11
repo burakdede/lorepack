@@ -1,5 +1,5 @@
 import { constants, DatabaseSync } from 'node:sqlite';
-import { LoreError } from '@lorepack/core';
+import { diskFullError, LoreError } from '@lorepack/core';
 
 /**
  * The only module in the repository that imports node:sqlite. The API is a release
@@ -201,4 +201,33 @@ export function integrityCheck(db: DatabaseSync): { ok: boolean; problems: strin
 export function sqliteVersion(db: DatabaseSync): string {
   const row = db.prepare('SELECT sqlite_version() AS version').get() as { version: string };
   return row.version;
+}
+
+/**
+ * The error a failed storage write should surface: `LORE_E_DISK_FULL` when storage ran out,
+ * otherwise the error unchanged.
+ */
+export function storageFailure(cause: unknown): unknown {
+  return diskFullError(cause) ?? cause;
+}
+
+/**
+ * Runs `work` in a `BEGIN IMMEDIATE` transaction, committing on success.
+ *
+ * On failure the transaction is rolled back only if it is still open. SQLite ends it by itself
+ * on `SQLITE_FULL` and on some I/O errors, and an unconditional `ROLLBACK` then threw "cannot
+ * rollback - no transaction is active", which replaced the real cause with an internal error
+ * (#572). The original error is what reaches the caller, mapped to `LORE_E_DISK_FULL` when
+ * that is what it was.
+ */
+export function inTransaction<T>(db: DatabaseSync, work: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (cause) {
+    if (db.isTransaction) db.exec('ROLLBACK');
+    throw storageFailure(cause);
+  }
 }

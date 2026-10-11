@@ -33,13 +33,28 @@ Sealing an id that already exists is a no-op rather than an error. Build ids are
 derived, so an identical id means identical logical content, and the existing directory is
 already correct.
 
+A build killed before it seals leaves its candidate behind. Every build sweeps
+`tmp/candidate-*` as soon as it holds the project lock, which is safe because a build holds
+the lock from creating its candidate until sealing it, so under the lock no candidate belongs
+to a running build (#572). Before the sweep, these survived every later build and prune.
+
+`.lore` itself must be inside the project. A repository can ship it as a symbolic link, and
+every write would then land wherever it points, so loading the configuration refuses a `.lore`
+that resolves outside the project with `LORE_E_PATH_ESCAPE`, and `lorepack doctor` fails its
+build-directory check. A link that stays inside the project is allowed. The decision to
+refuse even user-owned external targets is recorded in
+[ADR 0003](../adr/0003-project-contained-build-storage.md).
+
 Directory `fsync` is a POSIX guarantee with no Windows equivalent, so that call is best
 effort. What we actually depend on, atomic same-volume rename, holds on both.
 
 ## Object store
 
 Content-addressed with two levels of fan-out (`objects/sha256/ab/cd/<rest>`), so no
-directory grows unmanageable.
+directory grows unmanageable. An object is written with `writeFileAtomic`, and every fan-out
+directory created for it is then synced into its parent: the build record that references the
+object commits with `synchronous = FULL`, so after a power loss the record must not survive a
+directory entry that did not (#572).
 
 Reads verify the digest. A mismatch raises `LORE_E_OBJECT_CORRUPT` naming the hash rather
 than returning wrong bytes, and `quarantine` removes the object so the next build

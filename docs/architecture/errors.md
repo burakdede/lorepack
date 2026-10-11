@@ -31,7 +31,7 @@ throw new LoreError('LORE_E_PATH_ESCAPE', 'archive/../../etc/passwd escapes the 
 |---:|---|---|
 | 1 | User or configuration error | `LORE_E_CONFIG_INVALID`, `LORE_E_PATH_ESCAPE`, `LORE_E_SQL_REJECTED`, `LORE_E_CANCELLED` |
 | 2 | Build integrity failure | `LORE_E_PARSE_FAILED`, `LORE_E_BUILD_VALIDATION`, `LORE_E_STALE_SOURCES`, `LORE_E_SCHEMA_MISMATCH` |
-| 3 | Environment or capability | `LORE_E_UNSUPPORTED_NODE`, `LORE_E_UNSUPPORTED_SQLITE`, `LORE_E_FTS5_UNAVAILABLE` |
+| 3 | Environment or capability | `LORE_E_UNSUPPORTED_NODE`, `LORE_E_UNSUPPORTED_SQLITE`, `LORE_E_FTS5_UNAVAILABLE`, `LORE_E_DISK_FULL` |
 | 4 | Concurrency | `LORE_E_LOCK_HELD`, `LORE_E_BUSY` |
 | 5 | Remote or deployment | `LORE_E_REMOTE_DEPLOY`, `LORE_E_CAPABILITY_LOSS` |
 
@@ -48,6 +48,12 @@ a bug report. An ordinary condition of a real filesystem is not that. A source f
 cannot be opened is `LORE_E_SOURCE_UNREADABLE`, exit 1, naming the display path and pointing
 at permissions or `.loreignore`. It used to arrive as `LORE_E_INTERNAL` carrying a raw
 `EACCES` and an absolute path (#168).
+
+A full disk is `LORE_E_DISK_FULL`, exit 3, from a file write (`ENOSPC`, `EDQUOT`) or from
+SQLite (`SQLITE_FULL`, which carries no errno). It used to reach the user as `LORE_E_INTERNAL`,
+and from inside a transaction as "cannot rollback - no transaction is active": SQLite had
+already ended the transaction, and the unconditional `ROLLBACK` that followed threw its own
+error over the real one (#572). Transactions now roll back only while one is open.
 
 The `next:` line names only what the binary can do today. Until `lorepack doctor` ships in
 Phase 3, no message refers to it: `scripts/check-command-set.mjs` reads the real `--help`

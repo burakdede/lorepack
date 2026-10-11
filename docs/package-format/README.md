@@ -80,6 +80,12 @@ Every archive member MUST use a POSIX path. Every member timestamp MUST be norma
 `1980-01-01T00:00:00Z`, and file entries SHOULD use mode `100644`. The current writer uses
 deflate compression.
 
+The current writer writes the archive to a temporary file beside the destination, syncs it,
+and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any
+earlier archive at that path intact rather than truncated (#572). Replacement preserves the
+existing destination's permission bits, even under a changed umask. Its temporary file
+is private until writing finishes. A new archive uses the process's normal umask (#686).
+
 `checksums.json` has this shape:
 
 ```json

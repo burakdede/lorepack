@@ -23,6 +23,7 @@ export {
   discardCandidateDirectory,
   type SealDependencies,
   sealCandidateDirectory,
+  sweepCandidateDirectories,
 } from './atomic.js';
 export {
   assertIdentifier,

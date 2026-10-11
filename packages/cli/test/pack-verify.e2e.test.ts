@@ -1,6 +1,13 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createWriteStream, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  createWriteStream,
+  existsSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
@@ -193,4 +200,34 @@ describe('lorepack pack --verify on a hostile archive', () => {
       expect(result.stderr).toContain('constructor is unlisted');
     });
   }, 120_000);
+});
+
+// Windows chmod does not implement POSIX group and other permission bits.
+describe('the pack binary preserves permissions', () => {
+  it.skipIf(process.platform === 'win32')(
+    'replaces a private archive without widening its mode',
+    async () => {
+      await withTempProject(
+        {
+          files: {
+            'lore.yaml': 'version: 1\nname: demo\nsources:\n  - .\n',
+            'doc.md': '# Private\n',
+          },
+        },
+        async (project) => {
+          const invoke = (args: string[]) =>
+            execute(process.execPath, [BIN, ...args], { cwd: project.root, timeout: 120_000 });
+          await invoke(['build']);
+          const archive = join(project.root, 'private.lorepack');
+          await invoke(['pack', '--out', archive]);
+          chmodSync(archive, 0o600);
+          await invoke(['pack', '--out', archive]);
+          expect(statSync(archive).mode & 0o777).toBe(0o600);
+          const verified = await invoke(['pack', '--verify', archive]);
+          expect(verified.stdout).toContain('intact');
+        },
+      );
+    },
+    120_000,
+  );
 });
