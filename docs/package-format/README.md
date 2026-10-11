@@ -82,7 +82,9 @@ deflate compression.
 
 The current writer writes the archive to a temporary file beside the destination, syncs it,
 and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any
-earlier archive at that path intact rather than truncated (#572).
+earlier archive at that path intact rather than truncated (#572). Replacement preserves the
+existing destination's permission bits, even under a changed umask. Its temporary file
+is private until writing finishes. A new archive uses the process's normal umask (#686).
 
 `checksums.json` has this shape:
 

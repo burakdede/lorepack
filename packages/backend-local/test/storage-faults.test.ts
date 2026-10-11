@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LoreError } from '@lorepack/core';
@@ -140,6 +140,53 @@ describe('a full disk', () => {
 });
 
 describe('writing an archive', () => {
+  // Windows chmod does not implement POSIX group and other permission bits.
+  it.skipIf(process.platform === 'win32')(
+    'preserves a private archive mode on replacement',
+    async () => {
+      await withTempProject({}, async (project) => {
+        const destination = project.path('private.lorepack');
+        await writeArchive(destination, [
+          { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
+        ]);
+        chmodSync(destination, 0o600);
+        await writeArchive(destination, [
+          { path: 'manifest.json', bytes: new TextEncoder().encode('{"new":true}') },
+        ]);
+        expect(statSync(destination).mode & 0o777).toBe(0o600);
+        expect((await verifyArchive(destination)).ok).toBe(true);
+      });
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves the existing mode under a stricter umask',
+    async () => {
+      await withTempProject({}, async (project) => {
+        const destination = project.path('shared.lorepack');
+        await writeArchive(destination, [
+          { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
+        ]);
+        chmodSync(destination, 0o644);
+        const previous = process.umask(0o077);
+        try {
+          await writeArchive(destination, [
+            { path: 'manifest.json', bytes: new TextEncoder().encode('{"new":true}') },
+          ]);
+          expect(statSync(destination).mode & 0o777).toBe(0o644);
+          expect((await verifyArchive(destination)).ok).toBe(true);
+          const fresh = project.path('fresh.lorepack');
+          await writeArchive(fresh, [
+            { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
+          ]);
+          expect(statSync(fresh).mode & 0o777).toBe(0o600);
+        } finally {
+          process.umask(previous);
+        }
+      });
+    },
+  );
+
   it('replaces an existing archive only when the new one is complete', async () => {
     await withTempProject({}, async (project) => {
       const destination = project.path('out/project.lorepack');
@@ -148,6 +195,7 @@ describe('writing an archive', () => {
         { path: 'manifest.json', bytes: new TextEncoder().encode('{"good":true}') },
       ]);
       expect((await verifyArchive(destination)).ok).toBe(true);
+      if (process.platform !== 'win32') chmodSync(destination, 0o600);
 
       // A second pack to the same path, killed while it is writing.
       const writer = spawn(
@@ -171,12 +219,15 @@ describe('writing an archive', () => {
       });
       await new Promise<void>((resolve) => writer.stdout.once('data', () => resolve()));
       const goodSize = statSync(destination).size;
+      let temporaryMode: number | undefined;
       // Killed as soon as the write has visibly begun: a temporary file beside the archive,
       // or the archive itself changing size when it is written in place.
       await new Promise<void>((resolve) => {
         const poll = setInterval(() => {
-          const begun =
-            readdirSync(dirname(destination)).length > 1 || statSync(destination).size !== goodSize;
+          const temporary = readdirSync(dirname(destination)).find((name) => name.endsWith('.tmp'));
+          if (temporary !== undefined)
+            temporaryMode = statSync(join(dirname(destination), temporary)).mode & 0o777;
+          const begun = temporary !== undefined || statSync(destination).size !== goodSize;
           if (begun || finished) {
             clearInterval(poll);
             resolve();
@@ -185,6 +236,8 @@ describe('writing an archive', () => {
       });
       writer.kill('SIGKILL');
       await exited;
+      // Windows still runs the interrupted-write check, but has no POSIX mode semantics.
+      if (process.platform !== 'win32') expect(temporaryMode).toBe(0o600);
 
       const result = await verifyArchive(destination);
       expect(result.ok).toBe(true);

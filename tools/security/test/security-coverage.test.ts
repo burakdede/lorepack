@@ -22,6 +22,25 @@ const SECURITY_ROOT = 'tools/security/';
 
 const EVIDENCE: readonly Evidence[] = [
   {
+    name: 'archive replacement preserves POSIX permissions, issue 686',
+    path: 'packages/backend-local/test/storage-faults.test.ts',
+    tests: [
+      'writing an archive preserves a private archive mode on replacement',
+      'writing an archive preserves the existing mode under a stricter umask',
+    ],
+    patterns: [/chmodSync\(destination, 0o600\)/, /process.umask\(0o077\)/],
+    skippedOn: { win32: 'Windows chmod does not implement POSIX group and other permission bits.' },
+  },
+  {
+    name: 'the pack binary preserves private archive permissions, issue 686',
+    path: 'packages/cli/test/pack-verify.e2e.test.ts',
+    tests: [
+      'the pack binary preserves permissions replaces a private archive without widening its mode',
+    ],
+    patterns: [/execute\(process.execPath/, /chmodSync\(archive, 0o600\)/],
+    skippedOn: { win32: 'Windows chmod does not implement POSIX group and other permission bits.' },
+  },
+  {
     name: 'disk-full and interrupted archive writes preserve storage integrity, issue 572',
     path: 'packages/backend-local/test/storage-faults.test.ts',
     tests: [

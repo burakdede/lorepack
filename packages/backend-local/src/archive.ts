@@ -3,6 +3,7 @@ import {
   closeSync,
   createWriteStream,
   existsSync,
+  fchmodSync,
   fsyncSync,
   lstatSync,
   openSync,
@@ -137,6 +138,8 @@ export async function writeArchive(
   destination: string,
   members: readonly ArchiveMember[],
 ): Promise<void> {
+  const existing = statSync(destination, { throwIfNoEntry: false });
+  const mode = existing === undefined ? undefined : existing.mode & 0o777;
   const index = checksumIndex(members);
   const indexBytes = new TextEncoder().encode(`${JSON.stringify(index, null, 2)}\n`);
 
@@ -165,7 +168,10 @@ export async function writeArchive(
   const temporary = join(dirname(destination), `.${basename(destination)}.${randomUUID()}.tmp`);
   try {
     await new Promise<void>((resolve, reject) => {
-      const out = createWriteStream(temporary, { flags: 'wx' });
+      const out = createWriteStream(temporary, {
+        flags: 'wx',
+        ...(mode === undefined ? {} : { mode: 0o600 }),
+      });
       out.on('error', reject);
       out.on('close', resolve);
       zip.outputStream.on('error', reject);
@@ -173,6 +179,7 @@ export async function writeArchive(
     });
     const fd = openSync(temporary, 'r+');
     try {
+      if (mode !== undefined) fchmodSync(fd, mode);
       fsyncSync(fd);
     } finally {
       closeSync(fd);

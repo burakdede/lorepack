@@ -147,3 +147,16 @@ directory as the target of its `.lore` link.
 
 The real SQLite-full and killed-archive cases run in
 `packages/backend-local/test/storage-faults.test.ts` and the mandatory security gate.
+
+### Replacing a private archive (#686)
+
+Verified on 2026-10-11, macOS arm64, Node 24.21.0, with the built CLI:
+
+1. Build a project, then run `lorepack pack --out private.lorepack`.
+2. Run `chmod 600 private.lorepack`, then repeat the same pack command.
+3. Inspect the file mode: it remains `0600`.
+4. Run `lorepack pack --verify private.lorepack`: exit 0, six members intact.
+
+Real filesystem tests also check a changed umask and the temporary file during an
+interrupted write. POSIX mode assertions do not apply to Windows; interrupted
+replacement and archive verification still run there.
