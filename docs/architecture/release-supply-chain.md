@@ -126,8 +126,14 @@ not been confirmed applied; a release must not run until it is.
 | `npm-release` environment | required reviewer `burakdede`; deployment branches: `main` only | GitHub repository settings | applied 2026-10-10 (#604) |
 | Default `GITHUB_TOKEN` permission | read; Actions may not approve pull requests | GitHub repository settings | applied 2026-10-10 (#604) |
 | Repository secrets | no npm token of any kind; `NPM_TOKEN` was deleted (no workflow used it) | GitHub repository settings | applied 2026-10-10 (#620) |
-| npm Trusted Publisher for `@lorepack/cli` | GitHub Actions, `burakdede/lorepack`, `release.yml`, environment `npm-release`, **Allow npm dist-tag** on | npmjs.com package settings (owner only) | pending |
-| npm publishing access | require two-factor authentication and disallow tokens; the token behind the deleted `NPM_TOKEN` revoked | npmjs.com package and account settings (owner only) | pending |
+| npm Trusted Publisher for `@lorepack/cli` | GitHub Actions, `burakdede/lorepack`, `release.yml`, environment `npm-release` | npmjs.com package settings (owner only) | owner-confirmed 2026-10-10 (#620) |
+| npm dist-tag permission | **Allow npm dist-tag** on | npmjs.com Trusted Publisher settings (owner only) | pending confirmation (#102) |
+| npm publishing access | require two-factor authentication and disallow tokens; the token behind the deleted `NPM_TOKEN` revoked | npmjs.com package and account settings (owner only) | owner-confirmed 2026-10-10 (#620) |
+
+The [owner confirmation in #620](https://github.com/burakdede/lorepack/issues/620) records
+the npm environment binding, publishing access and token revocation. It does not confirm
+dist-tag permission. Actual publication, registry tags and provenance remain release-time
+checks under [#102](https://github.com/burakdede/lorepack/issues/102).
 
 Check the GitHub half with `gh api repos/burakdede/lorepack/environments/npm-release`,
 `gh api repos/burakdede/lorepack/actions/permissions/workflow` and `gh secret list`.
