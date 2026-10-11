@@ -3,6 +3,37 @@
 One shell, many commands. Every command is a handler; argument parsing, error rendering,
 exit codes and output modes belong to the shell so no command reinvents them.
 
+## Retained builds and live source configuration
+
+Decision: [retained-build configuration](../adr/0004-retained-build-configuration.md).
+
+`loadProjectConfig` reads and validates `lore.yaml` and the containment of `.lore/` without
+resolving source roots. It returns `ProjectConfig`, which has no validated `sources` or
+build-identity `effective` configuration. Retained-build operations use this type so a
+removed source directory cannot prevent recovery (architecture section 18.4).
+
+`loadSourceConfig` resolves and validates the declared source roots and constructs
+`LoadedConfig`. `loadConfig` composes both steps for compilation and source checking.
+The compiler still requires `LoadedConfig`; a retained project configuration cannot be
+passed as a validated build input.
+
+Activation and rollback share manifest schema/target-ID, catalog integrity, supported
+migration and content-object presence checks before moving the pointer. This is not a
+claim that preflight recomputes every logical hash or checks every object's bytes.
+Source reads verify object bytes independently.
+
+Inspection, history, diff, search, export, prune and default packing do not require live
+sources. `serve` can restart over retained data, and MCP's `--active-only` does not check
+sources. `--allow-stale` attempts freshness but can serve with `unknown` when sources are
+unavailable. Freshness validation is separate from reading a sealed build: source-root
+errors can degrade that annotation, while corrupt build/state errors still fail the read.
+
+Studio uses the same retained activation/rollback preflight. Its plan route still requires
+live sources, as do `plan`, `build`, `dev`, `status` and `mcp --ensure-current`. Keep
+`lore.yaml`, `.lore/state.sqlite`, the target build directory and its referenced content
+objects. Optional `package.includeOriginals: true` still needs the original files;
+normalized retained content is sufficient only for default packing.
+
 ## Entry point
 
 `packages/cli/src/entry.ts` checks the runtime before anything else:

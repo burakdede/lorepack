@@ -113,6 +113,13 @@ them is a bug, not a style issue:
 
 ## Next
 
+Recovery does not depend on keeping the source directory or parser cache. With `lore.yaml`
+and `.lore/` retained, `lorepack rollback <build-id>` can select a healthy earlier build,
+and inspection, search and export read that build. Query freshness becomes `unknown` when
+sources cannot be checked. Use `lorepack serve` or `lorepack mcp --active-only` to read it;
+`status` and rebuilding still require live sources. A corrupt target is refused before
+activation. See [retained-build configuration](architecture/cli.md#retained-builds-and-live-source-configuration).
+
 - [Studio tour](studio-tour.md): the local inspector `lorepack dev` serves.
 - [Core concepts](concepts.md): why the build, not the search index, is the product.
 - [Limitations](limitations.md): what v0.1 does not do.

@@ -4,7 +4,7 @@ import {
   count,
   LORE_DIRECTORY,
   LoreError,
-  loadConfig,
+  loadProjectConfig,
   type RemoteRetentionReceipt,
 } from '@lorepack/core';
 import {
@@ -83,7 +83,7 @@ export function pruneCommand(options: PruneCommandOptions = {}): CommandDefiniti
           resumeId,
         );
       }
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
       const state = openStateStore(loreDirectory);
 
@@ -177,7 +177,7 @@ async function pruneRemote(
     });
   }
 
-  const config = loadConfig({ cwd });
+  const config = loadProjectConfig({ cwd });
   if (resumeId !== null) {
     return await resumeRemotePrune(
       config.projectRoot,

@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { discover } from '@lorepack/compiler';
-import type { LoadedConfig, SourceState } from '@lorepack/core';
+import { loadSourceConfig, type ProjectConfig, type SourceState } from '@lorepack/core';
 import { readFreshness } from './status.js';
 
 /**
@@ -22,7 +22,7 @@ import { readFreshness } from './status.js';
  */
 
 export interface RevalidatorOptions {
-  readonly config: LoadedConfig;
+  readonly config: ProjectConfig;
   /** Milliseconds between checks. `0` checks every request. */
   readonly intervalMs: number;
   /** Never checks. The answer is whatever the first one was. */
@@ -90,8 +90,9 @@ export function createRevalidator(options: RevalidatorOptions): Revalidator {
  * moving, which is the reason content hashes decide freshness, and this only decides
  * whether to go and compute them.
  */
-function scan(config: LoadedConfig): string {
+function scan(project: ProjectConfig): string {
   try {
+    const config = loadSourceConfig(project);
     const discovered = discover({ config, allowLargeProject: true });
     const parts: string[] = [];
     for (const artifact of discovered.artifacts) {

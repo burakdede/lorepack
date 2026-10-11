@@ -1,7 +1,7 @@
 import { networkInterfaces } from 'node:os';
 import { serve } from '@hono/node-server';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
-import { type BuildId, type LoadedConfig, LoreError } from '@lorepack/core';
+import { type BuildId, LoreError, type ProjectConfig } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
@@ -56,7 +56,7 @@ export const REQUEST_TIMEOUTS = {
 export const SERVE_DEFAULTS = { port: DEFAULT_PORT, attempts: PORT_ATTEMPTS } as const;
 
 export interface ServingOptions {
-  readonly config: LoadedConfig;
+  readonly config: ProjectConfig;
   readonly host: string;
   readonly port: number;
   readonly warn: (text: string) => void;

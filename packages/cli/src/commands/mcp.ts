@@ -3,6 +3,8 @@ import {
   count,
   LoreError,
   loadConfig,
+  loadProjectConfig,
+  loadSourceConfig,
   ProgressBus,
   ProgressRenderer,
   type SourceState,
@@ -51,9 +53,8 @@ export function mcpCommand(): CommandDefinition {
           ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
           : parseInterval(flags.revalidateInterval);
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
-      const config = loadConfig({ cwd });
-
       const mode = resolveMode(flags);
+      const config = mode === 'ensure-current' ? loadConfig({ cwd }) : loadProjectConfig({ cwd });
       const sourceState = await reconcile({ config, mode, warn: context.warn });
 
       // Freshness while serving, not only at startup. An open connection is not a session
@@ -194,16 +195,18 @@ function resolveMode(flags: Record<string, unknown>): Mode {
  *   forensic read of an old one.
  */
 async function reconcile(options: {
-  config: ReturnType<typeof loadConfig>;
+  config: ReturnType<typeof loadProjectConfig>;
   mode: Mode;
   warn: (text: string) => void;
 }): Promise<SourceState> {
   if (options.mode === 'active-only') return 'unknown';
 
   const started = Date.now();
-  const status = await readStatus({ config: options.config, allowLargeProject: true }).catch(
-    () => null,
-  );
+  const status = await (async () =>
+    readStatus({
+      config: loadSourceConfig(options.config),
+      allowLargeProject: true,
+    }))().catch(() => null);
 
   // No build at all is a different situation from a stale one, and only one of the three
   // modes can do anything about it. `--ensure-current` means exactly this: make the served
@@ -253,7 +256,7 @@ async function reconcile(options: {
  * parse error the client cannot explain to anyone (architecture 14.3).
  */
 async function rebuild(options: {
-  config: ReturnType<typeof loadConfig>;
+  config: ReturnType<typeof loadProjectConfig>;
   warn: (text: string) => void;
 }): Promise<void> {
   const progress = new ProgressBus();
@@ -261,7 +264,11 @@ async function rebuild(options: {
   progress.subscribe((event) => renderer.handle(event));
 
   try {
-    await runBuild({ config: options.config, progress, allowLargeProject: true });
+    await runBuild({
+      config: loadSourceConfig(options.config),
+      progress,
+      allowLargeProject: true,
+    });
   } catch (cause) {
     // A failed build leaves the previous pointer where it was and serves nothing. Stale
     // context delivered confidently is worse than an error a person can act on (6.9).

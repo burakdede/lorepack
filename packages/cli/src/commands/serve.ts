@@ -1,4 +1,4 @@
-import { loadConfig } from '@lorepack/core';
+import { loadProjectConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 import {
@@ -43,7 +43,7 @@ export function serveCommand(): CommandDefinition {
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const host = typeof flags.host === 'string' ? flags.host : '127.0.0.1';
 
       const server = await startServing({

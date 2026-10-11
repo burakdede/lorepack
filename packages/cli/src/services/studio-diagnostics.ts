@@ -10,7 +10,7 @@ import {
   SERVER_NAME,
   VSCODE_ID,
 } from '@lorepack/connect-clients';
-import type { DoctorReport, LoadedConfig } from '@lorepack/core';
+import type { DoctorReport, ProjectConfig } from '@lorepack/core';
 import { runDoctor } from './doctor.js';
 import { COMPILER_VERSION } from './versions.js';
 import type { WatchStatus } from './watch.js';
@@ -30,7 +30,7 @@ import type { WatchStatus } from './watch.js';
  */
 
 export interface DiagnosticsInput {
-  readonly config: LoadedConfig;
+  readonly config: ProjectConfig;
   readonly host: string;
   /** A function, because the port is chosen by binding and is not known before then. */
   readonly port: () => number;
@@ -92,7 +92,7 @@ function environment(): Record<string, string | boolean> {
  * page (section 15.6).
  */
 async function clients(
-  config: LoadedConfig,
+  config: ProjectConfig,
 ): Promise<readonly (ClientStatus & { id: string; title: string })[]> {
   const connectors = [createClaudeCodeConnector(), createCodexConnector(), createVsCodeConnector()];
   const input = {

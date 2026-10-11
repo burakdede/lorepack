@@ -1,8 +1,8 @@
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import {
   count,
-  type LoadedConfig,
   LoreError,
+  type ProjectConfig,
   type SearchResult,
   type SourceState,
 } from '@lorepack/core';
@@ -18,7 +18,7 @@ import { createRuntime } from '@lorepack/runtime';
  */
 
 export interface SearchOptions {
-  readonly config: LoadedConfig;
+  readonly config: ProjectConfig;
   readonly query: string;
   readonly sourceState: SourceState;
   readonly limit?: number;

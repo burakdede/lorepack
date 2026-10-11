@@ -7,7 +7,9 @@ import {
   LORE_DIRECTORY,
   type LoadedConfig,
   LoreError,
+  loadSourceConfig,
   type ProgressBus,
+  type ProjectConfig,
   type SourceState,
   type Status,
 } from '@lorepack/core';
@@ -121,9 +123,27 @@ export interface Freshness {
  * Invariant 6 applies to the degraded case too: `unknown` says Lorepack does not know, and
  * never that the sources are clean.
  */
-export async function readFreshness(options: StatusOptions): Promise<Freshness> {
+export async function readFreshness(
+  options: Omit<StatusOptions, 'config'> & { readonly config: ProjectConfig },
+): Promise<Freshness> {
+  let config: LoadedConfig;
   try {
-    const status = await readStatus({ ...options, allowLargeProject: true });
+    config = loadSourceConfig(options.config);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    if (
+      !(error instanceof LoreError) &&
+      !['ENOENT', 'EACCES', 'EPERM', 'ELOOP', 'ENOTDIR'].includes(code ?? '')
+    ) {
+      throw error;
+    }
+    return {
+      sourceState: 'unknown',
+      reason: error instanceof Error ? error.message : 'Sources cannot be validated.',
+    };
+  }
+  try {
+    const status = await readStatus({ ...options, config, allowLargeProject: true });
     return {
       sourceState: status.sourceState === 'unbuilt' ? 'unknown' : status.sourceState,
       reason: null,

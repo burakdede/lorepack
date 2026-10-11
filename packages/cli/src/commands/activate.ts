@@ -6,7 +6,7 @@ import {
   type DeploymentTarget,
   LORE_DIRECTORY,
   LoreError,
-  loadConfig,
+  loadProjectConfig,
 } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import {
@@ -81,7 +81,7 @@ export function buildsCommand(): CommandDefinition {
     name: 'builds',
     description: 'List build history, newest first.',
     handler: (_args, _flags, context): CommandResult => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const state = openStateStore(join(config.projectRoot, LORE_DIRECTORY));
       try {
         const builds = state.listBuilds();
@@ -109,7 +109,7 @@ async function switchTo(
   choose: (builds: readonly BuildSummary[], active: BuildId | null) => BuildId,
   verb: string,
 ): Promise<CommandResult> {
-  const config = loadConfig({ cwd });
+  const config = loadProjectConfig({ cwd });
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
   const lock = new ProjectLock(join(loreDirectory, 'lock'));
   const state = openStateStore(loreDirectory);
@@ -173,7 +173,7 @@ async function rollbackRemote(
   resolveTargetOverride: ActivateCommandOptions['resolveTarget'],
   cloudflareAdapter: CloudflareResolverAdapter | undefined,
 ): Promise<CommandResult> {
-  const config = loadConfig({ cwd });
+  const config = loadProjectConfig({ cwd });
   const requestedBuildId =
     buildId === undefined || buildId.trim() === ''
       ? await previousRemoteBuildId(targetName, config.projectRoot, cloudflareAdapter)

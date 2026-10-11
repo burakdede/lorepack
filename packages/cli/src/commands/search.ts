@@ -1,4 +1,4 @@
-import { LoreError, loadConfig } from '@lorepack/core';
+import { LoreError, loadProjectConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { renderSearch, runSearch } from '../services/search.js';
 import { readFreshness } from '../services/status.js';
@@ -23,7 +23,7 @@ export function searchCommand(): CommandDefinition {
       { flags: '--debug', description: 'show why each result ranked where it did' },
     ],
     handler: async (args, flags, context): Promise<CommandResult> => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const query = args[0] ?? '';
 
       // Freshness travels with the answer (section 4.10): a result from a stale build is

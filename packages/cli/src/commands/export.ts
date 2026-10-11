@@ -5,7 +5,7 @@ import {
   type ContextProfile,
   contextProfileSchema,
   LoreError,
-  loadConfig,
+  loadProjectConfig,
   writeFileAtomic,
 } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
@@ -44,7 +44,7 @@ export function exportCommand(): CommandDefinition {
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const task = typeof flags.task === 'string' ? flags.task.trim() : '';
       if (task === '') {
         throw new LoreError('LORE_E_INVALID_ARGUMENT', 'An export needs a task to select for.', {
@@ -143,6 +143,6 @@ function parseBudget(raw: unknown): number {
   return value;
 }
 
-function absolute(path: string, config: ReturnType<typeof loadConfig>): string {
+function absolute(path: string, config: ReturnType<typeof loadProjectConfig>): string {
   return isAbsolute(path) ? path : resolve(config.projectRoot, path);
 }

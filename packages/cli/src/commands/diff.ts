@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { diffBuilds, renderDiff } from '@lorepack/compiler';
-import { type BuildId, LORE_DIRECTORY, LoreError, loadConfig } from '@lorepack/core';
+import { type BuildId, LORE_DIRECTORY, LoreError, loadProjectConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { openStateStore, readSnapshot, resolveBuildId } from '../services/builds.js';
 
@@ -13,7 +13,7 @@ export function diffCommand(): CommandDefinition {
       { name: 'to', description: 'build to compare to', required: false },
     ],
     handler: (args, _flags, context): CommandResult => {
-      const config = loadConfig({ cwd: context.options.cwd });
+      const config = loadProjectConfig({ cwd: context.options.cwd });
       const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
       const state = openStateStore(loreDirectory);
 
