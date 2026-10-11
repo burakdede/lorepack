@@ -80,6 +80,24 @@ quoted for their own rules. Windows backslashes are literal except before a quot
 trailing run before the closing quote must be doubled, or `CommandLineToArgvW` reads the
 quote as part of the argument.
 
+## Finding a client's executable
+
+`lorepack connect` runs inside a project, and on Windows a bare command name is looked up in
+the current directory before `PATH`, with every `PATHEXT` extension. A repository that ships
+`codex.cmd` or `lorepack.bat` would have it run the moment someone connects a client there.
+So `claude`, `codex`, `code` and the `lorepack` server are each resolved to an absolute file
+through absolute `PATH` entries only, never the working directory or a relative entry such as
+`.`, and that file is what runs (#577).
+
+npm installs `codex` as `codex.cmd`, and VS Code ships `code.cmd`. Node refuses to start a
+batch file without a shell since CVE-2024-27980, so these run through `cmd.exe`, named by its
+absolute path, with the arguments escaped the way cross-spawn escapes them.
+
+Closing the verification transport stops its immediate process. A `.cmd` server shim can
+leave the Node process it launched running after a timeout. Direct executable cleanup is
+tested; cleanup of the shim's process tree remains open in
+[issue #578](https://github.com/burakdede/lorepack/issues/578).
+
 ## Running the suite
 
 ```bash

@@ -1,9 +1,8 @@
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { type ConfigLocation, resolveConfigFile, writeOptionsFor } from './config-file.js';
+import { runExecutable } from './executable.js';
 import { backup } from './json-config.js';
 import type {
   ClientConnector,
@@ -56,8 +55,6 @@ import { type VerifyOptions, verifyStdioServer } from './verify.js';
  * So trust has its own outcome. It is not a failure, because nothing is broken: the file is
  * right and one interactive step remains.
  */
-
-const execute = promisify(execFile);
 
 export const CODEX_ID = 'codex';
 
@@ -128,14 +125,11 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
   const probe = options.probe ?? verifyStdioServer;
   const runClient =
     options.runClient ??
-    (async (args: readonly string[], run?: { cwd?: string }) => {
-      const { stdout, stderr } = await execute('codex', [...args], {
-        timeout: 20_000,
+    ((args: readonly string[], run?: { cwd?: string }) =>
+      runExecutable('codex', args, {
         ...(run?.cwd === undefined ? {} : { cwd: run.cwd }),
         env: { ...process.env, CODEX_HOME: home },
-      });
-      return { stdout, stderr };
-    });
+      }));
 
   const tablePath = (serverName: string): readonly string[] => [SERVERS_KEY, serverName];
 

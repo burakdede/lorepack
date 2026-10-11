@@ -372,7 +372,7 @@ lorepack connect [client]
 | Name | Description |
 |---|---|
 | `--dry-run` | show the plan and change nothing |
-| `--yes` | apply without asking |
+| `--yes` | apply without asking (required when there is no terminal) |
 | `--scope <scope>` | project (default) or user |
 | `--shared` | write the project file that others will be asked to trust |
 | `--snippet` | print a configuration to paste, and change nothing |

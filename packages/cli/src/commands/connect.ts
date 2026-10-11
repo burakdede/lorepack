@@ -3,6 +3,9 @@ import {
   type ClientConnector,
   CODEX_ID,
   type ConnectInput,
+  type ConnectionCheck,
+  type ConnectPlan,
+  type ConnectReceipt,
   type ConnectScope,
   createClaudeCodeConnector,
   createCodexConnector,
@@ -13,7 +16,8 @@ import {
   type Snippet,
   VSCODE_ID,
 } from '@lorepack/connect-clients';
-import { LoreError, loadConfig } from '@lorepack/core';
+import { EXIT_CODES, LoreError, loadConfig } from '@lorepack/core';
+import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 
 /**
@@ -53,7 +57,22 @@ export const CLIENT_IDS: readonly string[] = [CLAUDE_CODE_ID, CODEX_ID, VSCODE_I
 
 const CLIENT_CHOICES = `${CLIENT_IDS.join(', ')}, or all`;
 
-export function connectCommand(): CommandDefinition {
+export interface ConnectCommandOptions {
+  /** Replaces the registered connectors. Tests inject fakes so no real client is touched. */
+  readonly connectors?: (options: { shared: boolean }) => readonly ClientConnector[];
+  /** Asks before anything is written. Defaults to a `[y/N]` prompt on a terminal. */
+  readonly confirm?: (plan: string, context: CommandContext) => Promise<boolean>;
+}
+
+/** One client's part of the plan: what is shown before anything changes. */
+interface Section {
+  readonly lines: readonly string[];
+  /** Absent for a client that is not installed, which has nothing to apply. */
+  readonly connector?: ClientConnector;
+  readonly plan?: ConnectPlan;
+}
+
+export function connectCommand(options: ConnectCommandOptions = {}): CommandDefinition {
   return {
     name: 'connect',
     description: 'Configure an AI client to read this project, and verify that it works.',
@@ -62,7 +81,10 @@ export function connectCommand(): CommandDefinition {
     ],
     flags: [
       { flags: '--dry-run', description: 'show the plan and change nothing' },
-      { flags: '--yes', description: 'apply without asking' },
+      {
+        flags: '--yes',
+        description: 'apply without asking (required when there is no terminal)',
+      },
       { flags: '--scope <scope>', description: 'project (default) or user' },
       {
         flags: '--shared',
@@ -73,7 +95,7 @@ export function connectCommand(): CommandDefinition {
     handler: async (args, flags, context): Promise<CommandResult> => {
       const config = loadConfig({ cwd: context.options.cwd });
       const scope = resolveScope(flags.scope);
-      const chosen = select(args[0], { shared: flags.shared === true });
+      const chosen = select(args[0], { shared: flags.shared === true }, options.connectors);
 
       const input: ConnectInput = {
         projectRoot: config.projectRoot,
@@ -96,44 +118,117 @@ export function connectCommand(): CommandDefinition {
         return { human: renderSnippet(snippet, args[0]), json: snippet };
       }
 
-      const lines: string[] = [];
-      const receipts: unknown[] = [];
-
+      // Plan every client before touching any of them, so the whole change is shown, and
+      // agreed to, before the first file is written (6.6: plan, show, apply, verify).
+      const sections: Section[] = [];
       for (const connector of chosen) {
         const detected = await connector.detect();
         if (!detected.installed) {
-          lines.push(`${connector.title}: not installed. ${detected.reason ?? ''}`.trimEnd());
-          lines.push('  Run `lorepack connect --snippet` for a configuration to paste.');
+          sections.push({
+            lines: [
+              `${connector.title}: not installed. ${detected.reason ?? ''}`.trimEnd(),
+              '  Run `lorepack connect --snippet` for a configuration to paste.',
+            ],
+          });
           continue;
         }
 
         const plan = await connector.plan(input);
-        lines.push(
+        const lines = [
           `${connector.title}${detected.version === undefined ? '' : ` ${detected.version}`}`,
-        );
-        for (const change of plan.changes) lines.push(`  ${change}`);
+          ...plan.changes.map((change) => `  ${change}`),
+        ];
         // Part of the plan, not of the outcome. A step the client will still require is
         // something to know *before* deciding, which means `--dry-run` has to show it too.
         if (plan.manualStep !== undefined) lines.push(`  ${plan.manualStep}`);
+        sections.push({ lines, connector, plan });
+      }
 
-        if (flags.dryRun === true) {
-          // Zero writes, which is the only promise `--dry-run` makes and the only one that
-          // matters: someone runs it precisely because they do not trust this yet.
-          lines.push('  (dry run, nothing was changed)');
+      if (flags.dryRun === true) {
+        // Zero writes, which is the only promise `--dry-run` makes and the only one that
+        // matters: someone runs it precisely because they do not trust this yet.
+        const lines = sections.flatMap((section) =>
+          section.plan === undefined
+            ? section.lines
+            : [...section.lines, '  (dry run, nothing was changed)'],
+        );
+        return { human: lines.join('\n'), json: { receipts: [] } };
+      }
+
+      const applicable = sections.filter((section) => section.plan !== undefined);
+      const planText = sections.flatMap((section) => section.lines).join('\n');
+
+      // These are other programs' files, `~/.claude.json` among them. Writing them without a
+      // yes is the presumption the plan exists to prevent (#576), so a run that cannot ask,
+      // a script or CI job, has to say `--yes` out loud.
+      let prompted = false;
+      if (applicable.length > 0 && flags.yes !== true) {
+        const confirmed = await (options.confirm ?? confirmConnect)(planText, context);
+        if (!confirmed) return { human: 'Cancelled. Nothing was changed.', json: { receipts: [] } };
+        prompted = true;
+      }
+
+      const lines: string[] = [];
+      const receipts: ConnectReceipt[] = [];
+      const checks: ConnectionCheck[] = [];
+      for (const section of sections) {
+        const { connector, plan } = section;
+        // A plan the person has just read at the prompt is not repeated, only its outcome.
+        if (connector === undefined || plan === undefined) {
+          if (!prompted) lines.push(...section.lines);
           continue;
         }
+        lines.push(...(prompted ? section.lines.slice(0, 1) : section.lines));
 
         const receipt = await connector.apply(plan);
         receipts.push(receipt);
         if (receipt.backupPath !== undefined) lines.push(`  Backed up to ${receipt.backupPath}`);
 
         const check = await connector.verify(receipt);
+        checks.push(check);
         lines.push(check.ok ? `  Verified: ${check.detail}` : `  Not working yet: ${check.detail}`);
       }
 
-      return { human: lines.join('\n'), json: { receipts } };
+      // A trust prompt the client will show is one step left for the person, not a failure.
+      // Anything else means the configuration was written and does not start, which a script
+      // has to be able to see without parsing the text (#578).
+      const failed = checks.some((check) => !check.ok && check.pendingTrust !== true);
+      return {
+        human: lines.join('\n'),
+        json: { receipts, checks },
+        ...(failed ? { exitCode: EXIT_CODES.ENVIRONMENT } : {}),
+      };
     },
   };
+}
+
+/**
+ * Asks on a terminal, and refuses to guess anywhere else.
+ *
+ * Both ends must be a terminal: the question is written to stdout and the answer read from
+ * stdin, and `lorepack connect < /dev/null` must not read end-of-file as consent.
+ */
+async function confirmConnect(plan: string, context: CommandContext): Promise<boolean> {
+  if (!context.streams.isTty || process.stdin.isTTY !== true) {
+    context.write(`${plan}\n`);
+    throw new LoreError(
+      'LORE_E_INVALID_ARGUMENT',
+      'Connecting a client asks first, and there is no terminal to ask on, so nothing was changed.',
+      {
+        remediation:
+          'Review the plan above, then re-run with `--yes` to apply it, or with `--dry-run` to see it without being asked.',
+      },
+    );
+  }
+
+  context.write(`${plan}\n\nApply these changes? [y/N] `);
+  const answer = await new Promise<string>((resolve) => {
+    process.stdin.setEncoding('utf8');
+    process.stdin.once('data', (chunk) => resolve(String(chunk)));
+    process.stdin.once('end', () => resolve(''));
+  });
+  process.stdin.pause();
+  return /^y(es)?$/i.test(answer.trim());
 }
 
 export function disconnectCommand(): CommandDefinition {
@@ -184,8 +279,9 @@ export function disconnectCommand(): CommandDefinition {
 function select(
   name: string | undefined,
   options: { shared: boolean },
+  factory: (options: { shared: boolean }) => readonly ClientConnector[] = connectors,
 ): readonly ClientConnector[] {
-  const all = connectors(options);
+  const all = factory(options);
   if (name === undefined || name === 'all') return all;
 
   // An unknown client is not an error. The caller renders a verified snippet for it, which
