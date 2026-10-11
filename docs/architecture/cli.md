@@ -155,8 +155,9 @@ rendered error, passes through `sanitizeForTerminal` in `@lorepack/core` on its 
 replaces C0 controls other than tab and newline, DEL and C1 controls with a visible `\xNN`, so a
 name holding `ESC ] 0 ;` cannot set the terminal title, plant an OSC 8 link, clear the screen
 or write the clipboard (#579). Lorepack's own colour is applied after sanitising, so it is the
-only escape sequence a terminal receives. `--json` needs nothing extra, because
-`JSON.stringify` escapes every control character.
+only escape sequence a terminal receives. `--json` preserves source values as structured data
+and bypasses this human formatter. JSON serialization escapes C0 characters; DEL and C1
+characters remain unchanged, so it is not the terminal sanitizer.
 
 The one exception is a document the user asked for, marked `verbatim` on the result:
 `lorepack export` to stdout. Redirected, it is written byte for byte, so `> file.md` and

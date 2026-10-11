@@ -53,8 +53,8 @@ export function stripAnsi(text: string): string {
  * Windows line ending is a newline, not a control to show.
  *
  * Applied to every human string on its way out, and before Lorepack's own styling, which is
- * the only escape sequence that reaches the terminal. `--json` never needs it: `JSON.stringify`
- * already escapes every control character.
+ * the only escape sequence that reaches the terminal. Structured JSON bypasses this human
+ * formatter to preserve source values. JSON serialization escapes C0 characters, not C1.
  */
 export function sanitizeForTerminal(text: string): string {
   let out = '';

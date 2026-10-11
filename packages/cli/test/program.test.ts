@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import { EXIT_CODES } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { validateCommandMetadata } from '../src/framework/metadata.js';
+import { runCli } from '../src/framework/program.js';
 import { fixtureCommands, run } from './helpers.js';
 
 const commands = fixtureCommands;
@@ -253,13 +255,13 @@ describe('corpus text on its way to a terminal (#579)', () => {
       handler: (_args, _flags, context) => {
         context.write(`writing ${hostile}\n`);
         context.warn(`warning ${hostile}\n`);
-        return { human: `result ${hostile}`, json: { path: hostile } };
+        return { human: `result ${hostile}`, json: { path: hostile, controls: '\u007f\u009b' } };
       },
     },
     {
       name: 'document',
       description: 'Returns a document the user asked for.',
-      handler: () => ({ human: `body ${hostile}`, verbatim: true }),
+      handler: () => ({ human: `body ${hostile}\u009b`, verbatim: true }),
     },
   ] satisfies typeof commands;
 
@@ -272,17 +274,31 @@ describe('corpus text on its way to a terminal (#579)', () => {
     expect(result.stderr).toContain('warning docs/evil\\x1b]0;PWNED\\x07.md');
   });
 
-  it('leaves --json to JSON, which already escapes every control character', async () => {
+  it('keeps JSON source values intact without terminal escaping', async () => {
     const result = await run(['--json', 'report'], { commands: reporting });
 
     expect(result.stdout).not.toContain(ESC);
-    expect(JSON.parse(result.stdout)).toEqual({ path: hostile });
+    expect(JSON.parse(result.stdout)).toEqual({ path: hostile, controls: '\u007f\u009b' });
   });
 
   it('writes a requested document byte for byte when it is redirected', async () => {
     const result = await run(['document'], { commands: reporting });
 
     // Not a terminal, so `lorepack export > file.md` matches `--output file.md`.
-    expect(result.stdout).toBe(`body ${hostile}\n`);
+    expect(result.stdout).toBe(`body ${hostile}\u009b\n`);
+  });
+
+  it('escapes requested document controls on a terminal', async () => {
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const code = await runCli(['node', 'lorepack', 'document'], {
+      commands: reporting,
+      streams: { stdout, stderr, isTty: true },
+      exitProcess: false,
+    });
+
+    expect(code).toBe(0);
+    expect(stdout.read()?.toString()).toBe('body docs/evil\\x1b]0;PWNED\\x07.md\\x9b\n');
+    expect(stderr.read()).toBeNull();
   });
 });

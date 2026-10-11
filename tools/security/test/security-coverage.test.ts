@@ -507,6 +507,20 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/expectInert\(output\)/, /http:\/\/evil\.example/],
   },
   {
+    name: 'terminal exports are inert and structured or redirected values stay intact, issue 579',
+    path: 'packages/cli/test/program.test.ts',
+    tests: [
+      'corpus text on its way to a terminal (#579) escapes requested document controls on a terminal',
+      'corpus text on its way to a terminal (#579) keeps JSON source values intact without terminal escaping',
+      'corpus text on its way to a terminal (#579) writes a requested document byte for byte when it is redirected',
+    ],
+    patterns: [
+      /isTty: true/,
+      /JSON.parse\(result.stdout\)\)\.toEqual/,
+      /controls: '\\u007f\\u009b'/,
+    ],
+  },
+  {
     name: 'privacy defaults block network calls in the build path',
     path: 'tools/security/test/privacy-defaults.test.ts',
     tests: [
