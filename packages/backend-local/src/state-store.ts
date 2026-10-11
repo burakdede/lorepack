@@ -8,6 +8,8 @@ import {
   type BuildId,
   type BuildSummary,
   LoreError,
+  type RuntimeIdentity,
+  runtimeIdentitySchema,
 } from '@lorepack/core';
 import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
 import { inTransaction, openReadOnly, openWritable } from './sqlite.js';
@@ -43,11 +45,13 @@ export class LocalStateStore {
     const db = openWritable(path);
     try {
       runMigrations(db, migrations);
+      const store = new LocalStateStore(db, loreDirectory);
+      store.identity();
+      return store;
     } catch (cause) {
       db.close();
       throw cause;
     }
-    return new LocalStateStore(db, loreDirectory);
   }
 
   close(): void {
@@ -56,6 +60,26 @@ export class LocalStateStore {
 
   get loreDirectory(): string {
     return this.#loreDirectory;
+  }
+
+  identity(): RuntimeIdentity {
+    const row = this.#db
+      .prepare(
+        'SELECT corpus_id AS corpusId, namespace_id AS namespaceId FROM runtime_identity WHERE id = 1',
+      )
+      .get();
+    const parsed = runtimeIdentitySchema.safeParse(row);
+    if (!parsed.success) {
+      throw new LoreError(
+        'LORE_E_SCHEMA_MISMATCH',
+        'The project runtime identity is missing or invalid.',
+        {
+          remediation:
+            'Restore the project state from a known-good backup. Identity cannot be regenerated safely.',
+        },
+      );
+    }
+    return parsed.data;
   }
 
   recordBuild(summary: BuildSummary): void {
@@ -199,6 +223,7 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
   readonly #state: LocalStateStore;
   readonly #buildsDirectory: string;
   readonly #open = new Map<BuildId, { db: DatabaseSync; refs: number }>();
+  readonly #handles = new WeakMap<BuildHandle, DatabaseSync>();
 
   constructor(state: LocalStateStore, buildsDirectory: string) {
     this.#state = state;
@@ -209,7 +234,7 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     return this.#state.current();
   }
 
-  async acquire(): Promise<BuildHandle> {
+  async acquire(): Promise<BuildHandle & RuntimeIdentity> {
     // Re-read on every acquisition. A missed filesystem notification is harmless because
     // the request boundary is what observes the generation.
     const active = this.#state.current();
@@ -218,6 +243,7 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
         remediation: 'Run `lorepack build` to create and activate one.',
       });
     }
+    const identity = this.#state.identity();
 
     this.#closeIdle(active.buildId);
 
@@ -230,27 +256,47 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
       this.#open.set(active.buildId, entry);
     }
     entry.refs += 1;
+    const database = entry.db;
 
     let released = false;
     const self = this;
-    return {
+    const handle: BuildHandle & RuntimeIdentity = Object.freeze({
+      ...identity,
       buildId: active.buildId,
       generation: active.generation,
       release(): void {
         if (released) return;
         released = true;
-        self.#release(active.buildId);
+        self.#handles.delete(handle);
+        self.#release(active.buildId, database);
       },
-    };
+    });
+    this.#handles.set(handle, database);
+    return handle;
   }
 
   /** The database backing a handle. Only the runtime's data access layer calls this. */
   database(handle: BuildHandle): DatabaseSync {
+    if (!this.#handles.has(handle)) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'The build handle is foreign, forged or released.',
+        {
+          remediation: 'Acquire a new handle from this runtime provider.',
+          subject: handle.buildId,
+        },
+      );
+    }
     const entry = this.#open.get(handle.buildId);
-    if (entry === undefined) {
-      throw new LoreError('LORE_E_INTERNAL', 'This build handle has already been released.', {
-        subject: handle.buildId,
-      });
+    if (entry === undefined || entry.db !== this.#handles.get(handle)) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'The build handle belongs to a closed runtime.',
+        {
+          remediation: 'Acquire a new handle from an open runtime provider.',
+          subject: handle.buildId,
+        },
+      );
     }
     return entry.db;
   }
@@ -259,9 +305,9 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     return this.#open.size;
   }
 
-  #release(buildId: BuildId): void {
+  #release(buildId: BuildId, database: DatabaseSync): void {
     const entry = this.#open.get(buildId);
-    if (entry === undefined) return;
+    if (entry === undefined || entry.db !== database) return;
     entry.refs -= 1;
     if (entry.refs > 0) return;
 

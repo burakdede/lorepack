@@ -9,6 +9,10 @@ excluded and why, ask for bounded context with citations, compare versions, acti
 version, and roll back without rebuilding. AI clients read the active build over MCP or HTTP.
 They cannot edit sources, build, deploy, or run shell commands through the Lorepack boundary.
 
+Local project state keeps a persistent corpus ID and runtime namespace separately from the
+content digest and display name. These identify the collection; local owner access remains
+the trust boundary. See [local storage](docs/architecture/local-storage.md).
+
 ## Why teams use it
 
 Lorepack is for teams whose AI answers must be grounded in project material that changes over

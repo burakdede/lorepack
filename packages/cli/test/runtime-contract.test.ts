@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { type LoreRuntime, loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
-import { type ContractFixture, runRuntimeContract } from '@lorepack/test-support';
+import { type ContractFixture, runRuntimeContract, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
@@ -112,6 +112,45 @@ runRuntimeContract({
     });
     return built.buildId;
   },
+});
+
+describe('runtime ownership boundary (#697)', () => {
+  it('refuses handles from an equivalent project without reporting build corruption', async () => {
+    await withTempProject({ files: CORPUS }, async (first) => {
+      await withTempProject({ files: CORPUS }, async (second) => {
+        for (const project of [first, second]) {
+          await runBuild({
+            config: loadConfig({ cwd: project.root }),
+            progress: new ProgressBus(),
+          });
+        }
+        const firstBackend = createLocalRuntimeBackend({ projectRoot: first.root });
+        const secondBackend = createLocalRuntimeBackend({ projectRoot: second.root });
+        const firstHandle = await firstBackend.provider.acquire();
+        const secondHandle = await secondBackend.provider.acquire();
+        try {
+          expect(firstHandle.buildId).toBe(secondHandle.buildId);
+          await expect(firstBackend.open(secondHandle)).rejects.toMatchObject({
+            code: 'LORE_E_INVALID_ARGUMENT',
+          });
+          await expect(secondBackend.open(firstHandle)).rejects.toMatchObject({
+            code: 'LORE_E_INVALID_ARGUMENT',
+          });
+          const own = await firstBackend.open(firstHandle);
+          expect((await own.catalog.manifest()).buildId).toBe(firstHandle.buildId);
+          firstHandle.release();
+          await expect(firstBackend.open(firstHandle)).rejects.toMatchObject({
+            code: 'LORE_E_INVALID_ARGUMENT',
+          });
+        } finally {
+          firstHandle.release();
+          secondHandle.release();
+          firstBackend.close();
+          secondBackend.close();
+        }
+      });
+    });
+  });
 });
 
 /**

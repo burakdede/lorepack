@@ -70,7 +70,21 @@ the builds and objects that the plan named and that nothing surviving still refe
 
 ## State store and activation
 
-`state.sqlite` holds build history, the active pointer, and operational receipts.
+`state.sqlite` holds build history, the active pointer, operational receipts, and the
+project's corpus and runtime namespace identity.
+
+State migration `0002_runtime-identity.sql` seeds one pair of 128-bit identifiers inside
+the existing migration transaction. `corpus_<32 lowercase hex>` names the collection;
+`namespace_<32 lowercase hex>` names its local storage/runtime binding. Reopening or
+renaming the project preserves both. A fresh state database receives a new pair even
+when its content yields the same build digest. Moving or copying the retained state
+preserves the pair. A copied runtime still owns its own handles.
+
+Neither identifier enters source bytes, canonical roots, manifests or build hashing.
+They are identifiers, not credentials. The local owner's filesystem access is the
+trust boundary. Missing or malformed identity records cause `LORE_E_SCHEMA_MISMATCH`;
+opening the database does not silently replace them. Restore a known-good state backup.
+See [ADR 0005](../adr/0005-corpus-runtime-identity.md) for the identity boundary.
 
 Activation is one transaction: the pointer moves and a monotonic generation increments
 together. A crash leaves the old pointer, never a torn state. The generation never repeats,
@@ -92,6 +106,11 @@ Only a verified build can be activated. Attempting to activate a failed candidat
 ## Request-scoped build handles
 
 `LocalActiveBuildProvider` hands out reference-counted read-only handles.
+Each handle captures the corpus and namespace. The provider also binds the handle object
+to its own open database connection. Another provider's handle, a copied or forged
+object, a released handle, or a handle whose connection has closed is refused with
+`LORE_E_INVALID_ARGUMENT`, even when the build digest and identity metadata match.
+Repeated release is harmless; releasing a closed connection cannot drain a replacement.
 
 ```ts
 const handle = await provider.acquire();   // start of a request

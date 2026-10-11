@@ -378,6 +378,7 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       try {
         db = provider.database(handle);
       } catch (cause) {
+        if (cause instanceof LoreError && cause.code === 'LORE_E_INVALID_ARGUMENT') throw cause;
         throw damagedBuild(handle.buildId, cause);
       }
       // Before `restrictToTables` below, which is what makes reading `schema_migrations`
