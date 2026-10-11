@@ -134,7 +134,7 @@ An empty value is refused rather than read as zero. `Number('')` is 0, an unset 
 expands to the empty string in a shell, and 0 means "do not wait at all": the opposite of what
 someone setting a wait wants, reached by writing nothing.
 
-**On the parse limits.** See [parsers](./parsers.md#every-parse-has-a-deadline-and-a-memory-ceiling).
+**On the parse limits.** See [parsers](./parsers.md#built-in-parsers-have-a-deadline-and-a-heap-ceiling).
 A file that reaches either limit is left out with a warning rather than failing the build, so
 raising a limit is how to get a legitimately huge file in, and lowering one is how a CI job says
 it would rather lose a file than wait.

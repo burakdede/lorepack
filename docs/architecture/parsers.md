@@ -35,17 +35,17 @@ input nobody anticipated.
 
 ## Which failures stop a build, and which do not
 
-Three outcomes, and the difference between them is what the failure says about the file.
+Five outcomes, and the difference between them is what the failure says about the file.
 
 | Outcome | When | Result |
 |---|---|---|
 | **Excluded before parsing** | No parser handles the extension, or the bytes are not readable text | Warning, build succeeds (#165) |
 | **Excluded by a limit** | The file parsed, and a scale limit means part of it is not imported | Warning, build succeeds (#242) |
-| **Excluded by a resource limit** | Parsing the file exceeded the deadline or the memory ceiling | Warning, build succeeds (#594) |
+| **Excluded by a resource limit** | Parsing the file exceeded the deadline or the V8 heap ceiling | Warning, build succeeds (#594) |
 | **Excluded by nesting** | The document is nested deeper than its parser can recurse | Warning, build succeeds (#595) |
 | **Fails the build** | A supported, included file whose bytes could not be read | `LORE_E_PARSE_FAILED`, exit 2 |
 
-The middle row is the one that changed. A CSV of 101 columns or a sheet of 500,001 rows used to
+The scale-limit row changed for spreadsheets. A CSV of 101 columns or a sheet of 500,001 rows used to
 throw, which failed the entire project: one over-wide spreadsheet anywhere made every other
 document unbuildable, for a limit that is about Lorepack's scale envelope rather than about the
 file being broken.
@@ -71,7 +71,7 @@ The **file-count** envelope is unchanged and still refuses the build, offering
 `--allow-large-project`. It is a property of the project as a whole, so there is no smaller thing
 to exclude; a per-file limit has one.
 
-## Every parse has a deadline and a memory ceiling
+## Built-in parsers have a deadline and a heap ceiling
 
 A parser is a pure function of its bytes, which is not the same as a bounded one. Small, valid
 files drive the libraries underneath into quadratic time or into gigabytes of memory: 20 KB of
@@ -111,7 +111,9 @@ each file's bytes and result across the IPC channel.
 `ArrayBuffer` memory, which is where pdfjs inflates a compressed stream, so a decompression bomb
 is stopped by the deadline rather than the ceiling: the 1.5 GB PDF above reached about 3.2 GB of
 resident memory in its 30 s. Issue #599 covers extracted-text amplification, which does not
-bound those buffers. A total resident-memory ceiling remains an acceptance gap in #594.
+bound those buffers. A total resident-memory budget is tracked separately in
+[issue #677](https://github.com/burakdede/lorepack/issues/677), following the isolation work
+completed in #594.
 Peak memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever
 buffers the parse allocates before its deadline.
 
