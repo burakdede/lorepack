@@ -42,6 +42,11 @@ planning, before anything is parsed, so the contributing set is not known when i
 And the stability is imaginary: `compilerVersion` is already an input, and a release that adds
 a parser bumps it, so every id moves anyway.
 
+The normative [package-format contract](../package-format/README.md#build-id-derivation)
+and its [frozen vectors](../package-format/worked-example.json) use this same registered
+set rule. The vectors hold canonical content fixed, preserve identity when map insertion
+order changes, and change identity when the unused XLSX parser's version changes.
+
 ## What stays out, deliberately
 
 Operational timestamps, machine name, absolute workspace path, temporary directory,

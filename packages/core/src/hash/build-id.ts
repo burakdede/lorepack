@@ -44,7 +44,7 @@ export interface BuildIdInputs {
   readonly normalizationVersion: number;
   /** Effective configuration with secrets and absolute paths already removed. */
   readonly effectiveConfig: Canonical;
-  /** Parser identifier to version, for every parser that contributed. */
+  /** Every registered parser's version, including parsers unused by this build. */
   readonly parserVersions: Readonly<Record<string, string>>;
   /** Resolved rules per artifact, already sorted by the caller's canonical rules. */
   readonly ruleResolution: Canonical;

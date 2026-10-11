@@ -47,6 +47,38 @@ function schemaFields(schema: JsonSchema, prefix = ''): Set<string> {
 }
 
 describe('package format documentation', () => {
+  it('defines parser identity as every registered parser, including unused parsers', () => {
+    const spec = readFileSync(SPEC, 'utf8');
+    expect(spec).toMatch(/\| `parserVersions` \|[^\n]*every registered parser/);
+  });
+
+  it('reproduces frozen parser-version vectors without changing canonical content', () => {
+    const example = JSON.parse(readFileSync(EXAMPLE, 'utf8')) as {
+      buildIdInputs: BuildIdInputs;
+      manifest: { buildId: string };
+      parserVersionVectors: {
+        name: string;
+        parserVersions: Record<string, string>;
+        buildId: string;
+      }[];
+    };
+    expect(example.parserVersionVectors).toHaveLength(2);
+    const [reordered, unusedBump] = example.parserVersionVectors;
+    if (reordered === undefined || unusedBump === undefined) throw new Error('Missing vectors');
+    expect(Object.keys(reordered.parserVersions)).toEqual(
+      Object.keys(example.buildIdInputs.parserVersions).reverse(),
+    );
+    expect(reordered.buildId).toBe(example.manifest.buildId);
+    expect(unusedBump.parserVersions.xlsx).not.toBe(example.buildIdInputs.parserVersions.xlsx);
+    expect(unusedBump.buildId).not.toBe(example.manifest.buildId);
+    for (const vector of example.parserVersionVectors) {
+      expect(
+        deriveBuildId({ ...example.buildIdInputs, parserVersions: vector.parserVersions }),
+        vector.name,
+      ).toBe(vector.buildId);
+    }
+  });
+
   it('documents every build manifest schema field and no invented manifest field', () => {
     const schema = JSON.parse(readFileSync(MANIFEST_SCHEMA, 'utf8')) as JsonSchema;
     const documented = documentedManifestFields();

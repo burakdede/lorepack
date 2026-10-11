@@ -23,7 +23,13 @@
       "sources": ["docs"]
     },
     "parserVersions": {
-      "markdown": "0.1.0"
+      "markdown": "0.1.0",
+      "html": "0.1.0",
+      "docx": "0.1.0",
+      "pdf-text": "0.1.0",
+      "csv": "0.1.0",
+      "xlsx": "0.1.0",
+      "text": "0.1.0"
     },
     "ruleResolution": [],
     "embeddingProfile": null,
@@ -37,7 +43,7 @@
   },
   "manifest": {
     "formatVersion": 1,
-    "buildId": "lore_7109c946e90daf364dacd1699d807a84a2785df75bf1541ef57d9dcf67af184e",
+    "buildId": "lore_0714e4ef0af111e1e64aac341ddbbd154a51365ce48fb5cbfcefcb26d57ee0b5",
     "projectName": "format-example",
     "compilerVersion": "0.1.0",
     "schemaVersion": 3,
@@ -60,5 +66,33 @@
     },
     "warnings": [],
     "exclusions": []
-  }
+  },
+  "parserVersionVectors": [
+    {
+      "name": "reordered-registry",
+      "parserVersions": {
+        "text": "0.1.0",
+        "xlsx": "0.1.0",
+        "csv": "0.1.0",
+        "pdf-text": "0.1.0",
+        "docx": "0.1.0",
+        "html": "0.1.0",
+        "markdown": "0.1.0"
+      },
+      "buildId": "lore_0714e4ef0af111e1e64aac341ddbbd154a51365ce48fb5cbfcefcb26d57ee0b5"
+    },
+    {
+      "name": "unused-xlsx-version-bump",
+      "parserVersions": {
+        "markdown": "0.1.0",
+        "html": "0.1.0",
+        "docx": "0.1.0",
+        "pdf-text": "0.1.0",
+        "csv": "0.1.0",
+        "xlsx": "0.2.0",
+        "text": "0.1.0"
+      },
+      "buildId": "lore_ee4a4d41be00cc60db1f03422640875407d1663e339b9ea7363eab12dfd88eba"
+    }
+  ]
 }

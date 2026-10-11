@@ -298,9 +298,11 @@ they show scale trends rather than proving performance on every customer corpus.
 
 ### Immutable identity
 
-The build id comes from canonical inputs, parser and compiler versions, configuration, and
-structure. It does not depend on timestamps, hostnames, absolute paths, or physical SQLite
-bytes. The same canonical inputs produce the same id across supported operating systems.
+The build id comes from canonical inputs, every registered parser's version (including unused
+parsers), compiler version, configuration, and structure. The
+[package-format contract and frozen vectors](docs/package-format/README.md#build-id-derivation)
+define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
+physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
 
 ### Provenance on every result
 
