@@ -116,7 +116,13 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
     const frozen = readFrozenInventory(
       join(root, 'tools/coverage_inventory/frozen_inventory.json'),
     );
-    const inventory = coverageInventory(root, frozen);
+    const inventory = {
+      ...coverageInventory(root, frozen),
+      root: realpathSync(root),
+      candidate: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+      dirty:
+        execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).length > 0,
+    };
     const json = `${JSON.stringify(inventory, null, 2)}\n`;
     if (args[1]) {
       const output = resolve(root, args[1]);

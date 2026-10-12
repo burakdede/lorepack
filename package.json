@@ -73,7 +73,8 @@
     "check:performance-report": "node scripts/check-performance-report.mjs",
     "check:changeset-policy": "node scripts/check-changeset-policy.mjs",
     "supply-chain:report": "node scripts/check-supply-chain.mjs --write",
-    "coverage:inventory": "node scripts/coverage_inventory.mjs --out coverage/owned_inventory.json"
+    "coverage:inventory": "node scripts/coverage_inventory.mjs --out coverage/owned_inventory.json",
+    "coverage:report": "node scripts/coverage_report.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
