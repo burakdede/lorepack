@@ -473,6 +473,9 @@ your Node.js version in a bug report.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
+Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
+The test toolchain is outside the published runtime dependencies; see the
+[CI guide](docs/architecture/ci.md) for its regression checks.
 
 ## License
 

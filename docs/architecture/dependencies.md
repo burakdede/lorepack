@@ -165,3 +165,13 @@ small and fully testable. `ProjectLock` has grown beyond its original directory 
 host identity, PID reuse and concurrent reclamation. Its current trade-offs are recorded in
 [ADR 0002](../adr/0002-lock-reclamation.md), with real cross-process tests on every supported
 platform.
+
+## Contributor test tooling
+
+Vitest and `@vitest/coverage-v8` are pinned together at 4.1.11. This patch fixes
+[redirect-mock file disclosure](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9)
+in the contributor toolchain. The regression drives the installed public registration
+handler with real files and Vite's allow/deny policy, rather than asserting a version string.
+These MIT tooling packages remain outside the published runtime closure. Installation
+continues to decline dependency scripts; the upgrade adds no runtime dependency or native
+build requirement.
