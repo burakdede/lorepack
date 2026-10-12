@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "files": [
+    "packages/core/test/sql-guard.test.ts",
+    "packages/backend-local/test/query_child.test.ts",
+    "tools/test-support/src/runtime-contract.ts"
+  ]
+}

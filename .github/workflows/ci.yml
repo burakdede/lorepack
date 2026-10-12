@@ -57,6 +57,9 @@ jobs:
 
       - run: pnpm typecheck
 
+      - name: Audit regression test types
+        run: pnpm typecheck:audit
+
       - name: Architecture rules
         run: pnpm test:arch
 

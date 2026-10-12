@@ -66,9 +66,10 @@ function query(sql: string, limit = 10, maxBytes = 1024): unknown {
 
 describe('SQL child message boundary against real SQLite', () => {
   it('refuses startup without an IPC channel', async () => {
-    vi.mocked(process.send).mockRestore();
+    vi.restoreAllMocks();
     const send = process.send;
-    process.send = undefined;
+    if (send === undefined) throw new Error('The test runner must provide an IPC channel.');
+    delete process.send;
     try {
       vi.resetModules();
       await expect(import('../src/sql/query-child.js')).rejects.toThrow(

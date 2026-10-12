@@ -24,7 +24,7 @@ Steps, in order:
    would bring back a bundled SQLite older than 3.53.2, with the FTS5 CVEs, so it fails
    loudly instead.
 2. `pnpm install --frozen-lockfile`
-3. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`
+3. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm typecheck:audit`
 4. `pnpm test:arch`, the dependency-direction rules
 5. `pnpm test`
 6. `pnpm check:no-native`, `pnpm check:no-em-dash`
@@ -44,6 +44,10 @@ The shared verifier also runs `pnpm check:supply-chain`: the production audit mu
 clean at Moderate and above, and the full contributor dependency audit must pass at High
 and above. Both run against the registry; an audit request failure fails verification.
 The dated dependency-health report and CycloneDX SBOM must match the resolved dependencies.
+
+Package builds type-check `src`. `pnpm typecheck:audit` applies the same strict settings to
+the audit regression files listed in [`tsconfig.audit_tests.json`](../../tsconfig.audit_tests.json).
+Add new audit regression files to that list. Both `pnpm verify` and native CI run the check.
 
 The `privacy sandbox (ubuntu-latest)` job builds the project and runs
 `tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
