@@ -308,7 +308,16 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
       };
       this.#open.set(buildId, entry);
     }
-    const releaseReference = registerReadReference(dirname(this.#buildsDirectory), buildId);
+    let releaseReference: () => void;
+    try {
+      releaseReference = registerReadReference(dirname(this.#buildsDirectory), buildId);
+    } catch (cause) {
+      if (entry.refs === 0 && entry.idleReference === undefined) {
+        entry.db.close();
+        this.#open.delete(buildId);
+      }
+      throw cause;
+    }
     entry.idleReference?.();
     delete entry.idleReference;
     entry.refs += 1;

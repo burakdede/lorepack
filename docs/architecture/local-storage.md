@@ -373,3 +373,6 @@ ownership, excluded from build identity and packages; they are not credentials o
 
 This local protocol does not yet establish remote read-lifetime protection. Remote cleanup
 coordination and explicit selected-server ownership remain part of #439.
+
+If reader-record publication fails, acquisition closes any newly opened unowned catalog
+before returning the failure. An existing owned connection keeps its valid reference.

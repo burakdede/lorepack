@@ -556,6 +556,17 @@ describe('LocalActiveBuildProvider', () => {
     });
   });
 
+  it('closes an unowned catalog if publishing its reader reference fails, issue 439', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      state.recordBuild(summary(BUILD_A));
+      state.activate(BUILD_A);
+      writeFileSync(join(builds, '..', 'readers'), 'blocked');
+      await expect(provider.acquire()).rejects.toThrow();
+      expect(provider.openBuildCount).toBe(0);
+    });
+  });
+
   it('keeps one build open after many activations with no request in flight (#566)', async () => {
     await withProvider(async (provider, state, builds) => {
       const ids = ['1', '2', '3', '4', '5', '6'].map(buildId);
