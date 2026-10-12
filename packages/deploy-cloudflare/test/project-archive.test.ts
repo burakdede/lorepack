@@ -1,15 +1,28 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { verifyArchive } from '@lorepack/backend-local';
-import { hashBytes, type LoreError, objectKey } from '@lorepack/core';
+import {
+  buildMigrationsDirectory,
+  loadMigrations,
+  openWritable,
+  runMigrations,
+  verifyArchive,
+} from '@lorepack/backend-local';
+import {
+  type BuildIdInputs,
+  deriveBuildId,
+  hashBytes,
+  hashCanonical,
+  hashRoot,
+  type LoreError,
+  objectKey,
+  SCHEMA_VERSION,
+} from '@lorepack/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { uploadProjectArchive } from '../src/project-archive.js';
 import { r2ArchiveKey } from '../src/r2-keys.js';
 
 const PROJECT = 'contracted';
-const BUILD = `lore_${'a'.repeat(64)}`;
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
@@ -58,6 +71,7 @@ function makeBuildDirectory(body: string): {
   readonly buildDirectory: string;
   readonly objectsDirectory: string;
   readonly hash: string;
+  readonly buildId: string;
 } {
   const root = mkdtempSync(join(tmpdir(), 'lore-build-'));
   directories.push(root);
@@ -67,55 +81,78 @@ function makeBuildDirectory(body: string): {
   mkdirSync(join(buildDirectory, 'reports'), { recursive: true });
   mkdirSync(objectsDirectory, { recursive: true });
 
-  writeFileSync(
-    join(buildDirectory, 'manifest.json'),
-    `${JSON.stringify(
-      {
-        formatVersion: 1,
-        buildId: BUILD,
-        projectName: PROJECT,
-        compilerVersion: '0.1.0',
-        schemaVersion: 1,
-        configurationHash: 'c'.repeat(64),
-        sourceFingerprint: 'd'.repeat(64),
-        canonicalRoots: {
-          artifacts: '1'.repeat(64),
-          nodes: '2'.repeat(64),
-          chunks: '3'.repeat(64),
-          tables: '4'.repeat(64),
-          objects: '5'.repeat(64),
-        },
-        capabilities: ['lexical-search', 'structured-context'],
-        counts: { artifacts: 1, nodes: 1, chunks: 0, tables: 0, tableRows: 0 },
-        warnings: [],
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  writeFileSync(join(buildDirectory, 'reports', 'warnings.json'), '[]\n');
-
-  const db = new DatabaseSync(join(buildDirectory, 'context.sqlite'), {
-    allowExtension: false,
-    enableDoubleQuotedStringLiterals: false,
-  });
-  db.exec(`CREATE TABLE artifacts (
-    id TEXT PRIMARY KEY,
-    object_hash TEXT NOT NULL
-  ) STRICT`);
-
   const bytes = new TextEncoder().encode(body);
   const hash = hashBytes(bytes);
+  const artifactId = 'contracted:guides/rollback.md';
+  const empty = hashRoot([]);
+  const roots = {
+    artifacts: hashRoot([hashCanonical([artifactId, hash])]),
+    nodes: empty,
+    chunks: empty,
+    tables: empty,
+    objects: hashRoot([hash]),
+  };
+  const inputs: BuildIdInputs = {
+    formatVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
+    compilerVersion: '0.1.0',
+    canonicalizationVersion: 1,
+    normalizationVersion: 1,
+    effectiveConfig: { name: PROJECT },
+    parserVersions: { text: '0.1.0' },
+    ruleResolution: [],
+    embeddingProfile: null,
+    canonicalRoots: roots,
+  };
+  const buildId = deriveBuildId(inputs);
+  writeFileSync(
+    join(buildDirectory, 'manifest.json'),
+    `${JSON.stringify({
+      formatVersion: 1,
+      buildId,
+      projectName: PROJECT,
+      compilerVersion: inputs.compilerVersion,
+      schemaVersion: SCHEMA_VERSION,
+      configurationHash: hashCanonical(inputs.effectiveConfig),
+      sourceFingerprint: hash,
+      canonicalRoots: roots,
+      capabilities: ['lexical-search', 'structured-context'],
+      counts: { artifacts: 1, nodes: 0, chunks: 0, tables: 0, tableRows: 0 },
+      warnings: [],
+    })}\n`,
+  );
+  writeFileSync(join(buildDirectory, 'reports', 'warnings.json'), '[]\n');
+  writeFileSync(
+    join(buildDirectory, 'reports', 'build-id-inputs.json'),
+    `${JSON.stringify(inputs)}\n`,
+  );
+  const db = openWritable(join(buildDirectory, 'context.sqlite'));
+  runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => '1970-01-01T00:00:00.000Z');
   const path = join(objectsDirectory, ...objectKey(hash).split('/'));
   mkdirSync(join(path, '..'), { recursive: true });
   writeFileSync(path, bytes);
-  db.prepare('INSERT INTO artifacts (id, object_hash) VALUES (?, ?)').run(
-    'contracted:guides/rollback.md',
+  db.prepare(`INSERT INTO artifacts
+    (id, source_id, relative_path, display_path, media_type, byte_size, content_hash,
+     parser_id, parser_version, title, status, authority, object_hash, metadata)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    artifactId,
+    PROJECT,
+    'guides/rollback.md',
+    'guides/rollback.md',
+    'text/plain',
+    bytes.byteLength,
     hash,
+    'text',
+    '0.1.0',
+    'Rollback',
+    'active',
+    50,
+    hash,
+    '{}',
   );
   db.close();
 
-  return { buildDirectory, objectsDirectory, hash };
+  return { buildDirectory, objectsDirectory, hash, buildId };
 }
 
 afterEach(() => {
@@ -132,20 +169,20 @@ describe('uploadProjectArchive, issue 88', () => {
     const result = await uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
     });
 
     expect(result).toMatchObject({
-      key: r2ArchiveKey(PROJECT, BUILD),
+      key: r2ArchiveKey(PROJECT, fixture.buildId),
       uploaded: true,
-      memberCount: 5,
+      memberCount: 6,
     });
 
     const archivePath = join(fixture.buildDirectory, 'downloaded.lorepack');
     writeFileSync(archivePath, bucket.objects.get(result.key) as Uint8Array);
-    expect(await verifyArchive(archivePath)).toMatchObject({ ok: true, memberCount: 5 });
+    expect(await verifyArchive(archivePath)).toMatchObject({ ok: true, memberCount: 6 });
   });
 
   it('skips a previously uploaded archive after verifying it', async () => {
@@ -155,14 +192,14 @@ describe('uploadProjectArchive, issue 88', () => {
     const first = await uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
     });
     const second = await uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
     });
@@ -175,14 +212,14 @@ describe('uploadProjectArchive, issue 88', () => {
   it('fails when the existing remote archive is corrupt', async () => {
     const fixture = makeBuildDirectory('rollback body');
     const bucket = new FakeR2Bucket();
-    const key = r2ArchiveKey(PROJECT, BUILD);
+    const key = r2ArchiveKey(PROJECT, fixture.buildId);
     bucket.objects.set(key, new TextEncoder().encode('tampered'));
 
     try {
       await uploadProjectArchive({
         bucket,
         projectId: PROJECT,
-        buildId: BUILD,
+        buildId: fixture.buildId,
         buildDirectory: fixture.buildDirectory,
         objectsDirectory: fixture.objectsDirectory,
       });
@@ -205,7 +242,7 @@ describe('uploadProjectArchive, issue 88', () => {
         uploadProjectArchive({
           bucket: new FakeR2Bucket(),
           projectId: PROJECT,
-          buildId: BUILD,
+          buildId: fixture.buildId,
           buildDirectory: fixture.buildDirectory,
           objectsDirectory: fixture.objectsDirectory,
         }),
@@ -221,7 +258,7 @@ describe('uploadProjectArchive, issue 88', () => {
     const result = await uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
       retryDelayMs: 0,
@@ -229,7 +266,7 @@ describe('uploadProjectArchive, issue 88', () => {
     });
 
     expect(result.uploaded).toBe(true);
-    expect(bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
+    expect(bucket.objects.has(r2ArchiveKey(PROJECT, fixture.buildId))).toBe(true);
   });
 
   it('retries a transient empty read during remote archive verification', async () => {
@@ -240,7 +277,7 @@ describe('uploadProjectArchive, issue 88', () => {
     const result = await uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
       retryDelayMs: 0,
@@ -248,7 +285,7 @@ describe('uploadProjectArchive, issue 88', () => {
     });
 
     expect(result.uploaded).toBe(true);
-    expect(bucket.objects.has(r2ArchiveKey(PROJECT, BUILD))).toBe(true);
+    expect(bucket.objects.has(r2ArchiveKey(PROJECT, fixture.buildId))).toBe(true);
     expect(bucket.getEmptyResponses).toBe(0);
   });
 
@@ -264,7 +301,7 @@ describe('uploadProjectArchive, issue 88', () => {
     const resultPromise = uploadProjectArchive({
       bucket,
       projectId: PROJECT,
-      buildId: BUILD,
+      buildId: fixture.buildId,
       buildDirectory: fixture.buildDirectory,
       objectsDirectory: fixture.objectsDirectory,
       progressIntervalMs: 25,
