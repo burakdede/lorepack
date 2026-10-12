@@ -121,8 +121,8 @@ The final command exits 1 for failed targets or missing sources. A direct-only r
 misses configuration files; missing coverage yields null aggregate metrics, never a smaller
 denominator. Separately convert genuine configuration/subprocess execution to Istanbul JSON,
 then capture each map with the same pre-measurement inventory and a distinct origin. Repeat
-`--input` to combine those bundles. This command binds and reports maps; it does not yet
-orchestrate those separate captures or make ordinary Vitest coverage complete.
+`--input` to combine those bundles. This command binds and reports maps; the campaign
+command below orchestrates the captures. Ordinary Vitest coverage alone stays incomplete.
 
 Each incoming source hash must match the current frozen-preserving inventory. Extra paths,
 invalid counter IDs/hits, mismatched branch-arm counts and incompatible complete
@@ -148,7 +148,7 @@ calls retain their original expression locations and real V8 ranges. A real Node
 verifies that this adapter does not cover an unused function or unexecuted branch.
 Changed source hashes fail conversion. The final all-owned report still refuses missing
 sources and failed targets. This command does not launch the measurement suite or import
-configurations automatically; that orchestration remains incomplete.
+configurations automatically; use the campaign command for orchestration.
 
 Resolved tooling modules are dynamically imported through file URLs, including Windows
 drive-letter paths. Coverage tools use Node's `import.meta.main` to distinguish commands
@@ -158,8 +158,8 @@ does not invoke commands or attempt to resolve stdin as a file. Native Windows C
 the real conversion and reporting suites; a macOS pass alone does not qualify portability.
 
 Native conversion reads and processes one raw V8 JSON file at a time. It does not retain
-the complete raw campaign in an array. Converted maps and parsed owned sources remain available for compatibility
-checks. The real-record stream test must produce the same counters as the array input,
+the complete raw campaign in an array. Converted maps and parsed owned sources remain
+available for compatibility checks. The real-record stream test must produce the same counters as the array input,
 including uncovered functions. This states the loading strategy, not a peak-memory bound.
 
 Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
@@ -167,6 +167,32 @@ critical lines/statements at least 98% and functions/branches at least 95%. Fail
 remain visible in the JSON report. The report command is not part of `pnpm verify` while the
 full capture workflow and audited coverage target attainment remain incomplete. Its contract
 tests run in the architecture suite, locally and in native CI.
+
+### Reproducible default-suite campaigns
+
+```sh
+pnpm coverage:capture --out coverage/campaign-<fresh-name>
+```
+
+The directory must not exist. The command builds first, records the complete source
+inventory, then compares normal and source-layout file/project collection. Source aliases
+match exact package exports. The parsers retain their compiled layout, and configless
+projects retain their package identities, including MCP. Generated configuration lives
+in the artifact directory; owned configurations stay in the inventory.
+
+The command imports every owned Vite/Vitest configuration with source-hash and semantic
+checks. It runs the complete default suite with direct coverage and actual Node subprocess
+capture, converts compatible native maps, then writes the combined source-bound report.
+It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
+Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
+retained. Raw records, configuration assertions, collection parity, inventory, direct maps
+and accepted/rejected native evidence stay in the directory.
+
+This measures the default suite. Separate security, acceptance, Studio and release gates
+remain required. Missing owned execution stays uncovered; it does not shrink the inventory.
+Do not overlap full campaigns or full worktree verifiers. The capture command has contract
+tests but does not yet establish final all-owned target attainment or native qualification
+of a complete campaign. Keep the release gate open until the measured evidence proves both.
 
 ## `commit-hygiene.yml`
 
