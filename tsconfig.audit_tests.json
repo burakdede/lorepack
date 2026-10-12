@@ -18,6 +18,7 @@
     "tools/arch/test/coverage_report.test.ts",
     "tools/arch/test/coverage_native.test.ts",
     "tools/arch/test/coverage_configuration.test.ts",
-    "tools/arch/test/coverage_capture.test.ts"
+    "tools/arch/test/coverage_capture.test.ts",
+    "tools/arch/test/coverage_provider.test.ts"
   ]
 }

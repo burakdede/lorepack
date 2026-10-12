@@ -85,6 +85,7 @@ describe('source-layout coverage configuration', () => {
     const rendered = (await import(pathToFileURL(file).href)).default;
     expect(rendered.test.coverage.include).toEqual([configPath]);
     expect(rendered.test.coverage.exclude).toEqual([]);
+    expect(rendered.test.coverage.provider).toBe('istanbul');
     expect(rendered.test.projects[0].resolve.alias[0].find).toBeInstanceOf(RegExp);
     expect(rendered.test.projects[0].resolve.alias[0].find.test('@lorepack/core-extra')).toBe(
       false,
