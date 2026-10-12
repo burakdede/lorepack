@@ -35,7 +35,10 @@ interface ChildReply {
   readonly subject?: string;
 }
 
-export async function verifyCatalogFiles(directory: string): Promise<LogicalCatalogProof> {
+export async function verifyCatalogFiles(
+  directory: string,
+  signal?: AbortSignal,
+): Promise<LogicalCatalogProof> {
   let reply: ChildReply;
   try {
     const { stdout } = await execute(
@@ -49,6 +52,7 @@ export async function verifyCatalogFiles(directory: string): Promise<LogicalCata
       ],
       {
         env: {},
+        signal,
         timeout: ARCHIVE_VERIFY_LIMITS.deadlineMs,
         killSignal: 'SIGKILL',
         maxBuffer: ARCHIVE_VERIFY_LIMITS.maxReplyBytes,
@@ -58,6 +62,12 @@ export async function verifyCatalogFiles(directory: string): Promise<LogicalCata
     reply = JSON.parse(stdout) as ChildReply;
   } catch (cause) {
     if (cause instanceof LoreError) throw cause;
+    if (signal?.aborted) {
+      throw new LoreError('LORE_E_CANCELLED', 'Catalog verification was cancelled.', {
+        remediation: 'Retained build data and the active pointer were not changed.',
+        cause,
+      });
+    }
     throw new LoreError(
       'LORE_E_LIMIT_EXCEEDED',
       'The archive verifier exceeded its execution limits or could not finish.',

@@ -52,7 +52,7 @@ same reviewability as code or infrastructure. Common environments include:
 
 The Terraform analogy describes the lifecycle, not infrastructure provisioning. `lore.yaml` is
 the desired context configuration. `lorepack plan` previews the candidate, `lorepack build`
-compiles an immutable artifact, `lorepack validate` checks it without moving the active pointer,
+compiles an immutable artifact, `lorepack validate` compiles and checks a candidate without moving the active pointer,
 and `lorepack activate` changes that pointer. `lorepack diff` reviews versions and
 `lorepack rollback` selects a previous immutable build. This separates desired inputs, review,
 and activation. Lorepack does not provision cloud resources and does not mutate source files.
@@ -260,6 +260,11 @@ Rollback points at an existing immutable build. It does not recompile the source
 works after the source directory and parser cache are removed. Keep `lore.yaml` and `.lore/`:
 they identify the project and hold its retained builds and content objects. A missing or
 invalid target fails before the active pointer changes.
+
+Use `lorepack validate --build <full-build-id>` to verify a retained build from its sealed
+catalog, manifest, identity inputs and normalized objects, even after sources change or
+disappear. It does not compile sources or move the active pointer. See the
+[validation contract](docs/validation.md) for checks, limits and unsupported builds.
 
 Retained builds remain available to inspection, diff, search, export and read-only serving.
 When sources are unavailable, query freshness is `unknown`. Use `lorepack mcp --active-only`

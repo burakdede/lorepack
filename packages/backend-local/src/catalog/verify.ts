@@ -11,8 +11,12 @@ import {
   hashCanonical,
   hashRoot,
   LoreError,
+  type LoreNode,
+  locatorBounds,
+  locatorProblem,
   NORMALIZATION_VERSION,
   SCHEMA_VERSION,
+  type SourceLocator,
   sha256Schema,
 } from '@lorepack/core';
 import { assertMigrationsKnown, loadMigrations, runMigrations } from '../migrations.js';
@@ -259,6 +263,7 @@ export function verifyLogicalCatalog(
     'context.sqlite',
     'The catalog contains broken foreign-key references.',
   );
+  verifyLocatorRanges(db);
 
   const artifacts = db
     .prepare('SELECT id, content_hash, object_hash, status, authority FROM artifacts ORDER BY id')
@@ -495,4 +500,75 @@ export function verifyLogicalCatalog(
     'The recorded build ID does not match its canonical inputs.',
   );
   return { buildId, objectHashes: artifacts.map((row) => row.object_hash), canonicalRoots: roots };
+}
+
+function verifyLocatorRanges(db: DatabaseSync): void {
+  for (const artifact of db
+    .prepare('SELECT id, relative_path, metadata FROM artifacts')
+    .iterate()) {
+    const id = String(artifact.id);
+    const relativePath = String(artifact.relative_path);
+    const nodes = db
+      .prepare('SELECT id, kind, line_start, line_end, metadata FROM nodes WHERE artifact_id=?')
+      .all(id)
+      .map((row) => {
+        const metadata = JSON.parse(String(row.metadata)) as Record<string, unknown>;
+        return {
+          id: String(row.id),
+          kind: row.kind as LoreNode['kind'],
+          metadata,
+          locator: {
+            artifactId: id,
+            relativePath,
+            ...(row.line_start === null ? {} : { lineStart: Number(row.line_start) }),
+            ...(row.line_end === null ? {} : { lineEnd: Number(row.line_end) }),
+            ...(metadata.page === undefined ? {} : { page: metadata.page as number }),
+            ...(metadata.sheet === undefined ? {} : { sheet: metadata.sheet as string }),
+            ...(metadata.cellRange === undefined
+              ? {}
+              : { cellRange: metadata.cellRange as string }),
+          },
+        };
+      });
+    const bounds = locatorBounds(
+      {
+        id,
+        relativePath,
+        metadata: JSON.parse(String(artifact.metadata)) as Record<string, unknown>,
+      },
+      nodes,
+    );
+    const check = (subject: string, locator: SourceLocator): void => {
+      const problem = locatorProblem(locator, bounds);
+      requireValid(problem === undefined, subject, `locator-ranges: ${problem ?? ''}`);
+    };
+    for (const node of nodes) check(node.id, node.locator);
+    for (const row of db
+      .prepare(
+        'SELECT id, relative_path, line_start, line_end, page FROM chunks WHERE artifact_id=?',
+      )
+      .iterate(id)) {
+      check(String(row.id), {
+        artifactId: id,
+        relativePath: String(row.relative_path),
+        ...(row.line_start === null ? {} : { lineStart: Number(row.line_start) }),
+        ...(row.line_end === null ? {} : { lineEnd: Number(row.line_end) }),
+        ...(row.page === null ? {} : { page: Number(row.page) }),
+      });
+    }
+    for (const row of db
+      .prepare(
+        'SELECT id, relative_path, line_start, line_end, sheet, cell_range FROM tables WHERE artifact_id=?',
+      )
+      .iterate(id)) {
+      check(String(row.id), {
+        artifactId: id,
+        relativePath: String(row.relative_path),
+        ...(row.line_start === null ? {} : { lineStart: Number(row.line_start) }),
+        ...(row.line_end === null ? {} : { lineEnd: Number(row.line_end) }),
+        ...(row.sheet === null ? {} : { sheet: String(row.sheet) }),
+        ...(row.cell_range === null ? {} : { cellRange: String(row.cell_range) }),
+      });
+    }
+  }
 }

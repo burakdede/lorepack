@@ -264,3 +264,14 @@ describe('cross-machine agreement', () => {
     expect(hashCanonical({ a: 1, b: ['x'] })).toBe(sha256Hex('o2:s1:ai1:1s1:ba1:s1:x'));
   });
 });
+
+it('cancels a streaming checksum instead of finishing after interruption, issue415', async () => {
+  await withTempProject({ files: {} }, async (project) => {
+    const path = `${project.root}/large-object`;
+    writeFileSync(path, Buffer.alloc(8 * 1024 * 1024, 65));
+    const controller = new AbortController();
+    const pending = hashFile(path, controller.signal);
+    setImmediate(() => controller.abort());
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});

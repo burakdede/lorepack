@@ -65,6 +65,7 @@ async function baseInput(overrides: Partial<ValidationInput> = {}): Promise<Vali
     secrets: [],
     integrityCheck: () => ({ ok: true, problems: [] }),
     search: () => [{ hit: true }],
+    tableMappingCheck: () => [],
     countRows: (_db, table) => (table === 'chunks' ? 1 : 1),
     ...overrides,
   };
@@ -320,9 +321,53 @@ describe('reporting', () => {
     const input = await baseInput({
       integrityCheck: () => ({ ok: false, problems: ['bad'] }),
       search: () => [],
+      tableMappingCheck: () => [],
       countRows: (_db, table) => (table === 'chunks' ? 5 : 1),
     });
     const report = await validateCandidate(input);
     expect(new Set(report.failures.map((failure) => failure.check)).size).toBeGreaterThan(2);
   });
+});
+
+describe('structured candidate validation, issue415', () => {
+  it('names a mismatched physical table mapping', async () => {
+    const input = {
+      ...(await baseInput()),
+      tableMappingCheck: () => [
+        { message: 'Physical table row count differs.', subject: 'src:a.md#table' },
+      ],
+    };
+    expect(failed(await validateCandidate(input), 'table-mapping')[0]?.subject).toBe(
+      'src:a.md#table',
+    );
+  });
+
+  it.each([{ lineStart: 2, lineEnd: 1 }, { lineStart: 1, lineEnd: 11 }, { page: 3 }])(
+    'rejects an out-of-range source locator %j',
+    async (coordinates) => {
+      const input = await baseInput();
+      const root = node('root', {
+        kind: 'document',
+        locator: { artifactId: 'src:a.md', relativePath: 'a.md', lineStart: 1, lineEnd: 10 },
+      });
+      const child = node('child', {
+        parentId: 'root',
+        locator: { artifactId: 'src:a.md', relativePath: 'a.md', ...coordinates },
+      });
+      const entry = input.artifacts[0];
+      if (entry === undefined) throw new Error('Missing fixture artifact.');
+      const broken = {
+        ...input,
+        artifacts: [
+          {
+            ...entry,
+            artifact: artifact({ metadata: { pages: 2 } }),
+            nodes: [root, child],
+            chunks: [chunk({ nodeIds: ['child'] })],
+          },
+        ],
+      };
+      expect(failed(await validateCandidate(broken), 'locator-ranges').length).toBeGreaterThan(0);
+    },
+  );
 });

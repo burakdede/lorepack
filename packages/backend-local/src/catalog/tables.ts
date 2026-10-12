@@ -404,6 +404,62 @@ export function describeStoredTable(
   };
 }
 
+export function checkTableMappings(
+  db: DatabaseSync,
+  parsed: readonly ParsedTable[],
+): readonly { readonly subject: string; readonly message: string }[] {
+  const failures: { subject: string; message: string }[] = [];
+  const expected = new Map(parsed.map((table) => [table.tableId, table]));
+  for (const row of listTableRows(db)) {
+    if (!expected.has(row.tableId))
+      failures.push({ subject: row.tableId, message: 'The catalog contains an unparsed table.' });
+  }
+  for (const table of parsed) {
+    try {
+      const stored = describeStoredTable(db, table.tableId, 0);
+      if (stored === null) throw new Error('The parsed table has no catalog mapping.');
+      if (
+        stored.name !== table.name ||
+        stored.sheet !== table.sheet ||
+        stored.locator.artifactId !== table.locator.artifactId ||
+        stored.locator.relativePath !== table.locator.relativePath ||
+        stored.sqlName !== sqlNameFor(table.tableId, table.sheet ?? table.name)
+      )
+        throw new Error('The table mapping differs from the parsed table.');
+      const physical = db.prepare(`PRAGMA table_info(${assertIdentifier(stored.sqlName)})`).all();
+      if (
+        physical.length !== table.columns.length ||
+        stored.columns.length !== table.columns.length
+      )
+        throw new Error('The physical and catalog column counts differ from the parsed table.');
+      for (const [index, column] of table.columns.entries()) {
+        const recorded = stored.columns[index];
+        const sqlName = columnSqlName(index, column.name);
+        if (
+          recorded?.name !== column.name ||
+          recorded.type !== column.type ||
+          recorded.nullable !== column.nullable ||
+          recorded.sqlName !== sqlName ||
+          physical[index]?.name !== sqlName ||
+          physical[index]?.type !== SQL_TYPES[column.type]
+        )
+          throw new Error('A physical or catalog column differs from the parsed column.');
+      }
+      const physicalRows = Number(
+        db.prepare(`SELECT count(*) AS n FROM ${assertIdentifier(stored.sqlName)}`).get()?.n,
+      );
+      if (physicalRows !== table.rows.length || stored.rowCount !== table.rows.length)
+        throw new Error('The physical or catalog row count differs from the parsed table.');
+    } catch (error) {
+      failures.push({
+        subject: table.tableId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return failures;
+}
+
 function relabel(
   row: Record<string, unknown>,
   columns: readonly ColumnRow[],
