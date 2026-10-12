@@ -407,7 +407,8 @@ uses the same byte serialization in local Node and the portable Worker-safe core
 Archive verification requires a compatible manifest, catalog and complete identity inputs.
 First-run state is initialized privately and published without replacing existing state.
 It recomputes catalog roots and the build ID, checks required content-addressed objects,
-and refuses link or device entries. Success reports integrity only and an unsigned publisher.
+and refuses link or device entries. Malformed verifier inputs are refused; incompatible
+hashing versions retain their typed error. Success reports integrity only and an unsigned publisher.
 Older archives missing identity inputs are explicitly unsupported for verification.
 See the [package format](docs/package-format/README.md#archive-structure).
 
