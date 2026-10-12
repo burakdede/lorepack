@@ -150,6 +150,13 @@ Changed source hashes fail conversion. The final all-owned report still refuses 
 sources and failed targets. This command does not launch the measurement suite or import
 configurations automatically; that orchestration remains incomplete.
 
+Resolved tooling modules are dynamically imported through file URLs, including Windows
+drive-letter paths. Coverage tools use Node's `import.meta.main` to distinguish commands
+from imports. The supported Node range includes this capability. An actual stdin-import
+regression checks that importing the native converter (and its report/inventory dependencies)
+does not invoke commands or attempt to resolve stdin as a file. Native Windows CI exercises
+the real conversion and reporting suites; a macOS pass alone does not qualify portability.
+
 Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
 critical lines/statements at least 98% and functions/branches at least 95%. Failed targets
 remain visible in the JSON report. The report command is not part of `pnpm verify` while the

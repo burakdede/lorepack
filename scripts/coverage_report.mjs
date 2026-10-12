@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { coverageInventory, readFrozenInventory } from './coverage_inventory.mjs';
 
@@ -134,7 +133,7 @@ export function reportCoverage(inventory, bundles) {
   };
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   try {
     const { values } = parseArgs({
       options: {
