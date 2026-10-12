@@ -3,6 +3,7 @@ import { estimateTokens } from '@lorepack/compiler';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { expect, it } from 'vitest';
+import { LoreClient } from '../../sdk/src/index.js';
 import { runBuild } from '../src/services/build.js';
 import { startServing } from '../src/services/serving.js';
 
@@ -104,3 +105,69 @@ it.each(['http', 'mcp'])(
     );
   },
 );
+
+it('SDK retains and verifies exact detached HTTP bytes, issue434', async () => {
+  await withTempProject(
+    {
+      files: {
+        'lore.yaml': 'version: 1\nname: sdk-receipt\nsources: [docs]\n',
+        'docs/policy.md': '# Rollback\n\nRollback needs café owner approval.\n',
+      },
+    },
+    async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      await runBuild({ config, progress: new ProgressBus() });
+      const server = await startServing({ config, host: '127.0.0.1', port: 47987, warn: () => {} });
+      try {
+        const client = new LoreClient({ baseUrl: server.url });
+        for (const captureRequest of [false, true]) {
+          const result = await client.contextForTaskWithReceipt({
+            task: 'rollback',
+            receipt: { captureRequest },
+          });
+          expect(JSON.parse(result.payload)).toEqual(result.bundle);
+          expect(result.receipt.payloadDigest).toBe(
+            createHash('sha256').update(result.payload).digest('hex'),
+          );
+          expect(result.receipt.requestRetained).toBe(captureRequest);
+        }
+        for (const corruption of ['payload', 'receipt', 'missing', 'version', 'extra']) {
+          let calls = 0;
+          const corrupt = new LoreClient({
+            baseUrl: server.url,
+            fetch: async (input, init) => {
+              calls += 1;
+              const reply = await fetch(input, init);
+              const headers = new Headers(reply.headers);
+              let payload = await reply.text();
+              if (corruption === 'payload') payload += '\n';
+              else if (corruption === 'missing') headers.delete('Lorepack-Context-Receipt');
+              else {
+                const receipt = JSON.parse(
+                  Buffer.from(
+                    headers.get('Lorepack-Context-Receipt') as string,
+                    'base64url',
+                  ).toString('utf8'),
+                );
+                if (corruption === 'receipt') receipt.payloadDigest = '0'.repeat(64);
+                if (corruption === 'version') receipt.receiptVersion = 2;
+                if (corruption === 'extra') receipt.sourcePath = '/private/task';
+                headers.set(
+                  'Lorepack-Context-Receipt',
+                  Buffer.from(JSON.stringify(receipt)).toString('base64url'),
+                );
+              }
+              return new Response(payload, { status: reply.status, headers });
+            },
+          });
+          await expect(
+            corrupt.contextForTaskWithReceipt({ task: 'rollback' }),
+          ).rejects.toMatchObject({ code: 'LORE_E_SCHEMA_MISMATCH' });
+          expect(calls).toBe(1);
+        }
+      } finally {
+        await server.close();
+      }
+    },
+  );
+});

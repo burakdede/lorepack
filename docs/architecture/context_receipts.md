@@ -73,3 +73,13 @@ The schema is [context-receipt.json](../../schemas/context-receipt.json).
 Typed SDK receipt access and Studio inspection are the
 remaining integration steps in #434; they are not advertised as implemented
 by this initial contract change. Persistent recording remains separate #435.
+
+### SDK retention
+
+`LoreClient.contextForTaskWithReceipt(request, signal)` returns the parsed bundle, detached
+receipt and original HTTP payload text. The client recomputes version1 receipt, payload,
+policy, selection and request digests before returning. It rejects missing headers, unknown
+receipt fields or versions, mismatched capture and changed bytes with `LORE_E_SCHEMA_MISMATCH`.
+Authentication, timeout, cancellation and no POST retry use the normal client pipeline.
+The SDK keeps zero runtime dependencies and uses platform Web Crypto. Retain `payload`
+unchanged for verification; serializing the parsed bundle again is not byte preservation.
