@@ -82,8 +82,8 @@ export const RANKING_WEIGHTS = {
 
   /**
    * Multipliers by declared status (architecture 12.7). A draft is penalised and labelled;
-   * an archived source is excluded by default and only surfaces when asked for, or when
-   * nothing active matched at all, so its multiplier applies to a fallback result.
+   * archived and superseded sources are excluded by default. Their multipliers apply
+   * only when a request explicitly includes historical evidence.
    */
   status: {
     active: 1,
