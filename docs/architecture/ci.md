@@ -157,6 +157,11 @@ regression checks that importing the native converter (and its report/inventory 
 does not invoke commands or attempt to resolve stdin as a file. Native Windows CI exercises
 the real conversion and reporting suites; a macOS pass alone does not qualify portability.
 
+Native conversion reads and processes one raw V8 JSON file at a time. It does not retain
+the complete raw campaign in an array. Converted maps and parsed owned sources remain available for compatibility
+checks. The real-record stream test must produce the same counters as the array input,
+including uncovered functions. This states the loading strategy, not a peak-memory bound.
+
 Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
 critical lines/statements at least 98% and functions/branches at least 95%. Failed targets
 remain visible in the JSON report. The report command is not part of `pnpm verify` while the
