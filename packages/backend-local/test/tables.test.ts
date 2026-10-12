@@ -6,6 +6,7 @@ import type { ParsedColumn, ParsedTable } from '@lorepack/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   assertIdentifier,
+  checkTableMappings,
   describeStoredTable,
   listTableRows,
   physicalTableNames,
@@ -265,5 +266,52 @@ describe('reading', () => {
     writeTables(db, [table(), table({ tableId: 'a1#two', name: 'other' })]);
     expect(physicalTableNames(db)).toHaveLength(2);
     expect(physicalTableNames(db).every((name) => name.startsWith('t_'))).toBe(true);
+  });
+});
+
+describe('candidate table mappings, issue415', () => {
+  it('accepts the parsed catalog and physical table', () => {
+    const parsed = table();
+    writeTables(db, [parsed]);
+    expect(checkTableMappings(db, [parsed])).toEqual([]);
+  });
+  it.each([
+    'catalog-count',
+    'physical-count',
+    'column-name',
+    'column-type',
+    'missing-table',
+    'artifact',
+    'unexpected',
+  ] as const)('names a real %s corruption', (corruption) => {
+    const parsed = table();
+    writeTables(db, [parsed]);
+    const name = sqlNameFor(parsed.tableId, parsed.name);
+    switch (corruption) {
+      case 'catalog-count':
+        db.exec('UPDATE tables SET row_count=99');
+        break;
+      case 'physical-count':
+        db.exec(`DELETE FROM ${name}`);
+        break;
+      case 'column-name':
+        db.exec("UPDATE table_columns SET name='invented' WHERE ordinal=0");
+        break;
+      case 'column-type':
+        db.exec("UPDATE table_columns SET type='integer' WHERE ordinal=0");
+        break;
+      case 'missing-table':
+        db.exec(`DROP TABLE ${name}`);
+        break;
+      case 'artifact':
+        db.exec("UPDATE tables SET relative_path='other.csv'");
+        break;
+      case 'unexpected':
+        expect(checkTableMappings(db, [])).toMatchObject([{ subject: parsed.tableId }]);
+        return;
+    }
+    expect(checkTableMappings(db, [parsed])).toMatchObject([
+      { subject: parsed.tableId, message: expect.any(String) },
+    ]);
   });
 });

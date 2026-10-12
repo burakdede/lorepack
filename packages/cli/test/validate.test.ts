@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { makePdf, withTempProject } from '@lorepack/test-support';
@@ -43,6 +43,18 @@ describe('lorepack validate', () => {
         expect(parsed.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
         expect(parsed.created).toBe(true);
         expect(parsed.activated).toBe(false);
+        const report = JSON.parse(
+          readFileSync(
+            join(temp.root, '.lore', 'builds', parsed.buildId, 'reports', 'validation.json'),
+            'utf8',
+          ),
+        );
+        expect(report.ok).toBe(true);
+        expect(report.failures).toEqual([]);
+        expect(report.checksRun).toContain('object-checksums');
+        expect(report.checks).toEqual(report.checksRun.map((name: string) => ({ name, ok: true })));
+        expect(report.checksRun).toContain('table-mapping');
+        expect(report.checksRun).toContain('locator-ranges');
         expect(result.stdout).not.toContain('Parsing');
         expect(result.stderr).toContain('Parsing');
       },

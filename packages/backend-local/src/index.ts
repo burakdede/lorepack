@@ -18,6 +18,7 @@ export {
   verifyArchive,
   writeArchive,
 } from './archive.js';
+export { ARCHIVE_VERIFY_LIMITS, verifyCatalogFiles } from './archive-verification.js';
 export {
   type CandidateDirectory,
   createCandidateDirectory,
@@ -28,6 +29,7 @@ export {
 } from './atomic.js';
 export {
   assertIdentifier,
+  checkTableMappings,
   decodeValue,
   describeStoredTable,
   listTableRows,

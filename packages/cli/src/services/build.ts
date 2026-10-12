@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildMigrationsDirectory,
+  checkTableMappings,
   countRows,
   createCandidateDirectory,
   discardCandidateDirectory,
@@ -575,6 +576,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             integrityCheck,
             search: (database, query, limit) => searchCatalog(database, query, limit),
             countRows,
+            tableMappingCheck: checkTableMappings,
           });
           progress.finish('validating', report.checksRun.length, report.ok ? 'done' : 'failed');
 
@@ -599,6 +601,10 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           writeFileAtomic(
             join(candidate.path, 'manifest.json'),
             `${JSON.stringify(manifest, null, 2)}\n`,
+          );
+          writeFileAtomic(
+            join(candidate.path, 'reports', 'validation.json'),
+            `${JSON.stringify({ ...report, checks: report.checksRun.map((name) => ({ name, ok: !report.failures.some((failure) => failure.check === name) })) }, null, 2)}\n`,
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'warnings.json'),

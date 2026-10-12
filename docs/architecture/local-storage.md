@@ -371,11 +371,20 @@ start identities. A malformed published record refuses cleanup rather than guess
 Atomic-write leftovers never represent successful acquisition. These records are operational
 ownership, excluded from build identity and packages; they are not credentials or sources.
 
-This local protocol does not yet establish remote read-lifetime protection. Remote cleanup
-coordination remains part of #439. Explicit `serve --build` and `mcp --build` acquire
+Remote projections use their separate D1 ownership and cleanup protocol described in
+[deployment](deployment.md). Explicit `serve --build` and `mcp --build` acquire
 the same owned handle at startup and hold it between requests until shutdown. HTTP closes
 its listener and drains HTTP/MCP before releasing selection; stdio releases after transport
 close or process shutdown. A missing selection fails under the same acquisition guard.
 
 If reader-record publication fails, acquisition closes any newly opened unowned catalog
 before returning the failure. An existing owned connection keeps its valid reference.
+
+## Verification without compilation
+
+`validate --build <full-id>` holds a retained read owner and verifies copied
+catalog/manifest/identity inputs in OS scratch. The archive verifier writes a
+reference FTS catalog beside its input, so it must never run directly inside a
+sealed build directory. Object checksums are streamed. Verification does not
+rewrite retained reports or activate a build. See the
+[validation contract](../validation.md) for coverage and limits.

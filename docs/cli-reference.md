@@ -78,7 +78,7 @@ None.
 
 ## `lorepack validate`
 
-Compile and validate a candidate without activating it.
+Validate a compiled candidate or verify a selected retained build.
 
 ```text
 lorepack validate
@@ -92,6 +92,7 @@ None.
 
 | Name | Description |
 |---|---|
+| `--build <id>` | verify this full retained build id without compiling sources |
 | `--frozen` | fail if lore.lock would change |
 | `--allow-large-project` | continue past the supported file count |
 

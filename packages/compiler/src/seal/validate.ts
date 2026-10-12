@@ -1,5 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { type Artifact, count, type LoreNode, type ObjectStore } from '@lorepack/core';
+import {
+  type Artifact,
+  count,
+  type LoreNode,
+  locatorBounds,
+  locatorProblem,
+  type ObjectStore,
+  type ParsedTable,
+} from '@lorepack/core';
 import type { Chunk } from '../chunk/chunk.js';
 
 /**
@@ -12,6 +20,8 @@ import type { Chunk } from '../chunk/chunk.js';
  */
 
 export type ValidationCheckName =
+  | 'locator-ranges'
+  | 'table-mapping'
   | 'artifact-identity'
   | 'node-integrity'
   | 'chunk-integrity'
@@ -45,12 +55,17 @@ export interface ValidationInput {
     readonly nodes: readonly LoreNode[];
     readonly chunks: readonly Chunk[];
     readonly objectHash: string;
+    readonly tables?: readonly ParsedTable[];
   }[];
   readonly manifest: Readonly<Record<string, unknown>>;
   /** Values that must never appear in the manifest, from the environment. */
   readonly secrets?: readonly string[];
   readonly integrityCheck: (db: DatabaseSync) => { ok: boolean; problems: string[] };
   readonly search: (db: DatabaseSync, query: string, limit?: number) => unknown[];
+  readonly tableMappingCheck: (
+    db: DatabaseSync,
+    tables: readonly ParsedTable[],
+  ) => readonly { readonly message: string; readonly subject: string }[];
   readonly countRows: (db: DatabaseSync, table: string) => number;
 }
 
@@ -67,6 +82,32 @@ export async function validateCandidate(input: ValidationInput): Promise<Validat
   run('node-integrity', () => checkNodeIntegrity(input));
   run('chunk-integrity', () => checkChunkIntegrity(input));
   run('chunk-provenance', () => checkChunkProvenance(input));
+  run('locator-ranges', () =>
+    input.artifacts.flatMap((entry) => {
+      const bounds = locatorBounds(entry.artifact, entry.nodes);
+      return [
+        ...entry.nodes.map((node) => ({ subject: node.id, locator: node.locator })),
+        ...entry.chunks.map((chunk) => ({ subject: chunk.id, locator: chunk.locator })),
+        ...(entry.tables ?? []).map((table) => ({
+          subject: table.tableId,
+          locator: table.locator,
+        })),
+      ].flatMap((record) => {
+        const message = locatorProblem(record.locator, bounds);
+        return message === undefined
+          ? []
+          : [{ check: 'locator-ranges' as const, message, subject: record.subject }];
+      });
+    }),
+  );
+  run('table-mapping', () =>
+    input
+      .tableMappingCheck(
+        input.db,
+        input.artifacts.flatMap((entry) => entry.tables ?? []),
+      )
+      .map((failure) => ({ check: 'table-mapping' as const, ...failure })),
+  );
   run('fts-parity', () => checkFtsParity(input));
   run('supersession-graph', () => checkSupersessionGraph(input));
   run('no-secrets-in-manifest', () => checkNoSecrets(input));

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import {
   fsyncDirectory,
   hashBytes,
+  hashFile,
   LoreError,
   type ObjectStore,
   objectKey,
@@ -74,6 +75,18 @@ export class FileObjectStore implements ObjectStore {
 
   async has(hash: string): Promise<boolean> {
     return existsSync(this.#pathFor(hash));
+  }
+
+  async verify(hash: string, signal?: AbortSignal): Promise<boolean> {
+    const path = this.#pathFor(hash);
+    if (!existsSync(path)) return false;
+    if ((await hashFile(path, signal)) !== hash) {
+      throw new LoreError('LORE_E_OBJECT_CORRUPT', `Object ${hash} failed its checksum.`, {
+        remediation: 'Restore the retained object from a verified package.',
+        subject: hash,
+      });
+    }
+    return true;
   }
 
   #readVerified(hash: string, path: string): Uint8Array {
