@@ -270,7 +270,9 @@ Cloudflare reads also own their captured build and normalized objects during cle
 remote operation must finish within five minutes; an expired operation returns an explicit
 limit error, even when its data was already loaded. Cleanup and activation share a primary
 database fence, so a build claimed for deletion cannot become active. An unconfirmed remote
-write blocks later mutations until its completion is established; it is never blindly retried. See
+write blocks later mutations until its completion is established; it is never blindly retried.
+Cleanup rechecks orphan table references before dropping them. Orphan-only plans refuse
+metadata-table names in edited receipts. See
 [remote cleanup](docs/architecture/deployment.md#cloudflare-remote-cleanup) for the lifetime
 and concurrent-operation behavior.
 Cleanup progress retains each confirmed R2 deletion if a later deletion fails, so a
