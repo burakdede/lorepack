@@ -475,6 +475,8 @@ reports the suggestion through the runtime, HTTP and MCP without rewriting the q
 Table query results identify the captured build, table and query. Their locator is
 explicitly table-level, including filtered or aggregate results; exact source-row and
 cell attribution is unsupported. See the [query contract](docs/adr/0014-table-query-identity.md).
+Unicode string values and numeric or blob literals are supported; identifiers follow the
+[SQL guard's restrictions](docs/architecture/security.md).
 
 ### Read-only AI boundary
 
