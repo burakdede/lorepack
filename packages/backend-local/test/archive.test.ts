@@ -237,7 +237,9 @@ describe('archive verification', () => {
       const bytes = new Uint8Array(8 * 1024 * 1024);
       const members = [...BUILD, ['payload.bin', bytes] as const];
       await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
-      expect((await readArchive(archive)).get('payload.bin')).toEqual(bytes);
+      const actual = (await readArchive(archive)).get('payload.bin');
+      expect(actual).toBeDefined();
+      expect(Buffer.from(actual as Uint8Array).equals(Buffer.from(bytes))).toBe(true);
     });
   });
 
