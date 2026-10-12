@@ -27,3 +27,19 @@ Screenshots were inspected. Full release qualification remains separate #102.
 
 ![Desktop receipt](../images/context-receipt-desktop.png)
 ![Mobile receipt with explicit task capture](../images/context-receipt-mobile.png)
+
+## Worker and installed-package evidence
+
+Projected Worker HTTP/MCP receipts verify retained build A after B activation and removal
+of the producing build directory. Explicit request capture and corruption refusal pass.
+An allowed browser origin can read the detached header; no allowlist is widened.
+Actual Wrangler4.119.0 Workerd/D1/R2 emulation passed all3 tests, including both receipt
+transports. Initial context assertions exposed missing search tables in the older fixture;
+its seed now uses the actual projection migration statements and a real indexed chunk.
+
+`pnpm check:packed-cli` installed145 packages with npm, matched the tested production tree,
+validated and imported the immutable archive, removed its producer, then verified exact
+JSON/Markdown stdout receipt digests and byte counts. Archive/table-child/PDF checks passed;
+`npm audit --omit=dev` reported0 vulnerabilities. The script's8 focused tests also pass.
+Hosted receipt assertions are part of the existing credentialed deployment acceptance
+flow; local emulation does not count as real hosted verification.

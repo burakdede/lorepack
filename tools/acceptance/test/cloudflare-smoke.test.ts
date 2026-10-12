@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EXIT_CODES } from '@lorepack/core';
+import { EXIT_CODES, verifyContextReceipt } from '@lorepack/core';
 import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
@@ -486,6 +486,52 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect((context as ContextBundle).buildId).toBe(localBuildId);
         expect(context.selected.length + context.overview.length).toBeGreaterThan(0);
 
+        const savedReceipts: Array<{ receipt: unknown; payload: string }> = [];
+        for (const captureRequest of [false, true]) {
+          const args = {
+            task: 'rollback',
+            buildId: localBuildId,
+            budget: 4000,
+            receipt: { captureRequest },
+          };
+          const response = await fetch(`${target.endpointBase}/v1/context`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${runtimeToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(args),
+            signal: AbortSignal.timeout(30_000),
+          });
+          expect(response.status).toBe(200);
+          const payload = await response.text();
+          const header = response.headers.get('Lorepack-Context-Receipt');
+          expect(header).not.toBeNull();
+          const receipt = JSON.parse(Buffer.from(header as string, 'base64url').toString('utf8'));
+          expect((await verifyContextReceipt(receipt, payload)).requestRetained).toBe(
+            captureRequest,
+          );
+          savedReceipts.push({ receipt, payload });
+          const mcp = await callRemoteMcpTool<ContextBundle>(
+            target.endpointBase,
+            'lore_context_for_task',
+            args,
+            runtimeToken,
+          );
+          const result = mcp.response.result as {
+            content: unknown;
+            structuredContent: unknown;
+            _meta: Record<string, unknown>;
+          };
+          const mcpPayload = JSON.stringify({
+            content: result.content,
+            structuredContent: result.structuredContent,
+          });
+          const mcpReceipt = result._meta['lorepack.dev/context-receipt'];
+          expect((await verifyContextReceipt(mcpReceipt, mcpPayload)).buildId).toBe(localBuildId);
+          savedReceipts.push({ receipt: mcpReceipt, payload: mcpPayload });
+        }
+
         const firstSearch = await callRemoteMcpTool<SearchResult>(
           target.endpointBase,
           'lore_search',
@@ -532,6 +578,15 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect(secondSearch.structuredContent.buildId).toBe(secondBuildId);
         expect(secondSearch.structuredContent.hits.length).toBeGreaterThan(0);
         expect(secondSearch.structuredContent.hits[0]?.locator.relativePath).toBe(UNIQUE_FILE);
+
+        for (const saved of savedReceipts) {
+          expect((await verifyContextReceipt(saved.receipt, saved.payload)).buildId).toBe(
+            localBuildId,
+          );
+          await expect(
+            verifyContextReceipt(saved.receipt, `${saved.payload}\n`),
+          ).rejects.toMatchObject({ code: 'LORE_E_SCHEMA_MISMATCH' });
+        }
 
         const rollback = await rollbackCloudflareTarget(project, localBuildId, runtimeToken);
         expect(rollback.buildId).toBe(localBuildId);

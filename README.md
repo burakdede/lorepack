@@ -209,6 +209,7 @@ CLI exports write the same detached contract with `--receipt <file>`; add
 `--capture-request` only when the receipt should retain the normalized task.
 The SDK returns verified receipt and original bytes with `contextForTaskWithReceipt`;
 Studio offers opt-in receipts and separate downloads for the exact context and receipt.
+Receipts work on local and Cloudflare runtimes, including explicitly allowed browser origins.
 
 ### 4. Serve and connect
 
