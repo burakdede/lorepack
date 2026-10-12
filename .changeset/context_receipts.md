@@ -4,6 +4,7 @@
 '@lorepack/mcp': patch
 '@lorepack/sdk': patch
 '@lorepack/cli': patch
+'@lorepack/deploy-cloudflare': patch
 ---
 
 Add bounded detached HTTP/MCP context receipts and portable verification of

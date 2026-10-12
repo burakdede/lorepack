@@ -268,6 +268,9 @@ function withWorkerHeaders(response: Response, origin: string | null, url?: stri
     headers.set('Access-Control-Allow-Methods', CORS_ALLOWED_METHODS);
     headers.set('Access-Control-Allow-Headers', CORS_ALLOWED_HEADERS);
     headers.set('Access-Control-Max-Age', CORS_MAX_AGE_SECONDS);
+    if (headers.has('Lorepack-Context-Receipt')) {
+      headers.append('Access-Control-Expose-Headers', 'Lorepack-Context-Receipt');
+    }
     appendVary(headers, 'Origin');
   }
   return new Response(response.body, {

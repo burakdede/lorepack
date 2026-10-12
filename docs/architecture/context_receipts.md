@@ -94,3 +94,7 @@ JSON context receipt. CLI equivalents save a JSON/receipt pair; HTTP equivalents
 JSON body and response headers containing the base64url receipt.
 
 See the [Studio verification checklist](../testing/context_receipts.md).
+
+For an explicitly allowed Cloudflare browser origin, receipt-bearing responses expose
+`Lorepack-Context-Receipt` through CORS so the SDK can verify it. Disallowed origins still
+fail before retrieval; receipt opt-in does not widen the allowlist or authorization.
