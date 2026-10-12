@@ -98,6 +98,66 @@ function tableQueryRequest(sqlName: string, token = 'lore_rt_first'): Request {
 }
 
 describe('the Worker table query rate limit', () => {
+  it('preserves captured query identity in both MCP result channels, issue695', async () => {
+    const opened = await open();
+    const described = await opened.runtime.describeTable(opened.knownTableId);
+    const app = createCloudflareWorkerFromBindings({
+      CATALOG_DB: opened.projection,
+      TABLES_DB: opened.projection,
+      OBJECTS: opened.bucket,
+      PROJECT_ID: PROJECT,
+    });
+    try {
+      const http = await app.fetch(tableQueryRequest(described.sqlName));
+      expect(http.status).toBe(200);
+      const expected = await http.json();
+      const response = await app.fetch(
+        new Request('https://worker.example/mcp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'Mcp-Method': 'tools/call',
+            'Mcp-Name': 'lore_query_table',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+              name: 'lore_query_table',
+              arguments: {
+                tableId: TABLE_ID,
+                sql: `SELECT count(*) AS n FROM ${described.sqlName}`,
+              },
+              _meta: {
+                'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': { name: 'query-contract-test', version: '1' },
+              },
+            },
+          }),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const emitted = await response.text();
+      const raw = response.headers.get('content-type')?.includes('text/event-stream')
+        ? emitted
+            .split('\n')
+            .find((line) => line.startsWith('data: '))
+            ?.slice(6)
+        : emitted;
+      if (raw === undefined) throw new Error('MCP did not return a data event.');
+      const message = JSON.parse(raw) as {
+        result: { structuredContent: unknown; content: { text: string }[] };
+      };
+      expect(message.result.structuredContent).toEqual(expected);
+      expect(JSON.parse(message.result.content[0]?.text ?? '')).toEqual(expected);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('refuses a caller past its limit with a typed busy error, before D1 sees the query', async () => {
     const opened = await open();
     const described = await opened.runtime.describeTable(opened.knownTableId);
@@ -188,3 +248,5 @@ describe('the Worker table query rate limit', () => {
     expect(limiter.keys[0]).toBe(await tableQueryCaller(tableQueryRequest('t', token)));
   });
 });
+
+import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
