@@ -8,6 +8,8 @@ import type { BuildId } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
 import { expect, it } from 'vitest';
+import { pruneCommand } from '../src/commands/prune.js';
+import { run } from './helpers.js';
 
 const execute = promisify(execFile);
 const BIN = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
@@ -190,6 +192,71 @@ it('keeps 200 captured A source reads alive across B activation and separate-pro
         release();
         await reads;
         backend.close();
+      }
+    },
+  );
+}, 120_000);
+
+it('rechecks a retained reader registered after the prune preview, issue439', async () => {
+  await withTempProject(
+    {
+      files: {
+        'lore.yaml': 'version: 1\nname: registration\nsources: [docs]\n',
+        'docs/guide.md': '# Original\n\nOriginal registered evidence.\n',
+      },
+    },
+    async (project) => {
+      const cli = (args: string[]) =>
+        execute(process.execPath, [BIN, '--cwd', project.root, '--json', ...args], {
+          timeout: 30_000,
+        });
+      const first = JSON.parse((await cli(['build'])).stdout).buildId as BuildId;
+      writeFileSync(
+        join(project.root, 'docs/guide.md'),
+        '# Replacement\n\nReplacement evidence.\n',
+      );
+      const second = JSON.parse((await cli(['build'])).stdout).buildId as BuildId;
+      const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+      let handle: import('@lorepack/core').BuildHandle | undefined;
+      try {
+        const preview = JSON.parse((await cli(['prune', '--keep', '0'])).stdout);
+        expect(preview.remove).toContain(first);
+        const result = await run(
+          ['--cwd', project.root, '--json', 'prune', '--keep', '0', '--yes'],
+          {
+            commands: [
+              pruneCommand({
+                beforeApply: async () => {
+                  handle = await backend.provider.acquire({ buildId: first });
+                },
+              }),
+            ],
+          },
+        );
+        expect(result.code, result.stderr).toBe(0);
+        expect(JSON.parse(result.stdout).keep).toContain(first);
+        expect(handle).toBeDefined();
+        const scope = await backend.open(handle as import('@lorepack/core').BuildHandle);
+        const runtime = createRuntime({ ...backend, buildId: first });
+        expect((await runtime.readSource({ path: 'guide.md' })).text).toContain(
+          'Original registered evidence',
+        );
+        expect(scope.buildId).toBe(first);
+      } finally {
+        handle?.release();
+        backend.close();
+      }
+      expect(JSON.parse((await cli(['prune', '--keep', '0', '--yes'])).stdout).remove).toContain(
+        first,
+      );
+      const fresh = createLocalRuntimeBackend({ projectRoot: project.root });
+      try {
+        await expect(fresh.provider.acquire({ buildId: first })).rejects.toMatchObject({
+          code: 'LORE_E_BUILD_NOT_FOUND',
+        });
+        expect((await createRuntime(fresh).readSource({ path: 'guide.md' })).buildId).toBe(second);
+      } finally {
+        fresh.close();
       }
     },
   );
