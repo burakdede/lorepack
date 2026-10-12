@@ -159,13 +159,25 @@ export function runRuntimeContract(options: ContractOptions): void {
     describe('bounds', () => {
       it('never returns a bundle larger than its budget', async () => {
         await withFixture(async ({ runtime, matchingQuery }) => {
-          for (const budget of [1000, 4000, 24_000]) {
+          for (const budget of [1, 1000]) {
+            await expect(
+              runtime.contextForTask({
+                task: matchingQuery,
+                budget,
+                includeArchived: false,
+                allowUnsupportedBudget: true,
+              }),
+            ).rejects.toMatchObject({
+              code: 'LORE_E_LIMIT_EXCEEDED',
+              details: { reason: 'context-framing-too-large' },
+            });
+          }
+          for (const budget of [4000, 24_000, 50_000]) {
             const bundle = await runtime.contextForTask({
               task: matchingQuery,
               includeArchived: false,
               budget,
-              // 1,000 is below the supported floor on purpose: a bound has to hold at the
-              // sizes nobody designed for, not only at the comfortable ones.
+              // The explicit 50,000 override still has to respect delivery limits.
               allowUnsupportedBudget: true,
             });
             expect(bundle.estimatedTokens).toBeLessThanOrEqual(budget);

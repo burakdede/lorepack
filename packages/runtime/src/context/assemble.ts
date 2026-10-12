@@ -7,6 +7,7 @@ import {
   type SourceLocator,
 } from '@lorepack/core/worker';
 import type { DropReason, RankedHit } from '../ranking/rank.js';
+import { omissionSummary } from './budget.js';
 
 /**
  * Task-aware context assembly: architecture 13.3.
@@ -97,6 +98,7 @@ type Assembled = Pick<
   | 'tables'
   | 'alternatives'
   | 'omitted'
+  | 'omissionSummary'
   | 'citations'
 >;
 
@@ -183,6 +185,7 @@ export function assembleBundle(input: AssembleInput): Assembled {
     tables: [],
     alternatives,
     omitted,
+    omissionSummary: omissionSummary(omitted),
     citations,
   };
 }

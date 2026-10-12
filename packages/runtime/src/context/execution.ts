@@ -11,6 +11,12 @@ import {
   RANKING_WEIGHTS_VERSION,
 } from '@lorepack/core/worker';
 import { MAX_ALTERNATIVES, MAX_ITEMS_PER_ARTIFACT, ORIENTATION_SHARE } from './assemble.js';
+import {
+  CONTEXT_BYTES_PER_TOKEN,
+  MAXIMUM_CONTEXT_BYTES,
+  MAXIMUM_OMISSION_DETAILS,
+  MAXIMUM_PROJECT_NAME_LENGTH,
+} from './budget.js';
 
 export function resolveExecutionPolicy(input: {
   profile: ExecutionPolicy['packing']['profile'];
@@ -30,17 +36,20 @@ export function resolveExecutionPolicy(input: {
       weights: RANKING_WEIGHTS,
     },
     packing: {
-      version: 1,
+      version: 2,
       profile: input.profile,
       budget: input.budget,
       orientationShare: ORIENTATION_SHARE,
       maximumItemsPerArtifact: MAX_ITEMS_PER_ARTIFACT,
       maximumAlternatives: MAX_ALTERNATIVES,
+      maximumOmissionDetails: MAXIMUM_OMISSION_DETAILS,
       unit: 'whole-chunk',
     },
     estimator: {
-      version: 1,
-      mode: 'stored-chunk-estimates',
+      version: 2,
+      mode: 'serialized-utf8-estimate',
+      bytesPerToken: CONTEXT_BYTES_PER_TOKEN,
+      wordFloor: 'whitespace-words',
       compilerVersion: input.compilerVersion,
     },
     visibility: {
@@ -49,7 +58,12 @@ export function resolveExecutionPolicy(input: {
       includeArchived: input.includeArchived,
       drafts: 'eligible-labeled-downranked',
     },
-    serialization: { version: 1, format: 'context-bundle-json' },
+    serialization: {
+      version: 2,
+      format: 'bounded-supported-formats',
+      maximumBytes: MAXIMUM_CONTEXT_BYTES,
+      maximumProjectNameLength: MAXIMUM_PROJECT_NAME_LENGTH,
+    },
   });
 }
 

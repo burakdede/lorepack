@@ -275,16 +275,28 @@ describe('runtime contracts', () => {
             orientationShare: 0.1,
             maximumItemsPerArtifact: 4,
             maximumAlternatives: 5,
+            maximumOmissionDetails: 20,
             unit: 'whole-chunk',
           },
-          estimator: { version: 1, mode: 'stored-chunk-estimates', compilerVersion: '0.1.0' },
+          estimator: {
+            version: 2,
+            mode: 'serialized-utf8-estimate',
+            bytesPerToken: 3.6,
+            wordFloor: 'whitespace-words',
+            compilerVersion: '0.1.0',
+          },
           visibility: {
             version: 1,
             default: 'current-preferred-with-historical-fallback',
             includeArchived: false,
             drafts: 'eligible-labeled-downranked',
           },
-          serialization: { version: 1, format: 'context-bundle-json' },
+          serialization: {
+            version: 2,
+            format: 'bounded-supported-formats',
+            maximumBytes: 4 * 1024 * 1024,
+            maximumProjectNameLength: 100,
+          },
         },
         selection: {
           corpusId: `corpus_${'c'.repeat(32)}`,
@@ -307,6 +319,12 @@ describe('runtime contracts', () => {
       tables: [],
       alternatives: [],
       omitted: [],
+      omissionSummary: {
+        total: 0,
+        reported: 0,
+        truncated: false,
+        reasons: { budget: 0, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+      },
       citations: [],
     };
     const result = contextBundleSchema.safeParse(bundle);

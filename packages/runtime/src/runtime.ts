@@ -30,6 +30,7 @@ import {
 } from '@lorepack/core/worker';
 import type { ZodType } from 'zod';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
+import { fitDeliveredContext } from './context/budget.js';
 import { identifyExecution, resolveExecutionPolicy } from './context/execution.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
@@ -200,7 +201,7 @@ class PortedRuntime implements LoreRuntime {
             filters: request.filters ?? [],
           },
         );
-        return {
+        return fitDeliveredContext({
           ...envelope,
           execution,
           ...assembleBundle({
@@ -214,7 +215,7 @@ class PortedRuntime implements LoreRuntime {
             dropped: report.dropped,
             suppressed,
           }),
-        };
+        });
       },
       { buildId: request.buildId },
     );

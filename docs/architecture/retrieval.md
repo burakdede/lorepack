@@ -197,11 +197,38 @@ worth knowing:
   sits inside that range. Below the floor a bundle is too small to orient a model and still
   say anything; above the ceiling it stops being bounded context. Both are permitted, and
   neither happens by typo: an out-of-range budget is refused unless the caller also passes
-  `allowUnsupportedBudget` (`--allow-unsupported-budget` on `lorepack export`).
-- **The omission report has to be complete.** Search shows a page and need not explain what
-  fell off the end; assembly must. `rankWithReport` returns what it dropped and why, so a
-  near-duplicate removed before packing is still nameable. Without it the report would have
-  been a partial account dressed as a complete one.
+  `allowUnsupportedBudget` (`--allow-unsupported-budget` on `lorepack export`). The override
+  does not bypass the byte ceiling or permit mandatory framing to exceed that budget.
+- **Omission totals remain complete; detail is bounded.** `omissionSummary` gives exact
+  totals and counts for every reason. `omitted` contains at most 20 diagnostic entries and
+  may contain fewer to fit. `reported` and `truncated` explicitly distinguish that sample
+  from the complete account. Entries are retained deterministically in assembly order.
+
+## Delivered context limits
+
+The final runtime packer measures every supported representation: pretty CLI JSON with its
+trailing newline, compact HTTP JSON, the complete MCP tool result (both pretty text and
+structured content), and Markdown with its framing, citations and shell-quoted more command.
+Markdown reserves the maximum supported 100-character project name. Every adapter uses the
+shared serializer or renderer; changing it requires a serialization-policy version change.
+Routing IDs, HTTP headers and downstream client-added prompts are outside this context boundary.
+`lorepack export --json --output <path>` returns the same context DTO as stdout export;
+the destination path stays in the argument and stderr confirmation, outside model context.
+
+`estimatedTokens` is the maximum estimate across those complete representations:
+`max(ceil(UTF-8 bytes / 3.6), whitespace word count)`. It includes its own serialized digits.
+This versioned engineering estimate is not an exact provider tokenizer or a guarantee of
+provider token usage. Stored per-item estimates and `reservedTokens` remain compiler
+provenance for passage packing; they do not partition the delivered-output total.
+
+Every representation must also fit 4 MiB of UTF-8 bytes, independently of budget overrides.
+The packer first bounds omission detail, then removes whole alternatives, selected passages
+and orientation passages from their lowest-priority end. It never cuts passage text or drops
+its provenance. Removed units increment the exact budget-omission count. Mandatory framing
+that cannot fit returns `LORE_E_LIMIT_EXCEEDED`, including with an unsupported-budget override.
+The same selection fits CLI, HTTP/SDK, MCP and Markdown without an adapter-specific fallback.
+See [the delivery decision](../adr/0013-delivered-context-budget.md).
+
 
 ## The Markdown export keeps documents out of its own structure
 
@@ -253,8 +280,9 @@ algebra. Bundle p95 fell from 194.59 ms to 60.4 ms.
 Each context bundle includes `execution.version: 1`, `policyId`, `selectionId`, the resolved
 `policy` and `selection`. Content build IDs continue to identify canonical evidence.
 Execution identity records retrieval/query/ranking versions and actual weights, packing
-version/profile/budget/orientation/diversity limits, stored-estimate compiler version,
-visibility including explicit history, and context-JSON serialization version.
+version/profile/budget/orientation/diversity/diagnostic limits, UTF-8 estimator parameters
+and compiler version, visibility including explicit history, and supported serialization
+versions, project-name bound and hard byte ceiling.
 
 `policyId` is `policy_` plus canonical SHA-256 of
 `{ domain: "lorepack-execution-policy-v1", policy }`. `selectionId` is `selection_` plus
@@ -265,8 +293,9 @@ The pure core canonical serialization and Web Crypto hash are shared across loca
 Worker runtimes. Defaults resolve before hashing. Freshness, observation timestamps,
 credentials and local absolute paths are excluded.
 
-The estimator descriptor names the stored chunk estimates and their compiler version.
-It does not claim an exact provider tokenizer or a complete serialized-payload count.
+Estimator version 2 names the complete-output UTF-8 estimate, word floor and compiler
+provenance. Packing and serialization version 2 identify whole-unit delivery fitting and
+all supported representations. It does not claim an exact provider tokenizer.
 Changing an output-affecting algorithm requires its pipeline version to change; changing
 weights or packing constants also changes the policy digest without altering evidence.
 

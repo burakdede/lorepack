@@ -74,3 +74,10 @@ Task context tool results include `execution.policyId`, `execution.selectionId` 
 resolved policy and build-scoped request. They identify context selection separately from
 immutable content. See the [execution contract](../architecture/retrieval.md#execution-identity)
 for canonical hashing, excluded observation state and replay limits.
+
+
+Context delivery was verified on 2026-10-12 with `@modelcontextprotocol/server` 2.0.0.
+The budget covers the complete tool result, including both `content` text and
+`structuredContent`. Exact omission totals remain in `omissionSummary`; `omitted` is
+bounded diagnostic detail with explicit reported/truncated fields. UTF-8 engineering
+estimates are not provider token counts. See [delivery limits](../architecture/retrieval.md#delivered-context-limits).

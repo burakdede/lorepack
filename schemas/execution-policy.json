@@ -44,23 +44,33 @@
     "estimator": {
       "additionalProperties": false,
       "properties": {
+        "bytesPerToken": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
         "compilerVersion": {
           "minLength": 1,
           "type": "string"
         },
         "mode": {
-          "const": "stored-chunk-estimates",
+          "const": "serialized-utf8-estimate",
           "type": "string"
         },
         "version": {
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "type": "integer"
+        },
+        "wordFloor": {
+          "const": "whitespace-words",
+          "type": "string"
         }
       },
       "required": [
         "version",
         "mode",
+        "bytesPerToken",
+        "wordFloor",
         "compilerVersion"
       ],
       "type": "object"
@@ -81,6 +91,11 @@
         "maximumItemsPerArtifact": {
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "maximumOmissionDetails": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
           "type": "integer"
         },
         "orientationShare": {
@@ -114,6 +129,7 @@
         "orientationShare",
         "maximumItemsPerArtifact",
         "maximumAlternatives",
+        "maximumOmissionDetails",
         "unit"
       ],
       "type": "object"
@@ -163,8 +179,18 @@
       "additionalProperties": false,
       "properties": {
         "format": {
-          "const": "context-bundle-json",
+          "const": "bounded-supported-formats",
           "type": "string"
+        },
+        "maximumBytes": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "maximumProjectNameLength": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
         },
         "version": {
           "exclusiveMinimum": 0,
@@ -174,7 +200,9 @@
       },
       "required": [
         "version",
-        "format"
+        "format",
+        "maximumBytes",
+        "maximumProjectNameLength"
       ],
       "type": "object"
     },

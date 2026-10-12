@@ -209,7 +209,7 @@
       "type": "string"
     },
     "estimatedTokens": {
-      "description": "Conservative estimate, never an exact count",
+      "description": "Versioned estimate of complete supported output, never a provider token count",
       "maximum": 9007199254740991,
       "minimum": 0,
       "type": "integer"
@@ -228,23 +228,33 @@
             "estimator": {
               "additionalProperties": false,
               "properties": {
+                "bytesPerToken": {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
                 "compilerVersion": {
                   "minLength": 1,
                   "type": "string"
                 },
                 "mode": {
-                  "const": "stored-chunk-estimates",
+                  "const": "serialized-utf8-estimate",
                   "type": "string"
                 },
                 "version": {
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991,
                   "type": "integer"
+                },
+                "wordFloor": {
+                  "const": "whitespace-words",
+                  "type": "string"
                 }
               },
               "required": [
                 "version",
                 "mode",
+                "bytesPerToken",
+                "wordFloor",
                 "compilerVersion"
               ],
               "type": "object"
@@ -265,6 +275,11 @@
                 "maximumItemsPerArtifact": {
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "maximumOmissionDetails": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
                   "type": "integer"
                 },
                 "orientationShare": {
@@ -298,6 +313,7 @@
                 "orientationShare",
                 "maximumItemsPerArtifact",
                 "maximumAlternatives",
+                "maximumOmissionDetails",
                 "unit"
               ],
               "type": "object"
@@ -347,8 +363,18 @@
               "additionalProperties": false,
               "properties": {
                 "format": {
-                  "const": "context-bundle-json",
+                  "const": "bounded-supported-formats",
                   "type": "string"
+                },
+                "maximumBytes": {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "maximumProjectNameLength": {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
                 },
                 "version": {
                   "exclusiveMinimum": 0,
@@ -358,7 +384,9 @@
               },
               "required": [
                 "version",
-                "format"
+                "format",
+                "maximumBytes",
+                "maximumProjectNameLength"
               ],
               "type": "object"
             },
@@ -489,6 +517,75 @@
     "namespaceId": {
       "pattern": "^namespace_[0-9a-f]{32}$",
       "type": "string"
+    },
+    "omissionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "reasons": {
+          "additionalProperties": false,
+          "properties": {
+            "archived": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "budget": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "diversity": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "duplicate": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "filtered": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "superseded": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "budget",
+            "duplicate",
+            "diversity",
+            "superseded",
+            "archived",
+            "filtered"
+          ],
+          "type": "object"
+        },
+        "reported": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "total",
+        "reported",
+        "truncated",
+        "reasons"
+      ],
+      "type": "object"
     },
     "omitted": {
       "items": {
@@ -822,6 +919,7 @@
     "tables",
     "alternatives",
     "omitted",
+    "omissionSummary",
     "citations"
   ],
   "title": "context-bundle",
