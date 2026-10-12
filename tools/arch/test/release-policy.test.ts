@@ -2,8 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { reportsMatch, sbomsMatch } from '../../../scripts/check-supply-chain.mjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  checkContributorAudit,
+  reportsMatch,
+  sbomsMatch,
+} from '../../../scripts/check-supply-chain.mjs';
 import {
   discoverPublishablePackages,
   findMissingPackages,
@@ -267,6 +271,51 @@ describe('npm package preflight', () => {
 describe('performance report policy', () => {
   it('accepts the checked-in v0.1 performance report', () => {
     expect(run(PERFORMANCE_CHECK, REPO_ROOT).status).toBe(0);
+  });
+});
+
+describe('contributor dependency audit', () => {
+  let root: string;
+  let packageManager: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'lore audit-'));
+    packageManager = join(root, 'package-manager.cjs');
+    vi.stubEnv('npm_execpath', packageManager);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('audits development dependencies and accepts an exit below the High threshold', () => {
+    writeFileSync(
+      packageManager,
+      `const expected = ['audit', '--audit-level', 'high'];
+if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expected)) process.exit(3);
+process.stdout.write('2 Moderate findings');
+`,
+    );
+    const problems: string[] = [];
+    checkContributorAudit(problems);
+    expect(problems).toEqual([]);
+  });
+
+  it.each([
+    { message: '1 High finding', stream: 'stdout' },
+    { message: 'registry request failed', stream: 'stderr' },
+  ])('fails closed when the package manager reports $message', ({ message, stream }) => {
+    writeFileSync(
+      packageManager,
+      `process.${stream}.write(${JSON.stringify(message)}); process.exitCode = 1;`,
+    );
+    const diagnostics = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const problems: string[] = [];
+    checkContributorAudit(problems);
+    expect(problems).toEqual(['contributor audit failed; run pnpm audit --audit-level high']);
+    expect(diagnostics).toHaveBeenCalledWith(message);
   });
 });
 

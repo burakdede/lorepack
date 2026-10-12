@@ -18,6 +18,9 @@ Two constraints bound every choice:
 
 - `publishConfig.provenance: true` on the public CLI package.
 - `pnpm audit --prod --audit-level moderate` reports no production vulnerabilities.
+- `pnpm audit --audit-level high` rejects High or Critical findings across the whole
+  contributor workspace, including development dependencies. Registry failures also fail
+  the gate. The dependency-health report's audit inventory remains production-only.
 - `pnpm licenses list --prod --json` and every direct dependency report contain only
   allowlisted licences.
 - npm provenance metadata is recorded for production direct dependencies where the publisher
