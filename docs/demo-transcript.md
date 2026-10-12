@@ -248,7 +248,7 @@ lorepack export --task "How should the sync worker recover after a failed deploy
 
 Project **coding-project**, build `lore_<build-id>`.
 Profile **chat**, budget 24,000 estimated tokens, of which 291 estimated tokens used.
-Execution policy `policy_58a96c7012e80aeb406cea54fef85779d66eef9787ed31be16e2a827efe188cb`, selection `selection_<selection-id>`.
+Execution policy `policy_e478f21dee81ffe597e0b3720610ab83f25101ddf7632623ab79fdb18a34af96`, selection `selection_<selection-id>`.
 
 Every passage below is quoted from a document in this project, with the file and source coordinate it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.
 Search considered up to 500 candidates using any-term matching.

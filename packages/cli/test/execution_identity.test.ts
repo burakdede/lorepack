@@ -33,7 +33,11 @@ it('identifies resolved execution independently from immutable content and obser
       try {
         const runtime = createRuntime({ ...backend, freshness: async () => 'clean' });
         const first = await runtime.contextForTask({ task: 'recovery' });
-        expect(first).toHaveProperty('execution');
+        expect(first.execution.policy.visibility).toMatchObject({
+          version: 2,
+          default: 'current-only',
+          includeArchived: false,
+        });
         const identity = (bundle: unknown) =>
           (bundle as { execution: { policyId: string; selectionId: string } }).execution;
         expect(identity(first).policyId).toMatch(/^policy_[a-f0-9]{64}$/);

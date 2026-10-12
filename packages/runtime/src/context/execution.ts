@@ -44,8 +44,8 @@ export function resolveExecutionPolicy(input: {
       compilerVersion: input.compilerVersion,
     },
     visibility: {
-      version: 1,
-      default: 'current-preferred-with-historical-fallback',
+      version: 2,
+      default: 'current-only',
       includeArchived: input.includeArchived,
       drafts: 'eligible-labeled-downranked',
     },

@@ -28,3 +28,7 @@ CLI, SDK, HTTP, MCP and projected D1 can describe the same policy. Namespace/cor
 remain selection inputs; digests are not access grants. Version/weight changes require
 updated identities and fixtures. This metadata does not retain evidence or guarantee a
 model answer. Historical payloads without descriptors have no execution identity to report.
+
+Visibility version2 records the current-only default adopted in #699. Historical expansion
+is explicit and changes the resolved policy digest. The identity does not change content
+build IDs or decide whether a document is true.

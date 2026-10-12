@@ -41,7 +41,8 @@ it.each([
 ] as const)('changes policy identity when %s.%s changes', async (section, field) => {
   const first = await identifyExecution(policy(), selection);
   const changed = policy();
-  (changed[section] as Record<string, unknown>)[field] = 2;
+  const pipeline = changed[section] as Record<string, unknown>;
+  pipeline[field] = Number(pipeline[field]) + 1;
   expect((await identifyExecution(changed, selection)).policyId).not.toBe(first.policyId);
 });
 
