@@ -263,11 +263,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.104.1"
+          "value": "5.104.2"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-02T10:04:57.020Z"
+          "value": "2026-10-11T19:35:15.506Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -614,7 +614,7 @@
     {
       "type": "library",
       "name": "@vitest/coverage-v8",
-      "version": "4.1.10",
+      "version": "4.1.11",
       "licenses": [
         {
           "expression": "MIT"
@@ -623,11 +623,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.0.3"
+          "value": "5.0.4"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-30T11:29:29.357Z"
+          "value": "2026-10-12T09:45:32.121Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1238,7 +1238,7 @@
     {
       "type": "library",
       "name": "vitest",
-      "version": "4.1.10",
+      "version": "4.1.11",
       "licenses": [
         {
           "expression": "MIT"
@@ -1247,11 +1247,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.0.3"
+          "value": "5.0.4"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-30T11:30:42.429Z"
+          "value": "2026-10-12T09:47:02.826Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1367,11 +1367,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.6.5"
+          "value": "4.6.7"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-13T23:25:14.644Z"
+          "value": "2026-10-12T16:29:37.778Z"
         },
         {
           "name": "lorepack:provenanceStatus",

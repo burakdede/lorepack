@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -8,8 +7,8 @@ let directory: string;
 let results: Record<string, string | null>;
 
 beforeAll(() => {
-  directory = realpathSync(mkdtempSync(join(tmpdir(), 'lorepack-mocker-boundary-')));
   const root = resolve(import.meta.dirname, '../../..');
+  directory = realpathSync(mkdtempSync(join(root, 'node_modules/lorepack-mocker-boundary-')));
   const script = `
     import { createRequire } from 'node:module';
     import { mkdirSync, writeFileSync } from 'node:fs';
