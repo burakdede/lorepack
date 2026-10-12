@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type ProjectionMigrationDatabaseLike,
@@ -17,7 +17,7 @@ import {
 class SqliteStatement implements ProjectionMigrationStatementLike {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -25,7 +25,7 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
   }
 
   bind(...values: unknown[]): SqliteStatement {
-    this.#bindings = values;
+    this.#bindings = values as SQLInputValue[];
     return this;
   }
 
@@ -33,10 +33,10 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     if (/\breturning\b/i.test(this.#query)) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
@@ -746,6 +746,7 @@ describe('remote retention with separate catalog and tables databases, issue 557
   });
 });
 
+
 describe('partial R2 cleanup progress, issue732', () => {
   it.each(['archives', 'objects'] as const)(
     'retains completed %s when the next deletion fails and resumes exactly once',
@@ -823,6 +824,132 @@ describe('partial R2 cleanup progress, issue732', () => {
       expect(
         catalog.raw.prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1').get(),
       ).toEqual({ buildId: ACTIVE_BUILD });
+    },
+  );
+});
+
+
+describe('remote retention cold and tied states', () => {
+  it('leaves an uninitialized target untouched during planning and apply', async () => {
+    const db = openDatabase();
+    const tables = openDatabase();
+    const bucket = new FakeR2Bucket();
+    const plan = await planRemoteRetention(db, tables, 'demo', 5);
+    expect(plan).toEqual({
+      activeBuildId: null,
+      keep: [],
+      remove: [],
+      archiveKeysToRemove: [],
+      objectKeysToRemove: [],
+      orphanTablesToRemove: [],
+    });
+    const result = await applyRemoteRetention(db, tables, bucket, 'demo', 5);
+    expect(result).toMatchObject({
+      ...plan,
+      r2: { archiveKeysRemoved: [], objectKeysRemoved: [] },
+    });
+    expect(Object.values(result.d1).filter((value) => typeof value === 'number')).toEqual(
+      Array(10).fill(0),
+    );
+    expect(result.d1.physicalTablesDropped).toEqual([]);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual([]);
+    expect(tables.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()).toEqual(
+      [],
+    );
+  });
+  it('plans an initialized target with no active or projected build', async () => {
+    const db = openDatabase();
+    const tables = openDatabase();
+    await runProjectionMigrations(db);
+    await runTableProjectionMigrations(tables);
+    expect(await planRemoteRetention(db, tables, 'demo', 5)).toEqual({
+      activeBuildId: null,
+      keep: [],
+      remove: [],
+      archiveKeysToRemove: [],
+      objectKeysToRemove: [],
+      orphanTablesToRemove: [],
+    });
+  });
+  it('breaks verified-time ties by projection time and then build ID without an active build', async () => {
+    const db = openDatabase();
+    const tables = openDatabase();
+    await runProjectionMigrations(db);
+    await runTableProjectionMigrations(tables);
+    const id = (value: string) => `lore_${value.repeat(64)}`;
+    const rows = [
+      [id('a'), '2026-10-12T10:00:00.000Z'],
+      [id('b'), '2026-10-12T10:00:00.000Z'],
+      [id('c'), '2026-10-12T11:00:00.000Z'],
+    ] as const;
+    for (const [buildId, projectedAt] of rows)
+      db.raw
+        .prepare(`INSERT INTO projected_builds
+      (project_id, build_id, build_schema_version, compiler_version, projection_schema_version,
+       projected_at, verified_at, activated_at) VALUES (?, ?, 1, '0.1.0', 4, ?, ?, NULL)`)
+        .run('demo', buildId, projectedAt, '2026-10-12T12:00:00.000Z');
+    const plan = await planRemoteRetention(db, tables, 'demo', 2);
+    expect(plan).toEqual({
+      activeBuildId: null,
+      keep: [id('c'), id('b')],
+      remove: [id('a')],
+      archiveKeysToRemove: [r2ArchiveKey('demo', id('a'))],
+      objectKeysToRemove: [],
+      orphanTablesToRemove: [],
+    });
+    expect(db.raw.prepare('SELECT COUNT(*) AS count FROM projected_builds').get()).toEqual({
+      count: 3,
+    });
+  });
+});
+
+describe('remote retention orphan-only receipt boundaries', () => {
+  it('rechecks a late catalog reference when an orphan-only plan is applied', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    catalog.raw
+      .prepare('UPDATE projected_builds SET verified_at = projected_at WHERE build_id = ?')
+      .run(PRUNED_BUILD);
+    tables.raw.exec(`CREATE TABLE ${ORPHAN_TABLE} (c_0 TEXT) STRICT`);
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 5);
+    expect(plan.remove).toEqual([]);
+    expect(plan.orphanTablesToRemove).toEqual([ORPHAN_TABLE]);
+    insertProjectedTable(catalog, ACTIVE_BUILD, 'late-reference', ORPHAN_TABLE);
+    const result = await applyRemoteRetentionPlan(catalog, tables, bucket, plan);
+    expect(result.d1.physicalTablesDropped).toEqual([]);
+    expect(result.r2).toEqual({ archiveKeysRemoved: [], objectKeysRemoved: [] });
+    expect(hasTable(tables, ORPHAN_TABLE)).toBe(true);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(bucket.deletedKeys).toEqual([]);
+  });
+  it.each([['schema_migrations'], ['schema_migrations', 'active_build']])(
+    'refuses edited orphan receipts containing metadata tables (%s)',
+    async (...names) => {
+      const { catalog, tables, bucket } = await seedSplitDeployment();
+      catalog.raw
+        .prepare('UPDATE projected_builds SET verified_at = projected_at WHERE build_id = ?')
+        .run(PRUNED_BUILD);
+      const plan = await planRemoteRetention(catalog, tables, 'demo', 5);
+      const failure: unknown = await applyRemoteRetentionPlan(catalog, tables, bucket, {
+        ...plan,
+        orphanTablesToRemove: names,
+      }).catch((cause: unknown) => cause);
+      expect(failure).toBeInstanceOf(RemoteRetentionApplyError);
+      if (!(failure instanceof RemoteRetentionApplyError))
+        throw new Error('Expected a cleanup failure.');
+      expect(failure.message).toBe(
+        `The cloudflare target failed while removing ${names.length} orphaned table${names.length === 1 ? '' : 's'}.`,
+      );
+      expect(failure.cause).toMatchObject({
+        code: 'LORE_E_INVALID_ARGUMENT',
+        subject: 'schema_migrations',
+      });
+      expect(failure.progress.d1Completed).toBe(false);
+      expect(failure.progress.d1.physicalTablesDropped).toEqual([]);
+      expect(hasTable(tables, 'schema_migrations')).toBe(true);
+      expect(hasTable(tables, PRUNED_TABLE)).toBe(true);
+      expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+      expect(bucket.deletedKeys).toEqual([]);
     },
   );
 });
