@@ -426,7 +426,8 @@ Table query results identify the captured build, table and query. Their locator 
 explicitly table-level, including filtered or aggregate results; exact source-row and
 cell attribution is unsupported. See the [query contract](docs/adr/0014-table-query-identity.md).
 Unicode string values and numeric or blob literals are supported; identifiers follow the
-[SQL guard's restrictions](docs/architecture/security.md).
+[SQL security contract](docs/architecture/security.md), including the local query engine's
+per-table authorization and bounded results.
 
 ### Read-only AI boundary
 
