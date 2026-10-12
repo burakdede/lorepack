@@ -1,10 +1,21 @@
 import { createWriteStream, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type LoreError, sha256Hex } from '@lorepack/core';
+import {
+  type BuildIdInputs,
+  deriveBuildId,
+  hashCanonical,
+  hashRoot,
+  type LoreError,
+  SCHEMA_VERSION,
+  sha256Hex,
+} from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import yazl from 'yazl';
 import { ARCHIVE_LIMITS, readArchive, verifyArchive } from '../src/archive.js';
+import { loadMigrations, runMigrations } from '../src/migrations.js';
+import { buildMigrationsDirectory } from '../src/migrations-path.js';
+import { openWritable } from '../src/sqlite.js';
 
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
 const DATABASE = new TextEncoder().encode('SQLite format 3');
@@ -27,6 +38,51 @@ const BUILD: ReadonlyArray<readonly [string, Uint8Array]> = [
   ['manifest.json', MANIFEST],
   ['context.sqlite', DATABASE],
 ];
+
+function validBuild(root: string): ReadonlyArray<readonly [string, Uint8Array]> {
+  const catalog = join(root, 'empty.sqlite');
+  const db = openWritable(catalog);
+  try {
+    runMigrations(db, loadMigrations(buildMigrationsDirectory()));
+  } finally {
+    db.close();
+  }
+  const empty = hashRoot([]);
+  const roots = { artifacts: empty, nodes: empty, chunks: empty, tables: empty, objects: empty };
+  const inputs: BuildIdInputs = {
+    formatVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
+    compilerVersion: '0.1.0',
+    canonicalizationVersion: 1,
+    normalizationVersion: 1,
+    effectiveConfig: {},
+    parserVersions: {},
+    ruleResolution: [],
+    embeddingProfile: null,
+    canonicalRoots: roots,
+  };
+  const encode = (value: unknown) => new TextEncoder().encode(`${JSON.stringify(value)}\n`);
+  return [
+    [
+      'manifest.json',
+      encode({
+        formatVersion: 1,
+        schemaVersion: SCHEMA_VERSION,
+        compilerVersion: '0.1.0',
+        buildId: deriveBuildId(inputs),
+        projectName: 'empty',
+        configurationHash: hashCanonical({}),
+        sourceFingerprint: sha256Hex(new Uint8Array()),
+        canonicalRoots: roots,
+        capabilities: ['lexical-search'],
+        counts: { artifacts: 0, nodes: 0, chunks: 0, tables: 0, tableRows: 0 },
+        warnings: [],
+      }),
+    ],
+    ['context.sqlite', new Uint8Array(readFileSync(catalog))],
+    ['reports/build-id-inputs.json', encode(inputs)],
+  ];
+}
 
 async function writeZip(
   path: string,
@@ -278,8 +334,15 @@ describe('archive verification', () => {
   it('verifies an intact archive by streaming, and reports a mismatch by name', async () => {
     await withTempProject({}, async (project) => {
       const archive = join(project.root, 'intact.lorepack');
-      await writeZip(archive, [...BUILD, ['checksums.json', indexOf(BUILD)]]);
-      expect(await verifyArchive(archive)).toEqual({ ok: true, memberCount: 3, failures: [] });
+      const build = validBuild(project.root);
+      await writeZip(archive, [...build, ['checksums.json', indexOf(build)]]);
+      expect(await verifyArchive(archive)).toMatchObject({
+        ok: true,
+        memberCount: 4,
+        failures: [],
+        assurance: 'integrity-only',
+        authenticated: false,
+      });
 
       const tampered = join(project.root, 'tampered.lorepack');
       await writeZip(tampered, [
@@ -363,18 +426,19 @@ describe('archive verification', () => {
     async (host) => {
       await withTempProject({}, async (project) => {
         const archive = join(project.root, 'directory.lorepack');
+        const build = validBuild(project.root);
         await writeZip(archive, [
-          ...BUILD,
-          ['checksums.json', indexOf(BUILD)],
+          ...build,
+          ['checksums.json', indexOf(build)],
           ['reports/', new Uint8Array()],
         ]);
         declareHost(archive, 'manifest.json', host);
         expect(await verifyArchive(archive)).toMatchObject({
           ok: true,
-          memberCount: 3,
+          memberCount: 4,
           failures: [],
         });
-        expect((await readArchive(archive)).get('manifest.json')).toEqual(MANIFEST);
+        expect((await readArchive(archive)).get('manifest.json')).toEqual(build[0]?.[1]);
       });
     },
   );

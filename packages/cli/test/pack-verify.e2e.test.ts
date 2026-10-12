@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { CHECKSUM_MEMBER, readArchive } from '@lorepack/backend-local';
 import { sha256Hex } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -30,7 +31,6 @@ const execute = promisify(execFile);
 const RSS_CEILING = 256 * 1024 * 1024;
 
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
-const DATABASE = new TextEncoder().encode('SQLite format 3');
 
 describe('required build members, issue 418', () => {
   it.each(['checksums-only', 'extra-only', 'missing-catalog'])(
@@ -181,31 +181,41 @@ describe('lorepack pack --verify on a hostile archive', () => {
   it('hashes a large listed member as a stream rather than buffering it', async () => {
     // 512 MiB of zeros compresses to about half a megabyte. Buffering it, as verification did
     // before #567, needs at least twice that in memory; streaming needs one chunk.
-    await withTempProject({}, async (project) => {
-      const archive = join(project.root, 'large.lorepack');
-      const large = zeros(512);
-      const hash = createHash('sha256');
-      for await (const chunk of large.stream()) hash.update(chunk as Buffer);
-      await writeZip(archive, [
-        ['manifest.json', MANIFEST],
-        [
-          'checksums.json',
-          indexOf({
-            'manifest.json': sha256Hex(MANIFEST),
-            'context.sqlite': sha256Hex(DATABASE),
-            'objects/large.bin': hash.digest('hex'),
-          }),
-        ],
-        ['context.sqlite', DATABASE],
-        ['objects/large.bin', large],
-      ]);
+    await withTempProject(
+      {
+        files: { 'lore.yaml': 'version: 1\nname: demo\nsources:\n  - .\n', 'doc.md': '# Valid\n' },
+      },
+      async (project) => {
+        const archive = join(project.root, 'large.lorepack');
+        const invoke = (args: string[]) =>
+          execute(process.execPath, [BIN, ...args], { cwd: project.root, timeout: 120_000 });
+        await invoke(['build']);
+        const base = join(project.root, 'base.lorepack');
+        await invoke(['pack', '--out', base]);
+        const members = await readArchive(base);
+        members.delete(CHECKSUM_MEMBER);
+        const large = zeros(512);
+        const hash = createHash('sha256');
+        for await (const chunk of large.stream()) hash.update(chunk as Buffer);
+        await writeZip(archive, [
+          ...members,
+          [
+            'checksums.json',
+            indexOf({
+              ...Object.fromEntries([...members].map(([name, bytes]) => [name, sha256Hex(bytes)])),
+              'reports/large.bin': hash.digest('hex'),
+            }),
+          ],
+          ['reports/large.bin', large],
+        ]);
 
-      const result = await verifyMeasured(project.root, archive);
+        const result = await verifyMeasured(project.root, archive);
 
-      expect(result.code, result.stderr).toBe(0);
-      expect(result.stdout).toContain('intact');
-      expect(result.peakRss).toBeLessThan(RSS_CEILING);
-    });
+        expect(result.code, result.stderr).toBe(0);
+        expect(result.stdout).toContain('intact');
+        expect(result.peakRss).toBeLessThan(RSS_CEILING);
+      },
+    );
   }, 120_000);
 
   it('fails members named after Object.prototype keys as unlisted', async () => {

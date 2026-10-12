@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BuildIdInputs } from '../hash/build-id.js';
 import {
   buildIdSchema,
   canonicalPathSchema,
@@ -18,6 +19,29 @@ export const lockfileSchema = z
     semantic: embeddingProfileSchema.nullable(),
   })
   .strict();
+
+export const buildIdInputsSchema = z
+  .object({
+    formatVersion: z.literal(1),
+    schemaVersion: z.int().positive(),
+    compilerVersion: z.string().min(1),
+    canonicalizationVersion: z.int().positive(),
+    normalizationVersion: z.int().positive(),
+    effectiveConfig: z.json(),
+    parserVersions: z.record(z.string().min(1), z.string().min(1)),
+    ruleResolution: z.json(),
+    embeddingProfile: z.json().nullable(),
+    canonicalRoots: z
+      .object({
+        artifacts: sha256Schema,
+        nodes: sha256Schema,
+        chunks: sha256Schema,
+        tables: sha256Schema,
+        objects: sha256Schema,
+      })
+      .strict(),
+  })
+  .strict() satisfies z.ZodType<BuildIdInputs>;
 
 export const buildWarningSchema = z
   .object({

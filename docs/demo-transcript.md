@@ -203,7 +203,7 @@ lorepack pack --verify "<demo-workspace>/product-research.lorepack"
 ```
 
 ```text
-<demo-workspace>/product-research.lorepack is intact. 10 members verified.
+<demo-workspace>/product-research.lorepack is intact. 10 members verified. Catalog roots, required objects and build ID verified. Integrity only; unsigned publisher.
 ```
 
 ## coding-context: coding-project

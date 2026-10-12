@@ -16,6 +16,7 @@ single source of truth, and `pnpm schemas:check` fails when committed schemas dr
 | [`schemas/lore-config.json`](../../schemas/lore-config.json) | `lore.yaml` |
 | [`schemas/lore-lock.json`](../../schemas/lore-lock.json) | `lore.lock` |
 | [`schemas/build-manifest.json`](../../schemas/build-manifest.json) | `manifest.json` inside a sealed build |
+| [`schemas/build-id-inputs.json`](../../schemas/build-id-inputs.json) | Exact canonical identity inputs retained in a sealed build |
 | [`schemas/build-receipt.json`](../../schemas/build-receipt.json) | Operational build receipt outside the build |
 | [`schemas/plan.json`](../../schemas/plan.json) | `lorepack plan --json` |
 | [`schemas/deployment-receipt.json`](../../schemas/deployment-receipt.json) | `.lore/targets/*` deployment receipt |
@@ -95,10 +96,24 @@ records. Zero file-type bits are accepted when a writer omits them; harmless dir
 records are ignored. ZIP attributes depend on the creator's host, as defined in
 [PKWARE's ZIP specification, sections 4.4.2 and 4.4.15](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT).
 
-Member checksums and required-entry checks establish neither builder identity nor
-authenticity. Packages are unsigned; the current checksum verifier is not a proof that
-catalog values agree with the build's canonical logical identity. Logical verification
-is tracked in [#418](https://github.com/burakdede/lorepack/issues/418).
+`pack --verify` first streams member checksums, then requires a valid compatible manifest
+and `reports/build-id-inputs.json`. It checks SQLite integrity, foreign keys, the complete
+unchanged migration history, supported schema definitions, node and chunk content hashes,
+declared ranking hints, FTS rows, term instances and document sizes, typed table rows and manifest counts. It recomputes
+all five canonical roots and derives the build ID from the exact recorded inputs. Every
+required normalized object must exist at its content address and hash to that address.
+
+Successful JSON output includes `buildId`, `assurance: "integrity-only"` and
+`authenticated: false`. Human output names the checks and says the publisher is unsigned.
+These checks prove internal consistency, not builder identity, source correctness or that
+the recorded compiler actually ran. A publisher can create a new internally consistent
+unsigned package. No signature or trusted-builder assertion is inferred.
+
+Legacy archives without complete identity inputs fail with `LORE_E_SCHEMA_MISMATCH`.
+Existing immutable builds are never retrofitted. Catalog verification runs read-only in a
+child process with a 60-second deadline, 128 MiB JavaScript heap and 4 MiB reply ceiling.
+Only fixed verification files are copied to a private temporary directory, removed after
+success or failure. No archive member is extracted into a user-selected destination.
 
 The current writer writes the archive to a temporary file beside the destination, syncs it,
 and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any

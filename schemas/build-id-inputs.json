@@ -1,0 +1,199 @@
+{
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "__schema1": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema1"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema1"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "__schema2": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema2"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema2"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://lorepack.dev/schemas/build-id-inputs.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalRoots": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "chunks": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "nodes": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "objects": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "tables": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifacts",
+        "nodes",
+        "chunks",
+        "tables",
+        "objects"
+      ],
+      "type": "object"
+    },
+    "canonicalizationVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "compilerVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "effectiveConfig": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "embeddingProfile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "formatVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "normalizationVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "parserVersions": {
+      "additionalProperties": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "propertyNames": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "ruleResolution": {
+      "$ref": "#/$defs/__schema1"
+    },
+    "schemaVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "formatVersion",
+    "schemaVersion",
+    "compilerVersion",
+    "canonicalizationVersion",
+    "normalizationVersion",
+    "effectiveConfig",
+    "parserVersions",
+    "ruleResolution",
+    "embeddingProfile",
+    "canonicalRoots"
+  ],
+  "title": "build-id-inputs",
+  "type": "object"
+}
