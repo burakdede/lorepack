@@ -141,7 +141,7 @@ provenance when two candidates are otherwise equivalent.
 | `unified` | Shared parser pipeline for Markdown and HTML. | Replace if the parser stack stops being maintained together. |
 | `vite` | Studio build tooling. | Replace if it adds install-time surprises or cannot keep the bundle deterministic. |
 | `vitest` | Unit and integration test runner. | Replace if it cannot run the workspace projects on all supported platforms. |
-| `@vitest/coverage-v8` | V8 coverage provider for the configured Vitest report. It is pinned to Vitest 4.1.10 because Vitest loads coverage providers as separate packages, and keeping the versions aligned makes the local coverage command reproducible. | Replace if Vitest changes its coverage-provider contract or if the provider adds native code or install hooks. |
+| `@vitest/coverage-v8` | V8 coverage provider for the configured Vitest report. It is pinned to Vitest 4.1.11 because Vitest loads coverage providers as separate packages, and keeping the versions aligned makes the local coverage command reproducible. | Replace if Vitest changes its coverage-provider contract or if the provider adds native code or install hooks. |
 | `wrangler` | Contributor-only Cloudflare deployment and smoke tooling, declared as a devDependency of `deploy-cloudflare` and of `cli` (so the in-repo bundle resolves it by package name). Users supply their own at runtime; the CLI finds it with Node resolution, never a relative path (#580). | Keep isolated from published packages; replace if Cloudflare CLI syntax changes incompatibly. |
 | `yaml` | `lore.yaml`, lockfile and frontmatter parsing. | Replace if it stops preserving actionable error locations. |
 | `yauzl` | ZIP reader for `.lorepack` and XLSX. | Replace only with an equally low-level pure-JS ZIP reader. |
@@ -165,3 +165,13 @@ small and fully testable. `ProjectLock` has grown beyond its original directory 
 host identity, PID reuse and concurrent reclamation. Its current trade-offs are recorded in
 [ADR 0002](../adr/0002-lock-reclamation.md), with real cross-process tests on every supported
 platform.
+
+## Contributor test tooling
+
+Vitest and `@vitest/coverage-v8` are pinned together at 4.1.11. This patch fixes
+[redirect-mock file disclosure](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9)
+in the contributor toolchain. The regression drives the installed public registration
+handler with real files and Vite's allow/deny policy, rather than asserting a version string.
+These MIT tooling packages remain outside the published runtime closure. Installation
+continues to decline dependency scripts; the upgrade adds no runtime dependency or native
+build requirement.
