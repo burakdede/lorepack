@@ -259,38 +259,28 @@ function ContextTab(): React.JSX.Element {
             </div>
           )}
 
-          <Omissions items={run.data.omitted} />
+          <Omissions items={run.data.omitted} summary={run.data.omissionSummary} />
         </>
       )}
     </>
   );
 }
 
-/**
- * Token accounting, architecture 13.6, labelled as estimates throughout.
- *
- * Every number here is a conservative estimate rather than a count, and saying so once at the
- * top is what stops a reader treating the arithmetic as exact.
- */
 function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.Element {
-  const omittedByBudget = bundle.omitted
-    .filter((item) => item.reason === 'budget')
-    .reduce((sum, item) => sum + item.estimatedTokens, 0);
-
   return (
     <div className="section panel">
       <h2 className="section-heading">budget</h2>
       <p className="section-note prose">
-        Every figure is a conservative estimate, not an exact token count.
+        The budget covers complete supported output. Token estimates are not provider token counts.
       </p>
-      <BudgetTape bundle={bundle} cut={omittedByBudget} />
+      <BudgetTape bundle={bundle} />
       <Facts>
         <Fact label="Profile">{bundle.profile}</Fact>
         {/* Named for what it bought, not just its size. "Reserved 468" beside "Selected 9"
             read as a budget line with nothing in it, because the passages it paid for were
             the ones missing from the page (#199). */}
         <Fact label="Orientation">
-          {`${bundle.overview.length}, using ${bundle.reservedTokens.toLocaleString()} reserved`}
+          {`${bundle.overview.length}, using ${bundle.reservedTokens.toLocaleString()} stored passage estimates`}
         </Fact>
         <Fact label="Selected">{String(bundle.selected.length)}</Fact>
         {bundle.alternatives.length > 0 && (
@@ -300,33 +290,20 @@ function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.E
         {/* The total a reader can check against the page: every passage the model receives
             carries a citation, so this is the number of items rendered above. */}
         <Fact label="Cited passages">{String(bundle.citations.length)}</Fact>
-        <Fact label="Omitted">{String(bundle.omitted.length)}</Fact>
-        {omittedByBudget > 0 && (
-          <Fact label="Cut for budget">{omittedByBudget.toLocaleString()}</Fact>
+        <Fact label="Omitted">{String(bundle.omissionSummary.total)}</Fact>
+        {bundle.omissionSummary.reasons.budget > 0 && (
+          <Fact label="Passages cut for budget">
+            {String(bundle.omissionSummary.reasons.budget)}
+          </Fact>
         )}
       </Facts>
     </div>
   );
 }
 
-/**
- * The budget as a fixed-length tape, drawn to scale: the orientation reserve first, then the
- * selections, then whatever is left. It is accounting, not a score, so it measures tokens and
- * nothing else, and the exact figures sit in the facts beneath it.
- *
- * The summary line above it is the only place the budget and the amount used are written,
- * so it is read aloud; the drawn track is hidden, because it repeats that line.
- */
-function BudgetTape({
-  bundle,
-  cut,
-}: {
-  readonly bundle: ContextBundle;
-  readonly cut: number;
-}): React.JSX.Element {
+function BudgetTape({ bundle }: { readonly bundle: ContextBundle }): React.JSX.Element {
   const share = (tokens: number): string =>
     `${Math.max(0, Math.min(100, (tokens / Math.max(bundle.budget, 1)) * 100))}%`;
-  const selected = Math.max(bundle.estimatedTokens - bundle.reservedTokens, 0);
   const free = Math.max(bundle.budget - bundle.estimatedTokens, 0);
 
   return (
@@ -335,34 +312,23 @@ function BudgetTape({
         <span className="tape-used">{bundle.estimatedTokens.toLocaleString()}</span>
         {' of '}
         <span className="tape-budget">{bundle.budget.toLocaleString()}</span>
-        {' estimated tokens used'}
+        {' estimated tokens for complete output'}
       </p>
       <div className="tape-track" aria-hidden="true">
         <span
-          className="tape-segment tape-reserved"
-          style={{ width: share(bundle.reservedTokens) }}
+          className="tape-segment tape-selected"
+          style={{ width: share(bundle.estimatedTokens) }}
         />
-        <span className="tape-segment tape-selected" style={{ width: share(selected) }} />
       </div>
       <div className="tape-legend" aria-hidden="true">
         <span className="tape-key">
-          <span className="tape-swatch tape-reserved" />
-          {`orientation ${bundle.reservedTokens.toLocaleString()}`}
-        </span>
-        <span className="tape-key">
           <span className="tape-swatch tape-selected" />
-          {`selections ${selected.toLocaleString()}`}
+          {`complete output ${bundle.estimatedTokens.toLocaleString()}`}
         </span>
         <span className="tape-key">
           <span className="tape-swatch tape-free" />
           {`unused ${free.toLocaleString()}`}
         </span>
-        {cut > 0 && (
-          <span className="tape-key">
-            <span className="tape-swatch tape-cut" />
-            {`fell off the end ${cut.toLocaleString()}`}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -420,46 +386,59 @@ const REASONS: Record<string, string> = {
   filtered: 'excluded by the filters on this request',
 };
 
-/**
- * Every omitted item, its category and its reason, at the same weight as the selections.
- *
- * This is the half of the route that makes it a debugger. "Why is this not in the answer" is
- * the question a person tuning retrieval arrives with.
- */
 function Omissions({
   items,
+  summary,
 }: {
   readonly items: readonly OmittedItem[];
+  readonly summary: ContextBundle['omissionSummary'];
 }): React.JSX.Element | null {
-  if (items.length === 0) return null;
+  if (summary.total === 0) return null;
 
   return (
     <div className="section">
       <h2 className="section-heading">omitted</h2>
-      <div className="table-frame table-scroll">
-        <table className="data-table omissions">
-          <thead>
-            <tr>
-              <th scope="col">where</th>
-              <th scope="col">why</th>
-              <th scope="col" className="numeric">
-                est
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.chunkId} className="artifact-row">
-                <td>
-                  <Citation locator={item.locator} />
-                </td>
-                <td className="omitted-reason prose">{REASONS[item.reason] ?? item.reason}</td>
-                <td className="numeric">{item.estimatedTokens.toLocaleString()}</td>
+      <p className="section-note prose">
+        {`${summary.total} omitted ${summary.total === 1 ? 'passage' : 'passages'}; showing ${summary.reported} ${summary.reported === 1 ? 'diagnostic' : 'diagnostics'}.`}
+      </p>
+      {summary.truncated && (
+        <p className="section-note prose">
+          Diagnostic detail was truncated to fit the delivery limits.
+        </p>
+      )}
+      <ul className="section-note prose">
+        {Object.entries(summary.reasons)
+          .filter(([, total]) => total > 0)
+          .map(([reason, total]) => (
+            <li key={reason}>{`${REASONS[reason] ?? reason}: ${total}`}</li>
+          ))}
+      </ul>
+      {items.length > 0 && (
+        <div className="table-frame table-scroll">
+          <table className="data-table omissions">
+            <thead>
+              <tr>
+                <th scope="col">where</th>
+                <th scope="col">why</th>
+                <th scope="col" className="numeric">
+                  est
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.chunkId} className="artifact-row">
+                  <td>
+                    <Citation locator={item.locator} />
+                  </td>
+                  <td className="omitted-reason prose">{REASONS[item.reason] ?? item.reason}</td>
+                  <td className="numeric">{item.estimatedTokens.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
