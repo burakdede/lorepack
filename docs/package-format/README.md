@@ -154,6 +154,12 @@ Existing immutable builds are never retrofitted. Catalog verification runs read-
 child process with a 60-second deadline, 128 MiB JavaScript heap and 4 MiB reply ceiling.
 An already-aborted verification returns `LORE_E_CANCELLED` before resolving or launching
 that child. Default and custom abort reasons retain the same public cancellation error.
+The verifier returns one JSON reply: an exact logical proof on success, or a typed failure.
+Malformed manifest, identity or catalog data receives a sanitized corruption response.
+Unsupported hashing versions preserve the schema-mismatch code and subject. The read-only
+catalog connection closes after both successful and failing logical verification.
+[`archive_verify_child.test.ts`](../../packages/backend-local/test/archive_verify_child.test.ts)
+checks these boundaries against real SQLite, including all missing input arguments.
 Only fixed verification files are copied to a private temporary directory, removed after
 success or failure. No archive member is extracted into a user-selected destination.
 
