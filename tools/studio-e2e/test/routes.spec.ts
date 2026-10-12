@@ -164,7 +164,14 @@ test.describe('Playground', () => {
     await page.goto(`${session.url}/#/playground`);
 
     await page.getByLabel('Task').fill('how do I roll back a release');
+    const assembled = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/v1/context') && response.request().method() === 'POST',
+    );
     await page.getByRole('button', { name: 'Assemble' }).click();
+    const response = await assembled;
+    expect(response.ok()).toBe(true);
+    const bundle = (await response.json()) as { estimatedTokens: number; budget: number };
 
     // A real bundle from the real assembler, so this fails if the route and the API disagree
     // about a field name, which no mocked component test can catch.
@@ -172,9 +179,26 @@ test.describe('Playground', () => {
     // Invariant 5: every selected passage carries where it came from.
     await expect(page.locator('.item .citation').first()).toContainText('docs/runbook.md');
     await expect(
-      page.getByText('Every figure is a conservative estimate, not an exact token count.'),
+      page.getByText(
+        'The budget covers complete supported output. Token estimates are not provider token counts.',
+      ),
     ).toBeVisible();
 
+    expect(Number((await page.locator('.tape-used').innerText()).replace(/\D/g, ''))).toBe(
+      bundle.estimatedTokens,
+    );
+    expect(Number((await page.locator('.tape-budget').innerText()).replace(/\D/g, ''))).toBe(
+      bundle.budget,
+    );
+    expect(
+      Number(
+        (await page.locator('.tape-key').filter({ hasText: 'unused' }).innerText()).replace(
+          /\D/g,
+          '',
+        ),
+      ),
+    ).toBe(bundle.budget - bundle.estimatedTokens);
+    expect(bundle.estimatedTokens).toBeLessThanOrEqual(bundle.budget);
     await checkA11y();
   });
 

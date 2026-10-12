@@ -34,3 +34,9 @@ Manual browser checklist, executed against real `lorepack dev`:
 ![Complete delivered-output budget in Studio](../images/studio-playground.png)
 
 ![Bounded diagnostic detail with complete totals on mobile](../images/context-budget-mobile.png)
+
+
+The real Studio end-to-end accounting scenario checks the complete-output note and
+compares displayed used, budget and unused values with the actual browser context
+response. This catches drift between the shared runtime contract and the UI without
+mocked estimates. The old exact-copy assertion was updated with the new contract.
