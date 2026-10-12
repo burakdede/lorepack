@@ -8,6 +8,10 @@
       "pattern": "^lore_[0-9a-f]{64}$",
       "type": "string"
     },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "locator": {
       "additionalProperties": false,
       "description": "Exact location of content within a source artifact",
@@ -55,6 +59,10 @@
       ],
       "type": "object"
     },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
+    },
     "sourceState": {
       "enum": [
         "clean",
@@ -72,6 +80,8 @@
     }
   },
   "required": [
+    "corpusId",
+    "namespaceId",
     "buildId",
     "sourceState",
     "text",

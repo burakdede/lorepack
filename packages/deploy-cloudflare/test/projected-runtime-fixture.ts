@@ -24,6 +24,7 @@ import {
   R2ObjectStore,
 } from '../src/index.js';
 
+export const CORPUS_ID = `corpus_${'c'.repeat(32)}`;
 export const PROJECT = 'contracted';
 export const ACTIVE_BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 export const CANDIDATE_BUILD = `lore_${'b'.repeat(64)}` as BuildId;
@@ -116,6 +117,7 @@ interface ProjectedFixtureState {
 let currentFixture: ProjectedFixtureState | null = null;
 
 export async function createProjectedWorkerRuntimeFixture(): Promise<{
+  readonly buildDirectory: string;
   readonly runtime: ReturnType<typeof createRuntime>;
   readonly knownArtifactId: string;
   readonly matchingQuery: string;
@@ -148,6 +150,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
     });
 
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: projection,
@@ -155,6 +158,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
     });
 
     const activePlan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: ACTIVE_BUILD,
       buildDirectory: activeDirectory,
@@ -165,6 +169,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
     await target.activate(activeReceipt);
 
     const candidatePlan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: CANDIDATE_BUILD,
       buildDirectory: candidateDirectory,
@@ -172,10 +177,12 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
     });
     const candidateReceipt = await target.apply(candidatePlan);
 
-    const provider = new D1ActiveBuildProvider(projection);
+    const provider = new D1ActiveBuildProvider(projection, PROJECT);
     const runtime = createRuntime({
       provider,
       open: async (handle): Promise<BuildScope> => ({
+        corpusId: handle.corpusId,
+        namespaceId: handle.namespaceId,
         buildId: handle.buildId,
         catalog: new D1CatalogStore({
           db: projection,
@@ -198,6 +205,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
     currentFixture = { root, target, candidateReceipt, close };
 
     return {
+      buildDirectory: activeDirectory,
       runtime,
       knownArtifactId: ARTIFACT_ID,
       matchingQuery: MATCHING_QUERY,

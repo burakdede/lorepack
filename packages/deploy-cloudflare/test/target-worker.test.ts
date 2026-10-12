@@ -17,6 +17,7 @@ import {
   r2ObjectKey,
 } from '../src/index.js';
 
+const CORPUS_ID = `corpus_${'c'.repeat(32)}`;
 const PROJECT = 'contracted';
 const ACTIVE_BUILD = `lore_${'a'.repeat(64)}` as const;
 const CANDIDATE_BUILD = `lore_${'b'.repeat(64)}` as const;
@@ -371,12 +372,14 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     );
 
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
     });
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: ACTIVE_BUILD,
       buildDirectory: activeDirectory,
@@ -456,12 +459,14 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     );
 
     const target = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
     });
     const plan = await target.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: ACTIVE_BUILD,
       buildDirectory: activeDirectory,
@@ -527,12 +532,14 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     );
 
     const activeTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
     });
     const activePlan = await activeTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: ACTIVE_BUILD,
       buildDirectory: activeDirectory,
@@ -543,6 +550,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     await activeTarget.activate(activeReceipt);
 
     const candidateTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -554,6 +562,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       },
     });
     const candidatePlan = await candidateTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: CANDIDATE_BUILD,
       buildDirectory: candidateDirectory,
@@ -631,12 +640,14 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     );
 
     const activeTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
       objects: fixture.bucket,
     });
     const activePlan = await activeTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: ACTIVE_BUILD,
       buildDirectory: activeDirectory,
@@ -654,6 +665,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
     });
 
     const candidateTarget = createCloudflareDeploymentTarget({
+      corpusId: CORPUS_ID,
       projectId: PROJECT,
       endpoint: ENDPOINT,
       catalogDb: fixture.projection,
@@ -665,6 +677,7 @@ describe('Cloudflare public candidate visibility, issue 89', () => {
       },
     });
     const candidatePlan = await candidateTarget.plan({
+      corpusId: CORPUS_ID,
       projectName: PROJECT,
       buildId: CANDIDATE_BUILD,
       buildDirectory: candidateDirectory,

@@ -39,6 +39,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
  * (HTTP) and `mcp-stdio.test.ts` (the real binary).
  */
 
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
+
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
 const HIT: CatalogSearchHit = {
@@ -160,6 +165,7 @@ const tables: TableStore = {
 };
 
 const scope: BuildScope = {
+  ...IDENTITY,
   buildId: BUILD,
   catalog,
   tables,
@@ -205,7 +211,7 @@ beforeEach(async () => {
         return { buildId: BUILD, generation: 1 };
       },
       async acquire(): Promise<BuildHandle> {
-        return { buildId: BUILD, generation: 1, release() {} };
+        return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
       },
     },
     open: async () => scope,
@@ -433,7 +439,7 @@ describe('a deployment that holds only the build it serves', () => {
           return { buildId: BUILD, generation: 1 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 1, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
         },
       },
       open: async () => scope,
@@ -518,7 +524,7 @@ describe('whose fault a failed resource read was', () => {
           return { buildId: BUILD, generation: 1 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 1, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
         },
       },
       open: async () => {
@@ -549,7 +555,7 @@ describe('whose fault a failed resource read was', () => {
           return { buildId: BUILD, generation: 1 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 1, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
         },
       },
       open: async () => scope,

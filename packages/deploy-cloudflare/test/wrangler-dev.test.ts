@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type BuildManifest, hashBytes, type SourceReadResult } from '@lorepack/core';
+import {
+  type BuildDescription,
+  type BuildManifest,
+  hashBytes,
+  type SourceReadResult,
+} from '@lorepack/core';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
@@ -12,6 +17,7 @@ import { r2ObjectKey } from '../src/r2-keys.js';
 const BUILD = `lore_${'a'.repeat(64)}`;
 const CANDIDATE_BUILD = `lore_${'b'.repeat(64)}`;
 const PROJECT = 'demo';
+const CORPUS_ID = `corpus_${'c'.repeat(32)}`;
 const ARTIFACT_ID = 'demo:guides/rollback.md';
 const ARTIFACT_PATH = 'guides/rollback.md';
 const TABLE_ID = 'demo:products';
@@ -90,6 +96,14 @@ beforeAll(async () => {
   build_id TEXT,
   generation INTEGER NOT NULL
 );
+CREATE TABLE runtime_identity (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  project_id TEXT NOT NULL,
+  corpus_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL
+);
+INSERT INTO runtime_identity (id, project_id, corpus_id, namespace_id)
+VALUES (1, '${PROJECT}', '${CORPUS_ID}', 'namespace_' || lower(hex(randomblob(16))));
 CREATE TABLE build_manifests (
   project_id TEXT NOT NULL,
   build_id TEXT NOT NULL,
@@ -324,7 +338,10 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
 
     const buildResponse = await worker.fetch('/v1/build', { headers: auth });
     expect(buildResponse.status).toBe(200);
-    expect(await buildResponse.json()).toMatchObject({
+    const build = (await buildResponse.json()) as BuildDescription;
+    expect(build).toMatchObject({
+      corpusId: CORPUS_ID,
+      namespaceId: expect.stringMatching(/^namespace_[0-9a-f]{32}$/),
       buildId: BUILD,
       sourceState: 'unknown',
       projectName: PROJECT,
@@ -338,6 +355,7 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     });
     expect(sourceResponse.status).toBe(200);
     const source = (await sourceResponse.json()) as SourceReadResult;
+    expect(source).toMatchObject({ corpusId: build.corpusId, namespaceId: build.namespaceId });
     expect(source.buildId).toBe(BUILD);
     expect(source.text).toContain('activate the previous build');
     expect(source.locator.artifactId).toBe(ARTIFACT_ID);
@@ -353,6 +371,8 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     });
     expect(describeResponse.status).toBe(200);
     expect(await describeResponse.json()).toMatchObject({
+      corpusId: build.corpusId,
+      namespaceId: build.namespaceId,
       tableId: TABLE_ID,
       name: 'Products',
       sqlName: TABLE_SQL,
@@ -377,6 +397,8 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     });
     expect(queryResponse.status).toBe(200);
     expect(await queryResponse.json()).toMatchObject({
+      corpusId: build.corpusId,
+      namespaceId: build.namespaceId,
       columns: ['SKU', 'Price'],
       rows: [
         { SKU: 'SKU-1', Price: 10 },

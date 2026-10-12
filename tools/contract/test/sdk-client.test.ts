@@ -22,6 +22,11 @@ import { describe, expect, it } from 'vitest';
  * a mock of them. A mock would agree with whatever the SDK believed.
  */
 
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
+
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
 const HIT: CatalogSearchHit = {
@@ -128,6 +133,7 @@ const tables: TableStore = {
 
 function clientOverApp(options: { retries?: number; timeoutMs?: number } = {}): LoreClient {
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog,
     tables,
@@ -151,7 +157,7 @@ function clientOverApp(options: { retries?: number; timeoutMs?: number } = {}): 
           return { buildId: BUILD, generation: 3 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 3, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 3, release() {} };
         },
       },
       open: async () => scope,
@@ -246,6 +252,7 @@ function clientOverEncodedNames(): LoreClient {
   });
 
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog: { ...catalog, artifact: async (id: string) => artifacts.get(id) ?? null },
     tables,
@@ -269,7 +276,7 @@ function clientOverEncodedNames(): LoreClient {
           return { buildId: BUILD, generation: 3 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 3, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 3, release() {} };
         },
       },
       open: async () => scope,
@@ -318,6 +325,7 @@ const HEADED_NODES: readonly CatalogNode[] = [
 
 function clientOverHeadings(): LoreClient {
   const scope: BuildScope = {
+    ...IDENTITY,
     buildId: BUILD,
     catalog: { ...catalog, nodes: async () => HEADED_NODES },
     tables,
@@ -340,7 +348,7 @@ function clientOverHeadings(): LoreClient {
           return { buildId: BUILD, generation: 3 };
         },
         async acquire(): Promise<BuildHandle> {
-          return { buildId: BUILD, generation: 3, release() {} };
+          return { ...IDENTITY, buildId: BUILD, generation: 3, release() {} };
         },
       },
       open: async () => scope,

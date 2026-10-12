@@ -2,7 +2,8 @@ import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { loadProjectConfig } from '@lorepack/core';
+import { LocalStateStore, stateMigrationsDirectory } from '@lorepack/backend-local';
+import { loadProjectConfig, type RuntimeIdentity } from '@lorepack/core';
 import { LEGACY_HANDSHAKE_VERSIONS, MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -18,7 +19,7 @@ async function cli(root: string, args: string[]) {
 }
 
 async function retainedProject(
-  body: (root: string, first: string, second: string) => Promise<void>,
+  body: (root: string, first: string, second: string, identity: RuntimeIdentity) => Promise<void>,
 ) {
   await withTempProject(
     {
@@ -37,7 +38,14 @@ async function retainedProject(
       expect(second).not.toBe(first);
       rmSync(temp.path('docs'), { recursive: true });
       rmSync(temp.path('.lore/cache'), { recursive: true, force: true });
-      await body(temp.root, first, second);
+      const state = LocalStateStore.open(temp.path('.lore'), stateMigrationsDirectory());
+      let identity: RuntimeIdentity;
+      try {
+        identity = state.identity();
+      } finally {
+        state.close();
+      }
+      await body(temp.root, first, second, identity);
     },
   );
 }
@@ -125,7 +133,7 @@ describe('retained builds without live sources', () => {
   });
 
   it('serves retained HTTP evidence and rolls back through the Studio operation', async () => {
-    await retainedProject(async (root, first, second) => {
+    await retainedProject(async (root, first, second, identity) => {
       const config = loadProjectConfig({ cwd: root });
       const server = await startServing({
         config,
@@ -144,7 +152,11 @@ describe('retained builds without live sources', () => {
           });
         const before = await search();
         expect(before.status).toBe(200);
-        expect(await before.json()).toMatchObject({ buildId: second, sourceState: 'unknown' });
+        expect(await before.json()).toMatchObject({
+          ...identity,
+          buildId: second,
+          sourceState: 'unknown',
+        });
         const rolled = await fetch(`${server.url}/v1/builds/rollback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Origin: server.url },
@@ -154,7 +166,9 @@ describe('retained builds without live sources', () => {
         expect(await rolled.json()).toMatchObject({ buildId: first });
         const after = await search();
         expect(after.status).toBe(200);
-        expect(JSON.stringify(await after.json())).toContain('restore the checkpoint');
+        const result = await after.json();
+        expect(result).toMatchObject(identity);
+        expect(JSON.stringify(result)).toContain('restore the checkpoint');
         const denied = await fetch(`${server.url}/v1/builds/rollback`, { method: 'POST' });
         expect(denied.status).not.toBe(200);
       } finally {
@@ -168,7 +182,7 @@ describe('retained builds without live sources', () => {
       ['modern', 'legacy'].map((era) => ({ mode, era })),
     ),
   )('serves retained MCP evidence with $mode in the $era era', async ({ mode, era }) => {
-    await retainedProject(async (root, _first, second) => {
+    await retainedProject(async (root, _first, second, identity) => {
       const child = spawn(process.execPath, [BIN, '--cwd', root, 'mcp', mode], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
@@ -204,6 +218,8 @@ describe('retained builds without live sources', () => {
         expect(result, diagnostics).toContain(second);
         expect(result).toContain('restart the worker');
         expect(result).toContain('unknown');
+        expect(result).toContain(identity.corpusId);
+        expect(result).toContain(identity.namespaceId);
       } finally {
         await stop(child);
       }
@@ -211,7 +227,7 @@ describe('retained builds without live sources', () => {
   });
 
   it('rolls back and reads, compares, packs and reactivates through the packaged CLI', async () => {
-    await retainedProject(async (root, first, second) => {
+    await retainedProject(async (root, first, second, identity) => {
       const rollback = JSON.parse((await cli(root, ['rollback', first])).stdout);
       expect(rollback.buildId).toBe(first);
       for (const args of [
@@ -233,6 +249,8 @@ describe('retained builds without live sources', () => {
         if (args[0] === 'search' || args[0] === 'export') {
           expect(result.stdout).toContain('restore the checkpoint');
           expect(result.stdout).toContain('unknown');
+          expect(result.stdout).toContain(identity.corpusId);
+          expect(result.stdout).toContain(identity.namespaceId);
         }
       }
       expect(JSON.parse((await cli(root, ['activate', second])).stdout).buildId).toBe(second);

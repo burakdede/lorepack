@@ -11,6 +11,16 @@ export const buildIdSchema = z
   .regex(/^lore_[0-9a-f]{64}$/, 'A build id is lore_ followed by a full lowercase sha256')
   .describe('Content-derived build identifier');
 
+export const runtimeIdentitySchema = z
+  .object({
+    corpusId: z.string().regex(/^corpus_[0-9a-f]{32}$/),
+    namespaceId: z.string().regex(/^namespace_[0-9a-f]{32}$/),
+  })
+  .strict()
+  .describe('Operational collection and runtime binding identifiers, never access credentials');
+
+export type RuntimeIdentity = Readonly<z.infer<typeof runtimeIdentitySchema>>;
+
 export const sha256Schema = z
   .string()
   .regex(/^[0-9a-f]{64}$/, 'A sha256 digest is 64 lowercase hexadecimal characters');

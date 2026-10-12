@@ -7,6 +7,10 @@ const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}
 const BUILD_A = buildId('a');
 const BUILD_B = buildId('b');
 const PROJECT = 'demo';
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
 
 class FakeR2Bucket {
   readonly objects = new Map<string, Uint8Array>();
@@ -30,6 +34,8 @@ class FakeR2Bucket {
 }
 
 class FakeD1Database implements D1DatabaseLike {
+  projectId = PROJECT;
+  identity = { ...IDENTITY };
   row: { buildId: string | null; generation: number } | null;
 
   constructor(row: { buildId: string | null; generation: number } | null) {
@@ -38,7 +44,10 @@ class FakeD1Database implements D1DatabaseLike {
 
   prepare(_query: string) {
     return {
-      first: async <T>() => this.row as T | null,
+      first: async <T>() =>
+        this.row === null
+          ? null
+          : ({ ...this.row, ...this.identity, projectId: this.projectId } as T),
     };
   }
 }
@@ -104,12 +113,12 @@ describe('R2ObjectStore', () => {
 
 describe('D1ActiveBuildProvider', () => {
   it('starts with no active build', async () => {
-    const provider = new D1ActiveBuildProvider(new FakeD1Database(null));
+    const provider = new D1ActiveBuildProvider(new FakeD1Database(null), PROJECT);
     expect(await provider.current()).toBeNull();
   });
 
   it('fails with an actionable error when nothing is active', async () => {
-    const provider = new D1ActiveBuildProvider(new FakeD1Database(null));
+    const provider = new D1ActiveBuildProvider(new FakeD1Database(null), PROJECT);
 
     try {
       await provider.acquire();
@@ -123,6 +132,7 @@ describe('D1ActiveBuildProvider', () => {
   it('returns the current build id and generation', async () => {
     const provider = new D1ActiveBuildProvider(
       new FakeD1Database({ buildId: BUILD_A, generation: 7 }),
+      PROJECT,
     );
 
     expect(await provider.current()).toEqual({ buildId: BUILD_A, generation: 7 });
@@ -130,7 +140,7 @@ describe('D1ActiveBuildProvider', () => {
 
   it('lets an in-flight request finish on its build while the next sees the new one', async () => {
     const db = new FakeD1Database({ buildId: BUILD_A, generation: 1 });
-    const provider = new D1ActiveBuildProvider(db);
+    const provider = new D1ActiveBuildProvider(db, PROJECT);
 
     const inFlight = await provider.acquire();
     expect(inFlight.buildId).toBe(BUILD_A);

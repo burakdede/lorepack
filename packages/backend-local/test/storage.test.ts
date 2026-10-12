@@ -20,6 +20,7 @@ import {
   sealCandidateDirectory,
 } from '../src/atomic.js';
 import { ProjectLock } from '../src/lock.js';
+import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { FileObjectStore } from '../src/object-store.js';
 import { ownProcessStart } from '../src/process-start.js';
 import { openWritable } from '../src/sqlite.js';
@@ -300,6 +301,115 @@ describe('LocalStateStore', () => {
     });
   });
 
+  it('persists corpus and namespace independently of the project display name (#697)', async () => {
+    await withTempProject({ files: { 'lore.yaml': 'name: first\n' } }, (project) => {
+      const lore = project.path('.lore');
+      const first = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      const identity = first.identity();
+      expect(identity).toEqual({
+        corpusId: expect.stringMatching(/^corpus_[0-9a-f]{32}$/),
+        namespaceId: expect.stringMatching(/^namespace_[0-9a-f]{32}$/),
+      });
+      first.close();
+      writeFileSync(project.path('lore.yaml'), 'name: renamed\n');
+      const second = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      try {
+        expect(second.identity()).toEqual(identity);
+      } finally {
+        second.close();
+      }
+    });
+  });
+
+  it('gives equivalent builds in different project states distinct identities (#697)', async () => {
+    await withTempProject({}, (project) => {
+      const first = LocalStateStore.open(project.path('first/.lore'), STATE_MIGRATIONS);
+      const second = LocalStateStore.open(project.path('second/.lore'), STATE_MIGRATIONS);
+      try {
+        for (const state of [first, second]) {
+          state.recordBuild(summary(BUILD_A));
+          state.activate(BUILD_A);
+        }
+        expect(first.current()).toEqual(second.current());
+        expect(first.identity().corpusId).not.toBe(second.identity().corpusId);
+        expect(first.identity().namespaceId).not.toBe(second.identity().namespaceId);
+      } finally {
+        first.close();
+        second.close();
+      }
+    });
+  });
+
+  it('migrates existing state without changing its builds or activation (#697)', async () => {
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      mkdirSync(lore, { recursive: true });
+      const raw = openWritable(join(lore, 'state.sqlite'));
+      runMigrations(
+        raw,
+        loadMigrations(STATE_MIGRATIONS).filter((migration) => migration.id === '0001'),
+      );
+      raw
+        .prepare(`INSERT INTO builds (build_id, state, created_at) VALUES (?, 'active', ?)`)
+        .run(BUILD_A, '2026-07-31T10:00:00Z');
+      raw.prepare('UPDATE active_build SET build_id = ?, generation = 7 WHERE id = 1').run(BUILD_A);
+      raw.close();
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      try {
+        expect(state.current()).toEqual({ buildId: BUILD_A, generation: 7 });
+        expect(state.getBuild(BUILD_A)?.state).toBe('active');
+        expect(state.identity().corpusId).toMatch(/^corpus_[0-9a-f]{32}$/);
+      } finally {
+        state.close();
+      }
+    });
+  });
+
+  it('refuses a missing identity table as damaged state without recreating it (#697)', async () => {
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      LocalStateStore.open(lore, STATE_MIGRATIONS).close();
+      const raw = openWritable(join(lore, 'state.sqlite'));
+      raw.exec('DROP TABLE runtime_identity');
+      raw.close();
+      expect(() => LocalStateStore.open(lore, STATE_MIGRATIONS)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_SCHEMA_MISMATCH' }),
+      );
+      const probe = openWritable(join(lore, 'state.sqlite'));
+      try {
+        expect(
+          probe.prepare("SELECT name FROM sqlite_master WHERE name = 'runtime_identity'").get(),
+        ).toBeUndefined();
+      } finally {
+        probe.close();
+      }
+    });
+  });
+
+  it.each(['missing', 'malformed'])(
+    'refuses %s identity without replacing it (#697)',
+    async (kind) => {
+      await withTempProject({}, (project) => {
+        const lore = project.path('.lore');
+        LocalStateStore.open(lore, STATE_MIGRATIONS).close();
+        const raw = openWritable(join(lore, 'state.sqlite'));
+        if (kind === 'missing') raw.exec('DELETE FROM runtime_identity');
+        else raw.exec("UPDATE runtime_identity SET corpus_id = 'wrong'");
+        raw.close();
+        expect(() => LocalStateStore.open(lore, STATE_MIGRATIONS)).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_SCHEMA_MISMATCH' }),
+        );
+        const probe = openWritable(join(lore, 'state.sqlite'));
+        try {
+          const row = probe.prepare('SELECT corpus_id FROM runtime_identity').get();
+          expect(row).toEqual(kind === 'missing' ? undefined : { corpus_id: 'wrong' });
+        } finally {
+          probe.close();
+        }
+      });
+    },
+  );
+
   it('activates a verified build and increments the generation', async () => {
     await withState((state) => {
       state.recordBuild(summary(BUILD_A));
@@ -399,7 +509,7 @@ describe('LocalStateStore written by a newer Lorepack', () => {
       raw.exec(`
         CREATE TABLE build_pins (build_id TEXT PRIMARY KEY) STRICT;
         INSERT INTO schema_migrations (id, name, checksum, applied_at)
-          VALUES ('0002', 'build-pins', 'future', '2027-01-01T00:00:00Z');
+          VALUES ('9999', 'build-pins', 'future', '2027-01-01T00:00:00Z');
       `);
       raw.close();
       const before = readFileSync(join(lore, 'state.sqlite'));
@@ -572,6 +682,88 @@ describe('LocalActiveBuildProvider', () => {
       expect(provider.openBuildCount).toBe(1);
       a.release();
       b.release();
+    });
+  });
+
+  it('rejects another provider handle even when both own the same build (#697)', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      state.recordBuild(summary(BUILD_A));
+      state.activate(BUILD_A);
+      const other = new LocalActiveBuildProvider(state, builds);
+      const own = await provider.acquire();
+      const foreign = await other.acquire();
+      try {
+        expect(() => provider.database(foreign)).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+        );
+        expect(() => other.database(own)).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+        );
+        expect(provider.database(own).prepare('SELECT id FROM chunks').get()).toEqual({
+          id: BUILD_A,
+        });
+      } finally {
+        own.release();
+        foreign.release();
+        other.closeAll();
+      }
+    });
+  });
+
+  it('rejects forged and released handles while the active connection is cached (#697)', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      state.recordBuild(summary(BUILD_A));
+      state.activate(BUILD_A);
+      const handle = await provider.acquire();
+      try {
+        expect(() => provider.database({ ...handle })).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+        );
+      } finally {
+        handle.release();
+      }
+      expect(provider.openBuildCount).toBe(1);
+      expect(() => provider.database(handle)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+      );
+      expect(() => handle.release()).not.toThrow();
+      const next = await provider.acquire();
+      try {
+        expect(provider.database(next).prepare('SELECT id FROM chunks').get()).toEqual({
+          id: BUILD_A,
+        });
+      } finally {
+        next.release();
+      }
+    });
+  });
+
+  it('does not revive a closed handle or let its release drain a new connection (#697)', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      materializeBuild(builds, BUILD_B);
+      state.recordBuild(summary(BUILD_A));
+      state.recordBuild(summary(BUILD_B));
+      state.activate(BUILD_A);
+      const closed = await provider.acquire();
+      provider.closeAll();
+      const current = await provider.acquire();
+      expect(() => provider.database(closed)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+      );
+      closed.release();
+      state.activate(BUILD_B);
+      const next = await provider.acquire();
+      try {
+        expect(provider.database(current).prepare('SELECT id FROM chunks').get()).toEqual({
+          id: BUILD_A,
+        });
+      } finally {
+        current.release();
+        next.release();
+      }
     });
   });
 });

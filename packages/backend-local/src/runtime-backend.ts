@@ -18,8 +18,8 @@ import {
   LoreError,
   type RuntimeDeps,
   type StoredTableDescription,
+  type StoredTableQueryResult,
   type TableQueryRequest,
-  type TableQueryResult,
   type TableStore,
 } from '@lorepack/core';
 import {
@@ -247,7 +247,7 @@ class LocalTableStore implements TableStore {
    * cannot reach another table, cannot read the catalog that would tell it those tables
    * exist, and cannot outlive its deadline. See `docs/architecture/adr-sql-surface.md`.
    */
-  async query(request: TableQueryRequest): Promise<TableQueryResult> {
+  async query(request: TableQueryRequest): Promise<StoredTableQueryResult> {
     const resolved = resolveTable(this.#db, request.tableId);
     if (resolved === null) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', `No table ${request.tableId} in this build.`, {
@@ -293,7 +293,7 @@ class LocalTableStore implements TableStore {
       // by the same function `describeTable` uses, because building it twice is how the two
       // came to disagree about the sheet (#235).
       locator: tableLocator(resolved.table),
-    } as TableQueryResult;
+    } as StoredTableQueryResult;
   }
 }
 
@@ -378,6 +378,7 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       try {
         db = provider.database(handle);
       } catch (cause) {
+        if (cause instanceof LoreError && cause.code === 'LORE_E_INVALID_ARGUMENT') throw cause;
         throw damagedBuild(handle.buildId, cause);
       }
       // Before `restrictToTables` below, which is what makes reading `schema_migrations`
@@ -402,6 +403,8 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
       // allowlist. #77 narrows this again, per query, when user SQL becomes possible.
       restrictToTables(db, [...RUNTIME_TABLES, ...physicalTableNames(db)]);
       return {
+        corpusId: handle.corpusId,
+        namespaceId: handle.namespaceId,
         buildId: handle.buildId,
         // Operational state, held beside the build rather than inside it, because a sealed
         // build carries no wall-clock time.

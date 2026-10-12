@@ -140,7 +140,8 @@ describe('opening state while another process uses it', () => {
     const db = new DatabaseSync(join(lore, 'state.sqlite'), { readOnly: true });
     try {
       const rows = db.prepare('SELECT id FROM schema_migrations').all();
-      expect(rows).toEqual([{ id: '0001' }]);
+      expect(rows).toEqual([{ id: '0001' }, { id: '0002' }]);
+      expect(db.prepare('SELECT count(*) AS n FROM runtime_identity').get()).toEqual({ n: 1 });
     } finally {
       db.close();
     }

@@ -210,6 +210,18 @@ const PROJECTION_MIGRATIONS_SOURCE = [
       `UPDATE projected_builds SET activated_at = NULL WHERE activated_at IS NOT NULL`,
     ],
   },
+  {
+    id: '0005',
+    name: 'runtime-identity',
+    statements: [
+      `CREATE TABLE runtime_identity (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  project_id TEXT NOT NULL,
+  corpus_id TEXT NOT NULL,
+  namespace_id TEXT NOT NULL
+)`,
+    ],
+  },
 ] as const;
 
 export const PROJECTION_MIGRATIONS: readonly ProjectionMigration[] =

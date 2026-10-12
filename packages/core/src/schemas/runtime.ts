@@ -6,6 +6,7 @@ import {
   capabilitySchema,
   columnTypeSchema,
   isoTimestampSchema,
+  runtimeIdentitySchema,
   sourceLocatorSchema,
 } from './common.js';
 import { contextProfileSchema } from './config.js';
@@ -46,6 +47,7 @@ const statusList = z
   });
 
 const responseEnvelope = {
+  ...runtimeIdentitySchema.shape,
   buildId: buildIdSchema,
   sourceState: sourceStateSchema,
 };

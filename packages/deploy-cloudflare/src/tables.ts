@@ -3,9 +3,9 @@ import {
   guardSingleTableQuery,
   LoreError,
   type StoredTableDescription,
+  type StoredTableQueryResult,
   TABLE_QUERY_LIMITS,
   type TableQueryRequest,
-  type TableQueryResult,
   type TableStore,
 } from '@lorepack/core/worker';
 
@@ -149,7 +149,7 @@ export class D1TableStore implements TableStore {
     };
   }
 
-  async query(request: TableQueryRequest): Promise<TableQueryResult> {
+  async query(request: TableQueryRequest): Promise<StoredTableQueryResult> {
     await this.#admitQuery?.();
     const resolved = await this.#resolve(request.tableId);
     if (resolved === null) {
@@ -215,7 +215,7 @@ export class D1TableStore implements TableStore {
       rowCount: limited.length,
       truncated,
       locator: tableLocator(resolved.table),
-    } as TableQueryResult;
+    } as StoredTableQueryResult;
   }
 
   /** Every object name in the database, read fresh. Failing to read them refuses the query. */

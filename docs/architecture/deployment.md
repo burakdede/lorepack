@@ -3,6 +3,25 @@
 A deployment projects one immutable build onto a remote runtime. It never recompiles, never
 edits the build, and never activates something it has not verified.
 
+The deploy input names the local `corpusId` separately from the display name and digest.
+Cloudflare's operational migration `0005` adds a singleton runtime binding. The first
+apply binds the configured project and source corpus to a new persistent namespace before
+projecting content; later deploys retain that binding. This operational metadata does not
+enter manifests, archives, canonical hashes or the logical projection schema version.
+The CLI can initialize or migrate local state while resolving the control-plane target;
+the target's `plan` only reads remote state.
+
+Plan, apply, verify, activation and rollback reject a bound deployment belonging to a
+different corpus. Reads validate the configured Worker project against persisted binding
+and never initialize it. Existing deployments without identity must be redeployed with
+this version; malformed or unreadable binding state requires repair or a known-good backup.
+An old partial receipt cannot bypass a missing binding by claiming metadata is complete.
+
+The namespace is distinct from the local runtime's even when both serve the same build.
+Runtime token authentication remains required where configured. A token from one deployment
+does not authenticate to another, and a configured project mismatch is refused even with
+a token valid for that database. This is a single-owner boundary, not multi-user tenancy.
+
 ## The port, and where the rules actually live
 
 `DeploymentTarget` (architecture section 16.3) is seven methods: `detect`, `capabilities`,

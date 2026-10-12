@@ -1,5 +1,5 @@
 import type { BuildManifest } from '../schemas/build.js';
-import type { ArtifactStatus } from '../schemas/common.js';
+import type { ArtifactStatus, RuntimeIdentity } from '../schemas/common.js';
 import type { BuildDiff } from '../schemas/diff.js';
 import type {
   BuildDescription,
@@ -176,7 +176,7 @@ export interface CatalogNode {
 export interface TableStore {
   list(): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
   describe(tableId: string): Promise<StoredTableDescription | null>;
-  query(request: TableQueryRequest): Promise<TableQueryResult>;
+  query(request: TableQueryRequest): Promise<StoredTableQueryResult>;
 }
 
 /**
@@ -188,7 +188,11 @@ export interface TableStore {
  * `SearchHit`, and it exists for the same reason: a store that had to invent a
  * `sourceState` would be answering a question it cannot see.
  */
-export type StoredTableDescription = Omit<TableDescription, 'buildId' | 'sourceState'>;
+export type StoredTableDescription = Omit<
+  TableDescription,
+  'buildId' | 'sourceState' | keyof RuntimeIdentity
+>;
+export type StoredTableQueryResult = Omit<TableQueryResult, keyof RuntimeIdentity>;
 
 /**
  * The stores for one acquired build.
@@ -197,7 +201,7 @@ export type StoredTableDescription = Omit<TableDescription, 'buildId' | 'sourceS
  * before reading anything, so a backend that opens the wrong build fails loudly at the
  * boundary instead of returning rows from two builds in one response (architecture 15.2).
  */
-export interface BuildScope {
+export interface BuildScope extends RuntimeIdentity {
   readonly buildId: BuildHandle['buildId'];
   /**
    * When this build was created, if the backend keeps that record.

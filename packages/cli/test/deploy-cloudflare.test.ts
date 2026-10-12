@@ -22,6 +22,7 @@ import { withTempProject } from '@lorepack/test-support';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readReceipt, runDeploy } from '../src/services/deploy.js';
 
+const CORPUS_ID = `corpus_${'c'.repeat(32)}`;
 const PROJECT = 'contracted';
 const ACTIVE_BUILD = `lore_${'a'.repeat(64)}` as const;
 const CANDIDATE_BUILD = `lore_${'b'.repeat(64)}` as const;
@@ -361,6 +362,7 @@ async function seedActiveBuild(
   bucket: FakeR2Bucket,
 ): Promise<void> {
   const target = createCloudflareDeploymentTarget({
+    corpusId: CORPUS_ID,
     projectId: PROJECT,
     endpoint: ENDPOINT,
     catalogDb: projection,
@@ -368,6 +370,7 @@ async function seedActiveBuild(
     publicBuildId: async () => buildId,
   });
   const plan = await target.plan({
+    corpusId: CORPUS_ID,
     projectName: PROJECT,
     buildId,
     buildDirectory,
@@ -423,6 +426,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
 
       const firstTarget = countingTarget(
         createCloudflareDeploymentTarget({
+          corpusId: CORPUS_ID,
           projectId: PROJECT,
           endpoint: ENDPOINT,
           catalogDb: targetProjection,
@@ -438,6 +442,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
       );
 
       const firstFailure = await runDeploy({
+        corpusId: CORPUS_ID,
         target: firstTarget.target,
         projectRoot: temp.root,
         projectName: PROJECT,
@@ -478,6 +483,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
 
       const resumeTarget = countingTarget(
         createCloudflareDeploymentTarget({
+          corpusId: CORPUS_ID,
           projectId: PROJECT,
           endpoint: ENDPOINT,
           catalogDb: targetProjection,
@@ -491,6 +497,7 @@ describe('Cloudflare deploy orchestration, issue 264', () => {
       );
 
       const resumed = await runDeploy({
+        corpusId: CORPUS_ID,
         target: resumeTarget.target,
         projectRoot: temp.root,
         projectName: PROJECT,

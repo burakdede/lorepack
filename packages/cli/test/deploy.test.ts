@@ -182,6 +182,7 @@ async function deploying<T>(body: (root: string) => Promise<T>): Promise<T> {
 }
 
 const base = (root: string, target: DeploymentTarget, extra = {}) => ({
+  corpusId: `corpus_${'c'.repeat(32)}`,
   target,
   projectRoot: root,
   projectName: 'deployed',

@@ -36,10 +36,16 @@ import { describe, expect, it } from 'vitest';
  */
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const IDENTITY = {
+  corpusId: `corpus_${'c'.repeat(32)}`,
+  namespaceId: `namespace_${'d'.repeat(32)}`,
+};
+
 const BUILD = `lore_${'a'.repeat(64)}` as BuildId;
 
 /** Discovery reads no build, so the scope only has to exist, not to answer. */
 const unusedScope = {
+  ...IDENTITY,
   buildId: BUILD,
   catalog: {},
   tables: {},
@@ -53,7 +59,7 @@ function handler(): ReturnType<typeof createMcpHttpHandler> {
         return { buildId: BUILD, generation: 1 };
       },
       async acquire(): Promise<BuildHandle> {
-        return { buildId: BUILD, generation: 1, release() {} };
+        return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
       },
     },
     open: async () => unusedScope,

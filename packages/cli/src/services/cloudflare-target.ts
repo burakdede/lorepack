@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { type BuildId, type DeploymentTarget, LoreError } from '@lorepack/core';
+import { LocalStateStore, stateMigrationsDirectory } from '@lorepack/backend-local';
+import { type BuildId, type DeploymentTarget, LORE_DIRECTORY, LoreError } from '@lorepack/core';
 import {
   createCloudflareDeploymentTarget,
   type D1CatalogDatabaseLike,
@@ -96,7 +97,15 @@ export async function resolveCloudflareTargetWithAdapter(
       { remediation: UNKNOWN_ENDPOINT_REMEDIATION, subject: resolved.receipt.workerName },
     );
   }
+  const state = LocalStateStore.open(join(projectRoot, LORE_DIRECTORY), stateMigrationsDirectory());
+  let corpusId: string;
+  try {
+    corpusId = state.identity().corpusId;
+  } finally {
+    state.close();
+  }
   return createCloudflareDeploymentTarget({
+    corpusId,
     projectId: resolved.receipt.project,
     endpoint: origin === null ? null : `${origin}/mcp`,
     workerName: resolved.receipt.workerName,
