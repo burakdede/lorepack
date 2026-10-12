@@ -114,8 +114,18 @@ describe('the Worker table query rate limit', () => {
       { tableQueryCaller: await tableQueryCaller(request) },
     );
 
-    expect((await app.fetch(request.clone())).status).toBe(200);
-    expect((await app.fetch(request.clone())).status).toBe(200);
+    const first = await app.fetch(request.clone());
+    expect(first.status).toBe(200);
+    const body = (await first.json()) as { queryId: string };
+    expect(body).toMatchObject({
+      tableId: TABLE_ID,
+      provenancePrecision: 'table',
+      queryId: expect.stringMatching(/^query_[a-f0-9]{64}$/),
+      rows: [{ n: 3 }],
+    });
+    const replay = await app.fetch(request.clone());
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ queryId: body.queryId });
     const refused = await app.fetch(request.clone());
     expect(refused.status).toBe(429);
     expect(await refused.json()).toMatchObject({ error: { code: 'LORE_E_BUSY' } });

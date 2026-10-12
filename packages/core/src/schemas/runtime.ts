@@ -299,6 +299,9 @@ export const tableQueryRequestSchema = z
 export const tableQueryResultSchema = z
   .object({
     ...responseEnvelope,
+    queryId: z.string().regex(/^query_[0-9a-f]{64}$/),
+    tableId: identifier,
+    provenancePrecision: z.literal('table'),
     columns: z.array(z.string()),
     rows: z.array(z.record(z.string(), z.unknown())),
     rowCount: z.int().nonnegative(),

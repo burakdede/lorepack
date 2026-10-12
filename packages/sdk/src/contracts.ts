@@ -237,6 +237,9 @@ export interface TableDescription extends RuntimeIdentity {
 export interface TableQueryResult extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;
+  queryId: string;
+  tableId: string;
+  provenancePrecision: 'table';
   columns: string[];
   rows: Array<Record<string, unknown>>;
   rowCount: number;

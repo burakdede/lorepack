@@ -55,6 +55,11 @@ build, deploy, source edits, activation, rollback or shell execution.
 Every result carries provenance through `SourceLocator`. A client that drops locators is losing
 contract data.
 
+`lore_query_table` also returns `queryId`, `tableId` and `provenancePrecision: "table"`.
+The locator covers the source table, not individual returned rows or aggregate cells.
+Keep the submitted SQL and limit to replay the request against its returned `buildId`.
+The [query identity contract](../adr/0014-table-query-identity.md) defines the fingerprint.
+
 ## Troubleshooting
 
 | Symptom | Check |

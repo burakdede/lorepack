@@ -387,7 +387,7 @@ See the [package format](docs/package-format/README.md#archive-structure).
 
 ### Provenance on every result
 
-Search results, exported context items, and table rows carry a `SourceLocator`. A locator can
+Search results, exported context items, and table-query results carry a `SourceLocator`. A locator can
 name a path, heading, line range, sheet, or cell range. This makes an answer auditable without
 requiring Lorepack to claim that one document is more truthful than another.
 
@@ -396,6 +396,10 @@ requiring Lorepack to claim that one document is more truthful than another.
 Markdown headings, code boundaries, directories, spreadsheet sheets, columns, and cell ranges
 remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
 through a bounded read-only SQL surface.
+
+Table query results identify the captured build, table and query. Their locator is
+explicitly table-level, including filtered or aggregate results; exact source-row and
+cell attribution is unsupported. See the [query contract](docs/adr/0014-table-query-identity.md).
 
 ### Read-only AI boundary
 

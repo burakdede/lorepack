@@ -192,7 +192,10 @@ export type StoredTableDescription = Omit<
   TableDescription,
   'buildId' | 'sourceState' | keyof RuntimeIdentity
 >;
-export type StoredTableQueryResult = Omit<TableQueryResult, keyof RuntimeIdentity>;
+export type StoredTableQueryResult = Omit<
+  TableQueryResult,
+  keyof RuntimeIdentity | 'queryId' | 'tableId' | 'provenancePrecision'
+>;
 
 /**
  * The stores for one acquired build.
