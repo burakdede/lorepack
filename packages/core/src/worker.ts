@@ -28,6 +28,13 @@ export {
 } from './errors/render.js';
 export { count, noun } from './format/count.js';
 export {
+  CANONICALIZATION_VERSION,
+  type Canonical,
+  canonicalize,
+  HASH_ALGORITHM,
+  hashCanonicalPortable,
+} from './hash/canonical_value.js';
+export {
   assertBuildId,
   BUILD_ID_PREFIX,
   type BuildId,

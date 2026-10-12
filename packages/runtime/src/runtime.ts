@@ -30,6 +30,7 @@ import {
 } from '@lorepack/core/worker';
 import type { ZodType } from 'zod';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
+import { identifyExecution, resolveExecutionPolicy } from './context/execution.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
 
@@ -183,8 +184,25 @@ class PortedRuntime implements LoreRuntime {
               .map(({ ranked }) => ranked)
           : [];
 
+        const manifest = await scope.catalog.manifest();
+        const execution = await identifyExecution(
+          resolveExecutionPolicy({
+            profile,
+            budget,
+            includeArchived: request.includeArchived,
+            compilerVersion: manifest.compilerVersion,
+          }),
+          {
+            corpusId: scope.corpusId,
+            namespaceId: scope.namespaceId,
+            buildId: scope.buildId,
+            task: request.task,
+            filters: request.filters ?? [],
+          },
+        );
         return {
           ...envelope,
+          execution,
           ...assembleBundle({
             task: request.task,
             profile,

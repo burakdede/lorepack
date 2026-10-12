@@ -1,0 +1,58 @@
+{
+  "$id": "https://lorepack.dev/schemas/execution-selection.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "filters": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "path",
+              "type",
+              "status"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "task": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "corpusId",
+    "namespaceId",
+    "buildId",
+    "task",
+    "filters"
+  ],
+  "title": "execution-selection",
+  "type": "object"
+}

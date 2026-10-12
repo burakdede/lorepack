@@ -223,12 +223,39 @@ describe('determinism', () => {
     expect(first.buildId).toBe(second.buildId);
     expect(first.corpusId).not.toBe(second.corpusId);
     expect(first.namespaceId).not.toBe(second.namespaceId);
-    const { corpusId: firstCorpus, namespaceId: firstNamespace, ...firstContent } = first;
-    const { corpusId: secondCorpus, namespaceId: secondNamespace, ...secondContent } = second;
+    const {
+      corpusId: firstCorpus,
+      namespaceId: firstNamespace,
+      execution: firstExecution,
+      ...firstContent
+    } = first;
+    const {
+      corpusId: secondCorpus,
+      namespaceId: secondNamespace,
+      execution: secondExecution,
+      ...secondContent
+    } = second;
     for (const corpusId of [firstCorpus, secondCorpus])
       expect(corpusId).toMatch(/^corpus_[0-9a-f]{32}$/);
     for (const namespaceId of [firstNamespace, secondNamespace])
       expect(namespaceId).toMatch(/^namespace_[0-9a-f]{32}$/);
+    expect(firstExecution.policy).toEqual(secondExecution.policy);
+    expect(firstExecution.policyId).toBe(secondExecution.policyId);
+    expect(firstExecution.selectionId).not.toBe(secondExecution.selectionId);
+    expect(firstExecution.selection).toEqual({
+      corpusId: firstCorpus,
+      namespaceId: firstNamespace,
+      buildId: first.buildId,
+      task,
+      filters: [],
+    });
+    expect(secondExecution.selection).toEqual({
+      corpusId: secondCorpus,
+      namespaceId: secondNamespace,
+      buildId: second.buildId,
+      task,
+      filters: [],
+    });
     expect(JSON.stringify(secondContent)).toBe(JSON.stringify(firstContent));
   });
 });

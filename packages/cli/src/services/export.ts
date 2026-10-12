@@ -37,6 +37,9 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
   lines.push(
     `Profile **${bundle.profile}**, budget ${count(bundle.budget, 'estimated token')}, of which ${count(bundle.estimatedTokens, 'estimated token')} used.`,
   );
+  lines.push(
+    `Execution policy \`${bundle.execution.policyId}\`, selection \`${bundle.execution.selectionId}\`.`,
+  );
   if (options.sourceState === 'dirty') {
     lines.push('');
     lines.push(

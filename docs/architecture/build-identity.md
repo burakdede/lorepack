@@ -135,3 +135,13 @@ The resolution also feeds the **parse cache key**. An artifact whose declared au
 has to be reindexed even though its bytes did not; resolving after the parse loop instead would
 let a rule edit reuse a stale entry, which is precisely the failure the cache key exists to
 prevent.
+
+## Portable canonical hashing
+
+`core/hash/canonical_value.ts` owns the pure length-prefixed serialization shared by Node
+content hashing and Worker-safe asynchronous hashing. `core/worker` exposes
+`hashCanonicalPortable`, using Web Crypto SHA-256 over the same UTF-8 canonical bytes.
+The local synchronous hashing API and build input contract remain unchanged. Operational
+execution identity may reuse serialization without entering canonical build inputs.
+
+A digest proves byte identity, not publisher authenticity or permission to read a corpus.

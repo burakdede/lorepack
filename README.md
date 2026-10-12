@@ -187,7 +187,9 @@ Assemble bounded context for a task without calling a model:
 lorepack export --task "How should the sync worker recover after a failed deploy?"
 ```
 
-The export contains the selected passages and their provenance. Lorepack does not summarize
+The export contains the selected passages and their provenance. JSON includes resolved
+execution policy and selection IDs; Markdown prints both IDs. These identify the runtime
+configuration and build-scoped request separately from the immutable content build. Lorepack does not summarize
 source material or decide which user-declared authority is correct.
 
 ### 4. Serve and connect
@@ -345,7 +347,8 @@ parsers), compiler version, configuration, and structure. The
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
 Newly compiled builds retain the exact identity inputs in `reports/build-id-inputs.json`.
-These support independent verification without returning to live sources.
+These support independent verification without returning to live sources. Canonical hashing
+uses the same byte serialization in local Node and the portable Worker-safe core.
 
 Archive verification requires a compatible manifest, catalog and complete identity inputs.
 It recomputes catalog roots and the build ID, checks required content-addressed objects,

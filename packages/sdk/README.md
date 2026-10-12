@@ -110,3 +110,9 @@ The types here mirror the server's published contracts. `tools/contract` asserts
 identical, so a change on either side fails to compile in CI rather than surprising you at
 runtime. Contract changes follow `formatVersion`: a new major of this package accompanies a
 `formatVersion` bump, and additive fields arrive in minors.
+
+Task context includes `execution.policyId`, `execution.selectionId` and their resolved
+policy/request descriptors. Equivalent defaults agree across local and remote runtimes;
+corpus bindings remain part of selection identity. These IDs describe context selection.
+They do not retain emitted bytes or promise downstream model-answer replay. See the
+[execution contract](../../docs/architecture/retrieval.md#execution-identity).
