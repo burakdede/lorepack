@@ -154,8 +154,15 @@ regression checks that importing the native converter (and its report/inventory 
 does not invoke commands or attempt to resolve stdin as a file. Native Windows CI exercises
 the real conversion and reporting suites; a macOS pass alone does not qualify portability.
 
-Native conversion reads and processes one raw V8 JSON file at a time. It does not retain
-the complete raw campaign in an array. Converted maps and parsed owned sources remain
+Native conversion reads and processes one raw V8 JSON file at a time. It rejects records
+whose full-script range differs from the expected source layout. For configuration
+TypeScript, Node's `stripTypeScriptTypes` API removes annotations before parsing while
+preserving the original positions, and calculates appended source-URL metadata for the
+range check. See the [Node module API](https://nodejs.org/docs/latest-v24.x/api/module.html#modulestriptypescripttypescode-options).
+A real wrapped-execution fixture previously received original-source counters; it now remains rejected.
+This layout check does not authenticate arbitrary external coverage files. The complete
+campaign must generate its own records from the unchanged measured candidate.
+It does not retain the complete raw campaign in an array. Converted maps and parsed owned sources remain
 available for compatibility checks. The real-record stream test must produce the same counters as the array input,
 including uncovered functions. This states the loading strategy, not a peak-memory bound.
 
