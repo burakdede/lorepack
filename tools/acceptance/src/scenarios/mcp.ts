@@ -127,8 +127,18 @@ export const MCP_SCENARIOS: readonly Scenario[] = [
       {
         action: 'run',
         args: ['export', '--task', 'rollback', '--budget', '400', '--allow-unsupported-budget'],
-        describe: 'And is honoured once it is deliberate',
-        expect: { exitCode: 0, stdout: { contains: ['budget 400 estimated tokens'] } },
+        describe: 'An explicit override still refuses framing that cannot fit',
+        expect: {
+          exitCode: 1,
+          errorCode: 'LORE_E_LIMIT_EXCEEDED',
+          stderr: { contains: ['Mandatory context framing', 'byte ceiling cannot be overridden'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rollback', '--budget', '50000', '--allow-unsupported-budget'],
+        describe: 'A deliberate larger budget is honoured within the independent byte ceiling',
+        expect: { exitCode: 0, stdout: { contains: ['budget 50,000 estimated tokens'] } },
       },
     ],
   },
