@@ -121,14 +121,19 @@ export async function startServing(
 
   try {
     const selected = options.buildId === undefined ? {} : { buildId: options.buildId };
-    const initial = await backend.provider.acquire(selected);
-    const initialBuildId = initial.buildId;
-    initial.release();
     const active = await backend.provider.current();
     if (active === null && options.buildId === undefined) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
         remediation: 'Run `lorepack build` first.',
       });
+    }
+    let initialBuildId: BuildId;
+    if (options.buildId !== undefined) {
+      const initial = await backend.provider.acquire(selected);
+      initialBuildId = initial.buildId;
+      initial.release();
+    } else {
+      initialBuildId = (active as NonNullable<typeof active>).buildId;
     }
 
     const runtime = createRuntime({
