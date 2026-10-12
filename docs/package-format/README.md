@@ -66,6 +66,40 @@ MUST NOT read source files to answer runtime requests for a sealed build.
 
 ## Archive Structure
 
+### Importing a build
+
+`lorepack --cwd <consumer> import <archive>` verifies and retains a build without compiling
+or activating it. The consumer directory must exist. Relative archive paths resolve from
+that directory. Run at an existing project's root or an empty directory outside another
+project. An existing project keeps its configuration, corpus/namespace binding and active
+pointer; an empty consumer receives a new operational binding and minimal `lore.yaml`.
+The consumer's context defaults remain its runtime policy.
+
+Import streams a private compressed snapshot, then runs the same logical verifier as
+`pack --verify` before extracting the same snapshot. Compressed input is limited to 16 GiB.
+Central-directory member, per-member, total-expanded and metadata limits also apply.
+The declared expanded/compressed ratio per member is capped at 2,048:1 before payload reads.
+This conservative bound leaves room for highly compressible valid DEFLATE members;
+absolute expanded-size limits still bound their work. DEFLATE uses length/distance symbols
+with copy lengths at most 258 bytes ([RFC1951](https://www.rfc-editor.org/rfc/rfc1951)).
+Payloads stream to private staging with bounded memory. Unsupported member layouts are
+refused. Only manifest, catalog, flat reports and content-addressed normalized objects are
+installed. `originals/*` are verified but never restored or executed.
+
+Every normalized object must match its address, including extra packaged objects. Existing
+objects are rechecked and corrupt ones refused. Import never replaces an existing immutable
+build; importing that ID again reports that it already exists. Import refuses links in its
+store paths. A failed import does not change the active pointer; objects installed before a
+later filesystem failure can remain unreferenced. Restore failed storage before retrying.
+Legacy packages missing complete identity inputs are refused, without retrofitting them.
+
+Use `lorepack activate <build-id>` explicitly, then inspect/search/read/query the retained
+build normally. `lorepack mcp --active-only` serves without source discovery or compilation.
+The generated configuration names a missing `__lorepack_sources_not_imported__` root to
+make accidental compilation fail explicitly until the user configures real sources.
+Integrity does not authenticate a publisher: unsigned imported content is still supplied
+by the archive sender. Import is a controller CLI operation, never a model-facing tool.
+
 A `.lorepack` file is a standard ZIP archive. It MUST NOT require encryption, proprietary
 framing or a Lorepack-specific container reader. A normal ZIP tool must be able to list it.
 

@@ -9,6 +9,7 @@ import { devCommand } from './dev.js';
 import { diffCommand } from './diff.js';
 import { doctorCommand } from './doctor.js';
 import { exportCommand } from './export.js';
+import { importCommand } from './import.js';
 import { initCommand } from './init.js';
 import { inspectCommand } from './inspect.js';
 import { mcpCommand } from './mcp.js';
@@ -37,6 +38,7 @@ export function registerCommands(): CommandDefinition[] {
     searchCommand(),
     inspectCommand(),
     packCommand(),
+    importCommand(),
     buildsCommand(),
     activateCommand(),
     rollbackCommand(),

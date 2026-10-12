@@ -201,6 +201,24 @@ lorepack pack [build]
 | `--verify <file>` | check an existing archive instead of writing one |
 | `--out <file>` | archive path to write |
 
+## `lorepack import`
+
+Verify and retain a portable build without compiling or activating it.
+
+```text
+lorepack import <file>
+```
+
+### Arguments
+
+| Name | Description |
+|---|---|
+| `<file>` | .lorepack archive to import |
+
+### Flags
+
+None.
+
 ## `lorepack builds`
 
 List build history, newest first.
