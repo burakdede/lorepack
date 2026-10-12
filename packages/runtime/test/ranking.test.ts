@@ -122,10 +122,31 @@ describe('step 3 and 5: status and supersession', () => {
     expect(visible[0]?.labels).toContain('archived');
   });
 
-  it('falls back to archived sources when nothing active matched at all', () => {
-    // Architecture 12.7: searchable when requested, or when no active source satisfies it.
+  it('returns no current evidence when only archived sources match', () => {
     const archived = score(candidate({ status: 'archived' }), input());
-    expect(applyVisibility([archived], input())).toHaveLength(1);
+    expect(applyVisibility([archived], input())).toHaveLength(0);
+  });
+
+  it('keeps current-only selection invariant under candidate enumeration order', () => {
+    const options = input({ superseded: new Set(['old']) });
+    const archived = candidate({ chunkId: 'arch', artifactId: 'arch', status: 'archived' });
+    const old = candidate({ chunkId: 'old', artifactId: 'old' });
+    const current = candidate({ chunkId: 'current', artifactId: 'current' });
+    for (const candidates of [
+      [archived, old, current],
+      [current, old, archived],
+      [old, archived, current],
+    ]) {
+      expect(rankCandidates(candidates, options).map((item) => item.hit.chunkId)).toEqual([
+        'current',
+      ]);
+      expect(
+        rankCandidates(
+          candidates.filter((item) => item !== current),
+          options,
+        ),
+      ).toEqual([]);
+    }
   });
 
   it('suppresses a superseded source from default results and keeps it labelled', () => {

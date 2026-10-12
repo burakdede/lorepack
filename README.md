@@ -274,6 +274,13 @@ before configuring a target.
 
 ## Workflows worth copying
 
+Search and task context use current-only evidence by default. If only archived or user-declared
+superseded material matches, the selection is empty; Lorepack never fills it with historical
+bodies automatically. Drafts remain eligible and labeled. Request history explicitly with
+`lorepack search --include-archived`, `lorepack export --include-archived`, or
+`includeArchived: true` through the SDK, HTTP or MCP. Historical items retain their labels
+and locators. This policy does not decide which document is true.
+
 ### Keep a coding agent on a reviewed context version
 
 ```bash

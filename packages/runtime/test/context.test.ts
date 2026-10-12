@@ -307,15 +307,13 @@ describe('alternatives, architecture 13.4', () => {
       includeArchived: false,
       superseded: NONE,
     });
-    // Everything is archived, so ranking falls back to showing them; force the suppressed
-    // path by asking assembly to treat them as alternatives.
     const bundle = assembleBundle({
       task: 'rollback',
       profile: 'agent',
       budget: PROFILE_BUDGETS.agent,
       ranked: [],
       dropped: [],
-      suppressed: report.kept,
+      suppressed: report.dropped.map(({ ranked }) => ranked),
     });
 
     expect(bundle.alternatives).toHaveLength(MAX_ALTERNATIVES);

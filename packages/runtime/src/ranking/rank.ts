@@ -192,10 +192,8 @@ export function authorityMultiplier(authority: number): number {
 /**
  * Steps 3 and 5, as visibility rather than as score.
  *
- * Archived sources are excluded by default and surface as a fallback when nothing active
- * matched, which is architecture 12.7 exactly: "searchable only when requested or when no
- * active source satisfies the query". Superseded sources are suppressed from default
- * results and remain readable, so they come back only when archived ones are asked for.
+ * Historical evidence requires explicit expansion, even when no current source matches.
+ * Drafts stay eligible with their declared label. Visibility does not decide truth.
  */
 export function applyVisibility(
   scored: readonly RankedHit[],
@@ -206,12 +204,7 @@ export function applyVisibility(
   const isSuppressed = (ranked: RankedHit): boolean =>
     ranked.hit.status === 'archived' || input.superseded.has(ranked.hit.artifactId);
 
-  const visible = scored.filter((ranked) => !isSuppressed(ranked));
-  if (visible.length > 0) return visible;
-
-  // Nothing active matched. Falling back is better than an empty page, and the label is
-  // what keeps it honest: a reader can see the answer came from an archived source.
-  return scored;
+  return scored.filter((ranked) => !isSuppressed(ranked));
 }
 
 /**

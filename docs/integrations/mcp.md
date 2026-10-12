@@ -9,6 +9,12 @@ CLI command surface.
 
 ## Minimal stdio configuration
 
+`lore_search` and `lore_context_for_task` exclude archived and declared superseded bodies
+unless their arguments explicitly set `includeArchived: true`. No current match produces
+an empty selection, without historical text in default alternatives. Drafts remain
+eligible and labeled. Historical expansion and explicitly addressed source reads preserve
+the original labels and locators; Lorepack does not choose which document is true.
+
 Configure the client to run:
 
 ```json

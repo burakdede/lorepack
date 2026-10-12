@@ -542,5 +542,6 @@ None.
 | `--format <format>` | markdown or json (default markdown) |
 | `--output <file>` | write to a file instead of stdout |
 | `--force` | overwrite an existing output file |
+| `--include-archived` | explicitly include labeled archived and superseded evidence |
 | `--allow-unsupported-budget` | permit a budget outside the supported 4,000 to 40,000 range |
 

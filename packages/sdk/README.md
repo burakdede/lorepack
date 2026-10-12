@@ -12,6 +12,12 @@ build, deploy or edit anything.
 
 ## Ten lines
 
+Search and task context are current-only by default. Archived and declared superseded
+bodies require `includeArchived: true`; a historical-only match leaves the default
+selection empty. Default context reports their omitted locators without delivering their
+text. Drafts remain eligible and labeled. Explicit historical results also keep labels
+and provenance. Direct source reads addressed by path or ID remain available.
+
 ```ts
 import { LoreClient } from '@lorepack/sdk';
 

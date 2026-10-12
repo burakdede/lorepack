@@ -138,20 +138,23 @@ the query in every section would otherwise be the entire answer.
 
 ## Status, authority and supersession
 
-Architecture 12.7, applied at query time:
+The current-only policy in [ADR0010](../adr/0010-current-only-context.md) applies at query time:
 
-- **archived**: excluded by default, included on request, and surfaced as a fallback when
-  nothing active matched at all. Always labelled.
+- **archived**: excluded from default search and task context, including historical-only
+  matches. Included only through explicit `includeArchived: true`, always labelled.
 - **draft**: ranked lower and labelled.
 - **superseded**: suppressed from default results, still readable on request, labelled.
 - **authority**: a multiplier between 0.75 and 1.25, centred on 1 at the default of 50. The
   range is deliberately narrow. If authority could dominate the lexical signal it would
   function as a truth claim.
 
-Note the boundary this phase actually reaches: the compiler does not yet apply configuration
-rules, so every artifact in a Phase 2 build is `active` with authority 50. Rule resolution is
-#78 in Phase 5. The ranking behaviour above is unit-tested against synthetic candidates now,
-and becomes reachable end to end when rules land.
+No eligible current evidence produces an empty selection. Historical bodies are not packed
+as default alternatives; their locators and omission reasons remain visible. Explicit history
+can select historical bodies or offer labeled alternatives. Drafts remain eligible with their
+declared label. Source reads addressed explicitly by path or ID remain available.
+Deployment verification explicitly includes history when checking candidate search/read
+availability, so a sampled historical passage does not fail an otherwise valid projection.
+Serving requests retain the current-only default.
 
 ## Filters narrow the candidates, never the ranking
 
