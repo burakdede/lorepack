@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { captureCoverage } from './coverage_report.mjs';
 
 const require = createRequire(import.meta.url);
 const providerRequire = createRequire(require.resolve('@vitest/coverage-v8'));
-const { convert } = await import(providerRequire.resolve('ast-v8-to-istanbul'));
-const { parseAstAsync } = await import(require.resolve('vitest/node'));
+const { convert } = await import(pathToFileURL(providerRequire.resolve('ast-v8-to-istanbul')).href);
+const { parseAstAsync } = await import(pathToFileURL(require.resolve('vitest/node')).href);
 const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
 
 export async function convertNativeCoverage(snapshot, records, direct = {}) {
@@ -84,7 +84,7 @@ export async function convertNativeCoverage(snapshot, records, direct = {}) {
   };
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   try {
     const { values } = parseArgs({
       options: {

@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { convertNativeCoverage } from '../../../scripts/coverage_native.mjs';
 
@@ -53,6 +54,18 @@ beforeAll(() => {
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 describe('genuine native configuration coverage', () => {
+  it('imports capture tooling from stdin without invoking CLI entrypoints', () => {
+    const script = pathToFileURL(
+      resolve(import.meta.dirname, '../../../scripts/coverage_native.mjs'),
+    ).href;
+    expect(
+      execFileSync(process.execPath, ['--input-type=module', '-'], {
+        input: `await import(${JSON.stringify(script)}); console.log('imported');`,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }),
+    ).toBe('imported\n');
+  });
   it('captures the default-export call without covering unused functions', async () => {
     const measured = await convertNativeCoverage(snapshot, records.slice(0, 1));
     expect(measured.acceptedExecutions).toBe(1);
