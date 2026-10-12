@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the local primitive, 2026-10-12. Part of #439 and audit F09.
-Remote coordination and selected-server integration remain unfinished.
+Remote coordination remains unfinished.
 
 ## Context
 
@@ -22,6 +22,10 @@ Transfer the final active-build reference to its idle cached connection until th
 closes or hands ownership to its next request. Close the database before removing its final
 record. Reclaim only owners proven dead or with a reused PID. Preserve foreign or ambiguous
 owners; malformed published records refuse cleanup. No TTL establishes local completion.
+
+An explicit selected HTTP or stdio server owns its retained build through startup, idle
+intervals and serving until shutdown. Per-request handles use the same guarded selection
+primitive. Activation remains independent of both lifetimes.
 
 ## Consequences
 

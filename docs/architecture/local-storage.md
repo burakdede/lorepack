@@ -372,7 +372,10 @@ Atomic-write leftovers never represent successful acquisition. These records are
 ownership, excluded from build identity and packages; they are not credentials or sources.
 
 This local protocol does not yet establish remote read-lifetime protection. Remote cleanup
-coordination and explicit selected-server ownership remain part of #439.
+coordination remains part of #439. Explicit `serve --build` and `mcp --build` acquire
+the same owned handle at startup and hold it between requests until shutdown. HTTP closes
+its listener and drains HTTP/MCP before releasing selection; stdio releases after transport
+close or process shutdown. A missing selection fails under the same acquisition guard.
 
 If reader-record publication fails, acquisition closes any newly opened unowned catalog
 before returning the failure. An existing owned connection keeps its valid reference.
