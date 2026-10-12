@@ -155,13 +155,15 @@ bundled SQLite fixes the FTS5 CVEs: see
 
 ## Contributor patch versions
 
-Studio pins `vite` at 7.3.5 on the existing 7.x major. This maintained patch includes
+Studio pins `vite` at 7.3.7 on the existing 7.x major. This maintained patch includes
 the published development-server fixes, including the
 [Windows file policy correction](https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff).
 Vite remains a development dependency: the shipped CLI serves built Studio assets.
 Its MIT licence and Node requirement (^20.19.0 or >=22.12.0) fit the supported Node
 24.21.0 toolchain. Vite has no install or post-install script; its build tooling
 continues to install with scripts disabled. The change does not add runtime dependencies.
+The [7.3.7 release](https://github.com/vitejs/vite/releases/tag/v7.3.7) also permits
+the maintained esbuild 0.28 patch line, removing the older build-only resolution.
 
 `@changesets/cli` 3.0.3 removes the older YAML/workspace and globbing dependency
 chains retained by 2.31.1. Two advisory-listed legacy patch versions were unavailable
