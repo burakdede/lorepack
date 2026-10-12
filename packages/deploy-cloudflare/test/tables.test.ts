@@ -54,80 +54,89 @@ ORDER BY name, id`,
         : [{ id: TABLE_ID, name: 'Candidate Products' }],
   );
 
-  db.handlers.set(
-    `SELECT id, artifact_id, name, sheet, sql_name, row_count,
-       relative_path, line_start, line_end, cell_range
-FROM tables
-WHERE project_id = ? AND build_id = ? AND id = ?
-LIMIT 1`,
-    ([projectId, buildId, tableId]) => {
-      if (projectId !== PROJECT || tableId !== TABLE_ID) return [];
-      if (buildId === ACTIVE_BUILD) {
-        return [
-          {
-            id: TABLE_ID,
-            artifact_id: 'demo:pricing.xlsx',
-            name: 'Products',
-            sheet: 'Products',
-            sql_name: 't_products_active',
-            row_count: 3,
-            relative_path: 'pricing.xlsx',
-            line_start: null,
-            line_end: null,
-            cell_range: 'A1:C4',
-          },
-        ];
-      }
+  const tableRows = ([projectId, buildId, tableId]: readonly unknown[]) => {
+    if (projectId !== PROJECT || tableId !== TABLE_ID) return [];
+    if (buildId === ACTIVE_BUILD) {
       return [
         {
           id: TABLE_ID,
           artifact_id: 'demo:pricing.xlsx',
           name: 'Products',
           sheet: 'Products',
-          sql_name: 't_products_candidate',
-          row_count: 2,
+          sql_name: 't_products_active',
+          row_count: 3,
           relative_path: 'pricing.xlsx',
           line_start: null,
           line_end: null,
-          cell_range: 'A1:C3',
+          cell_range: 'A1:C4',
         },
       ];
-    },
-  );
+    }
+    return [
+      {
+        id: TABLE_ID,
+        artifact_id: 'demo:pricing.xlsx',
+        name: 'Products',
+        sheet: 'Products',
+        sql_name: 't_products_candidate',
+        row_count: 2,
+        relative_path: 'pricing.xlsx',
+        line_start: null,
+        line_end: null,
+        cell_range: 'A1:C3',
+      },
+    ];
+  };
+
+  const columnRows = ([projectId, buildId, tableId]: readonly unknown[]) =>
+    projectId === PROJECT && tableId === TABLE_ID
+      ? [
+          {
+            name: 'SKU',
+            sql_name: 'c_0_sku',
+            type: 'text',
+            nullable: 0,
+            null_count: 0,
+            distinct_estimate: buildId === ACTIVE_BUILD ? 3 : 2,
+            distinct_is_exact: 1,
+            min_value: 'A-1',
+            max_value: buildId === ACTIVE_BUILD ? 'A-3' : 'A-2',
+          },
+          {
+            name: 'Available',
+            sql_name: 'c_1_available',
+            type: 'boolean',
+            nullable: 0,
+            null_count: 0,
+            distinct_estimate: 2,
+            distinct_is_exact: 1,
+            min_value: 'false',
+            max_value: 'true',
+          },
+        ]
+      : [];
 
   db.handlers.set(
-    `SELECT name, sql_name, type, nullable, null_count,
-       distinct_estimate, distinct_is_exact, min_value, max_value
-FROM table_columns
-WHERE project_id = ? AND build_id = ? AND table_id = ?
-ORDER BY ordinal`,
-    ([projectId, buildId, tableId]) =>
-      projectId === PROJECT && tableId === TABLE_ID
-        ? [
-            {
-              name: 'SKU',
-              sql_name: 'c_0_sku',
-              type: 'text',
-              nullable: 0,
-              null_count: 0,
-              distinct_estimate: buildId === ACTIVE_BUILD ? 3 : 2,
-              distinct_is_exact: 1,
-              min_value: 'A-1',
-              max_value: buildId === ACTIVE_BUILD ? 'A-3' : 'A-2',
-            },
-            {
-              name: 'Available',
-              sql_name: 'c_1_available',
-              type: 'boolean',
-              nullable: 0,
-              null_count: 0,
-              distinct_estimate: 2,
-              distinct_is_exact: 1,
-              min_value: 'false',
-              max_value: 'true',
-            },
-          ]
-        : [],
+    `SELECT t.id, t.artifact_id, t.name, t.sheet, t.sql_name, t.row_count,
+       t.relative_path, t.line_start, t.line_end, t.cell_range,
+       (SELECT json_group_array(json_object(
+         'name', name, 'sql_name', sql_name, 'type', type, 'nullable', nullable,
+         'null_count', null_count, 'distinct_estimate', distinct_estimate,
+         'distinct_is_exact', distinct_is_exact, 'min_value', min_value,
+         'max_value', max_value))
+        FROM (SELECT name, sql_name, type, nullable, null_count, distinct_estimate,
+                     distinct_is_exact, min_value, max_value
+              FROM table_columns
+              WHERE project_id = t.project_id AND build_id = t.build_id AND table_id = t.id
+              ORDER BY ordinal)) AS columns_json
+FROM tables t
+WHERE t.project_id = ? AND t.build_id = ? AND t.id = ?
+LIMIT 1`,
+    (bindings) =>
+      tableRows(bindings).map((table) => ({
+        ...table,
+        columns_json: JSON.stringify(columnRows(bindings)),
+      })),
   );
 
   // What D1 reports for the schema, read per query by the statement guard (#406).
@@ -254,7 +263,7 @@ ORDER BY name, id`,
       },
     });
     expect(db.calls[0]?.bindings).toEqual([PROJECT, ACTIVE_BUILD, TABLE_ID]);
-    expect(db.calls[1]?.bindings).toEqual([PROJECT, ACTIVE_BUILD, TABLE_ID]);
+    expect(db.calls[1]?.bindings).toEqual([5]);
   });
 
   it('rejects a query that tries to reach another build-scoped physical table', async () => {
