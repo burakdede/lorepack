@@ -79,12 +79,32 @@ describe('exact retained-build selection, issue432', () => {
     });
   });
 
-  it('refuses a missing catalog even if its retained record and an old open handle exist', async () => {
+  it('refuses a missing catalog with a retained record, including a live POSIX handle', async () => {
     await retainedPair(async (backend, first, _second, root) => {
-      rmSync(join(root, '.lore/builds', first, 'context.sqlite'));
+      const catalog = join(root, '.lore/builds', first, 'context.sqlite');
+      if (process.platform === 'win32') {
+        expect(() => rmSync(catalog)).toThrow(expect.objectContaining({ code: 'EPERM' }));
+        backend.provider.closeAll();
+      }
+      rmSync(catalog);
       await expect(backend.provider.acquire({ buildId: first })).rejects.toMatchObject({
         code: 'LORE_E_BUILD_NOT_FOUND',
       });
+    });
+  });
+
+  it('refuses an unregistered retained build even while an owned catalog handle exists', async () => {
+    await retainedPair(async (backend, first, second, root) => {
+      const state = new DatabaseSync(join(root, '.lore/state.sqlite'));
+      try {
+        state.prepare('DELETE FROM builds WHERE build_id = ?').run(first);
+      } finally {
+        state.close();
+      }
+      await expect(backend.provider.acquire({ buildId: first })).rejects.toMatchObject({
+        code: 'LORE_E_BUILD_NOT_FOUND',
+      });
+      expect((await createRuntime(backend).describeBuild()).buildId).toBe(second);
     });
   });
 
