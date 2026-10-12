@@ -318,6 +318,14 @@ parsers), compiler version, configuration, and structure. The
 [package-format contract and frozen vectors](docs/package-format/README.md#build-id-derivation)
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
+Newly compiled builds retain the exact identity inputs in `reports/build-id-inputs.json`.
+These support independent verification without returning to live sources.
+
+Archive verification requires a compatible manifest, catalog and complete identity inputs.
+It recomputes catalog roots and the build ID, checks required content-addressed objects,
+and refuses link or device entries. Success reports integrity only and an unsigned publisher.
+Older archives missing identity inputs are explicitly unsupported for verification.
+See the [package format](docs/package-format/README.md#archive-structure).
 
 ### Provenance on every result
 

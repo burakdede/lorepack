@@ -1,5 +1,10 @@
 import type { z } from 'zod';
-import { buildManifestSchema, buildReceiptSchema, lockfileSchema } from './build.js';
+import {
+  buildIdInputsSchema,
+  buildManifestSchema,
+  buildReceiptSchema,
+  lockfileSchema,
+} from './build.js';
 import { configSchema } from './config.js';
 import { buildDiffSchema } from './diff.js';
 import { doctorReportSchema } from './doctor.js';
@@ -27,6 +32,7 @@ export const PUBLIC_SCHEMAS = {
   'lore-config': configSchema,
   'lore-lock': lockfileSchema,
   'build-manifest': buildManifestSchema,
+  'build-id-inputs': buildIdInputsSchema,
   'build-receipt': buildReceiptSchema,
   'build-diff': buildDiffSchema,
   plan: planSchema,

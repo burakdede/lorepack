@@ -49,7 +49,7 @@ async function verify(file: string, cwd: string): Promise<CommandResult> {
   const result = await verifyArchive(path);
   if (result.ok) {
     return {
-      human: `${path} is intact. ${count(result.memberCount, 'member')} verified.`,
+      human: `${path} is intact. ${count(result.memberCount, 'member')} verified. Catalog roots, required objects and build ID verified. Integrity only; unsigned publisher.`,
       json: { archive: path, ...result },
     };
   }

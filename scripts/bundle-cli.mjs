@@ -18,6 +18,14 @@ const publicQueryChild = join(dist, 'query-child.js');
 // and once bundled its module is `public-entry.js`, so the child has to sit beside it.
 const parseChild = join(root, 'packages', 'parsers', 'dist', 'parse-child.js');
 const publicParseChild = join(dist, 'parse-child.js');
+const archiveVerifyChild = join(
+  root,
+  'packages',
+  'backend-local',
+  'dist',
+  'archive-verify-child.js',
+);
+const publicArchiveVerifyChild = join(dist, 'archive-verify-child.js');
 const sourceMigrations = join(root, 'packages', 'backend-local', 'migrations');
 const targetMigrations = join(cli, 'dist', 'migrations');
 const externalDependencies = [
@@ -44,7 +52,7 @@ const externalDependencies = [
   'yazl',
 ];
 
-for (const compiled of [entry, queryChild, parseChild]) {
+for (const compiled of [entry, queryChild, parseChild, archiveVerifyChild]) {
   if (!existsSync(compiled)) {
     throw new Error(`${compiled} is missing. Run tsc -b before bundling.`);
   }
@@ -55,6 +63,7 @@ for (const [entryPoint, outfile] of [
   [index, publicIndex],
   [queryChild, publicQueryChild],
   [parseChild, publicParseChild],
+  [archiveVerifyChild, publicArchiveVerifyChild],
 ]) {
   await build({
     bundle: true,

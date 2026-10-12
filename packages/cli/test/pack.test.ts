@@ -12,7 +12,13 @@ import { platform } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
-import { readArchive, verifyArchive } from '@lorepack/backend-local';
+import {
+  CHECKSUM_MEMBER,
+  openWritable,
+  readArchive,
+  verifyArchive,
+  writeArchive,
+} from '@lorepack/backend-local';
 import { buildManifestSchema, loadConfig, objectKey, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -34,8 +40,9 @@ async function packedProject<T>(
     archive: string,
   ) => Promise<T>,
   config = CONFIG,
+  files = CORPUS,
 ): Promise<T> {
-  return withTempProject({ files: { 'lore.yaml': config, ...CORPUS } }, async (temp) => {
+  return withTempProject({ files: { 'lore.yaml': config, ...files } }, async (temp) => {
     const built = await runBuild({
       config: loadConfig({ cwd: temp.root }),
       progress: new ProgressBus(),
@@ -98,6 +105,203 @@ describe('lorepack pack', () => {
       const result = await lore(['pack', '--verify', archive]);
       expect(result.code).toBe(0);
       expect(result.stdout).toContain('intact');
+      expect(result.stdout).toContain('Integrity only; unsigned publisher.');
+    });
+  });
+
+  it('verifies typed rows and reports unsigned logical integrity (#418)', async () => {
+    await packedProject(
+      async (_root, _lore, archive) => {
+        const result = await verifyArchive(archive);
+        expect(result).toMatchObject({
+          ok: true,
+          assurance: 'integrity-only',
+          authenticated: false,
+        });
+        const members = await readArchive(archive);
+        const manifest = buildManifestSchema.parse(
+          JSON.parse(new TextDecoder().decode(members.get('manifest.json'))),
+        );
+        expect(manifest.counts.tables).toBe(1);
+        expect(result.buildId).toBe(manifest.buildId);
+      },
+      CONFIG,
+      {
+        ...CORPUS,
+        'typed.csv': 'id,enabled,day,label\n1,true,2026-10-11,Café\n2,false,2026-10-12,\n',
+        'normalized.txt': 'Text with  multiple   spaces.\n',
+      },
+    );
+  });
+
+  it('refuses changed typed rows after regenerated member checksums (#418)', async () => {
+    await packedProject(
+      async (root, _lore, archive) => {
+        const members = await readArchive(archive);
+        const catalog = join(root, 'changed-rows.sqlite');
+        writeFileSync(catalog, members.get('context.sqlite') as Uint8Array);
+        const db = openWritable(catalog);
+        try {
+          const table = db.prepare('SELECT sql_name FROM tables').get();
+          expect(table).toBeDefined();
+          const column = db.prepare('SELECT sql_name FROM table_columns WHERE ordinal = 0').get();
+          expect(column).toBeDefined();
+          expect(String(table?.sql_name)).toMatch(/^t_[a-z0-9_]+$/);
+          expect(String(column?.sql_name)).toMatch(/^c_[a-z0-9_]+$/);
+          expect(
+            Number(
+              db.prepare(`UPDATE ${table?.sql_name} SET ${column?.sql_name} = 999`).run().changes,
+            ),
+          ).toBe(2);
+        } finally {
+          db.close();
+        }
+        members.set('context.sqlite', new Uint8Array(readFileSync(catalog)));
+        members.delete(CHECKSUM_MEMBER);
+        const changed = join(root, 'changed-rows.lorepack');
+        await writeArchive(
+          changed,
+          [...members].map(([path, bytes]) => ({ path, bytes })),
+        );
+        await expect(verifyArchive(changed)).rejects.toMatchObject({
+          code: 'LORE_E_OBJECT_CORRUPT',
+        });
+      },
+      CONFIG,
+      { ...CORPUS, 'rows.csv': 'id,value\n1,first\n2,second\n' },
+    );
+  });
+
+  it.each([
+    'chunk-text',
+    'fts-body',
+    'missing-object',
+    'unknown-format',
+    'compiler-version',
+    'missing-migration',
+    'changed-migration',
+    'extra-table',
+    'declared-rules',
+    'missing-inputs',
+    'build-id',
+    'object-content',
+    'fts-docsize',
+    'fts-term-data',
+  ])(
+    'refuses a self-consistent archive with altered %s through the packaged CLI (#418)',
+    async (alteration) => {
+      await packedProject(async (root, _lore, archive) => {
+        const members = await readArchive(archive);
+        members.delete(CHECKSUM_MEMBER);
+        if (alteration === 'missing-inputs') members.delete('reports/build-id-inputs.json');
+        else if (alteration === 'missing-object' || alteration === 'object-content') {
+          const object = [...members.keys()].find((name) => name.startsWith('objects/sha256/'));
+          expect(object).toBeDefined();
+          if (alteration === 'missing-object') members.delete(object as string);
+          else members.set(object as string, new TextEncoder().encode('fabricated object'));
+        } else if (
+          alteration === 'unknown-format' ||
+          alteration === 'compiler-version' ||
+          alteration === 'build-id'
+        ) {
+          const manifest = JSON.parse(new TextDecoder().decode(members.get('manifest.json')));
+          if (alteration === 'unknown-format') manifest.formatVersion = 999;
+          else if (alteration === 'build-id') manifest.buildId = `lore_${'0'.repeat(64)}`;
+          else manifest.compilerVersion = 'altered-builder';
+          members.set('manifest.json', new TextEncoder().encode(`${JSON.stringify(manifest)}\n`));
+        } else {
+          const catalog = join(root, 'altered-context.sqlite');
+          writeFileSync(catalog, members.get('context.sqlite') as Uint8Array);
+          const db = openWritable(catalog);
+          try {
+            if (alteration === 'extra-table')
+              db.exec('CREATE TABLE fabricated (value TEXT) STRICT');
+            else if (alteration === 'declared-rules') {
+              db.exec('UPDATE artifacts SET authority = 99; UPDATE chunks_fts SET authority = 99');
+            } else if (alteration === 'fts-docsize' || alteration === 'fts-term-data') {
+              (db as unknown as { enableDefensive(active: boolean): void }).enableDefensive(false);
+              expect(
+                Number(
+                  db
+                    .prepare(
+                      alteration === 'fts-docsize'
+                        ? "UPDATE chunks_fts_docsize SET sz = X'00'"
+                        : 'DELETE FROM chunks_fts_data WHERE id > 10',
+                    )
+                    .run().changes,
+                ),
+              ).toBeGreaterThan(0);
+            } else {
+              const statements: Record<string, string> = {
+                'chunk-text': "UPDATE chunks SET text = text || ' fabricated'",
+                'fts-body': "UPDATE chunks_fts SET body = 'fabricated'",
+                'missing-migration': "DELETE FROM schema_migrations WHERE id = '0004'",
+                'changed-migration':
+                  "UPDATE schema_migrations SET checksum = 'fabricated' WHERE id = '0004'",
+              };
+              expect(
+                Number(db.prepare(statements[alteration] as string).run().changes),
+              ).toBeGreaterThan(0);
+            }
+          } finally {
+            db.close();
+          }
+          members.set('context.sqlite', new Uint8Array(readFileSync(catalog)));
+        }
+        const altered = join(root, 'altered.lorepack');
+        await writeArchive(
+          altered,
+          [...members].map(([path, bytes]) => ({ path, bytes })),
+        );
+        await expect(
+          execute(
+            process.execPath,
+            [
+              join(import.meta.dirname, '..', 'dist', 'public-entry.js'),
+              '--json',
+              'pack',
+              '--verify',
+              altered,
+            ],
+            { cwd: root, timeout: 120_000 },
+          ),
+        ).rejects.toMatchObject({
+          code: 2,
+          stdout: expect.stringMatching(/LORE_E_(OBJECT_CORRUPT|SCHEMA_MISMATCH|BUILD_VALIDATION)/),
+        });
+      });
+    },
+  );
+
+  it('accepts equivalent FTS storage without segment lookup rows (#418)', async () => {
+    await packedProject(async (root, _lore, archive) => {
+      const members = await readArchive(archive);
+      const catalog = join(root, 'equivalent.sqlite');
+      writeFileSync(catalog, members.get('context.sqlite') as Uint8Array);
+      const db = openWritable(catalog);
+      try {
+        (db as unknown as { enableDefensive(active: boolean): void }).enableDefensive(false);
+        expect(Number(db.prepare('DELETE FROM chunks_fts_idx').run().changes)).toBeGreaterThan(0);
+        db.exec("INSERT INTO chunks_fts(chunks_fts) VALUES ('integrity-check')");
+        expect(
+          db.prepare("SELECT chunk_id FROM chunks_fts WHERE chunks_fts MATCH 'rollback'").all()
+            .length,
+        ).toBeGreaterThan(0);
+      } finally {
+        db.close();
+      }
+      members.set('context.sqlite', new Uint8Array(readFileSync(catalog)));
+      members.delete(CHECKSUM_MEMBER);
+      const equivalent = join(root, 'equivalent.lorepack');
+      await writeArchive(
+        equivalent,
+        [...members].map(([path, bytes]) => ({ path, bytes })),
+      );
+      const original = await verifyArchive(archive);
+      expect(await verifyArchive(equivalent)).toMatchObject({
+        ok: true,
+        buildId: original.buildId,
+      });
     });
   });
 

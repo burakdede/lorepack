@@ -189,6 +189,32 @@ function freePort() {
  */
 async function checkTableQuery(installDir, projectDir) {
   const entry = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');
+  const archive = join(installDir, 'verified.lorepack');
+  const packed = spawnSync(process.execPath, [entry, 'pack', '--out', archive], {
+    cwd: projectDir,
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  if (packed.status !== 0) return [`installed lorepack pack failed: ${packed.stderr}`];
+  const verified = spawnSync(process.execPath, [entry, '--json', 'pack', '--verify', archive], {
+    cwd: projectDir,
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  if (verified.status !== 0)
+    return [`installed logical archive verification failed: ${verified.stdout} ${verified.stderr}`];
+  const proof = JSON.parse(verified.stdout);
+  if (
+    proof.ok !== true ||
+    proof.assurance !== 'integrity-only' ||
+    proof.authenticated !== false ||
+    typeof proof.buildId !== 'string'
+  ) {
+    return [
+      `installed archive verification did not report unsigned logical integrity: ${verified.stdout}`,
+    ];
+  }
+  console.log('archive identity verified by the bundled read-only child');
   const inspected = spawnSync(process.execPath, [entry, 'inspect', 'tables', '--json'], {
     cwd: projectDir,
     encoding: 'utf8',

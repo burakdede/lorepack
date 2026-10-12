@@ -6,6 +6,7 @@ import {
   fchmodSync,
   fsyncSync,
   lstatSync,
+  mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
@@ -13,9 +14,14 @@ import {
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
+  writeSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, posix, relative, sep } from 'node:path';
 import {
+  buildIdInputsSchema,
+  buildManifestSchema,
   checksumIndexSchema,
   diskFullError,
   fsyncDirectory,
@@ -24,6 +30,7 @@ import {
 } from '@lorepack/core';
 import yauzl from 'yauzl';
 import yazl from 'yazl';
+import { verifyCatalogFiles } from './archive-verification.js';
 
 /**
  * The `.lorepack` archive: a standard ZIP envelope, deliberately boring.
@@ -42,6 +49,7 @@ import yazl from 'yazl';
 const NORMALIZED_MTIME = new Date(Date.UTC(1980, 0, 1, 0, 0, 0));
 
 export const CHECKSUM_MEMBER = 'checksums.json' as const;
+const REQUIRED_MEMBERS = ['manifest.json', 'context.sqlite'] as const;
 
 export interface ArchiveMember {
   /** POSIX path inside the archive. */
@@ -203,6 +211,9 @@ export interface VerificationResult {
   readonly ok: boolean;
   readonly memberCount: number;
   readonly failures: readonly VerificationFailure[];
+  readonly buildId?: string;
+  readonly assurance: 'integrity-only';
+  readonly authenticated: false;
 }
 
 /**
@@ -260,6 +271,7 @@ export async function verifyArchive(
     const index = parseIndex(path, await readEntry(archive, path, indexEntry));
 
     const failures: VerificationFailure[] = [];
+    const digests = new Map<string, string>();
     const present = new Set<string>();
     for (const entry of entries) {
       const member = entry.fileName;
@@ -275,6 +287,7 @@ export async function verifyArchive(
       const hash = createHash('sha256');
       await streamEntry(archive, path, entry, (chunk) => hash.update(chunk));
       const actual = hash.digest('hex');
+      digests.set(member, actual);
       if (actual !== expected) {
         failures.push({ member, reason: 'checksum-mismatch', expected, actual });
       }
@@ -282,8 +295,96 @@ export async function verifyArchive(
     for (const [member, expected] of index) {
       if (!present.has(member)) failures.push({ member, reason: 'missing', expected });
     }
+    for (const member of REQUIRED_MEMBERS) {
+      if (!present.has(member) && !index.has(member)) failures.push({ member, reason: 'missing' });
+    }
 
-    return { ok: failures.length === 0, memberCount: entries.length, failures };
+    if (failures.length > 0)
+      return {
+        ok: false,
+        memberCount: entries.length,
+        failures,
+        assurance: 'integrity-only',
+        authenticated: false,
+      };
+    const metadata = entries.find((entry) => entry.fileName === 'reports/build-id-inputs.json');
+    if (metadata === undefined) {
+      throw new LoreError(
+        'LORE_E_SCHEMA_MISMATCH',
+        'The package has no complete build identity inputs.',
+        {
+          remediation:
+            'Compile a new build with a version that retains identity inputs. An unchanged legacy build is not retrofitted.',
+          subject: 'reports/build-id-inputs.json',
+        },
+      );
+    }
+    const manifestEntry = entries.find(
+      (entry) => entry.fileName === 'manifest.json',
+    ) as yauzl.Entry;
+    for (const entry of [manifestEntry, metadata]) {
+      if (entry.uncompressedSize > limits.maxIndexBytes)
+        throw limitExceeded(path, 'maxIndexBytes', limits.maxIndexBytes, entry.fileName);
+    }
+    const manifestBytes = await readEntry(archive, path, manifestEntry);
+    const inputBytes = await readEntry(archive, path, metadata);
+    let manifest: ReturnType<typeof buildManifestSchema.parse>;
+    try {
+      manifest = buildManifestSchema.parse(JSON.parse(new TextDecoder().decode(manifestBytes)));
+      buildIdInputsSchema.parse(JSON.parse(new TextDecoder().decode(inputBytes)));
+    } catch (cause) {
+      throw new LoreError(
+        'LORE_E_SCHEMA_MISMATCH',
+        'The package contains an invalid or unsupported manifest or identity record.',
+        {
+          remediation: 'Use a compatible package written by a supported Lorepack version.',
+          cause,
+        },
+      );
+    }
+    const directory = mkdtempSync(join(tmpdir(), 'lorepack-archive-verify-'));
+    try {
+      for (const [name, bytes] of [
+        ['manifest.json', manifestBytes],
+        ['build-id-inputs.json', inputBytes],
+      ] as const) {
+        writeFileSync(join(directory, name), bytes, { flag: 'wx', mode: 0o600 });
+      }
+      const fd = openSync(join(directory, 'context.sqlite'), 'wx', 0o600);
+      try {
+        const catalog = entries.find((entry) => entry.fileName === 'context.sqlite') as yauzl.Entry;
+        await streamEntry(archive, path, catalog, (chunk) => {
+          let offset = 0;
+          while (offset < chunk.byteLength) offset += writeSync(fd, chunk, offset);
+        });
+      } finally {
+        closeSync(fd);
+      }
+      const proof = await verifyCatalogFiles(directory);
+      for (const hash of proof.objectHashes) {
+        const member = `objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+        if (digests.get(member) !== hash) {
+          throw new LoreError(
+            'LORE_E_OBJECT_CORRUPT',
+            'A required normalized object is missing or does not match its content address.',
+            {
+              remediation: 'Restore or rebuild the complete package.',
+              subject: member,
+            },
+          );
+        }
+      }
+      return {
+        ok: true,
+        memberCount: entries.length,
+        failures,
+        buildId: manifest.buildId,
+        assurance: 'integrity-only',
+        authenticated: false,
+      };
+    } finally {
+      rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+    }
   } finally {
     archive.close();
   }
@@ -374,6 +475,15 @@ function listEntries(
     archive.on('end', () => resolve(entries));
     archive.on('entry', (entry: yauzl.Entry) => {
       const name = entry.fileName;
+      if (!isRegularEntry(entry)) {
+        reject(
+          new LoreError('LORE_E_OBJECT_CORRUPT', `${name} in ${path} is not a regular file.`, {
+            remediation: 'The archive contains a link or device entry. Pack the build again.',
+            subject: name,
+          }),
+        );
+        return;
+      }
       if (name.endsWith('/')) {
         archive.readEntry();
         return;
@@ -402,6 +512,14 @@ function listEntries(
     });
     archive.readEntry();
   });
+}
+
+function isRegularEntry(entry: yauzl.Entry): boolean {
+  const host = entry.versionMadeBy >> 8;
+  if (host !== 3 && host !== 19) return true;
+  const type = (entry.externalFileAttributes >>> 16) & 0o170000;
+  if (entry.fileName.endsWith('/')) return type === 0 || type === 0o040000;
+  return type === 0 || type === 0o100000;
 }
 
 async function readEntry(

@@ -16,6 +16,7 @@ single source of truth, and `pnpm schemas:check` fails when committed schemas dr
 | [`schemas/lore-config.json`](../../schemas/lore-config.json) | `lore.yaml` |
 | [`schemas/lore-lock.json`](../../schemas/lore-lock.json) | `lore.lock` |
 | [`schemas/build-manifest.json`](../../schemas/build-manifest.json) | `manifest.json` inside a sealed build |
+| [`schemas/build-id-inputs.json`](../../schemas/build-id-inputs.json) | Exact canonical identity inputs retained in a sealed build |
 | [`schemas/build-receipt.json`](../../schemas/build-receipt.json) | Operational build receipt outside the build |
 | [`schemas/plan.json`](../../schemas/plan.json) | `lorepack plan --json` |
 | [`schemas/deployment-receipt.json`](../../schemas/deployment-receipt.json) | `.lore/targets/*` deployment receipt |
@@ -51,6 +52,13 @@ A sealed build directory is named by its build ID and MUST contain:
 | `context.sqlite` | Read-only catalog database for this build. Physical SQLite bytes are excluded from build identity. |
 | `reports/warnings.json` | Build warnings shown after sources move or rollback occurs. |
 | `reports/canonical-hashes.json` | Hash algorithm, canonicalization version and canonical roots used by the build. |
+| `reports/build-id-inputs.json` | Complete inputs passed to `deriveBuildId`, including effective configuration, all registered parser versions and resolved rules. Recorded by newly compiled builds for independent identity verification. |
+
+Builds sealed before #418 may lack `build-id-inputs.json`. Reusing an unchanged build
+does not retrofit files into its immutable directory. Serving that build does not require
+this report; an archive verifier cannot independently derive its identity without the inputs.
+The report excludes runtime namespace/corpus identity and operational receipts. Its roots
+must be checked against catalog content before deriving an ID, rather than trusted as proof.
 
 The build directory MAY reference normalized source objects stored outside the build under
 `.lore/objects/sha256/`. Readers MUST treat the manifest and catalog as build data and
@@ -79,6 +87,33 @@ changed or disappeared. It never packs the current bytes or leaves the file out.
 Every archive member MUST use a POSIX path. Every member timestamp MUST be normalized to
 `1980-01-01T00:00:00Z`, and file entries SHOULD use mode `100644`. The current writer uses
 deflate compression.
+
+Readers MUST require `manifest.json` and `context.sqlite`, even when the checksum index
+does not name them. An archive with only a consistent checksum index is not a build.
+Payload entries MUST be regular files. Lorepack refuses Unix and Darwin link, pipe and
+device modes from the central directory before reading payloads or skipping directory
+records. Zero file-type bits are accepted when a writer omits them; harmless directory
+records are ignored. ZIP attributes depend on the creator's host, as defined in
+[PKWARE's ZIP specification, sections 4.4.2 and 4.4.15](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT).
+
+`pack --verify` first streams member checksums, then requires a valid compatible manifest
+and `reports/build-id-inputs.json`. It checks SQLite integrity, foreign keys, the complete
+unchanged migration history, supported schema definitions, node and chunk content hashes,
+declared ranking hints, FTS rows, term instances and document sizes, typed table rows and manifest counts. It recomputes
+all five canonical roots and derives the build ID from the exact recorded inputs. Every
+required normalized object must exist at its content address and hash to that address.
+
+Successful JSON output includes `buildId`, `assurance: "integrity-only"` and
+`authenticated: false`. Human output names the checks and says the publisher is unsigned.
+These checks prove internal consistency, not builder identity, source correctness or that
+the recorded compiler actually ran. A publisher can create a new internally consistent
+unsigned package. No signature or trusted-builder assertion is inferred.
+
+Legacy archives without complete identity inputs fail with `LORE_E_SCHEMA_MISMATCH`.
+Existing immutable builds are never retrofitted. Catalog verification runs read-only in a
+child process with a 60-second deadline, 128 MiB JavaScript heap and 4 MiB reply ceiling.
+Only fixed verification files are copied to a private temporary directory, removed after
+success or failure. No archive member is extracted into a user-selected destination.
 
 The current writer writes the archive to a temporary file beside the destination, syncs it,
 and renames it into place, so an interrupted or out-of-space `lorepack pack` leaves any

@@ -451,6 +451,7 @@ describe('public registry', () => {
       [
         'build-description',
         'build-diff',
+        'build-id-inputs',
         'build-manifest',
         'build-receipt',
         'context-bundle',

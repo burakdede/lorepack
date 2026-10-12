@@ -12,6 +12,7 @@ import { writeCatalog } from '../src/catalog/writer.js';
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { FileObjectStore } from '../src/object-store.js';
 import { inTransaction, openWritable, storageFailure } from '../src/sqlite.js';
+import { validBuild } from './archive_fixture.js';
 
 /**
  * Crash and disk-full behaviour of local storage writes (#572). Each case is a failure a
@@ -146,13 +147,15 @@ describe('writing an archive', () => {
     async () => {
       await withTempProject({}, async (project) => {
         const destination = project.path('private.lorepack');
-        await writeArchive(destination, [
-          { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
-        ]);
+        await writeArchive(
+          destination,
+          validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
+        );
         chmodSync(destination, 0o600);
-        await writeArchive(destination, [
-          { path: 'manifest.json', bytes: new TextEncoder().encode('{"new":true}') },
-        ]);
+        await writeArchive(
+          destination,
+          validBuild(project.root, 'new').map(([path, bytes]) => ({ path, bytes })),
+        );
         expect(statSync(destination).mode & 0o777).toBe(0o600);
         expect((await verifyArchive(destination)).ok).toBe(true);
       });
@@ -164,21 +167,24 @@ describe('writing an archive', () => {
     async () => {
       await withTempProject({}, async (project) => {
         const destination = project.path('shared.lorepack');
-        await writeArchive(destination, [
-          { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
-        ]);
+        await writeArchive(
+          destination,
+          validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
+        );
         chmodSync(destination, 0o644);
         const previous = process.umask(0o077);
         try {
-          await writeArchive(destination, [
-            { path: 'manifest.json', bytes: new TextEncoder().encode('{"new":true}') },
-          ]);
+          await writeArchive(
+            destination,
+            validBuild(project.root, 'new').map(([path, bytes]) => ({ path, bytes })),
+          );
           expect(statSync(destination).mode & 0o777).toBe(0o644);
           expect((await verifyArchive(destination)).ok).toBe(true);
           const fresh = project.path('fresh.lorepack');
-          await writeArchive(fresh, [
-            { path: 'manifest.json', bytes: new TextEncoder().encode('{}') },
-          ]);
+          await writeArchive(
+            fresh,
+            validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
+          );
           expect(statSync(fresh).mode & 0o777).toBe(0o600);
         } finally {
           process.umask(previous);
@@ -191,9 +197,10 @@ describe('writing an archive', () => {
     await withTempProject({}, async (project) => {
       const destination = project.path('out/project.lorepack');
       mkdirSync(dirname(destination), { recursive: true });
-      await writeArchive(destination, [
-        { path: 'manifest.json', bytes: new TextEncoder().encode('{"good":true}') },
-      ]);
+      await writeArchive(
+        destination,
+        validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
+      );
       expect((await verifyArchive(destination)).ok).toBe(true);
       if (process.platform !== 'win32') chmodSync(destination, 0o600);
 

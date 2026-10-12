@@ -193,7 +193,7 @@ lorepack pack --out "<demo-workspace>/product-research.lorepack"
 
 ```text
 Wrote <demo-workspace>/product-research.lorepack
-  9 members, including the checksum index.
+  10 members, including the checksum index.
 ```
 
 ## deploy-ready: product-research
@@ -203,7 +203,7 @@ lorepack pack --verify "<demo-workspace>/product-research.lorepack"
 ```
 
 ```text
-<demo-workspace>/product-research.lorepack is intact. 9 members verified.
+<demo-workspace>/product-research.lorepack is intact. 10 members verified. Catalog roots, required objects and build ID verified. Integrity only; unsigned publisher.
 ```
 
 ## coding-context: coding-project
