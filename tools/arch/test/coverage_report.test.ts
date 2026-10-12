@@ -4,14 +4,15 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { captureCoverage, reportCoverage } from '../../../scripts/coverage_report.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const require = createRequire(join(ROOT, 'package.json'));
 const providerRequire = createRequire(require.resolve('@vitest/coverage-v8'));
-const { convert } = await import(providerRequire.resolve('ast-v8-to-istanbul'));
-const { parseAstAsync } = await import(require.resolve('vitest/node'));
+const { convert } = await import(pathToFileURL(providerRequire.resolve('ast-v8-to-istanbul')).href);
+const { parseAstAsync } = await import(pathToFileURL(require.resolve('vitest/node')).href);
 type Range = {
   start: { line: number; column: number };
   end: { line: number; column: number };

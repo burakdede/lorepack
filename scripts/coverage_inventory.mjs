@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const EXECUTABLE = /\.(?:[cm]?js|[cm]?ts|tsx|jsx)$/;
 const TEST = /(^|\/)(test|tests|fixtures|__tests__)\/|\.(test|spec)\.[^/]+$/;
@@ -107,7 +106,7 @@ export function coverageInventory(root, frozen) {
   };
 }
 
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   try {
     const args = process.argv.slice(2);
     if (args.length !== 0 && (args.length !== 2 || args[0] !== '--out' || !args[1]))
