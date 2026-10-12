@@ -263,3 +263,35 @@
 .search-equivalents .equivalents {
   margin-top: 0;
 }
+
+.receipt-options {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.receipt-options label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.receipt-options input {
+  accent-color: var(--text);
+}
+
+.receipt-options .section-note {
+  margin: 0;
+}
+
+.receipt-identifier {
+  overflow-wrap: anywhere;
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}

@@ -70,9 +70,7 @@ serialize their returned bundle and create the detached receipt at their own
 content boundary.
 
 The schema is [context-receipt.json](../../schemas/context-receipt.json).
-Typed SDK receipt access and Studio inspection are the
-remaining integration steps in #434; they are not advertised as implemented
-by this initial contract change. Persistent recording remains separate #435.
+Persistent recording remains separate #435.
 
 ### SDK retention
 
@@ -83,3 +81,16 @@ receipt fields or versions, mismatched capture and changed bytes with `LORE_E_SC
 Authentication, timeout, cancellation and no POST retry use the normal client pipeline.
 The SDK keeps zero runtime dependencies and uses platform Web Crypto. Retain `payload`
 unchanged for verification; serializing the parsed bundle again is not byte preservation.
+
+### Studio retention
+
+In Playground, select **Keep a receipt** before assembling. **Include task and filters in
+receipt** is a separate explicit choice. The receipt section reports the captured full
+build, policy and payload digest after SDK integrity verification. **Save exact context**
+and **Save receipt** download that result without issuing another context request; editing
+the form does not change either download. Both files are required for later verification.
+The separate **Copy as export** action creates a Markdown export and is not covered by this
+JSON context receipt. CLI equivalents save a JSON/receipt pair; HTTP equivalents save the
+JSON body and response headers containing the base64url receipt.
+
+See the [Studio verification checklist](../testing/context_receipts.md).

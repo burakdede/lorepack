@@ -207,6 +207,8 @@ emitted content bytes and build. Receipt creation does not enable query logging
 or prove model use. See [receipt boundaries and retention](docs/architecture/context_receipts.md).
 CLI exports write the same detached contract with `--receipt <file>`; add
 `--capture-request` only when the receipt should retain the normalized task.
+The SDK returns verified receipt and original bytes with `contextForTaskWithReceipt`;
+Studio offers opt-in receipts and separate downloads for the exact context and receipt.
 
 ### 4. Serve and connect
 

@@ -130,11 +130,13 @@ const SEARCH = {
 
 const contextForTask = vi.fn();
 const search = vi.fn();
+const contextForTaskWithReceipt = vi.fn();
 
 vi.mock('../src/lib/api.js', () => ({
   client: {
     contextForTask: (...args: unknown[]) => contextForTask(...args),
     search: (...args: unknown[]) => search(...args),
+    contextForTaskWithReceipt: (...args: unknown[]) => contextForTaskWithReceipt(...args),
   },
   toDisplayable: (error: unknown) => ({ message: String(error) }),
 }));
@@ -142,6 +144,7 @@ vi.mock('../src/lib/api.js', () => ({
 beforeEach(() => {
   contextForTask.mockReset().mockResolvedValue(BUNDLE);
   search.mockReset().mockResolvedValue(SEARCH);
+  contextForTaskWithReceipt.mockReset();
 });
 
 afterEach(() => {
@@ -430,5 +433,54 @@ describe('Studio is not a chat application', () => {
     for (const forbidden of ['Ask', 'Generate', 'Send', 'Chat', 'Answer']) {
       expect(labels.some((label) => label.includes(forbidden))).toBe(false);
     }
+  });
+});
+
+describe('detached receipts, issue434', () => {
+  it('defaults off and retains the original receipt result when the form changes', async () => {
+    const receipt = {
+      receiptId: 'context_receipt_saved',
+      payloadDigest: 'saved-digest',
+      buildId: BUNDLE.buildId,
+      requestRetained: false,
+      execution: { policyId: 'policy_saved' },
+    };
+    contextForTaskWithReceipt.mockResolvedValue({
+      bundle: BUNDLE,
+      receipt,
+      payload: JSON.stringify(BUNDLE),
+    });
+    renderRoute();
+    expect(screen.getByRole('checkbox', { name: 'Keep a receipt' })).not.toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Include task and filters in receipt' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Keep a receipt' }));
+    await assemble();
+    await waitFor(() => expect(screen.getByText('context_receipt_saved')).toBeInTheDocument());
+    expect(contextForTask).not.toHaveBeenCalled();
+    expect(screen.getByText(/--receipt context-receipt.json/)).toBeInTheDocument();
+    expect(contextForTaskWithReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({ receipt: { captureRequest: false } }),
+    );
+    await userEvent.clear(screen.getByLabelText('Task'));
+    await userEvent.type(screen.getByLabelText('Task'), 'different task');
+    expect(screen.getByText('context_receipt_saved')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save exact context' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save receipt' })).toBeInTheDocument();
+  });
+  it('requires explicit request capture and shows receipt failures', async () => {
+    contextForTaskWithReceipt.mockRejectedValue(new Error('Receipt integrity mismatch'));
+    renderRoute();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Keep a receipt' }));
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Include task and filters in receipt' }),
+    );
+    await assemble();
+    await waitFor(() => expect(screen.getByText(/Receipt integrity mismatch/)).toBeInTheDocument());
+    expect(contextForTaskWithReceipt).toHaveBeenCalledWith(
+      expect.objectContaining({ receipt: { captureRequest: true } }),
+    );
+    expect(screen.queryByRole('button', { name: 'Save receipt' })).not.toBeInTheDocument();
   });
 });

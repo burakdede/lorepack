@@ -1,4 +1,4 @@
-import type { ContextBundle, ContextItem, OmittedItem } from '@lorepack/sdk';
+import type { ContextBundle, ContextItem, ContextReceipt, OmittedItem } from '@lorepack/sdk';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Citation } from '../components/Citation.js';
@@ -85,17 +85,30 @@ function ContextTab(): React.JSX.Element {
   const [profile, setProfile] = useState<Profile>('agent');
   const [budget, setBudget] = useState('');
   const [copied, setCopied] = useState(false);
+  const [keepReceipt, setKeepReceipt] = useState(false);
+  const [captureRequest, setCaptureRequest] = useState(false);
 
-  const request = (): { task: string; profile: Profile; budget?: number } => ({
+  const request = (): {
+    task: string;
+    profile: Profile;
+    budget?: number;
+    receipt?: { captureRequest: boolean };
+  } => ({
     task,
     profile,
     ...(budget.trim() === '' ? {} : { budget: Number(budget) }),
+    ...(keepReceipt ? { receipt: { captureRequest } } : {}),
   });
 
   // The request travels with the result, so "Use it anywhere" shows what produced the bundle
   // on screen rather than whatever the form says now.
   const run = useMutation({
-    mutationFn: (sent: ReturnType<typeof request>) => client.contextForTask(sent),
+    mutationFn: async (
+      sent: ReturnType<typeof request>,
+    ): Promise<{ bundle: ContextBundle; receipt?: ContextReceipt; payload?: string }> =>
+      sent.receipt === undefined
+        ? { bundle: await client.contextForTask(sent) }
+        : client.contextForTaskWithReceipt(sent),
   });
 
   const copyExport = useMutation({
@@ -180,6 +193,32 @@ function ContextTab(): React.JSX.Element {
         >
           Assemble
         </button>
+        <div className="receipt-options">
+          <label>
+            <input
+              type="checkbox"
+              checked={keepReceipt}
+              onChange={(event) => setKeepReceipt(event.target.checked)}
+            />{' '}
+            Keep a receipt
+          </label>
+          {keepReceipt && (
+            <>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={captureRequest}
+                  onChange={(event) => setCaptureRequest(event.target.checked)}
+                />{' '}
+                Include task and filters in receipt
+              </label>
+              <p className="section-note prose">
+                Save the receipt and exact context together. Task text stays out of the receipt
+                unless you include it. Nothing is saved on the server.
+              </p>
+            </>
+          )}
+        </div>
       </form>
 
       {budgetError && (
@@ -193,7 +232,51 @@ function ContextTab(): React.JSX.Element {
 
       {run.data !== undefined && (
         <>
-          <Accounting bundle={run.data} />
+          <Accounting bundle={run.data.bundle} />
+          {run.data.receipt !== undefined && run.data.payload !== undefined && (
+            <section className="section receipt-result" aria-label="Context receipt">
+              <h2 className="section-heading">context receipt</h2>
+              <p className="section-note prose">
+                Integrity verified for this emitted context. This does not prove a model used it.
+                Save both files to check the bytes later.
+              </p>
+              <Facts>
+                <Fact label="Receipt">
+                  <span className="receipt-identifier">{run.data.receipt.receiptId}</span>
+                </Fact>
+                <Fact label="Build">
+                  <span className="receipt-identifier">{run.data.receipt.buildId}</span>
+                </Fact>
+                <Fact label="Policy">
+                  <span className="receipt-identifier">{run.data.receipt.execution.policyId}</span>
+                </Fact>
+                <Fact label="Payload digest">
+                  <span className="receipt-identifier">{run.data.receipt.payloadDigest}</span>
+                </Fact>
+                <Fact label="Task retained">
+                  {run.data.receipt.requestRetained ? 'Yes, explicitly included' : 'No'}
+                </Fact>
+              </Facts>
+              <div className="receipt-actions">
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => saveReceiptFile('context.json', run.data?.payload ?? '')}
+                >
+                  Save exact context
+                </button>
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() =>
+                    saveReceiptFile('context-receipt.json', JSON.stringify(run.data?.receipt))
+                  }
+                >
+                  Save receipt
+                </button>
+              </div>
+            </section>
+          )}
           {run.variables !== undefined && (
             <div className="section">
               <Equivalents forms={contextEquivalents(run.variables, serverOrigin())} />
@@ -205,14 +288,14 @@ function ContextTab(): React.JSX.Element {
               fifteen cited passages, and the ones withheld were the openings of the most
               relevant documents, so the passage that answered the task could be missing
               from a page whose whole purpose is showing what the model receives. */}
-          {run.data.overview.length > 0 && (
+          {run.data.bundle.overview.length > 0 && (
             <div className="section">
               <h2 className="section-heading">orientation</h2>
               <p className="section-note prose">
                 The opening of each of the most relevant documents, which is what the reserve in the
                 budget above pays for. The model receives these alongside the selections.
               </p>
-              <ItemList items={run.data.overview} />
+              <ItemList items={run.data.bundle.overview} />
             </div>
           )}
 
@@ -228,10 +311,10 @@ function ContextTab(): React.JSX.Element {
                 {copied ? 'Copied' : 'Copy as export'}
               </button>
             </div>
-            {run.data.selected.length === 0 ? (
+            {run.data.bundle.selected.length === 0 ? (
               <Empty title="Nothing fit. Every candidate is in the omissions below." />
             ) : (
-              <ItemList items={run.data.selected} />
+              <ItemList items={run.data.bundle.selected} />
             )}
           </div>
 
@@ -239,14 +322,14 @@ function ContextTab(): React.JSX.Element {
               cannot be silently dropped a second time: the test below asserts every citation
               in the bundle is on the page, and a table that appeared here without a panel
               would fail it. */}
-          {run.data.tables.length > 0 && (
+          {run.data.bundle.tables.length > 0 && (
             <div className="section">
               <h2 className="section-heading">tables</h2>
-              <TableList tables={run.data.tables} />
+              <TableList tables={run.data.bundle.tables} />
             </div>
           )}
 
-          {run.data.alternatives.length > 0 && (
+          {run.data.bundle.alternatives.length > 0 && (
             <div className="section">
               <h2 className="section-heading">alternatives</h2>
               {/* Architecture 13.4: these are ranked lower by declared hints. Lorepack does
@@ -255,11 +338,11 @@ function ContextTab(): React.JSX.Element {
                 Ranked lower by the status and authority declared in your configuration. Lorepack
                 does not judge which of two documents is correct.
               </p>
-              <ItemList items={run.data.alternatives} />
+              <ItemList items={run.data.bundle.alternatives} />
             </div>
           )}
 
-          <Omissions items={run.data.omitted} summary={run.data.omissionSummary} />
+          <Omissions items={run.data.bundle.omitted} summary={run.data.bundle.omissionSummary} />
         </>
       )}
     </>
@@ -550,4 +633,13 @@ function ScoreBreakdown({
       )}
     </details>
   );
+}
+
+function saveReceiptFile(name: string, payload: string): void {
+  const url = URL.createObjectURL(new Blob([payload], { type: 'application/json;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
