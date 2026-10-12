@@ -123,6 +123,25 @@ original evidence stays unchanged. A real Node V8 negative witness in
 [`coverage_report.test.ts`](../../tools/arch/test/coverage_report.test.ts) verifies that an
 unused function and branch stay uncovered. Both scripts themselves remain owned sources.
 
+Convert actual Node V8 records with the checked native converter:
+
+```sh
+pnpm coverage:native --inventory coverage/owned_inventory.json \
+  --raw coverage/node-v8 --direct coverage/coverage-final.json \
+  --origin native --out coverage/native.bundle.json
+```
+
+The raw directory must contain genuine `NODE_V8_COVERAGE` records from the same measured
+source tree. The converter currently supports owned `.mjs` scripts and executable
+`vite.config.ts`/`vitest.config.ts` files. It records other owned native layouts and
+incompatible maps as rejected evidence in the bundle; their hits are never merged.
+Bundled TypeScript source-map conversion remains unqualified. Evaluated default-export
+calls retain their original expression locations and real V8 ranges. A real Node fixture
+verifies that this adapter does not cover an unused function or unexecuted branch.
+Changed source hashes fail conversion. The final all-owned report still refuses missing
+sources and failed targets. This command does not launch the measurement suite or import
+configurations automatically; that orchestration remains incomplete.
+
 Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
 critical lines/statements at least 98% and functions/branches at least 95%. Failed targets
 remain visible in the JSON report. The report command is not part of `pnpm verify` while the
