@@ -75,7 +75,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
-    "@changesets/cli": "2.31.1",
+    "@changesets/cli": "3.0.3",
     "esbuild": "0.28.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "24.13.3",

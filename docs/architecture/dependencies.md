@@ -163,6 +163,17 @@ Its MIT licence and Node requirement (^20.19.0 or >=22.12.0) fit the supported N
 24.21.0 toolchain. Vite has no install or post-install script; its build tooling
 continues to install with scripts disabled. The change does not add runtime dependencies.
 
+`@changesets/cli` 3.0.3 removes the older YAML/workspace and globbing dependency
+chains retained by 2.31.1. Two advisory-listed legacy patch versions were unavailable
+from the registry, so inventing an override would not produce a reproducible install.
+The maintained release tool supports Node 24 and pnpm 11, has an MIT licence,
+and declares no install scripts. Its
+[major release changes](https://github.com/changesets/changesets/releases/tag/@changesets%2Fcli@3.0.0)
+include an error exit for version preparation without pending changesets. Our release
+workflow requires pending changesets. Explicit `privatePackages` settings preserve
+versioning private packages without tagging them, matching the previous behavior.
+Release-plan comparison and version preparation in disposable copies verify migration.
+
 ## Adding one
 
 Before adding a dependency, check and record: last release, open CVEs, licence, install
