@@ -15,6 +15,7 @@ import {
   locatorBounds,
   locatorProblem,
   NORMALIZATION_VERSION,
+  type ParsedArtifact,
   SCHEMA_VERSION,
   type SourceLocator,
   sha256Schema,
@@ -502,7 +503,29 @@ export function verifyLogicalCatalog(
   return { buildId, objectHashes: artifacts.map((row) => row.object_hash), canonicalRoots: roots };
 }
 
-function verifyLocatorRanges(db: DatabaseSync): void {
+type ParsedGeometry = Pick<ParsedArtifact, 'artifact' | 'nodes'>;
+
+export function checkStoredLocatorRanges(
+  db: DatabaseSync,
+  parsed: readonly ParsedGeometry[],
+): readonly { readonly subject: string; readonly message: string }[] {
+  try {
+    verifyLocatorRanges(db, parsed);
+    return [];
+  } catch (error) {
+    if (!(error instanceof LoreError)) throw error;
+    return [
+      {
+        subject: error.subject ?? 'context.sqlite',
+        message: error.message.replace(/^locator-ranges: /, ''),
+      },
+    ];
+  }
+}
+
+function verifyLocatorRanges(db: DatabaseSync, parsed?: readonly ParsedGeometry[]): void {
+  const expectedById =
+    parsed === undefined ? undefined : new Map(parsed.map((entry) => [entry.artifact.id, entry]));
   for (const artifact of db
     .prepare('SELECT id, relative_path, metadata FROM artifacts')
     .iterate()) {
@@ -530,14 +553,23 @@ function verifyLocatorRanges(db: DatabaseSync): void {
           },
         };
       });
-    const bounds = locatorBounds(
-      {
-        id,
-        relativePath,
-        metadata: JSON.parse(String(artifact.metadata)) as Record<string, unknown>,
-      },
-      nodes,
+    const expected = expectedById?.get(id);
+    requireValid(
+      expectedById === undefined || expected !== undefined,
+      id,
+      'locator-ranges: A stored artifact was not parsed.',
     );
+    const bounds =
+      expected === undefined
+        ? locatorBounds(
+            {
+              id,
+              relativePath,
+              metadata: JSON.parse(String(artifact.metadata)) as Record<string, unknown>,
+            },
+            nodes,
+          )
+        : locatorBounds(expected.artifact, expected.nodes);
     const check = (subject: string, locator: SourceLocator): void => {
       const problem = locatorProblem(locator, bounds);
       requireValid(problem === undefined, subject, `locator-ranges: ${problem ?? ''}`);

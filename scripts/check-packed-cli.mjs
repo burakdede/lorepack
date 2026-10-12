@@ -228,6 +228,27 @@ async function checkTableQuery(installDir, projectDir) {
   if (retained.buildId !== proof.buildId || retained.activated !== false)
     return [`installed import changed identity or activated: ${imported.stdout}`];
   rmSync(projectDir, { recursive: true });
+  const validation = spawnSync(
+    process.execPath,
+    [entry, '--json', 'validate', '--build', proof.buildId],
+    {
+      cwd: consumer,
+      encoding: 'utf8',
+      timeout: 120_000,
+    },
+  );
+  if (validation.status !== 0)
+    return [`installed retained validation failed: ${validation.stdout} ${validation.stderr}`];
+  const validated = JSON.parse(validation.stdout);
+  if (
+    validated.buildId !== proof.buildId ||
+    validated.mode !== 'existing-build' ||
+    validated.ok !== true
+  )
+    return [
+      `installed retained validation did not verify the exact imported build: ${validation.stdout}`,
+    ];
+  console.log('imported build validated without the producer or source files');
   const activated = spawnSync(process.execPath, [entry, 'activate', proof.buildId], {
     cwd: consumer,
     encoding: 'utf8',

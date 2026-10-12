@@ -66,6 +66,7 @@ async function baseInput(overrides: Partial<ValidationInput> = {}): Promise<Vali
     integrityCheck: () => ({ ok: true, problems: [] }),
     search: () => [{ hit: true }],
     tableMappingCheck: () => [],
+    locatorRangeCheck: () => [],
     countRows: (_db, table) => (table === 'chunks' ? 1 : 1),
     ...overrides,
   };
@@ -322,6 +323,7 @@ describe('reporting', () => {
       integrityCheck: () => ({ ok: false, problems: ['bad'] }),
       search: () => [],
       tableMappingCheck: () => [],
+      locatorRangeCheck: () => [],
       countRows: (_db, table) => (table === 'chunks' ? 5 : 1),
     });
     const report = await validateCandidate(input);

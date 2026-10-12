@@ -263,7 +263,8 @@ invalid target fails before the active pointer changes.
 
 Use `lorepack validate --build <full-build-id>` to verify a retained build from its sealed
 catalog, manifest, identity inputs and normalized objects, even after sources change or
-disappear. It does not compile sources or move the active pointer. See the
+disappear. It does not compile sources or move the active pointer. Candidate checks
+also verify stored mappings and source bounds before sealing. See the
 [validation contract](docs/validation.md) for checks, limits and unsupported builds.
 
 Retained builds remain available to inspection, diff, search, export and read-only serving.

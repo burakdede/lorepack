@@ -84,6 +84,19 @@ it.each(['changed', 'removed'] as const)(
             ok: true,
           });
         }
+        const human = await execute(process.execPath, [
+          BIN,
+          '--cwd',
+          project.root,
+          'validate',
+          '--build',
+          a,
+        ]);
+        expect(human.stdout).toContain(`Verified retained build ${a}.`);
+        expect(human.stdout).toContain(
+          'Sources, stored build data and the active pointer were not changed.',
+        );
+        expect(human.stderr).not.toContain('Discovering');
         expect(result.stderr).not.toContain('Discovering');
         expect(result.stderr).not.toContain('Parsing');
         expect(readActiveBuild(join(project.root, '.lore'))).toEqual(active);

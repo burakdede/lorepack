@@ -6,6 +6,7 @@ import {
   locatorBounds,
   locatorProblem,
   type ObjectStore,
+  type ParsedArtifact,
   type ParsedTable,
 } from '@lorepack/core';
 import type { Chunk } from '../chunk/chunk.js';
@@ -66,6 +67,10 @@ export interface ValidationInput {
     db: DatabaseSync,
     tables: readonly ParsedTable[],
   ) => readonly { readonly message: string; readonly subject: string }[];
+  readonly locatorRangeCheck: (
+    db: DatabaseSync,
+    parsed: readonly Pick<ParsedArtifact, 'artifact' | 'nodes'>[],
+  ) => readonly { readonly subject: string; readonly message: string }[];
   readonly countRows: (db: DatabaseSync, table: string) => number;
 }
 
@@ -82,8 +87,8 @@ export async function validateCandidate(input: ValidationInput): Promise<Validat
   run('node-integrity', () => checkNodeIntegrity(input));
   run('chunk-integrity', () => checkChunkIntegrity(input));
   run('chunk-provenance', () => checkChunkProvenance(input));
-  run('locator-ranges', () =>
-    input.artifacts.flatMap((entry) => {
+  run('locator-ranges', () => [
+    ...input.artifacts.flatMap((entry) => {
       const bounds = locatorBounds(entry.artifact, entry.nodes);
       return [
         ...entry.nodes.map((node) => ({ subject: node.id, locator: node.locator })),
@@ -99,7 +104,10 @@ export async function validateCandidate(input: ValidationInput): Promise<Validat
           : [{ check: 'locator-ranges' as const, message, subject: record.subject }];
       });
     }),
-  );
+    ...input
+      .locatorRangeCheck(input.db, input.artifacts)
+      .map((failure) => ({ check: 'locator-ranges' as const, ...failure })),
+  ]);
   run('table-mapping', () =>
     input
       .tableMappingCheck(
