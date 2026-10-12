@@ -40,6 +40,10 @@ export function exportCommand(): CommandDefinition {
       { flags: '--output <file>', description: 'write to a file instead of stdout' },
       { flags: '--force', description: 'overwrite an existing output file' },
       {
+        flags: '--include-archived',
+        description: 'explicitly include labeled archived and superseded evidence',
+      },
+      {
         flags: '--allow-unsupported-budget',
         description: 'permit a budget outside the supported 4,000 to 40,000 range',
       },
@@ -80,7 +84,7 @@ export function exportCommand(): CommandDefinition {
           ...(typeof flags.build === 'string' ? { buildId: flags.build } : {}),
           task,
           profile,
-          includeArchived: false,
+          includeArchived: flags.includeArchived === true,
           allowUnsupportedBudget: flags.allowUnsupportedBudget === true,
           ...(flags.budget === undefined ? {} : { budget: parseBudget(flags.budget) }),
         });

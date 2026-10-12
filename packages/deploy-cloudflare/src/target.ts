@@ -671,7 +671,7 @@ async function verifyCandidateBuild(
           await runtime.search({
             query: smokeQuery,
             limit: 1,
-            includeArchived: false,
+            includeArchived: true,
             debug: false,
           })
         ).hits[0];

@@ -173,11 +173,15 @@ class PortedRuntime implements LoreRuntime {
           includeArchived: request.includeArchived,
           superseded,
         });
-        // What ranking held back, offered as alternatives with their labels. Suppression is
-        // not silence: anything not offered is still named in the omission report.
-        const suppressed = report.dropped
-          .filter(({ reason }) => reason === 'archived' || reason === 'superseded')
-          .map(({ ranked }) => ranked);
+        // Historical text is offered only after explicit expansion. Default omissions retain locators.
+        const suppressed = request.includeArchived
+          ? report.dropped
+              .filter(
+                ({ ranked }) =>
+                  ranked.labels.includes('archived') || ranked.labels.includes('superseded'),
+              )
+              .map(({ ranked }) => ranked)
+          : [];
 
         return {
           ...envelope,

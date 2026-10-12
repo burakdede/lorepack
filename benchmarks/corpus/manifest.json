@@ -60,8 +60,8 @@
       "path": "packages/runtime/src/runtime.ts",
       "format": "source-code",
       "kind": "checked-in-repository-artifact",
-      "sha256": "efe3988dca55aed3d8a47d3f1371accedc633bc3d14813647f81a4814d9642e3",
-      "bytes": 15868
+      "sha256": "338f173f19daf416c8f68a36d7d5c558f81d296b3c73c3e2b38cf65e34e7c549",
+      "bytes": 15931
     },
     {
       "path": "benchmarks/corpus/text/operations.txt",
