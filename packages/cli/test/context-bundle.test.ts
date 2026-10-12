@@ -142,8 +142,7 @@ describe('nothing is invented and nothing is hidden', () => {
 
   it('lists each chunk in exactly one place', async () => {
     const bundle = await bundleFor('rollback', {
-      budget: 1200,
-      allowUnsupportedBudget: true,
+      budget: 4000,
     });
     const everywhere = [
       ...bundle.overview.map((item) => item.chunkId),
@@ -152,6 +151,15 @@ describe('nothing is invented and nothing is hidden', () => {
       ...bundle.omitted.map((item) => item.chunkId),
     ];
     expect(new Set(everywhere).size).toBe(everywhere.length);
+  });
+
+  it('refuses the old 1200-token request when mandatory framing cannot fit', async () => {
+    await expect(
+      bundleFor('rollback', { budget: 1200, allowUnsupportedBudget: true }),
+    ).rejects.toMatchObject({
+      code: 'LORE_E_LIMIT_EXCEEDED',
+      details: { reason: 'context-framing-too-large' },
+    });
   });
 
   it('reports omissions once the budget actually binds', async () => {
@@ -180,18 +188,25 @@ describe('nothing is invented and nothing is hidden', () => {
     });
 
     expect(bundle.estimatedTokens).toBeLessThanOrEqual(2000);
-    expect(bundle.omitted.length).toBeGreaterThan(0);
-    expect(bundle.omitted.some((item) => item.reason === 'budget')).toBe(true);
+    expect(bundle.omissionSummary.total).toBeGreaterThan(0);
+    expect(bundle.omissionSummary.reasons.budget).toBeGreaterThan(0);
+    expect(bundle.omissionSummary.reported).toBe(bundle.omitted.length);
+    expect(bundle.omissionSummary.truncated).toBe(
+      bundle.omissionSummary.total > bundle.omitted.length,
+    );
     for (const item of bundle.omitted) expect(item.locator.relativePath).not.toBe('');
   });
 
   it('stays inside a small budget and says what it dropped', async () => {
-    const bundle = await bundleFor('rollback deployment onboarding incident', {
-      budget: 1000,
-      allowUnsupportedBudget: true,
+    await expect(
+      bundleFor('rollback deployment onboarding incident', {
+        budget: 1000,
+        allowUnsupportedBudget: true,
+      }),
+    ).rejects.toMatchObject({
+      code: 'LORE_E_LIMIT_EXCEEDED',
+      details: { reason: 'context-framing-too-large' },
     });
-    expect(bundle.estimatedTokens).toBeLessThanOrEqual(1000);
-    expect(bundle.omitted.every((item) => item.locator.relativePath !== '')).toBe(true);
   });
 });
 
