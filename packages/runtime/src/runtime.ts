@@ -2,6 +2,8 @@ import {
   type BuildDescription,
   type BuildHandle,
   type BuildScope,
+  type BuildSelection,
+  buildSelectionSchema,
   type CatalogSearchCriteria,
   type CatalogSearchHit,
   type ContextBundle,
@@ -48,7 +50,9 @@ import { readSourceFrom } from './read-source.js';
  *    to prevent, so it is checked rather than assumed.
  */
 
-export interface RuntimeOptions extends RuntimeDeps {}
+export interface RuntimeOptions extends RuntimeDeps {
+  readonly buildId?: BuildHandle['buildId'];
+}
 
 export function createRuntime(deps: RuntimeOptions): LoreRuntime {
   return new PortedRuntime(deps);
@@ -71,7 +75,7 @@ class PortedRuntime implements LoreRuntime {
     this.#deps = deps;
   }
 
-  async describeBuild(): Promise<BuildDescription> {
+  async describeBuild(selection: BuildSelection = {}): Promise<BuildDescription> {
     return this.#withBuild(async ({ scope, envelope }) => {
       const manifest = await scope.catalog.manifest();
       return {
@@ -85,122 +89,133 @@ class PortedRuntime implements LoreRuntime {
         compilerVersion: manifest.compilerVersion,
         ...(scope.createdAt === undefined ? {} : { createdAt: scope.createdAt }),
       };
-    });
+    }, selection);
   }
 
   async search(unchecked: SearchRequest): Promise<SearchResult> {
     const request = checked(searchRequestSchema, unchecked);
-    return this.#withBuild(async ({ scope, envelope }) => {
-      // Ranking can only reorder what it was given, so the index is asked for more than
-      // the page: a page of ten taken straight from BM25 would make every boost decorative.
-      const candidates = await candidatesFor(scope, request.query, {
-        limit: candidateCount(request.limit),
-        pathGlob: request.pathGlob,
-        extension: request.fileType,
-        statuses: request.status,
-        artifactId: request.artifactId,
-      });
+    return this.#withBuild(
+      async ({ scope, envelope }) => {
+        // Ranking can only reorder what it was given, so the index is asked for more than
+        // the page: a page of ten taken straight from BM25 would make every boost decorative.
+        const candidates = await candidatesFor(scope, request.query, {
+          limit: candidateCount(request.limit),
+          pathGlob: request.pathGlob,
+          extension: request.fileType,
+          statuses: request.status,
+          artifactId: request.artifactId,
+        });
 
-      const ranked = rankCandidates(candidates.hits, {
-        query: request.query,
-        limit: request.limit,
-        includeArchived: request.includeArchived,
-        superseded: await scope.catalog.supersededArtifacts(),
-      });
+        const ranked = rankCandidates(candidates.hits, {
+          query: request.query,
+          limit: request.limit,
+          includeArchived: request.includeArchived,
+          superseded: await scope.catalog.supersededArtifacts(),
+        });
 
-      return {
-        ...envelope,
-        totalIndexedChunks: await scope.catalog.countChunks(),
-        hits: ranked.map(({ hit, score, components, labels }) => ({
-          chunkId: hit.chunkId,
-          artifactId: hit.artifactId,
-          /**
-           * The composed relevance score, higher being better. It is a heuristic about
-           * how well this chunk matches the words asked for, and it is not a confidence
-           * and not evidence the content is correct (architecture 13.2).
-           */
-          score,
-          excerpt: hit.excerpt,
-          headingPath: [...hit.headingPath],
-          status: hit.status,
-          labels,
-          // Provenance is mandatory (architecture 10.8). The locator is built from the
-          // same row as the hit, so a result cannot exist without one.
-          locator: {
+        return {
+          ...envelope,
+          totalIndexedChunks: await scope.catalog.countChunks(),
+          hits: ranked.map(({ hit, score, components, labels }) => ({
+            chunkId: hit.chunkId,
             artifactId: hit.artifactId,
-            relativePath: hit.relativePath,
-            ...(hit.headingPath.length === 0 ? {} : { headingPath: [...hit.headingPath] }),
-            ...(hit.sheet === null ? {} : { sheet: hit.sheet }),
-            ...(hit.cellRange === null ? {} : { cellRange: hit.cellRange }),
-            // A page and a line range are alternatives, not companions: a format has one
-            // coordinate or the other, and carrying an invented one alongside the real one
-            // is what made a PDF citation read as line 1 (#241).
-            ...(hit.page === null || hit.page <= 0 ? {} : { page: hit.page }),
-            ...(hit.lineStart === null || hit.lineStart <= 0 ? {} : { lineStart: hit.lineStart }),
-            ...(hit.lineEnd === null || hit.lineEnd <= 0 ? {} : { lineEnd: hit.lineEnd }),
-          },
-          ...(request.debug ? { scoreComponents: components } : {}),
-        })),
-      };
-    });
+            /**
+             * The composed relevance score, higher being better. It is a heuristic about
+             * how well this chunk matches the words asked for, and it is not a confidence
+             * and not evidence the content is correct (architecture 13.2).
+             */
+            score,
+            excerpt: hit.excerpt,
+            headingPath: [...hit.headingPath],
+            status: hit.status,
+            labels,
+            // Provenance is mandatory (architecture 10.8). The locator is built from the
+            // same row as the hit, so a result cannot exist without one.
+            locator: {
+              artifactId: hit.artifactId,
+              relativePath: hit.relativePath,
+              ...(hit.headingPath.length === 0 ? {} : { headingPath: [...hit.headingPath] }),
+              ...(hit.sheet === null ? {} : { sheet: hit.sheet }),
+              ...(hit.cellRange === null ? {} : { cellRange: hit.cellRange }),
+              // A page and a line range are alternatives, not companions: a format has one
+              // coordinate or the other, and carrying an invented one alongside the real one
+              // is what made a PDF citation read as line 1 (#241).
+              ...(hit.page === null || hit.page <= 0 ? {} : { page: hit.page }),
+              ...(hit.lineStart === null || hit.lineStart <= 0 ? {} : { lineStart: hit.lineStart }),
+              ...(hit.lineEnd === null || hit.lineEnd <= 0 ? {} : { lineEnd: hit.lineEnd }),
+            },
+            ...(request.debug ? { scoreComponents: components } : {}),
+          })),
+        };
+      },
+      { buildId: request.buildId },
+    );
   }
 
   async contextForTask(unchecked: TaskContextRequest): Promise<ContextBundle> {
     const request = checked(taskContextRequestSchema, unchecked);
-    return this.#withBuild(async ({ scope, envelope }) => {
-      const profile = request.profile ?? DEFAULT_PROFILE;
-      const budget = resolveBudget(profile, request.budget, request.allowUnsupportedBudget);
+    return this.#withBuild(
+      async ({ scope, envelope }) => {
+        const profile = request.profile ?? DEFAULT_PROFILE;
+        const budget = resolveBudget(profile, request.budget, request.allowUnsupportedBudget);
 
-      // A bundle is filled from a much deeper candidate list than a page of search
-      // results: the budget, not a page size, is what decides how much fits.
-      const candidates = await candidatesFor(scope, request.task, {
-        limit: RANKING_WEIGHTS.candidates.maximum,
-        ...filtersOf(request),
-      });
-      const superseded = await scope.catalog.supersededArtifacts();
+        // A bundle is filled from a much deeper candidate list than a page of search
+        // results: the budget, not a page size, is what decides how much fits.
+        const candidates = await candidatesFor(scope, request.task, {
+          limit: RANKING_WEIGHTS.candidates.maximum,
+          ...filtersOf(request),
+        });
+        const superseded = await scope.catalog.supersededArtifacts();
 
-      const report = rankWithReport(candidates.hits, {
-        query: request.task,
-        limit: candidates.hits.length,
-        includeArchived: request.includeArchived,
-        superseded,
-      });
-      // What ranking held back, offered as alternatives with their labels. Suppression is
-      // not silence: anything not offered is still named in the omission report.
-      const suppressed = report.dropped
-        .filter(({ reason }) => reason === 'archived' || reason === 'superseded')
-        .map(({ ranked }) => ranked);
+        const report = rankWithReport(candidates.hits, {
+          query: request.task,
+          limit: candidates.hits.length,
+          includeArchived: request.includeArchived,
+          superseded,
+        });
+        // What ranking held back, offered as alternatives with their labels. Suppression is
+        // not silence: anything not offered is still named in the omission report.
+        const suppressed = report.dropped
+          .filter(({ reason }) => reason === 'archived' || reason === 'superseded')
+          .map(({ ranked }) => ranked);
 
-      return {
-        ...envelope,
-        ...assembleBundle({
-          task: request.task,
-          profile,
-          budget,
-          candidateLimit: candidates.limit,
-          candidateLimitHit: candidates.hits.length >= candidates.limit,
-          candidateMatchMode: candidates.matchMode,
-          ranked: report.kept,
-          dropped: report.dropped,
-          suppressed,
-        }),
-      };
-    });
+        return {
+          ...envelope,
+          ...assembleBundle({
+            task: request.task,
+            profile,
+            budget,
+            candidateLimit: candidates.limit,
+            candidateLimitHit: candidates.hits.length >= candidates.limit,
+            candidateMatchMode: candidates.matchMode,
+            ranked: report.kept,
+            dropped: report.dropped,
+            suppressed,
+          }),
+        };
+      },
+      { buildId: request.buildId },
+    );
   }
 
   async readSource(unchecked: SourceReadRequest): Promise<SourceReadResult> {
     const request = checked(sourceReadRequestSchema, unchecked);
-    return this.#withBuild(async ({ scope, envelope }) => ({
-      ...envelope,
-      ...(await readSourceFrom(scope, request)),
-    }));
+    return this.#withBuild(
+      async ({ scope, envelope }) => ({
+        ...envelope,
+        ...(await readSourceFrom(scope, request)),
+      }),
+      { buildId: request.buildId },
+    );
   }
 
-  async listTables(): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
-    return this.#withBuild(async ({ scope }) => scope.tables.list());
+  async listTables(
+    selection: BuildSelection = {},
+  ): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
+    return this.#withBuild(async ({ scope }) => scope.tables.list(), selection);
   }
 
-  async describeTable(tableId: string): Promise<TableDescription> {
+  async describeTable(tableId: string, selection: BuildSelection = {}): Promise<TableDescription> {
     return this.#withBuild(async ({ scope, envelope }) => {
       const description = await scope.tables.describe(tableId);
       if (description === null) {
@@ -210,15 +225,18 @@ class PortedRuntime implements LoreRuntime {
         });
       }
       return { ...description, ...envelope };
-    });
+    }, selection);
   }
 
   async queryTable(unchecked: TableQueryRequest): Promise<TableQueryResult> {
     const request = checked(tableQueryRequestSchema, unchecked);
-    return this.#withBuild(async ({ scope, envelope }) => ({
-      ...(await scope.tables.query(request)),
-      ...envelope,
-    }));
+    return this.#withBuild(
+      async ({ scope, envelope }) => ({
+        ...(await scope.tables.query(request)),
+        ...envelope,
+      }),
+      { buildId: request.buildId },
+    );
   }
 
   /**
@@ -228,9 +246,41 @@ class PortedRuntime implements LoreRuntime {
    * report a state observed at a different moment than the data it returns. It never
    * fails the call: a source tree that cannot be inspected yields `unknown` (#147).
    */
-  async #withBuild<T>(body: (call: Call) => Promise<T>): Promise<T> {
-    const handle = await this.#deps.provider.acquire();
+  async #withBuild<T>(
+    body: (call: Call) => Promise<T>,
+    unchecked: BuildSelection = {},
+  ): Promise<T> {
+    const requested = checked(buildSelectionSchema, unchecked);
+    if (
+      this.#deps.buildId !== undefined &&
+      requested.buildId !== undefined &&
+      requested.buildId !== this.#deps.buildId
+    ) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'This runtime serves a different selected build.',
+        {
+          remediation: 'Use the build configured for this server.',
+          subject: requested.buildId,
+        },
+      );
+    }
+    const selection = {
+      buildId: requested.buildId ?? this.#deps.buildId,
+    };
+    const handle = await this.#deps.provider.acquire(selection);
     try {
+      if (selection.buildId !== undefined && handle.buildId !== selection.buildId) {
+        throw new LoreError(
+          'LORE_E_BUILD_NOT_FOUND',
+          'The runtime did not acquire the selected build.',
+          {
+            remediation:
+              'Use a provider that supports exact retained-build selection. No active fallback is permitted.',
+            subject: selection.buildId,
+          },
+        );
+      }
       const identity = runtimeIdentitySchema.safeParse({
         corpusId: handle.corpusId,
         namespaceId: handle.namespaceId,
@@ -260,7 +310,11 @@ class PortedRuntime implements LoreRuntime {
         );
       }
 
-      const sourceState = await this.#freshness();
+      const sourceState =
+        selection.buildId !== undefined &&
+        (await this.#deps.provider.current())?.buildId !== handle.buildId
+          ? 'unknown'
+          : await this.#freshness();
       return await body({
         scope,
         handle,

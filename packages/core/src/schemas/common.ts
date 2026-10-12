@@ -11,6 +11,9 @@ export const buildIdSchema = z
   .regex(/^lore_[0-9a-f]{64}$/, 'A build id is lore_ followed by a full lowercase sha256')
   .describe('Content-derived build identifier');
 
+export const buildSelectionSchema = z.object({ buildId: buildIdSchema.optional() }).strict();
+export type BuildSelection = Readonly<z.infer<typeof buildSelectionSchema>>;
+
 export const runtimeIdentitySchema = z
   .object({
     corpusId: z.string().regex(/^corpus_[0-9a-f]{32}$/),

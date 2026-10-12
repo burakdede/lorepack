@@ -32,6 +32,20 @@ const IDENTITY = {
   namespaceId: `namespace_${'d'.repeat(32)}`,
 };
 
+describe('selected provider contract, issue432', () => {
+  it('refuses a provider that ignores selection and releases its wrong handle', async () => {
+    const provider = new TrackingProvider();
+    provider.activate(BUILD_B);
+    const open = vi.fn();
+    const runtime = createRuntime({ provider, open });
+    await expect(runtime.describeBuild({ buildId: BUILD_A })).rejects.toMatchObject({
+      code: 'LORE_E_BUILD_NOT_FOUND',
+    });
+    expect(open).not.toHaveBeenCalled();
+    expect(provider.released).toBe(1);
+  });
+});
+
 function manifestFor(buildId: BuildId): BuildManifest {
   return {
     formatVersion: 1,

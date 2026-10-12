@@ -3,6 +3,8 @@ import {
   assertBuildId,
   type BuildHandle,
   type BuildId,
+  type BuildSelection,
+  buildSelectionSchema,
   LoreError,
   type ObjectStore,
   type RuntimeIdentity,
@@ -11,6 +13,7 @@ import { r2ObjectKey } from './r2-keys.js';
 import { checkedRuntimeIdentity } from './runtime-identity.js';
 
 interface D1PreparedStatementLike {
+  bind(...values: unknown[]): D1PreparedStatementLike;
   first<T = Record<string, unknown>>(): Promise<T | null>;
 }
 
@@ -124,18 +127,41 @@ export class D1ActiveBuildProvider implements ActiveBuildProvider {
     return { buildId: assertBuildId(row.buildId), generation: Number(row.generation) };
   }
 
-  async acquire(): Promise<BuildHandle> {
+  async acquire(selection: BuildSelection = {}): Promise<BuildHandle> {
+    const parsed = buildSelectionSchema.safeParse(selection);
+    if (!parsed.success)
+      throw new LoreError('LORE_E_INVALID_ARGUMENT', 'The build selection is invalid.', {
+        remediation: 'Pass a full retained build ID, or omit buildId to read the active build.',
+      });
     const active = await this.#activeRow();
-    if (active === null || active.buildId === null) {
+    if (active === null || (active.buildId === null && parsed.data.buildId === undefined)) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This deployment has no active build.', {
         remediation: 'Deploy and activate a verified build before serving requests from it.',
       });
     }
 
     const identity = checkedRuntimeIdentity(active, this.#projectId);
+    const buildId = assertBuildId(parsed.data.buildId ?? (active.buildId as string));
+    if (parsed.data.buildId !== undefined) {
+      const retained = await this.#db
+        .prepare(`SELECT build_id AS buildId FROM projected_builds
+        WHERE project_id = ? AND build_id = ? AND verified_at IS NOT NULL`)
+        .bind(this.#projectId, buildId)
+        .first<{ buildId: string }>();
+      if (retained?.buildId !== buildId)
+        throw new LoreError(
+          'LORE_E_BUILD_NOT_FOUND',
+          'The selected build is not retained and verified in this deployment.',
+          {
+            remediation:
+              'Select a verified deployed build in this project. No active fallback is permitted.',
+            subject: buildId,
+          },
+        );
+    }
     const handle: BuildHandle = Object.freeze({
       ...identity,
-      buildId: assertBuildId(active.buildId),
+      buildId,
       generation: Number(active.generation),
       release: () => {
         this.#handles.delete(handle);

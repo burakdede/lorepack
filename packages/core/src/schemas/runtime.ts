@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   artifactStatusSchema,
   buildIdSchema,
+  buildSelectionSchema,
   canonicalPathSchema,
   capabilitySchema,
   columnTypeSchema,
@@ -54,6 +55,7 @@ const responseEnvelope = {
 
 export const searchRequestSchema = z
   .object({
+    ...buildSelectionSchema.shape,
     query: z.string().min(1).max(1000),
     limit: z.int().positive().max(100).default(10),
     includeArchived: z.boolean().default(false),
@@ -90,6 +92,7 @@ export const searchResultSchema = z
 
 export const taskContextRequestSchema = z
   .object({
+    ...buildSelectionSchema.shape,
     task: z.string().min(1).max(4000),
     profile: contextProfileSchema.optional(),
     /**
@@ -156,6 +159,7 @@ export const contextBundleSchema = z
 
 export const sourceReadRequestSchema = z
   .object({
+    ...buildSelectionSchema.shape,
     artifactId: identifier.optional(),
     path: canonicalPathSchema.max(REQUEST_LIMITS.identifier).optional(),
     lineStart: z.int().positive().optional(),
@@ -232,6 +236,7 @@ export const tableDescriptionSchema = z
 
 export const tableQueryRequestSchema = z
   .object({
+    ...buildSelectionSchema.shape,
     tableId: identifier,
     sql: z.string().min(1).max(100_000).describe('Exactly one SELECT or WITH ... SELECT'),
     limit: z.int().positive().max(10_000).optional(),

@@ -6,7 +6,9 @@ import {
   assertBuildId,
   type BuildHandle,
   type BuildId,
+  type BuildSelection,
   type BuildSummary,
+  buildSelectionSchema,
   LoreError,
   type RuntimeIdentity,
   runtimeIdentitySchema,
@@ -246,26 +248,48 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     return this.#state.current();
   }
 
-  async acquire(): Promise<BuildHandle & RuntimeIdentity> {
+  async acquire(selection: BuildSelection = {}): Promise<BuildHandle & RuntimeIdentity> {
+    const parsed = buildSelectionSchema.safeParse(selection);
+    if (!parsed.success) {
+      throw new LoreError('LORE_E_INVALID_ARGUMENT', 'The build selection is invalid.', {
+        remediation: 'Pass a full retained build ID, or omit buildId to read the active build.',
+      });
+    }
     // Re-read on every acquisition. A missed filesystem notification is harmless because
     // the request boundary is what observes the generation.
     const active = this.#state.current();
-    if (active === null) {
+    const requested = parsed.data.buildId ?? active?.buildId;
+    if (requested === undefined) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build.', {
         remediation: 'Run `lorepack build` to create and activate one.',
       });
     }
+    const buildId = assertBuildId(requested);
+    if (
+      parsed.data.buildId !== undefined &&
+      (this.#state.getBuild(buildId) === null ||
+        !existsSync(join(this.#buildsDirectory, buildId, 'context.sqlite')))
+    ) {
+      throw new LoreError(
+        'LORE_E_BUILD_NOT_FOUND',
+        'The selected build is not retained in this project.',
+        {
+          remediation: 'Run `lorepack builds` and select an available full build ID.',
+          subject: buildId,
+        },
+      );
+    }
     const identity = this.#state.identity();
 
-    this.#closeIdle(active.buildId);
+    this.#closeIdle(buildId);
 
-    let entry = this.#open.get(active.buildId);
+    let entry = this.#open.get(buildId);
     if (entry === undefined) {
       entry = {
-        db: openReadOnly(join(this.#buildsDirectory, active.buildId, 'context.sqlite')),
+        db: openReadOnly(join(this.#buildsDirectory, buildId, 'context.sqlite')),
         refs: 0,
       };
-      this.#open.set(active.buildId, entry);
+      this.#open.set(buildId, entry);
     }
     entry.refs += 1;
     const database = entry.db;
@@ -274,13 +298,13 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     const self = this;
     const handle: BuildHandle & RuntimeIdentity = Object.freeze({
       ...identity,
-      buildId: active.buildId,
-      generation: active.generation,
+      buildId,
+      generation: active?.generation ?? 0,
       release(): void {
         if (released) return;
         released = true;
         self.#handles.delete(handle);
-        self.#release(active.buildId, database);
+        self.#release(buildId, database);
       },
     });
     this.#handles.set(handle, database);
