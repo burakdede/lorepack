@@ -44,6 +44,9 @@ class FakeD1Database implements D1DatabaseLike {
 
   prepare(_query: string) {
     return {
+      bind(..._values: unknown[]) {
+        return this;
+      },
       first: async <T>() =>
         this.row === null
           ? null

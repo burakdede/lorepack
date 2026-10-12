@@ -1,0 +1,14 @@
+{
+  "$id": "https://lorepack.dev/schemas/build-selection.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "title": "build-selection",
+  "type": "object"
+}

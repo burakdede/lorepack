@@ -5,6 +5,7 @@ import {
   buildReceiptSchema,
   lockfileSchema,
 } from './build.js';
+import { buildSelectionSchema } from './common.js';
 import { configSchema } from './config.js';
 import { buildDiffSchema } from './diff.js';
 import { doctorReportSchema } from './doctor.js';
@@ -50,6 +51,7 @@ export const PUBLIC_SCHEMAS = {
   'table-query-request': tableQueryRequestSchema,
   'table-query-result': tableQueryResultSchema,
   'build-description': buildDescriptionSchema,
+  'build-selection': buildSelectionSchema,
 } as const satisfies Record<string, z.ZodType>;
 
 export type PublicSchemaName = keyof typeof PUBLIC_SCHEMAS;

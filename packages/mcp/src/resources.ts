@@ -72,6 +72,9 @@ export const RESOURCE_URIS = [
 export const RESOURCE_TEMPLATES = [
   'lore://source/{artifactId}',
   'lore://build/{buildId}/diff/{otherBuildId}',
+  'lore://build/{buildId}',
+  'lore://build/{buildId}/source/{artifactId}',
+  'lore://build/{buildId}/tables',
 ] as const;
 
 export interface ResourceOptions {
@@ -91,6 +94,76 @@ export function registerResources(
   runtime: LoreRuntime,
   options: ResourceOptions = {},
 ): void {
+  server.registerResource(
+    'selected-build',
+    new ResourceTemplate('lore://build/{buildId}', { list: undefined }),
+    { title: 'Selected retained build', mimeType: 'application/json' },
+    async (uri, variables) =>
+      read(uri, async () => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify(
+              await runtime.describeBuild({ buildId: String(variables.buildId) }),
+              null,
+              2,
+            ),
+          },
+        ],
+      })),
+  );
+  server.registerResource(
+    'selected-source',
+    new ResourceTemplate('lore://build/{buildId}/source/{artifactId}', { list: undefined }),
+    { title: 'Source in a selected retained build', mimeType: 'application/json' },
+    async (uri, variables) =>
+      read(uri, async () => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify(
+              await runtime.readSource({
+                buildId: String(variables.buildId),
+                artifactId: decodeURIComponent(String(variables.artifactId)),
+              }),
+              null,
+              2,
+            ),
+          },
+        ],
+      })),
+  );
+  server.registerResource(
+    'selected-tables',
+    new ResourceTemplate('lore://build/{buildId}/tables', { list: undefined }),
+    { title: 'Tables in a selected retained build', mimeType: 'application/json' },
+    async (uri, variables) =>
+      read(uri, async () => {
+        const selection = { buildId: String(variables.buildId) };
+        const described = await runtime.describeBuild(selection);
+        const tables = await runtime.listTables(selection);
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: 'application/json',
+              text: JSON.stringify(
+                {
+                  buildId: described.buildId,
+                  corpusId: described.corpusId,
+                  namespaceId: described.namespaceId,
+                  tables,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }),
+  );
   server.registerResource(
     'build',
     'lore://project/build',

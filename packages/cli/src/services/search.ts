@@ -18,6 +18,7 @@ import { createRuntime } from '@lorepack/runtime';
  */
 
 export interface SearchOptions {
+  readonly buildId?: string;
   readonly config: ProjectConfig;
   readonly query: string;
   readonly sourceState: SourceState;
@@ -47,6 +48,7 @@ export async function runSearch(options: SearchOptions): Promise<SearchResult> {
     }
 
     return await createRuntime(backend).search({
+      ...(options.buildId === undefined ? {} : { buildId: options.buildId }),
       query: options.query,
       limit: options.limit ?? 10,
       includeArchived: options.includeArchived ?? false,

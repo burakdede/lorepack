@@ -1,5 +1,6 @@
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import {
+  assertBuildId,
   count,
   LoreError,
   loadConfig,
@@ -35,6 +36,10 @@ export function mcpCommand(): CommandDefinition {
     description: 'Serve the active build to an AI client over MCP on stdio.',
     flags: [
       {
+        flags: '--build <id>',
+        description: 'serve this full retained build ID without checking sources',
+      },
+      {
         flags: '--ensure-current',
         description: 'rebuild first when the sources have changed (the default)',
       },
@@ -53,7 +58,17 @@ export function mcpCommand(): CommandDefinition {
           ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
           : parseInterval(flags.revalidateInterval);
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
-      const mode = resolveMode(flags);
+      const buildId = typeof flags.build === 'string' ? assertBuildId(flags.build) : undefined;
+      if (buildId !== undefined && (flags.ensureCurrent === true || flags.allowStale === true)) {
+        throw new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          '--build cannot be combined with source reconciliation modes.',
+          {
+            remediation: 'Use --build alone or with --active-only.',
+          },
+        );
+      }
+      const mode = buildId === undefined ? resolveMode(flags) : 'active-only';
       const config = mode === 'ensure-current' ? loadConfig({ cwd }) : loadProjectConfig({ cwd });
       const sourceState = await reconcile({ config, mode, warn: context.warn });
 
@@ -72,7 +87,15 @@ export function mcpCommand(): CommandDefinition {
           mode === 'ensure-current' ? () => revalidator.freshness() : async () => sourceState,
       });
 
-      if ((await backend.provider.current()) === null) {
+      if (buildId !== undefined) {
+        try {
+          const handle = await backend.provider.acquire({ buildId });
+          handle.release();
+        } catch (error) {
+          backend.close();
+          throw error;
+        }
+      } else if ((await backend.provider.current()) === null) {
         backend.close();
         throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
           remediation: 'Run `lorepack build` first, or start the server with --ensure-current.',
@@ -87,7 +110,7 @@ export function mcpCommand(): CommandDefinition {
       // `server/discover` (a MUST in 2026-07-28) is answered with `Method not found` even
       // though the handler is registered. That is #189, and it was invisible because the
       // HTTP surface reaches the same decision through `createMcpHandler`.
-      const runtime = createRuntime(backend);
+      const runtime = createRuntime({ ...backend, ...(buildId === undefined ? {} : { buildId }) });
       const comparer = createLocalComparer(config.projectRoot);
       const factory = (): ReturnType<typeof createMcpServer> =>
         createMcpServer({ runtime, comparer });

@@ -1,6 +1,6 @@
 import type { BuildId } from '../hash/build-id.js';
 import type { BuildState } from '../schemas/build.js';
-import type { RuntimeIdentity } from '../schemas/common.js';
+import type { BuildSelection, RuntimeIdentity } from '../schemas/common.js';
 
 /**
  * Storage ports. Every implementation, local or remote, satisfies these and is held to
@@ -48,7 +48,7 @@ export interface BuildHandle extends RuntimeIdentity {
 
 export interface ActiveBuildProvider {
   current(): Promise<{ buildId: BuildId; generation: number } | null>;
-  acquire(): Promise<BuildHandle>;
+  acquire(selection?: BuildSelection): Promise<BuildHandle>;
 }
 
 export interface ObjectStore {

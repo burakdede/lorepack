@@ -27,7 +27,14 @@ Prefer project or workspace scope when the client supports it. User scope makes 
 visible to every project the client opens, which is rarely the safe default for private context.
 
 `--ensure-current` asks `lorepack mcp` to rebuild when sources changed. Use `--active-only` only
-when the client must read a pinned build and must not touch the source tree.
+when the client must avoid checking the source tree. It follows the active pointer.
+Use `--build lore_<64-hex-digest>` to select one retained build across the whole server,
+including tools and resources. Selection implies source-free startup and rejects
+`--ensure-current` or `--allow-stale`. A tool cannot override a server selection.
+
+On an ordinary local or remote server, every read tool accepts an optional full `buildId`.
+Selected resources use `lore://build/{buildId}`, `lore://build/{buildId}/source/{artifactId}`
+and `lore://build/{buildId}/tables`. Missing selections fail without reading the active build.
 
 ## Protocol behavior
 

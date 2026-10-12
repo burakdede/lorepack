@@ -1,4 +1,4 @@
-import { loadProjectConfig } from '@lorepack/core';
+import { assertBuildId, loadProjectConfig } from '@lorepack/core';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { DEFAULT_REVALIDATE_INTERVAL_MS } from '../services/revalidate.js';
 import {
@@ -32,6 +32,10 @@ export function serveCommand(): CommandDefinition {
     description: 'Serve the active build over HTTP and MCP. Read-only, and never rebuilds.',
     flags: [
       {
+        flags: '--build <id>',
+        description: 'serve this full retained build ID across all requests',
+      },
+      {
         flags: '--port <number>',
         description: `port to listen on (default ${SERVE_DEFAULTS.port})`,
       },
@@ -48,6 +52,7 @@ export function serveCommand(): CommandDefinition {
 
       const server = await startServing({
         config,
+        ...(typeof flags.build === 'string' ? { buildId: assertBuildId(flags.build) } : {}),
         host,
         port: parsePort(flags.port),
         warn: context.warn,
@@ -67,7 +72,9 @@ export function serveCommand(): CommandDefinition {
           `  MCP   ${server.url}/mcp`,
           `  Health ${server.url}/health`,
           '',
-          'Read-only. `lorepack build` in another terminal is picked up on the next request.',
+          typeof flags.build === 'string'
+            ? 'Read-only. All requests use the selected build until this server stops.'
+            : 'Read-only. `lorepack build` in another terminal is picked up on the next request.',
           'Press Ctrl-C to stop.',
           '',
         ].join('\n'),

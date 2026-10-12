@@ -206,6 +206,11 @@ lorepack serve
 lorepack mcp
 ```
 
+To keep a task on one retained version while another build activates, pass the full build ID:
+`lorepack serve --build lore_<64-hex-digest>` or `lorepack mcp --build lore_<64-hex-digest>`.
+Search and export accept the same `--build` selection. A missing selected build fails; it never
+falls back to the active version.
+
 `lorepack serve` never rebuilds or edits sources. `lorepack mcp` is useful as the command in an
 MCP client's stdio configuration. `lorepack connect <client>` shows the change it would make
 to the client configuration and asks before writing it. `--dry-run` only shows it, and `--yes`

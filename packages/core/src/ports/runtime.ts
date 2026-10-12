@@ -1,5 +1,5 @@
 import type { BuildManifest } from '../schemas/build.js';
-import type { ArtifactStatus, RuntimeIdentity } from '../schemas/common.js';
+import type { ArtifactStatus, BuildSelection, RuntimeIdentity } from '../schemas/common.js';
 import type { BuildDiff } from '../schemas/diff.js';
 import type {
   BuildDescription,
@@ -241,12 +241,14 @@ export interface RuntimeDeps {
  * freshness it observed, so no transport can forget to.
  */
 export interface LoreRuntime {
-  describeBuild(): Promise<BuildDescription>;
+  describeBuild(selection?: BuildSelection): Promise<BuildDescription>;
   search(request: SearchRequest): Promise<SearchResult>;
   contextForTask(request: TaskContextRequest): Promise<ContextBundle>;
   readSource(request: SourceReadRequest): Promise<SourceReadResult>;
-  listTables(): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
-  describeTable(tableId: string): Promise<TableDescription>;
+  listTables(
+    selection?: BuildSelection,
+  ): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
+  describeTable(tableId: string, selection?: BuildSelection): Promise<TableDescription>;
   queryTable(request: TableQueryRequest): Promise<TableQueryResult>;
 }
 

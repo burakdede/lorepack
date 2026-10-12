@@ -99,6 +99,48 @@ async function rpc(child: ChildProcess, id: number, method: string, params: unkn
 }
 
 describe('retained builds without live sources', () => {
+  it('reads selected A through packaged search, export and MCP after B activates, issue432', async () => {
+    await retainedProject(async (root, first, second) => {
+      for (const args of [
+        ['search', 'recovery', '--build', first],
+        ['export', '--task', 'recovery', '--build', first],
+      ]) {
+        const result = await cli(root, args);
+        expect(result.stdout).toContain(first);
+        expect(result.stdout).toContain('restore the checkpoint');
+        expect(result.stdout).not.toContain('restart the worker');
+      }
+      const child = spawn(process.execPath, [BIN, '--cwd', root, 'mcp', '--build', first], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      try {
+        const envelope = {
+          'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+          'io.modelcontextprotocol/clientCapabilities': {},
+        };
+        await rpc(child, 1, 'server/discover', { _meta: envelope });
+        const result = JSON.stringify(
+          await rpc(child, 2, 'tools/call', {
+            name: 'lore_search',
+            arguments: { query: 'recovery' },
+            _meta: envelope,
+          }),
+        );
+        expect(result).toContain(first);
+        expect(result).toContain('restore the checkpoint');
+        expect(result).not.toContain(second);
+        const resource = JSON.stringify(
+          await rpc(child, 3, 'resources/read', { uri: 'lore://project/build', _meta: envelope }),
+        );
+        expect(resource).toContain(first);
+      } finally {
+        await stop(child);
+      }
+      expect(JSON.parse((await cli(root, ['search', 'recovery'])).stdout)).toMatchObject({
+        buildId: second,
+      });
+    });
+  });
   it('restarts the packaged read-only HTTP server after source removal', async () => {
     await retainedProject(async (root, _first, second) => {
       const child = spawn(process.execPath, [BIN, '--cwd', root, 'serve', '--port', '47980'], {

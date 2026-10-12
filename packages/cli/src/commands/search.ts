@@ -9,6 +9,7 @@ export function searchCommand(): CommandDefinition {
     description: 'Search the active build. Every result carries its source location.',
     arguments: [{ name: 'query', description: 'what to look for' }],
     flags: [
+      { flags: '--build <id>', description: 'read this full retained build ID instead of active' },
       { flags: '--limit <count>', description: 'results to return (default 10)' },
       { flags: '--path <glob>', description: 'restrict to paths matching a glob' },
       { flags: '--type <extension>', description: 'restrict to one file extension' },
@@ -33,6 +34,7 @@ export function searchCommand(): CommandDefinition {
       const freshness = await readFreshness({ config });
 
       const result = await runSearch({
+        ...(typeof flags.build === 'string' ? { buildId: flags.build } : {}),
         config,
         query,
         sourceState: freshness.sourceState,

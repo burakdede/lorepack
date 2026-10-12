@@ -16,7 +16,7 @@ Build descriptions, search results, context bundles, source reads, table descrip
 table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. The runtime
 captures them from one acquired handle and checks that the opened scope belongs to the same
 corpus, namespace and build before reading its catalog. The table-name listing and health
-response retain their own existing shapes. Public JSON schemas and SDK types require the
+response retain their own existing shapes for unselected requests. Public JSON schemas and SDK types require the
 identity fields on the result envelopes.
 
 A missing or malformed provider identity is `LORE_E_SCHEMA_MISMATCH`; an adapter that opens
@@ -355,3 +355,23 @@ pointer has moved, it reports `unknown` immediately and queues the re-establishm
 
 This also covers the case nobody wired: `lorepack activate` run in a second terminal against a
 live dev session moves the same pointer, and is noticed the same way.
+
+## Exact retained-build selection
+
+Every runtime capability accepts an optional full `buildId`, validated before acquisition.
+Without it, one active handle is captured for the request. With it, acquisition must open that
+retained build or return `LORE_E_BUILD_NOT_FOUND`. The shared runtime checks the returned
+handle and scope; a provider that ignores selection cannot silently serve another version.
+Corpus and namespace bindings still come from owned handles, never request IDs.
+
+HTTP POST requests carry `buildId` in the strict request body. GET build, source, table,
+source-list and warnings routes use one `buildId` query parameter; duplicates and invalid
+IDs fail. Selected table listings include the verified build and runtime binding. MCP tools
+use the same schemas and selected resource templates. SDK clients verify response IDs.
+
+`serve --build` and `mcp --build` configure the runtime default and refuse request overrides.
+The selected MCP mode does not reconcile or rebuild sources. This is stateless version
+selection, not a durable task registry or retention guarantee. Pruned versions fail explicitly;
+retention protection remains a separate lifecycle contract. A retained selection that differs
+from the active build reports source freshness as `unknown`; the active build's source check
+cannot prove that an older selection matches the current files.
