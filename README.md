@@ -581,6 +581,9 @@ unused counters and recording rejected layouts. It reads raw records one file at
 Capture tools support native Windows
 module imports and can be imported without invoking their commands. See the [CI contract](docs/architecture/ci.md)
 for the checked files, capture limits and native matrix.
+`pnpm coverage:capture --out coverage/<fresh-name>` runs a default-suite campaign with
+configuration and subprocess capture. It fails when ownership, collection, tests or
+coverage gates fail, retaining the evidence for review.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
 SQLite projection fixtures seed atomically while retaining their original query assertions and deadlines.

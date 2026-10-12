@@ -75,7 +75,8 @@
     "supply-chain:report": "node scripts/check-supply-chain.mjs --write",
     "coverage:inventory": "node scripts/coverage_inventory.mjs --out coverage/owned_inventory.json",
     "coverage:report": "node scripts/coverage_report.mjs",
-    "coverage:native": "node scripts/coverage_native.mjs"
+    "coverage:native": "node scripts/coverage_native.mjs",
+    "coverage:capture": "node scripts/coverage_capture.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
