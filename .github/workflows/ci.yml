@@ -60,6 +60,9 @@ jobs:
       - name: Audit regression test types
         run: pnpm typecheck:audit
 
+      - name: All-owned coverage inventory
+        run: pnpm coverage:inventory
+
       - name: Architecture rules
         run: pnpm test:arch
 

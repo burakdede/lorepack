@@ -25,7 +25,7 @@ Steps, in order:
    loudly instead.
 2. `pnpm install --frozen-lockfile`
 3. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm typecheck:audit`
-4. `pnpm test:arch`, the dependency-direction rules
+4. `pnpm coverage:inventory`, then `pnpm test:arch`, the dependency-direction rules
 5. `pnpm test`
 6. `pnpm check:no-native`, `pnpm check:no-em-dash`
 
@@ -80,6 +80,20 @@ Run `mise exec -- pnpm test:unit --coverage` under the supported Node 24 runtime
 the text summary and JSON report to `coverage/`; the directory is local output and is not
 committed. The coverage provider is pinned to the same version as Vitest in the workspace so
 this command exercises the configured report path rather than failing during startup.
+
+`pnpm coverage:inventory` writes `coverage/owned_inventory.json` with source hashes,
+critical flags and explicit exclusion reasons. Its tracked
+[frozen manifest](../../tools/coverage_inventory/frozen_inventory.json) retains the original
+345 owned files and 49 critical files. Newly tracked executable sources extend this set,
+including configurations, scripts and acceptance drivers. Deleted baseline files, untracked
+owned code and non-regular executable files fail the command. The inventory script counts
+itself as owned code. Both local verification and native CI run it.
+
+This inventory is an ownership gate, not proof of coverage target attainment. Vitest's
+ordinary report omits executable configurations and some subprocess execution. An all-owned
+report must represent every inventory path, capture actual configuration and child execution,
+and validate source hashes and compatible counter locations before combining maps. Missing
+execution remains uncovered; it never removes a file from the denominator.
 
 ## `commit-hygiene.yml`
 
