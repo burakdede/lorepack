@@ -37,6 +37,11 @@ quoted identifiers and malformed blobs before database execution. The shared run
 checks exact literal values and table provenance on both backends, so rejection rules cannot
 silently narrow the supported data literals.
 
+`packages/backend-local/test/query_child.test.ts` exercises the query child's message handler
+against real read-only SQLite connections. It checks setup-error redaction, engine-level
+read/write denial, empty-result columns and exact row/byte limits. The forked SQL surface suite
+also verifies process isolation, concurrency and deadlines.
+
 | Attempt | Refused by |
 |---|---|
 | `DELETE`, `UPDATE`, `DROP` | The statement shape check: only one SELECT |
