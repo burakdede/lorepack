@@ -4,7 +4,9 @@ import {
   bm25ColumnWeights,
   escapeFtsQuery,
   type LoreNode,
+  NATIVE_UNIT_LIMITS,
   type ParsedTable,
+  type CatalogSearchHit as RuntimeCatalogSearchHit,
   type SourceLocator,
 } from '@lorepack/core';
 import { inTransaction } from '../sqlite.js';
@@ -195,6 +197,7 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
 }
 
 export interface CatalogSearchHit {
+  readonly nativeUnit?: NonNullable<RuntimeCatalogSearchHit['nativeUnit']>;
   readonly chunkId: string;
   readonly artifactId: string;
   readonly relativePath: string;
@@ -217,6 +220,7 @@ export interface CatalogSearchHit {
 }
 
 export interface CatalogSearchOptions {
+  readonly nativeUnits?: boolean;
   readonly limit?: number;
   /** Artifact statuses to include. Omitted means every status the build holds. */
   readonly statuses?: readonly string[];
@@ -257,6 +261,7 @@ export const SEARCH_TABLES: readonly string[] = [
  */
 export const RUNTIME_TABLES: readonly string[] = [
   ...SEARCH_TABLES,
+  'json_each',
   'nodes',
   'supersessions',
   'build_warnings',
@@ -308,7 +313,23 @@ export function searchCatalog(
               a.display_path  AS displayPath,
               c.heading_path  AS headingPath,
               c.text          AS text,
-              c.line_start    AS lineStart,
+              ${
+                settings.nativeUnits === true
+                  ? `c.node_ids AS unitNodeIds,
+              CASE WHEN json_array_length(c.node_ids) > 0
+                AND (SELECT count(*) FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                  ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                  WHERE unit_node.text IS NOT NULL) = json_array_length(c.node_ids)
+                AND (SELECT coalesce(sum(length(CAST(unit_node.text AS BLOB))), 0) + max(json_array_length(c.node_ids) - 1, 0) * 2
+                  FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                  ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id) <= ${NATIVE_UNIT_LIMITS.maxUtf8Bytes}
+              THEN (SELECT group_concat(body, char(10) || char(10)) FROM (
+                SELECT unit_node.text AS body FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                ORDER BY CAST(ref.key AS INTEGER))) ELSE NULL END AS unitText,
+              `
+                  : ''
+              }c.line_start    AS lineStart,
               c.line_end      AS lineEnd,
               c.page          AS page,
               json_extract(n.metadata, '$.sheet') AS sheet,
@@ -336,6 +357,14 @@ export function searchCatalog(
     displayPath: String(row.displayPath),
     headingPath: JSON.parse(String(row.headingPath)) as string[],
     text: String(row.text),
+    ...(settings.nativeUnits === true
+      ? {
+          nativeUnit: {
+            nodeIds: JSON.parse(String(row.unitNodeIds)) as string[],
+            text: row.unitText === null ? null : String(row.unitText),
+          },
+        }
+      : {}),
     excerpt: String(row.excerpt),
     page: row.page === null || row.page === undefined ? null : Number(row.page),
     sheet: row.sheet === null || row.sheet === undefined ? null : String(row.sheet),

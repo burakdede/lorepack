@@ -1,6 +1,11 @@
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { type Artifact, type LoreNode, SEARCH_QUERY_LIMITS } from '@lorepack/core';
+import {
+  type Artifact,
+  type LoreNode,
+  NATIVE_UNIT_LIMITS,
+  SEARCH_QUERY_LIMITS,
+} from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import {
@@ -86,6 +91,57 @@ async function withCatalog(
     }
   });
 }
+
+describe('native evidence units, issue698', () => {
+  it.each([
+    [NATIVE_UNIT_LIMITS.maxUtf8Bytes, 'ascii'],
+    [NATIVE_UNIT_LIMITS.maxUtf8Bytes + 1, 'ascii'],
+    [NATIVE_UNIT_LIMITS.maxUtf8Bytes, 'multibyte'],
+    [NATIVE_UNIT_LIMITS.maxUtf8Bytes + 1, 'multibyte'],
+  ] as const)(
+    'resolves a native unit only within the %i-byte boundary with %s text',
+    async (bytes, encoding) => {
+      const fill =
+        encoding === 'ascii'
+          ? 'x'.repeat(bytes - 9)
+          : `${'界'.repeat(Math.floor((bytes - 9) / 3))}${'x'.repeat((bytes - 9) % 3)}`;
+      const text = `rollback ${fill}`;
+      expect(Buffer.byteLength(text, 'utf8')).toBe(bytes);
+      const record = entry('p:policy.md', 'Policy', [text]);
+      const chunk = record.chunks[0];
+      if (chunk === undefined) throw new Error('Fixture requires a retrieval chunk.');
+      await withCatalog(
+        [{ ...record, chunks: [{ ...chunk, text: 'rollback fragment' }] }],
+        (db) => {
+          const ordinary = searchCatalog(db, 'rollback');
+          expect(ordinary[0]?.text).toBe('rollback fragment');
+          expect(ordinary[0]?.nativeUnit).toBeUndefined();
+          const closed = searchCatalog(db, 'rollback', { nativeUnits: true });
+          expect(closed[0]?.nativeUnit).toEqual({
+            nodeIds: [...chunk.nodeIds],
+            text: bytes <= NATIVE_UNIT_LIMITS.maxUtf8Bytes ? text : null,
+          });
+        },
+      );
+    },
+  );
+
+  it('preserves referenced node order and refuses missing or foreign nodes', async () => {
+    const record = entry('p:policy.md', 'Policy', ['rollback only if approved', 'do not waive']);
+    const chunk = record.chunks[0];
+    if (chunk === undefined) throw new Error('Fixture requires a retrieval chunk.');
+    const nodeIds = record.nodes.map((node) => node.id).reverse();
+    await withCatalog([{ ...record, chunks: [{ ...chunk, nodeIds }] }], (db) => {
+      expect(searchCatalog(db, 'rollback', { nativeUnits: true })[0]?.nativeUnit?.text).toBe(
+        'do not waive\n\nrollback only if approved',
+      );
+      db.prepare('UPDATE chunks SET node_ids=?').run(
+        JSON.stringify([...nodeIds, 'foreign:missing']),
+      );
+      expect(searchCatalog(db, 'rollback', { nativeUnits: true })[0]?.nativeUnit?.text).toBeNull();
+    });
+  });
+});
 
 describe('schema', () => {
   it('creates every catalog table including the FTS5 index', async () => {

@@ -7,6 +7,7 @@ import {
   type CatalogSearchHit,
   type CatalogStore,
   escapeFtsQuery,
+  NATIVE_UNIT_LIMITS,
 } from '@lorepack/core/worker';
 
 export interface D1CatalogStatementLike {
@@ -58,6 +59,8 @@ interface NodeRow {
 }
 
 interface SearchRow {
+  readonly unitNodeIds?: string;
+  readonly unitText?: string | null;
   readonly chunkId: string;
   readonly artifactId: string;
   readonly relativePath: string;
@@ -289,7 +292,26 @@ export class D1CatalogStore implements CatalogStore {
               a.display_path AS displayPath,
               c.heading_path AS headingPath,
               c.text AS text,
-              c.line_start AS lineStart,
+              ${
+                criteria.nativeUnits === true
+                  ? `c.node_ids AS unitNodeIds,
+              CASE WHEN json_array_length(c.node_ids) > 0
+                AND (SELECT count(*) FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                  ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                  AND unit_node.project_id=c.project_id AND unit_node.build_id=c.build_id
+                  WHERE unit_node.text IS NOT NULL) = json_array_length(c.node_ids)
+                AND (SELECT coalesce(sum(length(CAST(unit_node.text AS BLOB))), 0) + max(json_array_length(c.node_ids) - 1, 0) * 2
+                  FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                  ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                  AND unit_node.project_id=c.project_id AND unit_node.build_id=c.build_id) <= ${NATIVE_UNIT_LIMITS.maxUtf8Bytes}
+              THEN (SELECT group_concat(body, char(10) || char(10)) FROM (
+                SELECT unit_node.text AS body FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                AND unit_node.project_id=c.project_id AND unit_node.build_id=c.build_id
+                ORDER BY CAST(ref.key AS INTEGER))) ELSE NULL END AS unitText,
+              `
+                  : ''
+              }c.line_start AS lineStart,
               c.line_end AS lineEnd,
               c.page AS page,
               json_extract(n.metadata_json, '$.sheet') AS sheet,
@@ -321,6 +343,14 @@ export class D1CatalogStore implements CatalogStore {
       displayPath: row.displayPath,
       headingPath: JSON.parse(row.headingPath) as string[],
       text: row.text,
+      ...(criteria.nativeUnits === true
+        ? {
+            nativeUnit: {
+              nodeIds: JSON.parse(String(row.unitNodeIds)) as string[],
+              text: typeof row.unitText === 'string' ? row.unitText : null,
+            },
+          }
+        : {}),
       excerpt: row.excerpt,
       page: row.page === null ? null : Number(row.page),
       sheet: row.sheet === null ? null : String(row.sheet),
