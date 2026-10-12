@@ -88,6 +88,9 @@ const REJECTED = {
 
 const QUERY_RESULT = {
   buildId: ORDERS.buildId,
+  tableId: ORDERS.tableId,
+  queryId: `query_${'b'.repeat(64)}`,
+  provenancePrecision: 'table',
   sourceState: 'clean',
   columns: ['sku', 'qty'],
   rows: [
@@ -265,6 +268,21 @@ describe('the console', () => {
     // one thing a result count may never do.
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2 rows'));
     expect(screen.getByRole('status')).toHaveTextContent(/Truncated/);
+  });
+
+  it('shows the captured query identity and table precision without inventing row lineage', async () => {
+    renderRoute();
+    await screen.findByLabelText('SQL');
+    await userEvent.click(screen.getByRole('button', { name: 'Run query' }));
+    expect(await screen.findByText(QUERY_RESULT.queryId)).toBeInTheDocument();
+    const result = screen.getByRole('table', { name: 'Query result' }).closest('.console-result');
+    if (result === null) throw new Error('The console must contain its result.');
+    const shown = within(result as HTMLElement);
+    expect(shown.getByText(QUERY_RESULT.buildId)).toBeInTheDocument();
+    expect(shown.getByText(QUERY_RESULT.tableId)).toBeInTheDocument();
+    expect(
+      shown.getByText('Table-level; source rows and cells are not attributed.'),
+    ).toBeInTheDocument();
   });
 
   it('reports a rejection in the taxonomy\u2019s words, with its code and remediation', async () => {
