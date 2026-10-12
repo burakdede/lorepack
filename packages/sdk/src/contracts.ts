@@ -57,6 +57,7 @@ export interface SearchResult extends RuntimeIdentity {
 }
 
 export interface ContextItem {
+  nativeUnit?: { nodeIds: string[]; status: 'complete' } | undefined;
   chunkId: string;
   text: string;
   estimatedTokens: number;
@@ -66,8 +67,16 @@ export interface ContextItem {
 }
 
 export interface OmittedItem {
+  nativeUnit?: { nodeIds: string[]; status: 'omitted' } | undefined;
   chunkId: string;
-  reason: 'budget' | 'duplicate' | 'diversity' | 'superseded' | 'archived' | 'filtered';
+  reason:
+    | 'budget'
+    | 'duplicate'
+    | 'diversity'
+    | 'superseded'
+    | 'archived'
+    | 'filtered'
+    | 'structural-unit';
   estimatedTokens: number;
   locator: SourceLocator;
 }
@@ -99,7 +108,8 @@ export interface ExecutionPolicy {
     maximumItemsPerArtifact: number;
     maximumAlternatives: number;
     maximumOmissionDetails: number;
-    unit: 'whole-chunk';
+    unit: 'whole-chunk' | 'native-unit';
+    maximumNativeUnitBytes?: number | undefined;
   };
   estimator: {
     version: number;
@@ -158,7 +168,13 @@ export interface ContextBundle extends RuntimeIdentity {
     reported: number;
     truncated: boolean;
     reasons: Record<
-      'budget' | 'duplicate' | 'diversity' | 'superseded' | 'archived' | 'filtered',
+      | 'budget'
+      | 'duplicate'
+      | 'diversity'
+      | 'superseded'
+      | 'archived'
+      | 'filtered'
+      | 'structural-unit',
       number
     >;
   };

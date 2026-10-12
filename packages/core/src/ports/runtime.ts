@@ -59,12 +59,14 @@ export interface CatalogChunk {
 }
 
 export interface CatalogSearchHit extends CatalogChunk {
+  readonly nativeUnit?: { readonly nodeIds: readonly string[]; readonly text: string | null };
   /** Raw BM25 from the lexical index. Negative, and lower is better. */
   readonly bm25: number;
   readonly excerpt: string;
 }
 
 export interface CatalogSearchCriteria {
+  readonly nativeUnits?: boolean;
   readonly limit: number;
   /**
    * Whether a chunk must contain every term or only one. Defaults to every term.

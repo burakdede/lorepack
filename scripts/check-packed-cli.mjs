@@ -187,7 +187,7 @@ function freePort() {
  * The query runs in a forked child whose entry the bundle must ship as a file of its own. Every
  * other check here passes without it, which is how #639 reached a release candidate.
  */
-async function checkTableQuery(installDir, projectDir) {
+async function checkTableQuery(installDir, projectDir, nativeParagraph) {
   const entry = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');
   const archive = join(installDir, 'verified.lorepack');
   const packed = spawnSync(process.execPath, [entry, 'pack', '--out', archive], {
@@ -263,6 +263,26 @@ async function checkTableQuery(installDir, projectDir) {
   if (recovered.status !== 0 || JSON.parse(recovered.stdout).buildId !== proof.buildId)
     return [`installed imported search failed: ${recovered.stdout} ${recovered.stderr}`];
   console.log('portable build imported and read after its producer was removed');
+  const native = spawnSync(
+    process.execPath,
+    [
+      entry,
+      'export',
+      '--build',
+      proof.buildId,
+      '--task',
+      'ZX-88 emergency rollback',
+      '--budget',
+      '8000',
+      '--format',
+      'json',
+    ],
+    { cwd: consumer, encoding: 'utf8', timeout: 30_000 },
+  );
+  if (native.status !== 0 || !native.stdout.includes(nativeParagraph)) {
+    return ['installed source-free context lost its attached native qualification'];
+  }
+  console.log('imported native evidence retains its qualification without source files');
   const inspected = spawnSync(process.execPath, [entry, 'inspect', 'tables', '--json'], {
     cwd: consumer,
     encoding: 'utf8',
@@ -393,6 +413,11 @@ async function main() {
     mkdirSync(join(project, 'docs'), { recursive: true });
     copyFileSync(PDF_FIXTURE, join(project, 'docs', 'release-notes.pdf'));
     writeFileSync(join(project, 'docs', 'products.csv'), 'sku,price\nA-1,10\nB-2,25\n');
+    const nativeParagraph = `ZX-88 permits emergency rollback. ${'Review the operational conditions carefully. '.repeat(120)}ZX-88 is permitted only if owner approval is recorded; do not waive approval.`;
+    writeFileSync(
+      join(project, 'docs', 'native-permission.md'),
+      `# Emergency exception\n\n${nativeParagraph}\n`,
+    );
     for (let index = 0; index < 70; index += 1) {
       writeFileSync(
         join(project, 'docs', `policy-${index}.md`),
@@ -413,6 +438,18 @@ async function main() {
     const loaded = readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
     for (const file of loaded) problems.push(`PDF build loaded native module ${file}`);
     if (cited && loaded.length === 0) console.log('PDF build and search loaded no native module');
+
+    for (const format of ['json', 'markdown']) {
+      const payload = runInstalledCli(
+        installDir,
+        project,
+        ['export', '--task', 'ZX-88 emergency rollback', '--budget', '8000', '--format', format],
+        hookPath,
+        logPath,
+      );
+      if (!payload.includes(nativeParagraph))
+        problems.push(`packed ${format} context loses its native qualification`);
+    }
 
     for (const format of ['json', 'markdown']) {
       const payload = runInstalledCli(
@@ -446,7 +483,7 @@ async function main() {
     }
     console.log('packed context checked complete JSON/Markdown delivery and omission accounting');
 
-    problems.push(...(await checkTableQuery(installDir, project)));
+    problems.push(...(await checkTableQuery(installDir, project, nativeParagraph)));
 
     const audit = runTool('npm', ['audit', '--omit=dev', '--json'], installDir, {
       allowFailure: true,

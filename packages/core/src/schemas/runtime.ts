@@ -117,6 +117,10 @@ export const taskContextRequestSchema = z
 
 export const contextItemSchema = z
   .object({
+    nativeUnit: z
+      .object({ nodeIds: z.array(z.string().min(1)).min(1), status: z.literal('complete') })
+      .strict()
+      .optional(),
     chunkId: z.string().min(1),
     text: z.string(),
     estimatedTokens: z.int().nonnegative(),
@@ -128,8 +132,20 @@ export const contextItemSchema = z
 
 export const omittedItemSchema = z
   .object({
+    nativeUnit: z
+      .object({ nodeIds: z.array(z.string().min(1)).min(1), status: z.literal('omitted') })
+      .strict()
+      .optional(),
     chunkId: z.string().min(1),
-    reason: z.enum(['budget', 'duplicate', 'diversity', 'superseded', 'archived', 'filtered']),
+    reason: z.enum([
+      'budget',
+      'duplicate',
+      'diversity',
+      'superseded',
+      'archived',
+      'filtered',
+      'structural-unit',
+    ]),
     estimatedTokens: z.int().nonnegative(),
     locator: sourceLocatorSchema,
   })
@@ -168,6 +184,7 @@ export const contextBundleSchema = z
             superseded: z.int().nonnegative(),
             archived: z.int().nonnegative(),
             filtered: z.int().nonnegative(),
+            'structural-unit': z.int().nonnegative(),
           })
           .strict(),
       })

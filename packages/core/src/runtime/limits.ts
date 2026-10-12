@@ -40,3 +40,5 @@ export const TABLE_QUERY_LIMITS = {
 export const SEARCH_QUERY_LIMITS = {
   maxDistinctTerms: 64,
 } as const;
+
+export const NATIVE_UNIT_LIMITS = { maxUtf8Bytes: 64 * 1024 } as const;

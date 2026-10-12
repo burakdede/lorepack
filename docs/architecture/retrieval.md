@@ -7,6 +7,14 @@ adjustment, authority, superseded suppression, filters, expansion, near-duplicat
 diversity, then budget-aware packing. Steps 1 to 9 are search. Step 10 belongs to context
 assembly.
 
+Task context resolves lexical candidates to their complete recorded native nodes.
+Paragraphs and tables keep attached qualifications inside those nodes; a retrieval
+chunk is no longer presented as the complete native evidence. Bodies larger than
+65,536 UTF-8 bytes, or references that cannot resolve completely, are reported as
+`structural-unit` omissions. Budgeting can omit a whole unit, but never trim its
+condition away. Search still returns lexical excerpts. See
+[the decision and limits](../adr/0015-native-context-evidence.md).
+
 ## Where each part lives, and why
 
 | Part | Package | Why there |

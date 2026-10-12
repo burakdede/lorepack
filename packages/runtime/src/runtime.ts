@@ -167,10 +167,24 @@ class PortedRuntime implements LoreRuntime {
         const candidates = await candidatesFor(scope, request.task, {
           limit: RANKING_WEIGHTS.candidates.maximum,
           ...filtersOf(request),
+          nativeUnits: true,
         });
         const superseded = await scope.catalog.supersededArtifacts();
 
-        const report = rankWithReport(candidates.hits, {
+        const closedHits = candidates.hits.map((hit) => {
+          if (hit.nativeUnit === undefined)
+            throw new LoreError(
+              'LORE_E_SCHEMA_MISMATCH',
+              'This catalog adapter cannot resolve native evidence units.',
+              {
+                remediation: 'Use a compatible Lorepack adapter; partial chunks were not emitted.',
+              },
+            );
+          if (hit.nativeUnit.text === null) return hit;
+          const prefix = hit.headingPath.length === 0 ? '' : `${hit.headingPath.join(' > ')}\n\n`;
+          return { ...hit, text: prefix + hit.nativeUnit.text };
+        });
+        const report = rankWithReport(closedHits, {
           query: request.task,
           limit: candidates.hits.length,
           includeArchived: request.includeArchived,
@@ -181,7 +195,8 @@ class PortedRuntime implements LoreRuntime {
           ? report.dropped
               .filter(
                 ({ ranked }) =>
-                  ranked.labels.includes('archived') || ranked.labels.includes('superseded'),
+                  ranked.hit.nativeUnit?.text !== null &&
+                  (ranked.labels.includes('archived') || ranked.labels.includes('superseded')),
               )
               .map(({ ranked }) => ranked)
           : [];
@@ -212,7 +227,10 @@ class PortedRuntime implements LoreRuntime {
             candidateLimit: candidates.limit,
             candidateLimitHit: candidates.hits.length >= candidates.limit,
             candidateMatchMode: candidates.matchMode,
-            ranked: report.kept,
+            ranked: report.kept.filter((ranked) => ranked.hit.nativeUnit?.text !== null),
+            structuralOmissions: report.kept.filter(
+              (ranked) => ranked.hit.nativeUnit?.text === null,
+            ),
             dropped: report.dropped,
             suppressed,
           }),

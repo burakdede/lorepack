@@ -96,7 +96,16 @@ const catalog: CatalogStore = {
   },
   async search(_query: string, criteria: CatalogSearchCriteria) {
     criteriaSeen.push(criteria);
-    return [HIT];
+    return [
+      {
+        ...HIT,
+        ...(criteria.nativeUnits === true
+          ? {
+              nativeUnit: { nodeIds: ['n0'], text: HIT.text },
+            }
+          : {}),
+      },
+    ];
   },
   async supersededArtifacts() {
     return new Set<string>();

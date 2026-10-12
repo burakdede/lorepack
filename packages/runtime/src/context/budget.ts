@@ -18,6 +18,7 @@ export function omissionSummary(
     superseded: 0,
     archived: 0,
     filtered: 0,
+    'structural-unit': 0,
   };
   for (const item of omitted) reasons[item.reason] += 1;
   return { total: omitted.length, reported, truncated: reported < omitted.length, reasons };
@@ -86,6 +87,11 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
       allOmitted.push({
         chunkId: removed.chunkId,
         reason: 'budget',
+        ...(removed.nativeUnit === undefined
+          ? {}
+          : {
+              nativeUnit: { nodeIds: [...removed.nativeUnit.nodeIds], status: 'omitted' as const },
+            }),
         estimatedTokens: removed.estimatedTokens,
         locator: removed.locator,
       });

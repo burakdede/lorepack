@@ -35,6 +35,7 @@ it.each([
   ['retrieval', 'rankingVersion'],
   ['retrieval', 'weightsVersion'],
   ['packing', 'version'],
+  ['packing', 'maximumNativeUnitBytes'],
   ['estimator', 'version'],
   ['visibility', 'version'],
   ['serialization', 'version'],
@@ -44,6 +45,14 @@ it.each([
   const pipeline = changed[section] as Record<string, unknown>;
   pipeline[field] = Number(pipeline[field]) + 1;
   expect((await identifyExecution(changed, selection)).policyId).not.toBe(first.policyId);
+});
+
+it('requires an explicit byte limit for native-unit packing, issue698', async () => {
+  const changed = policy();
+  delete changed.packing.maximumNativeUnitBytes;
+  await expect(identifyExecution(changed, selection)).rejects.toThrow(
+    'Native-unit packing requires',
+  );
 });
 
 it('changes policy identity for resolved packing constants and actual ranking weights', async () => {

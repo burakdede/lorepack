@@ -88,7 +88,16 @@ const catalog: CatalogStore = {
   },
   async search(_query: string, criteria: CatalogSearchCriteria) {
     lastCriteria = criteria;
-    return [HIT].slice(0, criteria.limit);
+    return [
+      {
+        ...HIT,
+        ...(criteria.nativeUnits === true
+          ? {
+              nativeUnit: { nodeIds: ['n0'], text: HIT.text },
+            }
+          : {}),
+      },
+    ].slice(0, criteria.limit);
   },
   async supersededArtifacts() {
     return new Set<string>();

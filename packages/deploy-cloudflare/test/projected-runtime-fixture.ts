@@ -124,7 +124,9 @@ interface ProjectedFixtureState {
 
 let currentFixture: ProjectedFixtureState | null = null;
 
-export async function createProjectedWorkerRuntimeFixture(): Promise<{
+export async function createProjectedWorkerRuntimeFixture(
+  options: { readonly nativeText?: string; readonly chunkText?: string } = {},
+): Promise<{
   readonly buildDirectory: string;
   readonly candidateDirectory: string;
   readonly candidateReceipt: DeploymentReceipt;
@@ -145,7 +147,8 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
 
   try {
     const activeDirectory = createBuildDirectory(root, ACTIVE_BUILD, {
-      text: 'To roll back a release, activate the previous build.',
+      text: options.nativeText ?? 'To roll back a release, activate the previous build.',
+      ...(options.chunkText === undefined ? {} : { chunkText: options.chunkText }),
       tableRows: [
         ['A-1', '19.99', 'false'],
         ['A-2', '4.50', 'false'],
@@ -270,6 +273,7 @@ function createBuildDirectory(
   buildId: BuildId,
   input: {
     readonly text: string;
+    readonly chunkText?: string;
     readonly tableRows: readonly [string, string, string][];
   },
 ): string {
@@ -468,7 +472,7 @@ function createBuildDirectory(
       ARTIFACT_ID,
       '["n0"]',
       '["Rollback","Procedure"]',
-      input.text,
+      input.chunkText ?? input.text,
       16,
       'guides/rollback.md',
       3,

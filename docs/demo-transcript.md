@@ -247,8 +247,8 @@ lorepack export --task "How should the sync worker recover after a failed deploy
 # Context for: How should the sync worker recover after a failed deploy?
 
 Project **coding-project**, build `lore_<build-id>`.
-Profile **chat**, budget 24,000 estimated tokens, of which 4,183 estimated tokens used.
-Execution policy `policy_a0c6cb2f7e27d1f07a87a9ace51bf0352dca877be70cbea44acf4b283f69b904`, selection `selection_<selection-id>`.
+Profile **chat**, budget 24,000 estimated tokens, of which 4,659 estimated tokens used.
+Execution policy `policy_cecb3cf9e016907d7a7810c99c09e70cc932e4a95db8784eaa6b8930e0915747`, selection `selection_<selection-id>`.
 
 Every passage below is quoted from a document in this project, with the file and source coordinate it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.
 Search considered up to 500 candidates using any-term matching.

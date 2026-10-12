@@ -113,6 +113,28 @@
             ],
             "type": "object"
           },
+          "nativeUnit": {
+            "additionalProperties": false,
+            "properties": {
+              "nodeIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "status": {
+                "const": "complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "nodeIds",
+              "status"
+            ],
+            "type": "object"
+          },
           "text": {
             "type": "string"
           }
@@ -277,6 +299,11 @@
                   "maximum": 9007199254740991,
                   "type": "integer"
                 },
+                "maximumNativeUnitBytes": {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
                 "maximumOmissionDetails": {
                   "maximum": 9007199254740991,
                   "minimum": 0,
@@ -297,7 +324,10 @@
                   "type": "string"
                 },
                 "unit": {
-                  "const": "whole-chunk",
+                  "enum": [
+                    "whole-chunk",
+                    "native-unit"
+                  ],
                   "type": "string"
                 },
                 "version": {
@@ -549,6 +579,11 @@
               "minimum": 0,
               "type": "integer"
             },
+            "structural-unit": {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
             "superseded": {
               "maximum": 9007199254740991,
               "minimum": 0,
@@ -561,7 +596,8 @@
             "diversity",
             "superseded",
             "archived",
-            "filtered"
+            "filtered",
+            "structural-unit"
           ],
           "type": "object"
         },
@@ -647,6 +683,28 @@
             ],
             "type": "object"
           },
+          "nativeUnit": {
+            "additionalProperties": false,
+            "properties": {
+              "nodeIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "status": {
+                "const": "omitted",
+                "type": "string"
+              }
+            },
+            "required": [
+              "nodeIds",
+              "status"
+            ],
+            "type": "object"
+          },
           "reason": {
             "enum": [
               "budget",
@@ -654,7 +712,8 @@
               "diversity",
               "superseded",
               "archived",
-              "filtered"
+              "filtered",
+              "structural-unit"
             ],
             "type": "string"
           }
@@ -743,6 +802,28 @@
             "required": [
               "artifactId",
               "relativePath"
+            ],
+            "type": "object"
+          },
+          "nativeUnit": {
+            "additionalProperties": false,
+            "properties": {
+              "nodeIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "status": {
+                "const": "complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "nodeIds",
+              "status"
             ],
             "type": "object"
           },
@@ -850,6 +931,28 @@
             "required": [
               "artifactId",
               "relativePath"
+            ],
+            "type": "object"
+          },
+          "nativeUnit": {
+            "additionalProperties": false,
+            "properties": {
+              "nodeIds": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "status": {
+                "const": "complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "nodeIds",
+              "status"
             ],
             "type": "object"
           },

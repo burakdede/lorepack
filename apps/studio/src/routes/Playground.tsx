@@ -384,6 +384,7 @@ const REASONS: Record<string, string> = {
   superseded: 'superseded by another document you declared',
   archived: 'archived in your configuration',
   filtered: 'excluded by the filters on this request',
+  'structural-unit': 'complete native evidence could not be resolved within the supported limit',
 };
 
 function Omissions({
