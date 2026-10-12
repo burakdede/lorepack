@@ -4,6 +4,7 @@ import { loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { openStateStore } from '../src/services/builds.js';
 import { createRevalidator } from '../src/services/revalidate.js';
 
 /**
@@ -18,7 +19,7 @@ const CONFIG = 'version: 1\nname: revalidated\nsources:\n  - .\n';
 const CORPUS = { 'lore.yaml': CONFIG, 'a.md': '# A\n\nFirst.\n', 'b.md': '# B\n\nSecond.\n' };
 
 describe('within the interval', () => {
-  it('answers from cache and touches nothing', async () => {
+  it('answers from cache without scanning sources', async () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       const config = loadConfig({ cwd: project.root });
       await runBuild({ config, progress: new ProgressBus() });
@@ -121,5 +122,26 @@ describe('a source tree that cannot be walked', () => {
       // No throw: a read of a sealed build is never failed by the source tree (#147).
       expect(['clean', 'dirty', 'unknown']).toContain(await revalidator.freshness());
     });
+  });
+});
+
+it('revalidates unchanged sources against the rolled-back build within the interval, issue696', async () => {
+  await withTempProject({ files: CORPUS }, async (project) => {
+    const config = loadConfig({ cwd: project.root });
+    const first = await runBuild({ config, progress: new ProgressBus() });
+    writeFileSync(project.path('a.md'), '# A\n\nReplacement.\n');
+    const second = await runBuild({ config, progress: new ProgressBus() });
+    const revalidator = createRevalidator({ config, intervalMs: 5000, now: () => 1000 });
+    expect(await revalidator.freshness()).toBe('clean');
+    const state = openStateStore(project.path('.lore'));
+    try {
+      state.activate(first.buildId);
+      expect(await revalidator.freshness()).toBe('dirty');
+      expect(state.current()?.buildId).toBe(first.buildId);
+      state.activate(second.buildId);
+      expect(await revalidator.freshness()).toBe('clean');
+    } finally {
+      state.close();
+    }
   });
 });

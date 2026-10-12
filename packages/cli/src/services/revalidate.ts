@@ -1,7 +1,13 @@
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import { discover } from '@lorepack/compiler';
-import { loadSourceConfig, type ProjectConfig, type SourceState } from '@lorepack/core';
+import {
+  LORE_DIRECTORY,
+  loadSourceConfig,
+  type ProjectConfig,
+  type SourceState,
+} from '@lorepack/core';
+import { readActiveBuild } from './project.js';
 import { readFreshness } from './status.js';
 
 /**
@@ -46,6 +52,7 @@ export function createRevalidator(options: RevalidatorOptions): Revalidator {
   let cached: SourceState = 'unknown';
   let checkedAt = Number.NEGATIVE_INFINITY;
   let signature = '';
+  let describedPointer = '';
   let deepChecks = 0;
   let prescreens = 0;
   let started = false;
@@ -60,8 +67,17 @@ export function createRevalidator(options: RevalidatorOptions): Revalidator {
     async freshness(): Promise<SourceState> {
       if (options.frozen === true) return 'unknown';
 
+      let pointer: string;
+      try {
+        const active = readActiveBuild(join(options.config.projectRoot, LORE_DIRECTORY));
+        pointer = active === null ? 'none' : `${active.buildId}:${active.generation}`;
+      } catch {
+        started = false;
+        return 'unknown';
+      }
+      const pointerChanged = pointer !== describedPointer;
       const elapsed = now() - checkedAt;
-      if (started && elapsed < options.intervalMs) return cached;
+      if (started && !pointerChanged && elapsed < options.intervalMs) return cached;
 
       // The prescreen: sizes and modification times only, no file contents. It cannot
       // prove the sources are unchanged, which is why a difference sends us to the real
@@ -70,12 +86,24 @@ export function createRevalidator(options: RevalidatorOptions): Revalidator {
       prescreens += 1;
       checkedAt = now();
 
-      if (started && scanned === signature) return cached;
+      if (started && !pointerChanged && scanned === signature) return cached;
 
+      describedPointer = pointer;
       signature = scanned;
       deepChecks += 1;
       started = true;
       cached = (await readFreshness({ config: options.config })).sourceState;
+      try {
+        const active = readActiveBuild(join(options.config.projectRoot, LORE_DIRECTORY));
+        const observed = active === null ? 'none' : `${active.buildId}:${active.generation}`;
+        if (observed !== pointer) {
+          started = false;
+          return 'unknown';
+        }
+      } catch {
+        started = false;
+        return 'unknown';
+      }
       return cached;
     },
   };

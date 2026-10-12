@@ -493,7 +493,8 @@ None.
 |---|---|
 | `--build <id>` | serve this full retained build ID without checking sources |
 | `--ensure-current` | rebuild first when the sources have changed (the default) |
-| `--allow-stale` | serve the existing build even when sources changed |
+| `--follow-active` | follow activation and rollback without rebuilding; report source freshness |
+| `--allow-stale` | alias for --follow-active |
 | `--active-only` | skip source checks entirely, for pinned or CI use |
 | `--project <path>` | the project to serve |
 | `--revalidate-interval <ms>` | how often to recheck the sources while serving (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request, off never) |
