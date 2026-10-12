@@ -22,19 +22,30 @@ describe('usefulness metric definitions', () => {
   it('keeps context budget fit and omission reasons visible', () => {
     expect(
       contextBudgetFit([
-        { budget: 100, estimatedTokens: 90, omitted: [] },
+        {
+          budget: 100,
+          estimatedTokens: 90,
+          omitted: [],
+          omissionSummary: { total: 0, reported: 0, truncated: false, reasons: {} },
+        },
         {
           budget: 100,
           estimatedTokens: 100,
           omitted: [{ reason: 'budget' }, { reason: 'diversity' }],
+          omissionSummary: {
+            total: 9,
+            reported: 2,
+            truncated: true,
+            reasons: { budget: 7, diversity: 2 },
+          },
         },
       ]),
     ).toMatchObject({
       cases: 2,
       withinBudget: { numerator: 2, denominator: 2, ratio: 1 },
-      selectedTokens: 190,
-      omittedItems: 2,
-      omittedByReason: { budget: 1, diversity: 1 },
+      deliveredEstimatedTokens: 190,
+      omittedItems: 9,
+      omittedByReason: { budget: 7, diversity: 2 },
     });
   });
 
