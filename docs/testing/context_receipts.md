@@ -43,3 +43,22 @@ JSON/Markdown stdout receipt digests and byte counts. Archive/table-child/PDF ch
 `npm audit --omit=dev` reported0 vulnerabilities. The script's8 focused tests also pass.
 Hosted receipt assertions are part of the existing credentialed deployment acceptance
 flow; local emulation does not count as real hosted verification.
+
+## Combined native-evidence contract
+
+After integrating merged #698,38 focused CLI receipt/native-closure/Core/SDK parity tests
+pass. Real source-free HTTP/MCP reads at4,000 and8,000 include the exact complete paragraph
+and trailing owner-approval condition whenever delivered, allowing its canonical heading.
+At8,000 the native body must be delivered; a whole-unit budget omission is explicit when
+it cannot fit. MCP estimates include receipt metadata. The initial test incorrectly
+excluded the native heading; its expected forms now preserve both hierarchy and the
+entire paragraph. A misnamed test filter was corrected to the discovered file path.
+
+The standalone receipt schema check failed after rebase because the newly introduced
+schema still described only chunk packing. Regenerated it from current Core definitions;
+the schema check passes with native-unit packing and its declared materialization cap.
+
+The combined installed-package campaign passed145-package parity, native qualification in
+receipted source-free JSON/Markdown, archive validation, table-child/PDF checks and audit0.
+The native merge added SDK type fields that exceeded the existing source-size gate by100
+characters. Shortened duplicated source prose; the20,000-character gate remains unchanged.

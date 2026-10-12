@@ -294,7 +294,9 @@ async function checkTableQuery(installDir, projectDir, nativeParagraph) {
         '--build',
         proof.buildId,
         '--task',
-        'rollback',
+        'ZX-88 emergency rollback',
+        '--budget',
+        '8000',
         '--format',
         format,
         '--receipt',
@@ -307,6 +309,8 @@ async function checkTableQuery(installDir, projectDir, nativeParagraph) {
       },
     );
     if (exported.status !== 0) return [`installed detached export failed: ${exported.stderr}`];
+    if (!exported.stdout.includes(nativeParagraph))
+      return [`installed receipted ${format} context lost its attached qualification`];
     const receipt = JSON.parse(readFileSync(sidecar, 'utf8'));
     if (
       receipt.buildId !== proof.buildId ||

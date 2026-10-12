@@ -98,3 +98,11 @@ See the [Studio verification checklist](../testing/context_receipts.md).
 For an explicitly allowed Cloudflare browser origin, receipt-bearing responses expose
 `Lorepack-Context-Receipt` through CORS so the SDK can verify it. Disallowed origins still
 fail before retrieval; receipt opt-in does not widen the allowlist or authorization.
+
+### Native-evidence composition
+
+Receipts identify the actual emitted native-unit payload, including its resolved packing
+policy and materialization cap. The receipt reservation does not permit partial units:
+if a complete unit cannot fit, it is omitted whole and the payload reports the reason.
+Native headings can accompany their paragraphs. No receipt reconstructs evidence from
+source files or splits a paragraph to make metadata fit. See [native evidence](../adr/0015-native-context-evidence.md).

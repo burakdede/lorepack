@@ -13,16 +13,7 @@ import type {
   TaskContextRequest,
 } from './contracts.js';
 
-/**
- * A typed client for a Lorepack runtime, with no dependencies at all.
- *
- * `fetch` is standard in Node 24 and in Workers, so this installs anywhere and adds nothing
- * to a consumer's supply chain. That is the whole design brief: an agent author should be
- * able to add Lorepack without inheriting a compiler, a database driver or a schema library.
- *
- * Read-only, because the server is. There is no method here that could build, deploy or
- * edit anything, and no route exists that would answer one.
- */
+/** A read-only HTTP client using platform fetch, with zero runtime dependencies. */
 
 export interface LoreClientOptions {
   readonly buildId?: string;

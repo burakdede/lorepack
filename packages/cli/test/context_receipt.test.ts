@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { estimateTokens } from '@lorepack/compiler';
-import { loadConfig, ProgressBus } from '@lorepack/core';
+import { type ContextBundle, loadConfig, ProgressBus, verifyContextReceipt } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { expect, it } from 'vitest';
 import { LoreClient } from '../../sdk/src/index.js';
@@ -171,3 +173,91 @@ it('SDK retains and verifies exact detached HTTP bytes, issue434', async () => {
     },
   );
 });
+
+it.each(['http', 'mcp'])(
+  'keeps complete native qualifications in receipted %s output, issues434/698',
+  async (transport) => {
+    const paragraph = `ZX-88 permits emergency rollback. ${'Review the operational conditions carefully. '.repeat(120)}ZX-88 is permitted only if owner approval is recorded; do not waive approval.`;
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: combined-receipt\nsources: [docs]\n',
+          'docs/policy.md': `# Emergency exception\n\n${paragraph}\n`,
+        },
+      },
+      async (project) => {
+        const config = loadConfig({ cwd: project.root });
+        await runBuild({ config, progress: new ProgressBus() });
+        rmSync(join(project.root, 'docs'), { recursive: true });
+        const server = await startServing({
+          config,
+          host: '127.0.0.1',
+          port: 47987,
+          warn: () => {},
+        });
+        try {
+          for (const budget of [4000, 8000]) {
+            const args = { task: 'ZX-88 emergency rollback', budget, receipt: true };
+            const response = await fetch(
+              `${server.url}/${transport === 'http' ? 'v1/context' : 'mcp'}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Accept: 'application/json, text/event-stream',
+                },
+                body: JSON.stringify(
+                  transport === 'http'
+                    ? args
+                    : {
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'tools/call',
+                        params: { name: 'lore_context_for_task', arguments: args },
+                      },
+                ),
+              },
+            );
+            expect(response.status).toBe(200);
+            const emitted = await response.text();
+            let bundle: ContextBundle;
+            let payload: string;
+            let receipt: unknown;
+            if (transport === 'http') {
+              payload = emitted;
+              bundle = JSON.parse(payload);
+              receipt = JSON.parse(
+                Buffer.from(
+                  response.headers.get('Lorepack-Context-Receipt') as string,
+                  'base64url',
+                ).toString('utf8'),
+              );
+            } else {
+              const frame = emitted.split('\n').find((line) => line.startsWith('data: '));
+              const result = (
+                frame === undefined ? JSON.parse(emitted) : JSON.parse(frame.slice(6))
+              ).result;
+              expect(result.isError).not.toBe(true);
+              expect(estimateTokens(JSON.stringify(result))).toBeLessThanOrEqual(budget);
+              bundle = result.structuredContent;
+              payload = JSON.stringify({ content: result.content, structuredContent: bundle });
+              receipt = result._meta['lorepack.dev/context-receipt'];
+            }
+            expect((await verifyContextReceipt(receipt, payload)).buildId).toBe(bundle.buildId);
+            const bodies = [...bundle.overview, ...bundle.selected, ...bundle.alternatives].filter(
+              (item) => item.text.includes('ZX-88 permits'),
+            );
+            for (const item of bodies)
+              expect([paragraph, `Emergency exception\n\n${paragraph}`]).toContain(item.text);
+            if (budget === 8000) expect(bodies.length).toBeGreaterThan(0);
+            else if (bodies.length === 0)
+              expect(bundle.omissionSummary.reasons.budget).toBeGreaterThan(0);
+            expect(bundle.execution.policy.packing.unit).toBe('native-unit');
+          }
+        } finally {
+          await server.close();
+        }
+      },
+    );
+  },
+);

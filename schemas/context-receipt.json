@@ -124,6 +124,11 @@
                   "maximum": 9007199254740991,
                   "type": "integer"
                 },
+                "maximumNativeUnitBytes": {
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
                 "maximumOmissionDetails": {
                   "maximum": 9007199254740991,
                   "minimum": 0,
@@ -144,7 +149,10 @@
                   "type": "string"
                 },
                 "unit": {
-                  "const": "whole-chunk",
+                  "enum": [
+                    "whole-chunk",
+                    "native-unit"
+                  ],
                   "type": "string"
                 },
                 "version": {
