@@ -78,20 +78,20 @@ export function contextPlacement(bundles, expectedLocations, matches) {
 export function contextBudgetFit(bundles) {
   const omittedByReason = {};
   let withinBudget = 0;
-  let selectedTokens = 0;
+  let deliveredEstimatedTokens = 0;
   let omittedItems = 0;
   for (const bundle of bundles) {
     if (bundle.estimatedTokens <= bundle.budget) withinBudget += 1;
-    selectedTokens += bundle.estimatedTokens;
-    omittedItems += bundle.omitted.length;
-    for (const item of bundle.omitted) {
-      omittedByReason[item.reason] = (omittedByReason[item.reason] ?? 0) + 1;
+    deliveredEstimatedTokens += bundle.estimatedTokens;
+    omittedItems += bundle.omissionSummary.total;
+    for (const [reason, total] of Object.entries(bundle.omissionSummary.reasons)) {
+      if (total > 0) omittedByReason[reason] = (omittedByReason[reason] ?? 0) + total;
     }
   }
   return {
     cases: bundles.length,
     withinBudget: countMetric(withinBudget, bundles.length),
-    selectedTokens,
+    deliveredEstimatedTokens,
     omittedItems,
     omittedByReason,
   };
