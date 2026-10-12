@@ -67,7 +67,7 @@
     "@lorepack/parsers": "workspace:*",
     "@lorepack/runtime": "workspace:*",
     "@lorepack/test-support": "workspace:*",
-    "wrangler": "4.119.0"
+    "wrangler": "4.149.0"
   },
   "publishConfig": {
     "access": "public",

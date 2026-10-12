@@ -27,7 +27,7 @@ const ALLOWED_LICENSES = new Set([
   '(MIT OR GPL-3.0-or-later)',
 ]);
 const STALE_AFTER_DAYS = 548;
-const REPORT_DATE = '2026-08-20';
+const REPORT_DATE = '2026-10-13';
 const REPORT_DATE_TIME = `${REPORT_DATE}T00:00:00.000Z`;
 const EMPTY_AUDIT_VULNERABILITIES = {
   info: 0,
@@ -364,6 +364,15 @@ function checkAudit(report, problems) {
   if (count > 0) problems.push(`production audit reports ${count} vulnerabilities`);
 }
 
+export function checkContributorAudit(problems) {
+  try {
+    runPnpm(['audit', '--audit-level', 'high']);
+  } catch (error) {
+    console.error(error.stdout?.toString() || error.stderr?.toString() || error.message);
+    problems.push('contributor audit failed; run pnpm audit --audit-level high');
+  }
+}
+
 function checkDocs(report, problems) {
   const text = readFileSync(DOC, 'utf8');
   for (const dependency of report.dependencies) {
@@ -437,6 +446,7 @@ function main() {
   checkPublishConfig(problems);
   checkLicenses(report, problems);
   checkAudit(report, problems);
+  checkContributorAudit(problems);
   checkDocs(report, problems);
   checkReportFresh(report, problems);
   checkSbomFresh(report, problems);
@@ -450,7 +460,7 @@ function main() {
   }
 
   console.log(
-    `check:supply-chain: ${report.dependencies.length} direct dependencies, ${report.licenses.length} licenses, ${report.provenance.missing.length} missing provenance attestations, audit clean`,
+    `check:supply-chain: ${report.dependencies.length} direct dependencies, ${report.licenses.length} licenses, ${report.provenance.missing.length} missing provenance attestations, production audit clean, contributor audit below High`,
   );
 }
 

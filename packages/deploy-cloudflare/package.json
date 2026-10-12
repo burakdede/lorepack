@@ -37,6 +37,6 @@
     "directory": "packages/deploy-cloudflare"
   },
   "devDependencies": {
-    "wrangler": "4.119.0"
+    "wrangler": "4.149.0"
   }
 }

@@ -18,6 +18,9 @@ Two constraints bound every choice:
 
 - `publishConfig.provenance: true` on the public CLI package.
 - `pnpm audit --prod --audit-level moderate` reports no production vulnerabilities.
+- `pnpm audit --audit-level high` rejects High or Critical findings across the whole
+  contributor workspace, including development dependencies. Registry failures also fail
+  the gate. The dependency-health report's audit inventory remains production-only.
 - `pnpm licenses list --prod --json` and every direct dependency report contain only
   allowlisted licences.
 - npm provenance metadata is recorded for production direct dependencies where the publisher
@@ -152,6 +155,51 @@ provenance when two candidates are otherwise equivalent.
 dependencies. That is the reason the supported Node floor is 24.19.0, the first 24.x release whose
 bundled SQLite fixes the FTS5 CVEs: see
 [`docs/compatibility/sqlite-fts5.md`](../compatibility/sqlite-fts5.md).
+
+## Contributor patch versions
+
+Studio pins `vite` at 7.3.7 on the existing 7.x major. This maintained patch includes
+the published development-server fixes, including the
+[Windows file policy correction](https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff).
+Vite remains a development dependency: the shipped CLI serves built Studio assets.
+Its MIT licence and Node requirement (^20.19.0 or >=22.12.0) fit the supported Node
+24.21.0 toolchain. Vite has no install or post-install script; its build tooling
+continues to install with scripts disabled. The change does not add runtime dependencies.
+The [7.3.7 release](https://github.com/vitejs/vite/releases/tag/v7.3.7) also permits
+the maintained esbuild 0.28 patch line, removing the older build-only resolution.
+
+`@changesets/cli` 3.0.3 removes the older YAML/workspace and globbing dependency
+chains retained by 2.31.1. Two advisory-listed legacy patch versions were unavailable
+from the registry, so inventing an override would not produce a reproducible install.
+The maintained release tool supports Node 24 and pnpm 11, has an MIT licence,
+and declares no install scripts. Its
+[major release changes](https://github.com/changesets/changesets/releases/tag/@changesets%2Fcli@3.0.0)
+include an error exit for version preparation without pending changesets. Our release
+workflow requires pending changesets. Explicit `privatePackages` settings preserve
+versioning private packages without tagging them, matching the previous behavior.
+Release-plan comparison and version preparation in disposable copies verify migration.
+
+The contributor `wrangler` pins in CLI and deploy-cloudflare move together to 4.149.0.
+The [vendor release](https://github.com/cloudflare/workers-sdk/releases/tag/wrangler@4.149.0)
+includes sharp 0.35.5; its Miniflare closure also resolves undici 7.29.1. Keeping
+Cloudflare's declared closure avoids forcing replacements underneath its emulator.
+Wrangler supports Node >=22 and uses MIT OR Apache-2.0 licensing. As before, the stable
+Wrangler release declares a prerelease Miniflare dependency. Contributor native tools
+remain isolated from the published CLI, and install scripts remain disabled.
+
+The contract tool's `@modelcontextprotocol/client` pin is 2.2.0, matching the
+existing published CLI/connect packages. This MIT-licensed client supports Node >=20
+and declares no install scripts. The migration removes the older test-only client
+without changing the published dependency declarations. Existing protocol and
+transport contract tests verify compatibility with the server.
+
+The version-scoped `nanoid` override advances affected 3.x resolutions to 3.3.18
+without changing other majors. This patch satisfies the existing PostCSS range,
+is MIT-licensed, has no install scripts, and is about 25 kB unpacked. Remove the
+override when upstream dependency floors exclude the older versions. Source-map-js
+now resolves only to 1.2.2 through the maintained dependency closure, so it needs
+no override. These are contributor build dependencies, verified by Studio's build
+and browser workflows rather than added to the shipped runtime.
 
 ## Adding one
 
