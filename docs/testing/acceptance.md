@@ -925,8 +925,10 @@ Starting point: 3 source files, already set up with `lorepack init` and `lorepac
    Expect: it exits 1, the error is `LORE_E_INVALID_ARGUMENT`, stderr mentions "--task".
 4. A budget far outside the supported range is refused, and says how to mean it
    Expect: it exits 1, the error is `LORE_E_INVALID_ARGUMENT`, stderr mentions "4,000 to 40,000", "--allow-unsupported-budget".
-5. And is honoured once it is deliberate
-   Expect: it succeeds, stdout mentions "budget 400 estimated tokens".
+5. An explicit override still refuses framing that cannot fit
+   Expect: it exits 1, the error is `LORE_E_LIMIT_EXCEEDED`, stderr mentions "Mandatory context framing", "byte ceiling cannot be overridden".
+6. A deliberate larger budget is honoured within the independent byte ceiling
+   Expect: it succeeds, stdout mentions "budget 50,000 estimated tokens".
 
 ### `mcp/every-documented-resource-is-served`
 
