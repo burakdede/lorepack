@@ -88,6 +88,11 @@ Run `mise exec -- pnpm test:unit --coverage` under the supported Node 24 runtime
 the text summary and JSON report to `coverage/`; the directory is local output and is not
 committed. The coverage provider is pinned to the same version as Vitest in the workspace so
 this command exercises the configured report path rather than failing during startup.
+Direct coverage uses the patched Istanbul provider. A real executed fixture checks used,
+unused and async private methods, both async branch arms, and real type-only/barrel records.
+The patch applies through pnpm's lockfile, including frozen installs with scripts ignored.
+See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
+for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 
 `pnpm coverage:inventory` writes `coverage/owned_inventory.json` with source hashes,
 critical flags and explicit exclusion reasons. Its tracked
@@ -199,8 +204,14 @@ and collection check, but the pinned V8 mapper emitted a negative implicit-else 
 in `packages/cli/src/commands/export.ts`. Source-bound capture rejects that map before
 aggregation. Retain the raw artifacts and resolve the measurement error; clamping the
 counter does not prove either branch ran. Switching providers also requires preserving
-every executable counter: a focused Istanbul comparison omitted private-method function
-counters, including lock acquisition and reclamation. Neither result qualifies the release.
+every executable counter: the unpatched Istanbul provider omitted private-method function
+counters, including lock acquisition and reclamation, and remapping dropped genuinely empty
+source records. The pinned dependency patch corrects those omissions. A static comparison
+retains all 354 directly measured sources, loses no function line ranges and reduces no
+per-file statement/function/branch counts. The 17 configuration files require separate capture.
+All 26 export/receipt tests pass with nonnegative counters, including the formerly invalid
+branch. This focused evidence does not establish complete native measurement or release
+target attainment. Neither the old invalid V8 campaign nor static zero-hit maps qualify release.
 
 ## `commit-hygiene.yml`
 

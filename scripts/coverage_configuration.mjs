@@ -53,7 +53,7 @@ export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory
     test: {
       projects,
       coverage: {
-        provider: 'v8',
+        provider: 'istanbul',
         enabled: true,
         include: inventory.included.map((entry) => entry.path),
         exclude: [],
