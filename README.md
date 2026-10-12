@@ -476,6 +476,8 @@ The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
 The test toolchain is outside the published runtime dependencies; see the
 [CI guide](docs/architecture/ci.md) for its regression checks.
+Studio development uses Vite 7.3.5. Users receive Studio's built assets in the CLI;
+see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 
 ## License
 

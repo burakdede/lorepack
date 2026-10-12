@@ -153,6 +153,16 @@ dependencies. That is the reason the supported Node floor is 24.19.0, the first 
 bundled SQLite fixes the FTS5 CVEs: see
 [`docs/compatibility/sqlite-fts5.md`](../compatibility/sqlite-fts5.md).
 
+## Contributor patch versions
+
+Studio pins `vite` at 7.3.5 on the existing 7.x major. This maintained patch includes
+the published development-server fixes, including the
+[Windows file policy correction](https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff).
+Vite remains a development dependency: the shipped CLI serves built Studio assets.
+Its MIT licence and Node requirement (^20.19.0 or >=22.12.0) fit the supported Node
+24.21.0 toolchain. Vite has no install or post-install script; its build tooling
+continues to install with scripts disabled. The change does not add runtime dependencies.
+
 ## Adding one
 
 Before adding a dependency, check and record: last release, open CVEs, licence, install
