@@ -567,6 +567,8 @@ Keep protocol SDK loading inside the handlers that use it.
 Published CLI builds preserve that boundary with shared ESM chunks.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
+Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
+tests. See the [CI contract](docs/architecture/ci.md) for the checked files and native matrix.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
 SQLite projection fixtures seed atomically while retaining their original query assertions and deadlines.
