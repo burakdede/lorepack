@@ -139,10 +139,10 @@ acquisition re-reads the pointer and closes any database no request holds except
 one (#566). Before that, a long-running `lorepack dev` kept one database open per rebuild, and
 a pruned build's file stayed open, its space never freed and, on Windows, undeletable.
 
-One gap remains by design: if the pointer moves and no request arrives before `lorepack prune`
-runs, the previous build is still open, since nothing in the server observes the move until a
-request does. On POSIX the delete succeeds and the space is freed at the next request; on
-Windows the delete of that one build fails until then.
+If the pointer moves before another request arrives, the previous idle catalog remains
+owned by the runtime. Its reader record keeps that build and its objects out of cleanup on
+every OS. The next acquisition or runtime shutdown closes the connection and releases that
+record, after which a subsequent prune can reclaim it.
 
 ## Project lock
 
@@ -350,3 +350,26 @@ other project.
 `describeTable` is the required first step, not merely the preferred one. Table and column
 names are generated, so a query written against the source's names does not run, and the
 `sqlName` fields a description returns are the only place those generated names appear.
+
+## Reader ownership and cleanup
+
+Local runtime acquisition holds `.lore/read-lock` while capturing the pointer, opening
+its catalog and publishing a private ownership record under `.lore/readers/`. Cleanup
+holds the same short guard around its final reference check and deletion. This closes
+the registration/deletion race without holding the guard during retrieval or preventing
+activation while A still has readers.
+
+Each acquired handle protects its build and normalized objects until release. A cached
+idle SQLite connection retains one ownership record until it closes or transfers ownership
+to its next request. This matters on Windows, where an open file cannot be deleted.
+`prune` reports open runtime references alongside its usual retention window. An idle
+runtime may therefore postpone deletion until it reads another build or closes.
+
+Records use an unpredictable token plus PID, native process-start identity and host.
+Cleanup may reclaim a proven dead or reused PID, but preserves foreign hosts and unknown
+start identities. A malformed published record refuses cleanup rather than guessing.
+Atomic-write leftovers never represent successful acquisition. These records are operational
+ownership, excluded from build identity and packages; they are not credentials or sources.
+
+This local protocol does not yet establish remote read-lifetime protection. Remote cleanup
+coordination and explicit selected-server ownership remain part of #439.

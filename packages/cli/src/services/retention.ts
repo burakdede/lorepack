@@ -1,6 +1,10 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { openReadOnly } from '@lorepack/backend-local';
+import {
+  openReadOnly,
+  type ProtectedReadBuild,
+  protectedReadBuilds,
+} from '@lorepack/backend-local';
 import { type BuildId, type BuildSummary, count } from '@lorepack/core';
 import { buildDirectory } from './builds.js';
 
@@ -16,6 +20,7 @@ import { buildDirectory } from './builds.js';
 export const DEFAULT_KEEP_PREVIOUS = 5;
 
 export interface RetentionPlan {
+  readonly protectedReads?: readonly ProtectedReadBuild[];
   readonly keep: readonly BuildId[];
   readonly remove: readonly BuildId[];
   readonly objectsToRemove: readonly string[];
@@ -42,6 +47,8 @@ export function planRetention(
     if (build.state === 'failed') continue;
     keep.add(build.buildId);
   }
+  const protectedReads = protectedReadBuilds(loreDirectory);
+  for (const reference of protectedReads) keep.add(reference.buildId);
 
   const remove = ordered.map((build) => build.buildId).filter((id) => !keep.has(id));
 
@@ -59,6 +66,7 @@ export function planRetention(
   }
 
   return {
+    protectedReads,
     keep: [...keep],
     remove,
     objectsToRemove: [...doomed].sort(),
@@ -87,6 +95,7 @@ export function reconcileRetention(
   active: BuildId | null,
   keepPrevious: number,
 ): RetentionPlan {
+  protectedReadBuilds(loreDirectory, true);
   const fresh = new Set(planRetention(loreDirectory, builds, active, keepPrevious).remove);
   const remove = preview.remove.filter((id) => fresh.has(id) && id !== active);
   const removing = new Set<string>(remove);
@@ -97,6 +106,7 @@ export function reconcileRetention(
   }
 
   return {
+    protectedReads: protectedReadBuilds(loreDirectory),
     keep: builds.map((build) => build.buildId).filter((id) => !removing.has(id)),
     remove,
     objectsToRemove: preview.objectsToRemove.filter((hash) => !referenced.has(hash)),
@@ -139,8 +149,12 @@ export function applyRetention(loreDirectory: string, plan: RetentionPlan): void
 }
 
 export function renderRetentionPlan(plan: RetentionPlan): string {
+  const references = (plan.protectedReads ?? []).map(
+    ({ buildId, readers }) => `  ${buildId}: kept by ${count(readers, 'open runtime reference')}`,
+  );
+  const retained = references.length === 0 ? '' : `\n\n${references.join('\n')}`;
   if (plan.remove.length === 0) {
-    return `Nothing to remove. ${count(plan.keep.length, 'build')} retained.`;
+    return `Nothing to remove. ${count(plan.keep.length, 'build')} retained.${retained}`;
   }
   const lines = [
     `Removing ${count(plan.remove.length, 'build')}, keeping ${plan.keep.length}:`,
@@ -149,7 +163,7 @@ export function renderRetentionPlan(plan: RetentionPlan): string {
   for (const id of plan.remove) lines.push(`  - ${id}`);
   lines.push('', `  ${count(plan.objectsToRemove.length, 'unreferenced object')}`);
   lines.push(`  about ${Math.round(plan.bytesFreed / 1024)} KB freed`);
-  return lines.join('\n');
+  return `${lines.join('\n')}${retained}`;
 }
 
 function objectHashesOf(loreDirectory: string, buildId: BuildId): string[] {

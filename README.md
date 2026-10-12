@@ -237,6 +237,10 @@ lorepack rollback
 lorepack status
 ```
 
+Local `prune` preserves acquired reads and open runtime references, including normalized
+objects shared with retained builds. Its plan identifies those references. A running server
+may postpone deletion until it releases the catalog or closes.
+
 Rollback points at an existing immutable build. It does not recompile the sources, and it
 works after the source directory and parser cache are removed. Keep `lore.yaml` and `.lore/`:
 they identify the project and hold its retained builds and content objects. A missing or

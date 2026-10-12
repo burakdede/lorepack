@@ -64,6 +64,11 @@ export {
 } from './migrations-path.js';
 export { FileObjectStore } from './object-store.js';
 export {
+  type ProtectedReadBuild,
+  protectedReadBuilds,
+  withReadReferenceLock,
+} from './read_references.js';
+export {
   createLocalRuntimeBackend,
   type LocalRuntimeBackend,
   type LocalRuntimeOptions,
