@@ -14,6 +14,7 @@ import {
   RUNTIME_TOKEN_OVERLAP_MS,
   RUNTIME_TOKEN_PREFIX,
   type RuntimeAuthDatabaseLike,
+  remoteMutationCompletionUnknown,
   revokeRuntimeTokens,
   rotateRuntimeTokenHash,
   runProjectionMigrations,
@@ -1269,6 +1270,14 @@ export function renderWranglerSqlBatch(statements: readonly string[]): string {
   return statements.map(terminateSql).join('\n');
 }
 
+export function isWranglerRemoteMutation(args: readonly string[]): boolean {
+  return (
+    args.includes('--remote') &&
+    ((args[0] === 'd1' && args[1] === 'execute' && args.includes('--file')) ||
+      (args[0] === 'r2' && args[1] === 'object' && (args[2] === 'put' || args[2] === 'delete')))
+  );
+}
+
 export function isRetryableWranglerRemoteD1Failure(text: string): boolean {
   return text.includes('fetch failed') || /\bcode\b[^\d]*7500\b/.test(text);
 }
@@ -1311,6 +1320,7 @@ async function execWrangler(
       return { stdout };
     } catch (cause) {
       const failure = wranglerExecFailure(cause);
+      if (isWranglerRemoteMutation(args)) throw remoteMutationCompletionUnknown(failure);
       lastFailure = failure;
       if (attempt >= attempts || !isRetryableWranglerRemoteD1Failure(failure.message)) {
         throw failure;
@@ -1329,7 +1339,7 @@ async function execWranglerSqlFile(
   const path = tempPath('lore-target-d1-execute-', 'statement.sql');
   try {
     writeFileSync(path, sql, 'utf8');
-    return await execWrangler(bin, [
+    const result = await execWrangler(bin, [
       'd1',
       'execute',
       databaseName,
@@ -1338,6 +1348,12 @@ async function execWranglerSqlFile(
       '--file',
       path,
     ]);
+    try {
+      parseWranglerJson(result.stdout);
+    } catch (cause) {
+      throw remoteMutationCompletionUnknown(cause);
+    }
+    return result;
   } finally {
     rmSync(path, { force: true });
   }
