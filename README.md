@@ -345,7 +345,8 @@ parsers), compiler version, configuration, and structure. The
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
 Newly compiled builds retain the exact identity inputs in `reports/build-id-inputs.json`.
-These support independent verification without returning to live sources.
+These support independent verification without returning to live sources. Canonical hashing
+uses the same byte serialization in local Node and the portable Worker-safe core.
 
 Archive verification requires a compatible manifest, catalog and complete identity inputs.
 It recomputes catalog roots and the build ID, checks required content-addressed objects,
