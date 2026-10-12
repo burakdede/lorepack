@@ -1,0 +1,28 @@
+diff --git a/dist/provider.js b/dist/provider.js
+index 354c131859a3cc4d6ab4ee771892c39ef45d9d16..12a83b241ab3e97d726cf3b7574568fa863d2c48 100644
+--- a/dist/provider.js
++++ b/dist/provider.js
+@@ -988,6 +988,7 @@ function requireVisitor () {
+ 	    ExportDefaultDeclaration: entries(), // ignore processing only
+ 	    ExportNamedDeclaration: entries(), // ignore processing only
+ 	    ClassMethod: entries(coverFunction),
++	    ClassPrivateMethod: entries(coverFunction),
+ 	    ClassDeclaration: entries(parenthesizedExpressionProp('superClass')),
+ 	    ClassProperty: entries(coverClassPropDeclarator),
+ 	    ClassPrivateProperty: entries(coverClassPropDeclarator),
+@@ -3745,7 +3746,14 @@ class IstanbulCoverageProvider extends BaseCoverageProvider {
+ }
+ async function transformCoverage(coverageMap) {
+ 	const sourceMapStore = libSourceMaps.createSourceMapStore();
+-	return await sourceMapStore.transformCoverage(coverageMap);
++	const transformed = await sourceMapStore.transformCoverage(coverageMap);
++	for (const filename of coverageMap.files()) {
++		const map = coverageMap.fileCoverageFor(filename).toJSON();
++		if (Object.keys(map.s).length === 0 && Object.keys(map.f).length === 0 && Object.keys(map.b).length === 0) {
++			transformed.addFileCoverage({ ...map, path: removeQueryParameters(map.path) });
++		}
++	}
++	return transformed;
+ }
+ /**
+ * Remove possible query parameters from filenames

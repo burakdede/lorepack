@@ -673,6 +673,30 @@
       }
     },
     {
+      "name": "@vitest/coverage-istanbul",
+      "specifiers": [
+        "4.1.11"
+      ],
+      "dependencyTypes": [
+        "devDependencies"
+      ],
+      "references": [
+        "package.json:devDependencies"
+      ],
+      "latestVersion": "5.0.4",
+      "pinnedPublishedAt": "2026-08-18T14:27:13.693Z",
+      "latestReleaseAt": "2026-10-12T09:45:39.912Z",
+      "daysSinceLastRelease": 0,
+      "license": "MIT",
+      "provenance": {
+        "status": "not-required",
+        "reason": "not in the production direct dependency set"
+      },
+      "health": {
+        "status": "current"
+      }
+    },
+    {
       "name": "@vitest/coverage-v8",
       "specifiers": [
         "4.1.11"
