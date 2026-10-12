@@ -14,6 +14,7 @@
 //                                                        @lorepack/cli@0.1.0 (no lockfile
 //                                                        comparison: the checkout may differ)
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   existsSync,
@@ -283,6 +284,48 @@ async function checkTableQuery(installDir, projectDir, nativeParagraph) {
     return ['installed source-free context lost its attached native qualification'];
   }
   console.log('imported native evidence retains its qualification without source files');
+  for (const format of ['json', 'markdown']) {
+    const sidecar = join(installDir, `imported-${format}.receipt.json`);
+    const exported = spawnSync(
+      process.execPath,
+      [
+        entry,
+        'export',
+        '--build',
+        proof.buildId,
+        '--task',
+        'ZX-88 emergency rollback',
+        '--budget',
+        '8000',
+        '--format',
+        format,
+        '--receipt',
+        sidecar,
+      ],
+      {
+        cwd: consumer,
+        encoding: 'utf8',
+        timeout: 30_000,
+      },
+    );
+    if (exported.status !== 0) return [`installed detached export failed: ${exported.stderr}`];
+    if (!exported.stdout.includes(nativeParagraph))
+      return [`installed receipted ${format} context lost its attached qualification`];
+    const receipt = JSON.parse(readFileSync(sidecar, 'utf8'));
+    if (
+      receipt.buildId !== proof.buildId ||
+      receipt.payloadFormat !== format ||
+      receipt.requestRetained !== false ||
+      receipt.request !== undefined ||
+      receipt.payloadRetained !== false ||
+      receipt.payloadBytes !== Buffer.byteLength(exported.stdout, 'utf8') ||
+      receipt.payloadDigest !== createHash('sha256').update(exported.stdout).digest('hex')
+    ) {
+      return [`installed ${format} receipt does not identify exact source-free bytes`];
+    }
+  }
+  console.log('detached JSON/Markdown receipts match source-free imported export bytes');
+
   const inspected = spawnSync(process.execPath, [entry, 'inspect', 'tables', '--json'], {
     cwd: consumer,
     encoding: 'utf8',

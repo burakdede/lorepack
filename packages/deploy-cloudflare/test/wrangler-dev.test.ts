@@ -8,10 +8,12 @@ import {
   type BuildManifest,
   hashBytes,
   type SourceReadResult,
+  verifyContextReceipt,
 } from '@lorepack/core';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Unstable_DevWorker, unstable_dev } from 'wrangler';
+import { PROJECTION_MIGRATIONS } from '../src/projection-migrations.js';
 import { r2ObjectKey } from '../src/r2-keys.js';
 
 const BUILD = `lore_${'a'.repeat(64)}`;
@@ -51,7 +53,7 @@ const MANIFEST: BuildManifest = {
     objects: '4'.repeat(64),
   },
   capabilities: ['lexical-search', 'structured-context', 'table-query'],
-  counts: { artifacts: 1, nodes: 2, chunks: 0, tables: 1, tableRows: 2 },
+  counts: { artifacts: 1, nodes: 2, chunks: 1, tables: 1, tableRows: 2 },
   warnings: [],
 };
 
@@ -201,6 +203,7 @@ CREATE TABLE table_columns (
   max_value TEXT,
   PRIMARY KEY (project_id, build_id, table_id, ordinal)
 );
+${PROJECTION_MIGRATIONS[0]?.statements.filter((statement) => /^CREATE (?:TABLE IF NOT EXISTS (?:chunks|supersessions) \(|VIRTUAL TABLE IF NOT EXISTS chunks_fts )/.test(statement)).join(';\n')};
 INSERT INTO active_build (id, build_id, generation)
 VALUES (1, '${BUILD}', 7);
 INSERT INTO build_manifests (project_id, build_id, manifest_json)
@@ -240,6 +243,10 @@ INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, 
 VALUES
   ('n0', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 0, NULL, 'To roll back a release, activate the previous build.', '["Rollback"]', 3, 3),
   ('n1', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 1, NULL, 'Tell the team what changed after the rollback.', '["Rollback"]', 5, 5);
+INSERT INTO chunks (id, project_id, build_id, artifact_id, node_ids, heading_path, text, estimated_tokens, relative_path, line_start, line_end)
+VALUES ('chunk-rollback', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', '["n0","n1"]', '["Rollback"]', 'To roll back a release, activate the previous build. Tell the team what changed after the rollback.', 25, '${ARTIFACT_PATH}', 3, 5);
+INSERT INTO chunks_fts (project_id, build_id, chunk_id, artifact_id, status, authority, path, title, heading, body)
+VALUES ('${PROJECT}', '${BUILD}', 'chunk-rollback', '${ARTIFACT_ID}', 'active', 50, '${ARTIFACT_PATH}', 'Rollback', 'Rollback', 'To roll back a release, activate the previous build. Tell the team what changed after the rollback.');
 INSERT INTO tables (id, project_id, build_id, artifact_id, name, sheet, sql_name, row_count, relative_path, line_start, line_end, cell_range, metadata_json)
 VALUES
   ('${TABLE_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'Products', 'Products', '${TABLE_SQL}', 2, '${ARTIFACT_PATH}', 1, 4, 'A1:B3', '{}'),
@@ -470,3 +477,55 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     expect(writes.map((response) => response.status)).toEqual([404, 404]);
   }, 120_000);
 });
+
+it.each(['http', 'mcp'])(
+  'verifies detached %s receipts in actual workerd, issue434',
+  async (transport) => {
+    if (worker === null) throw new Error('Worker setup did not run');
+    const args = { task: 'rollback', buildId: BUILD, budget: 4000, receipt: true };
+    const response = await worker.fetch(transport === 'http' ? '/v1/context' : '/mcp', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'lore_context_for_task',
+      },
+      body: JSON.stringify(
+        transport === 'http'
+          ? args
+          : {
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'tools/call',
+              params: { name: 'lore_context_for_task', arguments: args, _meta: envelope },
+            },
+      ),
+    });
+    expect(response.status).toBe(200);
+    let payload: string;
+    let receipt: unknown;
+    if (transport === 'http') {
+      payload = await response.text();
+      const header = response.headers.get('Lorepack-Context-Receipt');
+      expect(header).not.toBeNull();
+      receipt = JSON.parse(Buffer.from(header as string, 'base64url').toString('utf8'));
+    } else {
+      const frame = await decodeMcp(response);
+      const result = frame.result as {
+        content: unknown;
+        structuredContent: unknown;
+        _meta: Record<string, unknown>;
+      };
+      payload = JSON.stringify({
+        content: result.content,
+        structuredContent: result.structuredContent,
+      });
+      receipt = result._meta['lorepack.dev/context-receipt'];
+    }
+    const verified = await verifyContextReceipt(receipt, payload);
+    expect(verified.buildId).toBe(BUILD);
+    expect(verified.requestRetained).toBe(false);
+  },
+);

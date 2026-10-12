@@ -137,3 +137,18 @@ describe('the panel', () => {
     expect(screen.getByRole('tab', { name: 'HTTP' })).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+it.each([false, true])(
+  'preserves opt-in receipt capture %s in every equivalent, issue434',
+  (captureRequest) => {
+    const request = { task: 'rollback', profile: 'agent', receipt: { captureRequest } };
+    const forms = contextEquivalents(request, ORIGIN);
+    expect(forms.cli).toContain(
+      '--format json --output context.json --receipt context-receipt.json',
+    );
+    expect(forms.cli?.includes('--capture-request')).toBe(captureRequest);
+    expect(forms.http).toContain('--output context.json --dump-header context.headers');
+    expect(curlBody(forms.http)).toEqual(request);
+    expect(forms.mcp.arguments).toEqual(request);
+  },
+);

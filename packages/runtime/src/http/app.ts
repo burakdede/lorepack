@@ -2,6 +2,7 @@ import {
   type BuildId,
   type BuildSelection,
   buildSelectionSchema,
+  createContextReceipt,
   forClient,
   LoreError,
   type LoreRuntime,
@@ -492,11 +493,34 @@ export function createApiApp(options: ApiOptions): Hono {
     ),
   );
 
-  app.post('/v1/context', async (context) =>
-    answer(context, async () =>
-      options.runtime.contextForTask(await body(context, taskContextRequestSchema, maxBytes)),
-    ),
-  );
+  app.post('/v1/context', async (context) => {
+    try {
+      const { receipt: requested, ...request } = await body(
+        context,
+        taskContextRequestSchema,
+        maxBytes,
+      );
+      const bundle = await options.runtime.contextForTask({ ...request, receipt: requested });
+      const payload = JSON.stringify(bundle);
+      if (requested !== undefined && requested !== false) {
+        const receipt = await createContextReceipt({
+          bundle,
+          payload,
+          format: 'json',
+          captureRequest: typeof requested === 'object' && requested.captureRequest,
+        });
+        const bytes = new TextEncoder().encode(JSON.stringify(receipt));
+        const encoded = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''))
+          .replaceAll('+', '-')
+          .replaceAll('/', '_')
+          .replace(/=+$/, '');
+        context.header('Lorepack-Context-Receipt', encoded);
+      }
+      return context.body(payload, 200, { 'Content-Type': 'application/json; charset=UTF-8' });
+    } catch (error) {
+      return failure(context, error, statusFor(error));
+    }
+  });
 
   /**
    * The artifact is a path parameter, so it arrives as text. It is looked up in the build

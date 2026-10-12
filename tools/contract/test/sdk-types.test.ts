@@ -1,6 +1,7 @@
 import type {
   BuildDescription as CoreBuildDescription,
   ContextBundle as CoreContextBundle,
+  ContextReceipt as CoreContextReceipt,
   SearchRequest as CoreSearchRequest,
   SearchResult as CoreSearchResult,
   SourceLocator as CoreSourceLocator,
@@ -12,6 +13,7 @@ import type {
 import type {
   BuildDescription as SdkBuildDescription,
   ContextBundle as SdkContextBundle,
+  ContextReceipt as SdkContextReceipt,
   SearchRequest as SdkSearchRequest,
   SearchResult as SdkSearchResult,
   SourceLocator as SdkSourceLocator,
@@ -47,6 +49,7 @@ describe('the SDK mirrors the server contracts exactly', () => {
   it('for every response shape', () => {
     assertExact<Exact<SdkSearchResult, CoreSearchResult>>(true);
     assertExact<Exact<SdkContextBundle, CoreContextBundle>>(true);
+    assertExact<Exact<SdkContextReceipt, CoreContextReceipt>>(true);
     assertExact<Exact<SdkBuildDescription, CoreBuildDescription>>(true);
     assertExact<Exact<SdkSourceReadResult, CoreSourceReadResult>>(true);
     assertExact<Exact<SdkTableDescription, CoreTableDescription>>(true);

@@ -1,6 +1,7 @@
 export * from './build.js';
 export * from './common.js';
 export * from './config.js';
+export * from './context_receipt.js';
 export * from './diff.js';
 export * from './doctor.js';
 export * from './execution.js';

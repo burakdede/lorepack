@@ -202,6 +202,16 @@ the same paragraph or table. Units that cannot resolve or fit are explicitly omi
 This does not infer qualifications across separate documents. See
 [the boundaries and limits](docs/adr/0015-native-context-evidence.md).
 
+HTTP and MCP task requests can opt into a detached receipt identifying the exact
+emitted content bytes and build. Receipt creation does not enable query logging
+or prove model use. See [receipt boundaries and retention](docs/architecture/context_receipts.md).
+CLI exports write the same detached contract with `--receipt <file>`; add
+`--capture-request` only when the receipt should retain the normalized task.
+The SDK returns verified receipt and original bytes with `contextForTaskWithReceipt`;
+Studio offers opt-in receipts and separate downloads for the exact context and receipt.
+Receipts work on local and Cloudflare runtimes, including explicitly allowed browser origins.
+Receipted context uses the same complete native units and whole-unit budget omissions.
+
 ### 4. Serve and connect
 
 Use `dev` while editing sources. It rebuilds after changes and keeps Studio, HTTP, and MCP

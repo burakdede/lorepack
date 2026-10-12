@@ -4,8 +4,10 @@ import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import {
   type ContextProfile,
   contextProfileSchema,
+  createContextReceipt,
   LoreError,
   loadProjectConfig,
+  sanitizeForTerminal,
   writeFileAtomic,
 } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
@@ -38,6 +40,11 @@ export function exportCommand(): CommandDefinition {
       { flags: '--budget <tokens>', description: 'estimated token budget, overriding the profile' },
       { flags: '--format <format>', description: 'markdown or json (default markdown)' },
       { flags: '--output <file>', description: 'write to a file instead of stdout' },
+      { flags: '--receipt <file>', description: 'write a detached receipt for the exported bytes' },
+      {
+        flags: '--capture-request',
+        description: 'include normalized task and filters in the receipt',
+      },
       { flags: '--force', description: 'overwrite an existing output file' },
       {
         flags: '--include-archived',
@@ -60,6 +67,31 @@ export function exportCommand(): CommandDefinition {
       const format = parseFormat(flags.format);
       const profile = parseProfile(flags.profile);
       const output = typeof flags.output === 'string' ? absolute(flags.output, config) : null;
+      const receipt = typeof flags.receipt === 'string' ? absolute(flags.receipt, config) : null;
+      if (flags.receipt === '' || (flags.captureRequest === true && receipt === null)) {
+        throw new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          '--capture-request requires --receipt <file>.',
+          {
+            remediation: 'Choose a receipt filename, or omit request capture.',
+          },
+        );
+      }
+      if (receipt !== null && receipt === output) {
+        throw new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          'Output and receipt must use distinct paths.',
+          {
+            remediation: 'Choose a separate receipt filename.',
+          },
+        );
+      }
+      if (receipt !== null && existsSync(receipt) && flags.force !== true) {
+        throw new LoreError('LORE_E_INVALID_ARGUMENT', `${flags.receipt} already exists.`, {
+          remediation: 'Pass --force to overwrite it, or choose another --receipt path.',
+          subject: String(flags.receipt),
+        });
+      }
       if (output !== null && existsSync(output) && flags.force !== true) {
         throw new LoreError('LORE_E_INVALID_ARGUMENT', `${flags.output} already exists.`, {
           remediation: 'Pass --force to overwrite it, or choose another --output path.',
@@ -87,6 +119,9 @@ export function exportCommand(): CommandDefinition {
           includeArchived: flags.includeArchived === true,
           allowUnsupportedBudget: flags.allowUnsupportedBudget === true,
           ...(flags.budget === undefined ? {} : { budget: parseBudget(flags.budget) }),
+          ...(receipt === null
+            ? {}
+            : { receipt: { captureRequest: flags.captureRequest === true } }),
         });
 
         const rendered =
@@ -98,7 +133,25 @@ export function exportCommand(): CommandDefinition {
                 moreCommand: moreCommandFor(task),
               });
 
+        const emitted =
+          output !== null
+            ? rendered
+            : context.options.json
+              ? `${JSON.stringify(bundle, null, 2)}\n`
+              : `${context.streams.isTty ? sanitizeForTerminal(rendered.trimEnd()) : rendered.trimEnd()}\n`;
+        const detached =
+          receipt === null
+            ? null
+            : await createContextReceipt({
+                bundle,
+                payload: emitted,
+                format: output === null && context.options.json ? 'json' : format,
+                captureRequest: flags.captureRequest === true,
+              });
+
         if (output === null) {
+          if (receipt !== null && detached !== null)
+            writeFileAtomic(receipt, JSON.stringify(detached));
           // stdout carries the export and nothing else, so `lorepack export ... > file.md` and
           // `--output file.md` produce the same bytes.
           return { human: rendered.trimEnd(), json: bundle, verbatim: true };
@@ -107,6 +160,8 @@ export function exportCommand(): CommandDefinition {
         // Atomic, because a half-written context file that looks complete is worse than no
         // file: a person would paste it without noticing.
         writeFileAtomic(output, rendered);
+        if (receipt !== null && detached !== null)
+          writeFileAtomic(receipt, JSON.stringify(detached));
         context.warn(
           `Wrote ${output}\n  ${bundle.estimatedTokens} estimated tokens of ${bundle.budget}, ${bundle.citations.length} citations, ${bundle.omissionSummary.total} omitted.\n`,
         );

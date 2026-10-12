@@ -129,6 +129,7 @@ export interface ExecutionPolicy {
     format: 'bounded-supported-formats';
     maximumBytes: number;
     maximumProjectNameLength: number;
+    receipt?: { version: 1; maximumBytes: 4096; captureRequest: boolean } | undefined;
   };
 }
 
@@ -144,6 +145,24 @@ export interface ExecutionIdentity {
   selectionId: string;
   policy: ExecutionPolicy;
   selection: ExecutionSelection;
+}
+
+export interface ContextReceipt extends RuntimeIdentity {
+  receiptVersion: 1;
+  canonicalizationVersion: 1;
+  receiptId: string;
+  boundary: 'lorepack-emitted-content';
+  assurance: 'integrity-only';
+  buildId: string;
+  requestDigest: string;
+  requestRetained: boolean;
+  request?: ExecutionSelection | undefined;
+  execution: { policyId: string; selectionId: string; policy: ExecutionPolicy };
+  evidencePrecision: 'declared-per-item';
+  payloadFormat: 'json' | 'markdown' | 'mcp-content';
+  payloadDigest: string;
+  payloadBytes: number;
+  payloadRetained: false;
 }
 
 export interface ContextBundle extends RuntimeIdentity {
@@ -291,6 +310,7 @@ export interface SearchRequest {
 export interface TaskContextRequest {
   buildId?: string | undefined;
   task: string;
+  receipt?: boolean | { captureRequest?: boolean | undefined } | undefined;
   profile?: ContextProfile | undefined;
   budget?: number | undefined;
   /** Permits a budget outside the supported 4,000 to 40,000 range. */

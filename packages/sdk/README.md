@@ -60,6 +60,7 @@ const bundle = await selected.contextForTask({ task: 'rollback procedure' });
 | `describeBuild()` | `GET /v1/build` |
 | `search(request)` | `POST /v1/search` |
 | `contextForTask(request)` | `POST /v1/context` |
+| `contextForTaskWithReceipt(request)` | `POST /v1/context` |
 | `readSource(artifactId, options)` | `GET /v1/sources/:artifactId` |
 | `listTables()` | `GET /v1/tables` |
 | `describeTable(tableId)` | `GET /v1/tables/:tableId` |
@@ -116,3 +117,20 @@ policy/request descriptors. Equivalent defaults agree across local and remote ru
 corpus bindings remain part of selection identity. These IDs describe context selection.
 They do not retain emitted bytes or promise downstream model-answer replay. See the
 [execution contract](../../docs/architecture/retrieval.md#execution-identity).
+
+## Detached context receipts
+
+`contextForTaskWithReceipt` opts into a detached receipt and returns `{ bundle, receipt,
+payload }`. It verifies the exact HTTP response text against the receipt, captured build,
+resolved policy and selection using standard Web Crypto. Missing metadata, unsupported
+receipt versions or changed bytes fail with `LORE_E_SCHEMA_MISMATCH`; POSTs are never retried.
+Save `payload` unchanged alongside the receipt. Re-serializing `bundle` can change its bytes.
+
+```ts
+const { bundle, receipt, payload } = await lore.contextForTaskWithReceipt({ task: 'rollback' });
+```
+
+Request text is redacted from the receipt by default. Set `receipt: { captureRequest: true }`
+to retain the normalized request explicitly. The server stores neither the receipt nor its
+payload. Integrity hashes are not authentication or proof that a downstream model consumed
+these bytes. See [the receipt contract](../../docs/architecture/context_receipts.md).

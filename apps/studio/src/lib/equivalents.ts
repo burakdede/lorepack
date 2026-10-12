@@ -40,6 +40,7 @@ export interface ContextRequest {
   readonly task: string;
   readonly profile: string;
   readonly budget?: number;
+  readonly receipt?: { readonly captureRequest: boolean };
 }
 
 export function contextEquivalents(request: ContextRequest, origin: string): Equivalents {
@@ -49,9 +50,19 @@ export function contextEquivalents(request: ContextRequest, origin: string): Equ
     `--profile ${request.profile}`,
   ];
   if (request.budget !== undefined) cli.push(`--budget ${request.budget}`);
+  if (request.receipt !== undefined) {
+    cli.push('--format json --output context.json --receipt context-receipt.json');
+    if (request.receipt.captureRequest) cli.push('--capture-request');
+  }
   return {
     cli: cli.join(' '),
-    http: curlPost(origin, '/v1/context', request),
+    http:
+      request.receipt === undefined
+        ? curlPost(origin, '/v1/context', request)
+        : curlPost(origin, '/v1/context', request).replace(
+            'curl -s ',
+            'curl -s --output context.json --dump-header context.headers ',
+          ),
     mcp: { name: 'lore_context_for_task', arguments: { ...request } },
   };
 }

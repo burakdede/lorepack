@@ -95,6 +95,9 @@ export const taskContextRequestSchema = z
   .object({
     ...buildSelectionSchema.shape,
     task: z.string().min(1).max(4000),
+    receipt: z
+      .union([z.boolean(), z.object({ captureRequest: z.boolean().default(false) }).strict()])
+      .optional(),
     profile: contextProfileSchema.optional(),
     /**
      * The absolute bound, not the policy. `SUPPORTED_BUDGET` is the range a caller may use

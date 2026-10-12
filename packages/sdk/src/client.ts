@@ -1,6 +1,8 @@
+import { verifyHttpReceipt } from './context_receipt.js';
 import type {
   BuildDescription,
   ContextBundle,
+  ContextReceipt,
   HealthResult,
   SearchRequest,
   SearchResult,
@@ -11,16 +13,7 @@ import type {
   TaskContextRequest,
 } from './contracts.js';
 
-/**
- * A typed client for a Lorepack runtime, with no dependencies at all.
- *
- * `fetch` is standard in Node 24 and in Workers, so this installs anywhere and adds nothing
- * to a consumer's supply chain. That is the whole design brief: an agent author should be
- * able to add Lorepack without inheriting a compiler, a database driver or a schema library.
- *
- * Read-only, because the server is. There is no method here that could build, deploy or
- * edit anything, and no route exists that would answer one.
- */
+/** A read-only HTTP client using platform fetch, with zero runtime dependencies. */
 
 export interface LoreClientOptions {
   readonly buildId?: string;
@@ -80,13 +73,7 @@ export class LoreClient {
     this.#baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.#token = options.token;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    // Bound, because `fetch` is a method of `Window` in a browser and must be called with
-    // that receiver. Storing it and calling `this.#fetch(...)` makes the client the
-    // receiver, which a browser rejects with "Illegal invocation" before the request is
-    // ever made. Node does not care, which is why every test passed for two phases (#196).
-    //
-    // An injected implementation is bound to `globalThis` too, which is a no-op for an arrow
-    // function or an already-bound function and correct for a plain one.
+    // Browser fetch needs Window as its receiver, including injected unbound fetch (#196).
     const implementation = options.fetch ?? globalThis.fetch;
     this.#fetch = implementation.bind(globalThis);
     this.#retries = Math.max(1, options.retries ?? DEFAULT_RETRIES);
@@ -113,6 +100,47 @@ export class LoreClient {
       '/v1/context',
       { ...request, buildId: request.buildId ?? this.#buildId },
       signal,
+    );
+  }
+
+  async contextForTaskWithReceipt(
+    request: TaskContextRequest,
+    signal?: AbortSignal,
+  ): Promise<{ bundle: ContextBundle; receipt: ContextReceipt; payload: string }> {
+    const captureRequest =
+      typeof request.receipt === 'object' && request.receipt.captureRequest === true;
+    return this.#send(
+      '/v1/context',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...request,
+          buildId: request.buildId ?? this.#buildId,
+          receipt: { captureRequest },
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      },
+      signal,
+      async (parsed, payload, response) => {
+        try {
+          const bundle = parsed as ContextBundle;
+          const receipt = await verifyHttpReceipt(
+            response.headers.get('Lorepack-Context-Receipt'),
+            payload,
+            bundle,
+            captureRequest,
+          );
+          return { bundle, receipt, payload };
+        } catch {
+          throw new LoreClientError({
+            code: 'LORE_E_SCHEMA_MISMATCH',
+            status: response.status,
+            message: 'The detached context receipt or emitted payload failed its integrity check.',
+            remediation:
+              'Use a runtime that supports version1 receipts and retain the original response bytes.',
+          });
+        }
+      },
     );
   }
 
@@ -193,7 +221,12 @@ export class LoreClient {
     );
   }
 
-  async #send<T>(path: string, init: RequestInit, signal?: AbortSignal): Promise<T> {
+  async #send<T>(
+    path: string,
+    init: RequestInit,
+    signal?: AbortSignal,
+    transform?: (parsed: unknown, payload: string, response: Response) => Promise<T>,
+  ): Promise<T> {
     // The caller's signal and the timeout both have to be able to cancel the request, and
     // `AbortSignal.any` is the standard way to say that without leaking a listener.
     const timeout = AbortSignal.timeout(this.#timeoutMs);
@@ -256,7 +289,7 @@ export class LoreClient {
         subject: selected,
       });
     }
-    return parsed as T;
+    return transform === undefined ? (parsed as T) : transform(parsed, text, response);
   }
 }
 

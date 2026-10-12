@@ -46,7 +46,12 @@ export function canonicalize(value: Canonical): string {
 }
 
 export async function hashCanonicalPortable(value: Canonical): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalize(value));
+  return sha256HexPortable(canonicalize(value));
+}
+
+export async function sha256HexPortable(value: string | Uint8Array): Promise<string> {
+  const bytes =
+    typeof value === 'string' ? new TextEncoder().encode(value) : Uint8Array.from(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

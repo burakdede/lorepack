@@ -7,9 +7,11 @@ import {
   executionPolicySchema,
   executionSelectionSchema,
   hashCanonicalPortable,
+  MAXIMUM_CONTEXT_RECEIPT_BYTES,
   NATIVE_UNIT_LIMITS,
   RANKING_WEIGHTS,
   RANKING_WEIGHTS_VERSION,
+  type TaskContextRequest,
 } from '@lorepack/core/worker';
 import { MAX_ALTERNATIVES, MAX_ITEMS_PER_ARTIFACT, ORIENTATION_SHARE } from './assemble.js';
 import {
@@ -24,6 +26,7 @@ export function resolveExecutionPolicy(input: {
   budget: number;
   includeArchived: boolean;
   compilerVersion: string;
+  receipt?: TaskContextRequest['receipt'];
 }): ExecutionPolicy {
   return executionPolicySchema.parse({
     version: 1,
@@ -61,10 +64,19 @@ export function resolveExecutionPolicy(input: {
       drafts: 'eligible-labeled-downranked',
     },
     serialization: {
-      version: 2,
+      version: input.receipt !== undefined && input.receipt !== false ? 3 : 2,
       format: 'bounded-supported-formats',
       maximumBytes: MAXIMUM_CONTEXT_BYTES,
       maximumProjectNameLength: MAXIMUM_PROJECT_NAME_LENGTH,
+      ...(input.receipt !== undefined && input.receipt !== false
+        ? {
+            receipt: {
+              version: 1,
+              maximumBytes: MAXIMUM_CONTEXT_RECEIPT_BYTES,
+              captureRequest: typeof input.receipt === 'object' && input.receipt.captureRequest,
+            },
+          }
+        : {}),
     },
   });
 }

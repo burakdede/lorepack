@@ -56,6 +56,23 @@
       ],
       "type": "string"
     },
+    "receipt": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "captureRequest": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
     "task": {
       "maxLength": 4000,
       "minLength": 1,
