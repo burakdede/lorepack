@@ -254,6 +254,20 @@ lorepack pack --out context.lorepack
 lorepack pack --verify context.lorepack
 ```
 
+On a machine without the source project, import the archive into an empty directory:
+
+```bash
+lorepack --cwd ./consumer import ../context.lorepack
+lorepack --cwd ./consumer activate <build-id>
+lorepack --cwd ./consumer mcp --active-only
+```
+
+The archive path is relative to `--cwd`. Import verifies the complete build, retains its
+exact ID and normalized content, and creates a minimal consumer configuration if needed.
+It never compiles or activates. Existing projects keep their active version and runtime
+identity. Original source files are not restored. See the
+[import contract](docs/package-format/README.md#importing-a-build) for limits and failures.
+
 Cloudflare deployment is an optional target. It projects the same build rather than compiling a
 different representation remotely. Read the [deployment guide](docs/architecture/deployment.md)
 before configuring a target.

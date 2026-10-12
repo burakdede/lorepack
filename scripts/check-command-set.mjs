@@ -55,6 +55,7 @@ const EXPECTED = [
   'prune',
   'inspect',
   'pack',
+  'import',
   'mcp',
   'serve',
   'export',

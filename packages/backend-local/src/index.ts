@@ -10,6 +10,7 @@ export {
   collectBuildMembers,
   collectObjects,
   collectOriginals,
+  extractVerifiedArchive,
   type OriginalSource,
   readArchive,
   type VerificationFailure,

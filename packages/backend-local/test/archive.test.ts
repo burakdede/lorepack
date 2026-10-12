@@ -218,6 +218,31 @@ describe('archive verification', () => {
     });
   });
 
+  it('refuses an excessive declared compression ratio before reading a payload, issue 419', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'ratio.lorepack');
+      const members = [...BUILD, ['payload.bin', new Uint8Array(1024)] as const];
+      await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+      declareSize(archive, 'payload.bin', 16 * 1024 * 1024);
+      await expect(readArchive(archive)).rejects.toMatchObject({
+        code: 'LORE_E_LIMIT_EXCEEDED',
+        details: expect.objectContaining({ limit: 'maxCompressionRatio' }),
+      });
+    });
+  });
+
+  it('accepts valid highly compressible members within the expansion limits, issue 419', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'compressible.lorepack');
+      const bytes = new Uint8Array(8 * 1024 * 1024);
+      const members = [...BUILD, ['payload.bin', bytes] as const];
+      await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+      const actual = (await readArchive(archive)).get('payload.bin');
+      expect(actual).toBeDefined();
+      expect(Buffer.from(actual as Uint8Array).equals(Buffer.from(bytes))).toBe(true);
+    });
+  });
+
   it('refuses more members than the limit before reading any of them', async () => {
     await withTempProject({}, async (project) => {
       const archive = join(project.root, 'count.lorepack');
