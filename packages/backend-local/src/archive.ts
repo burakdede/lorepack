@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  createReadStream,
   createWriteStream,
   existsSync,
   fchmodSync,
   fsyncSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
   readdirSync,
@@ -17,8 +19,11 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, posix, relative, sep } from 'node:path';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import {
   buildIdInputsSchema,
   buildManifestSchema,
@@ -235,6 +240,7 @@ export const ARCHIVE_LIMITS = {
   maxTotalBytes: 16 * 1024 * 1024 * 1024,
   /** `checksums.json`, the one member parsed whole rather than streamed. */
   maxIndexBytes: 16 * 1024 * 1024,
+  maxCompressionRatio: 2048,
 } as const;
 
 export type ArchiveLimits = { readonly [K in keyof typeof ARCHIVE_LIMITS]: number };
@@ -413,6 +419,99 @@ export async function readArchive(
   }
 }
 
+/** A private snapshot keeps verification and installed bytes independent of later sender edits. */
+export async function extractVerifiedArchive(
+  path: string,
+  destination: string,
+): Promise<VerificationResult> {
+  mkdirSync(destination, { mode: 0o700 });
+  const snapshot = join(destination, 'input.lorepack');
+  try {
+    const source = await open(path, 'r');
+    try {
+      const stat = await source.stat();
+      if (!stat.isFile()) {
+        throw new LoreError('LORE_E_INVALID_ARGUMENT', 'An archive must be a regular file.', {
+          remediation: 'Pass a local .lorepack file.',
+        });
+      }
+      let size = 0;
+      if (stat.size > ARCHIVE_LIMITS.maxTotalBytes)
+        throw limitExceeded(path, 'maxTotalBytes', ARCHIVE_LIMITS.maxTotalBytes);
+      await pipeline(
+        createReadStream(path, { fd: source.fd, autoClose: false }),
+        new Transform({
+          transform(chunk: Buffer, _encoding, callback) {
+            size += chunk.length;
+            if (size > ARCHIVE_LIMITS.maxTotalBytes) {
+              callback(limitExceeded(path, 'maxTotalBytes', ARCHIVE_LIMITS.maxTotalBytes));
+            } else callback(null, chunk);
+          },
+        }),
+        createWriteStream(snapshot, { flags: 'wx', mode: 0o600 }),
+      );
+    } finally {
+      await source.close();
+    }
+    const result = await verifyArchive(snapshot);
+    if (!result.ok) {
+      throw new LoreError('LORE_E_OBJECT_CORRUPT', 'The archive failed member verification.', {
+        remediation: 'Restore a complete, intact archive before importing.',
+        details: { failures: result.failures },
+      });
+    }
+    const archive = await openArchive(snapshot);
+    try {
+      for (const entry of await listEntries(archive, snapshot, ARCHIVE_LIMITS)) {
+        const name = entry.fileName;
+        if (name === CHECKSUM_MEMBER || name.startsWith('originals/')) continue;
+        const object = /^objects\/sha256\/([0-9a-f]{2})\/([0-9a-f]{2})\/([0-9a-f]{60})$/.exec(name);
+        const build =
+          name === 'manifest.json' ||
+          name === 'context.sqlite' ||
+          /^reports\/[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(name);
+        if (!build && object === null) {
+          throw new LoreError('LORE_E_SCHEMA_MISMATCH', 'The archive has an unsupported member.', {
+            remediation: 'Use the documented build, report and content-addressed object layout.',
+            subject: name,
+          });
+        }
+        const target = join(destination, ...(build ? ['build', name] : [name]));
+        mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+        const fd = openSync(target, 'wx', 0o600);
+        const digest = createHash('sha256');
+        try {
+          await streamEntry(archive, snapshot, entry, (chunk) => {
+            digest.update(chunk);
+            let offset = 0;
+            while (offset < chunk.length) offset += writeSync(fd, chunk, offset);
+          });
+          fsyncSync(fd);
+        } finally {
+          closeSync(fd);
+        }
+        if (object !== null && digest.digest('hex') !== `${object[1]}${object[2]}${object[3]}`) {
+          throw new LoreError(
+            'LORE_E_OBJECT_CORRUPT',
+            'An object has an invalid content address.',
+            {
+              remediation: 'Restore an intact archive. Objects cannot be repaired during import.',
+              subject: name,
+            },
+          );
+        }
+      }
+    } finally {
+      archive.close();
+    }
+    rmSync(snapshot);
+    return result;
+  } catch (cause) {
+    rmSync(destination, { recursive: true, force: true, maxRetries: 3 });
+    throw diskFullError(cause) ?? cause;
+  }
+}
+
 function parseIndex(path: string, bytes: Uint8Array): Map<string, string> {
   const invalid = (cause: unknown): LoreError =>
     new LoreError('LORE_E_OBJECT_CORRUPT', `${CHECKSUM_MEMBER} in ${path} is unreadable.`, {
@@ -472,7 +571,20 @@ function listEntries(
         }),
       ),
     );
-    archive.on('end', () => resolve(entries));
+    archive.on('end', () => {
+      for (const entry of entries) {
+        if (
+          entry.uncompressedSize >
+          Math.max(1, entry.compressedSize) * limits.maxCompressionRatio
+        ) {
+          reject(
+            limitExceeded(path, 'maxCompressionRatio', limits.maxCompressionRatio, entry.fileName),
+          );
+          return;
+        }
+      }
+      resolve(entries);
+    });
     archive.on('entry', (entry: yauzl.Entry) => {
       const name = entry.fileName;
       if (!isRegularEntry(entry)) {
@@ -557,7 +669,14 @@ function streamEntry(
         reject(corrupt(streamError));
         return;
       }
-      stream.on('data', onChunk);
+      stream.on('data', (chunk: Buffer) => {
+        try {
+          onChunk(chunk);
+        } catch (cause) {
+          stream.destroy();
+          reject(diskFullError(cause) ?? cause);
+        }
+      });
       stream.on('error', (cause) => reject(corrupt(cause)));
       stream.on('end', () => resolve());
     });
