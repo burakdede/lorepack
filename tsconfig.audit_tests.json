@@ -15,6 +15,7 @@
     "packages/backend-local/test/archive_verify_child.test.ts",
     "packages/deploy-cloudflare/test/retention.test.ts",
     "packages/backend-local/test/object_verify.test.ts",
-    "tools/arch/test/coverage_report.test.ts"
+    "tools/arch/test/coverage_report.test.ts",
+    "tools/arch/test/coverage_native.test.ts"
   ]
 }
