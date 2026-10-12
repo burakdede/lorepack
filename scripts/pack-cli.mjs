@@ -52,17 +52,19 @@ export function runTool(tool, args, cwd, options = {}) {
 }
 
 /**
- * Copies what `pnpm deploy` reads: the lockfile, the workspace and npm configuration, every
- * workspace manifest, and the built CLI.
+ * Copies what `pnpm deploy` reads: the lockfile, workspace and npm configuration,
+ * dependency patches, workspace manifests, and the built CLI.
  *
  * Deploying from a copy rather than from the checkout, because `pnpm deploy` rewrites the
  * workspace's `node_modules/.pnpm-workspace-state-v1.json` with its own production, hoisted
  * settings, after which every `pnpm run` in the checkout believes it needs a reinstall.
  */
-function copyWorkspace(root, target) {
+export function copyWorkspace(root, target) {
   for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc']) {
     if (existsSync(join(root, file))) copyFileSync(join(root, file), join(target, file));
   }
+  const patches = join(root, 'patches');
+  if (existsSync(patches)) cpSync(patches, join(target, 'patches'), { recursive: true });
   for (const group of ['packages', 'apps', 'tools']) {
     for (const entry of readdirSync(join(root, group), { withFileTypes: true })) {
       const manifest = join(root, group, entry.name, 'package.json');
