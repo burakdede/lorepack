@@ -323,3 +323,147 @@ describe('retained builds without live sources', () => {
     },
   );
 });
+
+it('keeps the reviewed README build active after sources change, issue696', async () => {
+  await withTempProject(
+    {
+      files: {
+        'lore.yaml': 'version: 1\nname: reviewed\nsources: [docs]\n',
+        'docs/a.md': '# Recovery\n\nRestore the checkpoint.\n',
+      },
+    },
+    async (project) => {
+      const first = JSON.parse((await cli(project.root, ['build'])).stdout).buildId as string;
+      writeFileSync(project.path('docs/a.md'), '# Recovery\n\nRestart the worker.\n');
+      const readme = readFileSync(join(import.meta.dirname, '../../../README.md'), 'utf8');
+      const workflow = readme
+        .split('### Keep a coding agent on a reviewed context version')[1]
+        ?.split('```')[1];
+      const command = workflow?.split('\n').find((line) => line.startsWith('lorepack mcp'));
+      expect(command).toBeDefined();
+      const child = spawn(
+        process.execPath,
+        [BIN, '--cwd', project.root, ...(command ?? '').split(' ').slice(1)],
+        {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        },
+      );
+      try {
+        const envelope = {
+          'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+          'io.modelcontextprotocol/clientCapabilities': {},
+        };
+        await rpc(child, 1, 'server/discover', { _meta: envelope });
+        const result = JSON.stringify(
+          await rpc(child, 2, 'tools/call', {
+            name: 'lore_search',
+            arguments: { query: 'recovery' },
+            _meta: envelope,
+          }),
+        );
+        expect(result).toContain(first);
+        expect(result).toContain('Restore the checkpoint');
+        expect(result).not.toContain('Restart the worker');
+        expect(result).toContain('dirty');
+      } finally {
+        await stop(child);
+      }
+      expect(JSON.parse((await cli(project.root, ['search', 'recovery'])).stdout).buildId).toBe(
+        first,
+      );
+    },
+  );
+});
+
+it.each(['--follow-active', '--allow-stale', '--ensure-current', '--active-only'])(
+  'serves explicit %s startup and annotates rollback without rebuilding, issue696',
+  async (mode) => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: modes\nsources: [docs]\n',
+          'docs/a.md': '# Recovery\n\nRestore the checkpoint.\n',
+        },
+      },
+      async (project) => {
+        const first = JSON.parse((await cli(project.root, ['build'])).stdout).buildId as string;
+        writeFileSync(project.path('docs/a.md'), '# Recovery\n\nRestart the worker.\n');
+        const child = spawn(
+          process.execPath,
+          [BIN, '--cwd', project.root, 'mcp', mode, '--revalidate-interval', '0'],
+          {
+            stdio: ['pipe', 'pipe', 'pipe'],
+          },
+        );
+        try {
+          const envelope = {
+            'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+            'io.modelcontextprotocol/clientCapabilities': {},
+          };
+          await rpc(child, 1, 'server/discover', { _meta: envelope });
+          const read = async (id: number) => {
+            const result = (await rpc(child, id, 'tools/call', {
+              name: 'lore_search',
+              arguments: { query: 'recovery' },
+              _meta: envelope,
+            })) as { structuredContent: { buildId: string; sourceState: string } };
+            return result.structuredContent;
+          };
+          const startup = await read(2);
+          if (mode === '--ensure-current') {
+            expect(startup.buildId).not.toBe(first);
+            expect(startup.sourceState).toBe('clean');
+            await cli(project.root, ['rollback', first]);
+            expect(await read(3)).toMatchObject({ buildId: first, sourceState: 'dirty' });
+          } else {
+            expect(startup).toMatchObject({
+              buildId: first,
+              sourceState: mode === '--active-only' ? 'unknown' : 'dirty',
+            });
+            const second = JSON.parse((await cli(project.root, ['build'])).stdout)
+              .buildId as string;
+            expect(await read(3)).toMatchObject({
+              buildId: second,
+              sourceState: mode === '--active-only' ? 'unknown' : 'clean',
+            });
+            await cli(project.root, ['rollback', first]);
+            expect(await read(4)).toMatchObject({
+              buildId: first,
+              sourceState: mode === '--active-only' ? 'unknown' : 'dirty',
+            });
+          }
+          expect(JSON.parse((await cli(project.root, ['search', 'recovery'])).stdout).buildId).toBe(
+            first,
+          );
+        } finally {
+          await stop(child);
+        }
+      },
+    );
+  },
+);
+
+it.each([
+  ['--ensure-current', '--follow-active'],
+  ['--ensure-current', '--active-only'],
+  ['--ensure-current', '--allow-stale'],
+  ['--follow-active', '--active-only'],
+])('refuses contradictory startup flags %s %s before MCP output, issue696', async (a, b) => {
+  await withTempProject(
+    { files: { 'lore.yaml': 'version: 1\nname: modes\nsources: [docs]\n' } },
+    async (project) => {
+      const error = await execute(process.execPath, [
+        BIN,
+        '--cwd',
+        project.root,
+        'mcp',
+        a,
+        b,
+      ]).catch((cause: unknown) => cause);
+      expect(error).toMatchObject({ code: 1, stdout: '' });
+      expect(String((error as { stderr: string }).stderr)).toContain(
+        'Source startup modes cannot be combined',
+      );
+    },
+  );
+});

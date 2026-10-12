@@ -291,11 +291,15 @@ lorepack build --no-activate
 lorepack validate
 lorepack diff
 lorepack activate
-lorepack mcp
+lorepack mcp --follow-active
 ```
 
 The agent sees only the active immutable build. If the source change is wrong, `lorepack rollback`
-returns to the previous build without parsing or indexing the sources again.
+returns to the previous build without parsing or indexing the sources again. `--follow-active`
+reports dirty or unknown freshness without rebuilding. Bare `mcp` and `--ensure-current`
+reconcile live sources at startup; use them for development rather than reviewed activation.
+`--active-only` follows activation without source checks. `--build <full-id>` pins one retained
+build instead of following later activation or rollback.
 
 ### Investigate a source before changing the build
 

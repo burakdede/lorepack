@@ -27,7 +27,11 @@ Content hashing every artifact is what dominates a no-op build. At the 50,000-ch
 envelope, on bursty agent traffic, doing that per request would be seconds of work to
 annotate an answer that took milliseconds.
 
-So freshness is rechecked at most once per `--revalidate-interval` (default 5,000 ms), and
+The active pointer and generation are checked on every read. A pointer change invalidates
+freshness even when sources did not change, including rollback during the interval or with
+`off`. This only checks freshness; it never rebuilds or undoes rollback.
+
+For source changes, freshness is rechecked at most once per `--revalidate-interval` (default 5,000 ms), and
 inside that check a **prescreen** looks only at paths, sizes and modification times.
 Architecture 12.3 permits exactly this: metadata as a prescreen, content hashes as the
 deciding evidence. A scan that finds nothing moved answers from cache. A scan that finds
@@ -37,7 +41,8 @@ something calls the real check.
 lorepack mcp --ensure-current                          # recheck every 5 seconds
 lorepack mcp --ensure-current --revalidate-interval 0  # recheck every request
 lorepack mcp --ensure-current --revalidate-interval off # startup only, the old behaviour
-lorepack mcp --allow-stale                             # serve as-is, label every result dirty
+lorepack mcp --follow-active                           # follow reviewed activation, never rebuild
+lorepack mcp --allow-stale                             # alias for --follow-active
 lorepack mcp --active-only                             # never look at the sources
 ```
 
@@ -58,5 +63,6 @@ Read `buildId` and `sourceState` off any result.
   simply behind.
 - `unknown`: freshness could not be established. Treat it as `dirty` if it matters.
 
-A changing `buildId` between two results means the project was rebuilt between them, which
-is normal and is exactly what makes the answers current.
+A changing `buildId` between results means activation changed, possibly through rollback.
+`--ensure-current` builds only at startup. Later source changes are annotated without automatic
+activation; `lorepack dev` separately watches source changes and builds them.

@@ -25,7 +25,7 @@ import { readFreshness, readStatus } from '../services/status.js';
  *
  * The startup sequence is architecture 14.3, and its order is the whole point. Freshness is
  * reconciled **before the first protocol byte**, so a client that launched against a dirty
- * project never sees stale context and never has to ask. Once the protocol starts, stdout
+ * project uses its explicitly chosen reconciliation mode. Read-only modes preserve the approved build. Once the protocol starts, stdout
  * belongs to it: every diagnostic goes to stderr, and a stray `console.log` here would
  * corrupt a frame and give the client a parse error with no explanation.
  */
@@ -43,7 +43,11 @@ export function mcpCommand(): CommandDefinition {
         flags: '--ensure-current',
         description: 'rebuild first when the sources have changed (the default)',
       },
-      { flags: '--allow-stale', description: 'serve the existing build even when sources changed' },
+      {
+        flags: '--follow-active',
+        description: 'follow activation and rollback without rebuilding; report source freshness',
+      },
+      { flags: '--allow-stale', description: 'alias for --follow-active' },
       { flags: '--active-only', description: 'skip source checks entirely, for pinned or CI use' },
       { flags: '--project <path>', description: 'the project to serve' },
       {
@@ -59,7 +63,10 @@ export function mcpCommand(): CommandDefinition {
           : parseInterval(flags.revalidateInterval);
       const cwd = typeof flags.project === 'string' ? flags.project : context.options.cwd;
       const buildId = typeof flags.build === 'string' ? assertBuildId(flags.build) : undefined;
-      if (buildId !== undefined && (flags.ensureCurrent === true || flags.allowStale === true)) {
+      if (
+        buildId !== undefined &&
+        (flags.ensureCurrent === true || flags.allowStale === true || flags.followActive === true)
+      ) {
         throw new LoreError(
           'LORE_E_INVALID_ARGUMENT',
           '--build cannot be combined with source reconciliation modes.',
@@ -79,12 +86,11 @@ export function mcpCommand(): CommandDefinition {
         config,
         // `--revalidate-interval`, else `LORE_REVALIDATE_INTERVAL_MS`, else the default (#582).
         intervalMs,
-        frozen: mode !== 'ensure-current',
+        frozen: mode === 'active-only',
       });
       const backend = createLocalRuntimeBackend({
         projectRoot: config.projectRoot,
-        freshness:
-          mode === 'ensure-current' ? () => revalidator.freshness() : async () => sourceState,
+        freshness: mode === 'active-only' ? async () => 'unknown' : () => revalidator.freshness(),
       });
 
       if (buildId !== undefined) {
@@ -190,14 +196,12 @@ function parseInterval(raw: unknown): number {
 }
 
 function resolveMode(flags: Record<string, unknown>): Mode {
-  const stale = flags.allowStale === true;
+  const stale = flags.allowStale === true || flags.followActive === true;
   const activeOnly = flags.activeOnly === true;
-  if (stale && activeOnly) {
-    throw new LoreError(
-      'LORE_E_INVALID_ARGUMENT',
-      '--allow-stale and --active-only cannot both be given.',
-      { remediation: 'Pick one: --allow-stale serves a dirty project, --active-only ignores it.' },
-    );
+  if (Number(stale) + Number(activeOnly) + Number(flags.ensureCurrent === true) > 1) {
+    throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Source startup modes cannot be combined.', {
+      remediation: 'Pick --ensure-current, --follow-active (or --allow-stale), or --active-only.',
+    });
   }
   if (activeOnly) return 'active-only';
   if (stale) return 'allow-stale';
@@ -212,10 +216,10 @@ function resolveMode(flags: Record<string, unknown>): Mode {
  * - `ensure-current` (the default) rebuilds a dirty project, so the first tool call reads
  *   what is on disk now. A failed rebuild exits without serving: stale context delivered
  *   confidently is worse than no context.
- * - `allow-stale` serves what exists and labels every result `dirty`, which is honest and
- *   is what a user asking for it wants.
- * - `active-only` does not look at the sources at all, for a pinned build in CI or a
- *   forensic read of an old one.
+ * - `allow-stale` (also `follow-active`) serves the approved build and rechecks freshness
+ *   without rebuilding. Activation and rollback change what subsequent reads capture.
+ * - `active-only` follows activation without source checks and reports unknown freshness.
+ *   Exact `--build` selects one retained build instead.
  */
 async function reconcile(options: {
   config: ReturnType<typeof loadProjectConfig>;

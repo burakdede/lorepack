@@ -375,3 +375,12 @@ selection, not a durable task registry or retention guarantee. Pruned versions f
 retention protection remains a separate lifecycle contract. A retained selection that differs
 from the active build reports source freshness as `unknown`; the active build's source check
 cannot prove that an older selection matches the current files.
+
+## Reviewed startup modes
+
+MCP `--follow-active` (alias `--allow-stale`) reads the approved active build without
+rebuilding. Source freshness can change while serving. `--active-only` avoids source checks
+and reports unknown. `--build` selects a full retained ID. Bare MCP retains ensure-current
+startup for development; contradictory startup modes fail explicitly. Polling freshness
+checks active pointer generation independently of source metadata and interval, so rollback
+invalidates the prior observation without compiling or activating another build.
