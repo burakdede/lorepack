@@ -69,6 +69,15 @@ effort. What we actually depend on, atomic same-volume rename, holds on both.
 
 ## Object store
 
+`FileObjectStore.verify(hash, signal)` streams the checksum and returns false for a missing
+object without creating storage. A checksum mismatch raises `LORE_E_OBJECT_CORRUPT`, naming
+the object hash and preserving the corrupt bytes for recovery. An aborted signal propagates
+the stream's `AbortError`; retrying without that signal can verify the unchanged object.
+Malformed hashes are refused. Verification never quarantines or rewrites data.
+[`object_verify.test.ts`](../../packages/backend-local/test/object_verify.test.ts) checks
+multi-chunk content, missing/corrupt objects, cancellation and invalid hashes using real files.
+
+
 Content-addressed with two levels of fan-out (`objects/sha256/ab/cd/<rest>`), so no
 directory grows unmanageable. An object is written with `writeFileAtomic`, and every fan-out
 directory created for it is then synced into its parent: the build record that references the
