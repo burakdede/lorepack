@@ -186,6 +186,14 @@ Do not overlap full campaigns or full worktree verifiers. The capture command ha
 tests but does not yet establish final all-owned target attainment or native qualification
 of a complete campaign. Keep the release gate open until the measured evidence proves both.
 
+The first complete campaign on Node 24.21.0 with Vitest 4.1.10 passed its 217 test files
+and collection check, but the pinned V8 mapper emitted a negative implicit-else counter
+in `packages/cli/src/commands/export.ts`. Source-bound capture rejects that map before
+aggregation. Retain the raw artifacts and resolve the measurement error; clamping the
+counter does not prove either branch ran. Switching providers also requires preserving
+every executable counter: a focused Istanbul comparison omitted private-method function
+counters, including lock acquisition and reclamation. Neither result qualifies the release.
+
 ## `commit-hygiene.yml`
 
 Runs on pull requests only. Rejects AI attribution trailers and footers, and an em dash in

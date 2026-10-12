@@ -509,6 +509,8 @@ for the checked files, capture limits and native matrix.
 `pnpm coverage:capture --out coverage/<fresh-name>` runs a default-suite campaign with
 configuration and subprocess capture. It fails when ownership, collection, tests or
 coverage gates fail, retaining the evidence for review.
+The complete campaign currently encounters an invalid V8 branch counter; the release
+coverage gate remains open. See the CI guide for the retained measurement limitation.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
 Its integration fixtures keep startup diagnostics separate from machine-readable results.
