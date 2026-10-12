@@ -80,7 +80,15 @@ const BUNDLE = {
     total: 1,
     reported: 1,
     truncated: false,
-    reasons: { budget: 1, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+    reasons: {
+      budget: 1,
+      duplicate: 0,
+      diversity: 0,
+      superseded: 0,
+      archived: 0,
+      filtered: 0,
+      'structural-unit': 0,
+    },
   },
   // Everything the model receives, which is `overview` then `selected`, as the runtime
   // assembles it. This is the list the page is checked against.
@@ -251,7 +259,15 @@ describe('omissions, which are why this route is a debugger', () => {
         total: 9,
         reported: 0,
         truncated: true,
-        reasons: { budget: 9, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+        reasons: {
+          budget: 9,
+          duplicate: 0,
+          diversity: 0,
+          superseded: 0,
+          archived: 0,
+          filtered: 0,
+          'structural-unit': 0,
+        },
       },
     });
     renderRoute();
@@ -268,7 +284,15 @@ describe('omissions, which are why this route is a debugger', () => {
         total: 9,
         reported: 1,
         truncated: true,
-        reasons: { budget: 7, duplicate: 2, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+        reasons: {
+          budget: 7,
+          duplicate: 2,
+          diversity: 0,
+          superseded: 0,
+          archived: 0,
+          filtered: 0,
+          'structural-unit': 0,
+        },
       },
     });
     renderRoute();
@@ -282,6 +306,41 @@ describe('omissions, which are why this route is a debugger', () => {
     expect(screen.getByText('did not fit the budget: 7')).toBeInTheDocument();
     expect(screen.getByText('near-duplicate of something already selected: 2')).toBeInTheDocument();
   });
+
+  it('explains an omitted native unit without presenting its permission fragment, issue698', async () => {
+    contextForTask.mockResolvedValue({
+      ...BUNDLE,
+      omissionSummary: {
+        total: 1,
+        reported: 1,
+        truncated: false,
+        reasons: { ...BUNDLE.omissionSummary.reasons, budget: 0, 'structural-unit': 1 },
+      },
+      overview: [],
+      selected: [],
+      alternatives: [],
+      citations: [],
+      omitted: [
+        {
+          ...BUNDLE.omitted[0],
+          reason: 'structural-unit',
+          nativeUnit: { nodeIds: ['native-policy'], status: 'omitted' },
+        },
+      ],
+    });
+    renderRoute();
+    await assemble();
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'complete native evidence could not be resolved within the supported limit',
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Run lorepack rollback/)).toBeNull();
+    expect(screen.getByText('docs/big.md')).toBeInTheDocument();
+  });
+
   it('lists every omitted item with a reason a reader can act on', async () => {
     renderRoute();
     await assemble();
