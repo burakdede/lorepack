@@ -215,8 +215,35 @@ async function checkTableQuery(installDir, projectDir) {
     ];
   }
   console.log('archive identity verified by the bundled read-only child');
+  const consumer = join(installDir, 'consumer');
+  mkdirSync(consumer);
+  const imported = spawnSync(process.execPath, [entry, '--json', 'import', archive], {
+    cwd: consumer,
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  if (imported.status !== 0)
+    return [`installed archive import failed: ${imported.stdout} ${imported.stderr}`];
+  const retained = JSON.parse(imported.stdout);
+  if (retained.buildId !== proof.buildId || retained.activated !== false)
+    return [`installed import changed identity or activated: ${imported.stdout}`];
+  rmSync(projectDir, { recursive: true });
+  const activated = spawnSync(process.execPath, [entry, 'activate', proof.buildId], {
+    cwd: consumer,
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  if (activated.status !== 0) return [`installed imported activation failed: ${activated.stderr}`];
+  const recovered = spawnSync(process.execPath, [entry, '--json', 'search', 'rollback'], {
+    cwd: consumer,
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+  if (recovered.status !== 0 || JSON.parse(recovered.stdout).buildId !== proof.buildId)
+    return [`installed imported search failed: ${recovered.stdout} ${recovered.stderr}`];
+  console.log('portable build imported and read after its producer was removed');
   const inspected = spawnSync(process.execPath, [entry, 'inspect', 'tables', '--json'], {
-    cwd: projectDir,
+    cwd: consumer,
     encoding: 'utf8',
   });
   if (inspected.status !== 0) return [`lorepack inspect tables failed: ${inspected.stderr}`];
@@ -226,7 +253,7 @@ async function checkTableQuery(installDir, projectDir) {
 
   const port = await freePort();
   const server = spawn(process.execPath, [entry, 'serve', '--port', String(port)], {
-    cwd: projectDir,
+    cwd: consumer,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -259,7 +286,7 @@ async function checkTableQuery(installDir, projectDir) {
     } else if (JSON.stringify(JSON.parse(body).rows) !== '[{"sku":"A-1"},{"sku":"B-2"}]') {
       problems.push(`a table query through the installed CLI returned the wrong rows: ${body}`);
     }
-    for (const path of [installDir, projectDir]) {
+    for (const path of [installDir, projectDir, consumer]) {
       if (body.includes(path) || body.includes(JSON.stringify(path).slice(1, -1))) {
         problems.push(`a table query response disclosed the absolute path ${path}`);
       }
