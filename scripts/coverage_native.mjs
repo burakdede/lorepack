@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
@@ -38,7 +38,10 @@ export async function convertNativeCoverage(snapshot, records, direct = {}) {
         const code = readFileSync(absolute, 'utf8');
         if (createHash('sha256').update(code).digest('hex') !== owned.get(path).sha256)
           throw new Error(`Stale native coverage source: ${path}`);
-        const ast = await parseAstAsync(code);
+        const parsedCode = path.endsWith('.ts')
+          ? stripTypeScriptTypes(code, { mode: 'strip' })
+          : code;
+        const ast = await parseAstAsync(parsedCode);
         // The pinned converter lacks a visitor for evaluated default-export calls.
         ast.body = ast.body.map((node) =>
           node.type === 'ExportDefaultDeclaration' && node.declaration.type === 'CallExpression'
@@ -53,6 +56,20 @@ export async function convertNativeCoverage(snapshot, records, direct = {}) {
         );
         source = { code, ast };
         sources.set(path, source);
+      }
+      const scriptRange = coverage.functions[0]?.ranges[0];
+      const expectedLength = path.endsWith('.ts')
+        ? stripTypeScriptTypes(source.code, { mode: 'strip', sourceUrl: coverage.url }).length
+        : source.code.length;
+      if (scriptRange?.startOffset !== 0 || scriptRange.endOffset !== expectedLength) {
+        rejected.push({
+          origin,
+          path,
+          reason: 'Native execution offsets do not match the owned source.',
+          expectedLength,
+          observedLength: scriptRange?.endOffset ?? null,
+        });
+        continue;
       }
       const maps = await convert({ ...source, coverage, wrapperLength: 0 });
       for (const [convertedPath, map] of Object.entries(maps)) {

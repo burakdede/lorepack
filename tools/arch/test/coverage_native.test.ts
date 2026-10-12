@@ -181,6 +181,75 @@ describe('genuine native configuration coverage', () => {
     expect(Object.values(measured.maps[join(directory, script)].f)).toContain(0);
   });
 
+  it('preserves original positions in a genuinely type-stripped configuration', async () => {
+    const script = 'vite.config.ts';
+    const typed = `function defineConfig(value: { selected: number }): { selected: number } { return value; }
+export function unused(): number { return 42; }
+const selected: number = process.argv[2] === 'yes' ? 1 : 2;
+export default defineConfig({ selected });
+`;
+    writeFileSync(join(directory, script), typed);
+    const raw = join(directory, 'typed');
+    execFileSync(process.execPath, [join(directory, script), 'yes'], {
+      env: { NODE_V8_COVERAGE: raw },
+      stdio: 'pipe',
+    });
+    const record = JSON.parse(
+      readFileSync(join(raw, readdirSync(raw)[0] ?? 'missing.json'), 'utf8'),
+    );
+    const measured = await convertNativeCoverage(
+      {
+        root: directory,
+        included: [{ path: script, sha256: createHash('sha256').update(typed).digest('hex') }],
+      },
+      [{ origin: 'typed', result: record.result }],
+    );
+    expect(measured.acceptedExecutions).toBe(1);
+    expect(measured.rejected).toEqual([]);
+    const map = measured.maps[join(directory, script)];
+    expect(Object.values(map.f)).toContain(0);
+    expect(Object.values(map.b).flat()).toContain(0);
+  });
+
+  it('rejects transformed execution under an original source filename', async () => {
+    const script = 'transformed.mjs';
+    const original = 'function used() { return 42; }\nused();\n';
+    writeFileSync(join(directory, script), original);
+    const raw = join(directory, 'transformed');
+    const filename = pathToFileURL(join(directory, script)).href;
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { readFileSync } from 'node:fs';
+import { runInThisContext } from 'node:vm';
+const filename = ${JSON.stringify(filename)};
+runInThisContext('0;\\n' + readFileSync(new URL(filename), 'utf8'), { filename });`,
+      ],
+      { env: { NODE_V8_COVERAGE: raw }, stdio: 'pipe' },
+    );
+    const record = JSON.parse(
+      readFileSync(join(raw, readdirSync(raw)[0] ?? 'missing.json'), 'utf8'),
+    );
+    const measured = await convertNativeCoverage(
+      {
+        root: directory,
+        included: [{ path: script, sha256: createHash('sha256').update(original).digest('hex') }],
+      },
+      [{ origin: 'transformed', result: record.result }],
+    );
+    expect(measured.acceptedExecutions).toBe(0);
+    expect(measured.maps).toEqual({});
+    expect(measured.rejected).toEqual([
+      expect.objectContaining({
+        origin: 'transformed',
+        path: script,
+        reason: 'Native execution offsets do not match the owned source.',
+      }),
+    ]);
+  });
+
   it('writes a source-bound bundle through the actual command', () => {
     const inventory = join(directory, 'inventory.json');
     const output = join(directory, 'nested/bundle.json');
