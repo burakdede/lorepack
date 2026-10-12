@@ -247,8 +247,8 @@ lorepack export --task "How should the sync worker recover after a failed deploy
 # Context for: How should the sync worker recover after a failed deploy?
 
 Project **coding-project**, build `lore_<build-id>`.
-Profile **chat**, budget 24,000 estimated tokens, of which 291 estimated tokens used.
-Execution policy `policy_e478f21dee81ffe597e0b3720610ab83f25101ddf7632623ab79fdb18a34af96`, selection `selection_<selection-id>`.
+Profile **chat**, budget 24,000 estimated tokens, of which 4,183 estimated tokens used.
+Execution policy `policy_a0c6cb2f7e27d1f07a87a9ace51bf0352dca877be70cbea44acf4b283f69b904`, selection `selection_<selection-id>`.
 
 Every passage below is quoted from a document in this project, with the file and source coordinate it came from. Lorepack selected and bounded them; it did not write or summarise anything, and it makes no claim about which document is correct.
 Search considered up to 500 candidates using any-term matching.
@@ -333,6 +333,6 @@ To widen this context, raise the budget or name a profile with a larger one:
 lorepack export --task 'How should the sync worker recover after a failed deploy?' --profile deep
 ```
 
-Token counts are conservative estimates from a deterministic counter, not a model tokenizer. Treat them as a bound, not a measurement.
+Token counts are versioned engineering estimates over complete supported output, not a provider tokenizer or a guarantee of provider token usage.
 ````
 

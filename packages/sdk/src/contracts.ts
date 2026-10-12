@@ -98,16 +98,28 @@ export interface ExecutionPolicy {
     orientationShare: number;
     maximumItemsPerArtifact: number;
     maximumAlternatives: number;
+    maximumOmissionDetails: number;
     unit: 'whole-chunk';
   };
-  estimator: { version: number; mode: 'stored-chunk-estimates'; compilerVersion: string };
+  estimator: {
+    version: number;
+    mode: 'serialized-utf8-estimate';
+    bytesPerToken: number;
+    wordFloor: 'whitespace-words';
+    compilerVersion: string;
+  };
   visibility: {
     version: number;
     default: 'current-preferred-with-historical-fallback' | 'current-only';
     includeArchived: boolean;
     drafts: 'eligible-labeled-downranked';
   };
-  serialization: { version: number; format: 'context-bundle-json' };
+  serialization: {
+    version: number;
+    format: 'bounded-supported-formats';
+    maximumBytes: number;
+    maximumProjectNameLength: number;
+  };
 }
 
 export interface ExecutionSelection extends RuntimeIdentity {
@@ -141,6 +153,15 @@ export interface ContextBundle extends RuntimeIdentity {
   tables: Array<{ tableId: string; name: string }>;
   alternatives: ContextItem[];
   omitted: OmittedItem[];
+  omissionSummary: {
+    total: number;
+    reported: number;
+    truncated: boolean;
+    reasons: Record<
+      'budget' | 'duplicate' | 'diversity' | 'superseded' | 'archived' | 'filtered',
+      number
+    >;
+  };
   citations: SourceLocator[];
 }
 

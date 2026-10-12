@@ -362,6 +362,12 @@ async function main() {
     mkdirSync(join(project, 'docs'), { recursive: true });
     copyFileSync(PDF_FIXTURE, join(project, 'docs', 'release-notes.pdf'));
     writeFileSync(join(project, 'docs', 'products.csv'), 'sku,price\nA-1,10\nB-2,25\n');
+    for (let index = 0; index < 70; index += 1) {
+      writeFileSync(
+        join(project, 'docs', `policy-${index}.md`),
+        `# Policy ${index}\n\n${Array.from({ length: 90 }, (_, word) => `permission${index}item${word}`).join(' ')}\n`,
+      );
+    }
     const hookPath = join(work, 'dlopen-hook.cjs');
     const logPath = join(work, 'dlopen.log');
     writeFileSync(hookPath, DLOPEN_HOOK);
@@ -376,6 +382,38 @@ async function main() {
     const loaded = readFileSync(logPath, 'utf8').split('\n').filter(Boolean);
     for (const file of loaded) problems.push(`PDF build loaded native module ${file}`);
     if (cited && loaded.length === 0) console.log('PDF build and search loaded no native module');
+
+    for (const format of ['json', 'markdown']) {
+      const payload = runInstalledCli(
+        installDir,
+        project,
+        ['export', '--task', 'policy', '--budget', '4000', '--format', format],
+        hookPath,
+        logPath,
+      );
+      const bytes = Buffer.byteLength(payload, 'utf8');
+      const estimate = Math.max(
+        Math.ceil(bytes / 3.6),
+        payload.trim().split(/\s+/).filter(Boolean).length,
+      );
+      if (estimate > 4000 || bytes > 4 * 1024 * 1024 || !payload.includes('permission')) {
+        problems.push(
+          `packed ${format} context violates complete-delivery limits or loses all evidence`,
+        );
+      }
+      if (format === 'json') {
+        const bundle = JSON.parse(payload);
+        if (
+          bundle.estimatedTokens < estimate ||
+          bundle.estimatedTokens > bundle.budget ||
+          bundle.omissionSummary.total <= bundle.omissionSummary.reported ||
+          !bundle.omissionSummary.truncated
+        ) {
+          problems.push('packed JSON context has untruthful accounting or omission truncation');
+        }
+      }
+    }
+    console.log('packed context checked complete JSON/Markdown delivery and omission accounting');
 
     problems.push(...(await checkTableQuery(installDir, project)));
 

@@ -24,13 +24,16 @@ export const executionPolicySchema = z
         orientationShare: z.number().min(0).max(1),
         maximumItemsPerArtifact: z.int().positive(),
         maximumAlternatives: z.int().nonnegative(),
+        maximumOmissionDetails: z.int().nonnegative(),
         unit: z.literal('whole-chunk'),
       })
       .strict(),
     estimator: z
       .object({
         version: z.int().positive(),
-        mode: z.literal('stored-chunk-estimates'),
+        mode: z.literal('serialized-utf8-estimate'),
+        bytesPerToken: z.number().positive(),
+        wordFloor: z.literal('whitespace-words'),
         compilerVersion: z.string().min(1),
       })
       .strict(),
@@ -43,7 +46,12 @@ export const executionPolicySchema = z
       })
       .strict(),
     serialization: z
-      .object({ version: z.int().positive(), format: z.literal('context-bundle-json') })
+      .object({
+        version: z.int().positive(),
+        format: z.literal('bounded-supported-formats'),
+        maximumBytes: z.int().positive(),
+        maximumProjectNameLength: z.int().positive(),
+      })
       .strict(),
   })
   .strict();

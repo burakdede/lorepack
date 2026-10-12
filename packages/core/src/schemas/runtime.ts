@@ -145,16 +145,54 @@ export const contextBundleSchema = z
     candidateLimit: z.int().positive(),
     candidateLimitHit: z.boolean(),
     candidateMatchMode: z.enum(['all', 'any']),
-    estimatedTokens: z.int().nonnegative().describe('Conservative estimate, never an exact count'),
+    estimatedTokens: z
+      .int()
+      .nonnegative()
+      .describe('Versioned estimate of complete supported output, never a provider token count'),
     reservedTokens: z.int().nonnegative(),
     overview: z.array(contextItemSchema),
     selected: z.array(contextItemSchema),
     tables: z.array(z.object({ tableId: z.string(), name: z.string() }).strict()),
     alternatives: z.array(contextItemSchema),
     omitted: z.array(omittedItemSchema),
+    omissionSummary: z
+      .object({
+        total: z.int().nonnegative(),
+        reported: z.int().nonnegative(),
+        truncated: z.boolean(),
+        reasons: z
+          .object({
+            budget: z.int().nonnegative(),
+            duplicate: z.int().nonnegative(),
+            diversity: z.int().nonnegative(),
+            superseded: z.int().nonnegative(),
+            archived: z.int().nonnegative(),
+            filtered: z.int().nonnegative(),
+          })
+          .strict(),
+      })
+      .strict(),
     citations: z.array(sourceLocatorSchema),
   })
   .strict()
+  .refine(
+    (bundle) =>
+      bundle.omissionSummary.reported === bundle.omitted.length &&
+      bundle.omissionSummary.total ===
+        Object.values(bundle.omissionSummary.reasons).reduce((sum, value) => sum + value, 0) &&
+      bundle.omissionSummary.total >= bundle.omissionSummary.reported &&
+      bundle.omissionSummary.reported <= bundle.execution.policy.packing.maximumOmissionDetails &&
+      Object.entries(bundle.omissionSummary.reasons).every(
+        ([reason, total]) =>
+          bundle.omitted.filter((item) => item.reason === reason).length <= total,
+      ) &&
+      bundle.omissionSummary.truncated ===
+        bundle.omissionSummary.total > bundle.omissionSummary.reported,
+    {
+      message: 'Omission accounting must report truthful totals and truncation',
+      path: ['omissionSummary'],
+    },
+  )
   .refine(
     (bundle) =>
       bundle.execution.selection.buildId === bundle.buildId &&

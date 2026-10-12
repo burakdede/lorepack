@@ -108,9 +108,9 @@ export function exportCommand(): CommandDefinition {
         // file: a person would paste it without noticing.
         writeFileAtomic(output, rendered);
         context.warn(
-          `Wrote ${output}\n  ${bundle.estimatedTokens} estimated tokens of ${bundle.budget}, ${bundle.citations.length} citations, ${bundle.omitted.length} omitted.\n`,
+          `Wrote ${output}\n  ${bundle.estimatedTokens} estimated tokens of ${bundle.budget}, ${bundle.citations.length} citations, ${bundle.omissionSummary.total} omitted.\n`,
         );
-        return { human: '', json: { ...bundle, output } };
+        return { human: '', json: bundle };
       } finally {
         backend.close();
       }

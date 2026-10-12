@@ -76,7 +76,8 @@ describe('the markdown a person pastes', () => {
   it('says the tokens are an estimate, wherever they appear', async () => {
     await exported(['export', '--task', 'rollback'], (result) => {
       expect(result.stdout).toContain('estimated token');
-      expect(result.stdout).toMatch(/conservative estimates/);
+      expect(result.stdout).toContain('versioned engineering estimates');
+      expect(result.stdout).toContain('not a provider tokenizer');
     });
   });
 
@@ -112,10 +113,21 @@ describe('the markdown a person pastes', () => {
 
     // Deliberate is allowed. The point of the gate is that it cannot happen by typo.
     await exported(
-      ['export', '--task', 'rollback', '--budget', '500', '--allow-unsupported-budget'],
+      ['export', '--task', 'rollback', '--budget', '50000', '--allow-unsupported-budget'],
       (result) => {
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('budget 500 estimated tokens');
+        expect(result.stdout).toContain('budget 50,000 estimated tokens');
+      },
+    );
+  });
+
+  it('refuses mandatory framing that cannot fit even with an explicit override', async () => {
+    await exported(
+      ['export', '--task', 'rollback', '--budget', '500', '--allow-unsupported-budget'],
+      (result) => {
+        expect(result.code).not.toBe(0);
+        expect(result.stderr).toContain('LORE_E_LIMIT_EXCEEDED');
+        expect(result.stderr).toContain('Mandatory context framing');
       },
     );
   });
@@ -131,6 +143,28 @@ describe('json', () => {
 });
 
 describe('writing a file', () => {
+  it('keeps JSON stdout inside the context contract when also writing a file', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      await run(['--cwd', project.root, 'build']);
+      const out = join(project.root, 'context.json');
+      const result = await run([
+        '--cwd',
+        project.root,
+        '--json',
+        'export',
+        '--task',
+        'rollback',
+        '--format',
+        'json',
+        '--output',
+        out,
+      ]);
+      expect(result.code).toBe(0);
+      const bundle = contextBundleSchema.parse(JSON.parse(result.stdout));
+      expect(bundle.estimatedTokens).toBeLessThanOrEqual(bundle.budget);
+      expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual(bundle);
+    });
+  });
   it('writes it, and reports what it contains on stderr', async () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       await run(['--cwd', project.root, 'build']);

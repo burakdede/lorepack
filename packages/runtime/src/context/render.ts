@@ -104,11 +104,18 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
   lines.push('');
 
   lines.push('## What was left out', '');
-  if (bundle.omitted.length === 0) {
+  if (bundle.omissionSummary.total === 0) {
     lines.push('Nothing from the candidates considered was omitted.', '');
   } else {
     lines.push(
-      `${count(bundle.omitted.length, 'passage')} considered candidates did not fit, grouped by reason. The report covers the candidates considered above.`,
+      `${count(bundle.omissionSummary.total, 'passage')} from the considered candidates were omitted. This bounded report lists ${count(bundle.omissionSummary.reported, 'passage')}${bundle.omissionSummary.truncated ? '; diagnostic detail was truncated to fit' : ''}.`,
+      '',
+    );
+    lines.push(
+      Object.entries(bundle.omissionSummary.reasons)
+        .filter(([, total]) => total > 0)
+        .map(([reason, total]) => `${describeReason(reason)}: ${total}`)
+        .join('; '),
       '',
     );
     for (const [reason, items] of groupByReason(bundle.omitted)) {
@@ -127,7 +134,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
   lines.push('To widen this context, raise the budget or name a profile with a larger one:', '');
   lines.push(...fenced(options.moreCommand, 'bash'), '');
   lines.push(
-    `Token counts are conservative estimates from a deterministic counter, not a model tokenizer. Treat them as a bound, not a measurement.`,
+    'Token counts are versioned engineering estimates over complete supported output, not a provider tokenizer or a guarantee of provider token usage.',
   );
 
   return `${lines.join('\n').trimEnd()}\n`;
