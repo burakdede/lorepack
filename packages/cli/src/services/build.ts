@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildMigrationsDirectory,
+  checkStoredLocatorRanges,
   checkTableMappings,
   countRows,
   createCandidateDirectory,
@@ -577,6 +578,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             search: (database, query, limit) => searchCatalog(database, query, limit),
             countRows,
             tableMappingCheck: checkTableMappings,
+            locatorRangeCheck: checkStoredLocatorRanges,
           });
           progress.finish('validating', report.checksRun.length, report.ok ? 'done' : 'failed');
 

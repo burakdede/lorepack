@@ -41,7 +41,9 @@ names, ordered column names/types/nullability, physical columns and row counts w
 parsed tables. `locator-ranges` validates locator shape and artifact/path ownership,
 ordered positive line ranges, recorded document extents and PDF page counts, sheet
 membership and valid ordered cell ranges within recorded sheet extents. It covers
-nodes, chunks and structured tables.
+nodes, chunks and structured tables. Candidate validation also checks the stored
+SQLite coordinates against the parsed bounds so a catalog-write defect cannot
+pass solely because the in-memory parse was correct.
 
 Range checks use parser-recorded bounds without extracting original sources. A
 format without a recorded line/page/sheet extent cannot supply that upper-bound

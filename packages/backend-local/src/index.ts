@@ -35,6 +35,7 @@ export {
   listTableRows,
   tableLocator,
 } from './catalog/tables.js';
+export { checkStoredLocatorRanges } from './catalog/verify.js';
 export {
   type CatalogArtifact,
   type CatalogChunk,
