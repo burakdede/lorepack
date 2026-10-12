@@ -182,6 +182,20 @@ Wrangler supports Node >=22 and uses MIT OR Apache-2.0 licensing. As before, the
 Wrangler release declares a prerelease Miniflare dependency. Contributor native tools
 remain isolated from the published CLI, and install scripts remain disabled.
 
+The contract tool's `@modelcontextprotocol/client` pin is 2.2.0, matching the
+existing published CLI/connect packages. This MIT-licensed client supports Node >=20
+and declares no install scripts. The migration removes the older test-only client
+without changing the published dependency declarations. Existing protocol and
+transport contract tests verify compatibility with the server.
+
+The version-scoped `nanoid` override advances affected 3.x resolutions to 3.3.18
+without changing other majors. This patch satisfies the existing PostCSS range,
+is MIT-licensed, has no install scripts, and is about 25 kB unpacked. Remove the
+override when upstream dependency floors exclude the older versions. Source-map-js
+now resolves only to 1.2.2 through the maintained dependency closure, so it needs
+no override. These are contributor build dependencies, verified by Studio's build
+and browser workflows rather than added to the shipped runtime.
+
 ## Adding one
 
 Before adding a dependency, check and record: last release, open CVEs, licence, install

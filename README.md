@@ -480,6 +480,7 @@ Studio development uses Vite 7.3.5. Users receive Studio's built assets in the C
 see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
 Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
+Contract tests use the same MCP client version as the shipped CLI.
 
 ## License
 
