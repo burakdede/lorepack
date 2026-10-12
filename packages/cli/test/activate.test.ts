@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import { PROJECTION_MIGRATIONS } from '../../deploy-cloudflare/src/projection-migrations.js';
 import { rollbackCommand } from '../src/commands/activate.js';
 import { pruneCommand } from '../src/commands/prune.js';
 import { runBuild } from '../src/services/build.js';
@@ -122,7 +123,11 @@ class SqliteStatement {
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
-    if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
+    if (
+      trimmed.startsWith('select') ||
+      trimmed.startsWith('pragma') ||
+      /\bRETURNING\b/i.test(this.#query)
+    ) {
       return { results: statement.all(...this.#bindings) as readonly T[] };
     }
     statement.run(...this.#bindings);
@@ -221,6 +226,13 @@ function fakeCloudflareRollbackAdapter(
   objectsBucket = createFakeCloudflareObjectsBucket(),
   tablesDb: DatabaseSync = db,
 ): CloudflareResolverAdapter {
+  for (const migration of PROJECTION_MIGRATIONS.filter(
+    ({ id }) => id === '0006' || id === '0007',
+  )) {
+    for (const statement of migration.statements) {
+      db.exec(statement.replace(/^CREATE (TABLE|INDEX) /, 'CREATE $1 IF NOT EXISTS '));
+    }
+  }
   const catalog = new SqliteCloudflareDatabase(db);
   const tables = new SqliteCloudflareDatabase(tablesDb);
   return {
