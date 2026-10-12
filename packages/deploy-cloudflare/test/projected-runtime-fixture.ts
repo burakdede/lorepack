@@ -199,6 +199,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
         catalog: new D1CatalogStore({
           db: projection,
           namespace: { projectId: PROJECT, buildId: handle.buildId },
+          manifestJson: provider.manifestFor(handle),
         }),
         tables: new D1TableStore(projection, { projectId: PROJECT, buildId: handle.buildId }),
         objects: new R2ObjectStore(PROJECT, bucket),

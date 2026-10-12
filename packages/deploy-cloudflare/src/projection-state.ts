@@ -48,9 +48,13 @@ export async function assertProjectionReadable(
     );
   }
 
+  assertProjectionStateReadable(namespace.buildId, row);
+}
+
+export function assertProjectionStateReadable(buildId: string, row: ProjectionStateRow): void {
   assertSchema(
     'catalog schema',
-    namespace.buildId,
+    buildId,
     Number(row.buildSchemaVersion),
     SCHEMA_VERSION,
     'Run `lorepack build` again, then re-project this build. A sealed build is never migrated in place.',
@@ -58,7 +62,7 @@ export async function assertProjectionReadable(
   );
   assertSchema(
     'projection schema',
-    namespace.buildId,
+    buildId,
     Number(row.projectionSchemaVersion),
     PROJECTION_SCHEMA_VERSION,
     'Project the build again with this Lorepack version so the Worker sees the current D1 projection shape.',

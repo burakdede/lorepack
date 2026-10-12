@@ -14,6 +14,9 @@ interface OwnershipRow extends RuntimeIdentity {
   readonly projectId: string;
   readonly buildId: string;
   readonly generation: number;
+  readonly buildSchemaVersion: number;
+  readonly projectionSchemaVersion: number;
+  readonly manifestJson: string | null;
 }
 
 export const REMOTE_READ_LIFETIME_SECONDS = 300;
@@ -40,7 +43,13 @@ export async function acquireReadOwnership(
     RETURNING token, project_id AS projectId, build_id AS buildId,
       (SELECT generation FROM active_build WHERE id = 1) AS generation,
       (SELECT corpus_id FROM runtime_identity WHERE id = 1) AS corpusId,
-      (SELECT namespace_id FROM runtime_identity WHERE id = 1) AS namespaceId`)
+      (SELECT namespace_id FROM runtime_identity WHERE id = 1) AS namespaceId,
+      (SELECT build_schema_version FROM projected_builds b
+        WHERE b.project_id = runtime_read_owners.project_id AND b.build_id = runtime_read_owners.build_id) AS buildSchemaVersion,
+      (SELECT projection_schema_version FROM projected_builds b
+        WHERE b.project_id = runtime_read_owners.project_id AND b.build_id = runtime_read_owners.build_id) AS projectionSchemaVersion,
+      (SELECT manifest_json FROM build_manifests m
+        WHERE m.project_id = runtime_read_owners.project_id AND m.build_id = runtime_read_owners.build_id) AS manifestJson`)
       .bind(
         token,
         REMOTE_READ_LIFETIME_SECONDS,

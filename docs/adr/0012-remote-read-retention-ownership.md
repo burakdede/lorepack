@@ -13,7 +13,10 @@ that a paused reader finished. Remote cleanup previously removed normalized A bo
 ## Decision
 
 Register a unique operational owner through one conditional primary D1 INSERT RETURNING.
-Capture the selected tuple and current generation in that statement. Reject missing,
+Capture the selected tuple, current generation, projection versions and immutable manifest
+in that statement. Validate the captured versions before opening adapters and use the
+captured manifest for execution provenance. This preserves the runtime query limits without
+separate metadata lookups; authentication and rate admission have separate costs. Reject missing,
 foreign or deletion-claimed evidence before acquiring it. D1 primary writes serialize
 registration against conditional deletion claims; replica observations cannot grant ownership.
 

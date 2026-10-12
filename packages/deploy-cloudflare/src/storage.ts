@@ -9,6 +9,7 @@ import {
   type ObjectStore,
   type RuntimeIdentity,
 } from '@lorepack/core/worker';
+import { assertProjectionStateReadable } from './projection-state.js';
 import { r2ObjectKey } from './r2-keys.js';
 import { acquireReadOwnership } from './read_ownership.js';
 import { checkedRuntimeIdentity } from './runtime-identity.js';
@@ -114,7 +115,7 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
 export class D1ActiveBuildProvider implements ActiveBuildProvider {
   readonly #db: D1DatabaseLike;
   readonly #projectId: string;
-  readonly #handles = new WeakSet<BuildHandle>();
+  readonly #handles = new WeakMap<BuildHandle, string>();
 
   constructor(db: D1DatabaseLike, projectId: string) {
     this.#db = db;
@@ -157,9 +158,22 @@ export class D1ActiveBuildProvider implements ActiveBuildProvider {
     }
     let identity: RuntimeIdentity;
     let buildId: BuildId;
+    let manifestJson: string;
     try {
       identity = checkedRuntimeIdentity(ownership, this.#projectId);
       buildId = assertBuildId(ownership.buildId);
+      assertProjectionStateReadable(buildId, ownership);
+      if (typeof ownership.manifestJson !== 'string') {
+        throw new LoreError(
+          'LORE_E_SCHEMA_MISMATCH',
+          'The acquired build is missing its projected manifest.',
+          {
+            remediation: 'Deploy a complete immutable build before serving it.',
+            subject: buildId,
+          },
+        );
+      }
+      manifestJson = ownership.manifestJson;
     } catch (error) {
       await ownership.release();
       throw error;
@@ -173,12 +187,13 @@ export class D1ActiveBuildProvider implements ActiveBuildProvider {
         await ownership.release();
       },
     });
-    this.#handles.add(handle);
+    this.#handles.set(handle, manifestJson);
     return handle;
   }
 
-  assertHandle(handle: BuildHandle): void {
-    if (!this.#handles.has(handle)) {
+  manifestFor(handle: BuildHandle): string {
+    const manifest = this.#handles.get(handle);
+    if (manifest === undefined) {
       throw new LoreError(
         'LORE_E_INVALID_ARGUMENT',
         'The build handle is foreign, forged or released.',
@@ -188,6 +203,11 @@ export class D1ActiveBuildProvider implements ActiveBuildProvider {
         },
       );
     }
+    return manifest;
+  }
+
+  assertHandle(handle: BuildHandle): void {
+    this.manifestFor(handle);
   }
 
   async #activeRow(): Promise<ActiveBuildRow | null> {

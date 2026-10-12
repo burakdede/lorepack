@@ -21,7 +21,6 @@ import {
   D1CatalogStore,
   type D1CatalogStoreOptions,
 } from './catalog.js';
-import { assertProjectionReadable } from './projection-state.js';
 import {
   D1ActiveBuildProvider,
   type D1DatabaseLike,
@@ -164,7 +163,6 @@ export function createCloudflareWorkerFromBindings(
     open: async (handle) => {
       provider.assertHandle(handle);
       const namespace = namespaceOf(bindings, handle.buildId);
-      await assertProjectionReadable(bindings.CATALOG_DB, namespace);
       return {
         corpusId: handle.corpusId,
         namespaceId: handle.namespaceId,
@@ -172,6 +170,7 @@ export function createCloudflareWorkerFromBindings(
         catalog: new D1CatalogStore({
           db: bindings.CATALOG_DB,
           namespace,
+          manifestJson: provider.manifestFor(handle),
         }),
         tables: new D1TableStore(
           bindings.CATALOG_DB,

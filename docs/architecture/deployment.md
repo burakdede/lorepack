@@ -150,7 +150,9 @@ prefix lets later work enumerate or remove exactly that build without guessing.
 
 Every remote runtime read registers a unique operational owner in `CATALOG_DB` before it
 opens the captured build. Registration atomically captures its corpus, namespace, build and
-generation and refuses deletion-claimed builds. Cleanup protects every unexpired owner and
+generation, projection versions and immutable manifest, and refuses deletion-claimed builds.
+The Worker validates the captured versions and uses that manifest throughout the operation,
+without a separate metadata lookup. Cleanup protects every unexpired owner and
 reconciles a printed plan against owners acquired since the preview. Those records affect
 retention only; they are excluded from immutable content identity and portable packages.
 

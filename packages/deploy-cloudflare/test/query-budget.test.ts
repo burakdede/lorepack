@@ -1,9 +1,10 @@
 import { join } from 'node:path';
-import { loadConfig, ProgressBus } from '@lorepack/core';
+import { type ContextBundle, loadConfig, ProgressBus } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
 import { withTempProject } from '../../../tools/test-support/src/index.ts';
 import { runBuild } from '../../cli/src/services/build.js';
 import { createCloudflareDeploymentTarget } from '../src/target.js';
+import { createCloudflareWorkerFromBindings } from '../src/worker-app.js';
 import {
   CORPUS_ID,
   createProjectedWorkerRuntimeFixture,
@@ -60,8 +61,35 @@ async function measuredFixture() {
       calls.push({ query });
       return prepare(query);
     };
+    const worker = createCloudflareWorkerFromBindings({
+      CATALOG_DB: fixture.projection,
+      TABLES_DB: fixture.projection,
+      OBJECTS: fixture.bucket,
+      PROJECT_ID: PROJECT,
+    });
+    const request = async (path: string, payload?: unknown): Promise<Response> => {
+      return await worker.fetch(
+        new Request(`https://budget.workers.dev${path}`, {
+          ...(payload === undefined
+            ? {}
+            : {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              }),
+        }),
+      );
+    };
     return {
       ...fixture,
+      request,
+      close: async () => {
+        try {
+          await worker.close();
+        } finally {
+          await fixture.close();
+        }
+      },
       db: {
         calls,
         resetCalls() {
@@ -79,72 +107,43 @@ async function measuredFixture() {
 }
 
 /**
- * Worker D1 query budget, verified 2026-08-08.
- *
- * These maxima include the per-request `active_build` read and the namespaced
- * `build_manifests` lookup.
- *
- * Current bounds:
- * - `describeBuild`: 4 queries
- * - `search`: 5 queries on the common path, 6 with fallback
- * - `contextForTask`: 4 queries on the common path, 5 with fallback
- * - `readSource`: 4 queries
- * - `listTables`: 3 queries
- * - `describeTable`: 5 queries
- * - `queryTable`: 5 queries
+ * Runtime D1 query maxima through the actual Worker HTTP assembly, verified 2026-10-12.
+ * Authorization is disabled for this capability-cost measurement; authentication and rate
+ * admission have their own suites. The producer is removed before any serving measurement.
  */
-
 describe('the Worker D1 query budget, issue 86', () => {
   it('keeps each runtime capability within its documented query maximum', async () => {
     const fixture = await measuredFixture();
     try {
-      const { runtime, db, knownArtifactId, knownTableId } = fixture;
-
-      const countFor = async (call: () => Promise<unknown>): Promise<number> => {
-        db.resetCalls();
-        await call();
-        return db.calls.length;
-      };
-
-      expect.soft(await countFor(() => runtime.describeBuild())).toBeLessThanOrEqual(4);
-      expect
-        .soft(
-          await countFor(() =>
-            runtime.search({
-              query: MATCHING_QUERY,
-              limit: 10,
-              includeArchived: false,
-              debug: false,
-            }),
-          ),
-        )
-        .toBeLessThanOrEqual(5);
-      expect
-        .soft(
-          await countFor(() =>
-            runtime.contextForTask({
-              task: 'rollback release unmatchedterm',
-              includeArchived: false,
-              allowUnsupportedBudget: false,
-            }),
-          ),
-        )
-        .toBeLessThanOrEqual(5);
-      expect
-        .soft(await countFor(() => runtime.readSource({ artifactId: knownArtifactId })))
-        .toBeLessThanOrEqual(4);
-      expect.soft(await countFor(() => runtime.listTables())).toBeLessThanOrEqual(3);
-      expect.soft(await countFor(() => runtime.describeTable(knownTableId))).toBeLessThanOrEqual(5);
-      expect
-        .soft(
-          await countFor(() =>
-            runtime.queryTable({
-              tableId: knownTableId,
-              sql: fixture.sql,
-            }),
-          ),
-        )
-        .toBeLessThanOrEqual(5);
+      const tablePath = `/v1/tables/${encodeURIComponent(fixture.knownTableId)}`;
+      const probes = [
+        { path: '/v1/build', maximum: 4 },
+        {
+          path: '/v1/search',
+          maximum: 5,
+          payload: { query: MATCHING_QUERY, limit: 10, includeArchived: false, debug: false },
+        },
+        {
+          path: '/v1/context',
+          maximum: 5,
+          payload: {
+            task: 'rollback release unmatchedterm',
+            includeArchived: false,
+            allowUnsupportedBudget: false,
+          },
+        },
+        { path: `/v1/sources/${encodeURIComponent(fixture.knownArtifactId)}`, maximum: 4 },
+        { path: '/v1/tables', maximum: 3 },
+        { path: tablePath, maximum: 5 },
+        { path: `${tablePath}/query`, maximum: 5, payload: { sql: fixture.sql } },
+      ];
+      for (const probe of probes) {
+        fixture.db.resetCalls();
+        const response = await fixture.request(probe.path, probe.payload);
+        const body = await response.text();
+        expect(response.status, `${probe.path}: ${body}`).toBe(200);
+        expect.soft(fixture.db.calls.length, probe.path).toBeLessThanOrEqual(probe.maximum);
+      }
     } finally {
       await fixture.close();
     }
@@ -153,19 +152,20 @@ describe('the Worker D1 query budget, issue 86', () => {
   it('does not fan out D1 queries with deeper context assembly', async () => {
     const fixture = await measuredFixture();
     try {
-      const { runtime, db } = fixture;
-
-      db.resetCalls();
-      const bundle = await runtime.contextForTask({
+      fixture.db.resetCalls();
+      const response = await fixture.request('/v1/context', {
         task: 'rollback release unmatchedterm',
         includeArchived: false,
         budget: 24_000,
         allowUnsupportedBudget: false,
       });
-
+      expect(response.status).toBe(200);
+      const bundle = (await response.json()) as ContextBundle;
       expect(bundle.selected.length).toBeGreaterThan(0);
-      expect(db.calls.length).toBeLessThanOrEqual(5);
-      expect(db.calls.filter((call) => call.query.includes('FROM chunks_fts')).length).toBe(2);
+      expect(fixture.db.calls.length).toBeLessThanOrEqual(5);
+      expect(fixture.db.calls.filter((call) => call.query.includes('FROM chunks_fts')).length).toBe(
+        2,
+      );
     } finally {
       await fixture.close();
     }
