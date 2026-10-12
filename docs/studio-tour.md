@@ -59,7 +59,8 @@ Tables console and the source reader offer the same panel.
 
 The schema shows types, nulls, distinct values, ranges, and generated query
 names. The console accepts only the same read-only SQL surface available to a
-model.
+model. Query results show their captured build, table and query IDs, plus explicit
+table-level provenance. Source rows and cells are not individually attributed.
 
 ![Studio Tables](images/studio-tables.png)
 

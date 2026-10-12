@@ -308,7 +308,10 @@ interface ConsoleQuery {
   readonly isError: boolean;
   readonly error: unknown;
   readonly data:
-    | { columns: string[]; rows: Array<Record<string, unknown>>; truncated: boolean }
+    | Pick<
+        TableQueryResult,
+        'columns' | 'rows' | 'truncated' | 'buildId' | 'tableId' | 'queryId' | 'provenancePrecision'
+      >
     | undefined;
 }
 
@@ -331,6 +334,14 @@ function ConsoleResult({ query }: { readonly query: ConsoleQuery }): React.JSX.E
           : `${data.rows.length.toLocaleString('en-US')} ${data.rows.length === 1 ? 'row' : 'rows'}.`}
         {data.truncated ? ' Truncated at the row limit, so there are more.' : ''}
       </p>
+      <Facts>
+        <Fact label="Query">{data.queryId}</Fact>
+        <Fact label="Build">{data.buildId}</Fact>
+        <Fact label="Table">{data.tableId}</Fact>
+        <Fact label="Provenance" mono={false}>
+          Table-level; source rows and cells are not attributed.
+        </Fact>
+      </Facts>
       <Grid label="Query result" columns={data.columns} rows={data.rows} />
     </div>
   );
@@ -410,3 +421,5 @@ function cellClass(value: unknown): string {
   if (typeof value === 'number') return 'cell cell-number';
   return 'cell';
 }
+
+import type { TableQueryResult } from '@lorepack/sdk';
