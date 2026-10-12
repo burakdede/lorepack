@@ -243,6 +243,13 @@ may postpone deletion until it releases the catalog or closes. An explicit `serv
 `mcp --build` owns that selection for its whole server lifetime, including between requests.
 Reads fail safely if ownership cannot be recorded.
 
+Cloudflare reads also own their captured build and normalized objects during cleanup. Each
+remote operation must finish within five minutes; an expired operation returns an explicit
+limit error, even when its data was already loaded. Cleanup and activation share a primary
+database fence, so a build claimed for deletion cannot become active. See
+[remote cleanup](docs/architecture/deployment.md#cloudflare-remote-cleanup) for the lifetime
+and concurrent-operation behavior.
+
 Rollback points at an existing immutable build. It does not recompile the sources, and it
 works after the source directory and parser cache are removed. Keep `lore.yaml` and `.lore/`:
 they identify the project and hold its retained builds and content objects. A missing or

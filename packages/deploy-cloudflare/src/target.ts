@@ -20,6 +20,10 @@ import {
 } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { type D1CatalogDatabaseLike, D1CatalogStore } from './catalog.js';
+import {
+  acquireRemoteMutationGuard,
+  hasUnknownRemoteMutationCompletion,
+} from './mutation_ownership.js';
 import { uploadProjectArchive } from './project-archive.js';
 import { projectBuildMetadata } from './project-metadata.js';
 import { uploadProjectObjects } from './project-objects.js';
@@ -78,8 +82,19 @@ export class CloudflareApplyError extends LoreError {
 
   constructor(message: string, receipt: DeploymentReceipt, cause: unknown) {
     super('LORE_E_REMOTE_DEPLOY', message, {
-      remediation: 'Deploy again with --resume so the completed candidate work is reused.',
-      details: { receiptId: receipt.receiptId },
+      remediation: hasUnknownRemoteMutationCompletion(cause)
+        ? 'Inspect the operation owner and remote state before retrying. Preserve ownership while an earlier write may still be running.'
+        : cause instanceof LoreError && cause.remediation !== undefined
+          ? cause.remediation
+          : 'Deploy again with --resume so the completed candidate work is reused.',
+      details: {
+        receiptId: receipt.receiptId,
+        ...(hasUnknownRemoteMutationCompletion(cause)
+          ? { reason: 'remote-mutation-completion-unknown' }
+          : cause instanceof LoreError && cause.details?.reason !== undefined
+            ? { reason: cause.details.reason }
+            : {}),
+      },
       cause,
     });
     this.receipt = receipt;
@@ -198,6 +213,7 @@ export function createCloudflareDeploymentTarget(
     },
     apply: async (plan, resume, progress): Promise<DeploymentReceipt> => {
       let receipt = receiptFor(plan, resume);
+      let mutationOwner: Awaited<ReturnType<typeof acquireRemoteMutationGuard>> | undefined;
       let transfer = normalizeTransfer(receipt.transfer, plan);
       const buildDirectory = plan.input.buildDirectory;
       const objectsDirectory = join(dirname(dirname(buildDirectory)), 'objects');
@@ -223,13 +239,82 @@ export function createCloudflareDeploymentTarget(
             },
           );
         }
+        await runProjectionMigrations(options.catalogDb, options.now);
+        await runTableProjectionMigrations(options.tablesDb ?? options.catalogDb, options.now);
         if (transfer.state?.migrations_done !== true) {
-          await runProjectionMigrations(options.catalogDb, options.now);
-          await runTableProjectionMigrations(options.tablesDb ?? options.catalogDb, options.now);
           transfer = updateState(transfer, 'migrations_done', true);
           receipt = { ...receipt, transfer };
           projectedSteps += 1;
           reportProjectionProgress(progress, projectedSteps, 'migrations');
+        }
+
+        mutationOwner = await acquireRemoteMutationGuard(options.catalogDb, {
+          kind: 'apply',
+          projectId: options.projectId,
+          buildId: plan.input.buildId,
+        });
+
+        const claim = (
+          await options.catalogDb
+            .prepare('SELECT token FROM retention_claims WHERE project_id = ? AND build_id = ?')
+            .bind(options.projectId, plan.input.buildId)
+            .run()
+        ).results?.[0];
+        if (claim !== undefined) {
+          throw new LoreError('LORE_E_REMOTE_DEPLOY', 'Cleanup still owns this candidate build.', {
+            remediation: 'Finish the interrupted cleanup before deploying this build again.',
+            subject: plan.input.buildId,
+            details: { reason: 'retention-claimed' },
+          });
+        }
+        const projected = (
+          await options.catalogDb
+            .prepare(
+              'SELECT verified_at AS verifiedAt FROM projected_builds WHERE project_id = ? AND build_id = ?',
+            )
+            .bind(options.projectId, plan.input.buildId)
+            .run<{ verifiedAt: string | null }>()
+        ).results?.[0];
+        if (projected === undefined && transfer.state?.metadata_done === true) {
+          throw new LoreError(
+            'LORE_E_REMOTE_DEPLOY',
+            'The resumed candidate projection no longer exists.',
+            {
+              remediation: 'Create a fresh deployment instead of reusing this expired receipt.',
+              subject: plan.input.buildId,
+              details: { reason: 'remote-candidate-expired' },
+            },
+          );
+        }
+        if (projected?.verifiedAt != null) {
+          await assertProjectionReadable(options.catalogDb, {
+            projectId: options.projectId,
+            buildId: plan.input.buildId,
+          });
+          for (const key of ['metadata_done', 'search_done', 'tables_done'])
+            transfer = updateState(transfer, key, true);
+          receipt = { ...receipt, transfer };
+        } else {
+          const protectedBuild = (
+            await options.catalogDb
+              .prepare(`SELECT 1 FROM active_build WHERE build_id = ?
+            UNION ALL SELECT 1 FROM runtime_read_owners WHERE project_id = ? AND build_id = ?
+            AND expires_at > unixepoch('now') LIMIT 1`)
+              .bind(plan.input.buildId, options.projectId, plan.input.buildId)
+              .run()
+          ).results?.[0];
+          if (protectedBuild !== undefined) {
+            throw new LoreError(
+              'LORE_E_REMOTE_DEPLOY',
+              'An active or acquired build cannot be reprojected.',
+              {
+                remediation:
+                  'Deploy a separate immutable candidate before changing the active pointer.',
+                subject: plan.input.buildId,
+                details: { reason: 'remote-build-owned' },
+              },
+            );
+          }
         }
 
         if (transfer.state?.metadata_done !== true) {
@@ -375,19 +460,45 @@ VALUES (1, ?, ?, 'namespace_' || lower(hex(randomblob(16))))`)
           receipt = { ...receipt, transfer };
         }
 
+        await mutationOwner.release();
+        mutationOwner = undefined;
         return receipt;
       } catch (cause) {
+        let failure = cause;
+        if (!hasUnknownRemoteMutationCompletion(cause)) {
+          try {
+            await mutationOwner?.release();
+          } catch (releaseCause) {
+            failure = new AggregateError(
+              [cause, releaseCause],
+              'Remote apply and ownership release failed.',
+            );
+          }
+        }
         throw new CloudflareApplyError(
           `The cloudflare target failed while projecting candidate ${plan.input.buildId}.`,
           receipt,
-          cause,
+          failure,
         );
       }
     },
     verify: async (receipt) => {
       await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
-      if (options.verifyCandidate !== undefined) return await options.verifyCandidate(receipt);
-      return await verifyCandidateBuild(options, receipt);
+      const owner = await acquireRemoteMutationGuard(options.catalogDb, {
+        kind: 'verify',
+        projectId: options.projectId,
+        buildId: receipt.buildId,
+      });
+      let failure: unknown;
+      try {
+        if (options.verifyCandidate !== undefined) return await options.verifyCandidate(receipt);
+        return await verifyCandidateBuild(options, receipt);
+      } catch (cause) {
+        failure = cause;
+        throw cause;
+      } finally {
+        if (!hasUnknownRemoteMutationCompletion(failure)) await owner.release();
+      }
     },
     activate: async (receipt) => {
       await readRuntimeIdentity(options.catalogDb, options.projectId, options.corpusId);
@@ -753,20 +864,80 @@ async function switchActiveBuild(
   guard: { readonly requireVerified: boolean },
 ): Promise<ActivationReceipt> {
   const switchedAt = options.now?.() ?? new Date().toISOString();
-  let previous: { readonly buildId: BuildId; readonly generation: number } | null = null;
+  const previous = await currentActiveBuild(options.catalogDb);
+  let switched = false;
   try {
-    await options.catalogDb.prepare('BEGIN IMMEDIATE').run();
     if (guard.requireVerified && !(await projectedBuildVerified(options, buildId))) {
       throw new CloudflareUnverifiedBuildError(buildId);
     }
-    previous = await currentActiveBuild(options.catalogDb);
-    if (previous?.buildId !== buildId) {
-      const nextGeneration = (previous?.generation ?? 0) + 1;
+    const updated = (
       await options.catalogDb
-        .prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1')
-        .bind(buildId, nextGeneration)
-        .run();
+        .prepare(`UPDATE active_build
+SET generation = generation + CASE WHEN build_id IS ? THEN 0 ELSE 1 END,
+    build_id = ?
+WHERE id = 1 AND build_id IS ? AND generation = ?
+  AND EXISTS (SELECT 1 FROM projected_builds b
+    WHERE b.project_id = ? AND b.build_id = ?
+      AND (? = 0 OR b.verified_at IS NOT NULL))
+  AND NOT EXISTS (SELECT 1 FROM retention_claims c
+    WHERE c.project_id = ? AND c.build_id = ?)
+  AND NOT EXISTS (SELECT 1 FROM remote_mutation_guard w
+    WHERE w.kind = 'apply' AND w.project_id = ? AND w.build_id = ?)
+RETURNING build_id AS buildId, generation`)
+        .bind(
+          buildId,
+          buildId,
+          previous?.buildId ?? null,
+          previous?.generation ?? 0,
+          options.projectId,
+          buildId,
+          guard.requireVerified ? 1 : 0,
+          options.projectId,
+          buildId,
+          options.projectId,
+          buildId,
+        )
+        .run<{ buildId: BuildId; generation: number }>()
+    ).results?.[0];
+    if (updated === undefined) {
+      const writer = (
+        await options.catalogDb
+          .prepare(
+            "SELECT token FROM remote_mutation_guard WHERE kind = 'apply' AND project_id = ? AND build_id = ?",
+          )
+          .bind(options.projectId, buildId)
+          .run()
+      ).results?.[0];
+      if (writer !== undefined) {
+        throw new LoreError('LORE_E_REMOTE_DEPLOY', 'A candidate apply still owns this build.', {
+          remediation:
+            'Wait for candidate apply and verification to finish before changing the pointer.',
+          subject: buildId,
+          details: { reason: 'remote-build-owned' },
+        });
+      }
+      const claim = (
+        await options.catalogDb
+          .prepare('SELECT token FROM retention_claims WHERE project_id = ? AND build_id = ?')
+          .bind(options.projectId, buildId)
+          .run()
+      ).results?.[0];
+      throw new LoreError(
+        'LORE_E_REMOTE_DEPLOY',
+        claim === undefined
+          ? 'The active pointer or candidate changed before activation.'
+          : 'Cleanup already claimed this build for deletion.',
+        {
+          remediation:
+            claim === undefined
+              ? 'Read the current remote state and retry activation of a retained verified build.'
+              : 'Deploy and verify retained evidence again before activating it.',
+          subject: buildId,
+          details: { reason: claim === undefined ? 'activation-raced' : 'retention-claimed' },
+        },
+      );
     }
+    switched = true;
     await options.catalogDb
       .prepare(
         `UPDATE projected_builds
@@ -776,19 +947,17 @@ WHERE project_id = ? AND build_id = ?`,
       )
       .bind(switchedAt, switchedAt, options.projectId, buildId)
       .run();
-    await options.catalogDb.prepare('COMMIT').run();
   } catch (cause) {
-    try {
-      await options.catalogDb.prepare('ROLLBACK').run();
-    } catch {}
-    if (cause instanceof CloudflareUnverifiedBuildError) throw cause;
+    if (cause instanceof LoreError) throw cause;
     throw new LoreError(
       'LORE_E_REMOTE_DEPLOY',
-      `Could not switch the active cloudflare build to ${buildId}.`,
+      `Could not complete activation of the cloudflare build ${buildId}.`,
       {
-        remediation:
-          'Nothing was switched publicly. Retry once the D1 catalog is writable and the projected build is complete.',
+        remediation: switched
+          ? 'The pointer changed, but activation metadata could not be recorded. Inspect the active build before retrying.'
+          : 'Read the current remote state and retry once the catalog is writable.',
         subject: buildId,
+        details: { pointerChanged: switched },
         cause,
       },
     );

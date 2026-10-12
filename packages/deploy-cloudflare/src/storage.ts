@@ -10,6 +10,7 @@ import {
   type RuntimeIdentity,
 } from '@lorepack/core/worker';
 import { r2ObjectKey } from './r2-keys.js';
+import { acquireReadOwnership } from './read_ownership.js';
 import { checkedRuntimeIdentity } from './runtime-identity.js';
 
 interface D1PreparedStatementLike {
@@ -133,38 +134,43 @@ export class D1ActiveBuildProvider implements ActiveBuildProvider {
       throw new LoreError('LORE_E_INVALID_ARGUMENT', 'The build selection is invalid.', {
         remediation: 'Pass a full retained build ID, or omit buildId to read the active build.',
       });
-    const active = await this.#activeRow();
-    if (active === null || (active.buildId === null && parsed.data.buildId === undefined)) {
-      throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This deployment has no active build.', {
-        remediation: 'Deploy and activate a verified build before serving requests from it.',
-      });
+    const selectedBuildId =
+      parsed.data.buildId === undefined ? undefined : assertBuildId(parsed.data.buildId);
+    const ownership = await acquireReadOwnership(this.#db, this.#projectId, selectedBuildId);
+    if (ownership === null) {
+      const active = await this.#activeRow();
+      if (active === null || (active.buildId === null && parsed.data.buildId === undefined)) {
+        throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This deployment has no active build.', {
+          remediation: 'Deploy and activate a verified build before serving requests from it.',
+        });
+      }
+      checkedRuntimeIdentity(active, this.#projectId);
+      throw new LoreError(
+        'LORE_E_BUILD_NOT_FOUND',
+        'The selected build is not retained and available for acquisition.',
+        {
+          remediation:
+            'Select a verified retained build in this project. No active fallback is permitted.',
+          ...(parsed.data.buildId === undefined ? {} : { subject: parsed.data.buildId }),
+        },
+      );
     }
-
-    const identity = checkedRuntimeIdentity(active, this.#projectId);
-    const buildId = assertBuildId(parsed.data.buildId ?? (active.buildId as string));
-    if (parsed.data.buildId !== undefined) {
-      const retained = await this.#db
-        .prepare(`SELECT build_id AS buildId FROM projected_builds
-        WHERE project_id = ? AND build_id = ? AND verified_at IS NOT NULL`)
-        .bind(this.#projectId, buildId)
-        .first<{ buildId: string }>();
-      if (retained?.buildId !== buildId)
-        throw new LoreError(
-          'LORE_E_BUILD_NOT_FOUND',
-          'The selected build is not retained and verified in this deployment.',
-          {
-            remediation:
-              'Select a verified deployed build in this project. No active fallback is permitted.',
-            subject: buildId,
-          },
-        );
+    let identity: RuntimeIdentity;
+    let buildId: BuildId;
+    try {
+      identity = checkedRuntimeIdentity(ownership, this.#projectId);
+      buildId = assertBuildId(ownership.buildId);
+    } catch (error) {
+      await ownership.release();
+      throw error;
     }
     const handle: BuildHandle = Object.freeze({
       ...identity,
       buildId,
-      generation: Number(active.generation),
-      release: () => {
+      generation: Number(ownership.generation),
+      release: async () => {
         this.#handles.delete(handle);
+        await ownership.release();
       },
     });
     this.#handles.add(handle);

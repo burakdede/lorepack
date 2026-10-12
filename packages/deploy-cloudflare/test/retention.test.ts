@@ -35,6 +35,9 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
       return { results: statement.all(...this.#bindings) as readonly T[] };
     }
+    if (/\breturning\b/i.test(this.#query)) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
     statement.run(...this.#bindings);
     return {};
   }

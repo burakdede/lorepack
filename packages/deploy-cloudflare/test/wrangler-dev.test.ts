@@ -110,6 +110,19 @@ CREATE TABLE build_manifests (
   manifest_json TEXT NOT NULL,
   PRIMARY KEY (project_id, build_id)
 );
+CREATE TABLE runtime_read_owners (
+  token TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  checked_at INTEGER NOT NULL
+);
+CREATE TABLE retention_claims (
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  token TEXT NOT NULL,
+  PRIMARY KEY (project_id, build_id)
+);
 CREATE TABLE projected_builds (
   project_id TEXT NOT NULL,
   build_id TEXT NOT NULL,

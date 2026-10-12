@@ -348,7 +348,7 @@ class PortedRuntime implements LoreRuntime {
         },
       });
     } finally {
-      handle.release();
+      await handle.release();
     }
   }
 
