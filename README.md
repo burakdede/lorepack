@@ -479,6 +479,7 @@ The test toolchain is outside the published runtime dependencies; see the
 Studio development uses Vite 7.3.5. Users receive Studio's built assets in the CLI;
 see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
+Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
 
 ## License
 

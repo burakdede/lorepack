@@ -174,6 +174,14 @@ workflow requires pending changesets. Explicit `privatePackages` settings preser
 versioning private packages without tagging them, matching the previous behavior.
 Release-plan comparison and version preparation in disposable copies verify migration.
 
+The contributor `wrangler` pins in CLI and deploy-cloudflare move together to 4.149.0.
+The [vendor release](https://github.com/cloudflare/workers-sdk/releases/tag/wrangler@4.149.0)
+includes sharp 0.35.5; its Miniflare closure also resolves undici 7.29.1. Keeping
+Cloudflare's declared closure avoids forcing replacements underneath its emulator.
+Wrangler supports Node >=22 and uses MIT OR Apache-2.0 licensing. As before, the stable
+Wrangler release declares a prerelease Miniflare dependency. Contributor native tools
+remain isolated from the published CLI, and install scripts remain disabled.
+
 ## Adding one
 
 Before adding a dependency, check and record: last release, open CVEs, licence, install
