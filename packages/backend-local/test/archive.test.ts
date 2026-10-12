@@ -1,21 +1,11 @@
 import { createWriteStream, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  type BuildIdInputs,
-  deriveBuildId,
-  hashCanonical,
-  hashRoot,
-  type LoreError,
-  SCHEMA_VERSION,
-  sha256Hex,
-} from '@lorepack/core';
+import { type LoreError, sha256Hex } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import yazl from 'yazl';
 import { ARCHIVE_LIMITS, readArchive, verifyArchive } from '../src/archive.js';
-import { loadMigrations, runMigrations } from '../src/migrations.js';
-import { buildMigrationsDirectory } from '../src/migrations-path.js';
-import { openWritable } from '../src/sqlite.js';
+import { validBuild } from './archive_fixture.js';
 
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
 const DATABASE = new TextEncoder().encode('SQLite format 3');
@@ -38,51 +28,6 @@ const BUILD: ReadonlyArray<readonly [string, Uint8Array]> = [
   ['manifest.json', MANIFEST],
   ['context.sqlite', DATABASE],
 ];
-
-function validBuild(root: string): ReadonlyArray<readonly [string, Uint8Array]> {
-  const catalog = join(root, 'empty.sqlite');
-  const db = openWritable(catalog);
-  try {
-    runMigrations(db, loadMigrations(buildMigrationsDirectory()));
-  } finally {
-    db.close();
-  }
-  const empty = hashRoot([]);
-  const roots = { artifacts: empty, nodes: empty, chunks: empty, tables: empty, objects: empty };
-  const inputs: BuildIdInputs = {
-    formatVersion: 1,
-    schemaVersion: SCHEMA_VERSION,
-    compilerVersion: '0.1.0',
-    canonicalizationVersion: 1,
-    normalizationVersion: 1,
-    effectiveConfig: {},
-    parserVersions: {},
-    ruleResolution: [],
-    embeddingProfile: null,
-    canonicalRoots: roots,
-  };
-  const encode = (value: unknown) => new TextEncoder().encode(`${JSON.stringify(value)}\n`);
-  return [
-    [
-      'manifest.json',
-      encode({
-        formatVersion: 1,
-        schemaVersion: SCHEMA_VERSION,
-        compilerVersion: '0.1.0',
-        buildId: deriveBuildId(inputs),
-        projectName: 'empty',
-        configurationHash: hashCanonical({}),
-        sourceFingerprint: sha256Hex(new Uint8Array()),
-        canonicalRoots: roots,
-        capabilities: ['lexical-search'],
-        counts: { artifacts: 0, nodes: 0, chunks: 0, tables: 0, tableRows: 0 },
-        warnings: [],
-      }),
-    ],
-    ['context.sqlite', new Uint8Array(readFileSync(catalog))],
-    ['reports/build-id-inputs.json', encode(inputs)],
-  ];
-}
 
 async function writeZip(
   path: string,
