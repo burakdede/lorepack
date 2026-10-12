@@ -23,6 +23,7 @@ import type {
  */
 
 export interface LoreClientOptions {
+  readonly buildId?: string;
   /** Where the runtime is listening, for example `http://127.0.0.1:4321`. */
   readonly baseUrl: string;
   /** Sent as `Authorization: Bearer`. Local servers need none; Phase 6 remotes will. */
@@ -67,6 +68,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRIES = 3;
 
 export class LoreClient {
+  readonly #buildId: string | undefined;
   readonly #baseUrl: string;
   readonly #token: string | undefined;
   readonly #timeoutMs: number;
@@ -74,6 +76,7 @@ export class LoreClient {
   readonly #retries: number;
 
   constructor(options: LoreClientOptions) {
+    this.#buildId = options.buildId;
     this.#baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.#token = options.token;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -98,11 +101,19 @@ export class LoreClient {
   }
 
   search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {
-    return this.#post('/v1/search', request, signal);
+    return this.#post(
+      '/v1/search',
+      { ...request, buildId: request.buildId ?? this.#buildId },
+      signal,
+    );
   }
 
   contextForTask(request: TaskContextRequest, signal?: AbortSignal): Promise<ContextBundle> {
-    return this.#post('/v1/context', request, signal);
+    return this.#post(
+      '/v1/context',
+      { ...request, buildId: request.buildId ?? this.#buildId },
+      signal,
+    );
   }
 
   readSource(
@@ -111,6 +122,7 @@ export class LoreClient {
     signal?: AbortSignal,
   ): Promise<SourceReadResult> {
     const query = new URLSearchParams();
+    if (options.buildId !== undefined) query.set('buildId', options.buildId);
     if (options.page !== undefined) query.set('page', String(options.page));
     if (options.lineStart !== undefined) query.set('lineStart', String(options.lineStart));
     if (options.lineEnd !== undefined) query.set('lineEnd', String(options.lineEnd));
@@ -132,12 +144,12 @@ export class LoreClient {
   queryTable(
     tableId: string,
     sql: string,
-    options: { limit?: number } = {},
+    options: { limit?: number; buildId?: string } = {},
     signal?: AbortSignal,
   ): Promise<TableQueryResult> {
     return this.#post(
       `/v1/tables/${encodeURIComponent(tableId)}/query`,
-      { tableId, sql, ...options },
+      { tableId, sql, ...options, buildId: options.buildId ?? this.#buildId },
       signal,
     );
   }
@@ -148,6 +160,11 @@ export class LoreClient {
    * 400 means the request was wrong, and asking again more slowly will not fix it.
    */
   async #get<T>(path: string, signal?: AbortSignal): Promise<T> {
+    if (this.#buildId !== undefined && path !== '/health') {
+      const url = new URL(path, `${this.#baseUrl}/`);
+      if (!url.searchParams.has('buildId')) url.searchParams.set('buildId', this.#buildId);
+      path = `${url.pathname}${url.search}`;
+    }
     let lastError: unknown;
     for (let attempt = 1; attempt <= this.#retries; attempt += 1) {
       try {
@@ -218,6 +235,27 @@ export class LoreClient {
       });
     }
 
+    const selected =
+      new URL(path, `${this.#baseUrl}/`).searchParams.get('buildId') ??
+      (typeof init.body === 'string'
+        ? (JSON.parse(init.body) as { buildId?: string }).buildId
+        : undefined);
+    if (
+      selected !== undefined &&
+      selected !== null &&
+      (parsed === null ||
+        typeof parsed !== 'object' ||
+        (parsed as { buildId?: unknown }).buildId !== selected)
+    ) {
+      throw new LoreClientError({
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        status: response.status,
+        message: 'The runtime response does not prove it read the selected build.',
+        remediation:
+          'Use a runtime that supports exact retained-build selection. No active fallback is accepted.',
+        subject: selected,
+      });
+    }
     return parsed as T;
   }
 }

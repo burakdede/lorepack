@@ -32,6 +32,7 @@ export function exportCommand(): CommandDefinition {
     name: 'export',
     description: 'Write a bounded, cited context bundle for a task. Markdown or JSON.',
     flags: [
+      { flags: '--build <id>', description: 'read this full retained build ID instead of active' },
       { flags: '--task <text>', description: 'what the context is for' },
       { flags: '--profile <name>', description: 'agent, coding, chat or deep (default chat)' },
       { flags: '--budget <tokens>', description: 'estimated token budget, overriding the profile' },
@@ -69,13 +70,14 @@ export function exportCommand(): CommandDefinition {
       });
 
       try {
-        if ((await backend.provider.current()) === null) {
+        if (flags.build === undefined && (await backend.provider.current()) === null) {
           throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to export.', {
             remediation: 'Run `lorepack build` first.',
           });
         }
 
         const bundle = await createRuntime(backend).contextForTask({
+          ...(typeof flags.build === 'string' ? { buildId: flags.build } : {}),
           task,
           profile,
           includeArchived: false,

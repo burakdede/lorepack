@@ -14,6 +14,69 @@ const manifest = JSON.parse(
   readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
 ) as { dependencies?: Record<string, string>; files?: string[]; exports?: unknown };
 
+describe('exact retained-build selection, issue432', () => {
+  const first = `lore_${'a'.repeat(64)}`;
+  const second = `lore_${'b'.repeat(64)}`;
+
+  it('carries one selected build through every read capability and preserves a base path', async () => {
+    const seen: string[] = [];
+    const client = new LoreClient({
+      baseUrl: 'https://runtime.test/project',
+      buildId: first,
+      fetch: async (input, init) => {
+        const url = new URL(String(input));
+        expect(url.pathname).toMatch(/^\/project\/v1\//);
+        const selection =
+          init?.body === undefined
+            ? url.searchParams.get('buildId')
+            : (JSON.parse(String(init.body)) as { buildId: string }).buildId;
+        expect(selection).toBe(first);
+        seen.push(url.pathname);
+        return Response.json({ buildId: first, tables: [] });
+      },
+    });
+    await client.describeBuild();
+    await client.search({ query: 'rollback' });
+    await client.contextForTask({ task: 'rollback' });
+    await client.readSource('guide');
+    await client.listTables();
+    await client.describeTable('pricing');
+    await client.queryTable('pricing', 'SELECT price FROM prices');
+    expect(seen).toHaveLength(7);
+  });
+
+  it('rejects a server that silently answers with the active build or omits proof', async () => {
+    for (const reply of [{ buildId: second }, { tables: [] }]) {
+      let calls = 0;
+      const client = new LoreClient({
+        baseUrl: 'https://runtime.test',
+        buildId: first,
+        fetch: async () => {
+          calls += 1;
+          return Response.json(reply);
+        },
+      });
+      await expect(client.describeBuild()).rejects.toMatchObject({
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        subject: first,
+      });
+      expect(calls).toBe(1);
+    }
+  });
+
+  it('lets an explicit per-request selection replace the client default', async () => {
+    const client = new LoreClient({
+      baseUrl: 'https://runtime.test',
+      buildId: first,
+      fetch: async (_input, init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ buildId: second });
+        return Response.json({ buildId: second });
+      },
+    });
+    expect((await client.search({ query: 'rollback', buildId: second })).buildId).toBe(second);
+  });
+});
+
 describe('the package', () => {
   it('has no runtime dependencies at all', () => {
     expect(manifest.dependencies ?? {}).toEqual({});

@@ -1,7 +1,7 @@
 import { networkInterfaces } from 'node:os';
 import { serve } from '@hono/node-server';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
-import { type BuildId, LoreError, type ProjectConfig } from '@lorepack/core';
+import { type BuildId, type BuildSelection, LoreError, type ProjectConfig } from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
@@ -56,6 +56,7 @@ export const REQUEST_TIMEOUTS = {
 export const SERVE_DEFAULTS = { port: DEFAULT_PORT, attempts: PORT_ATTEMPTS } as const;
 
 export interface ServingOptions {
+  readonly buildId?: BuildId;
   readonly config: ProjectConfig;
   readonly host: string;
   readonly port: number;
@@ -119,14 +120,37 @@ export async function startServing(
   });
 
   try {
+    const selected = options.buildId === undefined ? {} : { buildId: options.buildId };
+    const initial = await backend.provider.acquire(selected);
+    const initialBuildId = initial.buildId;
+    initial.release();
     const active = await backend.provider.current();
-    if (active === null) {
+    if (active === null && options.buildId === undefined) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no build to serve.', {
         remediation: 'Run `lorepack build` first.',
       });
     }
 
-    const runtime = createRuntime(backend);
+    const runtime = createRuntime({
+      ...backend,
+      ...(options.buildId === undefined ? {} : { buildId: options.buildId }),
+    });
+    const selectionFor = (request: BuildSelection): BuildSelection => {
+      if (
+        options.buildId !== undefined &&
+        request.buildId !== undefined &&
+        request.buildId !== options.buildId
+      ) {
+        throw new LoreError(
+          'LORE_E_INVALID_ARGUMENT',
+          'This server serves a different selected build.',
+          {
+            remediation: 'Use the build configured for this server.',
+          },
+        );
+      }
+      return { buildId: request.buildId ?? options.buildId };
+    };
     // One handler for the process, built once: it constructs a fresh server per request
     // internally, which is what the stateless model asks for, and holds the machinery that
     // would otherwise be rebuilt on every call.
@@ -150,8 +174,20 @@ export async function startServing(
     const app = createApiApp({
       runtime,
       allowedHosts,
-      currentBuild: () => backend.provider.current(),
-      freshness,
+      currentBuild: async () => {
+        if (options.buildId === undefined) return backend.provider.current();
+        const handle = await backend.provider.acquire(selected);
+        try {
+          return { buildId: handle.buildId, generation: handle.generation };
+        } finally {
+          handle.release();
+        }
+      },
+      freshness: async () =>
+        options.buildId !== undefined &&
+        (await backend.provider.current())?.buildId !== options.buildId
+          ? 'unknown'
+          : freshness(),
       mcpHandler: (request) => mcp.fetch(request),
       // Reads of the **active build**, so any server can answer them: they change nothing and
       // they touch no source file. `lorepack serve` offering them is the same promise it already
@@ -168,8 +204,8 @@ export async function startServing(
           sourceState: bundle.sourceState,
         });
       },
-      sources: async () => {
-        const handle = await backend.provider.acquire();
+      sources: async (selection) => {
+        const handle = await backend.provider.acquire(selectionFor(selection));
         try {
           const scope = await backend.open(handle);
           return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
@@ -177,10 +213,10 @@ export async function startServing(
           handle.release();
         }
       },
-      warnings: createWarningsEndpoint(async () => {
+      warnings: createWarningsEndpoint(async (selection) => {
         // Acquired and released like any other read, so a warnings request cannot pin a build
         // open after it stops being active.
-        const handle = await backend.provider.acquire();
+        const handle = await backend.provider.acquire(selectionFor(selection));
         try {
           const scope = await backend.open(handle);
           const manifest = await scope.catalog.manifest();
@@ -243,7 +279,7 @@ export async function startServing(
     return {
       url: `http://${options.host}:${server.port}`,
       port: server.port,
-      buildId: active.buildId,
+      buildId: initialBuildId,
       studio: serveStudio,
       close: async () => {
         if (closed) return;

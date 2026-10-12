@@ -1,5 +1,6 @@
 import {
   buildDescriptionSchema,
+  buildSelectionSchema,
   contextBundleSchema,
   forClient,
   type LoreRuntime,
@@ -53,11 +54,11 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
       title: 'Describe the active context build',
       description:
         'Report which build is active, what it contains, and whether the sources have changed since it was compiled. Call this first to learn what corpus you are reading.',
-      inputSchema: z.object({}),
+      inputSchema: buildSelectionSchema,
       outputSchema: buildDescriptionSchema,
       annotations: READ_ONLY,
     },
-    async () => guard(async () => reply(await runtime.describeBuild())),
+    async (selection) => guard(async () => reply(await runtime.describeBuild(selection))),
   );
 
   server.registerTool(
@@ -105,13 +106,30 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
       title: 'List typed tables',
       description:
         'List the typed tables this build contains. A build compiled from documents alone has none, and says so rather than failing.',
-      inputSchema: z.object({}),
+      inputSchema: buildSelectionSchema,
       outputSchema: z.object({
+        buildId: buildSelectionSchema.shape.buildId,
+        corpusId: z.string().optional(),
+        namespaceId: z.string().optional(),
         tables: z.array(z.object({ tableId: z.string(), name: z.string() }).strict()),
       }),
       annotations: READ_ONLY,
     },
-    async () => guard(async () => reply({ tables: [...(await runtime.listTables())] })),
+    async (selection) =>
+      guard(async () => {
+        const described =
+          selection.buildId === undefined ? undefined : await runtime.describeBuild(selection);
+        return reply({
+          ...(described === undefined
+            ? {}
+            : {
+                buildId: described.buildId,
+                corpusId: described.corpusId,
+                namespaceId: described.namespaceId,
+              }),
+          tables: [...(await runtime.listTables(selection))],
+        });
+      }),
   );
 
   server.registerTool(
@@ -120,11 +138,12 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
       title: 'Describe a table',
       description:
         'Report a table its columns, types, per-column statistics, row count and a small sample, with the sheet and cell range it came from. Call this before writing SQL: it reports the `sqlName` of the table and of every column, which are the only names a query may use.',
-      inputSchema: z.object({ tableId: z.string().min(1) }),
+      inputSchema: z.object({ ...buildSelectionSchema.shape, tableId: z.string().min(1) }).strict(),
       outputSchema: tableDescriptionSchema,
       annotations: READ_ONLY,
     },
-    async ({ tableId }) => guard(async () => reply(await runtime.describeTable(tableId))),
+    async ({ tableId, ...selection }) =>
+      guard(async () => reply(await runtime.describeTable(tableId, selection))),
   );
 
   server.registerTool(

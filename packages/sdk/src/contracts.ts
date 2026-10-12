@@ -183,6 +183,7 @@ export interface HealthResult {
  * parsed types do, and `exactOptionalPropertyTypes` makes those two different types.
  */
 export interface SearchRequest {
+  buildId?: string | undefined;
   query: string;
   limit?: number | undefined;
   includeArchived?: boolean | undefined;
@@ -195,6 +196,7 @@ export interface SearchRequest {
 }
 
 export interface TaskContextRequest {
+  buildId?: string | undefined;
   task: string;
   profile?: ContextProfile | undefined;
   budget?: number | undefined;
@@ -205,6 +207,7 @@ export interface TaskContextRequest {
 }
 
 export interface SourceReadOptions {
+  buildId?: string | undefined;
   page?: number | undefined;
   lineStart?: number | undefined;
   lineEnd?: number | undefined;

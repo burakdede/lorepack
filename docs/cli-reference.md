@@ -151,6 +151,7 @@ lorepack search <query>
 
 | Name | Description |
 |---|---|
+| `--build <id>` | read this full retained build ID instead of active |
 | `--limit <count>` | results to return (default 10) |
 | `--path <glob>` | restrict to paths matching a glob |
 | `--type <extension>` | restrict to one file extension |
@@ -472,6 +473,7 @@ None.
 
 | Name | Description |
 |---|---|
+| `--build <id>` | serve this full retained build ID without checking sources |
 | `--ensure-current` | rebuild first when the sources have changed (the default) |
 | `--allow-stale` | serve the existing build even when sources changed |
 | `--active-only` | skip source checks entirely, for pinned or CI use |
@@ -494,6 +496,7 @@ None.
 
 | Name | Description |
 |---|---|
+| `--build <id>` | serve this full retained build ID across all requests |
 | `--port <number>` | port to listen on (default 4321) |
 | `--host <address>` | address to bind (default 127.0.0.1) |
 | `--revalidate-interval <ms>` | how often to recheck the sources (default LORE_REVALIDATE_INTERVAL_MS or 5000, 0 every request) |
@@ -514,6 +517,7 @@ None.
 
 | Name | Description |
 |---|---|
+| `--build <id>` | read this full retained build ID instead of active |
 | `--task <text>` | what the context is for |
 | `--profile <name>` | agent, coding, chat or deep (default chat) |
 | `--budget <tokens>` | estimated token budget, overriding the profile |

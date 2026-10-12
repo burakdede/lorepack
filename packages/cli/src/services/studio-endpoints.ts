@@ -1,6 +1,7 @@
 import { createPlan, readLockfile } from '@lorepack/compiler';
 import {
   type BuildExclusion,
+  type BuildSelection,
   type BuildWarning,
   loadSourceConfig,
   ProgressBus,
@@ -88,14 +89,14 @@ export interface WarningSummary {
  * the grouping.
  */
 export function createWarningsEndpoint(
-  read: () => Promise<{
+  read: (selection: BuildSelection) => Promise<{
     buildId: string;
     warnings: readonly BuildWarning[];
     exclusions?: readonly BuildExclusion[];
   }>,
-): () => Promise<WarningSummary> {
-  return async () => {
-    const { buildId, warnings, exclusions } = await read();
+): (selection?: BuildSelection) => Promise<WarningSummary> {
+  return async (selection = {}) => {
+    const { buildId, warnings, exclusions } = await read(selection);
 
     const byClass = new Map<BuildWarning['class'], BuildWarning[]>();
     for (const warning of warnings) {

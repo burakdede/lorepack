@@ -29,8 +29,22 @@ for (const citation of bundle.citations) {
 Build descriptions, search results, context bundles, source reads, table descriptions and
 table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. Corpus and
 namespace are persistent operational identifiers; the digest identifies immutable content
-and freshness reports whether sources have moved on. IDs are not credentials. Health and
-the table-name listing retain their own shapes.
+and freshness reports whether sources have moved on. IDs are not credentials. Health reports server status. Selected table listings also carry build, corpus and namespace IDs.
+Unselected table listings retain their existing shape.
+
+## Selected retained builds
+
+Set `buildId` to a full build ID when creating `LoreClient` to keep all seven read capabilities
+on that version across activation changes. Search, context, source and query requests can
+override the client selection with their own `buildId`. Missing or unavailable versions fail
+with `LORE_E_BUILD_NOT_FOUND`; the client refuses a successful response with missing or
+different build proof as `LORE_E_SCHEMA_MISMATCH`, including an older server that ignores
+selection. Health is a server probe and is not selected by the client.
+
+```ts
+const selected = new LoreClient({ baseUrl: 'http://127.0.0.1:4321', buildId: build.buildId });
+const bundle = await selected.contextForTask({ task: 'rollback procedure' });
+```
 
 ## Methods
 

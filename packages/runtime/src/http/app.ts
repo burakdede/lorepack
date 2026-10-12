@@ -1,5 +1,7 @@
 import {
   type BuildId,
+  type BuildSelection,
+  buildSelectionSchema,
   forClient,
   LoreError,
   type LoreRuntime,
@@ -106,14 +108,14 @@ export interface ApiOptions {
    */
   readonly plan?: () => Promise<unknown>;
   /** The active build's warnings, with class and path, for the Overview summary. */
-  readonly warnings?: () => Promise<unknown>;
+  readonly warnings?: (selection: BuildSelection) => Promise<unknown>;
   /**
    * Every artifact in the active build, for the Sources tree.
    *
    * Reads `CatalogStore.artifacts()`, which is a storage question rather than a retrieval
    * one, so it stays off `LoreRuntime` and its seven capabilities.
    */
-  readonly sources?: () => Promise<unknown>;
+  readonly sources?: (selection: BuildSelection) => Promise<unknown>;
   /**
    * The same Markdown `lorepack export` writes, for the same inputs.
    *
@@ -377,7 +379,9 @@ export function createApiApp(options: ApiOptions): Hono {
     app.all('/mcp', async (context) => handler(context.req.raw));
   }
 
-  app.get('/v1/build', (context) => answer(context, () => options.runtime.describeBuild()));
+  app.get('/v1/build', (context) =>
+    answer(context, () => options.runtime.describeBuild(selectionOf(context))),
+  );
 
   // Studio-facing reads that are not runtime capabilities. Absent unless the host supplies
   // them, so a deployment without sources simply does not have these routes.
@@ -387,11 +391,11 @@ export function createApiApp(options: ApiOptions): Hono {
   }
   if (options.warnings !== undefined) {
     const warnings = options.warnings;
-    app.get('/v1/warnings', (context) => answer(context, () => warnings()));
+    app.get('/v1/warnings', (context) => answer(context, () => warnings(selectionOf(context))));
   }
   if (options.sources !== undefined) {
     const sources = options.sources;
-    app.get('/v1/sources', (context) => answer(context, () => sources()));
+    app.get('/v1/sources', (context) => answer(context, () => sources(selectionOf(context))));
   }
   if (options.diagnostics !== undefined) {
     const diagnostics = options.diagnostics;
@@ -512,6 +516,7 @@ export function createApiApp(options: ApiOptions): Hono {
       // one whose spaces matter, which is part of the citation it names (#611).
       const headingPath = context.req.queries('headingPath');
       return options.runtime.readSource({
+        ...selectionOf(context),
         artifactId,
         ...numeric('page', query.page),
         ...numeric('lineStart', query.lineStart),
@@ -522,11 +527,29 @@ export function createApiApp(options: ApiOptions): Hono {
   );
 
   app.get('/v1/tables', (context) =>
-    answer(context, async () => ({ tables: await options.runtime.listTables() })),
+    answer(context, async () => {
+      const selection = selectionOf(context);
+      const described =
+        selection.buildId === undefined
+          ? undefined
+          : await options.runtime.describeBuild(selection);
+      return {
+        ...(described === undefined
+          ? {}
+          : {
+              buildId: described.buildId,
+              corpusId: described.corpusId,
+              namespaceId: described.namespaceId,
+            }),
+        tables: await options.runtime.listTables(selection),
+      };
+    }),
   );
 
   app.get('/v1/tables/:tableId', (context) =>
-    answer(context, () => options.runtime.describeTable(context.req.param('tableId'))),
+    answer(context, () =>
+      options.runtime.describeTable(context.req.param('tableId'), selectionOf(context)),
+    ),
   );
 
   app.post('/v1/tables/:tableId/query', async (context) =>
@@ -758,6 +781,22 @@ function statusFor(error: unknown): number {
   if (code === 'LORE_E_SQL_REJECTED') return 400;
   if (code === 'LORE_E_INTERNAL') return 500;
   return 500;
+}
+
+function selectionOf(context: Context): BuildSelection {
+  const values = context.req.queries('buildId');
+  if (values === undefined) return {};
+  const parsed =
+    values.length === 1 ? buildSelectionSchema.safeParse({ buildId: values[0] }) : null;
+  if (parsed?.success) return parsed.data;
+  throw new LoreError(
+    'LORE_E_INVALID_ARGUMENT',
+    'The buildId query parameter must be one full retained build ID.',
+    {
+      remediation: 'Pass one full build ID, or omit buildId to read the active build.',
+      subject: 'buildId',
+    },
+  );
 }
 
 function numeric(
