@@ -148,6 +148,15 @@ prefix lets later work enumerate or remove exactly that build without guessing.
 
 ## Cloudflare remote cleanup
 
+An uninitialized target produces an empty plan and cleanup performs no catalog, physical-table
+or object mutation. An initialized target can also have no active build. Previous verified
+builds are ordered by verification time, then projection time, then build ID, all descending.
+An orphan-only receipt rechecks catalog references immediately before dropping physical
+tables. Edited orphan-only receipts naming metadata tables fail without dropping them. Real SQLite
+regressions in [`retention.test.ts`](../../packages/deploy-cloudflare/test/retention.test.ts)
+cover these cold, tied and stale-plan states.
+
+
 Every remote runtime read registers a unique operational owner in `CATALOG_DB` before it
 opens the captured build. Registration atomically captures its corpus, namespace, build and
 generation, projection versions and immutable manifest, and refuses deletion-claimed builds.
