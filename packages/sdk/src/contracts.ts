@@ -72,7 +72,60 @@ export interface OmittedItem {
   locator: SourceLocator;
 }
 
+export type ExecutionJson =
+  | string
+  | number
+  | boolean
+  | null
+  | ExecutionJson[]
+  | { [key: string]: ExecutionJson };
+
+export interface ExecutionPolicy {
+  version: 1;
+  canonicalizationVersion: number;
+  retrieval: {
+    version: number;
+    normalization: 'fts5-unicode61';
+    queryVersion: number;
+    rankingVersion: number;
+    weightsVersion: number;
+    weights: ExecutionJson;
+  };
+  packing: {
+    version: number;
+    profile: ContextProfile;
+    budget: number;
+    orientationShare: number;
+    maximumItemsPerArtifact: number;
+    maximumAlternatives: number;
+    unit: 'whole-chunk';
+  };
+  estimator: { version: number; mode: 'stored-chunk-estimates'; compilerVersion: string };
+  visibility: {
+    version: number;
+    default: 'current-preferred-with-historical-fallback' | 'current-only';
+    includeArchived: boolean;
+    drafts: 'eligible-labeled-downranked';
+  };
+  serialization: { version: number; format: 'context-bundle-json' };
+}
+
+export interface ExecutionSelection extends RuntimeIdentity {
+  buildId: string;
+  task: string;
+  filters: Array<{ kind: 'path' | 'type' | 'status'; value: string }>;
+}
+
+export interface ExecutionIdentity {
+  version: 1;
+  policyId: string;
+  selectionId: string;
+  policy: ExecutionPolicy;
+  selection: ExecutionSelection;
+}
+
 export interface ContextBundle extends RuntimeIdentity {
+  execution: ExecutionIdentity;
   buildId: string;
   sourceState: SourceState;
   task: string;

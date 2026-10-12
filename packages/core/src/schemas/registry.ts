@@ -9,6 +9,11 @@ import { buildSelectionSchema } from './common.js';
 import { configSchema } from './config.js';
 import { buildDiffSchema } from './diff.js';
 import { doctorReportSchema } from './doctor.js';
+import {
+  executionIdentitySchema,
+  executionPolicySchema,
+  executionSelectionSchema,
+} from './execution.js';
 import { deploymentReceiptSchema, planSchema, remoteRetentionReceiptSchema } from './plan.js';
 import {
   buildDescriptionSchema,
@@ -45,6 +50,9 @@ export const PUBLIC_SCHEMAS = {
   'search-result': searchResultSchema,
   'task-context-request': taskContextRequestSchema,
   'context-bundle': contextBundleSchema,
+  'execution-policy': executionPolicySchema,
+  'execution-selection': executionSelectionSchema,
+  'execution-identity': executionIdentitySchema,
   'source-read-request': sourceReadRequestSchema,
   'source-read-result': sourceReadResultSchema,
   'table-description': tableDescriptionSchema,

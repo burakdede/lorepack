@@ -65,3 +65,8 @@ contract data.
 
 MCP protocol 2026-07-28, `@modelcontextprotocol/server` 2.0.0, verified 2026-08-03. Generic
 stdio configuration page checked 2026-08-13.
+
+Task context tool results include `execution.policyId`, `execution.selectionId` and their
+resolved policy and build-scoped request. They identify context selection separately from
+immutable content. See the [execution contract](../architecture/retrieval.md#execution-identity)
+for canonical hashing, excluded observation state and replay limits.

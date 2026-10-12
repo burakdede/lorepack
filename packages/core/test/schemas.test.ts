@@ -253,6 +253,47 @@ describe('runtime contracts', () => {
       namespaceId: `namespace_${'d'.repeat(32)}`,
       buildId: BUILD_ID,
       sourceState: 'clean' as const,
+      execution: {
+        version: 1,
+        policyId: `policy_${FULL_DIGEST}`,
+        selectionId: `selection_${FULL_DIGEST}`,
+        policy: {
+          version: 1,
+          canonicalizationVersion: 1,
+          retrieval: {
+            version: 1,
+            normalization: 'fts5-unicode61',
+            queryVersion: 1,
+            rankingVersion: 1,
+            weightsVersion: 1,
+            weights: {},
+          },
+          packing: {
+            version: 1,
+            profile: 'chat',
+            budget: 100,
+            orientationShare: 0.1,
+            maximumItemsPerArtifact: 4,
+            maximumAlternatives: 5,
+            unit: 'whole-chunk',
+          },
+          estimator: { version: 1, mode: 'stored-chunk-estimates', compilerVersion: '0.1.0' },
+          visibility: {
+            version: 1,
+            default: 'current-preferred-with-historical-fallback',
+            includeArchived: false,
+            drafts: 'eligible-labeled-downranked',
+          },
+          serialization: { version: 1, format: 'context-bundle-json' },
+        },
+        selection: {
+          corpusId: `corpus_${'c'.repeat(32)}`,
+          namespaceId: `namespace_${'d'.repeat(32)}`,
+          buildId: BUILD_ID,
+          task: 'Review pricing',
+          filters: [],
+        },
+      },
       task: 'Review pricing',
       profile: 'chat' as const,
       budget: 100,
@@ -272,6 +313,18 @@ describe('runtime contracts', () => {
     expect(result.success).toBe(false);
     expect(JSON.stringify(result.error?.issues)).toContain('never exceed its budget');
     expect(contextBundleSchema.safeParse({ ...bundle, estimatedTokens: 100 }).success).toBe(true);
+    const valid = { ...bundle, estimatedTokens: 100 };
+    const differentBinding = {
+      ...valid,
+      execution: {
+        ...valid.execution,
+        selection: { ...valid.execution.selection, namespaceId: `namespace_${'e'.repeat(32)}` },
+      },
+    };
+    expect(contextBundleSchema.safeParse(differentBinding).success).toBe(false);
+    expect(contextBundleSchema.safeParse({ ...valid, task: 'Another request' }).success).toBe(
+      false,
+    );
   });
 
   it('caps table query sql at the D1 statement length limit', () => {
@@ -458,6 +511,9 @@ describe('public registry', () => {
         'context-bundle',
         'deployment-receipt',
         'doctor-report',
+        'execution-identity',
+        'execution-policy',
+        'execution-selection',
         'lore-config',
         'lore-lock',
         'plan',

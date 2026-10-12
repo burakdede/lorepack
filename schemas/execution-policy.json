@@ -1,0 +1,228 @@
+{
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "$id": "https://lorepack.dev/schemas/execution-policy.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalizationVersion": {
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "estimator": {
+      "additionalProperties": false,
+      "properties": {
+        "compilerVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "mode": {
+          "const": "stored-chunk-estimates",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "mode",
+        "compilerVersion"
+      ],
+      "type": "object"
+    },
+    "packing": {
+      "additionalProperties": false,
+      "properties": {
+        "budget": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "maximumAlternatives": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maximumItemsPerArtifact": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "orientationShare": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "profile": {
+          "enum": [
+            "agent",
+            "coding",
+            "chat",
+            "deep"
+          ],
+          "type": "string"
+        },
+        "unit": {
+          "const": "whole-chunk",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "profile",
+        "budget",
+        "orientationShare",
+        "maximumItemsPerArtifact",
+        "maximumAlternatives",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "retrieval": {
+      "additionalProperties": false,
+      "properties": {
+        "normalization": {
+          "const": "fts5-unicode61",
+          "type": "string"
+        },
+        "queryVersion": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "rankingVersion": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "weights": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "weightsVersion": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "normalization",
+        "queryVersion",
+        "rankingVersion",
+        "weightsVersion",
+        "weights"
+      ],
+      "type": "object"
+    },
+    "serialization": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "const": "context-bundle-json",
+          "type": "string"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "format"
+      ],
+      "type": "object"
+    },
+    "version": {
+      "const": 1,
+      "type": "number"
+    },
+    "visibility": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "enum": [
+            "current-preferred-with-historical-fallback",
+            "current-only"
+          ],
+          "type": "string"
+        },
+        "drafts": {
+          "const": "eligible-labeled-downranked",
+          "type": "string"
+        },
+        "includeArchived": {
+          "type": "boolean"
+        },
+        "version": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "default",
+        "includeArchived",
+        "drafts"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "canonicalizationVersion",
+    "retrieval",
+    "packing",
+    "estimator",
+    "visibility",
+    "serialization"
+  ],
+  "title": "execution-policy",
+  "type": "object"
+}

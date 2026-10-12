@@ -244,3 +244,32 @@ are not near-duplicates and most of those settle after a handful of misses.
 The early exit is exact, not an approximation, and a property test compares it against the
 plain computation over 1,500 generated pairs at three thresholds rather than trusting the
 algebra. Bundle p95 fell from 194.59 ms to 60.4 ms.
+
+## Execution identity
+
+Each context bundle includes `execution.version: 1`, `policyId`, `selectionId`, the resolved
+`policy` and `selection`. Content build IDs continue to identify canonical evidence.
+Execution identity records retrieval/query/ranking versions and actual weights, packing
+version/profile/budget/orientation/diversity limits, stored-estimate compiler version,
+visibility including explicit history, and context-JSON serialization version.
+
+`policyId` is `policy_` plus canonical SHA-256 of
+`{ domain: "lorepack-execution-policy-v1", policy }`. `selectionId` is `selection_` plus
+canonical SHA-256 of `{ domain: "lorepack-context-selection-v1", policyId, selection }`.
+The selection contains corpus/namespace/full build binding, task and resolved filters.
+Filters are sorted by kind/value and deduplicated. Arrays with meaningful order retain it.
+The pure core canonical serialization and Web Crypto hash are shared across local and
+Worker runtimes. Defaults resolve before hashing. Freshness, observation timestamps,
+credentials and local absolute paths are excluded.
+
+The estimator descriptor names the stored chunk estimates and their compiler version.
+It does not claim an exact provider tokenizer or a complete serialized-payload count.
+Changing an output-affecting algorithm requires its pipeline version to change; changing
+weights or packing constants also changes the policy digest without altering evidence.
+
+Markdown export prints the IDs for the context DTO it renders. The selection identity
+covers canonical context inputs, not retention of the emitted Markdown or JSON bytes.
+Exact emission receipts are separately tracked by #434. Replay requires retained evidence
+and compatible policies; this metadata alone cannot reproduce a downstream model answer.
+Legacy bundles missing execution metadata cannot supply an execution identity. Version1
+schemas require the descriptor and reject unknown top-level versions/fields.

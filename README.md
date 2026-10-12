@@ -187,7 +187,9 @@ Assemble bounded context for a task without calling a model:
 lorepack export --task "How should the sync worker recover after a failed deploy?"
 ```
 
-The export contains the selected passages and their provenance. Lorepack does not summarize
+The export contains the selected passages and their provenance. JSON includes resolved
+execution policy and selection IDs; Markdown prints both IDs. These identify the runtime
+configuration and build-scoped request separately from the immutable content build. Lorepack does not summarize
 source material or decide which user-declared authority is correct.
 
 ### 4. Serve and connect

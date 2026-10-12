@@ -11,6 +11,7 @@ import {
   sourceLocatorSchema,
 } from './common.js';
 import { contextProfileSchema } from './config.js';
+import { executionIdentitySchema } from './execution.js';
 
 /**
  * Runtime request and response contracts. MCP tool schemas, the REST bodies and the SDK
@@ -137,6 +138,7 @@ export const omittedItemSchema = z
 export const contextBundleSchema = z
   .object({
     ...responseEnvelope,
+    execution: executionIdentitySchema,
     task: z.string(),
     profile: contextProfileSchema,
     budget: z.int().positive(),
@@ -153,6 +155,19 @@ export const contextBundleSchema = z
     citations: z.array(sourceLocatorSchema),
   })
   .strict()
+  .refine(
+    (bundle) =>
+      bundle.execution.selection.buildId === bundle.buildId &&
+      bundle.execution.selection.corpusId === bundle.corpusId &&
+      bundle.execution.selection.namespaceId === bundle.namespaceId &&
+      bundle.execution.selection.task === bundle.task &&
+      bundle.execution.policy.packing.profile === bundle.profile &&
+      bundle.execution.policy.packing.budget === bundle.budget,
+    {
+      message: 'Execution metadata must identify this bundle and its resolved policy',
+      path: ['execution'],
+    },
+  )
   .refine((bundle) => bundle.estimatedTokens <= bundle.budget, {
     message: 'A bundle may never exceed its budget',
   });
