@@ -323,7 +323,15 @@ describe('runtime contracts', () => {
         total: 0,
         reported: 0,
         truncated: false,
-        reasons: { budget: 0, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+        reasons: {
+          budget: 0,
+          duplicate: 0,
+          diversity: 0,
+          superseded: 0,
+          archived: 0,
+          filtered: 0,
+          'structural-unit': 0,
+        },
       },
       citations: [],
     };

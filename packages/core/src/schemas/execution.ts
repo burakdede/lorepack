@@ -25,7 +25,8 @@ export const executionPolicySchema = z
         maximumItemsPerArtifact: z.int().positive(),
         maximumAlternatives: z.int().nonnegative(),
         maximumOmissionDetails: z.int().nonnegative(),
-        unit: z.literal('whole-chunk'),
+        unit: z.enum(['whole-chunk', 'native-unit']),
+        maximumNativeUnitBytes: z.int().positive().optional(),
       })
       .strict(),
     estimator: z
@@ -54,7 +55,15 @@ export const executionPolicySchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (policy) =>
+      policy.packing.unit !== 'native-unit' || policy.packing.maximumNativeUnitBytes !== undefined,
+    {
+      message: 'Native-unit packing requires its materialization limit.',
+      path: ['packing', 'maximumNativeUnitBytes'],
+    },
+  );
 
 export const executionSelectionSchema = z
   .object({

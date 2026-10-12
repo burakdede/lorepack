@@ -5,6 +5,7 @@ import type {
   BuildScope,
   CatalogArtifact,
   CatalogNode,
+  CatalogSearchCriteria,
   CatalogSearchHit,
   CatalogStore,
   TableStore,
@@ -77,8 +78,17 @@ const catalog: CatalogStore = {
   async countWarnings() {
     return 0;
   },
-  async search() {
-    return [HIT];
+  async search(_query: string, criteria: CatalogSearchCriteria) {
+    return [
+      {
+        ...HIT,
+        ...(criteria.nativeUnits === true
+          ? {
+              nativeUnit: { nodeIds: ['n0'], text: HIT.text },
+            }
+          : {}),
+      },
+    ];
   },
   async supersededArtifacts() {
     return new Set<string>();

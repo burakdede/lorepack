@@ -70,6 +70,7 @@ export interface AssembleInput {
   readonly candidateMatchMode?: 'all' | 'any';
   /** Ranked candidates, best first, already filtered for visibility. */
   readonly ranked: readonly RankedHit[];
+  readonly structuralOmissions?: readonly RankedHit[];
   /**
    * What the ranking pipeline removed, with its reason.
    *
@@ -111,7 +112,9 @@ export function assembleBundle(input: AssembleInput): Assembled {
   const reservedTokens = overview.reduce((sum, item) => sum + item.estimatedTokens, 0);
 
   const selected: ContextBundle['selected'] = [];
-  const omitted: ContextBundle['omitted'] = [];
+  const omitted: ContextBundle['omitted'] = (input.structuralOmissions ?? []).map((ranked) =>
+    omit(ranked, 'structural-unit'),
+  );
   const perArtifact = new Map<string, number>();
   let used = reservedTokens;
   let budgetExhausted = false;
@@ -242,6 +245,11 @@ function toItem(ranked: RankedHit): ContextBundle['selected'][number] {
   return {
     chunkId: ranked.hit.chunkId,
     text: ranked.hit.text,
+    ...(ranked.hit.nativeUnit === undefined
+      ? {}
+      : {
+          nativeUnit: { nodeIds: [...ranked.hit.nativeUnit.nodeIds], status: 'complete' as const },
+        }),
     estimatedTokens: ranked.hit.estimatedTokens,
     headingPath: [...ranked.hit.headingPath],
     labels: ranked.labels,
@@ -256,6 +264,11 @@ function omit(
   return {
     chunkId: ranked.hit.chunkId,
     reason,
+    ...(ranked.hit.nativeUnit === undefined || ranked.hit.nativeUnit.nodeIds.length === 0
+      ? {}
+      : {
+          nativeUnit: { nodeIds: [...ranked.hit.nativeUnit.nodeIds], status: 'omitted' as const },
+        }),
     estimatedTokens: ranked.hit.estimatedTokens,
     locator: locatorOf(ranked.hit),
   };

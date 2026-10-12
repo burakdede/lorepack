@@ -86,3 +86,9 @@ The budget covers the complete tool result, including both `content` text and
 `structuredContent`. Exact omission totals remain in `omissionSummary`; `omitted` is
 bounded diagnostic detail with explicit reported/truncated fields. UTF-8 engineering
 estimates are not provider token counts. See [delivery limits](../architecture/retrieval.md#delivered-context-limits).
+
+Context items identify their complete canonical native nodes in `nativeUnit`.
+Attached conditions inside those nodes are preserved. An unresolved or oversized
+native body is reported with omission reason `structural-unit`; budget omission
+also removes whole units. This is structural closure, without inferred links across
+paragraphs or documents. The resolved packing policy records the native body limit.

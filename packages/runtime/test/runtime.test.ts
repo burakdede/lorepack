@@ -46,6 +46,22 @@ describe('selected provider contract, issue432', () => {
   });
 });
 
+it('refuses context adapters that omit native closure and releases the captured reader, issue698', async () => {
+  const provider = new TrackingProvider();
+  const runtime = runtimeOver(provider, {
+    open: async (handle) => {
+      const scope = scopeFor(handle.buildId);
+      vi.spyOn(scope.catalog, 'search').mockResolvedValue([hitIn(handle.buildId)]);
+      return scope;
+    },
+  });
+  await expect(runtime.contextForTask({ task: 'match', budget: 8000 })).rejects.toMatchObject({
+    code: 'LORE_E_SCHEMA_MISMATCH',
+  });
+  expect(provider.released).toBe(1);
+  expect(provider.leaked).toBe(0);
+});
+
 function manifestFor(buildId: BuildId): BuildManifest {
   return {
     formatVersion: 1,
@@ -133,7 +149,17 @@ class FakeCatalog implements CatalogStore {
     _query: string,
     criteria: CatalogSearchCriteria,
   ): Promise<readonly CatalogSearchHit[]> {
-    return [hitIn(this.buildId)].slice(0, criteria.limit);
+    const hit = hitIn(this.buildId);
+    return [
+      {
+        ...hit,
+        ...(criteria.nativeUnits === true
+          ? {
+              nativeUnit: { nodeIds: [`${hit.artifactId}#0.1`], text: hit.text },
+            }
+          : {}),
+      },
+    ].slice(0, criteria.limit);
   }
 }
 

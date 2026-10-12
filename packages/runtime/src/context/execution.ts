@@ -7,6 +7,7 @@ import {
   executionPolicySchema,
   executionSelectionSchema,
   hashCanonicalPortable,
+  NATIVE_UNIT_LIMITS,
   RANKING_WEIGHTS,
   RANKING_WEIGHTS_VERSION,
 } from '@lorepack/core/worker';
@@ -28,7 +29,7 @@ export function resolveExecutionPolicy(input: {
     version: 1,
     canonicalizationVersion: CANONICALIZATION_VERSION,
     retrieval: {
-      version: 1,
+      version: 2,
       normalization: 'fts5-unicode61',
       queryVersion: 1,
       rankingVersion: 1,
@@ -36,14 +37,15 @@ export function resolveExecutionPolicy(input: {
       weights: RANKING_WEIGHTS,
     },
     packing: {
-      version: 2,
+      version: 3,
       profile: input.profile,
       budget: input.budget,
       orientationShare: ORIENTATION_SHARE,
       maximumItemsPerArtifact: MAX_ITEMS_PER_ARTIFACT,
       maximumAlternatives: MAX_ALTERNATIVES,
       maximumOmissionDetails: MAXIMUM_OMISSION_DETAILS,
-      unit: 'whole-chunk',
+      unit: 'native-unit',
+      maximumNativeUnitBytes: NATIVE_UNIT_LIMITS.maxUtf8Bytes,
     },
     estimator: {
       version: 2,
