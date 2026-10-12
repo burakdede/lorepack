@@ -110,6 +110,11 @@ describe('a table query through the bundled binary (#639)', () => {
       { sku: 'B-2', price: 25 },
     ]);
     expect(parsed.locator.relativePath).toBe('products.csv');
+    expect(parsed).toMatchObject({
+      tableId: TABLE,
+      provenancePrecision: 'table',
+      queryId: expect.stringMatching(/^query_[a-f0-9]{64}$/),
+    });
   });
 
   it('never puts an absolute path of this install in a response', async () => {

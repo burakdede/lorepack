@@ -391,6 +391,19 @@ export function runRuntimeContract(options: ContractOptions): void {
           // one build named different places until #235: `query` reported the sheet and
           // `describe` did not.
           expect(described.locator).toEqual(queried.locator);
+          expect(queried.tableId).toBe(knownTableId);
+          expect(queried.provenancePrecision).toBe('table');
+          expect(queried.queryId).toMatch(/^query_[a-f0-9]{64}$/);
+          expect(
+            (
+              await runtime.queryTable({
+                tableId: knownTableId,
+                sql: `SELECT ${described.columns[0]?.sqlName ?? '*'} FROM ${described.sqlName}`,
+                limit: 100,
+                buildId: queried.buildId,
+              })
+            ).queryId,
+          ).toBe(queried.queryId);
         });
       });
 

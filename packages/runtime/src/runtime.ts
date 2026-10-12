@@ -32,6 +32,7 @@ import type { ZodType } from 'zod';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
 import { fitDeliveredContext } from './context/budget.js';
 import { identifyExecution, resolveExecutionPolicy } from './context/execution.js';
+import { identifyTableQuery } from './query_identity.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
 
@@ -257,6 +258,9 @@ class PortedRuntime implements LoreRuntime {
       async ({ scope, envelope }) => ({
         ...(await scope.tables.query(request)),
         ...envelope,
+        tableId: request.tableId,
+        queryId: await identifyTableQuery(request, envelope),
+        provenancePrecision: 'table' as const,
       }),
       { buildId: request.buildId },
     );

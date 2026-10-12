@@ -69,6 +69,14 @@
       "pattern": "^namespace_[0-9a-f]{32}$",
       "type": "string"
     },
+    "provenancePrecision": {
+      "const": "table",
+      "type": "string"
+    },
+    "queryId": {
+      "pattern": "^query_[0-9a-f]{64}$",
+      "type": "string"
+    },
     "rowCount": {
       "maximum": 9007199254740991,
       "minimum": 0,
@@ -92,6 +100,11 @@
       ],
       "type": "string"
     },
+    "tableId": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string"
+    },
     "truncated": {
       "type": "boolean"
     }
@@ -101,6 +114,9 @@
     "namespaceId",
     "buildId",
     "sourceState",
+    "queryId",
+    "tableId",
+    "provenancePrecision",
     "columns",
     "rows",
     "rowCount",

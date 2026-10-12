@@ -307,6 +307,16 @@ async function checkTableQuery(installDir, projectDir) {
     } else if (JSON.stringify(JSON.parse(body).rows) !== '[{"sku":"A-1"},{"sku":"B-2"}]') {
       problems.push(`a table query through the installed CLI returned the wrong rows: ${body}`);
     }
+    if (response.status === 200) {
+      const result = JSON.parse(body);
+      if (
+        result.tableId !== table.id ||
+        result.provenancePrecision !== 'table' ||
+        !/^query_[a-f0-9]{64}$/.test(result.queryId)
+      ) {
+        problems.push(`an installed table query omitted its identity or precision: ${body}`);
+      }
+    }
     for (const path of [installDir, projectDir, consumer]) {
       if (body.includes(path) || body.includes(JSON.stringify(path).slice(1, -1))) {
         problems.push(`a table query response disclosed the absolute path ${path}`);
