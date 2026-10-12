@@ -1,6 +1,6 @@
 # Detached context receipts
 
-The HTTP and MCP context adapters can create a bounded receipt after assembling
+The CLI, HTTP and MCP context adapters can create a bounded receipt after assembling
 and serializing the captured build's context. Request `receipt: true` for a
 redacted receipt, or `receipt: {captureRequest: true}` to include the normalized
 task and filters. The default creates no receipt or query history.
@@ -43,6 +43,24 @@ request capture. Captured selection plus the recorded policy describes the
 normalized request, rather than preserving cosmetic defaults or duplicate
 filter syntax.
 
+For a CLI export, pass `--receipt context.receipt.json`. The sidecar identifies
+stdout, including its final newline, or the exact `--output` file bytes when
+that option is present. With `--output`, JSON acknowledgement stdout is a
+separate response and is not the receipted file. `--capture-request` explicitly
+includes the normalized selection and requires `--receipt`. The sidecar is
+compact JSON within the same4,096-byte ceiling.
+
+```bash
+lorepack export --task "rollback" --format json --output context.json --receipt context.receipt.json
+```
+
+Existing files require `--force`; output and receipt paths must differ. Files
+are written atomically individually, not as a transaction across two paths.
+After an I/O failure, check which files were written before retrying. For
+stdout, the receipt identifies the stream submitted by the CLI, not an
+acknowledgement from a downstream reader. Choose export paths outside your
+configured source roots if they should not become later build inputs.
+
 `createContextReceipt` and `verifyContextReceipt` are portable exports of
 `@lorepack/core/worker`. Verification needs only the receipt and saved payload
 bytes. It can succeed after a build expires, but does not make an expired
@@ -52,6 +70,6 @@ serialize their returned bundle and create the detached receipt at their own
 content boundary.
 
 The schema is [context-receipt.json](../../schemas/context-receipt.json).
-CLI sidecar delivery, typed SDK receipt access and Studio inspection are the
+Typed SDK receipt access and Studio inspection are the
 remaining integration steps in #434; they are not advertised as implemented
 by this initial contract change. Persistent recording remains separate #435.

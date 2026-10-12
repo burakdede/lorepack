@@ -3,6 +3,7 @@
 '@lorepack/runtime': patch
 '@lorepack/mcp': patch
 '@lorepack/sdk': patch
+'@lorepack/cli': patch
 ---
 
 Add bounded detached HTTP/MCP context receipts and portable verification of

@@ -543,6 +543,8 @@ None.
 | `--budget <tokens>` | estimated token budget, overriding the profile |
 | `--format <format>` | markdown or json (default markdown) |
 | `--output <file>` | write to a file instead of stdout |
+| `--receipt <file>` | write a detached receipt for the exported bytes |
+| `--capture-request` | include normalized task and filters in the receipt |
 | `--force` | overwrite an existing output file |
 | `--include-archived` | explicitly include labeled archived and superseded evidence |
 | `--allow-unsupported-budget` | permit a budget outside the supported 4,000 to 40,000 range |

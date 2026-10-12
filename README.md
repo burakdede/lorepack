@@ -205,6 +205,8 @@ This does not infer qualifications across separate documents. See
 HTTP and MCP task requests can opt into a detached receipt identifying the exact
 emitted content bytes and build. Receipt creation does not enable query logging
 or prove model use. See [receipt boundaries and retention](docs/architecture/context_receipts.md).
+CLI exports write the same detached contract with `--receipt <file>`; add
+`--capture-request` only when the receipt should retain the normalized task.
 
 ### 4. Serve and connect
 
