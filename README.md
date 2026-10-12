@@ -570,6 +570,8 @@ Keep protocol SDK loading inside the handlers that use it.
 Published CLI builds preserve that boundary with shared ESM chunks.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
+CLI packaging preserves dependency patches with the frozen lockfile in its temporary build
+workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
 executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that

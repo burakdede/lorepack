@@ -76,11 +76,15 @@ Without it, npm users got a different tree from the one the workspace tests (#60
 - 17 packages resolved to versions CI never ran, including a second copy of `zod`.
 
 `scripts/pack-cli.mjs` builds the tarball. It runs `pnpm deploy --prod` for the CLI from a
-copy of the workspace (lockfile, workspace configuration and manifests), with injected workspace
+copy of the workspace (lockfile, dependency patches, workspace configuration and manifests), with injected workspace
 packages and a hoisted `node_modules`, so the frozen lockfile and every workspace override
 apply. It then sets `bundleDependencies` to the CLI's dependencies, drops the workspace-only
 `devDependencies`, and runs `npm pack`. The injected deploy matters: `pnpm deploy --legacy`
 re-resolved the ranges and drifted 17 packages from the lockfile when tried.
+
+The temporary workspace retains dependency patch files because frozen deployment reads them
+even when a patched contributor dependency is outside the CLI's production closure. Those
+build inputs do not add contributor dependencies to the published tarball.
 
 `scripts/check-packed-cli.mjs` is the gate. It installs the tarball with **npm** into an empty
 directory and fails on any `*.node` file or `@napi-rs/*` package, on any difference from the
