@@ -13,6 +13,7 @@ import {
   tableQueryResultSchema,
   taskContextRequestSchema,
 } from '@lorepack/core/worker';
+import { toolResult as reply } from '@lorepack/runtime';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
@@ -158,24 +159,6 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
     },
     async (request) => guard(async () => reply(await runtime.queryTable(request))),
   );
-}
-
-/**
- * One result shape for every tool.
- *
- * `structuredContent` is what a 2026-07-28 client validates against the declared output
- * schema. The serialized text block beside it is what a 2025-era client reads, and costs
- * one `JSON.stringify`: worth it, because the alternative is a client that connects
- * successfully and then sees nothing.
- */
-function reply<T>(result: T): {
-  content: Array<{ type: 'text'; text: string }>;
-  structuredContent: T;
-} {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    structuredContent: result,
-  };
 }
 
 /**

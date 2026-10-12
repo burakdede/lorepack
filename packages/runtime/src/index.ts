@@ -1,3 +1,5 @@
+export { type ExportOptions, moreCommandFor, renderBundleMarkdown } from './context/render.js';
+export { toolResult } from './context/serialize.js';
 export {
   type ApiOptions,
   type AuthorizationDecision,

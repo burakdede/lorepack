@@ -205,6 +205,9 @@ worth knowing:
 
 ## The Markdown export keeps documents out of its own structure
 
+The portable runtime owns Markdown rendering and MCP result serialization. CLI export
+and MCP tools use those shared functions so output and later accounting cannot drift.
+
 `lorepack export` and `POST /v1/export` render a bundle as Markdown for chat products that
 have no structured channel, so the headings and citation lines are the only provenance a
 reader gets. Every passage is therefore inside a fenced block one backtick longer than the
