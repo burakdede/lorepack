@@ -60,7 +60,7 @@ Parsing         4/4                             done
 Indexing        0 <elapsed>ms
 Indexing        6                               done
 Validating      0 <elapsed>ms
-Validating      11                              done
+Validating      13                              done
 Sealing         0 <elapsed>ms
 Sealing         1                               done
 Activating      0 <elapsed>ms
@@ -124,7 +124,7 @@ Parsing         4/4                             done
 Indexing        0 <elapsed>ms
 Indexing        7                               done
 Validating      0 <elapsed>ms
-Validating      11                              done
+Validating      13                              done
 Sealing         0 <elapsed>ms
 Sealing         1                               done
 Activating      0 <elapsed>ms
@@ -194,7 +194,7 @@ lorepack pack --out "<demo-workspace>/product-research.lorepack"
 
 ```text
 Wrote <demo-workspace>/product-research.lorepack
-  10 members, including the checksum index.
+  11 members, including the checksum index.
 ```
 
 ## deploy-ready: product-research
@@ -204,7 +204,7 @@ lorepack pack --verify "<demo-workspace>/product-research.lorepack"
 ```
 
 ```text
-<demo-workspace>/product-research.lorepack is intact. 10 members verified. Catalog roots, required objects and build ID verified. Integrity only; unsigned publisher.
+<demo-workspace>/product-research.lorepack is intact. 11 members verified. Catalog roots, required objects and build ID verified. Integrity only; unsigned publisher.
 ```
 
 ## coding-context: coding-project
@@ -223,7 +223,7 @@ Parsing         3/3                             done
 Indexing        0 <elapsed>ms
 Indexing        5                               done
 Validating      0 <elapsed>ms
-Validating      11                              done
+Validating      13                              done
 Sealing         0 <elapsed>ms
 Sealing         1                               done
 Activating      0 <elapsed>ms
