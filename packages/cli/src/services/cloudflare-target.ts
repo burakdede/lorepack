@@ -22,7 +22,11 @@ import {
   isWranglerRemoteMutation,
   readCloudflareTargetReceipt,
   UNKNOWN_ENDPOINT_REMEDIATION,
+  wranglerD1ExecutionMode,
 } from '../commands/target.js';
+
+export { wranglerD1ExecutionMode } from '../commands/target.js';
+
 import { workersDevEndpoint } from './workers-endpoint.js';
 import {
   locateWrangler,
@@ -361,11 +365,6 @@ export function isWranglerD1TransactionControl(query: string): boolean {
   return wranglerD1TransactionControl(query) !== null;
 }
 
-export function wranglerD1ExecutionMode(query: string): 'skip' | 'command' | 'file' {
-  if (wranglerD1TransactionControl(query) !== null) return 'skip';
-  return isWranglerD1ReadQuery(query) ? 'command' : 'file';
-}
-
 export class WranglerD1TransactionBatch {
   #statements: string[] | null = null;
 
@@ -410,15 +409,6 @@ function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'roll
   if (normalized === 'begin immediate') return 'begin';
   if (normalized === 'commit') return 'commit';
   return 'rollback';
-}
-
-function isWranglerD1ReadQuery(query: string): boolean {
-  const normalized = query.trim().toLowerCase();
-  return (
-    normalized.startsWith('select') ||
-    normalized.startsWith('pragma') ||
-    normalized.startsWith('with')
-  );
 }
 
 class WranglerR2Bucket implements R2BucketLike {
@@ -624,6 +614,7 @@ async function execWrangler(
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
       });
+      if (isWranglerRemoteMutation(args) && args[0] === 'd1') parseWranglerJson(stdout);
       return { stdout };
     } catch (cause) {
       const failure = wranglerExecFailure(cause);

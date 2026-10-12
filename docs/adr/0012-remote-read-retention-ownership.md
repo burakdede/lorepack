@@ -39,6 +39,11 @@ interrupted owners. Confirmed operations release after awaited work finishes; an
 Wrangler write keeps its capability and is not replayed automatically. Manual recovery must
 first stop the old operation and establish remote completion, then remove only its exact token.
 
+Wrangler must execute ownership and pointer SQL with `RETURNING` through its query command,
+not its file import. Imports report aggregate statistics and cannot establish which capability
+or pointer was changed. Flush preceding staged DDL first. An unreadable mutation response
+has unknown completion and retains the capability, just like a transport failure.
+
 Reuse verified projections rather than rebuilding active or acquired indexes. Refuse a stale
 candidate resume whose metadata disappeared. Resumed cleanup rechecks all current archive
 and object references and clears deletion claims only after all stages finish.

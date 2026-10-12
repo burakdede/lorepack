@@ -246,7 +246,8 @@ Reads fail safely if ownership cannot be recorded.
 Cloudflare reads also own their captured build and normalized objects during cleanup. Each
 remote operation must finish within five minutes; an expired operation returns an explicit
 limit error, even when its data was already loaded. Cleanup and activation share a primary
-database fence, so a build claimed for deletion cannot become active. See
+database fence, so a build claimed for deletion cannot become active. An unconfirmed remote
+write blocks later mutations until its completion is established; it is never blindly retried. See
 [remote cleanup](docs/architecture/deployment.md#cloudflare-remote-cleanup) for the lifetime
 and concurrent-operation behavior.
 

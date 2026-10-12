@@ -1229,7 +1229,16 @@ export function isWranglerD1TransactionControl(query: string): boolean {
 
 export function wranglerD1ExecutionMode(query: string): 'skip' | 'command' | 'file' {
   if (wranglerD1TransactionControl(query) !== null) return 'skip';
-  return isWranglerD1ReadQuery(query) ? 'command' : 'file';
+  return isWranglerD1ReadQuery(query) || /\breturning\b/i.test(wranglerSqlKeywords(query))
+    ? 'command'
+    : 'file';
+}
+
+function wranglerSqlKeywords(query: string): string {
+  return query.replace(
+    /'([^']|'')*'|"([^"]|"")*"|`([^`]|``)*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\//g,
+    ' ',
+  );
 }
 
 export class WranglerD1TransactionBatch {
@@ -1273,7 +1282,13 @@ export function renderWranglerSqlBatch(statements: readonly string[]): string {
 export function isWranglerRemoteMutation(args: readonly string[]): boolean {
   return (
     args.includes('--remote') &&
-    ((args[0] === 'd1' && args[1] === 'execute' && args.includes('--file')) ||
+    ((args[0] === 'd1' &&
+      args[1] === 'execute' &&
+      (args.includes('--file') ||
+        (args.includes('--command') &&
+          !/^\s*select\b/i.test(
+            wranglerSqlKeywords(args[args.indexOf('--command') + 1] ?? ''),
+          )))) ||
       (args[0] === 'r2' && args[1] === 'object' && (args[2] === 'put' || args[2] === 'delete')))
   );
 }
@@ -1317,6 +1332,7 @@ async function execWrangler(
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
       });
+      if (isWranglerRemoteMutation(args) && args[0] === 'd1') parseWranglerJson(stdout);
       return { stdout };
     } catch (cause) {
       const failure = wranglerExecFailure(cause);

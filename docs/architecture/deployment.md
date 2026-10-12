@@ -235,8 +235,12 @@ It measures the current projection path with delayed write statements and record
 in-flight D1 writes observed. The recorded result is `maxInflightWrites: 1`, which is the
 evidence behind keeping the write path serial while D1 remains single-threaded.
 
-The CLI's Wrangler-backed D1 adapter executes remote D1 statements from temporary `.sql` files
-instead of passing projected SQL through Wrangler's `--command` flag. It also does **not**
+The CLI's Wrangler-backed D1 adapter executes bulk projection writes from temporary `.sql`
+files. Statements with SQL `RETURNING` use `--command`: Wrangler's remote file import returns
+import statistics rather than statement rows. Pending batched writes are flushed before such
+a statement, so ownership acquisition observes the migrated catalog. Both paths preserve
+mutation ownership after a failed command or unreadable response and never replay that write.
+It also does **not**
 forward explicit transaction control statements such as `BEGIN IMMEDIATE`, `COMMIT`, or
 `ROLLBACK` to remote D1. Cloudflare D1 already wraps each remote statement in its own
 transaction, so sending those statements through Wrangler fails before projection can begin.
