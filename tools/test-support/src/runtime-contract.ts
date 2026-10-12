@@ -603,6 +603,17 @@ export function runRuntimeContract(options: ContractOptions): void {
           (t, c) => `SELECT ${c} FROM ${t}) UNION SELECT id FROM tables WHERE (1=1`,
         ],
         ['an unterminated block comment', (t, c) => `SELECT ${c} FROM ${t} /*`],
+        ['an odd-length blob literal', (t) => `SELECT X'0' AS v FROM ${t}`],
+        ['a non-hexadecimal blob literal', (t) => `SELECT x'0g' AS v FROM ${t}`],
+        ['an unterminated blob literal', (t) => `SELECT X'001 AS v FROM ${t}`],
+        ['an unterminated bracketed identifier', (t) => `SELECT [sku FROM ${t}`],
+        ...['"région"', '`région`', '[région]'].map(
+          (identifier) =>
+            [
+              `a non-ASCII quoted identifier ${identifier}`,
+              (t: string) => `SELECT ${identifier} FROM ${t}`,
+            ] as const,
+        ),
         ['an INSERT', (t, c) => `INSERT INTO ${t} (${c}) VALUES (1)`],
         [
           'a CTE ending in a DELETE',
@@ -730,6 +741,28 @@ export function runRuntimeContract(options: ContractOptions): void {
           });
         });
       }
+
+      it.each([
+        ["hex(X'')", ''],
+        ["hex(x'00')", '00'],
+        ["hex(X'aBcD')", 'ABCD'],
+        ['0x2A', 42],
+        ['.5e+2', 50],
+        ['1E-2', 0.01],
+        ["'région;雪''s'", "région;雪's"],
+      ] as const)('returns the exact value of SQL literal %s', async (expression, expected) => {
+        await withTable(async ({ runtime, knownTableId }) => {
+          const described = await runtime.describeTable(knownTableId);
+          const result = await runtime.queryTable({
+            tableId: knownTableId,
+            sql: `SELECT ${expression} AS literal_value FROM ${described.sqlName} LIMIT 1`,
+          });
+          expect(result.rows).toEqual([{ literal_value: expected }]);
+          expect(result.rowCount).toBe(1);
+          expect(result.locator).toEqual(described.locator);
+          expect(result.provenancePrecision).toBe('table');
+        });
+      });
 
       /**
        * Every function on the allowlist, called once, on every backend (#563). The guard and the
