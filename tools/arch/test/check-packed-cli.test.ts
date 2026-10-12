@@ -7,6 +7,7 @@ import {
   inspectInstalledTree,
   optionalPeerNames,
 } from '../../../scripts/check-packed-cli.mjs';
+import { copyWorkspace } from '../../../scripts/pack-cli.mjs';
 
 /**
  * The pure halves of `check:packed-cli`: reading an npm-installed tree and comparing it to the
@@ -15,6 +16,48 @@ import {
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+
+describe('packaging workspace', () => {
+  it('preserves dependency patches required by the frozen lockfile', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-packed-workspace-'));
+    const source = join(root, 'source');
+    const target = join(root, 'target');
+    const patchPath = 'patches/provider.patch';
+    const patch = '--- a/provider.js\n+++ b/provider.js\n';
+    try {
+      for (const directory of [
+        'packages/cli/dist',
+        'packages/cli/studio-dist',
+        'apps',
+        'tools',
+        'patches',
+      ]) {
+        mkdirSync(join(source, directory), { recursive: true });
+      }
+      mkdirSync(target);
+      writeJson(join(source, 'package.json'), { private: true });
+      writeJson(join(source, 'packages/cli/package.json'), { name: '@lorepack/cli' });
+      writeFileSync(
+        join(source, 'pnpm-workspace.yaml'),
+        `patchedDependencies:\n  provider@1.0.0: ${patchPath}\n`,
+      );
+      writeFileSync(
+        join(source, 'pnpm-lock.yaml'),
+        `patchedDependencies:\n  provider@1.0.0:\n    path: ${patchPath}\n`,
+      );
+      writeFileSync(join(source, patchPath), patch);
+
+      copyWorkspace(source, target);
+
+      expect(readFileSync(join(target, patchPath), 'utf8')).toBe(patch);
+      expect(readFileSync(join(target, 'pnpm-lock.yaml'), 'utf8')).toBe(
+        readFileSync(join(source, 'pnpm-lock.yaml'), 'utf8'),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
