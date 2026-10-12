@@ -97,6 +97,17 @@ describe('genuine native configuration coverage', () => {
     expect(records).toEqual(retained);
   });
 
+  it('consumes genuine records from an asynchronous stream', async () => {
+    async function* streamedRecords() {
+      for (const record of records) yield record;
+    }
+    const expected = await convertNativeCoverage(snapshot, records);
+    const measured = await convertNativeCoverage(snapshot, streamedRecords());
+    expect(measured).toEqual(expected);
+    expect(measured.acceptedExecutions).toBe(2);
+    expect(Object.values(measured.maps[join(directory, path)].f)).toContain(0);
+  });
+
   it('refuses source bytes changed after the inventory was captured', async () => {
     const stale = structuredClone(snapshot);
     const entry = stale.included[0];

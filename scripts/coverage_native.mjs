@@ -19,7 +19,7 @@ export async function convertNativeCoverage(snapshot, records, direct = {}) {
   const merged = createCoverageMap({});
   const rejected = [];
   let acceptedExecutions = 0;
-  for (const { origin, result } of records) {
+  for await (const { origin, result } of records) {
     for (const coverage of result) {
       if (!coverage.url.startsWith('file:')) continue;
       const absolute = fileURLToPath(coverage.url);
@@ -101,14 +101,17 @@ if (import.meta.main) {
       );
     const readJson = (path) => JSON.parse(readFileSync(resolve(path), 'utf8'));
     const snapshot = readJson(values.inventory);
-    const records = readdirSync(values.raw)
+    const files = readdirSync(values.raw)
       .filter((file) => /^coverage-.*\.json$/.test(file))
-      .sort()
-      .map((origin) => ({ origin, result: readJson(join(values.raw, origin)).result }));
-    if (!records.length) throw new Error('No Node V8 coverage records found.');
+      .sort();
+    if (!files.length) throw new Error('No Node V8 coverage records found.');
+    async function* records() {
+      for (const origin of files)
+        yield { origin, result: readJson(join(values.raw, origin)).result };
+    }
     const measured = await convertNativeCoverage(
       snapshot,
-      records,
+      records(),
       values.direct ? readJson(values.direct) : {},
     );
     const bundle = {

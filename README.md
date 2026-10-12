@@ -575,7 +575,8 @@ tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and 
 executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that
 inventory, refusing stale hashes, incompatible maps and missing owned files.
 `pnpm coverage:native` converts actual Node configuration/script execution, preserving
-unused counters and recording rejected layouts. Capture tools support native Windows
+unused counters and recording rejected layouts. It reads raw records one file at a time.
+Capture tools support native Windows
 module imports and can be imported without invoking their commands. See the [CI contract](docs/architecture/ci.md)
 for the checked files, capture limits and native matrix.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
