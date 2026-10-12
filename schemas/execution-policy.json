@@ -200,6 +200,28 @@
           "maximum": 9007199254740991,
           "type": "integer"
         },
+        "receipt": {
+          "additionalProperties": false,
+          "properties": {
+            "captureRequest": {
+              "type": "boolean"
+            },
+            "maximumBytes": {
+              "const": 4096,
+              "type": "number"
+            },
+            "version": {
+              "const": 1,
+              "type": "number"
+            }
+          },
+          "required": [
+            "version",
+            "maximumBytes",
+            "captureRequest"
+          ],
+          "type": "object"
+        },
         "version": {
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,

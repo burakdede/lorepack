@@ -2,6 +2,7 @@ import {
   buildDescriptionSchema,
   buildSelectionSchema,
   contextBundleSchema,
+  createContextReceipt,
   forClient,
   type LoreRuntime,
   searchRequestSchema,
@@ -85,7 +86,19 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
       outputSchema: contextBundleSchema,
       annotations: READ_ONLY,
     },
-    async (request) => guard(async () => reply(await runtime.contextForTask(request))),
+    async (request) =>
+      guard(async () => {
+        const bundle = await runtime.contextForTask(request);
+        const result = reply(bundle);
+        if (request.receipt === undefined || request.receipt === false) return result;
+        const receipt = await createContextReceipt({
+          bundle,
+          payload: JSON.stringify(result),
+          format: 'mcp-content',
+          captureRequest: typeof request.receipt === 'object' && request.receipt.captureRequest,
+        });
+        return { ...result, _meta: { 'lorepack.dev/context-receipt': receipt } };
+      }),
   );
 
   server.registerTool(

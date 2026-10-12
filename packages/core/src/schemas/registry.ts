@@ -7,6 +7,7 @@ import {
 } from './build.js';
 import { buildSelectionSchema } from './common.js';
 import { configSchema } from './config.js';
+import { contextReceiptSchema } from './context_receipt.js';
 import { buildDiffSchema } from './diff.js';
 import { doctorReportSchema } from './doctor.js';
 import {
@@ -50,6 +51,7 @@ export const PUBLIC_SCHEMAS = {
   'search-result': searchResultSchema,
   'task-context-request': taskContextRequestSchema,
   'context-bundle': contextBundleSchema,
+  'context-receipt': contextReceiptSchema,
   'execution-policy': executionPolicySchema,
   'execution-selection': executionSelectionSchema,
   'execution-identity': executionIdentitySchema,

@@ -1,4 +1,5 @@
 export * from './config/index.js';
+export { createContextReceipt, verifyContextReceipt } from './context_receipt.js';
 export {
   causeChain,
   diskFullError,

@@ -208,6 +208,7 @@ class PortedRuntime implements LoreRuntime {
             budget,
             includeArchived: request.includeArchived,
             compilerVersion: manifest.compilerVersion,
+            receipt: request.receipt,
           }),
           {
             corpusId: scope.corpusId,

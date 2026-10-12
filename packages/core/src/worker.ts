@@ -9,6 +9,10 @@
  */
 
 export {
+  createContextReceipt,
+  verifyContextReceipt,
+} from './context_receipt.js';
+export {
   ERROR_CODES,
   type ErrorCode,
   EXIT_CODES,
@@ -33,6 +37,7 @@ export {
   canonicalize,
   HASH_ALGORITHM,
   hashCanonicalPortable,
+  sha256HexPortable,
 } from './hash/canonical_value.js';
 export {
   assertBuildId,

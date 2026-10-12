@@ -42,3 +42,4 @@ export const SEARCH_QUERY_LIMITS = {
 } as const;
 
 export const NATIVE_UNIT_LIMITS = { maxUtf8Bytes: 64 * 1024 } as const;
+export const MAXIMUM_CONTEXT_RECEIPT_BYTES = 4096;

@@ -35,10 +35,22 @@ export function measureContextRepresentations(bundle: ContextBundle): {
   estimatedTokens: number;
   bytes: number;
 } {
+  const mcp = {
+    ...toolResult(bundle),
+    ...(bundle.execution.policy.serialization.receipt === undefined
+      ? {}
+      : {
+          _meta: {
+            'lorepack.dev/context-receipt': 'x'.repeat(
+              bundle.execution.policy.serialization.receipt.maximumBytes,
+            ),
+          },
+        }),
+  };
   const representations = [
     `${JSON.stringify(bundle, null, 2)}\n`,
     JSON.stringify(bundle),
-    JSON.stringify(toolResult(bundle)),
+    JSON.stringify(mcp),
     renderBundleMarkdown(bundle, {
       projectName: 'x'.repeat(MAXIMUM_PROJECT_NAME_LENGTH),
       moreCommand: moreCommandFor(bundle.task),

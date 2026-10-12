@@ -535,6 +535,7 @@ describe('public registry', () => {
         'build-receipt',
         'build-selection',
         'context-bundle',
+        'context-receipt',
         'deployment-receipt',
         'doctor-report',
         'execution-identity',

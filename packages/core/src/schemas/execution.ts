@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAXIMUM_CONTEXT_RECEIPT_BYTES } from '../runtime/limits.js';
 import { buildIdSchema, runtimeIdentitySchema } from './common.js';
 import { contextProfileSchema } from './config.js';
 
@@ -52,6 +53,14 @@ export const executionPolicySchema = z
         format: z.literal('bounded-supported-formats'),
         maximumBytes: z.int().positive(),
         maximumProjectNameLength: z.int().positive(),
+        receipt: z
+          .object({
+            version: z.literal(1),
+            maximumBytes: z.literal(MAXIMUM_CONTEXT_RECEIPT_BYTES),
+            captureRequest: z.boolean(),
+          })
+          .strict()
+          .optional(),
       })
       .strict(),
   })
