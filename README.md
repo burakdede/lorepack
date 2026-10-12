@@ -338,7 +338,8 @@ lorepack --cwd ./consumer mcp --active-only
 ```
 
 The archive path is relative to `--cwd`. Import verifies the complete build, retains its
-exact ID and normalized content, and creates a minimal consumer configuration if needed.
+exact ID and normalized content from a private snapshot, and creates a minimal consumer
+configuration if needed. Later replacement of the sender's archive cannot change those bytes.
 It never compiles or activates. Existing projects keep their active version and runtime
 identity. Original source files are not restored. Catalog verification that is already cancelled
 returns before launching its helper. See the

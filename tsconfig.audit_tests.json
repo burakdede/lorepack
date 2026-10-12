@@ -8,6 +8,7 @@
   "files": [
     "packages/core/test/sql-guard.test.ts",
     "packages/backend-local/test/query_child.test.ts",
+    "packages/backend-local/test/archive_extraction.test.ts",
     "tools/test-support/src/runtime-contract.ts"
   ]
 }

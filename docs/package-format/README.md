@@ -86,6 +86,12 @@ Payloads stream to private staging with bounded memory. Unsupported member layou
 refused. Only manifest, catalog, flat reports and content-addressed normalized objects are
 installed. `originals/*` are verified but never restored or executed.
 
+The private snapshot determines the extracted bytes even if the sender later replaces the
+archive. Extraction failures remove that private staging directory; an existing staging
+destination is refused before its contents are touched. Regression checks in
+[`archive_extraction.test.ts`](../../packages/backend-local/test/archive_extraction.test.ts)
+cover snapshot replacement, exact bytes, unsupported layouts, extra object addresses and cleanup.
+
 Every normalized object must match its address, including extra packaged objects. Existing
 objects are rechecked and corrupt ones refused. Import never replaces an existing immutable
 build; importing that ID again reports that it already exists. Import refuses links in its
