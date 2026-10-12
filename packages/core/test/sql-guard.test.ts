@@ -133,6 +133,14 @@ describe('shape', () => {
     `SELECT sku FROM ${TABLE} WHERE sku = 1_000`,
     `SELECT sku FROM ${TABLE} WHERE sku = 0x1g`,
     `SELECT sku FROM ${TABLE} WHERE région = 1`,
+    `SELECT X'0' FROM ${TABLE}`,
+    `SELECT x'0g' FROM ${TABLE}`,
+    `SELECT X'001 FROM ${TABLE}`,
+    `SELECT [sku FROM ${TABLE}`,
+    `SELECT "région" FROM ${TABLE}`,
+    `SELECT \`région\` FROM ${TABLE}`,
+    `SELECT [région] FROM ${TABLE}`,
+    `SELECT sku$alias FROM ${TABLE}`,
     `INSERT INTO ${TABLE} (sku) VALUES (1)`,
     `WITH x AS (SELECT sku FROM ${TABLE}) DELETE FROM ${TABLE}`,
     `SELECT sku FROM ${TABLE} WHERE sku IN (${'('.repeat(40)}1${')'.repeat(40)})`,
@@ -494,6 +502,13 @@ describe('ordinary SQL a model writes', () => {
 });
 
 describe('the lexer', () => {
+  it.each(["X''", "x'00'", "X'aBcD'"])('preserves a valid blob literal %s', (literal) => {
+    const tokens = lexSql(`SELECT ${literal}`);
+    expect(tokens.find((token) => token.kind === 'blob')?.text).toBe(literal);
+    expect(() => guard(`SELECT ${literal} FROM ${TABLE}`, 'local')).not.toThrow();
+    expect(() => guard(`SELECT ${literal} FROM ${TABLE}`, 'remote')).not.toThrow();
+  });
+
   it('unescapes doubled quotes and lowercases in ASCII only', () => {
     const tokens = lexSql(`SELECT "A""b", 'C''d', [E f], \`G\`\`h\``);
     expect(tokens.filter((token) => token.kind === 'quoted').map((token) => token.value)).toEqual([

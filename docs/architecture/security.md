@@ -31,6 +31,12 @@ duplication of the first.
 in the shared runtime contract (`tools/test-support/src/runtime-contract.ts`), which every
 backend, local and Cloudflare, must pass.
 
+The guard accepts Unicode inside string literals, hexadecimal numbers, scientific notation
+and well-formed blob literals. It refuses non-ASCII identifiers even when quoted, incomplete
+quoted identifiers and malformed blobs before database execution. The shared runtime contract
+checks exact literal values and table provenance on both backends, so rejection rules cannot
+silently narrow the supported data literals.
+
 | Attempt | Refused by |
 |---|---|
 | `DELETE`, `UPDATE`, `DROP` | The statement shape check: only one SELECT |
