@@ -47,7 +47,8 @@ elsewhere in Studio links here, with its lines marked.
 ## Context Playground
 
 The passages a model would receive for a task, each with provenance, and every
-omission with the reason it was left out. **Use it anywhere** shows the same
+omission total with its reason counts. Diagnostic detail is explicitly bounded. The budget
+tape shows complete supported output estimates; stored passage estimates remain separate. **Use it anywhere** shows the same
 request as a `lorepack export` command, a `curl` call and an MCP `tools/call`, so
 a request tried here can be pasted into a terminal, a script or an agent. The
 Tables console and the source reader offer the same panel.

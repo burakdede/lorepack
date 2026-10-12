@@ -76,6 +76,12 @@ const BUNDLE = {
       locator: { relativePath: 'docs/big.md', lineStart: 1, lineEnd: 400 },
     },
   ],
+  omissionSummary: {
+    total: 1,
+    reported: 1,
+    truncated: false,
+    reasons: { budget: 1, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+  },
   // Everything the model receives, which is `overview` then `selected`, as the runtime
   // assembles it. This is the list the page is checked against.
   citations: [
@@ -166,7 +172,9 @@ describe('assembling a bundle', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Every figure is a conservative estimate, not an exact token count.'),
+        screen.getByText(
+          'The budget covers complete supported output. Token estimates are not provider token counts.',
+        ),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText('12,000')).toBeInTheDocument();
@@ -219,7 +227,7 @@ describe('assembling a bundle', () => {
     await assemble();
 
     await waitFor(() => expect(screen.getByText('Orientation')).toBeInTheDocument());
-    expect(screen.getByText('1, using 30 reserved')).toBeInTheDocument();
+    expect(screen.getByText('1, using 30 stored passage estimates')).toBeInTheDocument();
     // The count a reader can check against the page, and the reason the two cannot drift.
     expect(screen.getByText('Cited passages')).toBeInTheDocument();
     expect(screen.getByText(String(BUNDLE.citations.length))).toBeInTheDocument();
@@ -235,6 +243,45 @@ describe('assembling a bundle', () => {
 });
 
 describe('omissions, which are why this route is a debugger', () => {
+  it('keeps totals visible without an empty table when no diagnostic entries fit', async () => {
+    contextForTask.mockResolvedValue({
+      ...BUNDLE,
+      omitted: [],
+      omissionSummary: {
+        total: 9,
+        reported: 0,
+        truncated: true,
+        reasons: { budget: 9, duplicate: 0, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+      },
+    });
+    renderRoute();
+    await assemble();
+    expect(
+      await screen.findByText('9 omitted passages; showing 0 diagnostics.'),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.omissions')).toBeNull();
+  });
+  it('shows complete totals when diagnostic detail is bounded', async () => {
+    contextForTask.mockResolvedValue({
+      ...BUNDLE,
+      omissionSummary: {
+        total: 9,
+        reported: 1,
+        truncated: true,
+        reasons: { budget: 7, duplicate: 2, diversity: 0, superseded: 0, archived: 0, filtered: 0 },
+      },
+    });
+    renderRoute();
+    await assemble();
+    expect(
+      await screen.findByText('9 omitted passages; showing 1 diagnostic.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Diagnostic detail was truncated to fit the delivery limits.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('did not fit the budget: 7')).toBeInTheDocument();
+    expect(screen.getByText('near-duplicate of something already selected: 2')).toBeInTheDocument();
+  });
   it('lists every omitted item with a reason a reader can act on', async () => {
     renderRoute();
     await assemble();

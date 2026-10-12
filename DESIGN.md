@@ -347,7 +347,7 @@ Sits in a 12px framed box. 36px rows with hairline rules, a 34px Sunken Tint hea
 Opened with Cmd-K or Ctrl-K. A 640px sheet, 14vh from the top, over the Scrim, with the overlay shadow. A 52px search row at 16px, grouped options at 38px with a 16px icon, label and mono detail; the highlighted option takes Selection Wash. A Sunken Tint footer carries key hints. The scrim fades in 160ms and the sheet rises 6px from 0.985 scale in 180ms.
 
 ### Budget Tape (signature)
-Playground's accounting drawn to scale, under a summary line that is the one place the budget and the tokens used are written (used at 22px mono). A 14px pill track, reserved tokens in Pewter, selected in Graphite, free space as Raised Tint with an inset line, segments split by a 2px surface gap, and the cut marked with a 1.5px dashed Stale Amber border. A mono legend with the exact figures sits beneath. Built from elements, not SVG.
+Playground's accounting drawn to scale, under one summary line for the complete supported output estimate and budget (used at 22px mono). A 14px pill track shows complete output in Graphite and unused capacity in Raised Tint with an inset line. The mono legend gives both figures. Stored passage estimates remain separate facts, and omission counts include truncated diagnostic detail. Built from elements, not SVG.
 
 ### Confirmation
 Inline under the version it acts on: Clean Sheet, 1px ink frame, 12px radius, overlay shadow, a mono heading naming the build, the plan, and the actions behind a hairline. It enters by moving 4px over 200ms and never fades.
