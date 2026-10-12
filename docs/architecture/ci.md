@@ -103,6 +103,40 @@ report must represent every inventory path, capture actual configuration and chi
 and validate source hashes and compatible counter locations before combining maps. Missing
 execution remains uncovered; it never removes a file from the denominator.
 
+### Source-bound coverage reports
+
+Capture the inventory before measurement. Its canonical root, commit, dirty-worktree flag
+and exact source hashes bind later coverage to the measured files:
+
+```sh
+pnpm build
+pnpm coverage:inventory
+pnpm test:unit --coverage
+pnpm coverage:report --capture coverage/owned_inventory.json \
+  --map coverage/coverage-final.json --origin direct --out coverage/direct.bundle.json
+pnpm coverage:report --input coverage/direct.bundle.json --out coverage/owned_report.json
+```
+
+The final command exits 1 for failed targets or missing sources. A direct-only report normally
+misses configuration files; missing coverage yields null aggregate metrics, never a smaller
+denominator. Separately convert genuine configuration/subprocess execution to Istanbul JSON,
+then capture each map with the same pre-measurement inventory and a distinct origin. Repeat
+`--input` to combine those bundles. This command binds and reports maps; it does not yet
+orchestrate those separate captures or make ordinary Vitest coverage complete.
+
+Each incoming source hash must match the current frozen-preserving inventory. Extra paths,
+invalid counter IDs/hits, mismatched branch-arm counts and incompatible complete
+statement/function/branch maps fail. Maps are cloned before the standard Istanbul merge so
+original evidence stays unchanged. A real Node V8 negative witness in
+[`coverage_report.test.ts`](../../tools/arch/test/coverage_report.test.ts) verifies that an
+unused function and branch stay uncovered. Both scripts themselves remain owned sources.
+
+Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
+critical lines/statements at least 98% and functions/branches at least 95%. Failed targets
+remain visible in the JSON report. The report command is not part of `pnpm verify` while the
+full capture workflow and audited coverage target attainment remain incomplete. Its contract
+tests run in the architecture suite, locally and in native CI.
+
 ## `commit-hygiene.yml`
 
 Runs on pull requests only. Rejects AI attribution trailers and footers, and an em dash in
