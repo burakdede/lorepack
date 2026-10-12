@@ -57,6 +57,10 @@ export {
   createCloudflareRequestAuthorizer,
   resolveCloudflareAccessConfigFromBindings,
 } from './access-auth.js';
+export {
+  hasUnknownRemoteMutationCompletion,
+  remoteMutationCompletionUnknown,
+} from './mutation_ownership.js';
 export type { D1TableStoreOptions } from './tables.js';
 export type {
   CloudflareBindings,
@@ -76,7 +80,6 @@ export {
   createCloudflareWorkerFromBindings,
   tableQueryCaller,
 } from './worker-app.js';
-
 export type {
   CloudflareDeploymentTargetOptions,
   D1CatalogStoreOptions,

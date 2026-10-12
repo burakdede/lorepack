@@ -1,4 +1,8 @@
 import { assertBuildId, type BuildId, LoreError } from '@lorepack/core';
+import {
+  acquireRemoteMutationGuard,
+  hasUnknownRemoteMutationCompletion,
+} from './mutation_ownership.js';
 import { PROJECTED_TABLE_NAME } from './project-table-data.js';
 import type { ProjectionMigrationDatabaseLike } from './projection-migrations.js';
 import { r2ArchiveKey, r2ObjectKey } from './r2-keys.js';
@@ -160,6 +164,12 @@ ORDER BY projected_at DESC, build_id DESC`,
 
   const keep = new Set<BuildId>();
   if (activeBuildId !== null) keep.add(activeBuildId);
+  const owned = await db
+    .prepare(`SELECT DISTINCT build_id AS buildId FROM runtime_read_owners
+    WHERE project_id = ? AND expires_at > unixepoch('now')`)
+    .bind(projectId)
+    .run<{ buildId: string }>();
+  for (const row of owned.results ?? []) keep.add(assertBuildId(row.buildId));
 
   const verified = [...rows]
     .filter((row) => row.verifiedAt !== null)
@@ -170,10 +180,12 @@ ORDER BY projected_at DESC, build_id DESC`,
           : right.projectedAt.localeCompare(left.projectedAt)
         : (right.verifiedAt as string).localeCompare(left.verifiedAt as string),
     );
-  const keepTarget = keepPrevious + (activeBuildId === null ? 0 : 1);
+  let previousKept = 0;
   for (const row of verified) {
-    if (keep.size >= keepTarget) break;
+    if (row.buildId === activeBuildId) continue;
+    if (previousKept >= keepPrevious) break;
     keep.add(assertBuildId(row.buildId));
+    previousKept += 1;
   }
 
   const remove = rows
@@ -216,6 +228,35 @@ export async function applyRemoteRetentionPlan(
   resume?: RemoteRetentionResumeState,
 ): Promise<RemoteRetentionApplyResult> {
   if (plan.remove.length === 0 && plan.orphanTablesToRemove.length === 0) {
+    return await applyOwnedRemoteRetentionPlan(catalogDb, tablesDb, bucket, plan, resume);
+  }
+  const owner = await acquireRemoteMutationGuard(catalogDb, { kind: 'cleanup' });
+  let failure: unknown;
+  try {
+    await catalogDb
+      .prepare("DELETE FROM runtime_read_owners WHERE expires_at <= unixepoch('now')")
+      .run();
+    return await applyOwnedRemoteRetentionPlan(catalogDb, tablesDb, bucket, plan, resume);
+  } catch (cause) {
+    failure = cause;
+    throw cause;
+  } finally {
+    if (!hasUnknownRemoteMutationCompletion(failure)) await owner.release();
+  }
+}
+
+async function applyOwnedRemoteRetentionPlan(
+  catalogDb: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
+  bucket: R2BucketLike,
+  plan: RemoteRetentionPlan,
+  resume?: RemoteRetentionResumeState,
+): Promise<RemoteRetentionApplyResult> {
+  const projectId = plan.remove.length > 0 ? projectIdForPlan(plan) : null;
+  if (plan.remove.length > 0 && resume?.d1Completed !== true) {
+    plan = await claimRetentionRemovals(catalogDb, tablesDb, plan);
+  }
+  if (plan.remove.length === 0 && plan.orphanTablesToRemove.length === 0) {
     return {
       ...plan,
       d1: emptyD1Report(),
@@ -252,6 +293,23 @@ export async function applyRemoteRetentionPlan(
       }
       progress.d1Completed = true;
     }
+    const projected = await catalogDb
+      .prepare('SELECT project_id AS projectId, build_id AS buildId FROM projected_builds')
+      .run<{ projectId: string; buildId: string }>();
+    const retainedArchives = new Set(
+      (projected.results ?? []).map((row) => r2ArchiveKey(row.projectId, row.buildId)),
+    );
+    const artifacts = await catalogDb
+      .prepare('SELECT DISTINCT project_id AS projectId, object_hash AS objectHash FROM artifacts')
+      .run<{ projectId: string; objectHash: string }>();
+    const retainedObjects = new Set(
+      (artifacts.results ?? []).map((row) => r2ObjectKey(row.projectId, row.objectHash)),
+    );
+    plan = {
+      ...plan,
+      archiveKeysToRemove: plan.archiveKeysToRemove.filter((key) => !retainedArchives.has(key)),
+      objectKeysToRemove: plan.objectKeysToRemove.filter((key) => !retainedObjects.has(key)),
+    };
     if (!progress.archivesCompleted) {
       progress.archiveKeysRemoved = await deletePlannedR2Keys(
         bucket,
@@ -278,6 +336,16 @@ export async function applyRemoteRetentionPlan(
     );
   }
 
+  if (projectId !== null) {
+    for (const buildId of plan.remove) {
+      await catalogDb
+        .prepare(`DELETE FROM retention_claims WHERE project_id = ? AND build_id = ?
+        AND NOT EXISTS (SELECT 1 FROM projected_builds WHERE project_id = ? AND build_id = ?)`)
+        .bind(projectId, buildId, projectId, buildId)
+        .run();
+    }
+  }
+
   return {
     ...plan,
     d1: progress.d1,
@@ -285,6 +353,60 @@ export async function applyRemoteRetentionPlan(
       archiveKeysRemoved: progress.archiveKeysRemoved,
       objectKeysRemoved: progress.objectKeysRemoved,
     },
+  };
+}
+
+async function claimRetentionRemovals(
+  db: ProjectionMigrationDatabaseLike,
+  tablesDb: ProjectionMigrationDatabaseLike,
+  preview: RemoteRetentionPlan,
+): Promise<RemoteRetentionPlan> {
+  const projectId = projectIdForPlan(preview);
+  const token = crypto.randomUUID();
+  for (const buildId of preview.remove) {
+    await db
+      .prepare(`INSERT INTO retention_claims (project_id, build_id, token)
+      SELECT b.project_id, b.build_id, ? FROM projected_builds b
+      WHERE b.project_id = ? AND b.build_id = ?
+        AND NOT EXISTS (SELECT 1 FROM active_build a WHERE a.build_id = b.build_id)
+        AND NOT EXISTS (SELECT 1 FROM runtime_read_owners r
+          WHERE r.project_id = b.project_id AND r.build_id = b.build_id AND r.expires_at > unixepoch('now'))
+      ON CONFLICT(project_id, build_id) DO UPDATE SET token = excluded.token`)
+      .bind(token, projectId, buildId)
+      .run();
+  }
+  const claimed = await db
+    .prepare(`SELECT build_id AS buildId FROM retention_claims
+    WHERE project_id = ? AND token = ? ORDER BY build_id`)
+    .bind(projectId, token)
+    .run<{ buildId: string }>();
+  const claimedIds = new Set((claimed.results ?? []).map((row) => assertBuildId(row.buildId)));
+  const remove = preview.remove.filter((buildId) => claimedIds.has(buildId));
+  const projected = await db
+    .prepare(
+      'SELECT build_id AS buildId FROM projected_builds WHERE project_id = ? ORDER BY build_id',
+    )
+    .bind(projectId)
+    .run<{ buildId: string }>();
+  const keep = (projected.results ?? [])
+    .map((row) => assertBuildId(row.buildId))
+    .filter((buildId) => !claimedIds.has(buildId));
+  const retained = await readObjectHashes(db, projectId, keep);
+  const removed = await readObjectHashes(db, projectId, remove);
+  const active = await db
+    .prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1')
+    .run<ActiveBuildRow>();
+  const activeId = active.results?.[0]?.buildId;
+  return {
+    activeBuildId: activeId === null || activeId === undefined ? null : assertBuildId(activeId),
+    keep,
+    remove,
+    archiveKeysToRemove: remove.map((buildId) => r2ArchiveKey(projectId, buildId)),
+    objectKeysToRemove: [...removed]
+      .filter((hash) => !retained.has(hash))
+      .sort()
+      .map((hash) => r2ObjectKey(projectId, hash)),
+    orphanTablesToRemove: await findOrphanTables(db, tablesDb),
   };
 }
 

@@ -67,7 +67,7 @@ describe('projection migrations, issue 87', () => {
 
     const result = await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
     expect(result).toEqual({
-      applied: ['0001', '0002', '0003', '0004', '0005'],
+      applied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
       alreadyApplied: [],
     });
 
@@ -89,6 +89,9 @@ describe('projection migrations, issue 87', () => {
         'nodes',
         'projected_builds',
         'runtime_tokens',
+        'runtime_read_owners',
+        'retention_claims',
+        'remote_mutation_guard',
         'schema_migrations',
         'supersessions',
         'table_columns',
@@ -136,7 +139,7 @@ describe('projection migrations, issue 87', () => {
     const second = await runProjectionMigrations(projection, () => '2026-08-08T12:05:00.000Z');
     expect(second).toEqual({
       applied: [],
-      alreadyApplied: ['0001', '0002', '0003', '0004', '0005'],
+      alreadyApplied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
     });
 
     const rows = db
@@ -166,6 +169,11 @@ describe('projection migrations, issue 87', () => {
         id: '0005',
         checksum: PROJECTION_MIGRATIONS[4]?.checksum ?? '',
       },
+      {
+        id: '0006',
+        checksum: PROJECTION_MIGRATIONS[5]?.checksum ?? '',
+      },
+      { id: '0007', checksum: PROJECTION_MIGRATIONS[6]?.checksum ?? '' },
     ]);
     expect(PROJECTION_SCHEMA_VERSION).toBe(4);
   });

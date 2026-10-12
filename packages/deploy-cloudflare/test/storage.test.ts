@@ -3,9 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { r2ObjectKey } from '../src/r2-keys.js';
 import { D1ActiveBuildProvider, type D1DatabaseLike, R2ObjectStore } from '../src/storage.js';
 
+import {
+  ACTIVE_BUILD,
+  activateProjectedWorkerRuntimeFixture,
+  CANDIDATE_BUILD,
+  createProjectedWorkerRuntimeFixture,
+  PROJECT as PROJECTED_PROJECT,
+} from './projected-runtime-fixture.js';
+
 const buildId = (seed: string): BuildId => `lore_${seed.repeat(64).slice(0, 64)}` as BuildId;
 const BUILD_A = buildId('a');
-const BUILD_B = buildId('b');
 const PROJECT = 'demo';
 const IDENTITY = {
   corpusId: `corpus_${'c'.repeat(32)}`,
@@ -142,20 +149,27 @@ describe('D1ActiveBuildProvider', () => {
   });
 
   it('lets an in-flight request finish on its build while the next sees the new one', async () => {
-    const db = new FakeD1Database({ buildId: BUILD_A, generation: 1 });
-    const provider = new D1ActiveBuildProvider(db, PROJECT);
-
-    const inFlight = await provider.acquire();
-    expect(inFlight.buildId).toBe(BUILD_A);
-
-    db.row = { buildId: BUILD_B, generation: 2 };
-
-    const next = await provider.acquire();
-    expect(next.buildId).toBe(BUILD_B);
-    expect(next.generation).toBeGreaterThan(inFlight.generation);
-    expect(inFlight.buildId).toBe(BUILD_A);
-
-    expect(() => inFlight.release()).not.toThrow();
-    expect(() => next.release()).not.toThrow();
+    const fixture = await createProjectedWorkerRuntimeFixture();
+    try {
+      const provider = new D1ActiveBuildProvider(fixture.projection, PROJECTED_PROJECT);
+      const inFlight = await provider.acquire();
+      expect(inFlight.buildId).toBe(ACTIVE_BUILD);
+      await activateProjectedWorkerRuntimeFixture();
+      const next = await provider.acquire();
+      expect(next.buildId).toBe(CANDIDATE_BUILD);
+      expect(next.generation).toBeGreaterThan(inFlight.generation);
+      expect(inFlight.buildId).toBe(ACTIVE_BUILD);
+      expect(
+        fixture.projection.raw.prepare('SELECT count(*) AS count FROM runtime_read_owners').get(),
+      ).toMatchObject({ count: 2 });
+      await expect(inFlight.release()).resolves.toBeUndefined();
+      await expect(next.release()).resolves.toBeUndefined();
+      await expect(inFlight.release()).resolves.toBeUndefined();
+      expect(
+        fixture.projection.raw.prepare('SELECT count(*) AS count FROM runtime_read_owners').get(),
+      ).toMatchObject({ count: 0 });
+    } finally {
+      await fixture.close();
+    }
   });
 });

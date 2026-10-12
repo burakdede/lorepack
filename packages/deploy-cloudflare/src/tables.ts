@@ -79,17 +79,21 @@ FROM tables
 WHERE project_id = ? AND build_id = ?
 ORDER BY name, id`;
 
-const RESOLVE_TABLE_QUERY = `SELECT id, artifact_id, name, sheet, sql_name, row_count,
-       relative_path, line_start, line_end, cell_range
-FROM tables
-WHERE project_id = ? AND build_id = ? AND id = ?
+const RESOLVE_TABLE_QUERY = `SELECT t.id, t.artifact_id, t.name, t.sheet, t.sql_name, t.row_count,
+       t.relative_path, t.line_start, t.line_end, t.cell_range,
+       (SELECT json_group_array(json_object(
+         'name', name, 'sql_name', sql_name, 'type', type, 'nullable', nullable,
+         'null_count', null_count, 'distinct_estimate', distinct_estimate,
+         'distinct_is_exact', distinct_is_exact, 'min_value', min_value,
+         'max_value', max_value))
+        FROM (SELECT name, sql_name, type, nullable, null_count, distinct_estimate,
+                     distinct_is_exact, min_value, max_value
+              FROM table_columns
+              WHERE project_id = t.project_id AND build_id = t.build_id AND table_id = t.id
+              ORDER BY ordinal)) AS columns_json
+FROM tables t
+WHERE t.project_id = ? AND t.build_id = ? AND t.id = ?
 LIMIT 1`;
-
-const TABLE_COLUMNS_QUERY = `SELECT name, sql_name, type, nullable, null_count,
-       distinct_estimate, distinct_is_exact, min_value, max_value
-FROM table_columns
-WHERE project_id = ? AND build_id = ? AND table_id = ?
-ORDER BY ordinal`;
 
 export class D1TableStore implements TableStore {
   readonly #catalogDb: D1QueryDatabaseLike;
@@ -241,19 +245,15 @@ export class D1TableStore implements TableStore {
     tableId: string,
   ): Promise<{ readonly table: TableRow; readonly columns: readonly ColumnRow[] } | null> {
     const table = (
-      await this.#run<TableRow>(this.#catalogDb, RESOLVE_TABLE_QUERY, [
-        this.#namespace.projectId,
-        this.#namespace.buildId,
-        tableId,
-      ])
+      await this.#run<TableRow & { readonly columns_json: string }>(
+        this.#catalogDb,
+        RESOLVE_TABLE_QUERY,
+        [this.#namespace.projectId, this.#namespace.buildId, tableId],
+      )
     )[0];
     if (table === undefined) return null;
 
-    const columns = await this.#run<ColumnRow>(this.#catalogDb, TABLE_COLUMNS_QUERY, [
-      this.#namespace.projectId,
-      this.#namespace.buildId,
-      tableId,
-    ]);
+    const columns = JSON.parse(table.columns_json) as readonly ColumnRow[];
     return { table, columns };
   }
 

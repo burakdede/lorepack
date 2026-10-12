@@ -1,7 +1,13 @@
 import { networkInterfaces } from 'node:os';
 import { serve } from '@hono/node-server';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
-import { type BuildId, type BuildSelection, LoreError, type ProjectConfig } from '@lorepack/core';
+import {
+  type BuildHandle,
+  type BuildId,
+  type BuildSelection,
+  LoreError,
+  type ProjectConfig,
+} from '@lorepack/core';
 import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
@@ -119,6 +125,7 @@ export async function startServing(
     freshness,
   });
 
+  let selectedHandle: BuildHandle | undefined;
   try {
     const selected = options.buildId === undefined ? {} : { buildId: options.buildId };
     const active = await backend.provider.current();
@@ -129,9 +136,8 @@ export async function startServing(
     }
     let initialBuildId: BuildId;
     if (options.buildId !== undefined) {
-      const initial = await backend.provider.acquire(selected);
-      initialBuildId = initial.buildId;
-      initial.release();
+      selectedHandle = await backend.provider.acquire(selected);
+      initialBuildId = selectedHandle.buildId;
     } else {
       initialBuildId = (active as NonNullable<typeof active>).buildId;
     }
@@ -294,10 +300,12 @@ export async function startServing(
         // flight read a closed handle.
         await server.close();
         await mcp.close();
+        selectedHandle?.release();
         backend.close();
       },
     };
   } catch (error) {
+    selectedHandle?.release();
     backend.close();
     throw error;
   }

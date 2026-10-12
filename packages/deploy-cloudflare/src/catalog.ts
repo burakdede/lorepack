@@ -26,6 +26,7 @@ export interface D1CatalogNamespace {
 export interface D1CatalogStoreOptions {
   readonly db: D1CatalogDatabaseLike;
   readonly namespace: D1CatalogNamespace;
+  readonly manifestJson?: string;
 }
 
 interface ArtifactRow {
@@ -132,13 +133,16 @@ WHERE project_id = ? AND build_id = ?`;
 export class D1CatalogStore implements CatalogStore {
   readonly #db: D1CatalogDatabaseLike;
   readonly #namespace: D1CatalogNamespace;
+  readonly #manifestJson: string | undefined;
 
   constructor(options: D1CatalogStoreOptions) {
     this.#db = options.db;
     this.#namespace = options.namespace;
+    this.#manifestJson = options.manifestJson;
   }
 
   async manifest(): Promise<BuildManifest> {
+    if (this.#manifestJson !== undefined) return JSON.parse(this.#manifestJson) as BuildManifest;
     const row = (
       await this.#run<{ manifestJson: string }>(MANIFEST_QUERY, [
         this.#namespace.projectId,

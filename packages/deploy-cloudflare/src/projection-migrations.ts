@@ -222,6 +222,40 @@ const PROJECTION_MIGRATIONS_SOURCE = [
 )`,
     ],
   },
+  {
+    id: '0006',
+    name: 'runtime-read-ownership',
+    statements: [
+      `CREATE TABLE runtime_read_owners (
+  token TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  checked_at INTEGER NOT NULL
+)`,
+      `CREATE INDEX runtime_read_owners_build ON runtime_read_owners (project_id, build_id, expires_at)`,
+      `CREATE TABLE retention_claims (
+  project_id TEXT NOT NULL,
+  build_id TEXT NOT NULL,
+  token TEXT NOT NULL,
+  PRIMARY KEY (project_id, build_id)
+)`,
+    ],
+  },
+  {
+    id: '0007',
+    name: 'remote-mutation-ownership',
+    statements: [
+      `CREATE TABLE remote_mutation_guard (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  token TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL CHECK (kind IN ('apply', 'verify', 'cleanup')),
+  project_id TEXT,
+  build_id TEXT,
+  started_at TEXT NOT NULL
+)`,
+    ],
+  },
 ] as const;
 
 export const PROJECTION_MIGRATIONS: readonly ProjectionMigration[] =

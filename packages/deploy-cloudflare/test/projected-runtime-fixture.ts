@@ -6,6 +6,7 @@ import {
   type BuildId,
   type BuildManifest,
   type BuildScope,
+  type DeploymentReceipt,
   hashBytes,
   SCHEMA_VERSION,
 } from '@lorepack/core';
@@ -49,6 +50,10 @@ class FakeR2Bucket implements R2BucketLike {
     };
   }
 
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
   async head(key: string): Promise<Record<string, never> | null> {
     return this.objects.has(key) ? {} : null;
   }
@@ -80,6 +85,9 @@ class SqliteStatement
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
+      return { results: statement.all(...this.#bindings) as readonly T[] };
+    }
+    if (/\breturning\b/i.test(this.#query)) {
       return { results: statement.all(...this.#bindings) as readonly T[] };
     }
     statement.run(...this.#bindings);
@@ -118,6 +126,10 @@ let currentFixture: ProjectedFixtureState | null = null;
 
 export async function createProjectedWorkerRuntimeFixture(): Promise<{
   readonly buildDirectory: string;
+  readonly candidateDirectory: string;
+  readonly candidateReceipt: DeploymentReceipt;
+  readonly target: ReturnType<typeof createCloudflareDeploymentTarget>;
+  readonly applySharedCandidate: (buildId: BuildId) => Promise<DeploymentReceipt>;
   readonly runtime: ReturnType<typeof createRuntime>;
   readonly knownArtifactId: string;
   readonly matchingQuery: string;
@@ -187,6 +199,7 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
         catalog: new D1CatalogStore({
           db: projection,
           namespace: { projectId: PROJECT, buildId: handle.buildId },
+          manifestJson: provider.manifestFor(handle),
         }),
         tables: new D1TableStore(projection, { projectId: PROJECT, buildId: handle.buildId }),
         objects: new R2ObjectStore(PROJECT, bucket),
@@ -206,6 +219,27 @@ export async function createProjectedWorkerRuntimeFixture(): Promise<{
 
     return {
       buildDirectory: activeDirectory,
+      candidateDirectory,
+      candidateReceipt,
+      target,
+      applySharedCandidate: async (buildId: BuildId) => {
+        const directory = createBuildDirectory(root, buildId, {
+          text: 'To roll back a release, activate the previous build.',
+          tableRows: [
+            ['A-1', '19.99', 'false'],
+            ['A-2', '4.50', 'false'],
+            ['A-3', '', 'true'],
+          ],
+        });
+        const plan = await target.plan({
+          corpusId: CORPUS_ID,
+          projectName: PROJECT,
+          buildId,
+          buildDirectory: directory,
+          buildCapabilities: ['lexical-search', 'structured-context', 'table-query'],
+        });
+        return await target.apply(plan);
+      },
       runtime,
       knownArtifactId: ARTIFACT_ID,
       matchingQuery: MATCHING_QUERY,

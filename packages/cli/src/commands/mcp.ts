@@ -1,6 +1,7 @@
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import {
   assertBuildId,
+  type BuildHandle,
   count,
   LoreError,
   loadConfig,
@@ -93,10 +94,10 @@ export function mcpCommand(): CommandDefinition {
         freshness: mode === 'active-only' ? async () => 'unknown' : () => revalidator.freshness(),
       });
 
+      let selectedHandle: BuildHandle | undefined;
       if (buildId !== undefined) {
         try {
-          const handle = await backend.provider.acquire({ buildId });
-          handle.release();
+          selectedHandle = await backend.provider.acquire({ buildId });
         } catch (error) {
           backend.close();
           throw error;
@@ -132,6 +133,7 @@ export function mcpCommand(): CommandDefinition {
       const close = (): void => {
         if (closed) return;
         closed = true;
+        selectedHandle?.release();
         backend.close();
       };
       process.once('SIGINT', close);

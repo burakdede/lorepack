@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   type ActiveBuildProvider,
@@ -14,6 +14,7 @@ import {
   runtimeIdentitySchema,
 } from '@lorepack/core';
 import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
+import { registerReadReference, withReadReferenceLock } from './read_references.js';
 import { inTransaction, openReadOnly, openWritable } from './sqlite.js';
 
 /**
@@ -236,8 +237,13 @@ function toSummary(row: Record<string, string | number>): BuildSummary {
 export class LocalActiveBuildProvider implements ActiveBuildProvider {
   readonly #state: LocalStateStore;
   readonly #buildsDirectory: string;
-  readonly #open = new Map<BuildId, { db: DatabaseSync; refs: number }>();
+  readonly #open = new Map<
+    BuildId,
+    { db: DatabaseSync; refs: number; idleReference?: () => void }
+  >();
   readonly #handles = new WeakMap<BuildHandle, DatabaseSync>();
+  readonly #readers = new Map<BuildHandle, () => void>();
+  #acquiring: Promise<void> = Promise.resolve();
 
   constructor(state: LocalStateStore, buildsDirectory: string) {
     this.#state = state;
@@ -255,10 +261,21 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
         remediation: 'Pass a full retained build ID, or omit buildId to read the active build.',
       });
     }
+    const acquisition = this.#acquiring.then(() =>
+      withReadReferenceLock(dirname(this.#buildsDirectory), () => this.#acquireLocked(parsed.data)),
+    );
+    this.#acquiring = acquisition.then(
+      () => undefined,
+      () => undefined,
+    );
+    return acquisition;
+  }
+
+  #acquireLocked(selection: BuildSelection): BuildHandle & RuntimeIdentity {
     // Re-read on every acquisition. A missed filesystem notification is harmless because
     // the request boundary is what observes the generation.
     const active = this.#state.current();
-    const requested = parsed.data.buildId ?? active?.buildId;
+    const requested = selection.buildId ?? active?.buildId;
     if (requested === undefined) {
       throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'This project has no active build.', {
         remediation: 'Run `lorepack build` to create and activate one.',
@@ -266,7 +283,7 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     }
     const buildId = assertBuildId(requested);
     if (
-      parsed.data.buildId !== undefined &&
+      selection.buildId !== undefined &&
       (this.#state.getBuild(buildId) === null ||
         !existsSync(join(this.#buildsDirectory, buildId, 'context.sqlite')))
     ) {
@@ -291,6 +308,18 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
       };
       this.#open.set(buildId, entry);
     }
+    let releaseReference: () => void;
+    try {
+      releaseReference = registerReadReference(dirname(this.#buildsDirectory), buildId);
+    } catch (cause) {
+      if (entry.refs === 0 && entry.idleReference === undefined) {
+        entry.db.close();
+        this.#open.delete(buildId);
+      }
+      throw cause;
+    }
+    entry.idleReference?.();
+    delete entry.idleReference;
     entry.refs += 1;
     const database = entry.db;
 
@@ -304,10 +333,12 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
         if (released) return;
         released = true;
         self.#handles.delete(handle);
-        self.#release(buildId, database);
+        self.#release(buildId, database, releaseReference);
+        self.#readers.delete(handle);
       },
     });
     this.#handles.set(handle, database);
+    this.#readers.set(handle, releaseReference);
     return handle;
   }
 
@@ -341,17 +372,28 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     return this.#open.size;
   }
 
-  #release(buildId: BuildId, database: DatabaseSync): void {
+  #release(buildId: BuildId, database: DatabaseSync, releaseReference: () => void): void {
     const entry = this.#open.get(buildId);
-    if (entry === undefined || entry.db !== database) return;
+    if (entry === undefined || entry.db !== database) {
+      releaseReference();
+      return;
+    }
     entry.refs -= 1;
-    if (entry.refs > 0) return;
+    if (entry.refs > 0) {
+      releaseReference();
+      return;
+    }
 
     // Keep the currently active build open; closing it would reopen on the next request
     // for no benefit. Anything else is a drained older build.
-    if (this.#state.current()?.buildId === buildId) return;
+    if (this.#state.current()?.buildId === buildId) {
+      // An idle SQLite connection still owns the file, especially on Windows.
+      entry.idleReference = releaseReference;
+      return;
+    }
     entry.db.close();
     this.#open.delete(buildId);
+    releaseReference();
   }
 
   /**
@@ -367,12 +409,18 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     for (const [buildId, entry] of this.#open) {
       if (buildId === activeBuildId || entry.refs > 0) continue;
       entry.db.close();
+      entry.idleReference?.();
       this.#open.delete(buildId);
     }
   }
 
   closeAll(): void {
-    for (const entry of this.#open.values()) entry.db.close();
+    for (const entry of this.#open.values()) {
+      entry.db.close();
+      entry.idleReference?.();
+    }
     this.#open.clear();
+    for (const release of this.#readers.values()) release();
+    this.#readers.clear();
   }
 }

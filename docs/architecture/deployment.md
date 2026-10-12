@@ -148,6 +148,29 @@ prefix lets later work enumerate or remove exactly that build without guessing.
 
 ## Cloudflare remote cleanup
 
+Every remote runtime read registers a unique operational owner in `CATALOG_DB` before it
+opens the captured build. Registration atomically captures its corpus, namespace, build and
+generation, projection versions and immutable manifest, and refuses deletion-claimed builds.
+The Worker validates the captured versions and uses that manifest throughout the operation,
+without a separate metadata lookup. Cleanup protects every unexpired owner and
+reconciles a printed plan against owners acquired since the preview. Those records affect
+retention only; they are excluded from immutable content identity and portable packages.
+
+A single remote operation has a five-minute lifetime, measured by the primary database
+clock. The runtime fully materializes its result, then atomically validates the deadline
+and deletes its owner before returning. Expiry returns `LORE_E_LIMIT_EXCEEDED` with
+`details.reason: remote-read-expired`. It never returns successful partial data or switches
+to the active build. Release is awaited on successful and failed reads. Expired or crashed
+read owners stop protecting evidence; a late reader must still pass the final deadline
+check. Local process ownership has no corresponding timeout.
+
+Cleanup claims an inactive, unowned build in the primary database before deleting any
+physical table or object. Activation and rollback use one conditional pointer update that
+checks the prior generation, retained projection, required verification, absence of that
+claim and absence of an apply operation owning the selected build. A failed comparison returns an explicit deployment error instead of selecting a
+different build. Updating activation metadata happens after the pointer succeeds; an error
+there reports that the pointer changed. See [remote read ownership](../adr/0012-remote-read-retention-ownership.md).
+
 `lorepack prune --target cloudflare` removes builds from both D1 databases and from R2. The
 catalog rows (`tables`, `table_columns` and the rest) are deleted from `CATALOG_DB`; the
 projected physical tables they name are dropped from `TABLES_DB`, where projection created them
@@ -162,11 +185,44 @@ match the same `SAFE_IDENTIFIER` the table store uses before it is interpolated 
 
 The plan also lists `orphanTablesToRemove`: tables in `TABLES_DB` that have the projected name
 shape (`<prefix>_<16 hex>`) but that no catalog row references, for any build. Those are what
-the earlier bug left behind. `--yes` drops them after reading the references again, so a table
-a deploy claimed after the plan was printed is kept. Because a deploy creates a physical table
-before it writes the catalog row for it, do not run a remote prune while a deploy to the same
-target is in progress. A tables database must also belong to exactly one catalog database: the
-sweep cannot see references held by a different catalog.
+the earlier bug left behind. `--yes` drops them after reading the references again. Candidate
+apply, candidate verification and cleanup acquire one database-wide mutation capability,
+so a physical table under construction cannot be mistaken for an orphan. Every target that
+shares this catalog participates in the same guard. A tables database must still belong to
+exactly one catalog database; the sweep cannot see another catalog's references.
+
+A verified projection is reused during redeployment, including when it is active or acquired.
+It is not dropped and rebuilt underneath readers. An active or acquired unverified projection
+refuses reprojection. A resume whose candidate metadata disappeared returns an explicit
+expired-candidate error; create a fresh deployment instead. Cleanup resumes recheck every
+currently referenced archive and normalized object before deleting keys from an old receipt.
+Per-build deletion claims remain until all cleanup stages complete.
+
+Mutation ownership has no expiry. Successful operations and confirmed ordinary failures
+release it after awaited work finishes. An abrupt process exit or unconfirmed Wrangler D1/R2
+write leaves ownership intact. Such writes are not automatically replayed. Read retries remain
+bounded by the existing retry policy. `remote-mutation-completion-unknown` identifies the
+uncertain result; another mutating operation reports `remote-mutation-owned` with the owner
+kind, token, project, build and start time. Runtime reads of unclaimed evidence continue.
+
+Inspect ownership with:
+
+```bash
+wrangler d1 execute <catalog-database> --remote --command \
+  'SELECT token, kind, project_id, build_id, started_at FROM remote_mutation_guard WHERE id = 1'
+```
+
+Do not remove a record merely because it is old. First stop the original operation and
+establish that its remote writes completed or were cancelled. If that cannot be established,
+retain ownership. After confirming completion, remove only the observed capability:
+
+```bash
+wrangler d1 execute <catalog-database> --remote --command \
+  "DELETE FROM remote_mutation_guard WHERE id = 1 AND token = '<observed-token>'"
+```
+
+Then resume the saved deploy/cleanup receipt. Interrupted cleanup's build claims remain until
+its deletion stages finish. No model-facing tool can inspect, release or create mutation guards.
 
 ## Cloudflare D1 projection concurrency
 
@@ -179,8 +235,12 @@ It measures the current projection path with delayed write statements and record
 in-flight D1 writes observed. The recorded result is `maxInflightWrites: 1`, which is the
 evidence behind keeping the write path serial while D1 remains single-threaded.
 
-The CLI's Wrangler-backed D1 adapter executes remote D1 statements from temporary `.sql` files
-instead of passing projected SQL through Wrangler's `--command` flag. It also does **not**
+The CLI's Wrangler-backed D1 adapter executes bulk projection writes from temporary `.sql`
+files. Statements with SQL `RETURNING` use `--command`: Wrangler's remote file import returns
+import statistics rather than statement rows. Pending batched writes are flushed before such
+a statement, so ownership acquisition observes the migrated catalog. Both paths preserve
+mutation ownership after a failed command or unreadable response and never replay that write.
+It also does **not**
 forward explicit transaction control statements such as `BEGIN IMMEDIATE`, `COMMIT`, or
 `ROLLBACK` to remote D1. Cloudflare D1 already wraps each remote statement in its own
 transaction, so sending those statements through Wrangler fails before projection can begin.

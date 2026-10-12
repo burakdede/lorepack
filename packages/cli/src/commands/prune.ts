@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { ProjectLock } from '@lorepack/backend-local';
+import { ProjectLock, withReadReferenceLock } from '@lorepack/backend-local';
 import {
   count,
   LORE_DIRECTORY,
@@ -114,20 +114,22 @@ export function pruneCommand(options: PruneCommandOptions = {}): CommandDefiniti
         // The plan above was computed without the lock, and history can move before the lock
         // is ours. What is applied is re-derived under it (#564).
         const lock = new ProjectLock(join(loreDirectory, 'lock'));
-        const applied = await lock.withLock(() => {
-          const reconciled = reconcileRetention(
-            loreDirectory,
-            plan,
-            state.listBuilds(),
-            state.current()?.buildId ?? null,
-            keep,
-          );
-          // Records go first and all together: a build directory without a record is
-          // invisible garbage, a record without its directory is a build that cannot open.
-          state.forgetBuilds(reconciled.remove);
-          applyRetention(loreDirectory, reconciled);
-          return reconciled;
-        });
+        const applied = await lock.withLock(() =>
+          withReadReferenceLock(loreDirectory, () => {
+            const reconciled = reconcileRetention(
+              loreDirectory,
+              plan,
+              state.listBuilds(),
+              state.current()?.buildId ?? null,
+              keep,
+            );
+            // Records go first and all together: a build directory without a record is
+            // invisible garbage, a record without its directory is a build that cannot open.
+            state.forgetBuilds(reconciled.remove);
+            applyRetention(loreDirectory, reconciled);
+            return reconciled;
+          }),
+        );
 
         // "Removed." after "Nothing to remove." claimed a deletion that never happened.
         const outcome =

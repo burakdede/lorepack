@@ -43,7 +43,7 @@ export interface BuildStore {
 export interface BuildHandle extends RuntimeIdentity {
   readonly buildId: BuildId;
   readonly generation: number;
-  release(): void;
+  release(): void | Promise<void>;
 }
 
 export interface ActiveBuildProvider {

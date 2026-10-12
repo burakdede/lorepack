@@ -99,6 +99,95 @@ async function rpc(child: ChildProcess, id: number, method: string, params: unkn
 }
 
 describe('retained builds without live sources', () => {
+  it.each(['http', 'mcp'])(
+    'protects an idle explicitly selected %s server until shutdown, issue439',
+    async (transport) => {
+      await retainedProject(async (root, first, second) => {
+        let close: () => Promise<void>;
+        let read: () => Promise<string>;
+        if (transport === 'http') {
+          const server = await startServing({
+            config: loadProjectConfig({ cwd: root }),
+            buildId: first as import('@lorepack/core').BuildId,
+            host: '127.0.0.1',
+            port: 47_973,
+            warn: () => {},
+          });
+          close = server.close;
+          read = async () => {
+            const response = await fetch(`${server.url}/v1/search`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: 'recovery' }),
+            });
+            expect(response.status).toBe(200);
+            return JSON.stringify(await response.json());
+          };
+        } else {
+          const child = spawn(process.execPath, [BIN, '--cwd', root, 'mcp', '--build', first], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+          close = () => stop(child);
+          try {
+            await new Promise<void>((resolve, reject) => {
+              let output = '';
+              const timer = setTimeout(() => finish(new Error('MCP startup timed out.')), 10_000);
+              const finish = (error?: Error) => {
+                clearTimeout(timer);
+                child.stderr?.off('data', onData);
+                child.off('exit', onExit);
+                if (error) reject(error);
+                else resolve();
+              };
+              const onExit = () => finish(new Error(`MCP exited before startup: ${output}`));
+              const onData = (chunk: Buffer) => {
+                output += chunk.toString();
+                if (output.includes('over MCP on stdio')) finish();
+              };
+              child.stderr?.on('data', onData);
+              child.once('exit', onExit);
+            });
+          } catch (error) {
+            await close();
+            throw error;
+          }
+          read = async () => {
+            const envelope = {
+              'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+              'io.modelcontextprotocol/clientCapabilities': {},
+            };
+            await rpc(child, 1, 'server/discover', { _meta: envelope });
+            return JSON.stringify(
+              await rpc(child, 2, 'tools/call', {
+                name: 'lore_search',
+                arguments: { query: 'recovery' },
+                _meta: envelope,
+              }),
+            );
+          };
+        }
+        try {
+          expect(
+            JSON.parse((await cli(root, ['prune', '--keep', '0', '--yes'])).stdout).keep,
+          ).toContain(first);
+          const evidence = await read();
+          expect(evidence).toContain(first);
+          expect(evidence).toContain('restore the checkpoint');
+          expect(evidence).not.toContain(second);
+        } finally {
+          await close();
+        }
+        expect(
+          JSON.parse((await cli(root, ['prune', '--keep', '0', '--yes'])).stdout).remove,
+        ).toContain(first);
+        expect(JSON.parse((await cli(root, ['search', 'recovery'])).stdout)).toMatchObject({
+          buildId: second,
+        });
+      });
+    },
+    120_000,
+  );
+
   it('reads selected A through packaged search, export and MCP after B activates, issue432', async () => {
     await retainedProject(async (root, first, second) => {
       for (const args of [
