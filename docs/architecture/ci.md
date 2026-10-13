@@ -493,6 +493,12 @@ retaining the original fourteen processes and `[0,28]` counts per seven-prefix g
 The direct-import witness and missing-registry rejection remain separate checks.
 Generated CLI-help bundles live under the existing ignored `dist` tree. The test runs the
 actual inventory command while the bundle exists, retaining the frozen ownership counts.
+The fresh help bundle is compiled and executed in the same captured child. Its actual
+recipe receives the canonical capture plugin only while a compiled collector is active.
+The collector binds every emitted JavaScript/map artifact and original compiled input,
+source and preparation before loading. Changes to any of those inputs reject capture.
+The real help assertions and protocol-SDK loading guard remain in place. Multiple active
+counter namespaces require an explicit selection; ordinary execution delegates unchanged.
 Temporary compiled output must not look like untracked source to a concurrent inventory
 scan. The ownership guard and source denominator remain unchanged.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
