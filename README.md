@@ -630,6 +630,8 @@ Fork reconciliation rejects missing receipts, mismatched child identities and re
 execution streams before merging source-compatible maps once. Interrupted streams require
 an explicitly permitted signal and a successful matching kill receipt from the host.
 Host termination remains separate from the counter collector's JavaScript exit event.
+Observed process close qualifies genuine shutdown-microtask counters after that event;
+standalone replay still rejects an unqualified continuation.
 Forced termination retains counters with an incomplete lifecycle; it does not qualify
 complete capture. Production child integration remains required.
 Configuration capture now prepares source maps before native execution, verifies
