@@ -571,6 +571,7 @@ else process.disconnect?.();
   it('builds the CLI and every child in a separate complete measurement layout', async () => {
     const project = join(root, 'build-project');
     const files = [
+      'core/src/shared.ts',
       'cli/src/entry.ts',
       'cli/src/index.ts',
       'backend-local/src/sql/query-child.ts',
@@ -579,7 +580,10 @@ else process.disconnect?.();
     ];
     const included = files.map((file) => {
       const path = `packages/${file}`;
-      const source = `export function marker() { return 'measured'; }\n${
+      const shared = file.includes('/sql/')
+        ? '../../../core/dist/shared.js'
+        : '../../core/dist/shared.js';
+      const source = `${file === 'core/src/shared.ts' ? "export function marker() { return 'measured'; }" : `import {marker} from '${shared}';export {marker};`}\n${
         file === 'cli/src/entry.ts'
           ? `import {fork,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -606,7 +610,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       dirname(createRequire(join(repository, 'package.json')).resolve('typescript/package.json')),
       'bin/tsc',
     );
-    for (const name of ['cli', 'backend-local', 'parsers']) {
+    for (const name of ['core', 'cli', 'backend-local', 'parsers']) {
       execFileSync(
         process.execPath,
         [
@@ -617,6 +621,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
           '--module',
           'NodeNext',
           '--sourceMap',
+          '--declaration',
           '--skipLibCheck',
           '--types',
           'node',
@@ -663,7 +668,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     await bundleCli({ root: project });
     const output = join(project, 'measurement/dist');
     const built = await buildNativeCli(captured, native, output);
-    expect(built.receipts).toHaveLength(5);
+    expect(built.receipts).toHaveLength(6);
     for (const file of [
       'public-entry.js',
       'public-index.js',
@@ -671,7 +676,9 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       'parse-child.js',
       'archive-verify-child.js',
     ])
-      expect(readFileSync(join(output, file), 'utf8')).toContain('registerCounterStream(4)');
+      expect(readFileSync(join(output, file), 'utf8')).toContain(
+        "import './capture-bootstrap.mjs'",
+      );
     expect(readFileSync(join(output, '../studio-dist/index.html'), 'utf8')).toBe(
       '<main>Fixture Studio</main>',
     );
@@ -694,8 +701,8 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     } finally {
       closeSync(fd);
     }
-    expect(result.status).toBe(7);
     expect(result.stderr).toBe('');
+    expect(result.status).toBe(7);
     expect(
       result.stdout
         .trim()
@@ -718,11 +725,11 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     expect(children.executions.filter((execution) => execution.state === 'completed')).toHaveLength(
       1,
     );
-    expect(Object.keys(children.maps)).toHaveLength(3);
+    expect(Object.keys(children.maps)).toHaveLength(4);
     const parent = await replayCounterStream(captured, readFileSync(counterFile, 'utf8'));
     expect(parent.state).toBe('completed');
     expect(parent.exitCode).toBe(7);
-    expect(Object.keys(parent.maps)).toHaveLength(1);
+    expect(Object.keys(parent.maps)).toHaveLength(2);
     const registry = createCampaignRegistry(captured, launch);
     expect(registry.forkEntries).toHaveLength(6);
     expect(registry.commandEntries).toHaveLength(6);
@@ -769,11 +776,19 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
     ]);
     expect(workerCapture.status).toBe('Pass');
     expect(workerCapture.processes).toBe(10);
-    for (const [filename, message] of [
-      ['query-child.js', 'Fork capture entrypoint differs from its receipt.'],
-      ['archive-verify-child.js', 'Command capture entrypoint differs from its receipt.'],
-      ['public-entry.js', 'Captured CLI entrypoint differs from its receipt.'],
-    ] as const) {
+    const sharedChunk = readdirSync(output).find((filename) =>
+      /^chunk-[A-Z0-9]{8}\.js$/.test(filename),
+    );
+    expect(sharedChunk).toBeDefined();
+    for (const filename of [
+      'query-child.js',
+      'archive-verify-child.js',
+      'public-entry.js',
+      'measurement-public-entry.js',
+      'measurement-query-child.js',
+      'capture-bootstrap.mjs',
+      sharedChunk as string,
+    ]) {
       const changed = join(output, filename);
       const retained = readFileSync(changed);
       try {
@@ -782,7 +797,10 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
         const stale = spawnSync(process.execPath, [launch.entry], { encoding: 'utf8' });
         expect(stale.status).toBe(1);
         expect(stale.stdout).toBe('');
-        expect(stale.stderr).toContain(message);
+        expect(stale.stderr).toContain('Native CLI artifact differs from its receipt.');
+        expect(() => createCampaignRegistry(captured, launch)).toThrow(
+          'Native CLI artifact differs from its receipt.',
+        );
       } finally {
         writeFileSync(changed, retained);
       }

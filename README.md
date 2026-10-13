@@ -581,6 +581,8 @@ execution prevents qualification even when another record covers the same source
 unused counters and recording rejected layouts. Execution offsets must match the source
 or Node's position-preserving type stripping; wrapped code cannot be mapped as original. It reads raw
 records one file at a time.
+Measured CLI entry wrappers initialize capture before shared chunks execute, and launch
+receipts bind the emitted JavaScript graph.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.
 V8 records cannot qualify default-parameter branches; those require direct instrumentation.
