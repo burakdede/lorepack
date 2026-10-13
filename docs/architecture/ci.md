@@ -428,14 +428,19 @@ pnpm coverage:capture --out coverage/campaign-<fresh-name>
 ```
 
 The directory must not exist. The command builds first, records the complete source
-inventory, then compares normal and source-layout file/project collection. Source aliases
+inventory, then runs the complete default suite to retain canonical preparations.
+It builds separate measured CLI artifacts and adds their checked registry to each
+selected Vitest worker. It compares normal and measured file/project collection. Source aliases
 match exact package exports. The parsers retain their compiled layout, and configless
 projects retain their package identities, including MCP. Generated configuration lives
 in the artifact directory; owned configurations stay in the inventory.
 
 The command imports every owned Vite/Vitest configuration with source-hash and semantic
-checks. It runs the complete default suite with direct coverage and actual Node subprocess
-capture, converts compatible native maps, then writes the combined source-bound report.
+checks. A second complete default-suite run collects direct coverage and streamed
+native counters through the generated worker registry. Both passes bound worker
+concurrency to two; test selection, assertions and deadlines stay unchanged.
+The final report combines direct, configuration and reconciled native records
+through the common pinned instrumenter, without a child V8 conversion pass.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
