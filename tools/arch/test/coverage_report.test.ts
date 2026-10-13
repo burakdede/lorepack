@@ -1,11 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { convertNativeCoverage } from '../../../scripts/coverage_native.mjs';
 import { captureCoverage, reportCoverage } from '../../../scripts/coverage_report.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -106,6 +115,70 @@ afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 const copy = <T>(value: T): T => structuredClone(value);
 describe('owned coverage report', () => {
+  it('fails qualification when another execution of a represented source is rejected', async () => {
+    const root = realpathSync(directory);
+    const path = 'rejected-witness.mjs';
+    const code = 'function used() { return 42; }\nused();\n';
+    const source = join(root, path);
+    writeFileSync(source, code);
+    const inventory = {
+      root,
+      included: [
+        {
+          path,
+          sha256: createHash('sha256').update(code).digest('hex'),
+          critical: true,
+          group: 'witness',
+        },
+      ],
+    };
+    const records = [];
+    for (const origin of ['original', 'wrapped']) {
+      const raw = join(root, `report-${origin}`);
+      mkdirSync(raw);
+      const filename = pathToFileURL(source).href;
+      const args =
+        origin === 'original'
+          ? [source]
+          : [
+              '--input-type=module',
+              '-e',
+              `import { readFileSync } from 'node:fs';
+import { runInThisContext } from 'node:vm';
+const filename = ${JSON.stringify(filename)};
+runInThisContext('0;\\n' + readFileSync(new URL(filename), 'utf8'), { filename });`,
+            ];
+      execFileSync(process.execPath, args, { env: { NODE_V8_COVERAGE: raw }, stdio: 'pipe' });
+      for (const file of readdirSync(raw)) {
+        records.push({ origin, result: JSON.parse(readFileSync(join(raw, file), 'utf8')).result });
+      }
+    }
+    const measured = await convertNativeCoverage(inventory, records);
+    expect(measured.acceptedExecutions).toBe(1);
+    expect(measured.rejected).toEqual([
+      expect.objectContaining({
+        origin: 'wrapped',
+        path,
+        reason: 'Native execution offsets do not match the owned source.',
+      }),
+    ]);
+    const bundle = {
+      ...captureCoverage(inventory, measured.maps, 'native-witness'),
+      nativeEvidence: {
+        acceptedExecutions: measured.acceptedExecutions,
+        rejected: measured.rejected,
+      },
+    };
+    const report = reportCoverage(inventory, [bundle]);
+    expect(report.status).toBe('Fail');
+    expect(report.ownedFiles).toBe(1);
+    expect(report.representedFiles).toBe(1);
+    expect(report.overall).toBeNull();
+    expect(report.critical).toBeNull();
+    expect(report.rejectedExecutions).toEqual([
+      { bundleOrigin: 'native-witness', ...measured.rejected[0] },
+    ]);
+  });
   it('preserves the real unexecuted function and branch in its negative witness', () => {
     const report = reportCoverage(snapshot, [negative]);
     expect(report.status).toBe('Fail');
@@ -122,6 +195,24 @@ describe('owned coverage report', () => {
     expect(report.critical.branches.total).toBe(before.critical.branches.total);
     expect(report.critical.functions.pct).toBe(100);
     expect(report.critical.branches.pct).toBe(100);
+  });
+  it.each([
+    null,
+    { acceptedExecutions: -1, rejected: [] },
+    { acceptedExecutions: 1, rejected: null },
+  ])('refuses malformed native evidence: %j', (nativeEvidence) => {
+    expect(() => reportCoverage(snapshot, [{ ...yes, nativeEvidence }, no])).toThrow(
+      'Invalid native coverage evidence',
+    );
+  });
+  it('refuses a rejected execution attributed to an unowned source', () => {
+    const nativeEvidence = {
+      acceptedExecutions: 1,
+      rejected: [{ origin: 'child', path: 'unexpected.mjs', reason: 'Unsupported layout' }],
+    };
+    expect(() => reportCoverage(snapshot, [{ ...yes, nativeEvidence }, no])).toThrow(
+      'Unexpected rejected coverage source: unexpected.mjs',
+    );
   });
   it('does not publish a smaller aggregate when an owned source is missing', () => {
     const inventory = copy(snapshot);
