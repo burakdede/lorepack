@@ -382,6 +382,7 @@ const instance = new PrivateWitness();
 const outputs = [await instance.run(true), await instance.run(false)];
 if (process.argv[2] === 'stress') for (let i = 0; i < 5000; i++) await instance.run(true);
 const result = {outputs, writeAllowed: process.permission.has('fs.write')};
+if (process.argv[3] === 'inspect') Object.assign(result, {execArgv: process.execArgv, inheritedMarker: process.env.LORE_CAPTURE_PARENT_ONLY ?? null});
 if (process.send) process.send(result);
 else console.log(JSON.stringify(result));
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
@@ -547,6 +548,125 @@ else process.disconnect?.();
         sha256: snapshot.included.find((entry) => entry.path === 'private.ts')?.sha256,
       }),
     );
+  });
+
+  it('captures normal host forks and drains unrefed children without changing their options', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const original = join(root, 'ordinary-fork-entry.mjs');
+    writeFileSync(original, 'throw new Error("The registered original must be redirected");');
+    const entries = [
+      {
+        original,
+        target: bundle,
+        originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+        targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      },
+    ];
+    const directory = join(root, 'host-fork-records');
+    const parent = join(root, 'host-fork-parent.mjs');
+    const foreign = join(root, 'foreign-fork-entry.mjs');
+    writeFileSync(
+      foreign,
+      "process.send({kind:'delegated',args:process.argv.slice(2),execArgv:process.execArgv});process.disconnect();",
+    );
+    writeFileSync(
+      parent,
+      `
+import {fork} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {registerForkCapture,replayCounterStream} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+process.env.LORE_CAPTURE_PARENT_ONLY = 'fixture-only';
+const capture = registerForkCapture(${JSON.stringify(entries)},${JSON.stringify(directory)});
+let duplicateRejected = false;
+try { registerForkCapture(${JSON.stringify(entries)},${JSON.stringify(directory)}); } catch(error) { duplicateRejected = error.message.includes('already registered'); }
+const options = {env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']};
+const before = JSON.stringify(options);
+const child = fork(${JSON.stringify(original)},['hold','inspect'],options);
+const message = await new Promise((resolve,reject) => { child.once('message',resolve); child.once('error',reject); });
+child.kill('SIGKILL');child.unref();
+await capture.settled();
+const second = fork(${JSON.stringify(original)},undefined,options);
+const secondClosed = new Promise((resolve,reject)=>{second.once('close',resolve);second.once('error',reject);});
+const secondMessage = await new Promise(resolve=>second.once('message',resolve));
+await secondClosed;await capture.settled();
+const foreign = fork(${JSON.stringify(foreign)},['external'],{env:{},execArgv:[],stdio:['ignore','ignore','ignore','ipc']});
+const foreignClosed = new Promise((resolve,reject)=>{foreign.once('close',resolve);foreign.once('error',reject);});
+const delegated = await new Promise(resolve=>foreign.once('message',resolve));
+await foreignClosed;capture.restore();
+const launch = capture.launches[0];
+const closed = JSON.parse(readFileSync(join(${JSON.stringify(directory)},launch.id+'.close.json'),'utf8'));
+const counters = await replayCounterStream(${JSON.stringify(snapshot)},readFileSync(join(${JSON.stringify(directory)},launch.id+'.counters.jsonl'),'utf8'));
+console.log(JSON.stringify({message,optionsUnchanged:before===JSON.stringify(options),closed,counters,delegated,launches:capture.launches.length,secondMessage,duplicateRejected}));
+`,
+    );
+    const result = JSON.parse(
+      execFileSync(process.execPath, [parent], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    );
+    expect(result.optionsUnchanged).toBe(true);
+    expect(result.launches).toBe(2);
+    expect(result.duplicateRejected).toBe(true);
+    expect(result.secondMessage).toEqual({
+      outputs: [
+        [2, 'yes'],
+        [2, 'no'],
+      ],
+      writeAllowed: false,
+    });
+    expect(result.delegated).toEqual({ kind: 'delegated', args: ['external'], execArgv: [] });
+    expect(result.message).toEqual({
+      outputs: [
+        [2, 'yes'],
+        [2, 'no'],
+      ],
+      writeAllowed: false,
+      execArgv: ['--permission', '--allow-fs-read=*', '--max-old-space-size=64'],
+      inheritedMarker: null,
+    });
+    expect(result.closed.environment).toBe('empty');
+    expect(result.closed.signal).toBe('SIGKILL');
+    expect(result.closed.kills).toEqual([{ signal: 'SIGKILL', result: true }]);
+    expect(result.counters.pid).toBe(result.closed.pid);
+    expect(result.counters.state).toBe('interrupted');
+    expect(Object.keys(result.counters.maps)).toEqual([join(root, 'private.ts')]);
+  });
+
+  it('refuses a target that changes after registration before any child starts', () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const original = join(root, 'changed-fork-original.mjs');
+    writeFileSync(original, 'throw new Error("Must not start");');
+    const directory = join(root, 'changed-fork-records');
+    const parent = join(root, 'changed-fork-parent.mjs');
+    const entry = {
+      original,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+    };
+    writeFileSync(
+      parent,
+      `import {fork} from 'node:child_process';
+import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {registerForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture = registerForkCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const original = readFileSync(${JSON.stringify(bundle)});
+let rejected = false;
+try { writeFileSync(${JSON.stringify(bundle)},Buffer.concat([original,Buffer.from('\\n')]));
+  try { fork(${JSON.stringify(original)},[],{stdio:['ignore','ignore','ignore','ipc'],env:{},execArgv:[]}); }
+  catch(error) { rejected = error.message.includes('changed before launch'); }
+} finally { writeFileSync(${JSON.stringify(bundle)},original);capture.restore(); }
+console.log(JSON.stringify({rejected,launches:capture.launches.length,files:readdirSync(${JSON.stringify(directory)})}));`,
+    );
+    const result = JSON.parse(
+      execFileSync(process.execPath, [parent], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    );
+    expect(result).toEqual({ rejected: true, launches: 0, files: [] });
   });
 
   it('refuses compiled maps pointing to a different owned source', async () => {

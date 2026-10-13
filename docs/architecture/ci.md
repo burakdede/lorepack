@@ -148,6 +148,19 @@ migrations, and publishes source-bound compilation receipts. It refuses the
 ordinary CLI output and a nonempty measurement directory. Importing the ordinary
 builder no longer invokes a build; its command still uses the production defaults.
 
+`registerForkCapture` explicitly maps ordinary child entrypoints to checked measured
+artifacts. It verifies both hashes at registration and immediately before launch,
+preserves the original four-descriptor IPC layout, and adds only the capture file
+descriptor. Unregistered launches delegate unchanged. It records actual child and
+parent identities, argument hashes, environment mode, requested kill results and
+observed close status; environment values and raw arguments are not recorded.
+The `settled()` finalizer drains child close receipts after the host returns. It
+temporarily keeps the capture parent's event loop alive because the query host
+deliberately unrefs its child. Query execution still returns without waiting for
+termination. The finalizer must run after registered hosts stop their children.
+Extra existing descriptors remain unsupported; launch reconciliation, asynchronous
+and synchronous CLI/verification launches, and parent-exit integration remain open.
+
 `registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
 descriptor and child permissions. It forwards actual engine source registrations
 and cumulative counter mutations with contiguous sequence numbers. Strict replay
