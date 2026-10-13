@@ -155,10 +155,13 @@ migrations, and publishes source-bound compilation receipts. It refuses the
 ordinary CLI output and a nonempty measurement directory. Importing the ordinary
 builder no longer invokes a build; its command still uses the production defaults.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
-measured CLI body and all three children by SHA256. The bootstrap registers measured
+entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
 parser/query forks and the archive verifier's heap-prefixed command, records their
 executions under its `captures` directory, and drains actual closes before exit.
-The CLI body and child hashes are checked before execution. Real compiler/builder
+The complete emitted JavaScript graph is checked before execution and campaign registration.
+Entry wrappers import one initialization module before their owned body dependencies; shared
+chunks carry no collector banner. This initializes counters once before shared code runs.
+See [ADR 0021](../adr/0021-shared-chunk-capture.md). Real compiler/builder
 fixtures preserve exit7, restricted IPC and heap flags, retain two observed SIGKILL
 interruptions and one completed archive execution, and reject altered artifacts.
 Installing these generated artifacts in the complete campaign remains necessary.

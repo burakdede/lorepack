@@ -9,6 +9,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -417,7 +418,19 @@ export function registerSyncCommandCapture(entries, directory) {
   };
 }
 
+function verifyArtifactGraph(artifacts) {
+  if (!Array.isArray(artifacts) || artifacts.length === 0)
+    throw new Error('Native CLI artifact graph is missing.');
+  const paths = new Set();
+  for (const artifact of artifacts) {
+    if (paths.has(artifact.path) || digest(readFileSync(artifact.path)) !== artifact.sha256)
+      throw new Error('Native CLI artifact differs from its receipt.');
+    paths.add(artifact.path);
+  }
+}
+
 export function createCampaignRegistry(snapshot, launch) {
+  verifyArtifactGraph(launch.artifacts);
   const root = realpathSync(snapshot.root);
   if (
     launch.schema !== 1 ||
@@ -638,7 +651,9 @@ export async function runCapturedCli(
   directory,
   commandEntries = [],
   entrypointSha256,
+  artifacts,
 ) {
+  if (artifacts !== undefined) verifyArtifactGraph(artifacts);
   if (entrypointSha256 !== undefined && digest(readFileSync(entrypoint)) !== entrypointSha256)
     throw new Error('Captured CLI entrypoint differs from its receipt.');
   const capture = registerForkCapture(entries, directory);
@@ -706,10 +721,35 @@ export async function buildNativeCli(snapshot, preparations, output) {
     root,
     output: directory,
     plugins: [compilation.plugin],
-    banner: {
-      js: `import {registerCounterStream} from ${JSON.stringify(import.meta.url)}; registerCounterStream(4);`,
-    },
   });
+  const initialization = join(directory, 'capture-bootstrap.mjs');
+  writeFileSync(
+    initialization,
+    `import {registerCounterStream} from ${JSON.stringify(import.meta.url)};registerCounterStream(4);\n`,
+    { flag: 'wx' },
+  );
+  for (const filename of [
+    'public-entry.js',
+    'public-index.js',
+    'query-child.js',
+    'parse-child.js',
+    'archive-verify-child.js',
+  ]) {
+    const body = `measurement-${filename}`;
+    renameSync(join(directory, filename), join(directory, body));
+    writeFileSync(
+      join(directory, filename),
+      `import './capture-bootstrap.mjs';export * from './${body}';\n`,
+      { flag: 'wx' },
+    );
+  }
+  const artifacts = readdirSync(directory)
+    .filter((filename) => /\.(?:m?js|js\.map)$/.test(filename))
+    .sort()
+    .map((filename) => {
+      const path = join(directory, filename);
+      return { path, sha256: digest(readFileSync(path)) };
+    });
   const receipts = [...compilation.receipts.values()].sort((a, b) =>
     a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
   );
@@ -738,7 +778,7 @@ export async function buildNativeCli(snapshot, preparations, output) {
   const captureDirectory = join(directory, 'captures');
   const entrypoint = join(directory, 'public-entry.js');
   const entrypointSha256 = digest(readFileSync(entrypoint));
-  const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)});\n`;
+  const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)},${JSON.stringify(artifacts)});\n`;
   writeFileSync(entry, bootstrap, { flag: 'wx' });
   const launch = {
     schema: 1,
@@ -747,6 +787,7 @@ export async function buildNativeCli(snapshot, preparations, output) {
     entrySha256: digest(bootstrap),
     entrypoint,
     entrypointSha256,
+    artifacts,
     captureDirectory,
     forkEntries,
     commandEntries,
