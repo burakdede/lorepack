@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -367,13 +368,13 @@ runInThisContext('0;\\n' + readFileSync(new URL(filename), 'utf8'), { filename }
       ],
       { stdio: 'pipe' },
     );
-    expect(() =>
-      execFileSync(
-        process.execPath,
-        [join(ROOT, 'scripts/coverage_report.mjs'), '--input', bundle, '--out', report],
-        { stdio: 'pipe' },
-      ),
-    ).toThrow();
+    const child = spawnSync(
+      process.execPath,
+      [join(ROOT, 'scripts/coverage_report.mjs'), '--input', bundle, '--out', report],
+      { encoding: 'utf8', stdio: 'pipe' },
+    );
+    expect(child.status, child.stderr).toBe(1);
+    expect(existsSync(report), child.stderr || child.stdout).toBe(true);
     const result = JSON.parse(readFileSync(report, 'utf8'));
     expect(result.status).toBe('Fail');
     expect(result.overall).toBeNull();
