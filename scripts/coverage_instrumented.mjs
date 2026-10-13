@@ -260,6 +260,7 @@ function validCaptureStreams(streams, entry) {
 
 function selectCommand(registry, args, cwd, descriptor = 4) {
   if (!Array.isArray(args)) return null;
+  const nodeArguments = [];
   let index = 0;
   for (; index < args.length; index++) {
     const argument = args[index];
@@ -283,6 +284,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
       ].includes(argument)
     ) {
       if (typeof args[index + 1] !== 'string' || !args[index + 1]) return null;
+      if (argument !== '--import') nodeArguments.push(argument, args[index + 1]);
       index++;
       continue;
     }
@@ -291,8 +293,10 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
       /^(?:--permission|--no-warnings|--experimental-import-meta-resolve|--(?:import|allow-fs-read|allow-fs-write|require|conditions)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
         argument,
       )
-    )
+    ) {
+      if (!argument.startsWith('--import=')) nodeArguments.push(argument);
       continue;
+    }
     if (typeof argument !== 'string' || argument.startsWith('-')) return null;
     break;
   }
@@ -315,7 +319,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
     }
     return { entry: preload, index: -1 };
   }
-  if (index && !isDeepStrictEqual(args.slice(0, index), entry.nodeArguments ?? [])) return null;
+  if (index && !isDeepStrictEqual(nodeArguments, entry.nodeArguments ?? [])) return null;
   return { entry, index };
 }
 

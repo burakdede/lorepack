@@ -589,6 +589,7 @@ Explicit fixture collectors reconcile their launches and restore campaign captur
 Nested fork collectors retain their own command receipts; the surrounding campaign delegates
 the fork once without auditing the same child again. Different-directory custody still rejects.
 Measured eval and script launches preserve preloads, permissions, conditions and arguments.
+Registered CLI launches also retain user import preloads while checking their fixed heap flags.
 Node programs read from stdin retain their bytes, module mode and observable arguments.
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture files and pipes retain their descriptors and IPC alongside campaign capture.
