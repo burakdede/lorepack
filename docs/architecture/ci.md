@@ -472,6 +472,10 @@ descriptors remain unsupported. Both sync and async streams require real close r
 Temporary script and eval selection also consumes permission/read/write prefixes in
 separate-value and equals forms. Original grants and heap limits remain unchanged.
 Real launch tests compare denied and permitted writes with ordinary Node execution.
+Unregistered fork entrypoints can use the checked script import adapter with IPC
+retained on FD3 and counters on FD4. Fork auditing accepts that handoff only when
+the same process has a command launch receipt in the same capture directory.
+Unknown launches without that custody still prevent qualification.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.

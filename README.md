@@ -587,6 +587,7 @@ Explicit fixture collectors reconcile their launches and restore campaign captur
 Measured eval and temporary-script launches preserve import preloads, permissions and arguments.
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture streams retain their original descriptor alongside campaign capture.
+Fork capture retains IPC while binding actual command launch and close records.
 Native capture validates owned scripts loaded directly from source as well as compiled packages.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.
