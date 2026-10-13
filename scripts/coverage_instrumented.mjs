@@ -51,7 +51,7 @@ export function registerForkCapture(entries, directory) {
       digest(readFileSync(target)) !== entry.targetSha256
     )
       throw new Error('Fork capture entrypoint differs from its receipt.');
-    for (const filename of [original, target]) {
+    for (const filename of new Set([original, target])) {
       if (targets.has(filename)) throw new Error('Duplicate fork capture entrypoint.');
       targets.set(filename, { ...entry, original, target });
     }
