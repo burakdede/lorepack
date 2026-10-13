@@ -449,6 +449,10 @@ They use the same descriptor allocation as campaign launches.
 Temporary scripts and eval launches accept Node import preloads in separate-value or
 equals form. Capture consumes preload arguments before selecting the script, retains
 the original preload order and removes only its inserted import from observable execArgv.
+Campaign preparations and launch bootstraps use a fixed counter namespace separate from
+native regression fixtures. Both collectors can run in one child process without mixing
+hits; namespace mismatches and duplicate collectors remain errors. See
+[the counter storage decision](../adr/0022-independent-counter-namespaces.md).
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.

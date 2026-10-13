@@ -1,9 +1,11 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -16,7 +18,11 @@ import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { captureCampaign, nodeCommand } from '../../../scripts/coverage_capture.mjs';
 import { preparingInstrumenter } from '../../../scripts/coverage_configuration.mjs';
-import { prepareNativeCapture } from '../../../scripts/coverage_instrumented.mjs';
+import {
+  prepareNativeCapture,
+  reconcileNativeCapture,
+  replayCounterStream,
+} from '../../../scripts/coverage_instrumented.mjs';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 let directory: string;
@@ -171,6 +177,73 @@ async function nativeFixture(code = 'export const value = 7;') {
 }
 
 describe('native instrumentation process capture', () => {
+  it('keeps campaign counters independent from fixture counters in the same process', async () => {
+    const fixture =
+      await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }
+function unused() { return 9; }
+choose(); choose(true);
+if (globalThis.campaignOnly) choose();`);
+    const namespace = '__LOREPACK_CAMPAIGN_COVERAGE__';
+    const campaignPreparations = join(directory, 'campaign-preparations');
+    await prepareNativeCapture(
+      fixture.snapshot,
+      fixture.preparations,
+      campaignPreparations,
+      namespace,
+    );
+    const preparation = JSON.parse(
+      readFileSync(
+        join(
+          campaignPreparations,
+          `${createHash('sha256').update('owned.mjs').digest('hex')}.json`,
+        ),
+        'utf8',
+      ),
+    );
+    expect(createHash('sha256').update(preparation.instrumentedCode).digest('hex')).toBe(
+      preparation.instrumentedSha256,
+    );
+    const campaignModule = join(directory, 'campaign-module.mjs');
+    writeFileSync(campaignModule, preparation.instrumentedCode);
+    const script = join(directory, 'both-collectors.mjs');
+    writeFileSync(
+      script,
+      `import {registerCounterStream} from ${JSON.stringify(pathToFileURL(join(ROOT, 'scripts/coverage_instrumented.mjs')).href)};
+registerCounterStream(4,${JSON.stringify(namespace)});
+let duplicateRejected=false;
+try {registerCounterStream(4,${JSON.stringify(namespace)});} catch(error) {duplicateRejected=error.message.includes('already registered');}
+globalThis.campaignOnly=true;await import(${JSON.stringify(pathToFileURL(campaignModule).href)});
+globalThis.campaignOnly=false;await import(${JSON.stringify(pathToFileURL(fixture.bootstrap).href)});
+await import(${JSON.stringify(pathToFileURL(fixture.entry).href)});
+console.log(JSON.stringify({duplicateRejected}));`,
+    );
+    const counterFile = join(directory, 'campaign.jsonl');
+    const fd = openSync(counterFile, 'wx');
+    let result: ReturnType<typeof spawnSync>;
+    try {
+      result = spawnSync(process.execPath, [script], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status, String(result.stderr)).toBe(0);
+    expect(preparation.coverageVariable).toBe(namespace);
+    expect(String(result.stderr)).toBe('');
+    expect(JSON.parse(String(result.stdout))).toEqual({ duplicateRejected: true });
+    const campaign = await replayCounterStream(fixture.snapshot, readFileSync(counterFile, 'utf8'));
+    const native = await reconcileNativeCapture(fixture.snapshot, fixture.output);
+    expect(campaign.state).toBe('completed');
+    expect(native.status).toBe('Pass');
+    expect(Object.keys(campaign.maps)).toEqual([fixture.source]);
+    expect(Object.keys(native.maps)).toEqual([fixture.source]);
+    const functions = (value: unknown) =>
+      Object.values((value as { f: Record<string, number> }).f).sort();
+    expect(functions((campaign.maps as Record<string, unknown>)[fixture.source])).toEqual([0, 3]);
+    expect(functions(native.maps[fixture.source])).toEqual([0, 2]);
+  });
+
   it('captures genuine initializer, unused-function and branch counters once', async () => {
     const fixture =
       await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }

@@ -32,6 +32,12 @@ const capturedForkSpawn = Symbol.for('lorepack.capturedForkSpawn');
 const campaignCollector = Symbol.for('lorepack.campaignCollector');
 const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
+const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
+function assertCoverageVariable(value) {
+  if (value !== variable && value !== campaignVariable)
+    throw new Error('Unsupported native counter namespace.');
+}
+
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
 function afterProcessExit(callback) {
@@ -828,7 +834,8 @@ export async function runCapturedCli(
   exit.apply(process, parameters);
 }
 
-export async function buildNativeCli(snapshot, preparations, output) {
+export async function buildNativeCli(snapshot, preparations, output, coverageVariable = variable) {
+  assertCoverageVariable(coverageVariable);
   const root = realpathSync(snapshot.root);
   const directory = resolve(output);
   if (directory === join(root, 'packages', 'cli', 'dist'))
@@ -847,7 +854,7 @@ export async function buildNativeCli(snapshot, preparations, output) {
   });
   symlinkSync(join(cli, 'node_modules'), join(dirname(directory), 'node_modules'), 'junction');
   const { bundleCli } = await import('./bundle-cli.mjs');
-  const compilation = compiledCapturePlugin(snapshot, preparations);
+  const compilation = compiledCapturePlugin(snapshot, preparations, coverageVariable);
   await bundleCli({
     root,
     output: directory,
@@ -856,7 +863,7 @@ export async function buildNativeCli(snapshot, preparations, output) {
   const initialization = join(directory, 'capture-bootstrap.mjs');
   writeFileSync(
     initialization,
-    `import {registerCounterStream} from ${JSON.stringify(import.meta.url)};registerCounterStream(4);\n`,
+    `import {registerCounterStream} from ${JSON.stringify(import.meta.url)};registerCounterStream(4,${JSON.stringify(coverageVariable)});\n`,
     { flag: 'wx' },
   );
   for (const filename of [
@@ -875,12 +882,19 @@ export async function buildNativeCli(snapshot, preparations, output) {
     );
   }
   const importEntries = [
-    createEvalCapture(snapshot, preparations, join(directory, 'capture-eval.mjs')),
+    createEvalCapture(
+      snapshot,
+      preparations,
+      join(directory, 'capture-eval.mjs'),
+      'eval-import',
+      coverageVariable,
+    ),
     createEvalCapture(
       snapshot,
       preparations,
       join(directory, 'capture-script.mjs'),
       'script-import',
+      coverageVariable,
     ),
   ];
   const artifacts = readdirSync(directory)
@@ -937,7 +951,8 @@ export async function buildNativeCli(snapshot, preparations, output) {
   return { directory, receipts, launch };
 }
 
-export function compiledCaptureReader(snapshot, preparations) {
+export function compiledCaptureReader(snapshot, preparations, coverageVariable = variable) {
+  assertCoverageVariable(coverageVariable);
   const root = realpathSync(snapshot.root);
   const artifacts = new Map(
     snapshot.included
@@ -985,7 +1000,7 @@ export function compiledCaptureReader(snapshot, preparations) {
         if (prepared[key] !== expected[key])
           throw new Error(`Compiled preparation identity differs: ${entry.path}`);
       if (
-        prepared.coverageVariable !== variable ||
+        prepared.coverageVariable !== coverageVariable ||
         typeof prepared.instrumentedCode !== 'string' ||
         digest(prepared.instrumentedCode) !== prepared.instrumentedSha256
       )
@@ -1017,8 +1032,8 @@ export function compiledCaptureReader(snapshot, preparations) {
   };
 }
 
-export function compiledCapturePlugin(snapshot, preparations) {
-  const reader = compiledCaptureReader(snapshot, preparations);
+export function compiledCapturePlugin(snapshot, preparations, coverageVariable = variable) {
+  const reader = compiledCaptureReader(snapshot, preparations, coverageVariable);
   return {
     receipts: reader.receipts,
     plugin: {
@@ -1030,13 +1045,20 @@ export function compiledCapturePlugin(snapshot, preparations) {
   };
 }
 
-export function createEvalCapture(snapshot, preparations, filename, captureMode = 'eval-import') {
+export function createEvalCapture(
+  snapshot,
+  preparations,
+  filename,
+  captureMode = 'eval-import',
+  coverageVariable = variable,
+) {
+  assertCoverageVariable(coverageVariable);
   if (!['eval-import', 'script-import'].includes(captureMode))
     throw new Error('Invalid import capture mode.');
   const bootstrap = `import {registerCompiledCapture} from ${JSON.stringify(import.meta.url)};
 if(process.execArgv[0]!=='--import'||process.execArgv[1]!==import.meta.url)throw new Error('Eval capture preload arguments differ.');
 process.execArgv.splice(0,2);
-registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},4);
+registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},4,${JSON.stringify(coverageVariable)});
 `;
   writeFileSync(filename, bootstrap, { flag: 'wx' });
   const target = realpathSync(filename),
@@ -1051,9 +1073,9 @@ registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparation
   };
 }
 
-export function registerCompiledCapture(snapshot, preparations, fd) {
-  const reader = compiledCaptureReader(snapshot, preparations);
-  registerCounterStream(fd);
+export function registerCompiledCapture(snapshot, preparations, fd, coverageVariable = variable) {
+  const reader = compiledCaptureReader(snapshot, preparations, coverageVariable);
+  registerCounterStream(fd, coverageVariable);
   const hooks = registerHooks({
     load(url, context, nextLoad) {
       if (!url.startsWith('file:')) return nextLoad(url, context);
@@ -1082,10 +1104,12 @@ export function registerCompiledCapture(snapshot, preparations, fd) {
   };
 }
 
-export function registerCounterStream(fd) {
+export function registerCounterStream(fd, coverageVariable = variable) {
+  assertCoverageVariable(coverageVariable);
+  const collector = coverageVariable === variable ? active : Symbol.for(coverageVariable);
   if (!Number.isSafeInteger(fd) || fd < 4)
     throw new Error('Counter stream requires a separate inherited descriptor.');
-  if (globalThis[active] || Object.hasOwn(globalThis, variable))
+  if (globalThis[collector] || Object.hasOwn(globalThis, coverageVariable))
     throw new Error('Native coverage collector already registered or counters already exist.');
   const identity = {
     schema: 1,
@@ -1116,7 +1140,7 @@ export function registerCounterStream(fd) {
       },
     });
   emit({ ...identity, state: 'started' });
-  globalThis[variable] = new Proxy(
+  globalThis[coverageVariable] = new Proxy(
     {},
     {
       set(object, path, data) {
@@ -1129,7 +1153,7 @@ export function registerCounterStream(fd) {
       },
     },
   );
-  globalThis[active] = true;
+  globalThis[collector] = true;
   afterProcessExit((exitCode) => emit({ ...identity, state: 'completed', exitCode }));
   return identity.id;
 }
@@ -1239,7 +1263,13 @@ function publish(directory, name, value) {
   }
 }
 
-export async function prepareNativeCapture(snapshot, preparations, directory) {
+export async function prepareNativeCapture(
+  snapshot,
+  preparations,
+  directory,
+  coverageVariable = variable,
+) {
+  assertCoverageVariable(coverageVariable);
   const root = realpathSync(snapshot.root);
   const { createNativeInstrumenter } = await import('@vitest/coverage-istanbul/dist/provider.js');
   const instrumenter = createNativeInstrumenter({
@@ -1247,7 +1277,7 @@ export async function prepareNativeCapture(snapshot, preparations, directory) {
     autoWrap: false,
     esModules: true,
     compact: false,
-    coverageVariable: variable,
+    coverageVariable,
     coverageGlobalScope: 'globalThis',
     coverageGlobalScopeFunc: false,
     parserPlugins: [
@@ -1274,7 +1304,7 @@ export async function prepareNativeCapture(snapshot, preparations, directory) {
       ...prepared,
       instrumentedCode,
       instrumentedSha256: digest(instrumentedCode),
-      coverageVariable: variable,
+      coverageVariable,
     });
   }
 }
