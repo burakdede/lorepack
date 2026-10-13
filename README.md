@@ -585,6 +585,7 @@ Measured CLI entry wrappers initialize capture before shared chunks execute, and
 receipts bind the emitted JavaScript graph.
 Explicit fixture collectors reconcile their launches and restore campaign capture after use.
 Measured eval and temporary-script launches preserve user import preloads and arguments.
+Campaign counters remain separate from native fixture counters in shared child processes.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.
 V8 records cannot qualify default-parameter branches; those require direct instrumentation.

@@ -75,8 +75,18 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     included: inventory.included.filter((entry) => preparedPaths.has(entry.path)),
   };
   const native = join(output, 'native-preparations');
-  await prepareNativeCapture(nativeSnapshot, preparations, native);
-  const built = await buildNativeCli(inventory, native, join(output, 'measurement/dist'));
+  await prepareNativeCapture(
+    nativeSnapshot,
+    preparations,
+    native,
+    '__LOREPACK_CAMPAIGN_COVERAGE__',
+  );
+  const built = await buildNativeCli(
+    inventory,
+    native,
+    join(output, 'measurement/dist'),
+    '__LOREPACK_CAMPAIGN_COVERAGE__',
+  );
   save(join(output, 'native-build.json'), built);
   const setup = join(output, 'worker-setup.mjs');
   writeCampaignSetup(inventory, built.launch, setup);
