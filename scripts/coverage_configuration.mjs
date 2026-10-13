@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { createRequire } from 'node:module';
+import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -170,6 +170,28 @@ export function prepareSource(snapshot, id, code, map) {
   const hash = (value) => createHash('sha256').update(value).digest('hex');
   if (hash(bytes) !== entry.sha256) throw new Error(`Stale preparation source: ${id}`);
   if (typeof code !== 'string') throw new Error(`Invalid preparation code: ${id}`);
+  const moduleOnly = (text) =>
+    /^(?:export\s*\{\s*\}\s*;?)?$/.test(text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, '').trim());
+  let erased = false;
+  if (moduleOnly(code)) {
+    try {
+      erased = moduleOnly(stripTypeScriptTypes(original, { mode: 'strip' }));
+    } catch {
+      erased = false;
+    }
+  }
+  if (
+    erased &&
+    map?.version === 3 &&
+    Array.isArray(map.sources) &&
+    map.sources.length === 0 &&
+    Array.isArray(map.sourcesContent) &&
+    map.sourcesContent.length === 0 &&
+    Array.isArray(map.names) &&
+    map.names.length === 0 &&
+    map.mappings === ''
+  )
+    map = null;
   if (map != null) {
     if (
       map.version !== 3 ||
@@ -187,8 +209,12 @@ export function prepareSource(snapshot, id, code, map) {
     if (mapped !== source) throw new Error(`Preparation mapped source differs: ${id}`);
     if (map.sourcesContent[0] !== original)
       throw new Error(`Preparation mapped original differs: ${id}`);
-  } else if (code !== original)
+  } else if (code !== original && !erased)
     throw new Error(`Transformed preparation requires a source map: ${id}`);
+  if (erased && (map == null || map.mappings === '')) {
+    code = 'export {};\n';
+    map = null;
+  }
   if (query !== undefined) {
     const reportingFilename = `var _jsxFileName = ${JSON.stringify(id)};`;
     const canonicalFilename = `var _jsxFileName = ${JSON.stringify(input)};`;
