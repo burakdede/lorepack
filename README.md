@@ -617,6 +617,8 @@ Explicit fork capture records matched child identities and kill/close receipts w
 preserving the existing IPC, environment and flags. Complete launch integration remains open.
 Asynchronous command capture preserves Node's own callback and promise output handling,
 including timeouts and output limits, through registered entrypoints only.
+Synchronous capture preserves native results and errors through both Node launch APIs,
+using a separate inherited file descriptor and observed native termination evidence.
 Fork reconciliation rejects missing receipts, mismatched child identities and repeated
 execution streams before merging source-compatible maps once. Interrupted streams require
 an explicitly permitted signal and a successful matching kill receipt from the host.
