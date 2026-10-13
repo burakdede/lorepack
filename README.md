@@ -472,6 +472,8 @@ your Node.js version in a bug report.
 
 ## Contributing
 
+CI retains complete Git history for the changeset gate, including long pull request branches.
+
 CLI deployment tooling uses the [deployment client boundary](docs/architecture/packages.md)
 so control operations do not initialize Worker protocol adapters.
 Keep protocol SDK loading inside the handlers that use it.

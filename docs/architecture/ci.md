@@ -11,6 +11,13 @@ Runs on every pull request and every push to `main`, across a three-way OS matri
 a Windows-only failure is visible even when Linux is green, which is the whole reason the
 matrix exists.
 
+The verification job checks out complete Git history (`fetch-depth: 0`). Its changeset
+gate fetches the base and PR head together without a depth limit or pruning, then checks
+the explicit PR head. A shallow graph can hide the common ancestor and miss an earlier
+release declaration; pruning can remove the base ref during a targeted fetch. Real
+70-commit fixtures verify both valid and missing declarations with pruning on and off.
+See [checkout's history setting](https://github.com/actions/checkout#usage).
+
 Steps, in order:
 
 1. Assert the resolved Node stays inside `>=24.19.0 <25`. A silent drift below the floor

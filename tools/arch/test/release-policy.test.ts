@@ -139,6 +139,68 @@ describe('changeset policy', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('pull requests need a changeset');
   });
+
+  it.each([
+    [true, false],
+    [false, false],
+    [true, true],
+    [false, true],
+  ])('evaluates a long PR graph with marker %s and pruning %s', (hasMarker, prune) => {
+    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    let history = '';
+    for (let index = 1; index <= 70; index++) {
+      const subject =
+        index === 1 && hasMarker ? 'Document policy [no release]' : `Advance ${index}`;
+      const content = `${index}\n`;
+      history += `commit refs/heads/feature\nmark :${index}\ncommitter Test User <test@example.com> ${1700000000 + index} +0000\ndata ${Buffer.byteLength(subject)}\n${subject}\nfrom ${index === 1 ? base : `:${index - 1}`}\nM 100644 inline docs.md\ndata ${Buffer.byteLength(content)}\n${content}\n`;
+    }
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: history });
+    execFileSync('git', ['update-ref', 'refs/pull/718/head', 'refs/heads/feature'], { cwd: root });
+    const workflow = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const verify = workflow.slice(
+      workflow.indexOf('\n  verify:'),
+      workflow.indexOf('\n  acceptance:'),
+    );
+    const checkoutStep = verify.slice(0, verify.indexOf('- uses: pnpm/action-setup'));
+    const depth = Number(/fetch-depth:\s*(\d+)/.exec(checkoutStep)?.[1] ?? '1');
+    const checkout = join(root, 'checkout');
+    execFileSync(
+      'git',
+      [
+        'clone',
+        '--no-local',
+        '--branch',
+        'feature',
+        ...(depth === 0 ? [] : [`--depth=${depth}`]),
+        root,
+        checkout,
+      ],
+      { stdio: 'pipe' },
+    );
+    execFileSync('git', ['config', 'fetch.prune', String(prune)], { cwd: checkout });
+    const expand = (value: string) =>
+      value
+        .replaceAll(/\$\{\{\s*github\.base_ref\s*\}\}/g, 'main')
+        .replaceAll(/\$\{\{\s*github\.event\.pull_request\.number\s*\}\}/g, '718');
+    const fetches = [...verify.matchAll(/git fetch ([^\n]+)/g)];
+    expect(fetches.length).toBeGreaterThan(0);
+    for (const [, command] of fetches) {
+      const args = expand(command).match(/"[^"]*"|\S+/g);
+      if (!args) throw new Error('Missing workflow fetch arguments.');
+      execFileSync('git', ['fetch', ...args.map((value) => value.replace(/^"|"$/g, ''))], {
+        cwd: checkout,
+        stdio: 'pipe',
+      });
+    }
+    const head = /export CHANGESET_HEAD_REF="([^"]+)"/.exec(verify)?.[1];
+    if (!head) throw new Error('Missing workflow PR head selection.');
+    const result = run(CHANGESET_CHECK, checkout, {
+      GITHUB_BASE_REF: 'main',
+      CHANGESET_HEAD_REF: expand(head),
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(hasMarker ? 0 : 1);
+    if (!hasMarker) expect(result.stderr).toContain('pull requests need a changeset');
+  });
 });
 
 describe('release policy', () => {
