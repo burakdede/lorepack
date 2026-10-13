@@ -623,6 +623,9 @@ unavailable aggregates. Native preloads use file URLs for Windows compatibility.
 Subprocess integration and compiled-child qualification remain open.
 Compiled-capture fixtures instrument canonical preparations before bundling and replay
 real counters through a separate inherited descriptor, preserving IPC and permissions.
+Fresh fixture bundles use the actual compilation recipe and canonical capture plugin.
+The active collector checks emitted JavaScript, maps and original inputs before loading
+the graph; ordinary execution keeps the production recipe unchanged.
 Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
 Compiled measurement replays checked provider preparations while retaining ordinary
 compiler artifacts and their source-bound hash receipts.

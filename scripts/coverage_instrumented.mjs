@@ -33,6 +33,7 @@ const capturedForkDispatch = Symbol.for('lorepack.capturedForkDispatch');
 const campaignCollector = Symbol.for('lorepack.campaignCollector');
 const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
+const compiledContexts = Symbol.for('lorepack.compiledCaptureContexts');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
 function assertCoverageVariable(value) {
@@ -1183,11 +1184,38 @@ registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparation
 export function registerCompiledCapture(snapshot, preparations, fd, coverageVariable = variable) {
   const reader = compiledCaptureReader(snapshot, preparations, coverageVariable);
   registerCounterStream(fd, coverageVariable);
+  globalThis[compiledContexts] ??= new Map();
+  const contexts = globalThis[compiledContexts];
+  const captureContext = { snapshot, preparations, coverageVariable, generated: new Map() };
+  contexts.set(coverageVariable, captureContext);
   const hooks = registerHooks({
     load(url, context, nextLoad) {
       if (!url.startsWith('file:')) return nextLoad(url, context);
       const address = new URL(url);
       const filename = fileURLToPath(address);
+      const graphs = [...contexts.values()]
+        .map((registered) => registered.generated.get(filename))
+        .filter(Boolean);
+      if (graphs.length > 1) throw new Error('Generated capture graph has multiple owners.');
+      const graph = graphs[0];
+      if (graph) {
+        if (address.search || address.hash)
+          throw new Error('Unsupported generated capture URL variant.');
+        for (const [artifact, sha256] of graph.artifacts)
+          if (digest(readFileSync(artifact)) !== sha256)
+            throw new Error('Generated capture artifact changed before load.');
+        for (const [input, sha256] of graph.inputs)
+          if (digest(readFileSync(input)) !== sha256)
+            throw new Error('Generated capture input changed before load.');
+        const loaded = nextLoad(url, context);
+        if (
+          loaded.format !== 'module' ||
+          loaded.source == null ||
+          digest(Buffer.from(loaded.source)) !== graph.artifacts.get(filename)
+        )
+          throw new Error('Loaded generated source differs from its receipt.');
+        return loaded;
+      }
       const prepared = reader.load(filename);
       if (!prepared) return nextLoad(url, context);
       if (address.search || address.hash)
@@ -1207,8 +1235,62 @@ export function registerCompiledCapture(snapshot, preparations, fd, coverageVari
     receipts: reader.receipts,
     restore() {
       hooks.deregister();
+      if (contexts.get(coverageVariable) === captureContext) contexts.delete(coverageVariable);
     },
   };
+}
+
+export async function captureCompiledBuild(builder, options, directory, coverageVariable) {
+  if (coverageVariable !== undefined) assertCoverageVariable(coverageVariable);
+  const contexts = globalThis[compiledContexts];
+  if (!contexts?.size) return builder(options);
+  if (coverageVariable === undefined && contexts.size !== 1)
+    throw new Error('Generated capture requires an explicit counter namespace.');
+  const context =
+    coverageVariable === undefined
+      ? contexts.values().next().value
+      : contexts.get(coverageVariable);
+  if (!context) throw new Error('Generated capture namespace is not registered.');
+  mkdirSync(directory, { recursive: true });
+  const output = realpathSync(directory);
+  if (readdirSync(output).some((name) => /\.js(?:\.map)?$/.test(name)))
+    throw new Error('Generated capture requires an empty JavaScript output directory.');
+  const compilation = compiledCapturePlugin(
+    context.snapshot,
+    context.preparations,
+    context.coverageVariable,
+  );
+  const result = await builder({
+    ...options,
+    plugins: [...(options.plugins ?? []), compilation.plugin],
+  });
+  if (!compilation.receipts.size)
+    throw new Error('Generated capture has no owned compilation inputs.');
+  const inputs = new Map();
+  for (const receipt of compilation.receipts.values()) {
+    inputs.set(receipt.artifact, receipt.artifactSha256);
+    if (receipt.artifactMapSha256 !== null)
+      inputs.set(`${receipt.artifact}.map`, receipt.artifactMapSha256);
+    inputs.set(join(realpathSync(context.snapshot.root), receipt.path), receipt.sha256);
+    const preparation = join(context.preparations, `${digest(receipt.path)}.json`);
+    inputs.set(preparation, digest(readFileSync(preparation)));
+  }
+  const graph = new Map();
+  for (const name of readdirSync(output).filter((name) => /\.js(?:\.map)?$/.test(name))) {
+    const filename = join(output, name);
+    if (realpathSync(filename) !== filename || !statSync(filename).isFile())
+      throw new Error('Generated capture artifact is not a regular file.');
+    graph.set(filename, digest(readFileSync(filename)));
+  }
+  const scripts = [...graph.keys()].filter((filename) => filename.endsWith('.js'));
+  if (!scripts.length || scripts.some((filename) => !graph.has(`${filename}.map`)))
+    throw new Error('Generated capture requires JavaScript and source-map artifacts.');
+  for (const filename of scripts) {
+    if (context.generated.has(filename))
+      throw new Error('Generated capture graph already registered.');
+    context.generated.set(filename, { artifacts: graph, inputs });
+  }
+  return result;
 }
 
 export function registerCounterStream(fd, coverageVariable = variable) {

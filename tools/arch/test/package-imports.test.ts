@@ -35,19 +35,61 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
   });
 
   it('renders bundled CLI help without initializing protocol SDKs', () => {
-    const outputDirectory = mkdtempSync(join(REPO_ROOT, 'packages/cli/dist/.bundle-help-'));
+    const directory = mkdtempSync(join(REPO_ROOT, 'packages/cli/dist/.bundle-help-'));
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
+import {registerHooks} from 'node:module';
+import {pathToFileURL} from 'node:url';
+const {captureCompiledBuild}=await import(pathToFileURL(process.argv[1]+'/scripts/coverage_instrumented.mjs').href);
+const {bundleCli}=await import(pathToFileURL(process.argv[1]+'/scripts/bundle-cli.mjs').href);
+const directory=process.argv[2];
+await captureCompiledBuild(bundleCli,{root:process.argv[1],output:directory},directory);
+registerHooks({resolve(specifier,context,next){
+ if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Bundled CLI loaded a protocol SDK');
+ return next(specifier,context);
+}});
+const entry=directory+'/public-entry.js';
+process.argv=[process.execPath,'lorepack','--help'];
+await import(pathToFileURL(entry).href);
+`,
+          REPO_ROOT,
+          directory,
+        ],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      expect(output).toContain('pack');
+      expect(output).toContain('serve');
+      expect(output).toContain('mcp');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps generated CLI bundles outside the owned source inventory', () => {
+    const directory = mkdtempSync(join(REPO_ROOT, 'packages/cli/dist/.bundle-inventory-'));
     try {
       execFileSync(
         process.execPath,
         [
           '--input-type=module',
           '-e',
-          "const {bundleCli}=await import('./scripts/bundle-cli.mjs');await bundleCli({output:process.argv[1]});",
-          outputDirectory,
+          `
+import {pathToFileURL} from 'node:url';
+const {captureCompiledBuild}=await import(pathToFileURL(process.argv[1]+'/scripts/coverage_instrumented.mjs').href);
+const {bundleCli}=await import(pathToFileURL(process.argv[1]+'/scripts/bundle-cli.mjs').href);
+await captureCompiledBuild(bundleCli,{root:process.argv[1],output:process.argv[2]},process.argv[2]);
+`,
+          REPO_ROOT,
+          directory,
         ],
         { cwd: REPO_ROOT, encoding: 'utf8' },
       );
-      const inventoryFile = join(outputDirectory, 'owned-inventory.json');
+      const inventoryFile = join(directory, 'owned-inventory.json');
       execFileSync(
         process.execPath,
         [join(REPO_ROOT, 'scripts/coverage_inventory.mjs'), '--out', inventoryFile],
@@ -57,33 +99,12 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
       expect(inventory.frozenOwned).toBe(345);
       expect(inventory.frozenCritical).toBe(49);
       expect(
-        inventory.included.some((entry: { path: string }) => entry.path.includes('.bundle-help-')),
+        inventory.included.some((entry: { path: string }) =>
+          entry.path.includes('.bundle-inventory-'),
+        ),
       ).toBe(false);
-      const output = execFileSync(
-        process.execPath,
-        [
-          '--input-type=module',
-          '-e',
-          `
-import {registerHooks} from 'node:module';
-import {pathToFileURL} from 'node:url';
-registerHooks({resolve(specifier,context,next){
- if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Bundled CLI loaded a protocol SDK');
- return next(specifier,context);
-}});
-const entry=process.argv[1];
-process.argv=[process.execPath,'lorepack','--help'];
-await import(pathToFileURL(entry).href);
-`,
-          join(outputDirectory, 'public-entry.js'),
-        ],
-        { cwd: join(REPO_ROOT, 'packages/cli'), encoding: 'utf8' },
-      );
-      expect(output).toContain('pack');
-      expect(output).toContain('serve');
-      expect(output).toContain('mcp');
     } finally {
-      rmSync(outputDirectory, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 
