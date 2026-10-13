@@ -494,6 +494,11 @@ The measurement-layout regressions prepare an immutable compiler fixture once, t
 check packaging, parent/child execution, worker registration, each changed artifact and
 automatic capture independently. Capture ledgers reset between settled cases, and
 ordinary compiled output is checked after every case. Existing deadlines stay unchanged.
+The compiled eval/script matrix also prepares its immutable fixture once. Each of its
+seven prefixes runs ordinary, asynchronous and synchronous Node execution independently.
+Each prefix reconciles two measured processes and used/unused function counts `[0,4]`,
+retaining the original fourteen processes and `[0,28]` counts per seven-prefix group.
+The direct-import witness and missing-registry rejection remain separate checks.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
