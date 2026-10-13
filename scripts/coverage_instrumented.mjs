@@ -263,8 +263,8 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
   let index = 0;
   for (; index < args.length; index++) {
     const argument = args[index];
-    if (argument === '-e' || argument === '--eval') {
-      if (typeof args[index + 1] !== 'string') return null;
+    if (argument === '-' || argument === '-e' || argument === '--eval') {
+      if (argument !== '-' && typeof args[index + 1] !== 'string') return null;
       const entry = [...registry.values()].find(
         (value) =>
           value.captureMode === 'eval-import' && (value.captureDescriptor ?? 4) === descriptor,

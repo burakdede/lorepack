@@ -460,6 +460,10 @@ They use the same descriptor allocation as campaign launches.
 Temporary scripts and eval launches accept Node import preloads in separate-value or
 equals form. Capture consumes preload arguments before selecting the script, retains
 the original preload order and removes only its inserted import from observable execArgv.
+Node's stdin driver (`-`) uses the same checked import preload. Module and CommonJS
+programs retain their actual stdin bytes, arguments, execution flags, environment,
+working directory and module URL. Synchronous and asynchronous launches reconcile real
+close receipts and counters; no temporary driver file substitutes for stdin.
 Campaign preparations and launch bootstraps use a fixed counter namespace separate from
 native regression fixtures. Both collectors can run in one child process without mixing
 hits; namespace mismatches and duplicate collectors remain errors. See
