@@ -144,6 +144,123 @@ export function registerForkCapture(entries, directory) {
   };
 }
 
+export async function reconcileForkCapture(snapshot, directory, entries, direct = {}) {
+  const registry = new Map();
+  for (const entry of entries) {
+    const original = realpathSync(entry.original);
+    const target = realpathSync(entry.target);
+    if (
+      registry.has(original) ||
+      digest(readFileSync(original)) !== entry.originalSha256 ||
+      digest(readFileSync(target)) !== entry.targetSha256 ||
+      !Array.isArray(entry.interruptionSignals) ||
+      entry.interruptionSignals.some((signal) => typeof signal !== 'string')
+    )
+      throw new Error('Invalid fork reconciliation entrypoint.');
+    registry.set(original, { ...entry, original, target });
+  }
+  const files = readdirSync(directory).sort();
+  const consumed = new Set();
+  const identities = new Set();
+  const executions = [];
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  for (const file of files) {
+    if (!file.endsWith('.launch.json')) continue;
+    const launch = JSON.parse(readFileSync(join(directory, file), 'utf8'));
+    if (
+      launch.schema !== 1 ||
+      launch.provider !== 'istanbul@4.1.11' ||
+      !uuid.test(launch.id) ||
+      file !== `${launch.id}.launch.json` ||
+      !Number.isSafeInteger(launch.pid) ||
+      launch.pid <= 0 ||
+      !Number.isSafeInteger(launch.parentPid) ||
+      launch.parentPid <= 0 ||
+      !Number.isSafeInteger(launch.parentThreadId) ||
+      launch.parentThreadId < 0 ||
+      !['inherited', 'explicit', 'empty'].includes(launch.environment) ||
+      !/^[0-9a-f]{64}$/.test(launch.argumentsSha256)
+    )
+      throw new Error(`Invalid fork launch receipt: ${file}`);
+    const entry = registry.get(launch.original);
+    if (!entry) throw new Error(`Unregistered fork launch: ${file}`);
+    for (const key of ['original', 'target', 'originalSha256', 'targetSha256'])
+      if (entry[key] !== launch[key]) throw new Error(`Fork entrypoint receipt differs: ${file}`);
+    const closeFile = `${launch.id}.close.json`;
+    const counterFile = `${launch.id}.counters.jsonl`;
+    if (!files.includes(closeFile) || !files.includes(counterFile))
+      throw new Error(`Missing fork close receipt or counters: ${launch.id}`);
+    const { code, signal, kills, ...identity } = JSON.parse(
+      readFileSync(join(directory, closeFile), 'utf8'),
+    );
+    if (
+      !isDeepStrictEqual(identity, launch) ||
+      !Array.isArray(kills) ||
+      kills.some(
+        (kill) =>
+          (typeof kill?.signal !== 'string' && !Number.isSafeInteger(kill?.signal)) ||
+          typeof kill?.result !== 'boolean',
+      )
+    )
+      throw new Error(`Fork close identity or kill receipt differs: ${closeFile}`);
+    const counters = await replayCounterStream(
+      snapshot,
+      readFileSync(join(directory, counterFile), 'utf8'),
+    );
+    if (identities.has(counters.id) || counters.pid !== launch.pid || counters.threadId !== 0)
+      throw new Error(`Repeated or mismatched fork execution: ${counterFile}`);
+    identities.add(counters.id);
+    if (counters.state === 'completed') {
+      if (signal !== null || !Number.isSafeInteger(code) || code !== counters.exitCode)
+        throw new Error(`Fork completion differs from close: ${closeFile}`);
+    } else if (
+      code !== null ||
+      !entry.interruptionSignals.includes(signal) ||
+      !kills.some((kill) => kill.result === true && kill.signal === signal)
+    )
+      throw new Error(`Unqualified fork interruption: ${closeFile}`);
+    for (const name of [file, closeFile, counterFile]) consumed.add(name);
+    executions.push({ ...counters, launchId: launch.id, signal });
+  }
+  if (!executions.length || consumed.size !== files.length)
+    throw new Error('Missing fork launches or orphaned capture records.');
+  const require = createRequire(import.meta.url);
+  const providerRequire = createRequire(require.resolve('@vitest/coverage-istanbul'));
+  const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
+  const { captureCoverage } = await import('./coverage_report.mjs');
+  const { remapNativeCoverage } = await import('@vitest/coverage-istanbul/dist/provider.js');
+  const merged = createCoverageMap({});
+  for (const execution of executions) {
+    const remapped = await remapNativeCoverage(createCoverageMap(structuredClone(execution.maps)));
+    const wire = JSON.parse(JSON.stringify(remapped.toJSON()));
+    captureCoverage(snapshot, wire, execution.id);
+    const maps = Object.fromEntries(
+      Object.entries(wire).map(([filename, map]) => {
+        const canonical = realpathSync(filename);
+        return [canonical, { ...map, path: canonical }];
+      }),
+    );
+    if (!isDeepStrictEqual(Object.keys(maps).sort(), Object.keys(execution.maps).sort()))
+      throw new Error(`Fork remapping lost loaded sources: ${execution.id}`);
+    for (const [filename, map] of Object.entries(maps)) {
+      const previous = [direct[filename]];
+      if (merged.files().includes(filename))
+        previous.push(merged.fileCoverageFor(filename).toJSON());
+      for (const prior of previous.filter(Boolean))
+        for (const field of ['statementMap', 'fnMap', 'branchMap'])
+          if (!isDeepStrictEqual(prior[field], map[field]))
+            throw new Error(`Fork coverage layout differs: ${filename}.${field}`);
+    }
+    merged.merge(maps);
+  }
+  return {
+    status: 'Pass',
+    processes: executions.length,
+    executions: executions.map(({ maps, ...execution }) => execution),
+    maps: JSON.parse(JSON.stringify(merged.toJSON())),
+  };
+}
+
 export async function buildNativeCli(snapshot, preparations, output) {
   const root = realpathSync(snapshot.root);
   const directory = resolve(output);

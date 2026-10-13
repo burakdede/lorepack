@@ -20,6 +20,7 @@ import {
   buildNativeCli,
   compiledCapturePlugin,
   prepareNativeCapture,
+  reconcileForkCapture,
   reconcileNativeCapture,
   replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
@@ -632,6 +633,114 @@ console.log(JSON.stringify({message,optionsUnchanged:before===JSON.stringify(opt
     expect(result.counters.pid).toBe(result.closed.pid);
     expect(result.counters.state).toBe('interrupted');
     expect(Object.keys(result.counters.maps)).toEqual([join(root, 'private.ts')]);
+    const registry = entries.map((entry) => ({ ...entry, interruptionSignals: ['SIGKILL'] }));
+    const reconciled = await reconcileForkCapture(snapshot, directory, registry, maps);
+    expect(reconciled.status).toBe('Pass');
+    expect(reconciled.processes).toBe(2);
+    expect(
+      reconciled.executions.map((execution: { state: string }) => execution.state).sort(),
+    ).toEqual(['completed', 'interrupted']);
+    const filename = join(root, 'private.ts');
+    const actual = reconciled.maps[filename];
+    if (!actual || !maps[filename]) throw new Error('Missing reconciled fork map.');
+    for (const field of ['statementMap', 'fnMap', 'branchMap'])
+      expect(actual[field]).toEqual(maps[filename][field as keyof Coverage]);
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(maps[filename][field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 2);
+    for (const [key, arms] of Object.entries(maps[filename].b))
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 2));
+
+    const retained = Object.fromEntries(
+      readdirSync(directory).map((file) => [file, readFileSync(join(directory, file), 'utf8')]),
+    );
+    const launches = Object.entries(retained)
+      .filter(([file]) => file.endsWith('.launch.json'))
+      .map(([, text]) => JSON.parse(text));
+    const interrupted = launches.find((launch) => launch.pid === result.closed.pid);
+    const normal = launches.find((launch) => launch.pid !== result.closed.pid);
+    if (!interrupted || !normal) throw new Error('Missing normal or interrupted fork receipt.');
+    const closed = `${interrupted.id}.close.json`;
+    const stream = `${interrupted.id}.counters.jsonl`;
+    const originalClose = retained[closed];
+    const originalStream = retained[stream];
+    const normalClose = retained[`${normal.id}.close.json`];
+    if (!originalClose || !originalStream || !normalClose)
+      throw new Error('Missing normal or interrupted fork evidence.');
+    const invalid = [
+      { file: closed, value: null },
+      { file: stream, value: null },
+      { file: closed, value: JSON.stringify({ ...JSON.parse(originalClose), pid: normal.pid }) },
+      {
+        file: `${normal.id}.close.json`,
+        value: JSON.stringify({ ...JSON.parse(normalClose), code: 1 }),
+      },
+      {
+        file: `${normal.id}.close.json`,
+        value: JSON.stringify({ ...JSON.parse(normalClose), signal: 'SIGKILL' }),
+      },
+      { file: closed, value: JSON.stringify({ ...JSON.parse(originalClose), kills: [] }) },
+      {
+        file: closed,
+        value: JSON.stringify({
+          ...JSON.parse(originalClose),
+          kills: [{ signal: 'SIGKILL', result: false }],
+        }),
+      },
+      { file: closed, value: JSON.stringify({ ...JSON.parse(originalClose), signal: 'SIGTERM' }) },
+      { file: stream, value: originalStream.slice(0, -1) },
+      { file: stream, value: '' },
+      { file: 'orphan.counters.jsonl', value: originalStream },
+      {
+        file: `${normal.id}.counters.jsonl`,
+        value: `${originalStream
+          .trimEnd()
+          .split('\n')
+          .map((line, index) => {
+            const record = JSON.parse(line);
+            if (index === 0) record.pid = normal.pid;
+            return JSON.stringify(record);
+          })
+          .join('\n')}\n`,
+      },
+    ];
+    for (const control of invalid) {
+      try {
+        if (control.value === null) rmSync(join(directory, control.file));
+        else writeFileSync(join(directory, control.file), control.value);
+        await expect(reconcileForkCapture(snapshot, directory, registry, maps)).rejects.toThrow();
+      } finally {
+        for (const file of readdirSync(directory)) rmSync(join(directory, file));
+        for (const [file, text] of Object.entries(retained))
+          writeFileSync(join(directory, file), text);
+      }
+    }
+    await expect(
+      reconcileForkCapture(
+        snapshot,
+        directory,
+        registry.map((entry) => ({ ...entry, targetSha256: '0'.repeat(64) })),
+        maps,
+      ),
+    ).rejects.toThrow('Invalid fork reconciliation entrypoint');
+    await expect(reconcileForkCapture(snapshot, directory, [], maps)).rejects.toThrow(
+      'Unregistered fork launch',
+    );
+    await expect(
+      reconcileForkCapture(
+        snapshot,
+        directory,
+        entries.map((entry) => ({ ...entry, interruptionSignals: [] })),
+        maps,
+      ),
+    ).rejects.toThrow('Unqualified fork interruption');
+    const different = structuredClone(maps);
+    const differentMap = different[filename];
+    if (!differentMap) throw new Error('Missing direct layout fixture.');
+    differentMap.fnMap = {};
+    await expect(reconcileForkCapture(snapshot, directory, registry, different)).rejects.toThrow(
+      'Fork coverage layout differs',
+    );
   });
 
   it('refuses a target that changes after registration before any child starts', () => {
