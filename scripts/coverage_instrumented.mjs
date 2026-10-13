@@ -716,15 +716,49 @@ export async function registerNativeCapture(snapshot, preparations, directory) {
   mkdirSync(directory, { recursive: true });
   const identity = { schema: 1, id, pid: process.pid, threadId, provider: 'istanbul@4.1.11' };
   publish(directory, `${id}.started.json`, { ...identity, state: 'started' });
+  let finished = false;
+  let lateReported = false;
+  const rejectLate = (filename) => {
+    if (!finished || lateReported) return;
+    lateReported = true;
+    publish(directory, `${id}.rejected.json`, {
+      ...identity,
+      state: 'rejected',
+      path: relative(root, filename).split(sep).join('/'),
+      reason: 'Owned execution continued after the exit snapshot.',
+    });
+  };
+  const observe = (target, filename) =>
+    new Proxy(target, {
+      set(object, key, value) {
+        rejectLate(filename);
+        object[key] = value;
+        return true;
+      },
+    });
+  globalThis[variable] = new Proxy(
+    {},
+    {
+      set(object, filename, data) {
+        rejectLate(filename);
+        data.s = observe(data.s, filename);
+        data.f = observe(data.f, filename);
+        for (const key of Object.keys(data.b)) data.b[key] = observe(data.b[key], filename);
+        object[filename] = data;
+        return true;
+      },
+    },
+  );
   const loadedSources = [];
   const rejected = [];
-  const hooks = registerHooks({
+  registerHooks({
     load(url, context, nextLoad) {
       if (!url.startsWith('file:')) return nextLoad(url, context);
       const address = new URL(url);
       const filename = fileURLToPath(address);
       const entry = owned.get(filename);
       if (!entry) return nextLoad(url, context);
+      rejectLate(filename);
       try {
         const loaded = nextLoad(url, context);
         if (address.search || address.hash)
@@ -772,7 +806,7 @@ export async function registerNativeCapture(snapshot, preparations, directory) {
       rejected,
       maps: globalThis[variable] ?? {},
     });
-    hooks.deregister();
+    finished = true;
   });
   return id;
 }
@@ -797,10 +831,25 @@ export async function reconcileNativeCapture(snapshot, directory, direct = {}) {
       record.pid <= 0 ||
       !Number.isSafeInteger(record.threadId) ||
       record.threadId < 0 ||
-      !['started', 'completed'].includes(record.state) ||
+      !['started', 'completed', 'rejected'].includes(record.state) ||
       file !== `${record.id}.${record.state}.json`
     )
       throw new Error(`Invalid native lifecycle record: ${file}`);
+    if (record.state === 'rejected') {
+      if (
+        typeof record.path !== 'string' ||
+        !owned.has(join(root, record.path)) ||
+        typeof record.reason !== 'string'
+      )
+        throw new Error(`Invalid native late-execution rejection: ${file}`);
+      issues.push({
+        kind: 'rejected-execution',
+        id: record.id,
+        path: record.path,
+        reason: record.reason,
+      });
+      continue;
+    }
     const index = record.state === 'started' ? starts : completions;
     if (index.has(record.id)) throw new Error(`Duplicate native lifecycle record: ${record.id}`);
     index.set(record.id, record);
