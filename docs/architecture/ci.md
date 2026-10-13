@@ -468,6 +468,10 @@ Unregistered fork entrypoints can use the checked script import adapter with IPC
 retained on FD3 and counters on FD4. Fork auditing accepts that handoff only when
 the same process has a command launch receipt in the same capture directory.
 Unknown launches without that custody still prevent qualification.
+Warning suppression and the standard Vitest worker prefixes (CommonJS require preloads,
+export conditions and import-meta resolution) retain their original order and values.
+The unregistered-launch regression uses an empty explicit registry, so rejection tests
+missing capture custody rather than treating a supported Node warning flag as invalid.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
