@@ -36,6 +36,9 @@ policy and a reason for users to depend on it directly.
 CLI deployment, token and retention operations import `@lorepack/deploy-cloudflare/client`.
 That entrypoint exposes the control operations without evaluating Worker protocol adapters.
 The package root retains its existing Worker factories and the same control implementations.
+CLI source handlers load protocol SDKs when MCP, HTTP serving or client verification starts.
+The published build must preserve those module boundaries; its resource qualification uses
+the actual packaged binary rather than source imports alone.
 
 ## Release rule
 

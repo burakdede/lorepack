@@ -8,7 +8,6 @@ import {
   LoreError,
   type ProjectConfig,
 } from '@lorepack/core';
-import { createMcpHttpHandler } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { createLocalComparer } from './comparer.js';
 import { DEV_PORT } from './dev-session.js';
@@ -174,6 +173,7 @@ export async function startServing(
     // One list for REST and MCP, so the two surfaces cannot disagree about which names this
     // server answers to (#547).
     const allowedHosts = allowedHostsFor(options.host);
+    const { createMcpHttpHandler } = await import('@lorepack/mcp');
     const mcp = createMcpHttpHandler(runtime, comparer, { host: options.host, allowedHosts });
     // Absent when the package was installed without built assets, which is a broken install
     // rather than a mode: saying nothing about Studio is better than printing a URL that 404s.

@@ -1,5 +1,4 @@
-import { Client } from '@modelcontextprotocol/client';
-import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import type { Client } from '@modelcontextprotocol/client';
 import { resolveExecutable } from './executable.js';
 import type { ConnectionCheck } from './port.js';
 
@@ -45,6 +44,10 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
     };
   }
 
+  const [{ Client }, { StdioClientTransport }] = await Promise.all([
+    import('@modelcontextprotocol/client'),
+    import('@modelcontextprotocol/client/stdio'),
+  ]);
   const transport = new StdioClientTransport({
     command,
     args: [...options.args],

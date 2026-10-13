@@ -11,9 +11,7 @@ import {
   ProgressRenderer,
   type SourceState,
 } from '@lorepack/core';
-import { createMcpServer } from '@lorepack/mcp';
 import { createRuntime } from '@lorepack/runtime';
-import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { runBuild } from '../services/build.js';
 import { createLocalComparer } from '../services/comparer.js';
@@ -58,6 +56,10 @@ export function mcpCommand(): CommandDefinition {
       },
     ],
     handler: async (_args, flags, context): Promise<CommandResult> => {
+      const [{ createMcpServer }, { serveStdio }] = await Promise.all([
+        import('@lorepack/mcp'),
+        import('@modelcontextprotocol/server/stdio'),
+      ]);
       const intervalMs =
         flags.revalidateInterval === undefined
           ? (environmentInterval() ?? DEFAULT_REVALIDATE_INTERVAL_MS)
