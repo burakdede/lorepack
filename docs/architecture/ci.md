@@ -480,6 +480,10 @@ Warning suppression and the standard Vitest worker prefixes (CommonJS require pr
 export conditions and import-meta resolution) retain their original order and values.
 The unregistered-launch regression uses an empty explicit registry, so rejection tests
 missing capture custody rather than treating a supported Node warning flag as invalid.
+The measurement-layout regressions prepare an immutable compiler fixture once, then
+check packaging, parent/child execution, worker registration, each changed artifact and
+automatic capture independently. Capture ledgers reset between settled cases, and
+ordinary compiled output is checked after every case. Existing deadlines stay unchanged.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
