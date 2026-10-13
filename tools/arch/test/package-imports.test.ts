@@ -34,6 +34,29 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
     expect(output).toContain('mcp');
   });
 
+  it('renders bundled CLI help without initializing protocol SDKs', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+import {registerHooks} from 'node:module';
+registerHooks({resolve(specifier,context,next){
+ if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Bundled CLI loaded a protocol SDK');
+ return next(specifier,context);
+}});
+process.argv=[process.execPath,'lorepack','--help'];
+await import('./dist/public-entry.js');
+`,
+      ],
+      { cwd: join(REPO_ROOT, 'packages/cli'), encoding: 'utf8' },
+    );
+    expect(output).toContain('pack');
+    expect(output).toContain('serve');
+    expect(output).toContain('mcp');
+  });
+
   it('loads deployment client operations without loading Worker protocol adapters', () => {
     const output = execFileSync(
       process.execPath,
@@ -151,7 +174,18 @@ function javascriptFiles(root: string): string[] {
 
 function publishedJavaScriptFiles(packageDir: string, packageName: string | undefined): string[] {
   if (packageName === '@lorepack/cli') {
-    return ['public-entry.js', 'public-index.js']
+    const dist = join(packageDir, 'dist');
+    const chunks = existsSync(dist)
+      ? readdirSync(dist).filter((file) => /^chunk-[A-Z0-9]{8}\.js$/.test(file))
+      : [];
+    return [
+      'public-entry.js',
+      'public-index.js',
+      'query-child.js',
+      'parse-child.js',
+      'archive-verify-child.js',
+      ...chunks,
+    ]
       .map((file) => join(packageDir, 'dist', file))
       .filter((file) => existsSync(file));
   }
