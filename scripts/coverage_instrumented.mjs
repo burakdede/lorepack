@@ -17,7 +17,7 @@ import {
 import { createRequire, registerHooks, syncBuiltinESMExports } from 'node:module';
 import { constants } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { threadId } from 'node:worker_threads';
 import { prepareSource } from './coverage_configuration.mjs';
@@ -534,6 +534,37 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     executions: executions.map(({ maps, ...execution }) => execution),
     maps: JSON.parse(JSON.stringify(merged.toJSON())),
   };
+}
+
+export async function runCapturedCli(entrypoint, entries, directory) {
+  const capture = registerForkCapture(entries, directory);
+  const exit = process.exit;
+  class ExitRequest extends Error {
+    constructor(parameters) {
+      super('Native CLI requested process exit.');
+      this.parameters = parameters;
+    }
+  }
+  process.exit = (...parameters) => {
+    throw new ExitRequest(parameters);
+  };
+  let parameters = [];
+  let failure;
+  try {
+    await import(pathToFileURL(entrypoint).href);
+  } catch (error) {
+    if (error instanceof ExitRequest) parameters = error.parameters;
+    else failure = error;
+  } finally {
+    process.exit = exit;
+  }
+  try {
+    await capture.settled();
+  } finally {
+    capture.restore();
+  }
+  if (failure) throw failure;
+  exit.apply(process, parameters);
 }
 
 export async function buildNativeCli(snapshot, preparations, output) {

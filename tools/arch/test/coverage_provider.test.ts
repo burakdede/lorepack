@@ -1164,6 +1164,62 @@ console.log(JSON.stringify({message,launch:capture.launches[0],reconciled}));`,
       expect(actual[field]).toEqual(expected[field as keyof Coverage]);
   });
 
+  it('drains real fork receipts before completing a captured CLI exit', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const childEntry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: ['SIGKILL'],
+    };
+    const script = join(root, 'captured-cli-body.mjs');
+    const wrapper = join(root, 'captured-cli-wrapper.mjs');
+    const directory = join(root, 'captured-cli-children');
+    writeFileSync(
+      script,
+      `import {fork} from 'node:child_process';const child=fork(${JSON.stringify(bundle)},['hold'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']});const reply=await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);});console.log(JSON.stringify(reply));child.kill('SIGKILL');child.unref();process.exit(7);console.log('must not run');`,
+    );
+    writeFileSync(
+      wrapper,
+      `import {runCapturedCli} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};await runCapturedCli(${JSON.stringify(script)},[${JSON.stringify(childEntry)}],${JSON.stringify(directory)});`,
+    );
+    let failure: { status?: number; stdout?: string; stderr?: string } | undefined;
+    try {
+      execFileSync(process.execPath, [wrapper], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      failure = error as typeof failure;
+    }
+    expect(failure?.status).toBe(7);
+    expect(failure?.stderr).toBe('');
+    expect(failure?.stdout).not.toContain('must not run');
+    expect(JSON.parse(failure?.stdout ?? '').outputs).toEqual([
+      [2, 'yes'],
+      [2, 'no'],
+    ]);
+    const reconciled = await reconcileForkCapture(snapshot, directory, [childEntry], maps);
+    expect(reconciled.processes).toBe(1);
+    expect(reconciled.executions[0]).toMatchObject({ state: 'interrupted', signal: 'SIGKILL' });
+  });
+
+  it('preserves unexpected CLI import failures rather than treating them as requested exits', () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const script = join(root, 'failed-captured-cli.mjs');
+    const wrapper = join(root, 'failed-captured-cli-wrapper.mjs');
+    writeFileSync(script, "throw new Error('original import failure');");
+    writeFileSync(
+      wrapper,
+      `import {runCapturedCli} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};const exit=process.exit;try{await runCapturedCli(${JSON.stringify(script)},[],${JSON.stringify(join(root, 'failed-cli-children'))});}catch(error){console.log(JSON.stringify({message:error.message,restored:process.exit===exit}));}`,
+    );
+    expect(JSON.parse(execFileSync(process.execPath, [wrapper], { encoding: 'utf8' }))).toEqual({
+      message: 'original import failure',
+      restored: true,
+    });
+  });
+
   it('refuses a target that changes after registration before any child starts', () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const original = join(root, 'changed-fork-original.mjs');
