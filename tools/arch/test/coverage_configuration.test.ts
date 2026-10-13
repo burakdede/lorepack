@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   mkdirSync,
@@ -6,8 +7,10 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -98,6 +101,41 @@ describe('source-layout coverage configuration', () => {
     expect(rendered.test.projects[0].resolve.alias[0].find.test('@lorepack/core-extra')).toBe(
       false,
     );
+  });
+
+  it('runs capture setup alongside inherited project setup in a real worker', () => {
+    const repository = join(import.meta.dirname, '../../..');
+    symlinkSync(join(repository, 'node_modules'), join(root, 'node_modules'), 'junction');
+    put(
+      configPath,
+      "export default {test:{include:['test/*.test.ts'],name:'core',setupFiles:['./setup.ts']}};",
+    );
+    put('packages/core/setup.ts', 'globalThis.inheritedSetup = true;');
+    const setup = join(root, 'capture-setup.ts');
+    put('capture-setup.ts', 'globalThis.captureSetup = true;');
+    put(
+      'packages/core/test/setup.test.ts',
+      `import {expect,test} from 'vitest';
+test('both setup hooks execute',()=>{expect(globalThis.inheritedSetup).toBe(true);expect(globalThis.captureSetup).toBe(true);});`,
+    );
+    const config = sourceCoverageConfig(
+      root,
+      ['packages/core'],
+      snapshot(),
+      join(root, 'reports'),
+      setup,
+    );
+    const generated = join(root, 'generated.config.mjs');
+    writeFileSync(generated, renderCoverageConfig(config));
+    const require = createRequire(join(repository, 'package.json'));
+    const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+    expect(() =>
+      execFileSync(process.execPath, [vitest, 'run', '--config', generated], {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }),
+    ).not.toThrow();
   });
 
   it('rejects absent default projects', () => {

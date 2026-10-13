@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory) {
+export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory, setupFile = '') {
   root = realpathSync(root);
   const alias = [];
   for (const directory of readdirSync(join(root, 'packages'))) {
@@ -56,7 +56,15 @@ export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory
     const manifest = join(folder, 'package.json');
     const name = existsSync(manifest) ? JSON.parse(readFileSync(manifest, 'utf8')).name : undefined;
     return {
-      ...(existsSync(config) ? { extends: config } : { test: { name } }),
+      ...(existsSync(config) ? { extends: config } : {}),
+      ...(!existsSync(config) || setupFile
+        ? {
+            test: {
+              ...(!existsSync(config) ? { name } : {}),
+              ...(setupFile ? { setupFiles: [setupFile] } : {}),
+            },
+          }
+        : {}),
       root: folder,
       resolve: { alias },
     };
