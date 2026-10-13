@@ -1,8 +1,10 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, fork } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -17,6 +19,7 @@ import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mj
 import {
   prepareNativeCapture,
   reconcileNativeCapture,
+  replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
 
 type Coverage = {
@@ -286,4 +289,262 @@ it('captures actual typed transforms and reproduces every direct map and counter
   }
   for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
     expect(actual[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
+});
+
+describe('compiled native counter stream', () => {
+  let bundle: string;
+  let snapshot: { root: string; included: { path: string; sha256: string }[] };
+  let completed: string;
+
+  async function execute(kill: boolean, stress = false) {
+    const child = fork(bundle, [kill ? 'hold' : stress ? 'stress' : 'exit'], {
+      env: {},
+      execArgv: ['--permission', '--allow-fs-read=*', '--max-old-space-size=64'],
+      stdio: ['ignore', 'ignore', 'pipe', 'ipc', 'pipe'],
+      serialization: 'advanced',
+    });
+    let text = '';
+    let stderr = '';
+    let message: unknown;
+    const pipe = child.stdio[4];
+    if (!pipe || !('setEncoding' in pipe)) throw new Error('Missing native counter descriptor.');
+    pipe.setEncoding('utf8');
+    if (stress) {
+      pipe.pause();
+      setTimeout(() => pipe.resume(), 100);
+    }
+    pipe.on('data', (chunk: string) => {
+      text += chunk;
+    });
+    child.stderr?.on('data', (bytes: Buffer) => {
+      stderr += bytes.toString('utf8');
+    });
+    child.on('message', (value) => {
+      message = value;
+      if (kill) child.kill('SIGKILL');
+    });
+    const result = await new Promise<{ code: number | null; signal: string | null }>(
+      (resolve, reject) => {
+        child.once('error', reject);
+        child.once('close', (code, signal) => resolve({ code, signal }));
+      },
+    );
+    expect(stderr).toBe('');
+    expect(message).toEqual({
+      outputs: [
+        [2, 'yes'],
+        [2, 'no'],
+      ],
+      writeAllowed: false,
+    });
+    return { text, ...result };
+  }
+
+  beforeAll(async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const prepared = readdirSync(join(root, 'preparations')).map((file) =>
+      JSON.parse(readFileSync(join(root, 'preparations', file), 'utf8')),
+    );
+    snapshot = { root, included: prepared.map(({ path, sha256 }) => ({ path, sha256 })) };
+    const directory = join(root, 'stream-preparations');
+    await prepareNativeCapture(snapshot, join(root, 'preparations'), directory);
+    const instrumented = new Map(
+      prepared.map(({ path }) => [
+        join(root, path),
+        JSON.parse(
+          readFileSync(
+            join(directory, `${createHash('sha256').update(path).digest('hex')}.json`),
+            'utf8',
+          ),
+        ).instrumentedCode,
+      ]),
+    );
+    const entry = join(root, 'stream-entry.mjs');
+    writeFileSync(
+      entry,
+      `import {PrivateWitness} from './private.ts';
+const instance = new PrivateWitness();
+const outputs = [await instance.run(true), await instance.run(false)];
+if (process.argv[2] === 'stress') for (let i = 0; i < 5000; i++) await instance.run(true);
+const result = {outputs, writeAllowed: process.permission.has('fs.write')};
+if (process.send) process.send(result);
+else console.log(JSON.stringify(result));
+if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
+else process.disconnect?.();
+`,
+    );
+    bundle = join(root, 'stream-bundle.mjs');
+    const { build } = await import('esbuild');
+    await build({
+      entryPoints: [entry],
+      outfile: bundle,
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      target: 'node24',
+      sourcemap: true,
+      banner: {
+        js: `import {registerCounterStream} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)}; registerCounterStream(4);`,
+      },
+      plugins: [
+        {
+          name: 'canonical-native-preparations',
+          setup(builder) {
+            builder.onLoad({ filter: /\.ts$/ }, (args) => {
+              const contents = instrumented.get(args.path);
+              if (!contents) throw new Error('Unprepared owned compilation input.');
+              return { contents, loader: 'js' };
+            });
+          },
+        },
+      ],
+    });
+    const result = await execute(false);
+    expect(result.code).toBe(0);
+    expect(result.signal).toBeNull();
+    completed = result.text;
+  });
+
+  async function assertActualCounters(text: string, state: string) {
+    const actual = await replayCounterStream(snapshot, text);
+    expect(actual.state).toBe(state);
+    const require = createRequire(join(resolve(import.meta.dirname, '../../..'), 'package.json'));
+    const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
+    const { remapNativeCoverage } = await import(pathToFileURL(providerPath).href);
+    const { createCoverageMap } = createRequire(providerPath)('istanbul-lib-coverage');
+    const wire = JSON.parse(
+      JSON.stringify((await remapNativeCoverage(createCoverageMap(actual.maps))).toJSON()),
+    );
+    const remapped = Object.fromEntries(
+      Object.entries(wire).map(([path, map]) => [realpathSync(path), map]),
+    ) as Record<string, Record<string, unknown>>;
+    const filename = join(root, 'private.ts');
+    const actualMap = remapped[filename];
+    if (!actualMap) throw new Error('Missing remapped compiled source.');
+    for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
+      expect(actualMap[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
+    return actual;
+  }
+
+  it('preserves IPC and permission limits and exactly replays real bundled counters', async () => {
+    const actual = await assertActualCounters(completed, 'completed');
+    expect(actual.exitCode).toBe(0);
+  });
+
+  it('captures a synchronous restricted child through a parent-opened descriptor', async () => {
+    const filename = join(root, 'synchronous-counters.jsonl');
+    const fd = openSync(filename, 'wx');
+    try {
+      const output = execFileSync(
+        process.execPath,
+        ['--permission', '--allow-fs-read=*', '--max-old-space-size=64', bundle, 'exit'],
+        { env: {}, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+      );
+      expect(JSON.parse(output)).toEqual({
+        outputs: [
+          [2, 'yes'],
+          [2, 'no'],
+        ],
+        writeAllowed: false,
+      });
+    } finally {
+      closeSync(fd);
+    }
+    const actual = await assertActualCounters(readFileSync(filename, 'utf8'), 'completed');
+    expect(actual.exitCode).toBe(0);
+  });
+
+  it('retains executed counters across SIGKILL without inventing a completion', async () => {
+    const result = await execute(true);
+    expect(result.signal).toBe('SIGKILL');
+    expect(result.code).toBeNull();
+    const actual = await assertActualCounters(result.text, 'interrupted');
+    expect(actual.exitCode).toBeNull();
+  });
+
+  it('retains every counter when the parent temporarily stops draining the pipe', async () => {
+    const result = await execute(false, true);
+    expect(result.code).toBe(0);
+    const actual = await replayCounterStream(snapshot, result.text);
+    expect(actual.state).toBe('completed');
+    const map = (actual.maps as Record<string, Coverage>)[join(root, 'private.ts')];
+    if (!map) throw new Error('Missing stressed native source.');
+    const functions = Object.entries(map.fnMap).map(([id, fn]) => ({
+      line: (fn as { loc: { start: { line: number } } }).loc.start.line,
+      hits: map.f[id],
+    }));
+    expect(functions).toEqual(
+      expect.arrayContaining([
+        { line: 2, hits: 5002 },
+        { line: 5, hits: 0 },
+        { line: 8, hits: 5002 },
+        { line: 13, hits: 5002 },
+      ]),
+    );
+  });
+
+  it('rejects empty, truncated, missing, repeated and reordered counter events', async () => {
+    const lines = completed.trimEnd().split('\n');
+    for (const text of [
+      '',
+      completed.slice(0, -1),
+      `${lines.slice(1).join('\n')}\n`,
+      `${[lines[0], ...lines].join('\n')}\n`,
+      `${[lines[0], lines[2], lines[1], ...lines.slice(3)].join('\n')}\n`,
+    ])
+      await expect(replayCounterStream(snapshot, text)).rejects.toThrow();
+  });
+
+  it('rejects forged counter values and completion identities', async () => {
+    const records = completed
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const counter = records.find((record) => record.state === 'counter');
+    counter.value += 1;
+    await expect(
+      replayCounterStream(
+        snapshot,
+        `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+      ),
+    ).rejects.toThrow('increment');
+    counter.value -= 1;
+    records.at(-1).pid += 1;
+    await expect(
+      replayCounterStream(
+        snapshot,
+        `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+      ),
+    ).rejects.toThrow('identity');
+  });
+
+  it('rejects duplicate source registrations and initial execution hits', async () => {
+    const records = completed
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const source = records.find((record) => record.state === 'source');
+    const duplicate = [records[0], source, structuredClone(source), ...records.slice(2)];
+    duplicate.forEach((record, index) => {
+      record.sequence = index + 1;
+    });
+    await expect(
+      replayCounterStream(
+        snapshot,
+        `${duplicate.map((record) => JSON.stringify(record)).join('\n')}\n`,
+      ),
+    ).rejects.toThrow('repeated');
+    const initialLine = completed.split('\n')[1];
+    if (!initialLine) throw new Error('Missing native source registration.');
+    const initial = JSON.parse(initialLine);
+    const first = Object.keys(initial.data.f)[0];
+    if (!first) throw new Error('Missing source function counter.');
+    initial.data.f[first] = 1;
+    await expect(
+      replayCounterStream(
+        snapshot,
+        `${[completed.split('\n')[0], JSON.stringify(initial)].join('\n')}\n`,
+      ),
+    ).rejects.toThrow('starts with');
+  });
 });
