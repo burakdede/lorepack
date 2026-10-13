@@ -320,8 +320,12 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     if (identities.has(counters.id) || counters.pid !== launch.pid || counters.threadId !== 0)
       throw new Error(`Repeated or mismatched fork execution: ${counterFile}`);
     identities.add(counters.id);
-    if (counters.state === 'completed') {
-      if (signal !== null || !Number.isSafeInteger(code) || code !== counters.exitCode)
+    if (signal === null) {
+      if (
+        counters.state !== 'completed' ||
+        !Number.isSafeInteger(code) ||
+        code !== counters.exitCode
+      )
         throw new Error(`Fork completion differs from close: ${closeFile}`);
     } else if (
       code !== null ||
@@ -334,7 +338,15 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     )
       throw new Error(`Unqualified fork interruption: ${closeFile}`);
     for (const name of [file, closeFile, counterFile]) consumed.add(name);
-    executions.push({ ...counters, launchId: launch.id, signal });
+    executions.push({
+      ...counters,
+      counterState: counters.state,
+      counterExitCode: counters.exitCode,
+      state: signal === null ? 'completed' : 'interrupted',
+      exitCode: code,
+      launchId: launch.id,
+      signal,
+    });
   }
   if (!executions.length || consumed.size !== files.length)
     throw new Error('Missing fork launches or orphaned capture records.');
