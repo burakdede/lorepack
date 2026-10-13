@@ -502,7 +502,8 @@ workspace. See [release supply chain](docs/architecture/release-supply-chain.md)
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
 executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that
-inventory, refusing stale hashes, incompatible maps and missing owned files.
+inventory, refusing stale hashes, incompatible maps and missing owned files. Rejected native
+execution prevents qualification even when another record covers the same source.
 `pnpm coverage:native` converts actual Node configuration/script execution, preserving
 unused counters and recording rejected layouts. Execution offsets must match the source
 or Node's position-preserving type stripping; wrapped code cannot be mapped as original. It reads raw
