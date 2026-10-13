@@ -21,9 +21,12 @@ import {
   buildNativeCli,
   compiledCapturePlugin,
   createCampaignRegistry,
+  createEvalCapture,
   prepareNativeCapture,
   reconcileForkCapture,
   reconcileNativeCapture,
+  registerCommandCapture,
+  registerSyncCommandCapture,
   replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
 
@@ -927,6 +930,37 @@ test('captures the ordinary CLI automatically',()=>{
     if (!map) throw new Error('Missing eval-import coverage.');
     expect(Object.values(map.f).sort()).toEqual([0, 2]);
     expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
+    const observable = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url}));`;
+    const arguments_ = ['--input-type=module', '--max-old-space-size=64', '-e', observable];
+    const expected = execFileSync(process.execPath, arguments_, { encoding: 'utf8', env: {} });
+    const preload = createEvalCapture(snapshot, native, join(project, 'automatic-preload.mjs'));
+    const directory = join(project, 'automatic-counters');
+    const asynchronous = registerCommandCapture([preload], directory);
+    const synchronous = registerSyncCommandCapture([preload], directory);
+    try {
+      const { execFile, spawnSync } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const actual = await promisify(execFile)(process.execPath, arguments_, {
+        encoding: 'utf8',
+        env: {},
+      });
+      expect(actual.stdout).toBe(expected);
+      expect(actual.stderr).toBe('');
+      const synced = spawnSync(process.execPath, arguments_, { encoding: 'utf8', env: {} });
+      expect(synced.status).toBe(0);
+      expect(synced.stdout).toBe(expected);
+      expect(synced.stderr).toBe('');
+      await asynchronous.settled();
+    } finally {
+      synchronous.restore();
+      asynchronous.restore();
+    }
+    const automatic = await reconcileForkCapture(snapshot, directory, [preload]);
+    expect(automatic.status).toBe('Pass');
+    expect(automatic.processes).toBe(2);
+    const automaticMap = (automatic.maps as Record<string, Coverage>)[join(project, path)];
+    if (!automaticMap) throw new Error('Missing automatic eval coverage.');
+    expect(Object.values(automaticMap.f).sort()).toEqual([0, 4]);
   });
 
   it('binds compilation to the real original artifact, map and source without editing them', () => {

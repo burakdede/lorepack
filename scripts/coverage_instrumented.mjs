@@ -164,6 +164,8 @@ export function registerForkCapture(entries, directory) {
 }
 
 function assertNodeArguments(entry) {
+  if (entry.captureMode !== undefined && entry.captureMode !== 'eval-import')
+    throw new Error('Invalid command capture launch mode.');
   if (entry.nodeArguments === undefined) return;
   if (
     !Array.isArray(entry.nodeArguments) ||
@@ -176,6 +178,19 @@ function assertNodeArguments(entry) {
 
 function selectCommand(registry, args, cwd) {
   if (!Array.isArray(args)) return null;
+  for (let position = 0; position < args.length; position++) {
+    const argument = args[position];
+    if (argument === '-e' || argument === '--eval') {
+      if (typeof args[position + 1] !== 'string') return null;
+      const entry = [...registry.values()].find((value) => value.captureMode === 'eval-import');
+      return entry ? { entry, index: -1 } : null;
+    }
+    if (
+      typeof argument !== 'string' ||
+      !/^(?:--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(argument)
+    )
+      break;
+  }
   const index = args.findIndex(
     (argument) => typeof argument === 'string' && !argument.startsWith('-'),
   );
@@ -232,7 +247,15 @@ export function registerCommandCapture(entries, directory) {
     try {
       result = originalSpawn.call(this, {
         ...options,
-        args: [...options.args.slice(0, index + 1), entry.target, ...options.args.slice(index + 2)],
+        args:
+          index === -1
+            ? [
+                options.args[0],
+                '--import',
+                pathToFileURL(entry.target).href,
+                ...options.args.slice(1),
+              ]
+            : [...options.args.slice(0, index + 1), entry.target, ...options.args.slice(index + 2)],
         stdio: [...streams, 'ignore', fd],
       });
     } catch (error) {
@@ -250,6 +273,7 @@ export function registerCommandCapture(entries, directory) {
       target: entry.target,
       originalSha256: entry.originalSha256,
       targetSha256: entry.targetSha256,
+      ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
       environment: 'normalized',
       argumentsSha256: digest(JSON.stringify(options.args)),
     };
@@ -333,7 +357,9 @@ export function registerSyncCommandCapture(entries, directory) {
     try {
       result = originals.spawnSync(
         process.execPath,
-        [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
+        index === -1
+          ? ['--import', pathToFileURL(entry.target).href, ...args]
+          : [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
         {
           ...options,
           stdio: [...streams, 'ignore', fd],
@@ -355,6 +381,7 @@ export function registerSyncCommandCapture(entries, directory) {
       target: entry.target,
       originalSha256: entry.originalSha256,
       targetSha256: entry.targetSha256,
+      ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
       environment:
         options.env === undefined
           ? 'inherited'
@@ -543,7 +570,7 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       throw new Error(`Invalid fork launch receipt: ${file}`);
     const entry = registry.get(launch.original);
     if (!entry) throw new Error(`Unregistered fork launch: ${file}`);
-    for (const key of ['original', 'target', 'originalSha256', 'targetSha256'])
+    for (const key of ['original', 'target', 'originalSha256', 'targetSha256', 'captureMode'])
       if (entry[key] !== launch[key]) throw new Error(`Fork entrypoint receipt differs: ${file}`);
     const closeFile = `${launch.id}.close.json`;
     const counterFile = `${launch.id}.counters.jsonl`;
@@ -886,6 +913,25 @@ export function compiledCapturePlugin(snapshot, preparations) {
         builder.onLoad({ filter: /\.js$/ }, (args) => reader.load(args.path));
       },
     },
+  };
+}
+
+export function createEvalCapture(snapshot, preparations, filename) {
+  const bootstrap = `import {registerCompiledCapture} from ${JSON.stringify(import.meta.url)};
+if(process.execArgv[0]!=='--import'||process.execArgv[1]!==import.meta.url)throw new Error('Eval capture preload arguments differ.');
+process.execArgv.splice(0,2);
+registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},4);
+`;
+  writeFileSync(filename, bootstrap, { flag: 'wx' });
+  const target = realpathSync(filename),
+    hash = digest(bootstrap);
+  return {
+    original: target,
+    target,
+    originalSha256: hash,
+    targetSha256: hash,
+    captureMode: 'eval-import',
+    interruptionSignals: ['SIGTERM', 'SIGKILL'],
   };
 }
 
