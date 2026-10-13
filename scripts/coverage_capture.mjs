@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,7 +11,13 @@ import {
   renderCoverageConfig,
   sourceCoverageConfig,
 } from './coverage_configuration.mjs';
-import { prepareNativeCapture, reconcileNativeCapture } from './coverage_instrumented.mjs';
+import {
+  buildNativeCli,
+  createCampaignRegistry,
+  prepareNativeCapture,
+  reconcileForkCapture,
+  reconcileNativeCapture,
+} from './coverage_instrumented.mjs';
 import { captureCoverage } from './coverage_report.mjs';
 
 export function nodeCommand(root, args, environment = {}) {
@@ -48,13 +54,39 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
   nodeCommand(root, [join(root, 'scripts/coverage_inventory.mjs'), '--out', inventoryPath]);
   const inventory = json(inventoryPath);
   const { default: base } = await import(pathToFileURL(join(root, 'vitest.config.ts')).href);
+  const preparations = join(output, 'preparations');
+  const preparationConfig = join(output, 'preparation.config.mjs');
+  writeFileSync(
+    preparationConfig,
+    renderCoverageConfig(
+      sourceCoverageConfig(root, base.test.projects, inventory, join(output, 'preparation-direct')),
+      { snapshot: inventory, directory: preparations },
+    ),
+  );
+  nodeCommand(root, [vitest, 'run', '--config', preparationConfig, '--maxWorkers=2']);
+  const preparedPaths = new Set(
+    readdirSync(preparations).map((file) => json(join(preparations, file)).path),
+  );
+  const missing = inventory.included.filter((entry) => !preparedPaths.has(entry.path));
+  if (missing.some((entry) => !/(?:vite|vitest)\.config\.ts$/.test(entry.path)))
+    throw new Error('Campaign has missing executable preparations.');
+  const nativeSnapshot = {
+    ...inventory,
+    included: inventory.included.filter((entry) => preparedPaths.has(entry.path)),
+  };
+  const native = join(output, 'native-preparations');
+  await prepareNativeCapture(nativeSnapshot, preparations, native);
+  const built = await buildNativeCli(inventory, native, join(output, 'measurement/dist'));
+  save(join(output, 'native-build.json'), built);
+  const setup = join(output, 'worker-setup.mjs');
+  writeCampaignSetup(inventory, built.launch, setup);
   const configPath = join(output, 'source.config.mjs');
   const directDirectory = join(output, 'direct');
   writeFileSync(
     configPath,
     renderCoverageConfig(
-      sourceCoverageConfig(root, base.test.projects, inventory, directDirectory),
-      { snapshot: inventory, directory: join(output, 'preparations') },
+      sourceCoverageConfig(root, base.test.projects, inventory, directDirectory, setup),
+      { snapshot: inventory, directory: preparations },
     ),
   );
   const ordinary = join(output, 'ordinary.files.json');
@@ -68,8 +100,7 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
   const configurations = await captureConfigurations(inventory, join(output, 'configs-native'));
   const configBundle = join(output, 'configs.bundle.json');
   save(configBundle, configurations);
-  const rawChildren = join(output, 'children-v8');
-  nodeCommand(root, [vitest, 'run', '--config', configPath], { NODE_V8_COVERAGE: rawChildren });
+  nodeCommand(root, [vitest, 'run', '--config', configPath, '--maxWorkers=2']);
   const directMap = join(directDirectory, 'coverage-final.json');
   const directBundle = join(output, 'direct.bundle.json');
   nodeCommand(root, [
@@ -83,24 +114,21 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     '--out',
     directBundle,
   ]);
-  const bundles = [directBundle, configBundle];
-  for (const [origin, raw] of [['children', rawChildren]]) {
-    const bundle = join(output, `${origin}.bundle.json`);
-    nodeCommand(root, [
-      join(root, 'scripts/coverage_native.mjs'),
-      '--inventory',
-      inventoryPath,
-      '--raw',
-      raw,
-      '--direct',
-      directMap,
-      '--origin',
-      origin,
-      '--out',
-      bundle,
-    ]);
-    bundles.push(bundle);
-  }
+  const registry = createCampaignRegistry(inventory, built.launch);
+  const children = await reconcileForkCapture(
+    inventory,
+    built.launch.captureDirectory,
+    [...registry.forkEntries, ...registry.commandEntries],
+    json(directMap),
+  );
+  save(join(output, 'children.reconciliation.json'), children);
+  if (children.status !== 'Pass') throw new Error('Campaign native children failed qualification.');
+  const childBundle = join(output, 'children.bundle.json');
+  save(childBundle, {
+    ...captureCoverage(inventory, children.maps, 'children'),
+    nativeEvidence: { acceptedExecutions: children.processes, rejected: [] },
+  });
+  const bundles = [directBundle, configBundle, childBundle];
   nodeCommand(root, [
     join(root, 'scripts/coverage_report.mjs'),
     ...bundles.flatMap((bundle) => ['--input', bundle]),
