@@ -12,6 +12,58 @@ const { convert } = await import(pathToFileURL(providerRequire.resolve('ast-v8-t
 const { parseAstAsync } = await import(pathToFileURL(require.resolve('vitest/node')).href);
 const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
 
+function ordered(value) {
+  if (Array.isArray(value)) return value.map(ordered);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, ordered(entry)]),
+  );
+}
+
+function descriptorKey(entry, field) {
+  const descriptor = structuredClone(entry);
+  if (field !== 'statementMap' && Object.hasOwn(descriptor, 'line')) {
+    if (!Number.isSafeInteger(descriptor.line) || descriptor.line !== descriptor.loc?.start?.line)
+      return null;
+    delete descriptor.line;
+  }
+  return JSON.stringify(ordered(descriptor));
+}
+
+function alignMaps(map, previous) {
+  const aligned = structuredClone(map);
+  const mismatch = [];
+  for (const [field, counts] of [
+    ['statementMap', 's'],
+    ['fnMap', 'f'],
+    ['branchMap', 'b'],
+  ]) {
+    if (isDeepStrictEqual(previous[field], map[field])) continue;
+    const source = Object.entries(map[field]);
+    const target = Object.entries(previous[field]);
+    const sourceKeys = source.map(([id, entry]) => [descriptorKey(entry, field), id]);
+    const targetKeys = target.map(([id, entry]) => [descriptorKey(entry, field), id]);
+    const index = new Map(sourceKeys);
+    if (
+      source.length !== target.length ||
+      index.size !== source.length ||
+      new Set(targetKeys.map(([key]) => key)).size !== target.length ||
+      sourceKeys.some(([key]) => key === null) ||
+      targetKeys.some(([key]) => key === null || !index.has(key))
+    ) {
+      mismatch.push(field);
+      continue;
+    }
+    aligned[field] = structuredClone(previous[field]);
+    aligned[counts] = Object.fromEntries(
+      targetKeys.map(([key, id]) => [id, structuredClone(map[counts][index.get(key)])]),
+    );
+  }
+  return { aligned, mismatch };
+}
+
 export async function convertNativeCoverage(snapshot, records, direct = {}) {
   const root = realpathSync(snapshot.root);
   const owned = new Map(snapshot.included.map((entry) => [entry.path, entry]));
@@ -75,19 +127,25 @@ export async function convertNativeCoverage(snapshot, records, direct = {}) {
       for (const [convertedPath, map] of Object.entries(maps)) {
         if (realpathSync(convertedPath) !== realpathSync(absolute))
           throw new Error(`Native conversion changed source path: ${path}`);
+        if (Object.values(map.branchMap).some((branch) => branch.type === 'default-arg')) {
+          rejected.push({
+            origin,
+            path,
+            reason: 'V8 default-parameter execution is not recoverable.',
+          });
+          continue;
+        }
         const previous = merged.files().includes(convertedPath)
           ? merged.fileCoverageFor(convertedPath).toJSON()
           : direct[convertedPath];
-        const mismatch = previous
-          ? ['statementMap', 'fnMap', 'branchMap'].filter(
-              (field) => !isDeepStrictEqual(previous[field], map[field]),
-            )
-          : [];
+        const { aligned, mismatch } = previous
+          ? alignMaps(map, previous)
+          : { aligned: map, mismatch: [] };
         if (mismatch.length) {
           rejected.push({ origin, path, reason: 'Incompatible coverage maps', mismatch });
           continue;
         }
-        merged.merge({ [convertedPath]: structuredClone(map) });
+        merged.merge({ [convertedPath]: structuredClone(aligned) });
         acceptedExecutions++;
       }
     }
