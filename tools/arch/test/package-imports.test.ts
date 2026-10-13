@@ -11,6 +11,29 @@ const NODE_BUILTINS = new Set([
 ]);
 
 describe('published package dependency declarations', () => {
+  it('renders ordinary CLI help without initializing protocol SDKs', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+import {registerHooks} from 'node:module';
+registerHooks({resolve(specifier,context,next){
+ if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Ordinary CLI loaded a protocol SDK');
+ return next(specifier,context);
+}});
+const {runCli}=await import('./dist/framework/program.js');
+await runCli(['node','lorepack','--help'],{exitProcess:false});
+`,
+      ],
+      { cwd: join(REPO_ROOT, 'packages/cli'), encoding: 'utf8' },
+    );
+    expect(output).toContain('pack');
+    expect(output).toContain('serve');
+    expect(output).toContain('mcp');
+  });
+
   it('loads deployment client operations without loading Worker protocol adapters', () => {
     const output = execFileSync(
       process.execPath,
