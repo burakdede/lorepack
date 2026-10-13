@@ -482,6 +482,7 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     const counters = await replayCounterStream(
       snapshot,
       readFileSync(join(directory, counterFile), 'utf8'),
+      { pid: launch.pid, threadId: 0, code, signal },
     );
     if (identities.has(counters.id) || counters.pid !== launch.pid || counters.threadId !== 0)
       throw new Error(`Repeated or mismatched fork execution: ${counterFile}`);
@@ -814,7 +815,7 @@ export function registerCounterStream(fd) {
   return identity.id;
 }
 
-export async function replayCounterStream(snapshot, text) {
+export async function replayCounterStream(snapshot, text, hostClose) {
   if (typeof text !== 'string' || !text || !text.endsWith('\n'))
     throw new Error('Empty or truncated native counter stream.');
   const records = text
@@ -833,6 +834,16 @@ export async function replayCounterStream(snapshot, text) {
     start.threadId < 0
   )
     throw new Error('Invalid native counter stream identity.');
+  if (
+    hostClose &&
+    (hostClose.pid !== start.pid ||
+      hostClose.threadId !== start.threadId ||
+      !(
+        (Number.isSafeInteger(hostClose.code) && hostClose.signal === null) ||
+        (hostClose.code === null && typeof hostClose.signal === 'string')
+      ))
+  )
+    throw new Error('Native counter host close identity differs.');
   const root = realpathSync(snapshot.root);
   const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
   const maps = {};
@@ -840,7 +851,7 @@ export async function replayCounterStream(snapshot, text) {
   let sequence = 0;
   let completed = null;
   for (const record of records) {
-    if (completed || record.sequence !== ++sequence)
+    if ((completed && !hostClose) || record.sequence !== ++sequence)
       throw new Error('Native counter stream sequence differs.');
     if (sequence === 1) continue;
     if (record.state === 'source') {
@@ -876,6 +887,7 @@ export async function replayCounterStream(snapshot, text) {
         throw new Error('Native counter increment differs.');
       target[key] = record.value;
     } else if (record.state === 'completed') {
+      if (completed) throw new Error('Repeated native counter completion.');
       for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
         if (record[key] !== start[key])
           throw new Error('Native counter completion identity differs.');
@@ -884,6 +896,8 @@ export async function replayCounterStream(snapshot, text) {
       completed = record;
     } else throw new Error('Unknown native counter stream record.');
   }
+  if (hostClose?.signal === null && (!completed || hostClose.code !== completed.exitCode))
+    throw new Error('Native counter completion differs from host close.');
   captureCoverage(snapshot, maps, start.id);
   return {
     id: start.id,

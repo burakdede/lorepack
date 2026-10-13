@@ -222,6 +222,13 @@ descriptor and child permissions. It forwards actual engine source registrations
 and cumulative counter mutations with contiguous sequence numbers. Strict replay
 rejects truncated frames, sequence gaps, duplicate sources, initial hits, invalid
 increments and mismatched completion identities. It never sums cumulative values.
+An observed host close can qualify genuine counter frames following the JavaScript
+completion event, since natural-exit microtasks can still execute afterward. The
+close must match the actual stream PID/thread and normal exit code. Unqualified
+continuations and repeated completions still reject. A real compiled regression
+retains the late cleanup function hit and matching direct source locations; wrong
+PID, wrong code and repeated completion controls fail.
+See [ADR 0019](../adr/0019-host-close-counter-stream.md).
 `reconcileForkCapture` checks registered original/target hashes, launch/close identity,
 actual child PID and all capture files before remapping. A normal exit must match the
 counter completion code. An interrupted stream requires an explicitly permitted signal
