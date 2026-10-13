@@ -612,6 +612,9 @@ Measured CLI builds share the production entrypoint definitions and migration la
 with separate output, package metadata and Studio assets.
 Explicit fork capture records matched child identities and kill/close receipts while
 preserving the existing IPC, environment and flags. Complete launch integration remains open.
+Fork reconciliation rejects missing receipts, mismatched child identities and repeated
+execution streams before merging source-compatible maps once. Interrupted streams require
+an explicitly permitted signal and a successful matching kill receipt from the host.
 Forced termination retains counters with an incomplete lifecycle; it does not qualify
 complete capture. Production child integration remains required.
 Configuration capture now prepares source maps before native execution, verifies

@@ -158,7 +158,7 @@ The `settled()` finalizer drains child close receipts after the host returns. It
 temporarily keeps the capture parent's event loop alive because the query host
 deliberately unrefs its child. Query execution still returns without waiting for
 termination. The finalizer must run after registered hosts stop their children.
-Extra existing descriptors remain unsupported; launch reconciliation, asynchronous
+Extra existing descriptors remain unsupported; campaign integration, asynchronous
 and synchronous CLI/verification launches, and parent-exit integration remain open.
 
 `registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
@@ -166,6 +166,15 @@ descriptor and child permissions. It forwards actual engine source registrations
 and cumulative counter mutations with contiguous sequence numbers. Strict replay
 rejects truncated frames, sequence gaps, duplicate sources, initial hits, invalid
 increments and mismatched completion identities. It never sums cumulative values.
+`reconcileForkCapture` checks registered original/target hashes, launch/close identity,
+actual child PID and all capture files before remapping. A normal exit must match the
+counter completion code. An interrupted stream requires an explicitly permitted signal
+and a successful matching host kill receipt. Its state remains `interrupted`.
+Missing, truncated, orphaned and repeated execution streams reject qualification.
+Every source layout must match direct and previously merged maps; each independent
+execution contributes once. Real normal/interrupted child fixtures verify exact merged
+counts and exercise invalid receipt, stream, signal and layout controls.
+
 Real fork fixtures use an empty environment, the permission model and the same
 heap limit while testing normal exit, SIGKILL and temporarily paused pipe reads.
 An actual synchronous child uses a parent-opened file descriptor instead of a pipe:
