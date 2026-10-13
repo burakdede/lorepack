@@ -460,6 +460,9 @@ They use the same descriptor allocation as campaign launches.
 Temporary scripts and eval launches accept Node import preloads in separate-value or
 equals form. Capture consumes preload arguments before selecting the script, retains
 the original preload order and removes only its inserted import from observable execArgv.
+Registered CLI and child entrypoints also retain user import preloads in either form.
+Only import arguments are separated from the registered fixed Node prefix comparison;
+heap flags and every other declared prefix still require an exact match.
 Node's stdin driver (`-`) uses the same checked import preload. Module and CommonJS
 programs retain their actual stdin bytes, arguments, execution flags, environment,
 working directory and module URL. Synchronous and asynchronous launches reconcile real

@@ -745,6 +745,73 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       ).rejects.toThrow('ordinary');
       await expect(buildNativeCli(captured, native, output)).rejects.toThrow('empty');
     });
+    it.each([
+      ['sync', 'separate'],
+      ['async', 'separate'],
+      ['sync', 'equals'],
+      ['async', 'equals'],
+    ] as const)('retains registered CLI preloads through %s calls (%s)', async (mode, form) => {
+      const { project, captured, built } = scenario;
+      const { default: childProcess } = await import('node:child_process');
+      const preload = join(project, 'user-preload.mjs');
+      writeFileSync(preload, 'console.log(JSON.stringify({preload:process.execArgv}));\n');
+      const prefix =
+        form === 'separate'
+          ? ['--import', pathToFileURL(preload).href]
+          : [`--import=${pathToFileURL(preload).href}`];
+      const args = [...prefix, join(project, 'packages/cli/dist/public-entry.js')];
+      const expected = childProcess.spawnSync(process.execPath, args, {
+        env: {},
+        encoding: 'utf8',
+      });
+      expect(expected.status).toBe(7);
+      expect(expected.stderr).toBe('');
+      const registry = createCampaignRegistry(captured, built.launch);
+      const directory = join(project, `preload-${mode}-${form}-parent-counters`);
+      const synchronous = registerSyncCommandCapture(registry.commandEntries, directory);
+      const asynchronous = registerCommandCapture(registry.commandEntries, directory);
+      try {
+        if (mode === 'sync') {
+          const actual = childProcess.spawnSync(process.execPath, args, {
+            env: {},
+            encoding: 'utf8',
+          });
+          expect(actual.status).toBe(expected.status);
+          expect(actual.stdout).toBe(expected.stdout);
+          expect(actual.stderr).toBe(expected.stderr);
+        } else {
+          const child = childProcess.spawn(process.execPath, args, {
+            env: {},
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+          const output: Buffer[] = [];
+          const errors: Buffer[] = [];
+          child.stdout.on('data', (value) => output.push(value));
+          child.stderr.on('data', (value) => errors.push(value));
+          const code = await new Promise((resolve, reject) => {
+            child.once('close', resolve);
+            child.once('error', reject);
+          });
+          expect(code).toBe(expected.status);
+          expect(Buffer.concat(output).toString()).toBe(expected.stdout);
+          expect(Buffer.concat(errors).toString()).toBe(expected.stderr);
+        }
+        await asynchronous.settled();
+      } finally {
+        asynchronous.restore();
+        synchronous.restore();
+      }
+      const parent = await reconcileForkCapture(captured, directory, registry.commandEntries);
+      expect(parent.status).toBe('Pass');
+      expect(parent.processes).toBe(1);
+      const children = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(children.status).toBe('Pass');
+      expect(children.processes).toBe(3);
+    });
+
     it('reconciles actual parent counters and every CLI child', async () => {
       const { project, captured, built } = scenario;
       const launch = built.launch;
