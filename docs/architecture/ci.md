@@ -174,6 +174,11 @@ explicit script-import mode for unregistered script files with the original heap
 prefix. File launches preserve their module URL and application arguments;
 `--eval` after the script path remains an application argument. Async and sync
 temporary-script executions reconcile through that explicit launch mode.
+Campaign adapters retain audit records for Node launches outside their supported
+forms. Records contain argument digests and prefix option names, excluding eval
+text and environment values. Unregistered launches execute normally but prevent
+native qualification. A private fork handoff marker avoids auditing the same
+registered IPC launch twice. Invalid audit records also fail qualification.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
 eval/script preloads and their explicit registry modes,
 entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
