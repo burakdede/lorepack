@@ -177,6 +177,63 @@ async function nativeFixture(code = 'export const value = 7;') {
 }
 
 describe('native instrumentation process capture', () => {
+  it('captures owned raw scripts and rejects changed source bytes', async () => {
+    const fixture =
+      await nativeFixture(`export function choose(flag = false) { if (flag) return 1; return 2; }
+export function unused() { return 9; }
+choose(); choose(true);`);
+    const namespace = '__LOREPACK_CAMPAIGN_COVERAGE__';
+    const preparations = join(directory, 'raw-script-preparations');
+    await prepareNativeCapture(fixture.snapshot, fixture.preparations, preparations, namespace);
+    const bootstrap = join(directory, 'raw-script-bootstrap.mjs');
+    writeFileSync(
+      bootstrap,
+      `import {registerCompiledCapture} from ${JSON.stringify(pathToFileURL(join(ROOT, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerCompiledCapture(${JSON.stringify(fixture.snapshot)},${JSON.stringify(preparations)},4,${JSON.stringify(namespace)});
+await import(${JSON.stringify(pathToFileURL(fixture.source).href)});
+console.log(JSON.stringify([...capture.receipts.values()]));`,
+    );
+    const launch = (filename: string) => {
+      const fd = openSync(filename, 'wx');
+      try {
+        return spawnSync(process.execPath, [bootstrap], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+        });
+      } finally {
+        closeSync(fd);
+      }
+    };
+    const counterFile = join(directory, 'raw-script.jsonl');
+    const result = launch(counterFile);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    const receipts = JSON.parse(result.stdout);
+    expect(receipts).toHaveLength(1);
+    const owned = fixture.snapshot.included[0];
+    if (!owned) throw new Error('Missing owned raw script.');
+    expect(receipts[0]).toMatchObject({
+      path: 'owned.mjs',
+      sha256: owned.sha256,
+      artifact: fixture.source,
+      artifactSha256: owned.sha256,
+      artifactMapSha256: null,
+    });
+    const measured = await replayCounterStream(fixture.snapshot, readFileSync(counterFile, 'utf8'));
+    expect(measured.state).toBe('completed');
+    expect(Object.keys(measured.maps)).toEqual([fixture.source]);
+    const coverage = (measured.maps as Record<string, { f: Record<string, number> }>)[
+      fixture.source
+    ];
+    if (!coverage) throw new Error('Missing raw script counters.');
+    expect(Object.values(coverage.f).sort()).toEqual([0, 2]);
+    writeFileSync(fixture.source, `${readFileSync(fixture.source, 'utf8')}\n`);
+    const stale = launch(join(directory, 'raw-script-stale.jsonl'));
+    expect(stale.status).toBe(1);
+    expect(stale.stdout).toBe('');
+    expect(stale.stderr).toContain('Owned script source differs from inventory');
+  });
+
   it('keeps campaign counters independent from fixture counters in the same process', async () => {
     const fixture =
       await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }
