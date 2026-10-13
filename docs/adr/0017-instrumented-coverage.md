@@ -21,6 +21,12 @@ genuine empty source maps after remapping. The patch creates no hits or
 replacement counters. Keep actual used/unused/async and empty-source regression
 fixtures in the architecture suite and strict audit typecheck.
 
+Expose that same pinned factory and remapper through the dependency patch for
+native-capture qualification. Reusing its engine avoids a second independently
+versioned instrumenter. An actual Node execution fixture verifies default
+initializer counts, unused private methods and statements after an early throw.
+These primitives do not yet qualify the complete subprocess capture pipeline.
+
 Preserve every owned source and the original overall 95/95/95/90 and critical
 98/98/95/95 targets. Keep V8's pinned native conversion primitives until a
 common native instrumentation layout is qualified. Reject incompatible maps;
