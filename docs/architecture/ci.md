@@ -165,6 +165,9 @@ See [ADR 0021](../adr/0021-shared-chunk-capture.md). Real compiler/builder
 fixtures preserve exit7, restricted IPC and heap flags, retain two observed SIGKILL
 interruptions and one completed archive execution, and reject altered artifacts.
 Installing these generated artifacts in the complete campaign remains necessary.
+`sourceCoverageConfig` accepts an optional worker setup file for each selected project.
+A real Vitest fixture verifies that the generated setup and inherited project setup
+both execute; attaching it does not replace the existing setup.
 
 `registerForkCapture` explicitly maps ordinary child entrypoints to checked measured
 artifacts. It verifies both hashes at registration and immediately before launch,
