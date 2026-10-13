@@ -299,7 +299,12 @@ describe('stdout carries protocol and nothing else, architecture 14.3', () => {
         }
       }, 100);
     });
-    child.kill('SIGTERM');
+    const closed = new Promise<void>((resolve, reject) => {
+      child.once('close', () => resolve());
+      child.once('error', reject);
+    });
+    expect(child.kill('SIGTERM')).toBe(true);
+    await closed;
 
     const lines = out.split('\n').filter((line) => line.trim() !== '');
     expect(lines.length).toBeGreaterThan(0);
@@ -312,6 +317,57 @@ describe('stdout carries protocol and nothing else, architecture 14.3', () => {
 });
 
 describe('shutting down', () => {
+  it.each(['SIGTERM', 'SIGINT'] as const)(
+    'closes on %s while stdin remains open',
+    async (signal) => {
+      const child = spawn(process.execPath, [BINARY, '--cwd', project, 'mcp', '--ensure-current'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      let err = '';
+      child.stdout.resume();
+      const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+        (resolve, reject) => {
+          child.once('close', (code, signal) => resolve({ code, signal }));
+          child.once('error', reject);
+        },
+      );
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error(`MCP readiness timed out: ${err}`)),
+            90_000,
+          );
+          child.stderr.on('data', (data: Buffer) => {
+            err += data.toString('utf8');
+            if (err.includes('Serving ')) {
+              clearTimeout(timeout);
+              resolve();
+            }
+          });
+        });
+        expect(child.stdin.writableEnded).toBe(false);
+        expect(child.kill(signal)).toBe(true);
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const outcome = await Promise.race([
+          closed,
+          new Promise<null>((resolve) => {
+            timeout = setTimeout(() => resolve(null), 30_000);
+          }),
+        ]);
+        clearTimeout(timeout);
+        expect(outcome, 'server must close without stdin EOF').not.toBeNull();
+        if (process.platform !== 'win32') expect(outcome).toEqual({ code: 0, signal: null });
+        expect(err).not.toMatch(
+          /database is not open|ERR_INVALID_STATE|unsettled top-level await/i,
+        );
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) child.stdin.end();
+        await closed;
+      }
+    },
+    120_000,
+  );
+
   /**
    * Both defects here were found by running the server by hand after every test passed.
    *
@@ -363,7 +419,7 @@ describe('shutting down', () => {
     child.stdin.end();
     const code = await new Promise<number>((resolve) => {
       const give = setTimeout(() => resolve(-1), 30_000);
-      child.once('exit', (value) => {
+      child.once('close', (value) => {
         clearTimeout(give);
         resolve(value ?? 0);
       });
