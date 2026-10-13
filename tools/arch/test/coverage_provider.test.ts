@@ -1120,6 +1120,50 @@ console.log(JSON.stringify({spawn:{status:spawn.status,stdout:spawn.stdout,stder
     ).rejects.toThrow('Unqualified fork interruption');
   });
 
+  it('captures an explicitly registered measured child without changing its entrypoint', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const entry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: [],
+    };
+    const directory = join(root, 'self-fork-records');
+    const parent = join(root, 'self-fork-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {fork} from 'node:child_process';
+import {registerForkCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerForkCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const child=fork(${JSON.stringify(bundle)},['exit'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']});
+const message=await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);});
+await capture.settled();capture.restore();
+const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},[${JSON.stringify(entry)}],${JSON.stringify(maps)});
+console.log(JSON.stringify({message,launch:capture.launches[0],reconciled}));`,
+    );
+    const result = JSON.parse(
+      execFileSync(process.execPath, [parent], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    );
+    expect(result.message.outputs).toEqual([
+      [2, 'yes'],
+      [2, 'no'],
+    ]);
+    expect(result.message.writeAllowed).toBe(false);
+    expect(result.launch.original).toBe(bundle);
+    expect(result.launch.target).toBe(bundle);
+    expect(result.reconciled.processes).toBe(1);
+    expect(result.reconciled.executions[0]).toMatchObject({ state: 'completed', exitCode: 0 });
+    const actual = result.reconciled.maps[join(root, 'private.ts')];
+    const expected = maps[join(root, 'private.ts')];
+    if (!actual || !expected) throw new Error('Missing measured self-fork counters.');
+    for (const field of ['s', 'f', 'b'])
+      expect(actual[field]).toEqual(expected[field as keyof Coverage]);
+  });
+
   it('refuses a target that changes after registration before any child starts', () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const original = join(root, 'changed-fork-original.mjs');

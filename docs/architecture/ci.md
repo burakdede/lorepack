@@ -158,7 +158,9 @@ builder no longer invokes a build; its command still uses the production default
 `registerForkCapture` explicitly maps ordinary child entrypoints to checked measured
 artifacts. It verifies both hashes at registration and immediately before launch,
 preserves the original four-descriptor IPC layout, and adds only the capture file
-descriptor. Unregistered launches delegate unchanged. It records actual child and
+descriptor. An explicitly registered measured child may use the same original and
+target file, adding the descriptor without changing its entrypoint.
+Unregistered launches delegate unchanged. It records actual child and
 parent identities, argument hashes, environment mode, requested kill results and
 observed close status; environment values and raw arguments are not recorded.
 The `settled()` finalizer drains child close receipts after the host returns. It
