@@ -499,6 +499,10 @@ seven prefixes runs ordinary, asynchronous and synchronous Node execution indepe
 Each prefix reconciles two measured processes and used/unused function counts `[0,4]`,
 retaining the original fourteen processes and `[0,28]` counts per seven-prefix group.
 The direct-import witness and missing-registry rejection remain separate checks.
+Generated CLI-help bundles live under the existing ignored `dist` tree. The test runs the
+actual inventory command while the bundle exists, retaining the frozen ownership counts.
+Temporary compiled output must not look like untracked source to a concurrent inventory
+scan. The ownership guard and source denominator remain unchanged.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
