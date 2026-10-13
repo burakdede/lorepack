@@ -127,6 +127,13 @@ stream fixtures assert real cleanup hits and one final completion after all incr
 The runtime boundary and upgrade qualification are recorded in
 [ADR 0018](../adr/0018-native-exit-finalization.md).
 
+Promises scheduled by exit listeners can still run after synchronous finalization.
+Counter streams reject those later events. File capture observes actual source registration
+and counter mutations after its snapshot, retains a rejection record and returns unavailable
+maps. Load hooks remain active through shutdown so late owned modules cannot escape that
+check. The real microtask fixture retains its expected output while rejecting the stale
+snapshot. Complete shutdown capture must resolve this boundary before campaign qualification.
+
 Native preloads pass `pathToFileURL(...).href` to Node's `--import`; drive paths are
 not valid ESM specifiers on Windows. The native fixtures execute that same form.
 `reconcileNativeCapture` validates every lifecycle file, matched process/thread

@@ -601,6 +601,7 @@ processes, preserving their permissions. Its process records distinguish started
 completed, empty and rejected execution; interrupted capture remains incomplete.
 Both collectors retain synchronous cleanup hits before finalizing the real exit event;
 manually emitted events keep their ordinary listener behavior without finalizing capture.
+Owned execution after a file snapshot rejects qualification instead of accepting stale hits.
 Reconciliation validates matched lifecycle identities, loaded-source hashes and exact
 maps before merging each final snapshot once. Rejected or incomplete records produce
 unavailable aggregates. Native preloads use file URLs for Windows compatibility.
