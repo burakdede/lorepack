@@ -39,6 +39,7 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     configPath,
     renderCoverageConfig(
       sourceCoverageConfig(root, base.test.projects, inventory, directDirectory),
+      { snapshot: inventory, directory: join(output, 'preparations') },
     ),
   );
   const ordinary = join(output, 'ordinary.files.json');

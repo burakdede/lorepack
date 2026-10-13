@@ -590,6 +590,9 @@ for the checked files, capture limits and native matrix.
 `pnpm coverage:capture --out coverage/<fresh-name>` runs a default-suite campaign with
 configuration and subprocess capture. It fails when ownership, collection, tests or
 coverage gates fail, retaining the evidence for review.
+The campaign retains actual provider transformation preparations under `preparations/`,
+bound to original source hashes and mapped source content. These contain static code and
+maps, not execution hits. Conflicting transforms cannot overwrite retained evidence.
 Direct coverage uses pinned Istanbul instrumentation with a recorded dependency patch
 to retain private-method counters and empty source records. The patch also exposes its
 instrumenter and remapper for native-capture qualification, with real initializer and

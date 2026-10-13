@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -141,4 +149,95 @@ describe('source-layout coverage configuration', () => {
       assertCollectionParity([...collection, ...collection], [...collection, ...collection]),
     ).toThrow('collection differs');
   });
+});
+
+describe('source-bound transformation preparation', () => {
+  it('binds the actual transform to unchanged original source bytes', async () => {
+    const { prepareSource } = await import('../../../scripts/coverage_configuration.mjs');
+    const inventory = snapshot();
+    const id = join(root, configPath);
+    const prepared = prepareSource(inventory, id, configCode, null);
+    expect(prepared.kind).toBe('static-transform');
+    expect(prepared.path).toBe(configPath);
+    expect(prepared.sha256).toBe(inventory.included[0]?.sha256);
+    expect(prepared.code).toBe(configCode);
+    expect('s' in prepared).toBe(false);
+    expect('f' in prepared).toBe(false);
+    expect('b' in prepared).toBe(false);
+    put(configPath, 'export default {};');
+    expect(() => prepareSource(inventory, id, configCode, null)).toThrow('Stale preparation');
+  });
+
+  it('rejects transformed code without the original mapped content', async () => {
+    const { prepareSource } = await import('../../../scripts/coverage_configuration.mjs');
+    const inventory = snapshot();
+    const id = join(root, configPath);
+    const code = 'export default { test: { include: ["test/*.test.ts"], name: "core" } };';
+    expect(() => prepareSource(inventory, id, code, null)).toThrow('source map');
+    const map = {
+      version: 3,
+      sources: [id],
+      sourcesContent: [configCode],
+      mappings: '',
+      names: [],
+    };
+    expect(prepareSource(inventory, id, code, map).map).toEqual(map);
+    expect(() => prepareSource(inventory, id, code, { ...map, sourcesContent: ['wrong'] })).toThrow(
+      'mapped original',
+    );
+    expect(() =>
+      prepareSource(inventory, id, code, { ...map, sources: [join(root, 'other.ts')] }),
+    ).toThrow('mapped source');
+    expect(() => prepareSource(inventory, id, code, { ...map, version: 2 })).toThrow('source map');
+  });
+
+  it('rejects unowned paths and unrelated query variants', async () => {
+    const { prepareSource } = await import('../../../scripts/coverage_configuration.mjs');
+    expect(() => prepareSource(snapshot(), join(root, 'unowned.ts'), '', null)).toThrow('Unowned');
+    expect(() =>
+      prepareSource(snapshot(), `${join(root, configPath)}?wrapped`, configCode, null),
+    ).toThrow('query');
+  });
+});
+
+it('preserves preparations when a later transform conflicts', async () => {
+  const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
+  const directory = join(root, 'preparations');
+  const factory = await preparingInstrumenter(snapshot(), directory);
+  const instrumenter = factory({ coverageVariable: '__witness__' });
+  const id = join(root, configPath);
+  const map = { version: 3, sources: [id], sourcesContent: [configCode], mappings: '', names: [] };
+  instrumenter.instrumentSync(configCode, id, map);
+  const filename = join(directory, `${createHash('sha256').update(configPath).digest('hex')}.json`);
+  const original = readFileSync(filename, 'utf8');
+  expect(() => instrumenter.instrumentSync(`${configCode}\n`, id, map)).toThrow(
+    'Conflicting preparation',
+  );
+  expect(readFileSync(filename, 'utf8')).toBe(original);
+  expect(readdirSync(directory)).toEqual([basename(filename)]);
+});
+
+it('rechecks original bytes during the provider synthetic-map pass', async () => {
+  const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
+  const factory = await preparingInstrumenter(snapshot(), join(root, 'preparations'));
+  const instrumenter = factory({ coverageVariable: '__witness__' });
+  const id = join(root, configPath);
+  const code = `${configCode}\n`;
+  instrumenter.instrumentSync(code, id, {
+    version: 3,
+    sources: [id],
+    sourcesContent: [configCode],
+    mappings: '',
+    names: [],
+  });
+  put(configPath, 'export default {};');
+  expect(() =>
+    instrumenter.instrumentSync(code, id, {
+      version: 3,
+      sources: [id],
+      sourcesContent: [code],
+      mappings: '',
+      names: [],
+    }),
+  ).toThrow('Stale preparation');
 });
