@@ -64,6 +64,7 @@ export function reportCoverage(inventory, bundles) {
     throw new Error('Invalid owned inventory: sources must be nonempty and unique.');
   const canonical = new Map();
   const origins = [];
+  const rejectedExecutions = [];
   for (const bundle of bundles) {
     if (bundle.schemaVersion !== 1 || typeof bundle.origin !== 'string' || !bundle.files)
       throw new Error('Invalid coverage bundle.');
@@ -72,6 +73,28 @@ export function reportCoverage(inventory, bundles) {
       candidate: bundle.candidate,
       dirty: bundle.dirty ?? null,
     });
+    if (bundle.nativeEvidence !== undefined) {
+      const evidence = bundle.nativeEvidence;
+      if (
+        !evidence ||
+        !Number.isSafeInteger(evidence.acceptedExecutions) ||
+        evidence.acceptedExecutions < 0 ||
+        !Array.isArray(evidence.rejected)
+      )
+        throw new Error('Invalid native coverage evidence.');
+      for (const rejection of evidence.rejected) {
+        if (
+          !rejection ||
+          typeof rejection.origin !== 'string' ||
+          typeof rejection.path !== 'string' ||
+          typeof rejection.reason !== 'string'
+        )
+          throw new Error('Invalid native coverage rejection.');
+        if (!owned.has(rejection.path))
+          throw new Error(`Unexpected rejected coverage source: ${rejection.path}`);
+        rejectedExecutions.push({ ...structuredClone(rejection), bundleOrigin: bundle.origin });
+      }
+    }
     for (const [path, record] of Object.entries(bundle.files)) {
       const source = owned.get(path);
       if (!source) throw new Error(`Unexpected coverage source: ${path}`);
@@ -97,15 +120,23 @@ export function reportCoverage(inventory, bundles) {
     representedFiles: canonical.size,
     missing,
     origins,
+    rejectedExecutions,
     targets: structuredClone(TARGETS),
   };
-  if (missing.length)
+  if (missing.length || rejectedExecutions.length)
     return {
       ...base,
       overall: null,
       critical: null,
       groups: null,
-      failures: ['Owned sources are missing coverage; aggregate metrics are unavailable.'],
+      failures: [
+        ...(missing.length
+          ? ['Owned sources are missing coverage; aggregate metrics are unavailable.']
+          : []),
+        ...(rejectedExecutions.length
+          ? ['Native executions were rejected; aggregate metrics are unavailable.']
+          : []),
+      ],
       status: 'Fail',
     };
   const overall = createCoverageSummary();

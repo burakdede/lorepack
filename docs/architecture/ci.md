@@ -200,6 +200,11 @@ Failed children stop the campaign. Failed thresholds exit unsuccessfully with th
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
 
+The final report retains rejected native executions with their bundle origin, source and
+reason. Any rejection fails qualification and leaves aggregate metrics unavailable, even
+when another valid execution represents that source. Missing and rejected sources never
+reduce the owned denominator. Invalid native evidence or unowned rejection paths fail parsing.
+
 This measures the default suite. Separate security, acceptance, Studio and release gates
 remain required. Missing owned execution stays uncovered; it does not shrink the inventory.
 Do not overlap full campaigns or full worktree verifiers. The capture command has contract
