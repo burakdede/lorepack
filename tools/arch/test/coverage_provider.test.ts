@@ -852,6 +852,83 @@ test('captures the ordinary CLI automatically',()=>{
     await expect(buildNativeCli(captured, native, output)).rejects.toThrow('empty');
   });
 
+  it('captures owned compiled imports from a real Node eval without changing results', async () => {
+    const project = join(root, 'eval-project');
+    const path = 'packages/core/src/witness.ts';
+    const source =
+      'export function choose(flag = false) { if (flag) return 1; return 2; }\nexport function unused() { return 9; }\n';
+    mkdirSync(dirname(join(project, path)), { recursive: true });
+    writeFileSync(join(project, 'package.json'), '{"type":"module"}');
+    writeFileSync(join(project, path), source);
+    const repository = resolve(import.meta.dirname, '../../..');
+    const require = createRequire(join(repository, 'package.json'));
+    const compiler = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');
+    execFileSync(
+      process.execPath,
+      [
+        compiler,
+        '--ignoreConfig',
+        '--target',
+        'ES2024',
+        '--module',
+        'NodeNext',
+        '--sourceMap',
+        '--skipLibCheck',
+        '--rootDir',
+        join(project, 'packages/core/src'),
+        '--outDir',
+        join(project, 'packages/core/dist'),
+        join(project, path),
+      ],
+      { stdio: 'pipe' },
+    );
+    const snapshot = {
+      root: project,
+      included: [{ path, sha256: createHash('sha256').update(source).digest('hex') }],
+    };
+    const preparations = join(project, 'preparations');
+    mkdirSync(preparations);
+    writeFileSync(
+      join(preparations, `${createHash('sha256').update(path).digest('hex')}.json`),
+      JSON.stringify(prepareSource(snapshot, join(project, path), source, null)),
+    );
+    const native = join(project, 'native');
+    await prepareNativeCapture(snapshot, preparations, native);
+    const bootstrap = join(project, 'capture.mjs');
+    writeFileSync(
+      bootstrap,
+      `import {registerCompiledCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(native)},4);`,
+    );
+    const entry = pathToFileURL(join(project, 'packages/core/dist/witness.js')).href;
+    const code = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify([choose(),choose(true)]));`;
+    const ordinary = execFileSync(process.execPath, ['--input-type=module', '-e', code], {
+      encoding: 'utf8',
+      env: {},
+    });
+    const counters = join(project, 'counters.jsonl');
+    const fd = openSync(counters, 'wx');
+    let result: import('node:child_process').SpawnSyncReturns<string>;
+    try {
+      const { spawnSync } = await import('node:child_process');
+      result = spawnSync(
+        process.execPath,
+        ['--import', pathToFileURL(bootstrap).href, '--input-type=module', '-e', code],
+        { encoding: 'utf8', env: {}, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+      );
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(ordinary);
+    const replay = await replayCounterStream(snapshot, readFileSync(counters, 'utf8'));
+    expect(replay.state).toBe('completed');
+    const map = (replay.maps as Record<string, Coverage>)[join(project, path)];
+    if (!map) throw new Error('Missing eval-import coverage.');
+    expect(Object.values(map.f).sort()).toEqual([0, 2]);
+    expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
+  });
+
   it('binds compilation to the real original artifact, map and source without editing them', () => {
     const filename = join(root, 'dist/private.js');
     const receipt = compilation.receipts.get(filename);

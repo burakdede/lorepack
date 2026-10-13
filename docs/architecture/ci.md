@@ -168,6 +168,11 @@ It retains CLI package metadata, Studio assets, dependency resolution and copied
 migrations, and publishes source-bound compilation receipts. It refuses the
 ordinary CLI output and a nonempty measurement directory. Importing the ordinary
 builder no longer invokes a build; its command still uses the production defaults.
+The builder and `registerCompiledCapture` share one checked compiled-input reader.
+An explicit Node preload captures owned raw compiled imports through the same
+instrumentation and descriptor stream, including imports from `--eval`. A real
+fixture preserves ordinary output and unused-function zero counts. Automatic
+capture of unregistered eval and temporary-script launches remains unfinished.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
 entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
 parser/query forks and the archive verifier's heap-prefixed command, records their
