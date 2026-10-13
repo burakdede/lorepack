@@ -1103,236 +1103,277 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     });
   });
 
-  it('captures owned compiled imports from a real Node eval without changing results', async () => {
-    const project = join(root, 'eval-project');
-    const path = 'packages/core/src/witness.ts';
-    const source =
-      'export function choose(flag = false) { if (flag) return 1; return 2; }\nexport function unused() { return 9; }\n';
-    mkdirSync(dirname(join(project, path)), { recursive: true });
-    writeFileSync(join(project, 'package.json'), '{"type":"module"}');
-    writeFileSync(join(project, path), source);
-    const repository = resolve(import.meta.dirname, '../../..');
-    const require = createRequire(join(repository, 'package.json'));
-    const compiler = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');
-    execFileSync(
-      process.execPath,
-      [
-        compiler,
-        '--ignoreConfig',
-        '--target',
-        'ES2024',
-        '--module',
-        'NodeNext',
-        '--sourceMap',
-        '--skipLibCheck',
-        '--rootDir',
-        join(project, 'packages/core/src'),
-        '--outDir',
-        join(project, 'packages/core/dist'),
-        join(project, path),
-      ],
-      { stdio: 'pipe' },
-    );
-    const snapshot = {
-      root: project,
-      included: [{ path, sha256: createHash('sha256').update(source).digest('hex') }],
-    };
-    const preparations = join(project, 'preparations');
-    mkdirSync(preparations);
-    writeFileSync(
-      join(preparations, `${createHash('sha256').update(path).digest('hex')}.json`),
-      JSON.stringify(prepareSource(snapshot, join(project, path), source, null)),
-    );
-    const native = join(project, 'native');
-    await prepareNativeCapture(snapshot, preparations, native);
-    const bootstrap = join(project, 'capture.mjs');
-    writeFileSync(
-      bootstrap,
-      `import {registerCompiledCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(native)},4);`,
-    );
-    const entry = pathToFileURL(join(project, 'packages/core/dist/witness.js')).href;
-    const code = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify([choose(),choose(true)]));`;
-    const ordinary = execFileSync(process.execPath, ['--input-type=module', '-e', code], {
-      encoding: 'utf8',
-      env: {},
+  describe('owned compiled eval and script execution', () => {
+    let fixture: Awaited<ReturnType<typeof prepareFixture>>;
+    const forms = [
+      'plain',
+      'import-separate',
+      'import-equals',
+      'permission-read',
+      'permission-write',
+      'no-warnings',
+      'worker-prefixes',
+    ].map((name, index) => [name, index] as const);
+    beforeAll(async () => {
+      fixture = await prepareFixture();
     });
-    const counters = join(project, 'counters.jsonl');
-    const fd = openSync(counters, 'wx');
-    let result: import('node:child_process').SpawnSyncReturns<string>;
-    try {
-      const { spawnSync } = await import('node:child_process');
-      result = spawnSync(
-        process.execPath,
-        ['--import', pathToFileURL(bootstrap).href, '--input-type=module', '-e', code],
-        { encoding: 'utf8', env: {}, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+    afterEach(() => {
+      expect(readFileSync(join(fixture.project, 'packages/core/dist/witness.js'))).toEqual(
+        fixture.artifact,
       );
-    } finally {
-      closeSync(fd);
+    });
+    async function prepareFixture() {
+      const project = join(root, 'eval-project');
+      const path = 'packages/core/src/witness.ts';
+      const source =
+        'export function choose(flag = false) { if (flag) return 1; return 2; }\nexport function unused() { return 9; }\n';
+      mkdirSync(dirname(join(project, path)), { recursive: true });
+      writeFileSync(join(project, 'package.json'), '{"type":"module"}');
+      writeFileSync(join(project, path), source);
+      const repository = resolve(import.meta.dirname, '../../..');
+      const require = createRequire(join(repository, 'package.json'));
+      const compiler = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');
+      execFileSync(
+        process.execPath,
+        [
+          compiler,
+          '--ignoreConfig',
+          '--target',
+          'ES2024',
+          '--module',
+          'NodeNext',
+          '--sourceMap',
+          '--skipLibCheck',
+          '--rootDir',
+          join(project, 'packages/core/src'),
+          '--outDir',
+          join(project, 'packages/core/dist'),
+          join(project, path),
+        ],
+        { stdio: 'pipe' },
+      );
+      const snapshot = {
+        root: project,
+        included: [{ path, sha256: createHash('sha256').update(source).digest('hex') }],
+      };
+      const preparations = join(project, 'preparations');
+      mkdirSync(preparations);
+      writeFileSync(
+        join(preparations, `${createHash('sha256').update(path).digest('hex')}.json`),
+        JSON.stringify(prepareSource(snapshot, join(project, path), source, null)),
+      );
+      const native = join(project, 'native');
+      await prepareNativeCapture(snapshot, preparations, native);
+      const bootstrap = join(project, 'capture.mjs');
+      writeFileSync(
+        bootstrap,
+        `import {registerCompiledCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(native)},4);`,
+      );
+      const entry = pathToFileURL(join(project, 'packages/core/dist/witness.js')).href;
+      const code = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify([choose(),choose(true)]));`;
+      const deniedFile = join(project, 'denied-write.txt');
+      const observable = `const {choose}=await import(${JSON.stringify(entry)});const writeAllowed=process.permission?.has('fs.write',${JSON.stringify(deniedFile)})??true;let deniedWrite=null;if(!writeAllowed){try{const {writeFileSync}=await import('node:fs');writeFileSync(${JSON.stringify(deniedFile)},'test');}catch(error){deniedWrite=error.code;}}console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url,preloaded:globalThis.userPreloadRan??false,writeAllowed,deniedWrite,required:globalThis.commonJsPreloadRan??false}));`;
+      const arguments_ = ['--input-type=module', '--max-old-space-size=64', '-e', observable];
+      const userPreload = join(project, 'user-preload.mjs');
+      writeFileSync(userPreload, 'globalThis.userPreloadRan = true;');
+      const commonJsPreload = join(project, 'user-preload.cjs');
+      writeFileSync(commonJsPreload, 'globalThis.commonJsPreloadRan = true;');
+      const launchArguments = [
+        arguments_,
+        ['--import', pathToFileURL(userPreload).href, ...arguments_],
+        [`--import=${pathToFileURL(userPreload).href}`, ...arguments_],
+        ['--permission', '--allow-fs-read=*', ...arguments_],
+        ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...arguments_],
+        ['--no-warnings', ...arguments_],
+        [
+          '--experimental-import-meta-resolve',
+          '--require',
+          commonJsPreload,
+          '--conditions=node',
+          '--conditions',
+          'development',
+          ...arguments_,
+        ],
+      ];
+      const script = join(project, 'temporary.mjs');
+      writeFileSync(script, observable);
+      const scriptArguments = [
+        '--max-old-space-size=64',
+        script,
+        '--eval',
+        'ordinary application argument',
+      ];
+      const scriptLaunchArguments = [
+        scriptArguments,
+        ['--import', pathToFileURL(userPreload).href, ...scriptArguments],
+        [`--import=${pathToFileURL(userPreload).href}`, ...scriptArguments],
+        ['--permission', '--allow-fs-read=*', ...scriptArguments],
+        ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...scriptArguments],
+        ['--no-warnings', ...scriptArguments],
+        [
+          '--experimental-import-meta-resolve',
+          '--require',
+          commonJsPreload,
+          '--conditions=node',
+          '--conditions',
+          'development',
+          ...scriptArguments,
+        ],
+      ];
+
+      const preload = createEvalCapture(snapshot, native, join(project, 'automatic-preload.mjs'));
+      const scriptPreload = createEvalCapture(
+        snapshot,
+        native,
+        join(project, 'script-preload.mjs'),
+        'script-import',
+      );
+      const artifact = readFileSync(join(project, 'packages/core/dist/witness.js'));
+      return {
+        project,
+        path,
+        snapshot,
+        bootstrap,
+        entry,
+        code,
+        observable,
+        arguments_,
+        launchArguments,
+        scriptLaunchArguments,
+        preload,
+        scriptPreload,
+        artifact,
+      };
     }
-    expect(result.status).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(result.stdout).toBe(ordinary);
-    const replay = await replayCounterStream(snapshot, readFileSync(counters, 'utf8'));
-    expect(replay.state).toBe('completed');
-    const map = (replay.maps as Record<string, Coverage>)[join(project, path)];
-    if (!map) throw new Error('Missing eval-import coverage.');
-    expect(Object.values(map.f).sort()).toEqual([0, 2]);
-    expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
-    const deniedFile = join(project, 'denied-write.txt');
-    const observable = `const {choose}=await import(${JSON.stringify(entry)});const writeAllowed=process.permission?.has('fs.write',${JSON.stringify(deniedFile)})??true;let deniedWrite=null;if(!writeAllowed){try{const {writeFileSync}=await import('node:fs');writeFileSync(${JSON.stringify(deniedFile)},'test');}catch(error){deniedWrite=error.code;}}console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url,preloaded:globalThis.userPreloadRan??false,writeAllowed,deniedWrite,required:globalThis.commonJsPreloadRan??false}));`;
-    const arguments_ = ['--input-type=module', '--max-old-space-size=64', '-e', observable];
-    const userPreload = join(project, 'user-preload.mjs');
-    writeFileSync(userPreload, 'globalThis.userPreloadRan = true;');
-    const commonJsPreload = join(project, 'user-preload.cjs');
-    writeFileSync(commonJsPreload, 'globalThis.commonJsPreloadRan = true;');
-    const launchArguments = [
-      arguments_,
-      ['--import', pathToFileURL(userPreload).href, ...arguments_],
-      [`--import=${pathToFileURL(userPreload).href}`, ...arguments_],
-      ['--permission', '--allow-fs-read=*', ...arguments_],
-      ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...arguments_],
-      ['--no-warnings', ...arguments_],
-      [
-        '--experimental-import-meta-resolve',
-        '--require',
-        commonJsPreload,
-        '--conditions=node',
-        '--conditions',
-        'development',
-        ...arguments_,
-      ],
-    ];
-    const expectedLaunches = launchArguments.map((args) =>
-      execFileSync(process.execPath, args, { encoding: 'utf8', env: {} }),
-    );
-    expect(JSON.parse(expectedLaunches[3] as string)).toMatchObject({
-      writeAllowed: false,
-      deniedWrite: 'ERR_ACCESS_DENIED',
+    it('captures owned compiled imports from a real Node eval without changing results', async () => {
+      const { project, path, snapshot, bootstrap, code } = fixture;
+      const ordinary = execFileSync(process.execPath, ['--input-type=module', '-e', code], {
+        encoding: 'utf8',
+        env: {},
+      });
+      const counters = join(project, 'counters.jsonl');
+      const fd = openSync(counters, 'wx');
+      let result: import('node:child_process').SpawnSyncReturns<string>;
+      try {
+        const { spawnSync } = await import('node:child_process');
+        result = spawnSync(
+          process.execPath,
+          ['--import', pathToFileURL(bootstrap).href, '--input-type=module', '-e', code],
+          { encoding: 'utf8', env: {}, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+        );
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+      expect(result.stdout).toBe(ordinary);
+      const replay = await replayCounterStream(snapshot, readFileSync(counters, 'utf8'));
+      expect(replay.state).toBe('completed');
+      const map = (replay.maps as Record<string, Coverage>)[join(project, path)];
+      if (!map) throw new Error('Missing eval-import coverage.');
+      expect(Object.values(map.f).sort()).toEqual([0, 2]);
+      expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
     });
-    expect(JSON.parse(expectedLaunches[4] as string)).toMatchObject({
-      writeAllowed: true,
-      deniedWrite: null,
-    });
-    const preload = createEvalCapture(snapshot, native, join(project, 'automatic-preload.mjs'));
-    const directory = join(project, 'automatic-counters');
-    const asynchronous = registerCommandCapture([preload], directory);
-    const synchronous = registerSyncCommandCapture([preload], directory);
-    try {
-      const { execFile, spawnSync } = await import('node:child_process');
+    it.each(forms)('captures eval prefix %s without changing execution', async (name, index) => {
+      const { project, path, snapshot, preload } = fixture;
+      const args = fixture.launchArguments[index];
+      if (!args) throw new Error('Missing eval launch fixture.');
+      const { default: processes } = await import('node:child_process');
       const { promisify } = await import('node:util');
-      for (const [index, args] of launchArguments.entries()) {
-        const expectedLaunch = expectedLaunches[index];
-        const actual = await promisify(execFile)(process.execPath, args, {
+      const expected = processes.execFileSync(process.execPath, args, {
+        encoding: 'utf8',
+        env: {},
+      });
+      if (index === 3)
+        expect(JSON.parse(expected)).toMatchObject({
+          writeAllowed: false,
+          deniedWrite: 'ERR_ACCESS_DENIED',
+        });
+      if (index === 4)
+        expect(JSON.parse(expected)).toMatchObject({ writeAllowed: true, deniedWrite: null });
+      const directory = join(project, `eval-${name}-counters`);
+      const asynchronous = registerCommandCapture([preload], directory);
+      const synchronous = registerSyncCommandCapture([preload], directory);
+      try {
+        const actual = await promisify(processes.execFile)(process.execPath, args, {
           encoding: 'utf8',
           env: {},
         });
-        expect(actual.stdout).toBe(expectedLaunch);
+        expect(actual.stdout).toBe(expected);
         expect(actual.stderr).toBe('');
-        const synced = spawnSync(process.execPath, args, { encoding: 'utf8', env: {} });
+        const synced = processes.spawnSync(process.execPath, args, { encoding: 'utf8', env: {} });
         expect(synced.status).toBe(0);
-        expect(synced.stdout).toBe(expectedLaunch);
+        expect(synced.stdout).toBe(expected);
         expect(synced.stderr).toBe('');
+        await asynchronous.settled();
+      } finally {
+        synchronous.restore();
+        asynchronous.restore();
       }
-      await asynchronous.settled();
-    } finally {
-      synchronous.restore();
-      asynchronous.restore();
-    }
-    const automatic = await reconcileForkCapture(snapshot, directory, [preload]);
-    expect(automatic.status).toBe('Pass');
-    expect(automatic.processes).toBe(14);
-    const automaticMap = (automatic.maps as Record<string, Coverage>)[join(project, path)];
-    if (!automaticMap) throw new Error('Missing automatic eval coverage.');
-    expect(Object.values(automaticMap.f).sort()).toEqual([0, 28]);
-    const script = join(project, 'temporary.mjs');
-    writeFileSync(script, observable);
-    const scriptArguments = [
-      '--max-old-space-size=64',
-      script,
-      '--eval',
-      'ordinary application argument',
-    ];
-    const scriptLaunchArguments = [
-      scriptArguments,
-      ['--import', pathToFileURL(userPreload).href, ...scriptArguments],
-      [`--import=${pathToFileURL(userPreload).href}`, ...scriptArguments],
-      ['--permission', '--allow-fs-read=*', ...scriptArguments],
-      ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...scriptArguments],
-      ['--no-warnings', ...scriptArguments],
-      [
-        '--experimental-import-meta-resolve',
-        '--require',
-        commonJsPreload,
-        '--conditions=node',
-        '--conditions',
-        'development',
-        ...scriptArguments,
-      ],
-    ];
-    const expectedScripts = scriptLaunchArguments.map((args) =>
-      execFileSync(process.execPath, args, { cwd: project, encoding: 'utf8', env: {} }),
-    );
-    const scriptPreload = createEvalCapture(
-      snapshot,
-      native,
-      join(project, 'script-preload.mjs'),
-      'script-import',
-    );
-    const scriptsDirectory = join(project, 'script-counters');
-    const asyncScripts = registerCommandCapture([scriptPreload], scriptsDirectory);
-    const syncScripts = registerSyncCommandCapture([scriptPreload], scriptsDirectory);
-    try {
-      const { execFile, execFileSync: executeSync } = await import('node:child_process');
-      const { promisify } = await import('node:util');
-      for (const [index, args] of scriptLaunchArguments.entries()) {
-        const actual = await promisify(execFile)(process.execPath, args, {
-          cwd: project,
-          encoding: 'utf8',
-          env: {},
-        });
-        expect(actual.stdout).toBe(expectedScripts[index]);
-        expect(actual.stderr).toBe('');
-        expect(
-          executeSync(process.execPath, args, { cwd: project, encoding: 'utf8', env: {} }),
-        ).toBe(expectedScripts[index]);
-      }
-      await asyncScripts.settled();
-    } finally {
-      syncScripts.restore();
-      asyncScripts.restore();
-    }
-    const scriptCapture = await reconcileForkCapture(snapshot, scriptsDirectory, [scriptPreload]);
-    expect(scriptCapture.status).toBe('Pass');
-    expect(scriptCapture.processes).toBe(14);
-    const scriptMap = (scriptCapture.maps as Record<string, Coverage>)[join(project, path)];
-    if (!scriptMap) throw new Error('Missing temporary script coverage.');
-    expect(Object.values(scriptMap.f).sort()).toEqual([0, 28]);
-    const unregisteredArguments = ['--no-warnings', ...arguments_];
-    const expectedUnregistered = execFileSync(process.execPath, unregisteredArguments, {
-      encoding: 'utf8',
-      env: {},
+      const automatic = await reconcileForkCapture(snapshot, directory, [preload]);
+      expect(automatic.status).toBe('Pass');
+      expect(automatic.processes).toBe(2);
+      const map = (automatic.maps as Record<string, Coverage>)[join(project, path)];
+      if (!map) throw new Error('Missing automatic eval coverage.');
+      expect(Object.values(map.f).sort()).toEqual([0, 4]);
     });
-    const unregisteredDirectory = join(project, 'unregistered-counters');
-    const audited = registerSyncCommandCapture([], unregisteredDirectory, true);
-    try {
-      const { execFileSync: executeSync } = await import('node:child_process');
-      expect(
-        executeSync(process.execPath, unregisteredArguments, { encoding: 'utf8', env: {} }),
-      ).toBe(expectedUnregistered);
-    } finally {
-      audited.restore();
-    }
-    const unregisteredFiles = readdirSync(unregisteredDirectory);
-    expect(unregisteredFiles).toHaveLength(1);
-    const unregistered = readFileSync(
-      join(unregisteredDirectory, unregisteredFiles[0] as string),
-      'utf8',
+    it.each(forms)(
+      'captures temporary script prefix %s without changing execution',
+      async (name, index) => {
+        const { project, path, snapshot, scriptPreload } = fixture;
+        const args = fixture.scriptLaunchArguments[index];
+        if (!args) throw new Error('Missing script launch fixture.');
+        const { default: processes } = await import('node:child_process');
+        const { promisify } = await import('node:util');
+        const options = { cwd: project, encoding: 'utf8' as const, env: {} };
+        const expected = processes.execFileSync(process.execPath, args, options);
+        const directory = join(project, `script-${name}-counters`);
+        const asynchronous = registerCommandCapture([scriptPreload], directory);
+        const synchronous = registerSyncCommandCapture([scriptPreload], directory);
+        try {
+          const actual = await promisify(processes.execFile)(process.execPath, args, options);
+          expect(actual.stdout).toBe(expected);
+          expect(actual.stderr).toBe('');
+          expect(processes.execFileSync(process.execPath, args, options)).toBe(expected);
+          await asynchronous.settled();
+        } finally {
+          synchronous.restore();
+          asynchronous.restore();
+        }
+        const captured = await reconcileForkCapture(snapshot, directory, [scriptPreload]);
+        expect(captured.status).toBe('Pass');
+        expect(captured.processes).toBe(2);
+        const map = (captured.maps as Record<string, Coverage>)[join(project, path)];
+        if (!map) throw new Error('Missing temporary script coverage.');
+        expect(Object.values(map.f).sort()).toEqual([0, 4]);
+      },
     );
-    expect(unregistered).not.toContain(observable);
-    expect(JSON.parse(unregistered).optionNames).toContain('--no-warnings');
-    await expect(reconcileForkCapture(snapshot, unregisteredDirectory, [preload])).rejects.toThrow(
-      'Unregistered Node launches',
-    );
+    it('rejects an unregistered launch without recording its eval text', async () => {
+      const { project, snapshot, preload, observable, arguments_ } = fixture;
+      const args = ['--no-warnings', ...arguments_];
+      const { default: processes } = await import('node:child_process');
+      const expected = processes.execFileSync(process.execPath, args, {
+        encoding: 'utf8',
+        env: {},
+      });
+      const directory = join(project, 'unregistered-counters');
+      const audited = registerSyncCommandCapture([], directory, true);
+      try {
+        expect(processes.execFileSync(process.execPath, args, { encoding: 'utf8', env: {} })).toBe(
+          expected,
+        );
+      } finally {
+        audited.restore();
+      }
+      const files = readdirSync(directory);
+      expect(files).toHaveLength(1);
+      const record = readFileSync(join(directory, files[0] as string), 'utf8');
+      expect(record).not.toContain(observable);
+      expect(JSON.parse(record).optionNames).toContain('--no-warnings');
+      await expect(reconcileForkCapture(snapshot, directory, [preload])).rejects.toThrow(
+        'Unregistered Node launches',
+      );
+    });
   });
 
   it('binds compilation to the real original artifact, map and source without editing them', () => {
