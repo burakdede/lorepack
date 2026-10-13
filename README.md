@@ -101,6 +101,7 @@ lorepack connect claude-code
 The command changes only that client's Lorepack configuration. It does not upload your sources.
 See the [client integration guides](docs/integrations/) for Claude Code, Codex, VS Code, and
 generic MCP clients.
+The stdio server closes on stdin EOF or POSIX termination signals; see [shutdown behavior](docs/integrations/mcp.md#shutdown).
 
 ### Shell completion
 

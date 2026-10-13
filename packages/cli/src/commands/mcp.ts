@@ -138,8 +138,6 @@ export function mcpCommand(): CommandDefinition {
         selectedHandle?.release();
         backend.close();
       };
-      process.once('SIGINT', close);
-      process.once('SIGTERM', close);
       process.once('exit', close);
 
       context.warn(
@@ -149,7 +147,7 @@ export function mcpCommand(): CommandDefinition {
         onerror: (error) => context.warn(`${error.message}\n`),
       });
 
-      // Resolves when the client goes away.
+      // Resolves when the client goes away or the server is signalled.
       //
       // Standard input ending is the ordinary route: a client exits, or the pipe closes.
       // It has to be handled explicitly, because without it the await never settles, Node
@@ -163,13 +161,23 @@ export function mcpCommand(): CommandDefinition {
         const finish = (): void => {
           if (done) return;
           done = true;
+          process.stdin.off('end', finish);
+          process.stdin.off('close', finish);
+          process.off('SIGINT', finish);
+          process.off('SIGTERM', finish);
           resolve();
         };
         process.stdin.once('end', finish);
         process.stdin.once('close', finish);
+        process.once('SIGINT', finish);
+        process.once('SIGTERM', finish);
       });
-      await handle.close();
-      close();
+      try {
+        await handle.close();
+      } finally {
+        process.off('exit', close);
+        close();
+      }
 
       // Nothing structured on stdout: it carried protocol, and it is now finished.
       return { human: '', json: undefined };

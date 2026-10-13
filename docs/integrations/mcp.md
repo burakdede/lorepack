@@ -60,6 +60,16 @@ The locator covers the source table, not individual returned rows or aggregate c
 Keep the submitted SQL and limit to replay the request against its returned `buildId`.
 The [query identity contract](../adr/0014-table-query-identity.md) defines the fingerprint.
 
+## Shutdown
+
+Closing stdin ends the connection and releases the transport and retained build handles.
+On macOS and Linux, SIGTERM and SIGINT follow that same shutdown path even when stdin
+remains open. Shutdown listeners are removed after the connection finishes.
+
+On Windows, Ctrl-C can deliver SIGINT to JavaScript, but sending SIGTERM or SIGINT through
+Node's child-process API forcibly terminates the process. That termination does not prove
+JavaScript cleanup ran. See [Node signal behavior](https://nodejs.org/docs/latest-v24.x/api/process.html#signal-events).
+
 ## Troubleshooting
 
 | Symptom | Check |
