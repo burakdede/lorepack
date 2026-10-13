@@ -22,6 +22,18 @@ export function nodeCommand(root, args, environment = {}) {
   });
 }
 
+export function writeCampaignSetup(snapshot, launch, filename) {
+  writeFileSync(
+    filename,
+    `import {afterAll} from 'vitest';
+import {registerCampaignCapture} from ${JSON.stringify(new URL('./coverage_instrumented.mjs', import.meta.url).href)};
+const capture=registerCampaignCapture(${JSON.stringify(snapshot)},${JSON.stringify(launch)});
+afterAll(async()=>{try{await capture.settled();}finally{capture.restore();}});
+`,
+    { flag: 'wx' },
+  );
+}
+
 export async function captureCampaign(root, output, pnpmEntrypoint) {
   root = realpathSync(root);
   if (!pnpmEntrypoint) throw new Error('Run the capture through pnpm coverage:capture.');
