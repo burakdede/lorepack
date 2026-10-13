@@ -615,6 +615,7 @@ Measured CLI builds share the production entrypoint definitions and migration la
 with separate output, package metadata and Studio assets.
 Explicit fork capture records matched child identities and kill/close receipts while
 preserving the existing IPC, environment and flags. Complete launch integration remains open.
+Already measured child entrypoints keep their exact path when capture is attached.
 Asynchronous command capture preserves Node's own callback and promise output handling,
 including timeouts and output limits, through registered entrypoints only.
 Synchronous capture preserves native results and errors through both Node launch APIs,
