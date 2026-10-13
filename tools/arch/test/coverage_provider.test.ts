@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { writeCampaignSetup } from '../../../scripts/coverage_capture.mjs';
 import { prepareSource, renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 import {
   buildNativeCli,
@@ -805,6 +806,41 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
         writeFileSync(changed, retained);
       }
     }
+    const setupFile = join(project, 'auto-worker-setup.mjs');
+    writeCampaignSetup(captured, launch, setupFile);
+    const automaticTest = join(project, 'automatic.test.ts');
+    writeFileSync(
+      automaticTest,
+      `import {expect,test} from 'vitest';
+import {spawnSync} from 'node:child_process';
+test('captures the ordinary CLI automatically',()=>{
+ const result=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
+ expect(result.status).toBe(7);expect(result.stderr).toBe('');
+});`,
+    );
+    const automaticConfig = join(project, 'automatic.config.mjs');
+    writeFileSync(
+      automaticConfig,
+      `export default ${JSON.stringify({
+        root: project,
+        test: { include: ['automatic.test.ts'], setupFiles: [setupFile] },
+      })};`,
+    );
+    const vitest = join(
+      dirname(createRequire(join(repository, 'package.json')).resolve('vitest/package.json')),
+      'vitest.mjs',
+    );
+    execFileSync(process.execPath, [vitest, 'run', '--config', automaticConfig], {
+      cwd: project,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    const automaticCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
+      ...registry.forkEntries,
+      ...registry.commandEntries,
+    ]);
+    expect(automaticCapture.status).toBe('Pass');
+    expect(automaticCapture.processes).toBe(14);
     expect(
       included.map((entry) =>
         readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
