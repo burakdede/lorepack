@@ -28,6 +28,17 @@ const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
+function afterProcessExit(callback) {
+  if (typeof process._exiting !== 'boolean')
+    throw new Error('Native capture requires the verified Node exit state.');
+  const emit = process.emit;
+  process.emit = function (event, ...args) {
+    const result = emit.call(this, event, ...args);
+    if (this === process && event === 'exit' && process._exiting) callback(args[0]);
+    return result;
+  };
+}
+
 export function registerForkCapture(entries, directory) {
   if (globalThis[forkCollector]) throw new Error('Fork capture is already registered.');
   const targets = new Map();
@@ -560,7 +571,7 @@ export function registerCounterStream(fd) {
     },
   );
   globalThis[active] = true;
-  process.once('exit', (exitCode) => emit({ ...identity, state: 'completed', exitCode }));
+  afterProcessExit((exitCode) => emit({ ...identity, state: 'completed', exitCode }));
   return identity.id;
 }
 
@@ -752,7 +763,7 @@ export async function registerNativeCapture(snapshot, preparations, directory) {
     },
   });
   globalThis[active] = true;
-  process.once('exit', (exitCode) => {
+  afterProcessExit((exitCode) => {
     publish(directory, `${id}.completed.json`, {
       ...identity,
       state: 'completed',

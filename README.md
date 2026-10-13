@@ -597,6 +597,8 @@ Preparation identities normalize filesystem paths, including Vite's Windows sepa
 Native module capture compiles instrumented preparations before entering restricted
 processes, preserving their permissions. Its process records distinguish started,
 completed, empty and rejected execution; interrupted capture remains incomplete.
+Both collectors retain synchronous cleanup hits before finalizing the real exit event;
+manually emitted events keep their ordinary listener behavior without finalizing capture.
 Reconciliation validates matched lifecycle identities, loaded-source hashes and exact
 maps before merging each final snapshot once. Rejected or incomplete records produce
 unavailable aggregates. Native preloads use file URLs for Windows compatibility.
