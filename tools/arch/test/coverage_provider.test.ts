@@ -1025,6 +1025,101 @@ console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,closingKilled,ext
       expect(actual.b[key]).toEqual(arms.map((hits) => hits * 8));
   });
 
+  it('captures synchronous result, errors and native timeout evidence', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const original = join(root, 'ordinary-sync-entry.mjs');
+    writeFileSync(original, 'throw new Error("The registered entry must be redirected");');
+    const entry = {
+      original,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: ['SIGTERM'],
+    };
+    const directory = join(root, 'sync-command-records');
+    const parent = join(root, 'sync-command-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {spawnSync,execFileSync} from 'node:child_process';
+import {registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerSyncCommandCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const options={env:{},encoding:'utf8',stdio:'pipe',timeout:1000};
+const before=JSON.stringify(options);
+const spawn=spawnSync(process.execPath,[${JSON.stringify(original)},'exit'],options);
+const exec=execFileSync(process.execPath,[${JSON.stringify(original)},'exit'],options);
+let failure;try{execFileSync(process.execPath,[${JSON.stringify(original)},'fail'],options);}catch(error){failure={status:error.status,message:error.message,stdout:error.stdout,stderr:error.stderr,output:error.output};}
+const timed=spawnSync(process.execPath,[${JSON.stringify(original)},'hold'],options);
+let timedExec;try{execFileSync(process.execPath,[${JSON.stringify(original)},'hold'],options);}catch(error){timedExec={code:error.code,signal:error.signal,status:error.status,pid:error.pid};}
+const delegated=execFileSync(process.execPath,['-e',"console.log('external')"],{encoding:'utf8'});
+capture.restore();
+const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},[${JSON.stringify(entry)}],${JSON.stringify(maps)});
+console.log(JSON.stringify({spawn:{status:spawn.status,stdout:spawn.stdout,stderr:spawn.stderr,pid:spawn.pid,output:spawn.output},exec,failure,timed:{code:timed.error?.code,signal:timed.signal,status:timed.status,pid:timed.pid},timedExec,delegated,optionsUnchanged:JSON.stringify(options)===before,launches:capture.launches,reconciled}));`,
+    );
+    const result = JSON.parse(
+      execFileSync(process.execPath, [parent], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    );
+    expect(result.optionsUnchanged).toBe(true);
+    expect(result.spawn.status).toBe(0);
+    expect(result.spawn.stderr).toBe('');
+    expect(result.spawn.output).toEqual([null, result.spawn.stdout, '']);
+    expect(result.exec).toBe(result.spawn.stdout);
+    expect(JSON.parse(result.exec).outputs).toEqual([
+      [2, 'yes'],
+      [2, 'no'],
+    ]);
+    expect(result.failure.status).toBe(7);
+    expect(result.failure.stderr).toBe('fixture failure\n');
+    expect(result.failure.message).toBe(
+      `Command failed: ${process.execPath} ${original} fail\nfixture failure\n`,
+    );
+    for (const timed of [result.timed, result.timedExec])
+      expect(timed).toMatchObject({ code: 'ETIMEDOUT', signal: 'SIGTERM', status: null });
+    expect(result.delegated).toBe('external\n');
+    expect(result.launches).toHaveLength(5);
+    expect(result.reconciled.processes).toBe(5);
+    expect(
+      result.reconciled.executions.filter(
+        (execution: { state: string }) => execution.state === 'interrupted',
+      ),
+    ).toHaveLength(2);
+    expect(
+      result.reconciled.executions.map((execution: { pid: number }) => execution.pid).sort(),
+    ).toEqual(result.launches.map((launch: { pid: number }) => launch.pid).sort());
+    const filename = join(root, 'private.ts');
+    const expected = maps[filename];
+    const actual = result.reconciled.maps[filename];
+    if (!expected || !actual) throw new Error('Missing synchronous source counters.');
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(expected[field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 5);
+    for (const [key, arms] of Object.entries(expected.b))
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 5));
+    const timed = result.launches.find(
+      (launch: { nativeErrorCode: string | null }) => launch.nativeErrorCode === 'ETIMEDOUT',
+    );
+    const closed = join(directory, `${timed.id}.close.json`);
+    const retained = readFileSync(closed, 'utf8');
+    const receipt = JSON.parse(retained);
+    for (const nativeStop of [
+      null,
+      { cause: 'ENOBUFS', signal: 'SIGTERM' },
+      { cause: 'ETIMEDOUT', signal: 'SIGKILL' },
+    ]) {
+      try {
+        writeFileSync(closed, JSON.stringify({ ...receipt, nativeStop }));
+        await expect(reconcileForkCapture(snapshot, directory, [entry], maps)).rejects.toThrow();
+      } finally {
+        writeFileSync(closed, retained);
+      }
+    }
+    await expect(
+      reconcileForkCapture(snapshot, directory, [{ ...entry, interruptionSignals: [] }], maps),
+    ).rejects.toThrow('Unqualified fork interruption');
+  });
+
   it('refuses a target that changes after registration before any child starts', () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const original = join(root, 'changed-fork-original.mjs');

@@ -25,6 +25,7 @@ import { prepareSource } from './coverage_configuration.mjs';
 const active = Symbol.for('lorepack.nativeCoverageCollector');
 const forkCollector = Symbol.for('lorepack.nativeForkCollector');
 const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
+const syncCollector = Symbol.for('lorepack.nativeSyncCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -265,6 +266,135 @@ export function registerCommandCapture(entries, directory) {
   };
 }
 
+export function registerSyncCommandCapture(entries, directory) {
+  if (globalThis[syncCollector]) throw new Error('Synchronous capture is already registered.');
+  const registry = new Map();
+  for (const entry of entries) {
+    const original = realpathSync(entry.original),
+      target = realpathSync(entry.target);
+    if (
+      registry.has(original) ||
+      digest(readFileSync(original)) !== entry.originalSha256 ||
+      digest(readFileSync(target)) !== entry.targetSha256
+    )
+      throw new Error('Invalid synchronous capture entrypoint');
+    registry.set(original, { ...entry, original, target });
+  }
+  mkdirSync(directory, { recursive: true });
+  const originals = { spawnSync: childProcess.spawnSync, execFileSync: childProcess.execFileSync };
+  const launches = [];
+  function select(file, args, options) {
+    if (
+      file !== process.execPath ||
+      !Array.isArray(args) ||
+      typeof args[0] !== 'string' ||
+      args[0].startsWith('-')
+    )
+      return null;
+    let filename = resolve(options?.cwd ?? process.cwd(), args[0]);
+    try {
+      filename = realpathSync(filename);
+    } catch {}
+    return registry.get(filename) ?? null;
+  }
+  function measured(entry, args, options) {
+    if (options.shell) throw new Error('Synchronous capture does not support shell entrypoints');
+    if (
+      digest(readFileSync(entry.original)) !== entry.originalSha256 ||
+      digest(readFileSync(entry.target)) !== entry.targetSha256
+    )
+      throw new Error('Synchronous capture entrypoint changed before launch');
+    const stdio = options.stdio ?? 'pipe';
+    const streams = Array.isArray(stdio) ? [...stdio] : [stdio, stdio, stdio];
+    if (streams.length !== 3)
+      throw new Error('Synchronous capture requires three original descriptors');
+    const id = randomUUID();
+    const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
+    let result;
+    try {
+      result = originals.spawnSync(process.execPath, [entry.target, ...args.slice(1)], {
+        ...options,
+        stdio: [...streams, 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    if (Array.isArray(result.output)) result.output = result.output.slice(0, 3);
+    if (result.error?.spawnargs) result.error.spawnargs = [...args];
+    const record = {
+      schema: 1,
+      id,
+      provider: 'istanbul@4.1.11',
+      parentPid: process.pid,
+      parentThreadId: threadId,
+      pid: result.pid,
+      original: entry.original,
+      target: entry.target,
+      originalSha256: entry.originalSha256,
+      targetSha256: entry.targetSha256,
+      environment:
+        options.env === undefined
+          ? 'inherited'
+          : Object.keys(options.env).length
+            ? 'explicit'
+            : 'empty',
+      argumentsSha256: digest(JSON.stringify(args)),
+      nativeErrorCode: result.error?.code ?? null,
+    };
+    const nativeStopped =
+      result.signal !== null && ['ETIMEDOUT', 'ENOBUFS'].includes(record.nativeErrorCode);
+    const nativeStop = nativeStopped
+      ? { cause: record.nativeErrorCode, signal: options.killSignal ?? 'SIGTERM' }
+      : null;
+    publish(directory, `${id}.launch.json`, record);
+    publish(directory, `${id}.close.json`, {
+      ...record,
+      code: result.status,
+      signal: result.signal,
+      kills: [],
+      nativeStop,
+    });
+    launches.push(record);
+    return result;
+  }
+  function spawn(...parameters) {
+    const [file, args, options] = parameters;
+    const entry = select(file, args, options);
+    return entry
+      ? measured(entry, args, options ?? {})
+      : originals.spawnSync.apply(this, parameters);
+  }
+  function exec(...parameters) {
+    let [file, args, options] = parameters;
+    const entry = select(file, args, options);
+    if (!entry) return originals.execFileSync.apply(this, parameters);
+    options ??= {};
+    const result = measured(entry, args, options);
+    if (!options.stdio && result.stderr) process.stderr.write(result.stderr);
+    if (result.error) throw Object.assign(result.error, result);
+    if (result.status !== 0) {
+      let message = `Command failed: ${[options.argv0 || file, ...args].join(' ')}`;
+      if (result.stderr?.length) message += `\n${result.stderr.toString()}`;
+      throw Object.assign(new Error(message), result);
+    }
+    return result.stdout;
+  }
+  childProcess.spawnSync = spawn;
+  childProcess.execFileSync = exec;
+  globalThis[syncCollector] = spawn;
+  syncBuiltinESMExports();
+  return {
+    launches,
+    restore() {
+      if (childProcess.spawnSync !== spawn || childProcess.execFileSync !== exec)
+        throw new Error('Synchronous capture binding changed');
+      Object.assign(childProcess, originals);
+      delete globalThis[syncCollector];
+      syncBuiltinESMExports();
+    },
+  };
+}
+
 export async function reconcileForkCapture(snapshot, directory, entries, direct = {}) {
   const registry = new Map();
   for (const entry of entries) {
@@ -311,7 +441,7 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     const counterFile = `${launch.id}.counters.jsonl`;
     if (!files.includes(closeFile) || !files.includes(counterFile))
       throw new Error(`Missing fork close receipt or counters: ${launch.id}`);
-    const { code, signal, kills, ...identity } = JSON.parse(
+    const { code, signal, kills, nativeStop, ...identity } = JSON.parse(
       readFileSync(join(directory, closeFile), 'utf8'),
     );
     if (
@@ -324,6 +454,13 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       )
     )
       throw new Error(`Fork close identity or kill receipt differs: ${closeFile}`);
+    if (
+      nativeStop != null &&
+      (!['ETIMEDOUT', 'ENOBUFS'].includes(nativeStop.cause) ||
+        nativeStop.cause !== launch.nativeErrorCode ||
+        (nativeStop.signal !== signal && nativeStop.signal !== constants.signals[signal]))
+    )
+      throw new Error(`Native synchronous termination evidence differs: ${closeFile}`);
     const counters = await replayCounterStream(
       snapshot,
       readFileSync(join(directory, counterFile), 'utf8'),
@@ -341,11 +478,12 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     } else if (
       code !== null ||
       !entry.interruptionSignals.includes(signal) ||
-      !kills.some(
-        (kill) =>
-          kill.result === true &&
-          (kill.signal === signal || kill.signal === constants.signals[signal]),
-      )
+      (nativeStop == null &&
+        !kills.some(
+          (kill) =>
+            kill.result === true &&
+            (kill.signal === signal || kill.signal === constants.signals[signal]),
+        ))
     )
       throw new Error(`Unqualified fork interruption: ${closeFile}`);
     for (const name of [file, closeFile, counterFile]) consumed.add(name);
