@@ -128,6 +128,17 @@ cannot qualify capture. It remaps each final snapshot with the pinned engine,
 requires exact direct layouts where supplied, and checks compatibility before
 merging independent executions once. Failure returns unavailable maps; capture
 validity alone does not establish the original all-owned coverage targets.
+
+Vitest hard-excludes configuration files, even with an explicit coverage include.
+Configuration capture therefore prepares them separately through Vite's public
+[transform API](https://vite.dev/guide/api-javascript#transformwithoxc), using the
+version resolved by Vitest and original source-map content. It uses the same
+pinned instrumenter, including the default-export expression statement correction.
+The native child runs the original configuration assertions and strict reconciliation
+before the full owned inventory binds the configuration bundle. Default-export
+declarations and type-only/barrel scope remain unchanged. Remapped filenames are
+canonicalized only after source/duplicate validation so Windows slash spellings
+cannot be confused with unowned source identities.
 See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
 for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 

@@ -12,6 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -248,4 +249,34 @@ export async function preparingInstrumenter(snapshot, directory) {
     };
     return instrumenter;
   };
+}
+
+export async function prepareConfigurations(snapshot, directory) {
+  const included = snapshot.included.filter((entry) =>
+    /(?:vite|vitest)\.config\.ts$/.test(entry.path),
+  );
+  if (!included.length) throw new Error('No owned configurations found.');
+  const configurations = { ...snapshot, root: realpathSync(snapshot.root), included };
+  const require = createRequire(import.meta.url);
+  const vitestRequire = createRequire(require.resolve('vitest/package.json'));
+  const { transformWithOxc } = await import(pathToFileURL(vitestRequire.resolve('vite')).href);
+  const factory = await preparingInstrumenter(configurations, directory);
+  const instrumenter = factory({
+    coverageVariable: '__LOREPACK_PREPARATION_ONLY__',
+    coverageGlobalScope: 'globalThis',
+    coverageGlobalScopeFunc: false,
+  });
+  for (const entry of included) {
+    const filename = join(configurations.root, entry.path);
+    const bytes = readFileSync(filename);
+    if (createHash('sha256').update(bytes).digest('hex') !== entry.sha256)
+      throw new Error(`Stale configuration preparation: ${entry.path}`);
+    const transformed = await transformWithOxc(bytes.toString('utf8'), filename, {
+      lang: 'ts',
+      target: 'esnext',
+      sourcemap: true,
+    });
+    instrumenter.instrumentSync(transformed.code, filename, transformed.map);
+  }
+  return configurations;
 }
