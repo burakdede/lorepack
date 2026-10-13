@@ -465,6 +465,10 @@ The native reader also instruments owned JavaScript scripts loaded from source a
 bootstrap registration. Their receipts bind original source bytes directly, with no
 compiled source-map artifact. Changed source bytes and changed preparations are rejected.
 Modules loaded before the hook are not retroactively measured.
+Checked import bootstraps also support a separate FD5 campaign stream when a fixture
+already supplies its own file on FD4. Launch receipts bind the chosen descriptor. The
+adapters preserve the original FD4 file and visible output layout; arbitrary extra
+descriptors remain unsupported. Both sync and async streams require real close receipts.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
