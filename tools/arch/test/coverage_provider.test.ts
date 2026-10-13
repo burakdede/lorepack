@@ -1,9 +1,19 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 
 type Coverage = {
   path: string;
@@ -58,20 +68,34 @@ test('executes both async branch arms', async () => {
   );
   writeFileSync(
     join(root, 'vitest.config.mjs'),
-    `export default ${JSON.stringify({
-      root,
-      test: {
-        include: ['witness.test.ts'],
-        coverage: {
-          provider: 'istanbul',
-          enabled: true,
-          include: ['private.ts', 'empty.ts', 'barrel.ts'],
-          exclude: [],
-          reporter: ['json'],
-          reportsDirectory: 'coverage',
+    renderCoverageConfig(
+      {
+        root,
+        test: {
+          include: ['witness.test.ts'],
+          coverage: {
+            provider: 'istanbul',
+            enabled: true,
+            include: ['private.ts', 'empty.ts', 'barrel.ts'],
+            exclude: [],
+            reporter: ['json'],
+            reportsDirectory: 'coverage',
+          },
         },
       },
-    })};\n`,
+      {
+        snapshot: {
+          root,
+          included: ['private.ts', 'empty.ts', 'barrel.ts'].map((path) => ({
+            path,
+            sha256: createHash('sha256')
+              .update(readFileSync(join(root, path)))
+              .digest('hex'),
+          })),
+        },
+        directory: join(root, 'preparations'),
+      },
+    ),
   );
   execFileSync(process.execPath, [vitest, 'run', '--config', join(root, 'vitest.config.mjs')], {
     cwd: root,
@@ -199,4 +223,49 @@ try { fail(); } catch {}
     if (!unreachable) throw new Error('Missing unreachable statement counter.');
     expect(map.s[unreachable[0]]).toBe(0);
   });
+});
+
+it('captures actual typed transforms and reproduces every direct map and counter', async () => {
+  const prepared = readdirSync(join(root, 'preparations')).map((file) =>
+    JSON.parse(readFileSync(join(root, 'preparations', file), 'utf8')),
+  );
+  expect(prepared.map((value) => value.path).sort()).toEqual([
+    'barrel.ts',
+    'empty.ts',
+    'private.ts',
+  ]);
+  const preparation = prepared.find((value) => value.path === 'private.ts');
+  const original = readFileSync(join(root, 'private.ts'), 'utf8');
+  expect(preparation.sha256).toBe(createHash('sha256').update(original).digest('hex'));
+  expect(preparation.map.sourcesContent).toEqual([original]);
+  expect(preparation.code).not.toBe(original);
+  const repository = resolve(import.meta.dirname, '../../..');
+  const require = createRequire(join(repository, 'package.json'));
+  const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
+  const { createNativeInstrumenter, remapNativeCoverage } = await import(
+    pathToFileURL(providerPath).href
+  );
+  const instrumenter = createNativeInstrumenter({
+    produceSourceMap: true,
+    autoWrap: false,
+    esModules: true,
+    compact: false,
+    coverageVariable: '__LOREPACK_NATIVE_COVERAGE__',
+    coverageGlobalScope: 'globalThis',
+    coverageGlobalScopeFunc: false,
+    ignoreLines: true,
+  });
+  const filename = join(root, 'private.ts');
+  const instrumented = instrumenter.instrumentSync(preparation.code, filename, preparation.map);
+  const entry = join(root, 'prepared-native.mjs');
+  writeFileSync(
+    entry,
+    `${instrumented}\nconst instance = new PrivateWitness(); await instance.run(true); await instance.run(false); console.log(JSON.stringify(globalThis.__LOREPACK_NATIVE_COVERAGE__));\n`,
+  );
+  const raw = JSON.parse(execFileSync(process.execPath, [entry], { encoding: 'utf8' }));
+  const { createCoverageMap } = createRequire(providerPath)('istanbul-lib-coverage');
+  const remapped = await remapNativeCoverage(createCoverageMap(raw));
+  const actual = JSON.parse(JSON.stringify(remapped.fileCoverageFor(filename).toJSON()));
+  for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
+    expect(actual[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
 });

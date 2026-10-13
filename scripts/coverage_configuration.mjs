@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { existsSync, globSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  globSync,
+  linkSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory) {
   root = realpathSync(root);
@@ -64,11 +75,17 @@ export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory
   };
 }
 
-export function renderCoverageConfig(config) {
+export function renderCoverageConfig(config, preparation) {
   const json = JSON.stringify(config, (_key, value) =>
     value instanceof RegExp ? { regex: value.source } : value,
   );
-  return `export default JSON.parse(${JSON.stringify(json)}, (key, value) => key === 'find' && value && typeof value.regex === 'string' ? new RegExp(value.regex) : value);\n`;
+  const prefix = preparation
+    ? `import { preparingInstrumenter } from ${JSON.stringify(import.meta.url)};\n`
+    : '';
+  const suffix = preparation
+    ? `\nconfig.test.coverage.instrumenter = await preparingInstrumenter(${JSON.stringify(preparation.snapshot)}, ${JSON.stringify(preparation.directory)});`
+    : '';
+  return `${prefix}const config = JSON.parse(${JSON.stringify(json)}, (key, value) => key === 'find' && value && typeof value.regex === 'string' ? new RegExp(value.regex) : value);${suffix}\nexport default config;\n`;
 }
 
 export function assertCollectionParity(ordinary, measured) {
@@ -129,4 +146,105 @@ export async function importConfigurations(snapshot) {
   }
   if (!results.length) throw new Error('No owned configurations found.');
   return results;
+}
+
+export function prepareSource(snapshot, id, code, map) {
+  const [source, query] = id.split('?');
+  if (query !== undefined && !/^(?:cache=\d+&)?vitest-uncovered-coverage=true$/.test(query))
+    throw new Error(`Unsupported preparation query: ${id}`);
+  const root = realpathSync(snapshot.root);
+  const entry = snapshot.included.find((value) => join(root, value.path) === source);
+  if (!entry) throw new Error(`Unowned preparation source: ${id}`);
+  const bytes = readFileSync(source);
+  const original = bytes.toString('utf8');
+  const hash = (value) => createHash('sha256').update(value).digest('hex');
+  if (hash(bytes) !== entry.sha256) throw new Error(`Stale preparation source: ${id}`);
+  if (typeof code !== 'string') throw new Error(`Invalid preparation code: ${id}`);
+  if (map != null) {
+    if (
+      map.version !== 3 ||
+      !Array.isArray(map.sources) ||
+      map.sources.length !== 1 ||
+      !Array.isArray(map.sourcesContent) ||
+      map.sourcesContent.length !== 1 ||
+      typeof map.sources[0] !== 'string' ||
+      typeof map.mappings !== 'string'
+    )
+      throw new Error(`Invalid preparation source map: ${id}`);
+    const mapped = map.sources[0].startsWith('file:')
+      ? fileURLToPath(map.sources[0])
+      : resolve(dirname(source), map.sourceRoot ?? '', map.sources[0]);
+    if (mapped !== source) throw new Error(`Preparation mapped source differs: ${id}`);
+    if (map.sourcesContent[0] !== original)
+      throw new Error(`Preparation mapped original differs: ${id}`);
+  } else if (code !== original)
+    throw new Error(`Transformed preparation requires a source map: ${id}`);
+  return {
+    schema: 1,
+    kind: 'static-transform',
+    provider: 'istanbul@4.1.11',
+    path: entry.path,
+    sha256: entry.sha256,
+    code,
+    map: map == null ? null : JSON.parse(JSON.stringify(map)),
+  };
+}
+
+export async function preparingInstrumenter(snapshot, directory) {
+  const { createNativeInstrumenter } = await import('@vitest/coverage-istanbul/dist/provider.js');
+  mkdirSync(directory, { recursive: true });
+  const plugins = createNativeInstrumenter().opts.parserPlugins;
+  return (options) => {
+    const instrumenter = createNativeInstrumenter({
+      ...options,
+      produceSourceMap: true,
+      autoWrap: false,
+      esModules: true,
+      compact: false,
+      parserPlugins: [...plugins, ['importAttributes', { deprecatedAssertSyntax: true }]],
+      generatorOpts: { importAttributesKeyword: 'with' },
+      ignoreLines: true,
+    });
+    const instrument = instrumenter.instrumentSync.bind(instrumenter);
+    let previous;
+    instrumenter.instrumentSync = (code, id, map) => {
+      // Vitest's second pass builds a synthetic transform map; its code is not executed.
+      if (
+        previous?.id === id &&
+        previous.code === code &&
+        map?.version === 3 &&
+        map.sources?.length === 1 &&
+        map.sources[0] === id.split('?')[0] &&
+        map.sourcesContent?.length === 1 &&
+        map.sourcesContent[0] === code &&
+        typeof map.mappings === 'string'
+      ) {
+        prepareSource(snapshot, id, previous.code, previous.map);
+        previous = undefined;
+        return instrument(code, id, map);
+      }
+      const prepared = prepareSource(snapshot, id, code, map);
+      const payload = `${JSON.stringify(prepared)}\n`;
+      const filename = join(
+        directory,
+        `${createHash('sha256').update(prepared.path).digest('hex')}.json`,
+      );
+      const temporary = `${filename}.${process.pid}.${randomUUID()}.tmp`;
+      writeFileSync(temporary, payload, { flag: 'wx' });
+      try {
+        try {
+          linkSync(temporary, filename);
+        } catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          if (readFileSync(filename, 'utf8') !== payload)
+            throw new Error(`Conflicting preparation transforms: ${prepared.path}`);
+        }
+      } finally {
+        unlinkSync(temporary);
+      }
+      previous = { id, code, map: prepared.map };
+      return instrument(code, id, map);
+    };
+    return instrumenter;
+  };
 }

@@ -95,6 +95,13 @@ It also exposes the same instrumenter and source-map remapper for native-capture
 qualification. A real Node subprocess checks initializer execution once across two
 function calls, unused private methods and unexecuted statements after a throw.
 This fixture verifies the primitives, not complete configuration or child capture.
+The campaign's custom instrumenter retains its actual first transform input in
+`preparations/`. Each record binds transformed code and its original source map to
+the inventory SHA. Source content must match before collection, including during
+Vitest's synthetic second mapping pass. Exclusive atomic publication preserves
+existing records and rejects conflicting transforms. These records contain no hit
+counters; a real typed/private fixture replays them and requires exact equality
+for statement, function and branch maps and counts after remapping.
 See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
 for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 
