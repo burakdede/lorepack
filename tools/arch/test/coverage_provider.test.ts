@@ -338,6 +338,42 @@ it('captures actual typed transforms and reproduces every direct map and counter
     expect(actual[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
 });
 
+it('rejects a file snapshot superseded by real shutdown microtasks', async () => {
+  const repository = resolve(import.meta.dirname, '../../..');
+  const prepared = readdirSync(join(root, 'preparations')).map((file) =>
+    JSON.parse(readFileSync(join(root, 'preparations', file), 'utf8')),
+  );
+  const snapshot = {
+    root,
+    included: prepared.map((value) => ({ path: value.path, sha256: value.sha256 })),
+  };
+  const preparations = join(root, 'microtask-native-preparations');
+  await prepareNativeCapture(snapshot, join(root, 'preparations'), preparations);
+  const output = join(root, 'microtask-native-records');
+  const bootstrap = join(root, 'microtask-native-bootstrap.mjs');
+  const entry = join(root, 'microtask-native-entry.mjs');
+  writeFileSync(
+    bootstrap,
+    `import {registerNativeCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};await registerNativeCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},${JSON.stringify(output)});`,
+  );
+  writeFileSync(
+    entry,
+    `import {PrivateWitness} from ${JSON.stringify(pathToFileURL(join(root, 'private.ts')).href)};const instance=new PrivateWitness();process.once('exit',()=>Promise.resolve().then(()=>process.stdout.write(String(instance.close()))));`,
+  );
+  expect(
+    execFileSync(process.execPath, ['--import', pathToFileURL(bootstrap).href, entry], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  ).toBe('3');
+  const measured = await reconcileNativeCapture(snapshot, output, maps);
+  expect(measured.status).toBe('Fail');
+  expect(measured.maps).toBeNull();
+  expect(measured.issues).toEqual([
+    expect.objectContaining({ kind: 'rejected-execution', path: 'private.ts' }),
+  ]);
+});
+
 describe('compiled native counter stream', () => {
   let bundle: string;
   let snapshot: { root: string; included: { path: string; sha256: string }[] };
