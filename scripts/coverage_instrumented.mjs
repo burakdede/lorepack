@@ -29,6 +29,7 @@ const forkCollector = Symbol.for('lorepack.nativeForkCollector');
 const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
 const syncCollector = Symbol.for('lorepack.nativeSyncCollector');
 const capturedForkSpawn = Symbol.for('lorepack.capturedForkSpawn');
+const capturedForkDispatch = Symbol.for('lorepack.capturedForkDispatch');
 const campaignCollector = Symbol.for('lorepack.campaignCollector');
 const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
@@ -99,8 +100,10 @@ export function registerForkCapture(entries, directory, audit = false) {
   const pending = [];
   const launches = [];
   function measuredFork(...parameters) {
-    const providedOptions = Array.isArray(parameters[1]) ? parameters[2] : parameters[1];
-    if (providedOptions?.[capturedForkSpawn]) return originalFork.apply(this, parameters);
+    const optionsIndex = Array.isArray(parameters[1]) || parameters[1] == null ? 2 : 1;
+    const providedOptions = parameters[optionsIndex];
+    if (providedOptions?.[capturedForkSpawn] || providedOptions?.[capturedForkDispatch])
+      return originalFork.apply(this, parameters);
     let [modulePath, args, options] = parameters;
     let filename = modulePath instanceof URL ? fileURLToPath(modulePath) : resolve(modulePath);
     try {
@@ -108,7 +111,16 @@ export function registerForkCapture(entries, directory, audit = false) {
     } catch {}
     const entry = targets.get(filename);
     if (!entry) {
-      const child = originalFork.apply(this, parameters);
+      const forwarded = [...parameters];
+      if (
+        previous?.[campaignCollector] &&
+        (providedOptions === undefined ||
+          (providedOptions !== null &&
+            typeof providedOptions === 'object' &&
+            !Array.isArray(providedOptions)))
+      )
+        forwarded[optionsIndex] = { ...providedOptions, [capturedForkDispatch]: true };
+      const child = originalFork.apply(this, forwarded);
       const captured = child[capturedCommandLaunch];
       if (audit && (captured?.directory !== resolve(directory) || captured.pid !== child.pid))
         recordUnregisteredNode(directory, 'fork', parameters.slice(0, 2));

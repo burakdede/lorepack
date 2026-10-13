@@ -891,6 +891,71 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
         writeFileSync(changed, retained);
       }
     });
+    it('retains explicit fork custody inside a campaign worker', async () => {
+      const { project, repository, captured, built } = scenario;
+      const registry = createCampaignRegistry(captured, built.launch);
+      const setup = join(project, 'nested-fork-setup.mjs');
+      writeCampaignSetup(captured, built.launch, setup);
+      const driver = join(project, 'nested-fork-driver.mjs');
+      writeFileSync(
+        driver,
+        `const {marker}=await import(${JSON.stringify(pathToFileURL(join(project, 'packages/core/dist/shared.js')).href)});process.send(marker());process.disconnect();`,
+      );
+      const directory = join(project, 'explicit-fork-captures');
+      const foreign = join(project, 'different-fork-captures');
+      writeFileSync(
+        join(project, 'nested-fork.test.ts'),
+        `import {expect,test} from 'vitest';
+import {fork,spawnSync} from 'node:child_process';
+import {registerForkCapture,registerCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+test('retains both positive and negative explicit custody',async()=>{
+ const entries=${JSON.stringify(registry.commandEntries)};
+ const directory=${JSON.stringify(directory)};
+ const foreign=${JSON.stringify(foreign)};
+ for(const auditDirectory of [directory,foreign]) {
+  const forks=registerForkCapture([],auditDirectory,true);
+  const commands=registerCommandCapture(entries,directory);
+  try {
+   const child=fork(${JSON.stringify(driver)},[],{env:{},execArgv:[],stdio:['ignore','ignore','ignore','ipc']});
+   let message;child.on('message',value=>{message=value;});
+   const code=await new Promise((resolve,reject)=>{child.once('close',resolve);child.once('error',reject);});
+   expect(code).toBe(0);expect(message).toBe('measured');
+   await commands.settled();await forks.settled();
+  } finally {commands.restore();forks.restore();}
+ }
+ const captured=await reconcileForkCapture(${JSON.stringify(captured)},directory,entries);
+ expect(captured.status).toBe('Pass');expect(captured.processes).toBe(2);
+ await expect(reconcileForkCapture(${JSON.stringify(captured)},foreign,entries)).rejects.toThrow('Unregistered Node launches');
+ const restored=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
+ expect(restored.status).toBe(7);expect(restored.stderr).toBe('');
+ expect(restored.stdout).toContain('"marker":"measured"');
+});`,
+      );
+      const config = join(project, 'nested-fork.config.mjs');
+      writeFileSync(
+        config,
+        `export default ${JSON.stringify({
+          root: project,
+          test: { include: ['nested-fork.test.ts'], setupFiles: [setup] },
+        })};`,
+      );
+      const vitest = join(
+        dirname(createRequire(join(repository, 'package.json')).resolve('vitest/package.json')),
+        'vitest.mjs',
+      );
+      execFileSync(process.execPath, [vitest, 'run', '--config', config], {
+        cwd: project,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      const campaign = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(campaign.status).toBe('Pass');
+      expect(campaign.processes).toBe(4);
+    });
+
     it('captures automatic workers, nested collectors and explicit streams', async () => {
       const { project, repository, captured, built } = scenario;
       const launch = built.launch;

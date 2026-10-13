@@ -584,6 +584,8 @@ records one file at a time.
 Measured CLI entry wrappers initialize capture before shared chunks execute, and launch
 receipts bind the emitted JavaScript graph.
 Explicit fixture collectors reconcile their launches and restore campaign capture after use.
+Nested fork collectors retain their own command receipts; the surrounding campaign delegates
+the fork once without auditing the same child again. Different-directory custody still rejects.
 Measured eval and script launches preserve preloads, permissions, conditions and arguments.
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture files and pipes retain their descriptors and IPC alongside campaign capture.
