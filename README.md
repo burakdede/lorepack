@@ -622,6 +622,8 @@ Asynchronous command capture preserves Node's own callback and promise output ha
 including timeouts and output limits, through registered entrypoints only.
 Synchronous capture preserves native results and errors through both Node launch APIs,
 using a separate inherited file descriptor and observed native termination evidence.
+Registered heap-flag prefixes preserve the archive verifier's Node memory limit;
+unregistered flag prefixes keep Node's original launch behavior.
 Fork reconciliation rejects missing receipts, mismatched child identities and repeated
 execution streams before merging source-compatible maps once. Interrupted streams require
 an explicitly permitted signal and a successful matching kill receipt from the host.

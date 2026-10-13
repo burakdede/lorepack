@@ -188,10 +188,14 @@ integration and parent-exit qualification remain open.
 `registerCommandCapture` intercepts the shared asynchronous `ChildProcess.spawn`
 method before descriptor normalization. Node's original `spawn`, callback `execFile`
 and custom promise wrapper remain intact, including buffering, errors and timeouts.
-Only the current Node executable with an explicitly registered first script argument
-is mapped. Multiple ordinary entrypoints may share a measured artifact; the invoked
+Only the current Node executable with an explicitly registered script argument
+is mapped. Both command adapters accept a registered `nodeArguments` heap-flag prefix,
+such as the archive verifier's `--max-old-space-size=128`, without changing the flag
+or script arguments. Unregistered prefixes delegate unchanged. Real async and sync
+fixtures verify the actual `process.execArgv` and exact three-times-direct counters;
+eval prefixes cannot be registered. Multiple ordinary entrypoints may share a measured artifact; the invoked
 entrypoint is retained in its receipt. A measured target is registered explicitly
-when launched directly. Other commands and Node eval/flag launches delegate unchanged.
+when launched directly. Other commands and unregistered Node eval/flag launches delegate unchanged.
 The original three streams are preserved, descriptor 3 is ignored and descriptor 4
 receives the parent-opened capture file. Additional existing descriptors reject capture.
 Environment mode is recorded as `normalized` because this boundary receives Node's
