@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,26 +35,44 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
   });
 
   it('renders bundled CLI help without initializing protocol SDKs', () => {
-    const output = execFileSync(
-      process.execPath,
-      [
-        '--input-type=module',
-        '-e',
-        `
+    const outputDirectory = mkdtempSync(join(REPO_ROOT, 'packages/cli/.bundle-help-'));
+    try {
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          "const {bundleCli}=await import('./scripts/bundle-cli.mjs');await bundleCli({output:process.argv[1]});",
+          outputDirectory,
+        ],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      const output = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
 import {registerHooks} from 'node:module';
+import {pathToFileURL} from 'node:url';
 registerHooks({resolve(specifier,context,next){
  if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Bundled CLI loaded a protocol SDK');
  return next(specifier,context);
 }});
+const entry=process.argv[1];
 process.argv=[process.execPath,'lorepack','--help'];
-await import('./dist/public-entry.js');
+await import(pathToFileURL(entry).href);
 `,
-      ],
-      { cwd: join(REPO_ROOT, 'packages/cli'), encoding: 'utf8' },
-    );
-    expect(output).toContain('pack');
-    expect(output).toContain('serve');
-    expect(output).toContain('mcp');
+          join(outputDirectory, 'public-entry.js'),
+        ],
+        { cwd: join(REPO_ROOT, 'packages/cli'), encoding: 'utf8' },
+      );
+      expect(output).toContain('pack');
+      expect(output).toContain('serve');
+      expect(output).toContain('mcp');
+    } finally {
+      rmSync(outputDirectory, { recursive: true, force: true });
+    }
   });
 
   it('loads deployment client operations without loading Worker protocol adapters', () => {
