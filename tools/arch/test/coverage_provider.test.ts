@@ -14,7 +14,7 @@ import {
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { writeCampaignSetup } from '../../../scripts/coverage_capture.mjs';
 import { prepareSource, renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 import {
@@ -572,24 +572,41 @@ else process.disconnect?.();
     }
   });
 
-  it('builds the CLI and every child in a separate complete measurement layout', async () => {
-    const project = join(root, 'build-project');
-    const files = [
-      'core/src/shared.ts',
-      'cli/src/entry.ts',
-      'cli/src/index.ts',
-      'backend-local/src/sql/query-child.ts',
-      'backend-local/src/archive-verify-child.ts',
-      'parsers/src/parse-child.ts',
-    ];
-    const included = files.map((file) => {
-      const path = `packages/${file}`;
-      const shared = file.includes('/sql/')
-        ? '../../../core/dist/shared.js'
-        : '../../core/dist/shared.js';
-      const source = `${file === 'core/src/shared.ts' ? "export function marker() { return 'measured'; }" : `import {marker} from '${shared}';export {marker};`}\n${
-        file === 'cli/src/entry.ts'
-          ? `import {fork,execFile} from 'node:child_process';
+  describe('complete CLI measurement layout', () => {
+    let scenario: {
+      project: string;
+      repository: string;
+      captured: { root: string; included: { path: string; sha256: string }[] };
+      native: string;
+      output: string;
+      before: Buffer[];
+      built: Awaited<ReturnType<typeof buildNativeCli>>;
+    };
+    const expectedOutput = `${[
+      { marker: 'measured', writeAllowed: false },
+      { marker: 'measured', writeAllowed: false },
+      { marker: 'measured', execArgv: ['--max-old-space-size=128'] },
+    ]
+      .map((value) => JSON.stringify(value))
+      .join('\n')}\n`;
+    beforeAll(async () => {
+      const project = join(root, 'build-project');
+      const files = [
+        'core/src/shared.ts',
+        'cli/src/entry.ts',
+        'cli/src/index.ts',
+        'backend-local/src/sql/query-child.ts',
+        'backend-local/src/archive-verify-child.ts',
+        'parsers/src/parse-child.ts',
+      ];
+      const included = files.map((file) => {
+        const path = `packages/${file}`;
+        const shared = file.includes('/sql/')
+          ? '../../../core/dist/shared.js'
+          : '../../core/dist/shared.js';
+        const source = `${file === 'core/src/shared.ts' ? "export function marker() { return 'measured'; }" : `import {marker} from '${shared}';export {marker};`}\n${
+          file === 'cli/src/entry.ts'
+            ? `import {fork,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 for(const filename of ['parse-child.js','query-child.js']) {
@@ -599,160 +616,203 @@ for(const filename of ['parse-child.js','query-child.js']) {
 }
 const {stdout}=await promisify(execFile)(process.execPath,['--max-old-space-size=128',fileURLToPath(new URL('archive-verify-child.js',import.meta.url))],{env:{}});
 console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
-          : file.endsWith('archive-verify-child.ts')
-            ? 'console.log(JSON.stringify({marker:marker(),execArgv:process.execArgv}));\n'
-            : file.endsWith('child.ts')
-              ? "process.send?.({marker:marker(),writeAllowed:process.permission?.has('fs.write')});setInterval(()=>{},1000);\n"
-              : ''
-      }`;
-      mkdirSync(dirname(join(project, path)), { recursive: true });
-      writeFileSync(join(project, path), source);
-      return { path, sha256: createHash('sha256').update(source).digest('hex') };
-    });
-    const repository = resolve(import.meta.dirname, '../../..');
-    const compiler = join(
-      dirname(createRequire(join(repository, 'package.json')).resolve('typescript/package.json')),
-      'bin/tsc',
-    );
-    for (const name of ['core', 'cli', 'backend-local', 'parsers']) {
-      execFileSync(
-        process.execPath,
-        [
-          compiler,
-          '--ignoreConfig',
-          '--target',
-          'ES2024',
-          '--module',
-          'NodeNext',
-          '--sourceMap',
-          '--declaration',
-          '--skipLibCheck',
-          '--types',
-          'node',
-          '--rootDir',
-          join(project, 'packages', name, 'src'),
-          '--outDir',
-          join(project, 'packages', name, 'dist'),
-          ...included
-            .filter((entry) => entry.path.startsWith(`packages/${name}/`))
-            .map((entry) => join(project, entry.path)),
-        ],
-        { stdio: 'inherit' },
-      );
-    }
-    mkdirSync(join(project, 'packages/cli/studio-dist'), { recursive: true });
-    mkdirSync(join(project, 'packages/cli/node_modules'));
-    mkdirSync(join(project, 'packages/backend-local/migrations'));
-    writeFileSync(join(project, 'package.json'), '{"type":"module"}');
-    writeFileSync(
-      join(project, 'packages/cli/package.json'),
-      '{"type":"module","version":"0.1.0"}',
-    );
-    writeFileSync(
-      join(project, 'packages/cli/studio-dist/index.html'),
-      '<main>Fixture Studio</main>',
-    );
-    writeFileSync(join(project, 'packages/backend-local/migrations/001_fixture.sql'), 'SELECT 1;');
-    const captured = { root: project, included };
-    const preparation = join(project, 'preparations');
-    mkdirSync(preparation);
-    for (const entry of included) {
-      const source = join(project, entry.path);
-      writeFileSync(
-        join(preparation, `${createHash('sha256').update(entry.path).digest('hex')}.json`),
-        JSON.stringify(prepareSource(captured, source, readFileSync(source, 'utf8'), null)),
-      );
-    }
-    const native = join(project, 'native');
-    await prepareNativeCapture(captured, preparation, native, '__LOREPACK_CAMPAIGN_COVERAGE__');
-    const before = included.map((entry) =>
-      readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
-    );
-    const { bundleCli } = await import('../../../scripts/bundle-cli.mjs');
-    await bundleCli({ root: project });
-    const output = join(project, 'measurement/dist');
-    const built = await buildNativeCli(captured, native, output, '__LOREPACK_CAMPAIGN_COVERAGE__');
-    expect(built.receipts).toHaveLength(6);
-    for (const file of [
-      'public-entry.js',
-      'public-index.js',
-      'query-child.js',
-      'parse-child.js',
-      'archive-verify-child.js',
-    ])
-      expect(readFileSync(join(output, file), 'utf8')).toContain(
-        "import './capture-bootstrap.mjs'",
-      );
-    expect(readFileSync(join(output, '../studio-dist/index.html'), 'utf8')).toBe(
-      '<main>Fixture Studio</main>',
-    );
-    expect(readFileSync(join(output, 'migrations/001_fixture.sql'), 'utf8')).toBe('SELECT 1;');
-    const launch = built.launch;
-    expect(JSON.parse(readFileSync(join(output, 'launch.receipts.json'), 'utf8'))).toEqual(launch);
-    expect(launch.entrySha256).toBe(
-      createHash('sha256').update(readFileSync(launch.entry)).digest('hex'),
-    );
-    const parentDirectory = join(project, 'cli-counters');
-    const parentEntry = {
-      original: launch.entry,
-      target: launch.entry,
-      originalSha256: launch.entrySha256,
-      targetSha256: launch.entrySha256,
-      interruptionSignals: [],
-    };
-    const parentCapture = registerSyncCommandCapture([parentEntry], parentDirectory);
-    let result: import('node:child_process').SpawnSyncReturns<string>;
-    try {
-      const { spawnSync } = await import('node:child_process');
-      result = spawnSync(process.execPath, [launch.entry], {
-        env: {},
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
+            : file.endsWith('archive-verify-child.ts')
+              ? 'console.log(JSON.stringify({marker:marker(),execArgv:process.execArgv}));\n'
+              : file.endsWith('child.ts')
+                ? "process.send?.({marker:marker(),writeAllowed:process.permission?.has('fs.write')});setInterval(()=>{},1000);\n"
+                : ''
+        }`;
+        mkdirSync(dirname(join(project, path)), { recursive: true });
+        writeFileSync(join(project, path), source);
+        return { path, sha256: createHash('sha256').update(source).digest('hex') };
       });
-    } finally {
-      parentCapture.restore();
-    }
-    expect(parentCapture.launches).toHaveLength(1);
-    const counterFile = join(parentDirectory, `${parentCapture.launches[0].id}.counters.jsonl`);
-    const parentEvidence = await reconcileForkCapture(captured, parentDirectory, [parentEntry]);
-    expect(parentEvidence.status).toBe('Pass');
-    expect(parentEvidence.processes).toBe(1);
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(7);
-    expect(
-      result.stdout
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line)),
-    ).toEqual([
-      { marker: 'measured', writeAllowed: false },
-      { marker: 'measured', writeAllowed: false },
-      { marker: 'measured', execArgv: ['--max-old-space-size=128'] },
-    ]);
-    const children = await reconcileForkCapture(captured, launch.captureDirectory, [
-      ...launch.forkEntries,
-      ...launch.commandEntries,
-    ]);
-    expect(children.status).toBe('Pass');
-    expect(children.processes).toBe(3);
-    expect(
-      children.executions.filter((execution) => execution.state === 'interrupted'),
-    ).toHaveLength(2);
-    expect(children.executions.filter((execution) => execution.state === 'completed')).toHaveLength(
-      1,
-    );
-    expect(Object.keys(children.maps)).toHaveLength(4);
-    const parent = await replayCounterStream(captured, readFileSync(counterFile, 'utf8'));
-    expect(parent.state).toBe('completed');
-    expect(parent.exitCode).toBe(7);
-    expect(Object.keys(parent.maps)).toHaveLength(2);
-    const registry = createCampaignRegistry(captured, launch);
-    expect(registry.forkEntries).toHaveLength(6);
-    expect(registry.commandEntries).toHaveLength(10);
-    const worker = join(project, 'captured-worker.mjs');
-    writeFileSync(
-      worker,
-      `import {fork,execFile,spawnSync} from 'node:child_process';
+      const repository = resolve(import.meta.dirname, '../../..');
+      const compiler = join(
+        dirname(createRequire(join(repository, 'package.json')).resolve('typescript/package.json')),
+        'bin/tsc',
+      );
+      for (const name of ['core', 'cli', 'backend-local', 'parsers']) {
+        execFileSync(
+          process.execPath,
+          [
+            compiler,
+            '--ignoreConfig',
+            '--target',
+            'ES2024',
+            '--module',
+            'NodeNext',
+            '--sourceMap',
+            '--declaration',
+            '--skipLibCheck',
+            '--types',
+            'node',
+            '--rootDir',
+            join(project, 'packages', name, 'src'),
+            '--outDir',
+            join(project, 'packages', name, 'dist'),
+            ...included
+              .filter((entry) => entry.path.startsWith(`packages/${name}/`))
+              .map((entry) => join(project, entry.path)),
+          ],
+          { stdio: 'inherit' },
+        );
+      }
+      mkdirSync(join(project, 'packages/cli/studio-dist'), { recursive: true });
+      mkdirSync(join(project, 'packages/cli/node_modules'));
+      mkdirSync(join(project, 'packages/backend-local/migrations'));
+      writeFileSync(join(project, 'package.json'), '{"type":"module"}');
+      writeFileSync(
+        join(project, 'packages/cli/package.json'),
+        '{"type":"module","version":"0.1.0"}',
+      );
+      writeFileSync(
+        join(project, 'packages/cli/studio-dist/index.html'),
+        '<main>Fixture Studio</main>',
+      );
+      writeFileSync(
+        join(project, 'packages/backend-local/migrations/001_fixture.sql'),
+        'SELECT 1;',
+      );
+      const captured = { root: project, included };
+      const preparation = join(project, 'preparations');
+      mkdirSync(preparation);
+      for (const entry of included) {
+        const source = join(project, entry.path);
+        writeFileSync(
+          join(preparation, `${createHash('sha256').update(entry.path).digest('hex')}.json`),
+          JSON.stringify(prepareSource(captured, source, readFileSync(source, 'utf8'), null)),
+        );
+      }
+      const native = join(project, 'native');
+      await prepareNativeCapture(captured, preparation, native, '__LOREPACK_CAMPAIGN_COVERAGE__');
+      const before = included.map((entry) =>
+        readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
+      );
+      const { bundleCli } = await import('../../../scripts/bundle-cli.mjs');
+      await bundleCli({ root: project });
+      const output = join(project, 'measurement/dist');
+      const built = await buildNativeCli(
+        captured,
+        native,
+        output,
+        '__LOREPACK_CAMPAIGN_COVERAGE__',
+      );
+      scenario = { project, repository, captured, native, output, before, built };
+    });
+    beforeEach(() => {
+      for (const path of [
+        scenario.built.launch.captureDirectory,
+        join(scenario.project, 'cli-counters'),
+        join(scenario.project, 'nested-captures'),
+      ])
+        rmSync(path, { recursive: true, force: true });
+    });
+    afterEach(() => {
+      expect(
+        scenario.captured.included.map((entry) =>
+          readFileSync(
+            join(scenario.project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js')),
+          ),
+        ),
+      ).toEqual(scenario.before);
+    });
+    it('builds separate CLI artifacts without changing ordinary output', async () => {
+      const { built, output, captured, native, project } = scenario;
+      const launch = built.launch;
+      expect(built.receipts).toHaveLength(6);
+      for (const file of [
+        'public-entry.js',
+        'public-index.js',
+        'query-child.js',
+        'parse-child.js',
+        'archive-verify-child.js',
+      ])
+        expect(readFileSync(join(output, file), 'utf8')).toContain(
+          "import './capture-bootstrap.mjs'",
+        );
+      expect(readFileSync(join(output, '../studio-dist/index.html'), 'utf8')).toBe(
+        '<main>Fixture Studio</main>',
+      );
+      expect(readFileSync(join(output, 'migrations/001_fixture.sql'), 'utf8')).toBe('SELECT 1;');
+      expect(JSON.parse(readFileSync(join(output, 'launch.receipts.json'), 'utf8'))).toEqual(
+        launch,
+      );
+      expect(launch.entrySha256).toBe(
+        createHash('sha256').update(readFileSync(launch.entry)).digest('hex'),
+      );
+      await expect(
+        buildNativeCli(captured, native, join(project, 'packages/cli/dist')),
+      ).rejects.toThrow('ordinary');
+      await expect(buildNativeCli(captured, native, output)).rejects.toThrow('empty');
+    });
+    it('reconciles actual parent counters and every CLI child', async () => {
+      const { project, captured, built } = scenario;
+      const launch = built.launch;
+      const parentDirectory = join(project, 'cli-counters');
+      const parentEntry = {
+        original: launch.entry,
+        target: launch.entry,
+        originalSha256: launch.entrySha256,
+        targetSha256: launch.entrySha256,
+        interruptionSignals: [],
+      };
+      const parentCapture = registerSyncCommandCapture([parentEntry], parentDirectory);
+      let result: import('node:child_process').SpawnSyncReturns<string>;
+      try {
+        const { spawnSync } = await import('node:child_process');
+        result = spawnSync(process.execPath, [launch.entry], {
+          env: {},
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } finally {
+        parentCapture.restore();
+      }
+      expect(parentCapture.launches).toHaveLength(1);
+      const counterFile = join(parentDirectory, `${parentCapture.launches[0].id}.counters.jsonl`);
+      const parentEvidence = await reconcileForkCapture(captured, parentDirectory, [parentEntry]);
+      expect(parentEvidence.status).toBe('Pass');
+      expect(parentEvidence.processes).toBe(1);
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(7);
+      expect(
+        result.stdout
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line)),
+      ).toEqual([
+        { marker: 'measured', writeAllowed: false },
+        { marker: 'measured', writeAllowed: false },
+        { marker: 'measured', execArgv: ['--max-old-space-size=128'] },
+      ]);
+      const children = await reconcileForkCapture(captured, launch.captureDirectory, [
+        ...launch.forkEntries,
+        ...launch.commandEntries,
+      ]);
+      expect(children.status).toBe('Pass');
+      expect(children.processes).toBe(3);
+      expect(
+        children.executions.filter((execution) => execution.state === 'interrupted'),
+      ).toHaveLength(2);
+      expect(
+        children.executions.filter((execution) => execution.state === 'completed'),
+      ).toHaveLength(1);
+      expect(Object.keys(children.maps)).toHaveLength(4);
+      const parent = await replayCounterStream(captured, readFileSync(counterFile, 'utf8'));
+      expect(parent.state).toBe('completed');
+      expect(parent.exitCode).toBe(7);
+      expect(Object.keys(parent.maps)).toHaveLength(2);
+    });
+    it('captures worker entrypoints and restores rejected registration', async () => {
+      const { project, repository, captured, built } = scenario;
+      const launch = built.launch;
+      const registry = createCampaignRegistry(captured, launch);
+      expect(registry.forkEntries).toHaveLength(6);
+      expect(registry.commandEntries).toHaveLength(10);
+      const worker = join(project, 'captured-worker.mjs');
+      writeFileSync(
+        worker,
+        `import {fork,execFile,spawnSync} from 'node:child_process';
 import {promisify} from 'node:util';
 import {registerCampaignCapture,registerCommandCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
 const capture=registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)});
@@ -770,33 +830,32 @@ try{registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)
 const forkRestored=fork===before;existing.restore();
 const retry=registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)});await retry.settled();retry.restore();
 console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,cli:{status:cli.status,stdout:cli.stdout,stderr:cli.stderr}}));`,
-    );
-    const workerResult = JSON.parse(execFileSync(process.execPath, [worker], { encoding: 'utf8' }));
-    expect(workerResult.messages).toEqual([
-      { marker: 'measured', writeAllowed: false },
-      { marker: 'measured', writeAllowed: false },
-    ]);
-    expect(JSON.parse(workerResult.archive.stdout)).toEqual({
-      marker: 'measured',
-      execArgv: ['--max-old-space-size=128'],
+      );
+      const workerResult = JSON.parse(
+        execFileSync(process.execPath, [worker], { encoding: 'utf8' }),
+      );
+      expect(workerResult.messages).toEqual([
+        { marker: 'measured', writeAllowed: false },
+        { marker: 'measured', writeAllowed: false },
+      ]);
+      expect(JSON.parse(workerResult.archive.stdout)).toEqual({
+        marker: 'measured',
+        execArgv: ['--max-old-space-size=128'],
+      });
+      expect(workerResult.archive.stderr).toBe('');
+      expect(workerResult.cli.status).toBe(7);
+      expect(workerResult.cli.stderr).toBe('');
+      expect(workerResult.cli.stdout).toBe(expectedOutput);
+      expect(workerResult.registrationRejected).toBe(true);
+      expect(workerResult.forkRestored).toBe(true);
+      const workerCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(workerCapture.status).toBe('Pass');
+      expect(workerCapture.processes).toBe(7);
     });
-    expect(workerResult.archive.stderr).toBe('');
-    expect(workerResult.cli.status).toBe(7);
-    expect(workerResult.cli.stderr).toBe('');
-    expect(workerResult.cli.stdout).toBe(result.stdout);
-    expect(workerResult.registrationRejected).toBe(true);
-    expect(workerResult.forkRestored).toBe(true);
-    const workerCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
-      ...registry.forkEntries,
-      ...registry.commandEntries,
-    ]);
-    expect(workerCapture.status).toBe('Pass');
-    expect(workerCapture.processes).toBe(10);
-    const sharedChunk = readdirSync(output).find((filename) =>
-      /^chunk-[A-Z0-9]{8}\.js$/.test(filename),
-    );
-    expect(sharedChunk).toBeDefined();
-    for (const filename of [
+    it.each([
       'query-child.js',
       'archive-verify-child.js',
       'public-entry.js',
@@ -804,9 +863,19 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
       'measurement-query-child.js',
       'capture-bootstrap.mjs',
       'capture-script-fd5.mjs',
-      sharedChunk as string,
-    ]) {
-      const changed = join(output, filename);
+      'shared-chunk',
+    ])('rejects changed measurement artifact %s', async (filename) => {
+      const { output, captured, built } = scenario;
+      const launch = built.launch;
+      const sharedChunk = readdirSync(output).find((filename) =>
+        /^chunk-[A-Z0-9]{8}\.js$/.test(filename),
+      );
+      expect(sharedChunk).toBeDefined();
+
+      const changed = join(
+        output,
+        filename === 'shared-chunk' ? (sharedChunk as string) : filename,
+      );
       const retained = readFileSync(changed);
       try {
         writeFileSync(changed, Buffer.concat([retained, Buffer.from('\n// stale artifact')]));
@@ -821,21 +890,25 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
       } finally {
         writeFileSync(changed, retained);
       }
-    }
-    const setupFile = join(project, 'auto-worker-setup.mjs');
-    writeCampaignSetup(captured, launch, setupFile);
-    const ownedEval = `const {marker}=await import(${JSON.stringify(pathToFileURL(join(project, 'packages/core/dist/shared.js')).href)});console.log(marker());`;
-    const temporary = join(project, 'temporary-driver.mjs');
-    writeFileSync(temporary, ownedEval);
-    const separateDriver = join(project, 'separate-stream-driver.mjs');
-    writeFileSync(
-      separateDriver,
-      `import {writeSync} from 'node:fs';writeSync(4,'fixture');${ownedEval}`,
-    );
-    const automaticTest = join(project, 'automatic.test.ts');
-    writeFileSync(
-      automaticTest,
-      `import {expect,test} from 'vitest';
+    });
+    it('captures automatic workers, nested collectors and explicit streams', async () => {
+      const { project, repository, captured, built } = scenario;
+      const launch = built.launch;
+      const registry = createCampaignRegistry(captured, launch);
+      const setupFile = join(project, 'auto-worker-setup.mjs');
+      writeCampaignSetup(captured, launch, setupFile);
+      const ownedEval = `const {marker}=await import(${JSON.stringify(pathToFileURL(join(project, 'packages/core/dist/shared.js')).href)});console.log(marker());`;
+      const temporary = join(project, 'temporary-driver.mjs');
+      writeFileSync(temporary, ownedEval);
+      const separateDriver = join(project, 'separate-stream-driver.mjs');
+      writeFileSync(
+        separateDriver,
+        `import {writeSync} from 'node:fs';writeSync(4,'fixture');${ownedEval}`,
+      );
+      const automaticTest = join(project, 'automatic.test.ts');
+      writeFileSync(
+        automaticTest,
+        `import {expect,test} from 'vitest';
 import {spawnSync} from 'node:child_process';
 import {openSync,closeSync,readFileSync} from 'node:fs';
 import {registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
@@ -871,39 +944,31 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
   expect(result.status).toBe(0);expect(result.stdout).toBe('measured\\n');expect(result.stderr).toBe('');
  }
 });`,
-    );
-    const automaticConfig = join(project, 'automatic.config.mjs');
-    writeFileSync(
-      automaticConfig,
-      `export default ${JSON.stringify({
-        root: project,
-        test: { include: ['automatic.test.ts'], setupFiles: [setupFile] },
-      })};`,
-    );
-    const vitest = join(
-      dirname(createRequire(join(repository, 'package.json')).resolve('vitest/package.json')),
-      'vitest.mjs',
-    );
-    execFileSync(process.execPath, [vitest, 'run', '--config', automaticConfig], {
-      cwd: project,
-      encoding: 'utf8',
-      stdio: 'pipe',
+      );
+      const automaticConfig = join(project, 'automatic.config.mjs');
+      writeFileSync(
+        automaticConfig,
+        `export default ${JSON.stringify({
+          root: project,
+          test: { include: ['automatic.test.ts'], setupFiles: [setupFile] },
+        })};`,
+      );
+      const vitest = join(
+        dirname(createRequire(join(repository, 'package.json')).resolve('vitest/package.json')),
+        'vitest.mjs',
+      );
+      execFileSync(process.execPath, [vitest, 'run', '--config', automaticConfig], {
+        cwd: project,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      const automaticCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(automaticCapture.status).toBe('Pass');
+      expect(automaticCapture.processes).toBe(10);
     });
-    const automaticCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
-      ...registry.forkEntries,
-      ...registry.commandEntries,
-    ]);
-    expect(automaticCapture.status).toBe('Pass');
-    expect(automaticCapture.processes).toBe(20);
-    expect(
-      included.map((entry) =>
-        readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
-      ),
-    ).toEqual(before);
-    await expect(
-      buildNativeCli(captured, native, join(project, 'packages/cli/dist')),
-    ).rejects.toThrow('ordinary');
-    await expect(buildNativeCli(captured, native, output)).rejects.toThrow('empty');
   });
 
   it('captures owned compiled imports from a real Node eval without changing results', async () => {
