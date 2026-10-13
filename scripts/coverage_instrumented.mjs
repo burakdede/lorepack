@@ -554,8 +554,23 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
   };
 }
 
-export async function runCapturedCli(entrypoint, entries, directory) {
+export async function runCapturedCli(
+  entrypoint,
+  entries,
+  directory,
+  commandEntries = [],
+  entrypointSha256,
+) {
+  if (entrypointSha256 !== undefined && digest(readFileSync(entrypoint)) !== entrypointSha256)
+    throw new Error('Captured CLI entrypoint differs from its receipt.');
   const capture = registerForkCapture(entries, directory);
+  let commands;
+  try {
+    commands = registerCommandCapture(commandEntries, directory);
+  } catch (error) {
+    capture.restore();
+    throw error;
+  }
   const exit = process.exit;
   class ExitRequest extends Error {
     constructor(parameters) {
@@ -577,9 +592,13 @@ export async function runCapturedCli(entrypoint, entries, directory) {
     process.exit = exit;
   }
   try {
-    await capture.settled();
+    await Promise.all([capture.settled(), commands.settled()]);
   } finally {
-    capture.restore();
+    try {
+      commands.restore();
+    } finally {
+      capture.restore();
+    }
   }
   if (failure) throw failure;
   exit.apply(process, parameters);
@@ -622,7 +641,40 @@ export async function buildNativeCli(snapshot, preparations, output) {
     provider: 'istanbul@4.1.11',
     receipts,
   });
-  return { directory, receipts };
+  const childEntry = (filename) => {
+    const target = join(directory, filename);
+    const hash = digest(readFileSync(target));
+    return {
+      original: target,
+      target,
+      originalSha256: hash,
+      targetSha256: hash,
+      interruptionSignals: ['SIGKILL'],
+    };
+  };
+  const forkEntries = ['parse-child.js', 'query-child.js'].map(childEntry);
+  const commandEntries = [
+    { ...childEntry('archive-verify-child.js'), nodeArguments: ['--max-old-space-size=128'] },
+  ];
+  const entry = join(directory, 'capture-entry.mjs');
+  const captureDirectory = join(directory, 'captures');
+  const entrypoint = join(directory, 'public-entry.js');
+  const entrypointSha256 = digest(readFileSync(entrypoint));
+  const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)});\n`;
+  writeFileSync(entry, bootstrap, { flag: 'wx' });
+  const launch = {
+    schema: 1,
+    provider: 'istanbul@4.1.11',
+    entry,
+    entrySha256: digest(bootstrap),
+    entrypoint,
+    entrypointSha256,
+    captureDirectory,
+    forkEntries,
+    commandEntries,
+  };
+  publish(directory, 'launch.receipts.json', launch);
+  return { directory, receipts, launch };
 }
 
 export function compiledCapturePlugin(snapshot, preparations) {

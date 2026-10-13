@@ -573,7 +573,24 @@ else process.disconnect?.();
     ];
     const included = files.map((file) => {
       const path = `packages/${file}`;
-      const source = `export function marker() { return 'measured'; }\n${file === 'cli/src/entry.ts' ? 'console.log(marker());\n' : ''}`;
+      const source = `export function marker() { return 'measured'; }\n${
+        file === 'cli/src/entry.ts'
+          ? `import {fork,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+for(const filename of ['parse-child.js','query-child.js']) {
+ const child=fork(new URL(filename,import.meta.url),[],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']});
+ const message=await new Promise(resolve=>child.once('message',resolve));
+ console.log(JSON.stringify(message));child.kill('SIGKILL');child.unref();
+}
+const {stdout}=await promisify(execFile)(process.execPath,['--max-old-space-size=128',fileURLToPath(new URL('archive-verify-child.js',import.meta.url))],{env:{}});
+console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
+          : file.endsWith('archive-verify-child.ts')
+            ? 'console.log(JSON.stringify({marker:marker(),execArgv:process.execArgv}));\n'
+            : file.endsWith('child.ts')
+              ? "process.send?.({marker:marker(),writeAllowed:process.permission?.has('fs.write')});setInterval(()=>{},1000);\n"
+              : ''
+      }`;
       mkdirSync(dirname(join(project, path)), { recursive: true });
       writeFileSync(join(project, path), source);
       return { path, sha256: createHash('sha256').update(source).digest('hex') };
@@ -595,6 +612,8 @@ else process.disconnect?.();
           'NodeNext',
           '--sourceMap',
           '--skipLibCheck',
+          '--types',
+          'node',
           '--rootDir',
           join(project, 'packages', name, 'src'),
           '--outDir',
@@ -603,7 +622,7 @@ else process.disconnect?.();
             .filter((entry) => entry.path.startsWith(`packages/${name}/`))
             .map((entry) => join(project, entry.path)),
         ],
-        { stdio: 'pipe' },
+        { stdio: 'inherit' },
       );
     }
     mkdirSync(join(project, 'packages/cli/studio-dist'), { recursive: true });
@@ -649,6 +668,71 @@ else process.disconnect?.();
       '<main>Fixture Studio</main>',
     );
     expect(readFileSync(join(output, 'migrations/001_fixture.sql'), 'utf8')).toBe('SELECT 1;');
+    const launch = built.launch;
+    expect(JSON.parse(readFileSync(join(output, 'launch.receipts.json'), 'utf8'))).toEqual(launch);
+    expect(launch.entrySha256).toBe(
+      createHash('sha256').update(readFileSync(launch.entry)).digest('hex'),
+    );
+    const counterFile = join(project, 'cli-counters.jsonl');
+    const fd = openSync(counterFile, 'wx');
+    let result: import('node:child_process').SpawnSyncReturns<string>;
+    try {
+      const { spawnSync } = await import('node:child_process');
+      result = spawnSync(process.execPath, [launch.entry], {
+        env: {},
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status).toBe(7);
+    expect(result.stderr).toBe('');
+    expect(
+      result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line)),
+    ).toEqual([
+      { marker: 'measured', writeAllowed: false },
+      { marker: 'measured', writeAllowed: false },
+      { marker: 'measured', execArgv: ['--max-old-space-size=128'] },
+    ]);
+    const children = await reconcileForkCapture(captured, launch.captureDirectory, [
+      ...launch.forkEntries,
+      ...launch.commandEntries,
+    ]);
+    expect(children.status).toBe('Pass');
+    expect(children.processes).toBe(3);
+    expect(
+      children.executions.filter((execution) => execution.state === 'interrupted'),
+    ).toHaveLength(2);
+    expect(children.executions.filter((execution) => execution.state === 'completed')).toHaveLength(
+      1,
+    );
+    expect(Object.keys(children.maps)).toHaveLength(3);
+    const parent = await replayCounterStream(captured, readFileSync(counterFile, 'utf8'));
+    expect(parent.state).toBe('completed');
+    expect(parent.exitCode).toBe(7);
+    expect(Object.keys(parent.maps)).toHaveLength(1);
+    for (const [filename, message] of [
+      ['query-child.js', 'Fork capture entrypoint differs from its receipt.'],
+      ['archive-verify-child.js', 'Command capture entrypoint differs from its receipt.'],
+      ['public-entry.js', 'Captured CLI entrypoint differs from its receipt.'],
+    ] as const) {
+      const changed = join(output, filename);
+      const retained = readFileSync(changed);
+      try {
+        writeFileSync(changed, Buffer.concat([retained, Buffer.from('\n// stale artifact')]));
+        const { spawnSync } = await import('node:child_process');
+        const stale = spawnSync(process.execPath, [launch.entry], { encoding: 'utf8' });
+        expect(stale.status).toBe(1);
+        expect(stale.stdout).toBe('');
+        expect(stale.stderr).toContain(message);
+      } finally {
+        writeFileSync(changed, retained);
+      }
+    }
     expect(
       included.map((entry) =>
         readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
