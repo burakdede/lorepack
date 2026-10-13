@@ -501,6 +501,7 @@ export function createCampaignRegistry(snapshot, launch) {
   }
   const commandEntries = [...launch.commandEntries];
   for (const entry of launch.commandEntries) {
+    if (entry.captureMode === 'eval-import' || entry.captureMode === 'script-import') continue;
     if (basename(entry.target) !== 'archive-verify-child.js')
       throw new Error('Unknown campaign command target.');
     commandEntries.push(
@@ -787,6 +788,15 @@ export async function buildNativeCli(snapshot, preparations, output) {
       { flag: 'wx' },
     );
   }
+  const importEntries = [
+    createEvalCapture(snapshot, preparations, join(directory, 'capture-eval.mjs')),
+    createEvalCapture(
+      snapshot,
+      preparations,
+      join(directory, 'capture-script.mjs'),
+      'script-import',
+    ),
+  ];
   const artifacts = readdirSync(directory)
     .filter((filename) => /\.(?:m?js|js\.map)$/.test(filename))
     .sort()
@@ -817,6 +827,7 @@ export async function buildNativeCli(snapshot, preparations, output) {
   const forkEntries = ['parse-child.js', 'query-child.js'].map(childEntry);
   const commandEntries = [
     { ...childEntry('archive-verify-child.js'), nodeArguments: ['--max-old-space-size=128'] },
+    ...importEntries,
   ];
   const entry = join(directory, 'capture-entry.mjs');
   const captureDirectory = join(directory, 'captures');

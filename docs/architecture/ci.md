@@ -183,6 +183,7 @@ prefix. File launches preserve their module URL and application arguments;
 `--eval` after the script path remains an application argument. Async and sync
 temporary-script executions reconcile through that explicit launch mode.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
+eval/script preloads and their explicit registry modes,
 entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
 parser/query forks and the archive verifier's heap-prefixed command, records their
 executions under its `captures` directory, and drains actual closes before exit.
