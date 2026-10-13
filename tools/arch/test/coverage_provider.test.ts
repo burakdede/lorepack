@@ -819,6 +819,19 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
       automaticTest,
       `import {expect,test} from 'vitest';
 import {spawnSync} from 'node:child_process';
+import {registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+test('restores campaign capture after a nested explicit collector',async()=>{
+ const entries=${JSON.stringify(registry.commandEntries)};
+ const directory=${JSON.stringify(join(project, 'nested-captures'))};
+ const nested=registerSyncCommandCapture(entries,directory);
+ try {
+  expect(()=>registerSyncCommandCapture(entries,directory)).toThrow('already registered');
+  const result=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
+  expect(result.status).toBe(7);expect(result.stderr).toBe('');
+ } finally {nested.restore();}
+ const captured=await reconcileForkCapture(${JSON.stringify(captured)},directory,entries);
+ expect(captured.status).toBe('Pass');expect(captured.processes).toBe(1);
+});
 test('captures the ordinary CLI automatically',()=>{
  const result=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
  expect(result.status).toBe(7);expect(result.stderr).toBe('');
@@ -852,7 +865,7 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       ...registry.commandEntries,
     ]);
     expect(automaticCapture.status).toBe('Pass');
-    expect(automaticCapture.processes).toBe(16);
+    expect(automaticCapture.processes).toBe(19);
     expect(
       included.map((entry) =>
         readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
