@@ -239,9 +239,10 @@ function validCaptureStreams(streams, entry) {
     );
   return (
     streams.length === 5 &&
-    streams[3] === 'ignore' &&
-    Number.isSafeInteger(streams[4]) &&
-    streams[4] >= 0
+    (streams[3] === 'ignore' ||
+      streams[3] === 'ipc' ||
+      (streams[3]?.type === 'pipe' && streams[3]?.ipc === true)) &&
+    (streams[4] === 'pipe' || (Number.isSafeInteger(streams[4]) && streams[4] >= 0))
   );
 }
 
