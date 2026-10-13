@@ -60,6 +60,9 @@ beforeAll(() => {
   async run(value: boolean) {
     return [this.#used(1), await this.#choose(value)];
   }
+  close() {
+    return this.#used(2);
+  }
 }
 `,
   );
@@ -235,6 +238,47 @@ try { fail(); } catch {}
   });
 });
 
+it('captures synchronous owned cleanup after later exit listeners', async () => {
+  const repository = resolve(import.meta.dirname, '../../..');
+  const prepared = readdirSync(join(root, 'preparations')).map((file) =>
+    JSON.parse(readFileSync(join(root, 'preparations', file), 'utf8')),
+  );
+  const snapshot = {
+    root,
+    included: prepared.map((value) => ({ path: value.path, sha256: value.sha256 })),
+  };
+  const preparations = join(root, 'late-native-preparations');
+  await prepareNativeCapture(snapshot, join(root, 'preparations'), preparations);
+  const filename = join(root, 'private.ts');
+  for (const manual of [false, true]) {
+    const output = join(root, `late-native-${manual}`);
+    const bootstrap = join(root, `late-native-bootstrap-${manual}.mjs`);
+    const entry = join(root, `late-native-entry-${manual}.mjs`);
+    writeFileSync(
+      bootstrap,
+      `import {registerNativeCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)}; await registerNativeCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},${JSON.stringify(output)});`,
+    );
+    writeFileSync(
+      entry,
+      `import {PrivateWitness} from ${JSON.stringify(pathToFileURL(filename).href)};const instance=new PrivateWitness();await instance.run(true);await instance.run(false);process.on('exit',()=>process.stdout.write(String(instance.close())));${manual ? "process.emit('exit',0);" : ''}`,
+    );
+    expect(
+      execFileSync(process.execPath, ['--import', pathToFileURL(bootstrap).href, entry], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    ).toBe(manual ? '33' : '3');
+    const measured = await reconcileNativeCapture(snapshot, output, maps);
+    expect(measured.status).toBe('Pass');
+    const actual = measured.maps[filename];
+    const close = Object.entries(actual.fnMap).find(
+      ([, fn]) => (fn as { loc: { start: { line: number } } }).loc.start.line === 16,
+    );
+    if (!close) throw new Error('Missing actual cleanup function.');
+    expect(actual.f[close[0]]).toBe(manual ? 2 : 1);
+  }
+});
+
 it('captures actual typed transforms and reproduces every direct map and counter', async () => {
   const prepared = readdirSync(join(root, 'preparations')).map((file) =>
     JSON.parse(readFileSync(join(root, 'preparations', file), 'utf8')),
@@ -387,7 +431,8 @@ if (process.argv[3] === 'inspect') Object.assign(result, {execArgv: process.exec
 if (process.send) process.send(result);
 else console.log(JSON.stringify(result));
 if (process.argv[2] === 'fail') {process.stderr.write('fixture failure\\n');process.exitCode=7;}
-if (process.argv[2] === 'exit-window') process.once('exit',()=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10000));
+if (process.argv[2] === 'exit-window') {const emit=process.emit;process.emit=function(event,...args){const result=emit.call(this,event,...args);if(event==='exit')Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10000);return result;};}
+if (['late-exit','manual-exit'].includes(process.argv[2])) {process.on('exit',()=>process.stdout.write(String(instance.close())));if(process.argv[2]==='manual-exit')process.emit('exit',0);}
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -413,9 +458,8 @@ else process.disconnect?.();
     completed = result.text;
   });
 
-  async function assertActualCounters(text: string, state: string) {
+  async function remapCounters(text: string) {
     const actual = await replayCounterStream(snapshot, text);
-    expect(actual.state).toBe(state);
     const require = createRequire(join(resolve(import.meta.dirname, '../../..'), 'package.json'));
     const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
     const { remapNativeCoverage } = await import(pathToFileURL(providerPath).href);
@@ -429,6 +473,13 @@ else process.disconnect?.();
     const filename = join(root, 'private.ts');
     const actualMap = remapped[filename];
     if (!actualMap) throw new Error('Missing remapped compiled source.');
+    return { actual, actualMap };
+  }
+
+  async function assertActualCounters(text: string, state: string) {
+    const { actual, actualMap } = await remapCounters(text);
+    expect(actual.state).toBe(state);
+    const filename = join(root, 'private.ts');
     for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
       expect(actualMap[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
     return actual;
@@ -437,6 +488,42 @@ else process.disconnect?.();
   it('preserves IPC and permission limits and exactly replays real bundled counters', async () => {
     const actual = await assertActualCounters(completed, 'completed');
     expect(actual.exitCode).toBe(0);
+  });
+
+  it('records compiled cleanup before completion and ignores manual exit events', async () => {
+    for (const [mode, calls] of [
+      ['late-exit', 1],
+      ['manual-exit', 2],
+    ] as const) {
+      const filename = join(root, `${mode}.counters.jsonl`);
+      const fd = openSync(filename, 'wx');
+      let stdout: string;
+      try {
+        stdout = execFileSync(
+          process.execPath,
+          ['--permission', '--allow-fs-read=*', '--max-old-space-size=64', bundle, mode],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+        );
+      } finally {
+        closeSync(fd);
+      }
+      expect(stdout.trimEnd().split('\n').at(-1)).toBe('3'.repeat(calls));
+      const text = readFileSync(filename, 'utf8');
+      const records = text
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(records.filter((record) => record.state === 'completed')).toHaveLength(1);
+      expect(records.at(-1).state).toBe('completed');
+      const { actual, actualMap } = await remapCounters(text);
+      expect(actual.state).toBe('completed');
+      const map = actualMap as unknown as Coverage;
+      const close = Object.entries(map.fnMap).find(([, fn]) => fn.loc.start.line === 16);
+      const used = Object.entries(map.fnMap).find(([, fn]) => fn.loc.start.line === 2);
+      if (!close || !used) throw new Error('Missing actual compiled cleanup functions.');
+      expect(map.f[close[0]]).toBe(calls);
+      expect(map.f[used[0]]).toBe(2 + calls);
+    }
   });
 
   it('builds the CLI and every child in a separate complete measurement layout', async () => {

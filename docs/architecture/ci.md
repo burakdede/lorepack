@@ -111,6 +111,14 @@ verify these cases, exact typed/private map replay and file-access denial under 
 permissions. Missing completion still needs campaign reconciliation; compiled children
 and complete campaign qualification remain open.
 
+Both collectors finalize after synchronous exit listeners return, including listeners
+registered later by owned modules. They delegate the original process emitter and use
+Node's verified `_exiting` state to ignore manually emitted events for finalization.
+Actual manual events still invoke their listeners normally. File and restricted compiled
+stream fixtures assert real cleanup hits and one final completion after all increments.
+The runtime boundary and upgrade qualification are recorded in
+[ADR 0018](../adr/0018-native-exit-finalization.md).
+
 Native preloads pass `pathToFileURL(...).href` to Node's `--import`; drive paths are
 not valid ESM specifiers on Windows. The native fixtures execute that same form.
 `reconcileNativeCapture` validates every lifecycle file, matched process/thread
