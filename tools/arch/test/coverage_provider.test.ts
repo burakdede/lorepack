@@ -982,16 +982,28 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     expect(Object.values(map.f).sort()).toEqual([0, 2]);
     expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
     const deniedFile = join(project, 'denied-write.txt');
-    const observable = `const {choose}=await import(${JSON.stringify(entry)});const writeAllowed=process.permission?.has('fs.write',${JSON.stringify(deniedFile)})??true;let deniedWrite=null;if(!writeAllowed){try{const {writeFileSync}=await import('node:fs');writeFileSync(${JSON.stringify(deniedFile)},'test');}catch(error){deniedWrite=error.code;}}console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url,preloaded:globalThis.userPreloadRan??false,writeAllowed,deniedWrite}));`;
+    const observable = `const {choose}=await import(${JSON.stringify(entry)});const writeAllowed=process.permission?.has('fs.write',${JSON.stringify(deniedFile)})??true;let deniedWrite=null;if(!writeAllowed){try{const {writeFileSync}=await import('node:fs');writeFileSync(${JSON.stringify(deniedFile)},'test');}catch(error){deniedWrite=error.code;}}console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url,preloaded:globalThis.userPreloadRan??false,writeAllowed,deniedWrite,required:globalThis.commonJsPreloadRan??false}));`;
     const arguments_ = ['--input-type=module', '--max-old-space-size=64', '-e', observable];
     const userPreload = join(project, 'user-preload.mjs');
     writeFileSync(userPreload, 'globalThis.userPreloadRan = true;');
+    const commonJsPreload = join(project, 'user-preload.cjs');
+    writeFileSync(commonJsPreload, 'globalThis.commonJsPreloadRan = true;');
     const launchArguments = [
       arguments_,
       ['--import', pathToFileURL(userPreload).href, ...arguments_],
       [`--import=${pathToFileURL(userPreload).href}`, ...arguments_],
       ['--permission', '--allow-fs-read=*', ...arguments_],
       ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...arguments_],
+      ['--no-warnings', ...arguments_],
+      [
+        '--experimental-import-meta-resolve',
+        '--require',
+        commonJsPreload,
+        '--conditions=node',
+        '--conditions',
+        'development',
+        ...arguments_,
+      ],
     ];
     const expectedLaunches = launchArguments.map((args) =>
       execFileSync(process.execPath, args, { encoding: 'utf8', env: {} }),
@@ -1031,10 +1043,10 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     }
     const automatic = await reconcileForkCapture(snapshot, directory, [preload]);
     expect(automatic.status).toBe('Pass');
-    expect(automatic.processes).toBe(10);
+    expect(automatic.processes).toBe(14);
     const automaticMap = (automatic.maps as Record<string, Coverage>)[join(project, path)];
     if (!automaticMap) throw new Error('Missing automatic eval coverage.');
-    expect(Object.values(automaticMap.f).sort()).toEqual([0, 20]);
+    expect(Object.values(automaticMap.f).sort()).toEqual([0, 28]);
     const script = join(project, 'temporary.mjs');
     writeFileSync(script, observable);
     const scriptArguments = [
@@ -1049,6 +1061,16 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       [`--import=${pathToFileURL(userPreload).href}`, ...scriptArguments],
       ['--permission', '--allow-fs-read=*', ...scriptArguments],
       ['--permission', '--allow-fs-read', '*', `--allow-fs-write=${project}`, ...scriptArguments],
+      ['--no-warnings', ...scriptArguments],
+      [
+        '--experimental-import-meta-resolve',
+        '--require',
+        commonJsPreload,
+        '--conditions=node',
+        '--conditions',
+        'development',
+        ...scriptArguments,
+      ],
     ];
     const expectedScripts = scriptLaunchArguments.map((args) =>
       execFileSync(process.execPath, args, { cwd: project, encoding: 'utf8', env: {} }),
@@ -1084,22 +1106,22 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     }
     const scriptCapture = await reconcileForkCapture(snapshot, scriptsDirectory, [scriptPreload]);
     expect(scriptCapture.status).toBe('Pass');
-    expect(scriptCapture.processes).toBe(10);
+    expect(scriptCapture.processes).toBe(14);
     const scriptMap = (scriptCapture.maps as Record<string, Coverage>)[join(project, path)];
     if (!scriptMap) throw new Error('Missing temporary script coverage.');
-    expect(Object.values(scriptMap.f).sort()).toEqual([0, 20]);
-    const unsupportedArguments = ['--no-warnings', ...arguments_];
-    const expectedUnsupported = execFileSync(process.execPath, unsupportedArguments, {
+    expect(Object.values(scriptMap.f).sort()).toEqual([0, 28]);
+    const unregisteredArguments = ['--no-warnings', ...arguments_];
+    const expectedUnregistered = execFileSync(process.execPath, unregisteredArguments, {
       encoding: 'utf8',
       env: {},
     });
     const unregisteredDirectory = join(project, 'unregistered-counters');
-    const audited = registerSyncCommandCapture([preload], unregisteredDirectory, true);
+    const audited = registerSyncCommandCapture([], unregisteredDirectory, true);
     try {
       const { execFileSync: executeSync } = await import('node:child_process');
       expect(
-        executeSync(process.execPath, unsupportedArguments, { encoding: 'utf8', env: {} }),
-      ).toBe(expectedUnsupported);
+        executeSync(process.execPath, unregisteredArguments, { encoding: 'utf8', env: {} }),
+      ).toBe(expectedUnregistered);
     } finally {
       audited.restore();
     }
