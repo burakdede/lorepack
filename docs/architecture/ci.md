@@ -168,7 +168,11 @@ artifacts. It verifies both hashes at registration and immediately before launch
 preserves the original four-descriptor IPC layout, and adds only the capture file
 descriptor. An explicitly registered measured child may use the same original and
 target file, adding the descriptor without changing its entrypoint.
-Unregistered launches delegate unchanged. It records actual child and
+Unregistered launches delegate unchanged.
+Shared measured targets retain each ordinary entrypoint's identity; an explicitly
+registered measured sibling takes priority over inferred target aliases. Duplicate
+ordinary entrypoints and targets that redirect to another target are rejected.
+It records actual child and
 parent identities, argument hashes, environment mode, requested kill results and
 observed close status; environment values and raw arguments are not recorded.
 The `settled()` finalizer drains child close receipts after the host returns. It
@@ -184,6 +188,14 @@ Normal build, HTTP query/SIGTERM and MCP client-close probes pass, but complete
 signal/failure qualification and installation into the campaign remain open.
 Extra existing descriptors remain unsupported; complete CLI/verification launch
 integration and parent-exit qualification remain open.
+
+`createCampaignRegistry` checks the generated CLI launch receipts and binds ordinary
+compiled and bundled entrypoints to measured targets. `registerCampaignCapture`
+installs fork, asynchronous command and synchronous command capture together,
+restores prior bindings if registration fails, and settles real closes before
+restoring the adapters. A real compiler/worker fixture reconciles ten independent
+executions including nested CLI children, preserving IPC, permissions, heap flags
+and exit7. Automatic worker setup and complete campaign integration remain open.
 
 `registerCommandCapture` intercepts the shared asynchronous `ChildProcess.spawn`
 method before descriptor normalization. Node's original `spawn`, callback `execFile`

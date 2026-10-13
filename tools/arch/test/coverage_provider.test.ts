@@ -19,6 +19,7 @@ import { prepareSource, renderCoverageConfig } from '../../../scripts/coverage_c
 import {
   buildNativeCli,
   compiledCapturePlugin,
+  createCampaignRegistry,
   prepareNativeCapture,
   reconcileForkCapture,
   reconcileNativeCapture,
@@ -658,6 +659,8 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     const before = included.map((entry) =>
       readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
     );
+    const { bundleCli } = await import('../../../scripts/bundle-cli.mjs');
+    await bundleCli({ root: project });
     const output = join(project, 'measurement/dist');
     const built = await buildNativeCli(captured, native, output);
     expect(built.receipts).toHaveLength(5);
@@ -720,6 +723,52 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     expect(parent.state).toBe('completed');
     expect(parent.exitCode).toBe(7);
     expect(Object.keys(parent.maps)).toHaveLength(1);
+    const registry = createCampaignRegistry(captured, launch);
+    expect(registry.forkEntries).toHaveLength(6);
+    expect(registry.commandEntries).toHaveLength(6);
+    const worker = join(project, 'captured-worker.mjs');
+    writeFileSync(
+      worker,
+      `import {fork,execFile,spawnSync} from 'node:child_process';
+import {promisify} from 'node:util';
+import {registerCampaignCapture,registerCommandCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)});
+const messages=[];
+for(const original of ${JSON.stringify(['packages/parsers/dist/parse-child.js', 'packages/backend-local/dist/sql/query-child.js'].map((path) => join(project, path)))}){
+ const child=fork(original,[],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],stdio:['ignore','ignore','ignore','ipc']});
+ messages.push(await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);}));child.kill('SIGKILL');
+}
+const archive=await promisify(execFile)(process.execPath,['--max-old-space-size=128',${JSON.stringify(join(project, 'packages/backend-local/dist/archive-verify-child.js'))}],{env:{}});
+const cli=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{env:{},encoding:'utf8'});
+await capture.settled();capture.restore();
+const before=fork,existing=registerCommandCapture(capture.registry.commandEntries,${JSON.stringify(launch.captureDirectory)});
+let registrationRejected=false;
+try{registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)});}catch(error){registrationRejected=error.message.includes('already registered');}
+const forkRestored=fork===before;existing.restore();
+const retry=registerCampaignCapture(${JSON.stringify(captured)},${JSON.stringify(launch)});await retry.settled();retry.restore();
+console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,cli:{status:cli.status,stdout:cli.stdout,stderr:cli.stderr}}));`,
+    );
+    const workerResult = JSON.parse(execFileSync(process.execPath, [worker], { encoding: 'utf8' }));
+    expect(workerResult.messages).toEqual([
+      { marker: 'measured', writeAllowed: false },
+      { marker: 'measured', writeAllowed: false },
+    ]);
+    expect(JSON.parse(workerResult.archive.stdout)).toEqual({
+      marker: 'measured',
+      execArgv: ['--max-old-space-size=128'],
+    });
+    expect(workerResult.archive.stderr).toBe('');
+    expect(workerResult.cli.status).toBe(7);
+    expect(workerResult.cli.stderr).toBe('');
+    expect(workerResult.cli.stdout).toBe(result.stdout);
+    expect(workerResult.registrationRejected).toBe(true);
+    expect(workerResult.forkRestored).toBe(true);
+    const workerCapture = await reconcileForkCapture(captured, launch.captureDirectory, [
+      ...registry.forkEntries,
+      ...registry.commandEntries,
+    ]);
+    expect(workerCapture.status).toBe('Pass');
+    expect(workerCapture.processes).toBe(10);
     for (const [filename, message] of [
       ['query-child.js', 'Fork capture entrypoint differs from its receipt.'],
       ['archive-verify-child.js', 'Command capture entrypoint differs from its receipt.'],
@@ -1278,7 +1327,7 @@ console.log(JSON.stringify({spawn:{status:spawn.status,stdout:spawn.stdout,stder
     ).rejects.toThrow('Unqualified fork interruption');
   });
 
-  it('captures an explicitly registered measured child without changing its entrypoint', async () => {
+  it('captures shared fork targets with explicit measured sibling identity', async () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const entry = {
       original: bundle,
@@ -1288,17 +1337,35 @@ console.log(JSON.stringify({spawn:{status:spawn.status,stdout:spawn.stdout,stder
       interruptionSignals: [],
     };
     const directory = join(root, 'self-fork-records');
+    const aliases = ['first-fork-alias.mjs', 'second-fork-alias.mjs'].map((filename) => {
+      const original = join(root, filename);
+      writeFileSync(original, 'throw new Error("The alias must be redirected");');
+      return {
+        ...entry,
+        original,
+        originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+      };
+    });
+    const entries = [entry, ...aliases];
     const parent = join(root, 'self-fork-parent.mjs');
     writeFileSync(
       parent,
       `import {fork} from 'node:child_process';
 import {registerForkCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
-const capture=registerForkCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
-const child=fork(${JSON.stringify(bundle)},['exit'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']});
-const message=await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);});
+const entries=${JSON.stringify(entries)};
+const capture=registerForkCapture(entries,${JSON.stringify(directory)});
+const messages=[];
+for(const entry of entries){
+ const child=fork(entry.original,['exit'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],serialization:'advanced',stdio:['ignore','ignore','ignore','ipc']});
+ messages.push(await new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);}));
+}
 await capture.settled();capture.restore();
-const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},[${JSON.stringify(entry)}],${JSON.stringify(maps)});
-console.log(JSON.stringify({message,launch:capture.launches[0],reconciled}));`,
+const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},entries,${JSON.stringify(maps)});
+const invalid=[];
+for(const bad of [[entries[0],entries[0]],[entries[0],{...entries[1],target:entries[2].original,targetSha256:entries[2].originalSha256},entries[2]]]){
+ try{registerForkCapture(bad,${JSON.stringify(directory)});}catch(error){invalid.push(error.message);}
+}
+console.log(JSON.stringify({messages,launches:capture.launches,reconciled,invalid}));`,
     );
     const result = JSON.parse(
       execFileSync(process.execPath, [parent], {
@@ -1306,20 +1373,34 @@ console.log(JSON.stringify({message,launch:capture.launches[0],reconciled}));`,
         stdio: ['ignore', 'pipe', 'pipe'],
       }),
     );
-    expect(result.message.outputs).toEqual([
-      [2, 'yes'],
-      [2, 'no'],
+    expect(result.messages).toHaveLength(3);
+    for (const message of result.messages) {
+      expect(message.outputs).toEqual([
+        [2, 'yes'],
+        [2, 'no'],
+      ]);
+      expect(message.writeAllowed).toBe(false);
+    }
+    expect(result.launches.map((launch: { original: string }) => launch.original)).toEqual(
+      entries.map((entry) => entry.original),
+    );
+    expect(result.launches.every((launch: { target: string }) => launch.target === bundle)).toBe(
+      true,
+    );
+    expect(result.reconciled.processes).toBe(3);
+    expect(result.invalid).toEqual([
+      'Duplicate fork capture entrypoint.',
+      'Ambiguous fork capture target.',
     ]);
-    expect(result.message.writeAllowed).toBe(false);
-    expect(result.launch.original).toBe(bundle);
-    expect(result.launch.target).toBe(bundle);
-    expect(result.reconciled.processes).toBe(1);
     expect(result.reconciled.executions[0]).toMatchObject({ state: 'completed', exitCode: 0 });
     const actual = result.reconciled.maps[join(root, 'private.ts')];
     const expected = maps[join(root, 'private.ts')];
     if (!actual || !expected) throw new Error('Missing measured self-fork counters.');
-    for (const field of ['s', 'f', 'b'])
-      expect(actual[field]).toEqual(expected[field as keyof Coverage]);
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(expected[field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 3);
+    for (const [key, arms] of Object.entries(expected.b))
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 3));
   });
 
   it('reconciles actual shutdown microtasks against observed host close', async () => {

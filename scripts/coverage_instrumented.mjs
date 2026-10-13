@@ -51,10 +51,14 @@ export function registerForkCapture(entries, directory) {
       digest(readFileSync(target)) !== entry.targetSha256
     )
       throw new Error('Fork capture entrypoint differs from its receipt.');
-    for (const filename of new Set([original, target])) {
-      if (targets.has(filename)) throw new Error('Duplicate fork capture entrypoint.');
-      targets.set(filename, { ...entry, original, target });
-    }
+    if (targets.has(original)) throw new Error('Duplicate fork capture entrypoint.');
+    targets.set(original, { ...entry, original, target });
+  }
+  for (const entry of [...targets.values()]) {
+    const registered = targets.get(entry.target);
+    if (registered && registered.target !== entry.target)
+      throw new Error('Ambiguous fork capture target.');
+    if (!registered) targets.set(entry.target, entry);
   }
   mkdirSync(directory, { recursive: true });
   const originalFork = childProcess.fork;
@@ -409,6 +413,79 @@ export function registerSyncCommandCapture(entries, directory) {
       Object.assign(childProcess, originals);
       delete globalThis[syncCollector];
       syncBuiltinESMExports();
+    },
+  };
+}
+
+export function createCampaignRegistry(snapshot, launch) {
+  const root = realpathSync(snapshot.root);
+  if (
+    launch.schema !== 1 ||
+    launch.provider !== 'istanbul@4.1.11' ||
+    digest(readFileSync(launch.entry)) !== launch.entrySha256 ||
+    digest(readFileSync(launch.entrypoint)) !== launch.entrypointSha256
+  )
+    throw new Error('Campaign CLI launch differs from its receipt.');
+  const alias = (path, target) => {
+    const original = realpathSync(join(root, path));
+    return { ...target, original, originalSha256: digest(readFileSync(original)) };
+  };
+  const forkEntries = [...launch.forkEntries];
+  for (const entry of launch.forkEntries) {
+    const filename = basename(entry.target);
+    const compiled =
+      filename === 'parse-child.js'
+        ? 'packages/parsers/dist/parse-child.js'
+        : filename === 'query-child.js'
+          ? 'packages/backend-local/dist/sql/query-child.js'
+          : null;
+    if (!compiled) throw new Error('Unknown campaign fork target.');
+    forkEntries.push(alias(compiled, entry), alias(`packages/cli/dist/${filename}`, entry));
+  }
+  const commandEntries = [...launch.commandEntries];
+  for (const entry of launch.commandEntries) {
+    if (basename(entry.target) !== 'archive-verify-child.js')
+      throw new Error('Unknown campaign command target.');
+    commandEntries.push(
+      alias('packages/backend-local/dist/archive-verify-child.js', entry),
+      alias('packages/cli/dist/archive-verify-child.js', entry),
+    );
+  }
+  const cli = {
+    original: launch.entry,
+    target: launch.entry,
+    originalSha256: launch.entrySha256,
+    targetSha256: launch.entrySha256,
+    interruptionSignals: ['SIGTERM', 'SIGKILL'],
+  };
+  commandEntries.push(
+    cli,
+    alias('packages/cli/dist/entry.js', cli),
+    alias('packages/cli/dist/public-entry.js', cli),
+  );
+  return { forkEntries, commandEntries };
+}
+
+export function registerCampaignCapture(snapshot, launch) {
+  const registry = createCampaignRegistry(snapshot, launch);
+  const captures = [];
+  try {
+    captures.push(registerForkCapture(registry.forkEntries, launch.captureDirectory));
+    captures.push(registerCommandCapture(registry.commandEntries, launch.captureDirectory));
+    captures.push(registerSyncCommandCapture(registry.commandEntries, launch.captureDirectory));
+  } catch (error) {
+    for (const capture of captures.reverse()) capture.restore();
+    throw error;
+  }
+  return {
+    registry,
+    async settled() {
+      await Promise.all(
+        captures.filter((capture) => capture.settled).map((capture) => capture.settled()),
+      );
+    },
+    restore() {
+      for (const capture of [...captures].reverse()) capture.restore();
     },
   };
 }
