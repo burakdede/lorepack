@@ -1,8 +1,11 @@
+import childProcess from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  closeSync,
   cpSync,
   linkSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -11,7 +14,7 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { createRequire, registerHooks } from 'node:module';
+import { createRequire, registerHooks, syncBuiltinESMExports } from 'node:module';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -19,8 +22,127 @@ import { threadId } from 'node:worker_threads';
 import { prepareSource } from './coverage_configuration.mjs';
 
 const active = Symbol.for('lorepack.nativeCoverageCollector');
+const forkCollector = Symbol.for('lorepack.nativeForkCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+
+export function registerForkCapture(entries, directory) {
+  if (globalThis[forkCollector]) throw new Error('Fork capture is already registered.');
+  const targets = new Map();
+  for (const entry of entries) {
+    const original = realpathSync(entry.original);
+    const target = realpathSync(entry.target);
+    if (
+      digest(readFileSync(original)) !== entry.originalSha256 ||
+      digest(readFileSync(target)) !== entry.targetSha256
+    )
+      throw new Error('Fork capture entrypoint differs from its receipt.');
+    for (const filename of [original, target]) {
+      if (targets.has(filename)) throw new Error('Duplicate fork capture entrypoint.');
+      targets.set(filename, { ...entry, original, target });
+    }
+  }
+  mkdirSync(directory, { recursive: true });
+  const originalFork = childProcess.fork;
+  const pending = [];
+  const launches = [];
+  function measuredFork(...parameters) {
+    let [modulePath, args, options] = parameters;
+    let filename = modulePath instanceof URL ? fileURLToPath(modulePath) : resolve(modulePath);
+    try {
+      filename = realpathSync(filename);
+    } catch {}
+    const entry = targets.get(filename);
+    if (!entry) return originalFork.apply(this, parameters);
+    if (args != null && !Array.isArray(args)) {
+      if (typeof args !== 'object') return originalFork.apply(this, parameters);
+      options = args;
+      args = [];
+    }
+    args ??= [];
+    options ??= {};
+    const stdio = options.stdio ?? (options.silent ? 'pipe' : 'inherit');
+    const streams = Array.isArray(stdio) ? [...stdio] : [stdio, stdio, stdio, 'ipc'];
+    if (streams.length !== 4 || streams[3] !== 'ipc')
+      throw new Error('Fork capture requires the original four-descriptor IPC layout.');
+    if (
+      digest(readFileSync(entry.original)) !== entry.originalSha256 ||
+      digest(readFileSync(entry.target)) !== entry.targetSha256
+    )
+      throw new Error('Fork capture entrypoint changed before launch.');
+    const id = randomUUID();
+    const capture = join(directory, `${id}.counters.jsonl`);
+    const fd = openSync(capture, 'wx');
+    let child;
+    try {
+      child = originalFork.call(this, entry.target, args, { ...options, stdio: [...streams, fd] });
+    } catch (error) {
+      closeSync(fd);
+      throw error;
+    }
+    const record = {
+      schema: 1,
+      id,
+      provider: 'istanbul@4.1.11',
+      parentPid: process.pid,
+      parentThreadId: threadId,
+      pid: child.pid ?? null,
+      original: entry.original,
+      target: entry.target,
+      originalSha256: entry.originalSha256,
+      targetSha256: entry.targetSha256,
+      environment:
+        options.env === undefined
+          ? 'inherited'
+          : Object.keys(options.env).length
+            ? 'explicit'
+            : 'empty',
+      argumentsSha256: digest(
+        JSON.stringify({ args, execArgv: options.execArgv ?? process.execArgv }),
+      ),
+    };
+    publish(directory, `${id}.launch.json`, record);
+    launches.push(record);
+    const kills = [];
+    const kill = child.kill;
+    child.kill = function (signal) {
+      const result = kill.call(this, signal);
+      kills.push({ signal: signal ?? 'SIGTERM', result });
+      return result;
+    };
+    pending.push(
+      new Promise((resolveClosed) => {
+        child.prependOnceListener('close', (code, signal) => {
+          closeSync(fd);
+          publish(directory, `${id}.close.json`, { ...record, code, signal, kills });
+          resolveClosed();
+        });
+      }),
+    );
+    return child;
+  }
+  childProcess.fork = measuredFork;
+  globalThis[forkCollector] = measuredFork;
+  syncBuiltinESMExports();
+  return {
+    launches,
+    async settled() {
+      // A query deliberately unrefs its child; only capture finalization waits for close.
+      const keepAlive = setInterval(() => {}, 1000);
+      try {
+        await Promise.all(pending);
+      } finally {
+        clearInterval(keepAlive);
+      }
+    },
+    restore() {
+      if (childProcess.fork !== measuredFork) throw new Error('Fork capture binding changed.');
+      childProcess.fork = originalFork;
+      delete globalThis[forkCollector];
+      syncBuiltinESMExports();
+    },
+  };
+}
 
 export async function buildNativeCli(snapshot, preparations, output) {
   const root = realpathSync(snapshot.root);
