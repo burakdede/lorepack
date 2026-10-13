@@ -28,6 +28,7 @@ const active = Symbol.for('lorepack.nativeCoverageCollector');
 const forkCollector = Symbol.for('lorepack.nativeForkCollector');
 const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
 const syncCollector = Symbol.for('lorepack.nativeSyncCollector');
+const capturedForkSpawn = Symbol.for('lorepack.capturedForkSpawn');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -42,7 +43,27 @@ function afterProcessExit(callback) {
   };
 }
 
-export function registerForkCapture(entries, directory) {
+function recordUnregisteredNode(directory, kind, args) {
+  const optionNames = [];
+  const values = Array.isArray(args) ? args : [];
+  for (const value of values[0] === process.execPath ? values.slice(1) : values) {
+    if (typeof value !== 'string' || !/^--[a-z][a-z0-9-]*(?:=.*)?$/.test(value)) break;
+    const name = value.split('=')[0];
+    optionNames.push(name);
+    if (name === '--eval' || name === '--print') break;
+  }
+  publish(directory, `${randomUUID()}.unregistered.json`, {
+    schema: 1,
+    provider: 'istanbul@4.1.11',
+    kind,
+    parentPid: process.pid,
+    parentThreadId: threadId,
+    argumentsSha256: digest(JSON.stringify(args)),
+    optionNames,
+  });
+}
+
+export function registerForkCapture(entries, directory, audit = false) {
   if (globalThis[forkCollector]) throw new Error('Fork capture is already registered.');
   const targets = new Map();
   for (const entry of entries) {
@@ -73,7 +94,10 @@ export function registerForkCapture(entries, directory) {
       filename = realpathSync(filename);
     } catch {}
     const entry = targets.get(filename);
-    if (!entry) return originalFork.apply(this, parameters);
+    if (!entry) {
+      if (audit) recordUnregisteredNode(directory, 'fork', parameters.slice(0, 2));
+      return originalFork.apply(this, parameters);
+    }
     if (args != null && !Array.isArray(args)) {
       if (typeof args !== 'object') return originalFork.apply(this, parameters);
       options = args;
@@ -95,7 +119,11 @@ export function registerForkCapture(entries, directory) {
     const fd = openSync(capture, 'wx');
     let child;
     try {
-      child = originalFork.call(this, entry.target, args, { ...options, stdio: [...streams, fd] });
+      child = originalFork.call(this, entry.target, args, {
+        ...options,
+        [capturedForkSpawn]: true,
+        stdio: [...streams, fd],
+      });
     } catch (error) {
       closeSync(fd);
       throw error;
@@ -222,7 +250,7 @@ function selectCommand(registry, args, cwd) {
   return { entry, index };
 }
 
-export function registerCommandCapture(entries, directory) {
+export function registerCommandCapture(entries, directory, audit = false) {
   if (globalThis[commandCollector]) throw new Error('Command capture is already registered.');
   const targets = new Map();
   for (const entry of entries) {
@@ -246,8 +274,13 @@ export function registerCommandCapture(entries, directory) {
   function measuredSpawn(options) {
     if (options.file !== process.execPath && options.file !== node)
       return originalSpawn.call(this, options);
+    if (options[capturedForkSpawn]) return originalSpawn.call(this, options);
     const selected = selectCommand(targets, options.args?.slice(1), options.cwd);
-    if (!selected) return originalSpawn.call(this, options);
+    if (!selected) {
+      if (audit && !['--version', '--help'].includes(options.args?.[1]))
+        recordUnregisteredNode(directory, 'async', options.args);
+      return originalSpawn.call(this, options);
+    }
     const { entry, index } = selected;
     if (
       digest(readFileSync(entry.original)) !== entry.originalSha256 ||
@@ -334,7 +367,7 @@ export function registerCommandCapture(entries, directory) {
   };
 }
 
-export function registerSyncCommandCapture(entries, directory) {
+export function registerSyncCommandCapture(entries, directory, audit = false) {
   if (globalThis[syncCollector]) throw new Error('Synchronous capture is already registered.');
   const registry = new Map();
   for (const entry of entries) {
@@ -354,7 +387,10 @@ export function registerSyncCommandCapture(entries, directory) {
   const launches = [];
   function select(file, args, options) {
     if (file !== process.execPath) return null;
-    return selectCommand(registry, args, options?.cwd);
+    const selected = selectCommand(registry, args, options?.cwd);
+    if (!selected && audit && !['--version', '--help'].includes(args?.[0]))
+      recordUnregisteredNode(directory, 'sync', args);
+    return selected;
   }
   function measured(selected, args, options) {
     const { entry, index } = selected;
@@ -528,9 +564,11 @@ export function registerCampaignCapture(snapshot, launch) {
   const registry = createCampaignRegistry(snapshot, launch);
   const captures = [];
   try {
-    captures.push(registerForkCapture(registry.forkEntries, launch.captureDirectory));
-    captures.push(registerCommandCapture(registry.commandEntries, launch.captureDirectory));
-    captures.push(registerSyncCommandCapture(registry.commandEntries, launch.captureDirectory));
+    captures.push(registerForkCapture(registry.forkEntries, launch.captureDirectory, true));
+    captures.push(registerCommandCapture(registry.commandEntries, launch.captureDirectory, true));
+    captures.push(
+      registerSyncCommandCapture(registry.commandEntries, launch.captureDirectory, true),
+    );
   } catch (error) {
     for (const capture of captures.reverse()) capture.restore();
     throw error;
@@ -564,6 +602,33 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     registry.set(original, { ...entry, original, target });
   }
   const files = readdirSync(directory).sort();
+  const unregistered = files
+    .filter((file) => file.endsWith('.unregistered.json'))
+    .map((file) => JSON.parse(readFileSync(join(directory, file), 'utf8')));
+  for (const record of unregistered) {
+    if (
+      record.schema !== 1 ||
+      record.provider !== 'istanbul@4.1.11' ||
+      !['fork', 'async', 'sync'].includes(record.kind) ||
+      !Number.isSafeInteger(record.parentPid) ||
+      record.parentPid <= 0 ||
+      !Number.isSafeInteger(record.parentThreadId) ||
+      record.parentThreadId < 0 ||
+      !/^[0-9a-f]{64}$/.test(record.argumentsSha256) ||
+      !Array.isArray(record.optionNames) ||
+      record.optionNames.some(
+        (value) => typeof value !== 'string' || !/^--[a-z][a-z0-9-]*$/.test(value),
+      )
+    )
+      throw new Error('Invalid unregistered Node launch evidence.');
+  }
+  if (unregistered.length)
+    throw Object.assign(
+      new Error(
+        `Unregistered Node launches prevent native qualification: ${unregistered.map((record) => `${record.kind} ${record.optionNames.join(',')}`).join('; ')}`,
+      ),
+      { unregistered },
+    );
   const consumed = new Set();
   const identities = new Set();
   const executions = [];

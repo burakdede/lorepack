@@ -1016,6 +1016,32 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     const scriptMap = (scriptCapture.maps as Record<string, Coverage>)[join(project, path)];
     if (!scriptMap) throw new Error('Missing temporary script coverage.');
     expect(Object.values(scriptMap.f).sort()).toEqual([0, 4]);
+    const unsupportedArguments = ['--no-warnings', ...arguments_];
+    const expectedUnsupported = execFileSync(process.execPath, unsupportedArguments, {
+      encoding: 'utf8',
+      env: {},
+    });
+    const unregisteredDirectory = join(project, 'unregistered-counters');
+    const audited = registerSyncCommandCapture([preload], unregisteredDirectory, true);
+    try {
+      const { execFileSync: executeSync } = await import('node:child_process');
+      expect(
+        executeSync(process.execPath, unsupportedArguments, { encoding: 'utf8', env: {} }),
+      ).toBe(expectedUnsupported);
+    } finally {
+      audited.restore();
+    }
+    const unregisteredFiles = readdirSync(unregisteredDirectory);
+    expect(unregisteredFiles).toHaveLength(1);
+    const unregistered = readFileSync(
+      join(unregisteredDirectory, unregisteredFiles[0] as string),
+      'utf8',
+    );
+    expect(unregistered).not.toContain(observable);
+    expect(JSON.parse(unregistered).optionNames).toContain('--no-warnings');
+    await expect(reconcileForkCapture(snapshot, unregisteredDirectory, [preload])).rejects.toThrow(
+      'Unregistered Node launches',
+    );
   });
 
   it('binds compilation to the real original artifact, map and source without editing them', () => {
