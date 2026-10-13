@@ -172,7 +172,12 @@ The builder and `registerCompiledCapture` share one checked compiled-input reade
 An explicit Node preload captures owned raw compiled imports through the same
 instrumentation and descriptor stream, including imports from `--eval`. A real
 fixture preserves ordinary output and unused-function zero counts. Automatic
-capture of unregistered eval and temporary-script launches remains unfinished.
+`createEvalCapture` adds a checked preload entry for async and sync Node eval
+launches. Its receipt identifies eval-import mode, and the preload removes only
+its injected arguments from `process.execArgv` before the original program runs.
+Real executions preserve output, argv, environment, cwd and module URL, then
+reconcile actual process closes and source counters. Installing this entry in the
+complete campaign and capturing temporary-script launches remain unfinished.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
 entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
 parser/query forks and the archive verifier's heap-prefixed command, records their
