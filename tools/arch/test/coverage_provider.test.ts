@@ -664,14 +664,14 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       );
     }
     const native = join(project, 'native');
-    await prepareNativeCapture(captured, preparation, native);
+    await prepareNativeCapture(captured, preparation, native, '__LOREPACK_CAMPAIGN_COVERAGE__');
     const before = included.map((entry) =>
       readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
     );
     const { bundleCli } = await import('../../../scripts/bundle-cli.mjs');
     await bundleCli({ root: project });
     const output = join(project, 'measurement/dist');
-    const built = await buildNativeCli(captured, native, output);
+    const built = await buildNativeCli(captured, native, output, '__LOREPACK_CAMPAIGN_COVERAGE__');
     expect(built.receipts).toHaveLength(6);
     for (const file of [
       'public-entry.js',
