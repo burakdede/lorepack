@@ -164,6 +164,10 @@ source-map remapper for native-capture qualification. Reusing the bundled engine
 avoids an independently versioned instrumentation dependency. The regression runs
 real Node code and verifies default initializers, unused private methods and early
 throws. Full child capture remains a release gate.
+The patch also counts default-export expressions with its existing statement
+visitor. A real native configuration regression was red before this correction.
+All 17 repository configurations preserve their earlier statement/function/branch
+counts; no configuration source is dropped or reclassified as nonexecuted.
 
 Studio pins `vite` at 7.3.7 on the existing 7.x major. This maintained patch includes
 the published development-server fixes, including the

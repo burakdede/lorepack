@@ -602,12 +602,16 @@ completed, empty and rejected execution; interrupted capture remains incomplete.
 Reconciliation validates matched lifecycle identities, loaded-source hashes and exact
 maps before merging each final snapshot once. Rejected or incomplete records produce
 unavailable aggregates. Native preloads use file URLs for Windows compatibility.
-Complete campaign integration and compiled-child qualification remain open.
+Subprocess integration and compiled-child qualification remain open.
+Configuration capture now prepares source maps before native execution, verifies
+all configuration assertions, and reconciles process evidence before bundling counts.
+The provider patch retains default-export expression statements so configurations
+keep their measured statement scope.
 Direct coverage uses pinned Istanbul instrumentation with a recorded dependency patch
 to retain private-method counters and empty source records. The patch also exposes its
 instrumenter and remapper for native-capture qualification, with real initializer and
-early-throw regression tests. Complete configuration and
-subprocess measurement, and the release coverage targets, remain open. See the
+early-throw regression tests. Complete subprocess measurement and the release
+coverage targets remain open. See the
 [provider decision](docs/adr/0017-instrumented-coverage.md) and CI guide.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
