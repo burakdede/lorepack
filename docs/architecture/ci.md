@@ -177,7 +177,11 @@ launches. Its receipt identifies eval-import mode, and the preload removes only
 its injected arguments from `process.execArgv` before the original program runs.
 Real executions preserve output, argv, environment, cwd and module URL, then
 reconcile actual process closes and source counters. Installing this entry in the
-complete campaign and capturing temporary-script launches remain unfinished.
+complete campaign remains unfinished. The same checked preload supports an
+explicit script-import mode for unregistered script files with the original heap
+prefix. File launches preserve their module URL and application arguments;
+`--eval` after the script path remains an application argument. Async and sync
+temporary-script executions reconcile through that explicit launch mode.
 It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
 entry wrappers, measured bodies, shared chunks, source maps and initialization module by SHA256. The bootstrap registers measured
 parser/query forks and the archive verifier's heap-prefixed command, records their
