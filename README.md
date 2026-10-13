@@ -531,6 +531,8 @@ Subprocess integration and compiled-child qualification remain open.
 Compiled-capture fixtures instrument canonical preparations before bundling and replay
 real counters through a separate inherited descriptor, preserving IPC and permissions.
 Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
+Compiled measurement replays checked provider preparations while retaining ordinary
+compiler artifacts and their source-bound hash receipts.
 Forced termination retains counters with an incomplete lifecycle; it does not qualify
 complete capture. Production child integration remains required.
 Configuration capture now prepares source maps before native execution, verifies

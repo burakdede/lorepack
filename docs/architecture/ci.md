@@ -124,7 +124,15 @@ validity alone does not establish the original all-owned coverage targets.
 Vitest hard-excludes configuration files, even with an explicit coverage include.
 Compiled-child qualification fixtures instrument canonical preparations before
 bundling with esbuild. Instrumenting TypeScript compiler output after compilation
-does not reproduce the direct provider's source locations. `registerCounterStream`
+does not reproduce the direct provider's source locations. `compiledCapturePlugin`
+uses the original emitted artifact's single-source map to identify its owned input,
+then loads the checked canonical instrumented preparation. The ordinary artifact
+and map remain untouched. Receipts bind both emitted files, original source bytes
+and instrumented code by SHA256; differing mapped sources, stale originals,
+altered preparations or changing inputs between loads fail compilation. The plugin
+supports the project's standard TypeScript `src` to `dist` layout and rejects
+unowned package distribution modules. Measurement bundles require a separate output
+directory and keep normal relative imports. `registerCounterStream`
 uses a separate inherited descriptor (4 or greater), preserving the existing IPC
 descriptor and child permissions. It forwards actual engine source registrations
 and cumulative counter mutations with contiguous sequence numbers. Strict replay

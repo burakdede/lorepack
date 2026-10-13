@@ -10,7 +10,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
-import { join } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { threadId } from 'node:worker_threads';
@@ -19,6 +19,91 @@ import { prepareSource } from './coverage_configuration.mjs';
 const active = Symbol.for('lorepack.nativeCoverageCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+
+export function compiledCapturePlugin(snapshot, preparations) {
+  const root = realpathSync(snapshot.root);
+  const artifacts = new Map(
+    snapshot.included
+      .filter((entry) => /\.tsx?$/.test(entry.path))
+      .map((entry) => {
+        const compiled = entry.path.includes('/src/')
+          ? entry.path.replace('/src/', '/dist/')
+          : `dist/${entry.path}`;
+        return [join(root, compiled.replace(/\.tsx?$/, '.js')), entry];
+      }),
+  );
+  const receipts = new Map();
+  return {
+    receipts,
+    plugin: {
+      name: 'source-bound-compiled-capture',
+      setup(builder) {
+        builder.onLoad({ filter: /\.js$/ }, (args) => {
+          const filename = resolve(args.path);
+          const entry = artifacts.get(filename);
+          if (!entry) {
+            if (/^packages\/[^/]+\/dist\//.test(relative(root, filename).split(sep).join('/')))
+              throw new Error(`Unowned compiled capture input: ${filename}`);
+            return;
+          }
+          const bytes = readFileSync(filename);
+          const mapBytes = readFileSync(`${filename}.map`);
+          const map = JSON.parse(mapBytes.toString('utf8'));
+          if (
+            map.version !== 3 ||
+            map.file !== basename(filename) ||
+            !Array.isArray(map.sources) ||
+            map.sources.length !== 1 ||
+            typeof map.sources[0] !== 'string' ||
+            typeof map.mappings !== 'string'
+          )
+            throw new Error(`Unsupported compiled capture map: ${filename}`);
+          const source = map.sources[0].startsWith('file:')
+            ? fileURLToPath(map.sources[0])
+            : resolve(dirname(filename), map.sourceRoot ?? '', map.sources[0]);
+          if (source !== join(root, entry.path))
+            throw new Error(`Compiled capture mapped source differs: ${filename}`);
+          const prepared = JSON.parse(
+            readFileSync(join(preparations, `${digest(entry.path)}.json`), 'utf8'),
+          );
+          const expected = prepareSource(snapshot, source, prepared.code, prepared.map);
+          for (const key of ['schema', 'kind', 'provider', 'path', 'sha256'])
+            if (prepared[key] !== expected[key])
+              throw new Error(`Compiled preparation identity differs: ${entry.path}`);
+          if (
+            prepared.coverageVariable !== variable ||
+            typeof prepared.instrumentedCode !== 'string' ||
+            digest(prepared.instrumentedCode) !== prepared.instrumentedSha256
+          )
+            throw new Error(`Compiled instrumented preparation differs: ${entry.path}`);
+          if (
+            map.sourcesContent != null &&
+            (!Array.isArray(map.sourcesContent) ||
+              map.sourcesContent.length !== 1 ||
+              map.sourcesContent[0] !== readFileSync(source, 'utf8'))
+          )
+            throw new Error(`Compiled capture mapped content differs: ${filename}`);
+          const receipt = {
+            path: entry.path,
+            sha256: entry.sha256,
+            artifact: filename,
+            artifactSha256: digest(bytes),
+            artifactMapSha256: digest(mapBytes),
+            instrumentedSha256: prepared.instrumentedSha256,
+          };
+          if (receipts.has(filename) && !isDeepStrictEqual(receipts.get(filename), receipt))
+            throw new Error(`Compiled input changed between loads: ${filename}`);
+          receipts.set(filename, receipt);
+          return {
+            contents: prepared.instrumentedCode,
+            loader: 'js',
+            resolveDir: dirname(filename),
+          };
+        });
+      },
+    },
+  };
+}
 
 export function registerCounterStream(fd) {
   if (!Number.isSafeInteger(fd) || fd < 4)
