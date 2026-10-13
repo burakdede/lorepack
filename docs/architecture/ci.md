@@ -167,7 +167,7 @@ resolved environment; no values are recorded or changed. Kill receipts retain ac
 numeric signals from Node's timeout handling. Reconciliation matches them against
 the platform's signal constants and observed close signal.
 Real fixtures retain exact callback/promise results, nonzero errors, timeout behavior
-and output truncation, with seven independent executions contributing exactly seven
+and output truncation, with eight independent executions contributing exactly eight
 times the direct counts. Synchronous launches and complete campaign integration remain open.
 
 `registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
@@ -179,6 +179,10 @@ increments and mismatched completion identities. It never sums cumulative values
 actual child PID and all capture files before remapping. A normal exit must match the
 counter completion code. An interrupted stream requires an explicitly permitted signal
 and a successful matching host kill receipt. Its state remains `interrupted`.
+The JavaScript exit event can precede OS termination: a successful host kill during
+that window retains `counterState: completed` and its reported code, while the host
+lifecycle remains `interrupted` with the actual signal and null exit code. A real
+child held inside an exit callback verifies this ordering without synthesizing records.
 Missing, truncated, orphaned and repeated execution streams reject qualification.
 Every source layout must match direct and previously merged maps; each independent
 execution contributes once. Real normal/interrupted child fixtures verify exact merged

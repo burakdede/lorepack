@@ -387,6 +387,7 @@ if (process.argv[3] === 'inspect') Object.assign(result, {execArgv: process.exec
 if (process.send) process.send(result);
 else console.log(JSON.stringify(result));
 if (process.argv[2] === 'fail') {process.stderr.write('fixture failure\\n');process.exitCode=7;}
+if (process.argv[2] === 'exit-window') process.once('exit',()=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10000));
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -772,6 +773,8 @@ console.log(JSON.stringify({message,optionsUnchanged:before===JSON.stringify(opt
       parent,
       `import {spawn,execFile} from 'node:child_process';
 import {readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {setTimeout as delay} from 'node:timers/promises';
 import {promisify} from 'node:util';
 import {registerCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
 const executeBefore = promisify(execFile);
@@ -799,6 +802,19 @@ try {await executeBefore(process.execPath,[${JSON.stringify(original)},'exit'],{
 let extraDescriptorsRejected=false;
 try {spawn(process.execPath,[${JSON.stringify(original)}],{stdio:['ignore','ignore','ignore','ignore']});} catch(error) {extraDescriptorsRejected=error.message.includes('three-descriptor');}
 const foreign=await executeBefore(process.execPath,['--input-type=module','-e','console.log(JSON.stringify(process.argv.slice(1)))',${JSON.stringify(original)}],{env:{}});
+const closing=spawn(process.execPath,[${JSON.stringify(original)},'exit-window'],{env:{},stdio:['ignore','ignore','ignore']});
+const closingLaunch=capture.launches.at(-1);
+let exitRecorded=false;
+for(let attempt=0;attempt<200;attempt++) {
+ const stream=readFileSync(join(${JSON.stringify(directory)},closingLaunch.id+'.counters.jsonl'),'utf8');
+ const last=stream.lastIndexOf('\\n');
+ const lines=last<0?[]:stream.slice(0,last).split('\\n').filter(Boolean);
+ exitRecorded=lines.some(line=>JSON.parse(line).state==='completed');
+ if(exitRecorded) break;
+ await delay(5);
+}
+if(!exitRecorded) throw new Error('The deterministic exit window was not reached');
+const closingKilled=closing.kill('SIGTERM');
 await capture.settled();
 const originalTarget=readFileSync(${JSON.stringify(bundle)});
 let changedEntryRejected=false;
@@ -808,7 +824,7 @@ try {
 } finally {writeFileSync(${JSON.stringify(bundle)},originalTarget);}
 capture.restore();
 const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},${JSON.stringify(entries)});
-console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,extraDescriptorsRejected,changedEntryRejected,foreign,optionsUnchanged:before===JSON.stringify(options),duplicateRejected,launches:capture.launches,reconciled}));
+console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,closingKilled,extraDescriptorsRejected,changedEntryRejected,foreign,optionsUnchanged:before===JSON.stringify(options),duplicateRejected,launches:capture.launches,reconciled}));
 `,
     );
     const result = JSON.parse(
@@ -849,7 +865,7 @@ console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,extraDescriptorsR
     expect(result.extraDescriptorsRejected).toBe(true);
     expect(result.changedEntryRejected).toBe(true);
     expect(JSON.parse(result.foreign.stdout)).toEqual([original]);
-    expect(result.launches).toHaveLength(7);
+    expect(result.launches).toHaveLength(8);
     expect(
       result.launches.slice(0, 4).map((launch: { original: string }) => launch.original),
     ).toEqual([original, alias, original, bundle]);
@@ -858,11 +874,22 @@ console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,extraDescriptorsR
         (launch: { environment: string }) => launch.environment === 'normalized',
       ),
     ).toBe(true);
-    expect(result.reconciled.processes).toBe(7);
+    expect(result.reconciled.processes).toBe(8);
     const timedOut = result.reconciled.executions.find(
       (execution: { launchId: string }) => execution.launchId === result.launches[5].id,
     );
     expect(timedOut).toMatchObject({ state: 'interrupted', signal: 'SIGTERM', exitCode: null });
+    expect(result.closingKilled).toBe(true);
+    const closing = result.reconciled.executions.find(
+      (execution: { launchId: string }) => execution.launchId === result.launches[7].id,
+    );
+    expect(closing).toMatchObject({
+      state: 'interrupted',
+      exitCode: null,
+      signal: 'SIGTERM',
+      counterState: 'completed',
+      counterExitCode: 0,
+    });
     const filename = join(root, 'private.ts');
     const actual = result.reconciled.maps[filename];
     if (!maps[filename] || !actual) throw new Error('Missing reconciled command map.');
@@ -870,9 +897,9 @@ console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,extraDescriptorsR
       expect(actual[field]).toEqual(maps[filename][field as keyof Coverage]);
     for (const field of ['s', 'f'])
       for (const [key, hits] of Object.entries(maps[filename][field as 's' | 'f']))
-        expect(actual[field][key]).toBe(hits * 7);
+        expect(actual[field][key]).toBe(hits * 8);
     for (const [key, arms] of Object.entries(maps[filename].b))
-      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 7));
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 8));
   });
 
   it('refuses a target that changes after registration before any child starts', () => {
