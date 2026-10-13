@@ -736,7 +736,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     expect(Object.keys(parent.maps)).toHaveLength(2);
     const registry = createCampaignRegistry(captured, launch);
     expect(registry.forkEntries).toHaveLength(6);
-    expect(registry.commandEntries).toHaveLength(6);
+    expect(registry.commandEntries).toHaveLength(8);
     const worker = join(project, 'captured-worker.mjs');
     writeFileSync(
       worker,
@@ -811,6 +811,9 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
     }
     const setupFile = join(project, 'auto-worker-setup.mjs');
     writeCampaignSetup(captured, launch, setupFile);
+    const ownedEval = `const {marker}=await import(${JSON.stringify(pathToFileURL(join(project, 'packages/core/dist/shared.js')).href)});console.log(marker());`;
+    const temporary = join(project, 'temporary-driver.mjs');
+    writeFileSync(temporary, ownedEval);
     const automaticTest = join(project, 'automatic.test.ts');
     writeFileSync(
       automaticTest,
@@ -819,6 +822,12 @@ import {spawnSync} from 'node:child_process';
 test('captures the ordinary CLI automatically',()=>{
  const result=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
  expect(result.status).toBe(7);expect(result.stderr).toBe('');
+});
+test('captures unregistered eval and temporary drivers automatically',()=>{
+ for(const args of [['--input-type=module','-e',${JSON.stringify(ownedEval)}],[${JSON.stringify(temporary)}]]) {
+  const result=spawnSync(process.execPath,args,{encoding:'utf8',env:{}});
+  expect(result.status).toBe(0);expect(result.stdout).toBe('measured\\n');expect(result.stderr).toBe('');
+ }
 });`,
     );
     const automaticConfig = join(project, 'automatic.config.mjs');
@@ -843,7 +852,7 @@ test('captures the ordinary CLI automatically',()=>{
       ...registry.commandEntries,
     ]);
     expect(automaticCapture.status).toBe('Pass');
-    expect(automaticCapture.processes).toBe(14);
+    expect(automaticCapture.processes).toBe(16);
     expect(
       included.map((entry) =>
         readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
