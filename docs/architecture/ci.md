@@ -154,6 +154,14 @@ It retains CLI package metadata, Studio assets, dependency resolution and copied
 migrations, and publishes source-bound compilation receipts. It refuses the
 ordinary CLI output and a nonempty measurement directory. Importing the ordinary
 builder no longer invokes a build; its command still uses the production defaults.
+It also emits `capture-entry.mjs` and `launch.receipts.json`, binding the bootstrap,
+measured CLI body and all three children by SHA256. The bootstrap registers measured
+parser/query forks and the archive verifier's heap-prefixed command, records their
+executions under its `captures` directory, and drains actual closes before exit.
+The CLI body and child hashes are checked before execution. Real compiler/builder
+fixtures preserve exit7, restricted IPC and heap flags, retain two observed SIGKILL
+interruptions and one completed archive execution, and reject altered artifacts.
+Installing these generated artifacts in the complete campaign remains necessary.
 
 `registerForkCapture` explicitly maps ordinary child entrypoints to checked measured
 artifacts. It verifies both hashes at registration and immediately before launch,
@@ -168,7 +176,7 @@ temporarily keeps the capture parent's event loop alive because the query host
 deliberately unrefs its child. Query execution still returns without waiting for
 termination. The finalizer must run after registered hosts stop their children.
 `runCapturedCli` intercepts a requested CLI exit with a private control exception,
-unwinds the normal entrypoint import, drains child close receipts, restores the original
+unwinds the normal entrypoint import, drains fork and command close receipts, restores the original
 bindings and invokes the original exit with its exact arguments. Unexpected import
 errors remain errors. Real fixtures retain exit code 7, skip statements after exit,
 preserve permission/IPC limits and reconcile the actual child SIGKILL receipt.
