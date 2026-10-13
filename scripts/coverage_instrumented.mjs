@@ -10,6 +10,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -164,7 +165,10 @@ export function registerForkCapture(entries, directory) {
 }
 
 function assertNodeArguments(entry) {
-  if (entry.captureMode !== undefined && entry.captureMode !== 'eval-import')
+  if (
+    entry.captureMode !== undefined &&
+    !['eval-import', 'script-import'].includes(entry.captureMode)
+  )
     throw new Error('Invalid command capture launch mode.');
   if (entry.nodeArguments === undefined) return;
   if (
@@ -200,7 +204,20 @@ function selectCommand(registry, args, cwd) {
     filename = realpathSync(filename);
   } catch {}
   const entry = registry.get(filename);
-  if (!entry) return null;
+  if (!entry) {
+    const preload = [...registry.values()].find((value) => value.captureMode === 'script-import');
+    if (
+      !preload ||
+      args.slice(0, index).some((value) => !/^--max-old-space-size=[1-9][0-9]*$/.test(value))
+    )
+      return null;
+    try {
+      if (!statSync(filename).isFile()) return null;
+    } catch {
+      return null;
+    }
+    return { entry: preload, index: -1 };
+  }
   if (index && !isDeepStrictEqual(args.slice(0, index), entry.nodeArguments ?? [])) return null;
   return { entry, index };
 }
@@ -916,7 +933,9 @@ export function compiledCapturePlugin(snapshot, preparations) {
   };
 }
 
-export function createEvalCapture(snapshot, preparations, filename) {
+export function createEvalCapture(snapshot, preparations, filename, captureMode = 'eval-import') {
+  if (!['eval-import', 'script-import'].includes(captureMode))
+    throw new Error('Invalid import capture mode.');
   const bootstrap = `import {registerCompiledCapture} from ${JSON.stringify(import.meta.url)};
 if(process.execArgv[0]!=='--import'||process.execArgv[1]!==import.meta.url)throw new Error('Eval capture preload arguments differ.');
 process.execArgv.splice(0,2);
@@ -930,7 +949,7 @@ registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparation
     target,
     originalSha256: hash,
     targetSha256: hash,
-    captureMode: 'eval-import',
+    captureMode,
     interruptionSignals: ['SIGTERM', 'SIGKILL'],
   };
 }

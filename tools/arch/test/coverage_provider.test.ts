@@ -961,6 +961,52 @@ test('captures the ordinary CLI automatically',()=>{
     const automaticMap = (automatic.maps as Record<string, Coverage>)[join(project, path)];
     if (!automaticMap) throw new Error('Missing automatic eval coverage.');
     expect(Object.values(automaticMap.f).sort()).toEqual([0, 4]);
+    const script = join(project, 'temporary.mjs');
+    writeFileSync(script, observable);
+    const scriptArguments = [
+      '--max-old-space-size=64',
+      script,
+      '--eval',
+      'ordinary application argument',
+    ];
+    const expectedScript = execFileSync(process.execPath, scriptArguments, {
+      cwd: project,
+      encoding: 'utf8',
+      env: {},
+    });
+    const scriptPreload = createEvalCapture(
+      snapshot,
+      native,
+      join(project, 'script-preload.mjs'),
+      'script-import',
+    );
+    const scriptsDirectory = join(project, 'script-counters');
+    const asyncScripts = registerCommandCapture([scriptPreload], scriptsDirectory);
+    const syncScripts = registerSyncCommandCapture([scriptPreload], scriptsDirectory);
+    try {
+      const { execFile, execFileSync: executeSync } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const actual = await promisify(execFile)(process.execPath, scriptArguments, {
+        cwd: project,
+        encoding: 'utf8',
+        env: {},
+      });
+      expect(actual.stdout).toBe(expectedScript);
+      expect(actual.stderr).toBe('');
+      expect(
+        executeSync(process.execPath, scriptArguments, { cwd: project, encoding: 'utf8', env: {} }),
+      ).toBe(expectedScript);
+      await asyncScripts.settled();
+    } finally {
+      syncScripts.restore();
+      asyncScripts.restore();
+    }
+    const scriptCapture = await reconcileForkCapture(snapshot, scriptsDirectory, [scriptPreload]);
+    expect(scriptCapture.status).toBe('Pass');
+    expect(scriptCapture.processes).toBe(2);
+    const scriptMap = (scriptCapture.maps as Record<string, Coverage>)[join(project, path)];
+    if (!scriptMap) throw new Error('Missing temporary script coverage.');
+    expect(Object.values(scriptMap.f).sort()).toEqual([0, 4]);
   });
 
   it('binds compilation to the real original artifact, map and source without editing them', () => {
