@@ -30,6 +30,10 @@ type Coverage = {
   s: Record<string, number>;
   f: Record<string, number>;
   b: Record<string, number[]>;
+  statementMap: Record<
+    string,
+    { start: { line: number; column: number }; end: { line: number; column: number } }
+  >;
   fnMap: Record<string, { loc: { start: { line: number } } }>;
   branchMap: Record<string, { loc: { start: { line: number } } }>;
 };
@@ -469,6 +473,7 @@ else console.log(JSON.stringify(result));
 if (process.argv[2] === 'fail') {process.stderr.write('fixture failure\\n');process.exitCode=7;}
 if (process.argv[2] === 'exit-window') {const emit=process.emit;process.emit=function(event,...args){const result=emit.call(this,event,...args);if(event==='exit')Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10000);return result;};}
 if (['late-exit','manual-exit'].includes(process.argv[2])) {process.on('exit',()=>process.stdout.write(String(instance.close())));if(process.argv[2]==='manual-exit')process.emit('exit',0);}
+if (process.argv[2] === 'exit-microtask') process.once('exit',()=>Promise.resolve().then(()=>process.stdout.write(String(instance.close()))));
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -1315,6 +1320,76 @@ console.log(JSON.stringify({message,launch:capture.launches[0],reconciled}));`,
     if (!actual || !expected) throw new Error('Missing measured self-fork counters.');
     for (const field of ['s', 'f', 'b'])
       expect(actual[field]).toEqual(expected[field as keyof Coverage]);
+  });
+
+  it('reconciles actual shutdown microtasks against observed host close', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const entry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: [],
+    };
+    const directory = join(root, 'shutdown-command-records');
+    const parent = join(root, 'shutdown-command-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {registerCommandCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerCommandCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const {stdout,stderr}=await promisify(execFile)(process.execPath,[${JSON.stringify(bundle)},'exit-microtask'],{env:{}});
+await capture.settled();capture.restore();
+console.log(JSON.stringify({stdout,stderr,launch:capture.launches[0]}));`,
+    );
+    const result = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+    expect(result.stderr).toBe('');
+    expect(result.stdout.trimEnd().split('\n').at(-1)).toBe('3');
+    const text = readFileSync(join(directory, `${result.launch.id}.counters.jsonl`), 'utf8');
+    await expect(replayCounterStream(snapshot, text)).rejects.toThrow('sequence differs');
+    const reconciled = await reconcileForkCapture(snapshot, directory, [entry], maps);
+    expect(reconciled.status).toBe('Pass');
+    expect(reconciled.processes).toBe(1);
+    expect(reconciled.executions[0]).toMatchObject({
+      state: 'completed',
+      exitCode: 0,
+      signal: null,
+    });
+    const actual = reconciled.maps[join(root, 'private.ts')] as Coverage;
+    const expected = maps[join(root, 'private.ts')];
+    if (!actual || !expected) throw new Error('Missing actual shutdown microtask map.');
+    for (const field of ['statementMap', 'fnMap', 'branchMap'] as const)
+      expect(actual[field]).toEqual(expected[field as keyof Coverage]);
+    const close = Object.entries(actual.fnMap).find(([, fn]) => fn.loc.start.line === 16);
+    const used = Object.entries(actual.fnMap).find(([, fn]) => fn.loc.start.line === 2);
+    if (!close || !used) throw new Error('Missing actual shutdown microtask functions.');
+    expect(actual.f[close[0]]).toBe(1);
+    expect(actual.f[used[0]]).toBe(3);
+    const receipt = JSON.parse(
+      readFileSync(join(directory, `${result.launch.id}.close.json`), 'utf8'),
+    );
+    const hostClose = {
+      pid: result.launch.pid,
+      threadId: 0,
+      code: receipt.code,
+      signal: receipt.signal,
+    };
+    await expect(
+      replayCounterStream(snapshot, text, { ...hostClose, pid: hostClose.pid + 1 }),
+    ).rejects.toThrow('host close identity differs');
+    await expect(replayCounterStream(snapshot, text, { ...hostClose, code: 7 })).rejects.toThrow(
+      'completion differs from host close',
+    );
+    const records = text
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const completion = records.find((record) => record.state === 'completed');
+    const repeated = `${text}${JSON.stringify({ ...completion, sequence: records.length + 1 })}\n`;
+    await expect(replayCounterStream(snapshot, repeated, hostClose)).rejects.toThrow(
+      'Repeated native counter completion',
+    );
   });
 
   it('drains real fork receipts before completing a captured CLI exit', async () => {
