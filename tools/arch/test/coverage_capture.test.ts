@@ -167,7 +167,7 @@ async function nativeFixture(code = 'export const value = 7;') {
   writeFileSync(entry, `import ${JSON.stringify(pathToFileURL(source).href)};`);
   const records = () =>
     readdirSync(output).map((file) => JSON.parse(readFileSync(join(output, file), 'utf8')));
-  return { source, entry, bootstrap, output, records, preparations: nativePreparations };
+  return { source, entry, bootstrap, output, records, preparations: nativePreparations, snapshot };
 }
 
 describe('native instrumentation process capture', () => {
@@ -176,9 +176,13 @@ describe('native instrumentation process capture', () => {
       await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }
 function unused() { return 9; }
 choose(); choose(true);`);
-    const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-      encoding: 'utf8',
-    });
+    const result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    );
     expect(result.status, result.stderr).toBe(0);
     const records = fixture.records();
     expect(records).toHaveLength(2);
@@ -205,9 +209,13 @@ choose(); choose(true);`);
         `import ${JSON.stringify(pathToFileURL(fixture.source).href)}; ${code}`,
       );
       const plain = spawnSync(process.execPath, [fixture.entry], { encoding: 'utf8' });
-      const captured = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-        encoding: 'utf8',
-      });
+      const captured = spawnSync(
+        process.execPath,
+        ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+        {
+          encoding: 'utf8',
+        },
+      );
       expect(plain.status).toBe(status);
       expect(captured.status, captured.stderr).toBe(status);
     }
@@ -223,9 +231,13 @@ choose(); choose(true);`);
   it('records an explicit empty execution when no owned source loads', async () => {
     const fixture = await nativeFixture();
     writeFileSync(fixture.entry, 'process.exit(0);');
-    const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-      encoding: 'utf8',
-    });
+    const result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    );
     expect(result.status, result.stderr).toBe(0);
     const completed = fixture.records().find((record) => record.state === 'completed');
     expect(completed.maps).toEqual({});
@@ -236,18 +248,26 @@ choose(); choose(true);`);
   it('retains rejection evidence for missing preparations and changed loaded source', async () => {
     const fixture = await nativeFixture();
     writeFileSync(fixture.source, 'export const changed = 8;');
-    let result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-      encoding: 'utf8',
-    });
+    let result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    );
     expect(result.status).toBe(1);
     expect(
       fixture.records().find((record) => record.state === 'completed').rejected[0].reason,
     ).toContain('differs from inventory');
     writeFileSync(fixture.source, 'export const value = 7;');
     rmSync(fixture.preparations, { recursive: true });
-    result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-      encoding: 'utf8',
-    });
+    result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    );
     expect(result.status).toBe(1);
     expect(
       fixture
@@ -261,9 +281,13 @@ choose(); choose(true);`);
     const fixture = await nativeFixture(
       "console.log('capture-ready'); setInterval(() => {},1000);",
     );
-    const child = spawn(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
     try {
       await new Promise<void>((resolve, reject) => {
         child.once('error', reject);
@@ -299,7 +323,7 @@ it('preserves file-access denial under explicit identical Node permissions', asy
     const plain = spawnSync(process.execPath, [...flags, fixture.entry], { encoding: 'utf8' });
     const captured = spawnSync(
       process.execPath,
-      [...flags, '--import', fixture.bootstrap, fixture.entry],
+      [...flags, '--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
       { encoding: 'utf8' },
     );
     expect(plain.status).toBe(1);
@@ -321,9 +345,13 @@ it('rejects duplicate registration without recording duplicate execution', async
     fixture.bootstrap,
     `${bootstrap}\n${bootstrap.slice(bootstrap.indexOf('await registerNativeCapture'))}`,
   );
-  const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+    {
+      encoding: 'utf8',
+    },
+  );
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('already registered');
   expect(fixture.records().filter((record) => record.state === 'started')).toHaveLength(1);
@@ -336,9 +364,13 @@ it('rejects changed instrumented bytes before executing them', async () => {
   const prepared = JSON.parse(readFileSync(file, 'utf8'));
   prepared.instrumentedCode = "throw new Error('Changed native code executed');";
   writeFileSync(file, JSON.stringify(prepared));
-  const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+    {
+      encoding: 'utf8',
+    },
+  );
   expect(result.status).toBe(1);
   expect(result.stderr).not.toContain('Changed native code executed');
   expect(
@@ -352,9 +384,13 @@ it('rejects query-qualified owned native execution', async () => {
     fixture.entry,
     `import ${JSON.stringify(`${pathToFileURL(fixture.source).href}?wrapped`)};`,
   );
-  const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+    {
+      encoding: 'utf8',
+    },
+  );
   expect(result.status).toBe(1);
   expect(
     fixture.records().find((record) => record.state === 'completed').rejected[0].reason,
@@ -367,9 +403,13 @@ it('keeps inherited worker executions distinct from the parent snapshot', async 
     fixture.entry,
     `import {Worker} from 'node:worker_threads'; await Promise.all([1,2].map(() => new Promise((resolve,reject) => {const worker = new Worker(new URL(${JSON.stringify(pathToFileURL(fixture.source).href)})); worker.once('error',reject); worker.once('exit',code=>code===0?resolve():reject(new Error('Worker failed'))); })));`,
   );
-  const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+    {
+      encoding: 'utf8',
+    },
+  );
   expect(result.status, result.stderr).toBe(0);
   const records = fixture.records();
   const completed = records.filter((record) => record.state === 'completed');
@@ -389,12 +429,165 @@ it('records a delegated loader failure as rejected owned execution', async () =>
     fixture.bootstrap,
     `import {registerHooks} from 'node:module'; registerHooks({load(url,context,nextLoad){if(url===${JSON.stringify(pathToFileURL(fixture.source).href)}) throw new Error('Delegated loader witness'); return nextLoad(url,context);}}); ${bootstrap}`,
   );
-  const result = spawnSync(process.execPath, ['--import', fixture.bootstrap, fixture.entry], {
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+    {
+      encoding: 'utf8',
+    },
+  );
   expect(result.status).toBe(1);
   const completed = fixture.records().find((record) => record.state === 'completed');
   expect(completed.loadedSources).toEqual([]);
   expect(completed.maps).toEqual({});
   expect(completed.rejected).toEqual([{ path: 'owned.mjs', reason: 'Delegated loader witness' }]);
+});
+
+it('reconciles independent completed executions without duplicating snapshots', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture('function used() { return 7; } used(); used();');
+  for (let run = 0; run < 2; run++)
+    expect(
+      spawnSync(
+        process.execPath,
+        ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+        {
+          encoding: 'utf8',
+        },
+      ).status,
+    ).toBe(0);
+  const measured = await reconcileNativeCapture(fixture.snapshot, fixture.output);
+  expect(measured.status).toBe('Pass');
+  expect(measured.processes).toBe(2);
+  expect(measured.issues).toEqual([]);
+  expect(Object.values(measured.maps[fixture.source].f)).toEqual([4]);
+});
+
+it('refuses to qualify rejected owned execution as an empty run', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture();
+  writeFileSync(fixture.source, 'export const changed = 9;');
+  expect(
+    spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    ).status,
+  ).toBe(1);
+  const measured = await reconcileNativeCapture(fixture.snapshot, fixture.output);
+  expect(measured.status).toBe('Fail');
+  expect(measured.maps).toBeNull();
+  expect(measured.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ kind: 'rejected-execution', path: 'owned.mjs' }),
+    ]),
+  );
+});
+
+it('retains an actually loaded module with no executable counters', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture('export {};');
+  expect(
+    spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    ).status,
+  ).toBe(0);
+  const measured = await reconcileNativeCapture(fixture.snapshot, fixture.output);
+  expect(measured.status).toBe('Pass');
+  expect(measured.maps[fixture.source].s).toEqual({});
+  expect(measured.maps[fixture.source].f).toEqual({});
+  expect(measured.maps[fixture.source].b).toEqual({});
+});
+
+it('refuses missing start or completion records', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture();
+  expect(
+    spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    ).status,
+  ).toBe(0);
+  for (const [state, kind] of [
+    ['started', 'missing-completion'],
+    ['completed', 'missing-start'],
+  ] as const) {
+    const copy = join(directory, state);
+    mkdirSync(copy);
+    for (const record of fixture.records().filter((record) => record.state === state))
+      writeFileSync(join(copy, `${record.id}.${state}.json`), JSON.stringify(record));
+    const measured = await reconcileNativeCapture(fixture.snapshot, copy);
+    expect(measured.status).toBe('Fail');
+    expect(measured.maps).toBeNull();
+    expect(measured.issues).toEqual([expect.objectContaining({ kind })]);
+  }
+});
+
+it('rejects invalid identity, counter and loaded-source records', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture('function used() { return 7; } used();');
+  expect(
+    spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    ).status,
+  ).toBe(0);
+  const pristine = fixture.records().find((record) => record.state === 'completed');
+  const filename = join(fixture.output, `${pristine.id}.completed.json`);
+  const variants = [
+    () => ({ ...pristine, threadId: pristine.threadId + 1 }),
+    () => ({ ...pristine, loadedSources: [...pristine.loadedSources, ...pristine.loadedSources] }),
+    () => ({
+      ...pristine,
+      loadedSources: [{ path: 'unowned.mjs', sha256: pristine.loadedSources[0].sha256 }],
+    }),
+    () => ({ ...pristine, maps: {} }),
+    () => {
+      const record = structuredClone(pristine);
+      record.maps[fixture.source].f['0'] = -1;
+      return record;
+    },
+  ];
+  for (const variant of variants) {
+    writeFileSync(filename, JSON.stringify(variant()));
+    await expect(reconcileNativeCapture(fixture.snapshot, fixture.output)).rejects.toThrow();
+  }
+  writeFileSync(filename, '');
+  await expect(reconcileNativeCapture(fixture.snapshot, fixture.output)).rejects.toThrow();
+});
+
+it('rejects remapped layout changes and extra snapshot files', async () => {
+  const { reconcileNativeCapture } = await import('../../../scripts/coverage_instrumented.mjs');
+  const fixture = await nativeFixture('function used() { return 7; } used();');
+  expect(
+    spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(fixture.bootstrap).href, fixture.entry],
+      {
+        encoding: 'utf8',
+      },
+    ).status,
+  ).toBe(0);
+  const baseline = await reconcileNativeCapture(fixture.snapshot, fixture.output);
+  baseline.maps[fixture.source].fnMap['0'].loc.start.line += 1;
+  await expect(
+    reconcileNativeCapture(fixture.snapshot, fixture.output, baseline.maps),
+  ).rejects.toThrow('layout differs from direct');
+  const completed = fixture.records().find((record) => record.state === 'completed');
+  writeFileSync(join(fixture.output, 'duplicate.completed.json'), JSON.stringify(completed));
+  await expect(reconcileNativeCapture(fixture.snapshot, fixture.output)).rejects.toThrow(
+    'Invalid native lifecycle',
+  );
 });

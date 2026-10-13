@@ -2,14 +2,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   linkSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { registerHooks } from 'node:module';
+import { createRequire, registerHooks } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { threadId } from 'node:worker_threads';
 import { prepareSource } from './coverage_configuration.mjs';
 
@@ -136,4 +138,122 @@ export async function registerNativeCapture(snapshot, preparations, directory) {
     hooks.deregister();
   });
   return id;
+}
+
+export async function reconcileNativeCapture(snapshot, directory, direct = {}) {
+  const root = realpathSync(snapshot.root);
+  const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
+  const starts = new Map();
+  const completions = new Map();
+  const issues = [];
+  const files = readdirSync(directory).sort();
+  if (!files.length) throw new Error('No native lifecycle records found.');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const { captureCoverage } = await import('./coverage_report.mjs');
+  for (const file of files) {
+    const record = JSON.parse(readFileSync(join(directory, file), 'utf8'));
+    if (
+      record?.schema !== 1 ||
+      !uuid.test(record.id) ||
+      record.provider !== 'istanbul@4.1.11' ||
+      !Number.isSafeInteger(record.pid) ||
+      record.pid <= 0 ||
+      !Number.isSafeInteger(record.threadId) ||
+      record.threadId < 0 ||
+      !['started', 'completed'].includes(record.state) ||
+      file !== `${record.id}.${record.state}.json`
+    )
+      throw new Error(`Invalid native lifecycle record: ${file}`);
+    const index = record.state === 'started' ? starts : completions;
+    if (index.has(record.id)) throw new Error(`Duplicate native lifecycle record: ${record.id}`);
+    index.set(record.id, record);
+    if (record.state !== 'completed') continue;
+    if (
+      !Number.isSafeInteger(record.exitCode) ||
+      !Array.isArray(record.loadedSources) ||
+      !Array.isArray(record.rejected) ||
+      !record.maps ||
+      typeof record.maps !== 'object' ||
+      Array.isArray(record.maps)
+    )
+      throw new Error(`Invalid native completion: ${file}`);
+    const loaded = new Map();
+    for (const source of record.loadedSources) {
+      const filename = typeof source?.path === 'string' ? join(root, source.path) : '';
+      const entry = owned.get(filename);
+      if (
+        !entry ||
+        entry.path !== source.path ||
+        source.sha256 !== entry.sha256 ||
+        loaded.has(filename)
+      )
+        throw new Error(`Invalid native loaded source: ${file}`);
+      if (digest(readFileSync(filename)) !== entry.sha256)
+        throw new Error(`Stale native loaded source: ${source.path}`);
+      loaded.set(filename, entry);
+    }
+    for (const rejection of record.rejected) {
+      if (
+        typeof rejection?.path !== 'string' ||
+        typeof rejection.reason !== 'string' ||
+        !snapshot.included.some((entry) => entry.path === rejection.path)
+      )
+        throw new Error(`Invalid native rejection: ${file}`);
+      issues.push({
+        kind: 'rejected-execution',
+        id: record.id,
+        path: rejection.path,
+        reason: rejection.reason,
+      });
+    }
+    captureCoverage(snapshot, record.maps, record.id);
+    if (!isDeepStrictEqual(Object.keys(record.maps).sort(), [...loaded.keys()].sort()))
+      throw new Error(`Native maps differ from loaded source ledger: ${file}`);
+  }
+  for (const [id, start] of starts) {
+    const end = completions.get(id);
+    if (!end) {
+      issues.push({ kind: 'missing-completion', id });
+      continue;
+    }
+    for (const key of ['pid', 'threadId', 'provider', 'schema'])
+      if (start[key] !== end[key]) throw new Error(`Native lifecycle identity differs: ${id}`);
+  }
+  for (const id of completions.keys())
+    if (!starts.has(id)) issues.push({ kind: 'missing-start', id });
+  if (issues.length) return { status: 'Fail', processes: starts.size, issues, maps: null };
+  const require = createRequire(import.meta.url);
+  const providerRequire = createRequire(require.resolve('@vitest/coverage-istanbul'));
+  const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
+  const { remapNativeCoverage } = await import('@vitest/coverage-istanbul/dist/provider.js');
+  const merged = createCoverageMap({});
+  for (const record of completions.values()) {
+    const remapped = await remapNativeCoverage(createCoverageMap(structuredClone(record.maps)));
+    const maps = JSON.parse(JSON.stringify(remapped.toJSON()));
+    captureCoverage(snapshot, maps, record.id);
+    for (const [filename, map] of Object.entries(maps)) {
+      if (!record.loadedSources.some((source) => join(root, source.path) === filename))
+        throw new Error(`Unexpected remapped native source: ${filename}`);
+      const previous = direct[filename];
+      if (previous)
+        for (const field of ['statementMap', 'fnMap', 'branchMap'])
+          if (!isDeepStrictEqual(previous[field], map[field]))
+            throw new Error(`Native coverage layout differs from direct: ${filename}.${field}`);
+      if (merged.files().includes(filename)) {
+        const previous = merged.fileCoverageFor(filename).toJSON();
+        for (const field of ['statementMap', 'fnMap', 'branchMap'])
+          if (!isDeepStrictEqual(previous[field], map[field]))
+            throw new Error(`Native coverage layouts differ: ${filename}.${field}`);
+      }
+    }
+    if (!isDeepStrictEqual(Object.keys(maps).sort(), Object.keys(record.maps).sort()))
+      throw new Error(`Native remapping lost loaded sources: ${record.id}`);
+    merged.merge(maps);
+  }
+  return {
+    status: 'Pass',
+    processes: starts.size,
+    issues: [],
+    maps: JSON.parse(JSON.stringify(merged.toJSON())),
+  };
 }
