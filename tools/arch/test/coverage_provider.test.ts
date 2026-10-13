@@ -964,9 +964,18 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     if (!map) throw new Error('Missing eval-import coverage.');
     expect(Object.values(map.f).sort()).toEqual([0, 2]);
     expect(Object.values(map.s).some((value) => value > 0)).toBe(true);
-    const observable = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url}));`;
+    const observable = `const {choose}=await import(${JSON.stringify(entry)});console.log(JSON.stringify({result:[choose(),choose(true)],execArgv:process.execArgv,argv:process.argv,cwd:process.cwd(),env:process.env,url:import.meta.url,preloaded:globalThis.userPreloadRan??false}));`;
     const arguments_ = ['--input-type=module', '--max-old-space-size=64', '-e', observable];
-    const expected = execFileSync(process.execPath, arguments_, { encoding: 'utf8', env: {} });
+    const userPreload = join(project, 'user-preload.mjs');
+    writeFileSync(userPreload, 'globalThis.userPreloadRan = true;');
+    const launchArguments = [
+      arguments_,
+      ['--import', pathToFileURL(userPreload).href, ...arguments_],
+      [`--import=${pathToFileURL(userPreload).href}`, ...arguments_],
+    ];
+    const expectedLaunches = launchArguments.map((args) =>
+      execFileSync(process.execPath, args, { encoding: 'utf8', env: {} }),
+    );
     const preload = createEvalCapture(snapshot, native, join(project, 'automatic-preload.mjs'));
     const directory = join(project, 'automatic-counters');
     const asynchronous = registerCommandCapture([preload], directory);
@@ -974,16 +983,19 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     try {
       const { execFile, spawnSync } = await import('node:child_process');
       const { promisify } = await import('node:util');
-      const actual = await promisify(execFile)(process.execPath, arguments_, {
-        encoding: 'utf8',
-        env: {},
-      });
-      expect(actual.stdout).toBe(expected);
-      expect(actual.stderr).toBe('');
-      const synced = spawnSync(process.execPath, arguments_, { encoding: 'utf8', env: {} });
-      expect(synced.status).toBe(0);
-      expect(synced.stdout).toBe(expected);
-      expect(synced.stderr).toBe('');
+      for (const [index, args] of launchArguments.entries()) {
+        const expectedLaunch = expectedLaunches[index];
+        const actual = await promisify(execFile)(process.execPath, args, {
+          encoding: 'utf8',
+          env: {},
+        });
+        expect(actual.stdout).toBe(expectedLaunch);
+        expect(actual.stderr).toBe('');
+        const synced = spawnSync(process.execPath, args, { encoding: 'utf8', env: {} });
+        expect(synced.status).toBe(0);
+        expect(synced.stdout).toBe(expectedLaunch);
+        expect(synced.stderr).toBe('');
+      }
       await asynchronous.settled();
     } finally {
       synchronous.restore();
@@ -991,10 +1003,10 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     }
     const automatic = await reconcileForkCapture(snapshot, directory, [preload]);
     expect(automatic.status).toBe('Pass');
-    expect(automatic.processes).toBe(2);
+    expect(automatic.processes).toBe(6);
     const automaticMap = (automatic.maps as Record<string, Coverage>)[join(project, path)];
     if (!automaticMap) throw new Error('Missing automatic eval coverage.');
-    expect(Object.values(automaticMap.f).sort()).toEqual([0, 4]);
+    expect(Object.values(automaticMap.f).sort()).toEqual([0, 12]);
     const script = join(project, 'temporary.mjs');
     writeFileSync(script, observable);
     const scriptArguments = [
@@ -1003,11 +1015,14 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       '--eval',
       'ordinary application argument',
     ];
-    const expectedScript = execFileSync(process.execPath, scriptArguments, {
-      cwd: project,
-      encoding: 'utf8',
-      env: {},
-    });
+    const scriptLaunchArguments = [
+      scriptArguments,
+      ['--import', pathToFileURL(userPreload).href, ...scriptArguments],
+      [`--import=${pathToFileURL(userPreload).href}`, ...scriptArguments],
+    ];
+    const expectedScripts = scriptLaunchArguments.map((args) =>
+      execFileSync(process.execPath, args, { cwd: project, encoding: 'utf8', env: {} }),
+    );
     const scriptPreload = createEvalCapture(
       snapshot,
       native,
@@ -1020,16 +1035,18 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     try {
       const { execFile, execFileSync: executeSync } = await import('node:child_process');
       const { promisify } = await import('node:util');
-      const actual = await promisify(execFile)(process.execPath, scriptArguments, {
-        cwd: project,
-        encoding: 'utf8',
-        env: {},
-      });
-      expect(actual.stdout).toBe(expectedScript);
-      expect(actual.stderr).toBe('');
-      expect(
-        executeSync(process.execPath, scriptArguments, { cwd: project, encoding: 'utf8', env: {} }),
-      ).toBe(expectedScript);
+      for (const [index, args] of scriptLaunchArguments.entries()) {
+        const actual = await promisify(execFile)(process.execPath, args, {
+          cwd: project,
+          encoding: 'utf8',
+          env: {},
+        });
+        expect(actual.stdout).toBe(expectedScripts[index]);
+        expect(actual.stderr).toBe('');
+        expect(
+          executeSync(process.execPath, args, { cwd: project, encoding: 'utf8', env: {} }),
+        ).toBe(expectedScripts[index]);
+      }
       await asyncScripts.settled();
     } finally {
       syncScripts.restore();
@@ -1037,10 +1054,10 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
     }
     const scriptCapture = await reconcileForkCapture(snapshot, scriptsDirectory, [scriptPreload]);
     expect(scriptCapture.status).toBe('Pass');
-    expect(scriptCapture.processes).toBe(2);
+    expect(scriptCapture.processes).toBe(6);
     const scriptMap = (scriptCapture.maps as Record<string, Coverage>)[join(project, path)];
     if (!scriptMap) throw new Error('Missing temporary script coverage.');
-    expect(Object.values(scriptMap.f).sort()).toEqual([0, 4]);
+    expect(Object.values(scriptMap.f).sort()).toEqual([0, 12]);
     const unsupportedArguments = ['--no-warnings', ...arguments_];
     const expectedUnsupported = execFileSync(process.execPath, unsupportedArguments, {
       encoding: 'utf8',
