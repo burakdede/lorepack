@@ -31,6 +31,7 @@ const syncCollector = Symbol.for('lorepack.nativeSyncCollector');
 const capturedForkSpawn = Symbol.for('lorepack.capturedForkSpawn');
 const campaignCollector = Symbol.for('lorepack.campaignCollector');
 const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
+const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
 function assertCoverageVariable(value) {
@@ -107,8 +108,11 @@ export function registerForkCapture(entries, directory, audit = false) {
     } catch {}
     const entry = targets.get(filename);
     if (!entry) {
-      if (audit) recordUnregisteredNode(directory, 'fork', parameters.slice(0, 2));
-      return originalFork.apply(this, parameters);
+      const child = originalFork.apply(this, parameters);
+      const captured = child[capturedCommandLaunch];
+      if (audit && (captured?.directory !== resolve(directory) || captured.pid !== child.pid))
+        recordUnregisteredNode(directory, 'fork', parameters.slice(0, 2));
+      return child;
     }
     if (args != null && !Array.isArray(args)) {
       if (typeof args !== 'object') return originalFork.apply(this, parameters);
@@ -227,7 +231,12 @@ function assertNodeArguments(entry) {
 }
 
 function validCaptureStreams(streams, entry) {
-  if ((entry.captureDescriptor ?? 4) === 4) return streams.length === 3;
+  if ((entry.captureDescriptor ?? 4) === 4)
+    return (
+      streams.length === 3 ||
+      (streams.length === 4 &&
+        (streams[3] === 'ipc' || (streams[3]?.type === 'pipe' && streams[3]?.ipc === true)))
+    );
   return (
     streams.length === 5 &&
     streams[3] === 'ignore' &&
@@ -376,6 +385,7 @@ export function registerCommandCapture(entries, directory, audit = false) {
       argumentsSha256: digest(JSON.stringify(options.args)),
     };
     publish(directory, `${id}.launch.json`, record);
+    this[capturedCommandLaunch] = { directory: resolve(directory), pid: this.pid, id };
     launches.push(record);
     const kills = [];
     const kill = this.kill;

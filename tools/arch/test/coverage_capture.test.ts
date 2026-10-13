@@ -24,6 +24,7 @@ import {
   reconcileForkCapture,
   reconcileNativeCapture,
   registerCommandCapture,
+  registerForkCapture,
   registerSyncCommandCapture,
   replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
@@ -181,6 +182,99 @@ async function nativeFixture(code = 'export const value = 7;') {
 }
 
 describe('native instrumentation process capture', () => {
+  it('accounts unregistered forks through command capture while preserving IPC', async () => {
+    const fixture =
+      await nativeFixture(`export function choose(flag = false) { if (flag) return 1; return 2; }
+export function unused() { return 9; }
+choose(); choose(true);`);
+    const namespace = '__LOREPACK_CAMPAIGN_COVERAGE__';
+    const preparations = join(directory, 'fork-preparations');
+    await prepareNativeCapture(fixture.snapshot, fixture.preparations, preparations, namespace);
+    const entry = createEvalCapture(
+      fixture.snapshot,
+      preparations,
+      join(directory, 'fork-preload.mjs'),
+      'script-import',
+      namespace,
+    );
+    const driver = join(directory, 'unregistered-fork.mjs');
+    writeFileSync(
+      driver,
+      `await import(${JSON.stringify(pathToFileURL(fixture.source).href)});
+process.send({value:7n,args:process.argv,execArgv:process.execArgv});process.disconnect();`,
+    );
+    const captures = join(directory, 'fork-captures');
+    const forks = registerForkCapture([], captures, true);
+    const commands = registerCommandCapture([entry], captures);
+    const flags = ['--permission', '--allow-fs-read=*', '--max-old-space-size=64'];
+    try {
+      const { fork } = await import('node:child_process');
+      const child = fork(driver, ['fixture-argument'], {
+        env: {},
+        execArgv: flags,
+        serialization: 'advanced',
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      });
+      let message: unknown;
+      const errors: Buffer[] = [];
+      child.on('message', (value) => {
+        message = value;
+      });
+      child.stderr?.on('data', (value) => errors.push(value));
+      const code = await new Promise((resolve, reject) => {
+        child.once('close', resolve);
+        child.once('error', reject);
+      });
+      expect(code, Buffer.concat(errors).toString()).toBe(0);
+      expect(message).toEqual({
+        value: 7n,
+        args: [process.execPath, driver, 'fixture-argument'],
+        execArgv: flags,
+      });
+      expect(child.stdio).toHaveLength(4);
+      await commands.settled();
+      await forks.settled();
+    } finally {
+      commands.restore();
+      forks.restore();
+    }
+    const measured = await reconcileForkCapture(fixture.snapshot, captures, [entry]);
+    expect(measured.status).toBe('Pass');
+    expect(measured.processes).toBe(1);
+    const coverage = (measured.maps as Record<string, { f: Record<string, number> }>)[
+      fixture.source
+    ];
+    if (!coverage) throw new Error('Missing fork execution counters.');
+    expect(Object.values(coverage.f).sort()).toEqual([0, 2]);
+    const otherDirectory = join(directory, 'different-fork-audit');
+    const otherForks = registerForkCapture([], otherDirectory, true);
+    const otherCommands = registerCommandCapture([entry], captures);
+    try {
+      const { fork } = await import('node:child_process');
+      const child = fork(driver, [], {
+        env: {},
+        execArgv: flags,
+        serialization: 'advanced',
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      });
+      const code = await new Promise((resolve, reject) => {
+        child.once('close', resolve);
+        child.once('error', reject);
+      });
+      expect(code).toBe(0);
+      await otherCommands.settled();
+    } finally {
+      otherCommands.restore();
+      otherForks.restore();
+    }
+    await expect(reconcileForkCapture(fixture.snapshot, otherDirectory, [entry])).rejects.toThrow(
+      'Unregistered Node launches',
+    );
+    const allCommands = await reconcileForkCapture(fixture.snapshot, captures, [entry]);
+    expect(allCommands.status).toBe('Pass');
+    expect(allCommands.processes).toBe(2);
+  });
+
   it('preserves explicit fixture streams alongside sync and async campaign capture', async () => {
     const fixture =
       await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }
