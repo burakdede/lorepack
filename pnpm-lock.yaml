@@ -11,7 +11,7 @@ overrides:
   nanoid@>=3.0.0 <3.3.18: 3.3.18
 
 patchedDependencies:
-  '@vitest/coverage-istanbul@4.1.11': 848205cf2cfccda2ea1db4731120131c01c08e6ca48e0339b95fd016c3455963
+  '@vitest/coverage-istanbul@4.1.11': 5e206d9790e1a7ce07066cae8edf93d8bdc8b4578c53e80630a64a36004148fb
 
 importers:
 
@@ -31,7 +31,7 @@ importers:
         version: 24.13.3
       '@vitest/coverage-istanbul':
         specifier: 4.1.11
-        version: 4.1.11(patch_hash=848205cf2cfccda2ea1db4731120131c01c08e6ca48e0339b95fd016c3455963)(supports-color@10.2.2)(vitest@4.1.11)
+        version: 4.1.11(patch_hash=5e206d9790e1a7ce07066cae8edf93d8bdc8b4578c53e80630a64a36004148fb)(supports-color@10.2.2)(vitest@4.1.11)
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
@@ -4188,7 +4188,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/coverage-istanbul@4.1.11(patch_hash=848205cf2cfccda2ea1db4731120131c01c08e6ca48e0339b95fd016c3455963)(supports-color@10.2.2)(vitest@4.1.11)':
+  '@vitest/coverage-istanbul@4.1.11(patch_hash=5e206d9790e1a7ce07066cae8edf93d8bdc8b4578c53e80630a64a36004148fb)(supports-color@10.2.2)(vitest@4.1.11)':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@istanbuljs/schema': 0.1.6
@@ -5533,7 +5533,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.3
-      '@vitest/coverage-istanbul': 4.1.11(patch_hash=848205cf2cfccda2ea1db4731120131c01c08e6ca48e0339b95fd016c3455963)(supports-color@10.2.2)(vitest@4.1.11)
+      '@vitest/coverage-istanbul': 4.1.11(patch_hash=5e206d9790e1a7ce07066cae8edf93d8bdc8b4578c53e80630a64a36004148fb)(supports-color@10.2.2)(vitest@4.1.11)
       '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
       jsdom: 27.0.0(supports-color@10.2.2)
     transitivePeerDependencies:

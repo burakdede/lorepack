@@ -593,7 +593,9 @@ for the checked files, capture limits and native matrix.
 configuration and subprocess capture. It fails when ownership, collection, tests or
 coverage gates fail, retaining the evidence for review.
 Direct coverage uses pinned Istanbul instrumentation with a recorded dependency patch
-to retain private-method counters and empty source records. Complete configuration and
+to retain private-method counters and empty source records. The patch also exposes its
+instrumenter and remapper for native-capture qualification, with real initializer and
+early-throw regression tests. Complete configuration and
 subprocess measurement, and the release coverage targets, remain open. See the
 [provider decision](docs/adr/0017-instrumented-coverage.md) and CI guide.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).

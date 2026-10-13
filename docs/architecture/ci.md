@@ -91,6 +91,10 @@ this command exercises the configured report path rather than failing during sta
 Direct coverage uses the patched Istanbul provider. A real executed fixture checks used,
 unused and async private methods, both async branch arms, and real type-only/barrel records.
 The patch applies through pnpm's lockfile, including frozen installs with scripts ignored.
+It also exposes the same instrumenter and source-map remapper for native-capture
+qualification. A real Node subprocess checks initializer execution once across two
+function calls, unused private methods and unexecuted statements after a throw.
+This fixture verifies the primitives, not complete configuration or child capture.
 See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
 for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 
