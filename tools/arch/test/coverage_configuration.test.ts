@@ -238,6 +238,52 @@ describe('source-bound transformation preparation', () => {
   });
 });
 
+it('retains canonical JSX preparations for reporting-only debug filenames', async () => {
+  const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
+  const repository = join(import.meta.dirname, '../../..');
+  const require = createRequire(join(repository, 'package.json'));
+  const viteRequire = createRequire(require.resolve('vitest/package.json'));
+  const { transformWithOxc } = await import(pathToFileURL(viteRequire.resolve('vite')).href);
+  const source = 'export function Widget() { return <div>Hello</div>; }';
+  put('widget.tsx', source);
+  const id = join(root, 'widget.tsx');
+  const reportingId = `${id}?cache=123&vitest-uncovered-coverage=true`;
+  const options = {
+    lang: 'tsx',
+    sourcemap: true,
+    jsx: { runtime: 'automatic', development: true },
+  };
+  const ordinary = await transformWithOxc(source, id, options);
+  const reporting = await transformWithOxc(source, reportingId, options);
+  expect(ordinary.code).toContain(`var _jsxFileName = ${JSON.stringify(id)};`);
+  expect(reporting.code).toContain(JSON.stringify(reportingId));
+  const map = { ...reporting.map, sources: ordinary.map.sources };
+  expect(map.mappings).toBe(ordinary.map.mappings);
+  expect(map.sourcesContent).toEqual(ordinary.map.sourcesContent);
+  const inventory = {
+    root,
+    included: [{ path: 'widget.tsx', sha256: createHash('sha256').update(source).digest('hex') }],
+  };
+  const directory = join(root, 'preparations');
+  const factory = await preparingInstrumenter(inventory, directory);
+  const instrumenter = factory({ coverageVariable: '__witness__' });
+  instrumenter.instrumentSync(ordinary.code, id, ordinary.map);
+  const filename = join(
+    directory,
+    `${createHash('sha256').update('widget.tsx').digest('hex')}.json`,
+  );
+  const retained = readFileSync(filename, 'utf8');
+  expect(() => instrumenter.instrumentSync(reporting.code, id, map)).toThrow(
+    'Conflicting preparation',
+  );
+  const emitted = instrumenter.instrumentSync(reporting.code, reportingId, map);
+  expect(emitted).toContain(JSON.stringify(reportingId));
+  expect(readFileSync(filename, 'utf8')).toBe(retained);
+  expect(() =>
+    instrumenter.instrumentSync(reporting.code.replace('Hello', 'Other'), reportingId, map),
+  ).toThrow('Conflicting preparation');
+});
+
 it('preserves preparations when a later transform conflicts', async () => {
   const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
   const directory = join(root, 'preparations');
