@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 import {
+  compiledCapturePlugin,
   prepareNativeCapture,
   reconcileNativeCapture,
   replayCounterStream,
@@ -295,6 +296,7 @@ describe('compiled native counter stream', () => {
   let bundle: string;
   let snapshot: { root: string; included: { path: string; sha256: string }[] };
   let completed: string;
+  let compilation: ReturnType<typeof compiledCapturePlugin>;
 
   async function execute(kill: boolean, stress = false) {
     const child = fork(bundle, [kill ? 'hold' : stress ? 'stress' : 'exit'], {
@@ -348,21 +350,33 @@ describe('compiled native counter stream', () => {
     snapshot = { root, included: prepared.map(({ path, sha256 }) => ({ path, sha256 })) };
     const directory = join(root, 'stream-preparations');
     await prepareNativeCapture(snapshot, join(root, 'preparations'), directory);
-    const instrumented = new Map(
-      prepared.map(({ path }) => [
-        join(root, path),
-        JSON.parse(
-          readFileSync(
-            join(directory, `${createHash('sha256').update(path).digest('hex')}.json`),
-            'utf8',
-          ),
-        ).instrumentedCode,
-      ]),
-    );
     const entry = join(root, 'stream-entry.mjs');
+    execFileSync(
+      process.execPath,
+      [
+        join(
+          dirname(
+            createRequire(join(repository, 'package.json')).resolve('typescript/package.json'),
+          ),
+          'bin/tsc',
+        ),
+        '--ignoreConfig',
+        '--target',
+        'ES2024',
+        '--module',
+        'NodeNext',
+        '--sourceMap',
+        '--skipLibCheck',
+        '--outDir',
+        join(root, 'dist'),
+        join(root, 'private.ts'),
+      ],
+      { stdio: 'pipe' },
+    );
+    compilation = compiledCapturePlugin(snapshot, directory);
     writeFileSync(
       entry,
-      `import {PrivateWitness} from './private.ts';
+      `import {PrivateWitness} from './dist/private.js';
 const instance = new PrivateWitness();
 const outputs = [await instance.run(true), await instance.run(false)];
 if (process.argv[2] === 'stress') for (let i = 0; i < 5000; i++) await instance.run(true);
@@ -386,18 +400,7 @@ else process.disconnect?.();
       banner: {
         js: `import {registerCounterStream} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)}; registerCounterStream(4);`,
       },
-      plugins: [
-        {
-          name: 'canonical-native-preparations',
-          setup(builder) {
-            builder.onLoad({ filter: /\.ts$/ }, (args) => {
-              const contents = instrumented.get(args.path);
-              if (!contents) throw new Error('Unprepared owned compilation input.');
-              return { contents, loader: 'js' };
-            });
-          },
-        },
-      ],
+      plugins: [compilation.plugin],
     });
     const result = await execute(false);
     expect(result.code).toBe(0);
@@ -429,6 +432,76 @@ else process.disconnect?.();
   it('preserves IPC and permission limits and exactly replays real bundled counters', async () => {
     const actual = await assertActualCounters(completed, 'completed');
     expect(actual.exitCode).toBe(0);
+  });
+
+  it('binds compilation to the real original artifact, map and source without editing them', () => {
+    const filename = join(root, 'dist/private.js');
+    const receipt = compilation.receipts.get(filename);
+    expect(receipt).toEqual(
+      expect.objectContaining({
+        path: 'private.ts',
+        artifact: filename,
+        artifactSha256: createHash('sha256').update(readFileSync(filename)).digest('hex'),
+        artifactMapSha256: createHash('sha256')
+          .update(readFileSync(`${filename}.map`))
+          .digest('hex'),
+        sha256: snapshot.included.find((entry) => entry.path === 'private.ts')?.sha256,
+      }),
+    );
+  });
+
+  it('refuses compiled maps pointing to a different owned source', async () => {
+    const filename = join(root, 'dist/private.js.map');
+    const original = readFileSync(filename);
+    const altered = JSON.parse(original.toString('utf8'));
+    altered.sources = ['../empty.ts'];
+    writeFileSync(filename, JSON.stringify(altered));
+    try {
+      const { build } = await import('esbuild');
+      await expect(
+        build({
+          entryPoints: [join(root, 'dist/private.js')],
+          outfile: join(root, 'rejected-bundle.mjs'),
+          bundle: true,
+          format: 'esm',
+          platform: 'node',
+          logLevel: 'silent',
+          plugins: [compiledCapturePlugin(snapshot, join(root, 'stream-preparations')).plugin],
+        }),
+      ).rejects.toThrow('mapped source differs');
+    } finally {
+      writeFileSync(filename, original);
+    }
+  });
+
+  it('refuses altered instrumented code while preserving ordinary compiler output', async () => {
+    const filename = join(
+      root,
+      'stream-preparations',
+      `${createHash('sha256').update('private.ts').digest('hex')}.json`,
+    );
+    const original = readFileSync(filename);
+    const artifact = readFileSync(join(root, 'dist/private.js'));
+    const altered = JSON.parse(original.toString('utf8'));
+    altered.instrumentedCode += '\n';
+    writeFileSync(filename, JSON.stringify(altered));
+    try {
+      const { build } = await import('esbuild');
+      await expect(
+        build({
+          entryPoints: [join(root, 'dist/private.js')],
+          outfile: join(root, 'rejected-code.mjs'),
+          bundle: true,
+          format: 'esm',
+          platform: 'node',
+          logLevel: 'silent',
+          plugins: [compiledCapturePlugin(snapshot, join(root, 'stream-preparations')).plugin],
+        }),
+      ).rejects.toThrow('instrumented preparation differs');
+      expect(readFileSync(join(root, 'dist/private.js'))).toEqual(artifact);
+    } finally {
+      writeFileSync(filename, original);
+    }
   });
 
   it('captures a synchronous restricted child through a parent-opened descriptor', async () => {
