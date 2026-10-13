@@ -964,6 +964,8 @@ export function compiledCaptureReader(snapshot, preparations, coverageVariable =
         return [join(root, compiled.replace(/\.tsx?$/, '.js')), entry];
       }),
   );
+  for (const entry of snapshot.included.filter((value) => /\.m?js$/.test(value.path)))
+    artifacts.set(join(root, entry.path), { ...entry, raw: true });
   const receipts = new Map();
   return {
     receipts,
@@ -976,22 +978,30 @@ export function compiledCaptureReader(snapshot, preparations, coverageVariable =
         return;
       }
       const bytes = readFileSync(filename);
-      const mapBytes = readFileSync(`${filename}.map`);
-      const map = JSON.parse(mapBytes.toString('utf8'));
-      if (
-        map.version !== 3 ||
-        map.file !== basename(filename) ||
-        !Array.isArray(map.sources) ||
-        map.sources.length !== 1 ||
-        typeof map.sources[0] !== 'string' ||
-        typeof map.mappings !== 'string'
-      )
-        throw new Error(`Unsupported compiled capture map: ${filename}`);
-      const source = map.sources[0].startsWith('file:')
-        ? fileURLToPath(map.sources[0])
-        : resolve(dirname(filename), map.sourceRoot ?? '', map.sources[0]);
-      if (source !== join(root, entry.path))
-        throw new Error(`Compiled capture mapped source differs: ${filename}`);
+      let mapBytes = null;
+      let map = null;
+      let source = filename;
+      if (entry.raw) {
+        if (digest(bytes) !== entry.sha256)
+          throw new Error(`Owned script source differs from inventory: ${filename}`);
+      } else {
+        mapBytes = readFileSync(`${filename}.map`);
+        map = JSON.parse(mapBytes.toString('utf8'));
+        if (
+          map.version !== 3 ||
+          map.file !== basename(filename) ||
+          !Array.isArray(map.sources) ||
+          map.sources.length !== 1 ||
+          typeof map.sources[0] !== 'string' ||
+          typeof map.mappings !== 'string'
+        )
+          throw new Error(`Unsupported compiled capture map: ${filename}`);
+        source = map.sources[0].startsWith('file:')
+          ? fileURLToPath(map.sources[0])
+          : resolve(dirname(filename), map.sourceRoot ?? '', map.sources[0]);
+        if (source !== join(root, entry.path))
+          throw new Error(`Compiled capture mapped source differs: ${filename}`);
+      }
       const prepared = JSON.parse(
         readFileSync(join(preparations, `${digest(entry.path)}.json`), 'utf8'),
       );
@@ -1006,7 +1016,7 @@ export function compiledCaptureReader(snapshot, preparations, coverageVariable =
       )
         throw new Error(`Compiled instrumented preparation differs: ${entry.path}`);
       if (
-        map.sourcesContent != null &&
+        map?.sourcesContent != null &&
         (!Array.isArray(map.sourcesContent) ||
           map.sourcesContent.length !== 1 ||
           map.sourcesContent[0] !== readFileSync(source, 'utf8'))
@@ -1017,7 +1027,7 @@ export function compiledCaptureReader(snapshot, preparations, coverageVariable =
         sha256: entry.sha256,
         artifact: filename,
         artifactSha256: digest(bytes),
-        artifactMapSha256: digest(mapBytes),
+        artifactMapSha256: mapBytes === null ? null : digest(mapBytes),
         instrumentedSha256: prepared.instrumentedSha256,
       };
       if (receipts.has(filename) && !isDeepStrictEqual(receipts.get(filename), receipt))

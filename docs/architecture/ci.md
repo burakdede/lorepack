@@ -461,6 +461,10 @@ Campaign preparations and launch bootstraps use a fixed counter namespace separa
 native regression fixtures. Both collectors can run in one child process without mixing
 hits; namespace mismatches and duplicate collectors remain errors. See
 [the counter storage decision](../adr/0022-independent-counter-namespaces.md).
+The native reader also instruments owned JavaScript scripts loaded from source after
+bootstrap registration. Their receipts bind original source bytes directly, with no
+compiled source-map artifact. Changed source bytes and changed preparations are rejected.
+Modules loaded before the hook are not retroactively measured.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
