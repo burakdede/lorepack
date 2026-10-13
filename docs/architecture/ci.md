@@ -122,6 +122,26 @@ merging independent executions once. Failure returns unavailable maps; capture
 validity alone does not establish the original all-owned coverage targets.
 
 Vitest hard-excludes configuration files, even with an explicit coverage include.
+Compiled-child qualification fixtures instrument canonical preparations before
+bundling with esbuild. Instrumenting TypeScript compiler output after compilation
+does not reproduce the direct provider's source locations. `registerCounterStream`
+uses a separate inherited descriptor (4 or greater), preserving the existing IPC
+descriptor and child permissions. It forwards actual engine source registrations
+and cumulative counter mutations with contiguous sequence numbers. Strict replay
+rejects truncated frames, sequence gaps, duplicate sources, initial hits, invalid
+increments and mismatched completion identities. It never sums cumulative values.
+Real fork fixtures use an empty environment, the permission model and the same
+heap limit while testing normal exit, SIGKILL and temporarily paused pipe reads.
+An actual synchronous child uses a parent-opened file descriptor instead of a pipe:
+the parent cannot drain an asynchronous pipe while blocked in `execFileSync`.
+The inherited descriptor gives access to the capture file without a filesystem
+path permission grant; the child still reports filesystem writes disallowed.
+Remapped maps and counters match direct instrumentation exactly. SIGKILL retains
+executed counters with state `interrupted` and no invented exit completion. The
+host must still prove expected termination before that execution can qualify.
+These primitives do not yet replace the production child capture path; large
+source registrations and native Windows pipe behavior remain qualification work.
+
 Configuration capture therefore prepares them separately through Vite's public
 [transform API](https://vite.dev/guide/api-javascript#transformwithoxc), using the
 version resolved by Vitest and original source-map content. It uses the same

@@ -528,6 +528,11 @@ Reconciliation validates matched lifecycle identities, loaded-source hashes and 
 maps before merging each final snapshot once. Rejected or incomplete records produce
 unavailable aggregates. Native preloads use file URLs for Windows compatibility.
 Subprocess integration and compiled-child qualification remain open.
+Compiled-capture fixtures instrument canonical preparations before bundling and replay
+real counters through a separate inherited descriptor, preserving IPC and permissions.
+Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
+Forced termination retains counters with an incomplete lifecycle; it does not qualify
+complete capture. Production child integration remains required.
 Configuration capture now prepares source maps before native execution, verifies
 all configuration assertions, and reconciles process evidence before bundling counts.
 The provider patch retains default-export expression statements so configurations

@@ -7,6 +7,7 @@ import {
   realpathSync,
   unlinkSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
 import { join } from 'node:path';
@@ -18,6 +19,139 @@ import { prepareSource } from './coverage_configuration.mjs';
 const active = Symbol.for('lorepack.nativeCoverageCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+
+export function registerCounterStream(fd) {
+  if (!Number.isSafeInteger(fd) || fd < 4)
+    throw new Error('Counter stream requires a separate inherited descriptor.');
+  if (globalThis[active] || Object.hasOwn(globalThis, variable))
+    throw new Error('Native coverage collector already registered or counters already exist.');
+  const identity = {
+    schema: 1,
+    id: randomUUID(),
+    pid: process.pid,
+    threadId,
+    provider: 'istanbul@4.1.11',
+  };
+  let sequence = 0;
+  const emit = (record) => {
+    const bytes = Buffer.from(`${JSON.stringify({ ...record, sequence: ++sequence })}\n`);
+    if (writeSync(fd, bytes) !== bytes.length)
+      throw new Error('Incomplete native counter stream write.');
+  };
+  const counters = (target, path, field, key) =>
+    new Proxy(target, {
+      set(object, counter, value) {
+        emit({
+          state: 'counter',
+          path,
+          field,
+          key: key ?? counter,
+          ...(field === 'b' ? { arm: Number(counter) } : {}),
+          value,
+        });
+        object[counter] = value;
+        return true;
+      },
+    });
+  emit({ ...identity, state: 'started' });
+  globalThis[variable] = new Proxy(
+    {},
+    {
+      set(object, path, data) {
+        emit({ state: 'source', path, data });
+        data.s = counters(data.s, path, 's');
+        data.f = counters(data.f, path, 'f');
+        for (const key of Object.keys(data.b)) data.b[key] = counters(data.b[key], path, 'b', key);
+        object[path] = data;
+        return true;
+      },
+    },
+  );
+  globalThis[active] = true;
+  process.once('exit', (exitCode) => emit({ ...identity, state: 'completed', exitCode }));
+  return identity.id;
+}
+
+export async function replayCounterStream(snapshot, text) {
+  if (typeof text !== 'string' || !text || !text.endsWith('\n'))
+    throw new Error('Empty or truncated native counter stream.');
+  const records = text
+    .slice(0, -1)
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  const start = records[0];
+  if (
+    start.state !== 'started' ||
+    start.schema !== 1 ||
+    start.provider !== 'istanbul@4.1.11' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(start.id) ||
+    !Number.isSafeInteger(start.pid) ||
+    start.pid <= 0 ||
+    !Number.isSafeInteger(start.threadId) ||
+    start.threadId < 0
+  )
+    throw new Error('Invalid native counter stream identity.');
+  const root = realpathSync(snapshot.root);
+  const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
+  const maps = {};
+  const { captureCoverage } = await import('./coverage_report.mjs');
+  let sequence = 0;
+  let completed = null;
+  for (const record of records) {
+    if (completed || record.sequence !== ++sequence)
+      throw new Error('Native counter stream sequence differs.');
+    if (sequence === 1) continue;
+    if (record.state === 'source') {
+      const entry = owned.get(record.path);
+      if (!entry || Object.hasOwn(maps, record.path) || record.data?.path !== record.path)
+        throw new Error('Invalid or repeated native counter source.');
+      if (digest(readFileSync(record.path)) !== entry.sha256)
+        throw new Error(`Stale native counter source: ${entry.path}`);
+      captureCoverage(snapshot, { [record.path]: record.data }, start.id);
+      if (
+        [
+          ...Object.values(record.data.s),
+          ...Object.values(record.data.f),
+          ...Object.values(record.data.b).flat(),
+        ].some((value) => value !== 0)
+      )
+        throw new Error('Native counter source starts with execution hits.');
+      maps[record.path] = record.data;
+    } else if (record.state === 'counter') {
+      const map = maps[record.path];
+      if (
+        !map ||
+        !['s', 'f', 'b'].includes(record.field) ||
+        typeof record.key !== 'string' ||
+        !Object.hasOwn(map[record.field], record.key)
+      )
+        throw new Error('Unknown native counter.');
+      const target = record.field === 'b' ? map.b[record.key] : map[record.field];
+      const key = record.field === 'b' ? record.arm : record.key;
+      if (record.field === 'b' && (!Number.isSafeInteger(key) || key < 0 || key >= target.length))
+        throw new Error('Unknown native branch arm.');
+      if (!Number.isSafeInteger(record.value) || record.value !== target[key] + 1)
+        throw new Error('Native counter increment differs.');
+      target[key] = record.value;
+    } else if (record.state === 'completed') {
+      for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
+        if (record[key] !== start[key])
+          throw new Error('Native counter completion identity differs.');
+      if (!Number.isSafeInteger(record.exitCode))
+        throw new Error('Invalid native counter exit code.');
+      completed = record;
+    } else throw new Error('Unknown native counter stream record.');
+  }
+  captureCoverage(snapshot, maps, start.id);
+  return {
+    id: start.id,
+    pid: start.pid,
+    threadId: start.threadId,
+    state: completed ? 'completed' : 'interrupted',
+    exitCode: completed?.exitCode ?? null,
+    maps,
+  };
+}
 
 function publish(directory, name, value) {
   const filename = join(directory, name);
