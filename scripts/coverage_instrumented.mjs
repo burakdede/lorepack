@@ -217,23 +217,30 @@ function assertNodeArguments(entry) {
 
 function selectCommand(registry, args, cwd) {
   if (!Array.isArray(args)) return null;
-  for (let position = 0; position < args.length; position++) {
-    const argument = args[position];
+  let index = 0;
+  for (; index < args.length; index++) {
+    const argument = args[index];
     if (argument === '-e' || argument === '--eval') {
-      if (typeof args[position + 1] !== 'string') return null;
+      if (typeof args[index + 1] !== 'string') return null;
       const entry = [...registry.values()].find((value) => value.captureMode === 'eval-import');
       return entry ? { entry, index: -1 } : null;
     }
+    if (argument === '--import') {
+      if (typeof args[index + 1] !== 'string' || !args[index + 1]) return null;
+      index++;
+      continue;
+    }
     if (
-      typeof argument !== 'string' ||
-      !/^(?:--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(argument)
+      typeof argument === 'string' &&
+      /^(?:--import=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
+        argument,
+      )
     )
-      break;
+      continue;
+    if (typeof argument !== 'string' || argument.startsWith('-')) return null;
+    break;
   }
-  const index = args.findIndex(
-    (argument) => typeof argument === 'string' && !argument.startsWith('-'),
-  );
-  if (index < 0) return null;
+  if (index >= args.length) return null;
   let filename = resolve(cwd ?? process.cwd(), args[index]);
   try {
     filename = realpathSync(filename);
@@ -241,11 +248,7 @@ function selectCommand(registry, args, cwd) {
   const entry = registry.get(filename);
   if (!entry) {
     const preload = [...registry.values()].find((value) => value.captureMode === 'script-import');
-    if (
-      !preload ||
-      args.slice(0, index).some((value) => !/^--max-old-space-size=[1-9][0-9]*$/.test(value))
-    )
-      return null;
+    if (!preload) return null;
     try {
       if (!statSync(filename).isFile()) return null;
     } catch {
