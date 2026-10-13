@@ -168,6 +168,10 @@ Installing these generated artifacts in the complete campaign remains necessary.
 `sourceCoverageConfig` accepts an optional worker setup file for each selected project.
 A real Vitest fixture verifies that the generated setup and inherited project setup
 both execute; attaching it does not replace the existing setup.
+`writeCampaignSetup` installs the checked registry in a real Vitest worker and
+drains actual process closes before restoring bindings at file teardown. The
+compiler fixture verifies automatic CLI redirection and all three nested children.
+The complete campaign does not yet install this setup.
 
 `registerForkCapture` explicitly maps ordinary child entrypoints to checked measured
 artifacts. It verifies both hashes at registration and immediately before launch,
