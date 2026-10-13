@@ -14,7 +14,10 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
-import { prepareNativeCapture } from '../../../scripts/coverage_instrumented.mjs';
+import {
+  prepareNativeCapture,
+  reconcileNativeCapture,
+} from '../../../scripts/coverage_instrumented.mjs';
 
 type Coverage = {
   path: string;
@@ -241,14 +244,14 @@ it('captures actual typed transforms and reproduces every direct map and counter
   expect(preparation.map.sourcesContent).toEqual([original]);
   expect(preparation.code).not.toBe(original);
   const repository = resolve(import.meta.dirname, '../../..');
-  const require = createRequire(join(repository, 'package.json'));
-  const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
-  const { remapNativeCoverage } = await import(pathToFileURL(providerPath).href);
   const filename = join(root, 'private.ts');
   const entry = join(root, 'prepared-native.mjs');
   const bootstrap = join(root, 'native-bootstrap.mjs');
   const output = join(root, 'native-records');
-  const snapshot = { root, included: [{ path: 'private.ts', sha256: preparation.sha256 }] };
+  const snapshot = {
+    root,
+    included: prepared.map((value) => ({ path: value.path, sha256: value.sha256 })),
+  };
   const nativePreparations = join(root, 'native-preparations');
   await prepareNativeCapture(snapshot, join(root, 'preparations'), nativePreparations);
   writeFileSync(
@@ -257,18 +260,30 @@ it('captures actual typed transforms and reproduces every direct map and counter
   );
   writeFileSync(
     entry,
-    `import {PrivateWitness} from ${JSON.stringify(pathToFileURL(filename).href)}; const instance = new PrivateWitness(); await instance.run(true); await instance.run(false);`,
+    `import {PrivateWitness} from ${JSON.stringify(pathToFileURL(filename).href)}; import ${JSON.stringify(pathToFileURL(join(root, 'empty.ts')).href)}; import ${JSON.stringify(pathToFileURL(join(root, 'barrel.ts')).href)}; const instance = new PrivateWitness(); await instance.run(true); await instance.run(false);`,
   );
-  execFileSync(process.execPath, ['--import', bootstrap, entry], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['--import', pathToFileURL(bootstrap).href, entry], {
+    stdio: 'pipe',
+  });
   const completed = readdirSync(output)
     .map((file) => JSON.parse(readFileSync(join(output, file), 'utf8')))
     .find((record) => record.state === 'completed');
   expect(completed.rejected).toEqual([]);
-  expect(completed.loadedSources).toEqual([{ path: 'private.ts', sha256: preparation.sha256 }]);
-  const raw = completed.maps;
-  const { createCoverageMap } = createRequire(providerPath)('istanbul-lib-coverage');
-  const remapped = await remapNativeCoverage(createCoverageMap(raw));
-  const actual = JSON.parse(JSON.stringify(remapped.fileCoverageFor(filename).toJSON()));
+  expect(completed.loadedSources.map((value: { path: string }) => value.path).sort()).toEqual([
+    'barrel.ts',
+    'empty.ts',
+    'private.ts',
+  ]);
+  const measured = await reconcileNativeCapture(snapshot, output, maps);
+  expect(measured.status).toBe('Pass');
+  expect(measured.processes).toBe(1);
+  const actual = measured.maps[filename];
+  expect(Object.keys(measured.maps).sort()).toEqual(Object.keys(maps).sort());
+  for (const path of ['barrel.ts', 'empty.ts']) {
+    expect(measured.maps[join(root, path)].s).toEqual({});
+    expect(measured.maps[join(root, path)].f).toEqual({});
+    expect(measured.maps[join(root, path)].b).toEqual({});
+  }
   for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
     expect(actual[field]).toEqual(maps[filename]?.[field as keyof Coverage]);
 });

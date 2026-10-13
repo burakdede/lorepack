@@ -118,6 +118,16 @@ Forced termination leaves a start record without a fabricated completion. Real f
 verify these cases, exact typed/private map replay and file-access denial under identical
 permissions. Missing completion still needs campaign reconciliation; compiled children
 and complete campaign qualification remain open.
+
+Native preloads pass `pathToFileURL(...).href` to Node's `--import`; drive paths are
+not valid ESM specifiers on Windows. The native fixtures execute that same form.
+`reconcileNativeCapture` validates every lifecycle file, matched process/thread
+identity, loaded source hash and map/counter scope. Empty or malformed JSON,
+duplicate snapshot files, orphan records, missing completions and rejected loads
+cannot qualify capture. It remaps each final snapshot with the pinned engine,
+requires exact direct layouts where supplied, and checks compatibility before
+merging independent executions once. Failure returns unavailable maps; capture
+validity alone does not establish the original all-owned coverage targets.
 See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
 for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 
