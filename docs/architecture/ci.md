@@ -174,6 +174,23 @@ It does not retain the complete raw campaign in an array. Converted maps and par
 available for compatibility checks. The real-record stream test must produce the same counters as the array input,
 including uncovered functions. This states the loading strategy, not a peak-memory bound.
 
+Native and direct providers may assign different counter IDs to identical source locations.
+Alignment requires a unique one-to-one match of every descriptor in coverage JSON: statement
+ranges, function name/declaration/body, and branch type/ranges/ordered arms. Optional function
+or branch `line` metadata is redundant only when it equals `loc.start.line`. Coverage JSON
+serialization preserves the providers' wire representation, including null end columns.
+Alignment rekeys genuine counts without changing them or reducing scope. Ambiguous matches,
+nonredundant metadata and reordered branch arms remain rejected. A real installed-provider
+fixture checks exercised and unused functions, statements and both branch arms against an
+independent native execution.
+
+V8 cannot recover default-parameter branch execution reliably. A real witness executes a
+function twice but its initializer once; direct instrumentation records one initializer hit,
+while native mapping assigns the function's two calls. Native conversion rejects sources
+containing these branches rather than inventing counts. See the
+[mapper limitations](https://github.com/AriPerkkio/ast-v8-to-istanbul#limitations).
+Those owned sources still require direct instrumentation and remain in the denominator.
+
 Targets are fixed: overall lines/statements/functions at least 95% and branches at least 90%;
 critical lines/statements at least 98% and functions/branches at least 95%. Failed targets
 remain visible in the JSON report. The report command is not part of `pnpm verify` while the

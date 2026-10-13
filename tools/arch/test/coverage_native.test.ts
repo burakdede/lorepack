@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -8,8 +9,9 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { convertNativeCoverage } from '../../../scripts/coverage_native.mjs';
@@ -54,6 +56,115 @@ beforeAll(() => {
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 describe('genuine native configuration coverage', () => {
+  it.each([
+    { defaultParameter: false, behavior: 'aligns exact source locations' },
+    { defaultParameter: true, behavior: 'rejects unrecoverable default-parameter coverage' },
+  ])('$behavior with actual Istanbul and native execution', async ({ defaultParameter }) => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const require = createRequire(join(repository, 'package.json'));
+    const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+    mkdirSync(join(repository, 'coverage'), { recursive: true });
+    const root = realpathSync(mkdtempSync(join(repository, 'coverage/native-layout-')));
+    try {
+      const path = 'witness.mjs';
+      const source = join(root, path);
+      const code = `export function choose(flag${defaultParameter ? ' = false' : ''}) {
+  if (flag) return 1;
+  return 2;
+}
+export function unused() { return 0; }
+export const outputs = [choose(true), choose(${defaultParameter ? '' : 'false'})];
+`;
+      writeFileSync(source, code);
+      writeFileSync(
+        join(root, 'witness.test.mjs'),
+        `import { expect, test } from 'vitest';
+import { outputs } from './witness.mjs';
+test('executes both arms', () => expect(outputs).toEqual([1, 2]));
+`,
+      );
+      const config = join(root, 'vitest.config.mjs');
+      writeFileSync(
+        config,
+        `export default ${JSON.stringify({
+          root,
+          test: {
+            include: ['witness.test.mjs'],
+            coverage: {
+              provider: 'istanbul',
+              enabled: true,
+              include: ['witness.mjs'],
+              exclude: [],
+              reporter: ['json'],
+              reportsDirectory: 'direct',
+            },
+          },
+        })};\n`,
+      );
+      execFileSync(process.execPath, [vitest, 'run', '--config', config], {
+        cwd: root,
+        stdio: 'pipe',
+      });
+      const rawDirect = JSON.parse(readFileSync(join(root, 'direct/coverage-final.json'), 'utf8'));
+      const direct = Object.fromEntries(
+        Object.entries(rawDirect).map(([path, map]) => [realpathSync(path), map]),
+      ) as typeof rawDirect;
+      const raw = join(root, 'native');
+      execFileSync(process.execPath, [source], { env: { NODE_V8_COVERAGE: raw }, stdio: 'pipe' });
+      const records = readdirSync(raw).map((file) => ({
+        origin: file,
+        result: JSON.parse(readFileSync(join(raw, file), 'utf8')).result,
+      }));
+      const retained = structuredClone({ direct, records });
+      const measured = await convertNativeCoverage(
+        { root, included: [{ path, sha256: createHash('sha256').update(code).digest('hex') }] },
+        records,
+        direct,
+      );
+      if (defaultParameter) {
+        const branch = Object.entries(direct[source].branchMap).find(
+          ([, entry]) => (entry as { type: string }).type === 'default-arg',
+        );
+        if (!branch) throw new Error('Missing default-parameter witness.');
+        expect(direct[source].b[branch[0]]).toEqual([1]);
+        const choose = records
+          .flatMap((record) => record.result)
+          .flatMap((script: Script) => script.functions)
+          .find((fn: Script['functions'][number]) => fn.functionName === 'choose');
+        expect(choose?.ranges[0]?.count).toBe(2);
+        expect(measured.maps).toEqual({});
+        expect(measured.acceptedExecutions).toBe(0);
+        expect(measured.rejected).toEqual([
+          expect.objectContaining({
+            path,
+            reason: 'V8 default-parameter execution is not recoverable.',
+          }),
+        ]);
+        expect({ direct, records }).toEqual(retained);
+        return;
+      }
+      expect(measured.rejected).toEqual([]);
+      expect(measured.acceptedExecutions).toBe(1);
+      const map = measured.maps[source];
+      for (const field of ['statementMap', 'fnMap', 'branchMap'])
+        expect(map[field]).toEqual(direct[source][field]);
+      expect(map.s).toEqual(direct[source].s);
+      expect(map.b).toEqual(direct[source].b);
+      const functions = Object.entries(map.fnMap).map(([id, entry]) => ({
+        name: (entry as { name: string }).name,
+        hits: map.f[id],
+      }));
+      expect(functions).toEqual(
+        expect.arrayContaining([
+          { name: 'choose', hits: 2 },
+          { name: 'unused', hits: 0 },
+        ]),
+      );
+      expect({ direct, records }).toEqual(retained);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('imports capture tooling from stdin without invoking CLI entrypoints', () => {
     const script = pathToFileURL(
       resolve(import.meta.dirname, '../../../scripts/coverage_native.mjs'),
@@ -131,6 +242,49 @@ describe('genuine native configuration coverage', () => {
       true,
     );
     expect(incompatible[join(directory, path)].statementMap).toEqual({});
+  });
+
+  it('rejects ambiguous counter locations without changing either input', async () => {
+    const native = await convertNativeCoverage(snapshot, records.slice(0, 1));
+    const direct = structuredClone(native.maps);
+    const map = direct[join(directory, path)];
+    const ids = Object.keys(map.statementMap);
+    if (!ids[0] || !ids[1]) throw new Error('Missing statement witnesses.');
+    map.statementMap[ids[1]] = structuredClone(map.statementMap[ids[0]]);
+    const retained = structuredClone(direct);
+    const measured = await convertNativeCoverage(snapshot, records, direct);
+    expect(measured.acceptedExecutions).toBe(0);
+    expect(measured.maps).toEqual({});
+    expect(measured.rejected).toHaveLength(2);
+    expect(measured.rejected.every((entry) => entry.mismatch?.includes('statementMap'))).toBe(true);
+    expect(direct).toEqual(retained);
+  });
+
+  it('rejects line metadata that disagrees with the retained function location', async () => {
+    const native = await convertNativeCoverage(snapshot, records.slice(0, 1));
+    const direct = structuredClone(native.maps);
+    const map = direct[join(directory, path)];
+    const fn = Object.values(map.fnMap)[0] as { line: number; loc: { start: { line: number } } };
+    fn.line = fn.loc.start.line + 1;
+    const measured = await convertNativeCoverage(snapshot, records, direct);
+    expect(measured.acceptedExecutions).toBe(0);
+    expect(measured.maps).toEqual({});
+    expect(measured.rejected.every((entry) => entry.mismatch?.includes('fnMap'))).toBe(true);
+  });
+
+  it('rejects reordered branch arms rather than moving their hit counts', async () => {
+    const native = await convertNativeCoverage(snapshot, records.slice(0, 1));
+    const direct = structuredClone(native.maps);
+    const map = direct[join(directory, path)];
+    const branch = Object.values(map.branchMap).find(
+      (entry) => (entry as { locations: unknown[] }).locations.length === 2,
+    ) as { locations: unknown[] } | undefined;
+    if (!branch) throw new Error('Missing branch witness.');
+    branch.locations.reverse();
+    const measured = await convertNativeCoverage(snapshot, records, direct);
+    expect(measured.acceptedExecutions).toBe(0);
+    expect(measured.maps).toEqual({});
+    expect(measured.rejected.every((entry) => entry.mismatch?.includes('branchMap'))).toBe(true);
   });
 
   it('combines compatible native counters without modifying the direct maps', async () => {
