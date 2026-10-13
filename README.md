@@ -583,6 +583,7 @@ or Node's position-preserving type stripping; wrapped code cannot be mapped as o
 records one file at a time.
 Measured CLI entry wrappers initialize capture before shared chunks execute, and launch
 receipts bind the emitted JavaScript graph.
+Explicit fixture collectors restore the surrounding campaign capture after use.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.
 V8 records cannot qualify default-parameter branches; those require direct instrumentation.
