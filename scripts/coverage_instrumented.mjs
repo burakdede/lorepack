@@ -249,14 +249,14 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
       );
       return entry ? { entry, index: -1 } : null;
     }
-    if (argument === '--import') {
+    if (['--import', '--allow-fs-read', '--allow-fs-write'].includes(argument)) {
       if (typeof args[index + 1] !== 'string' || !args[index + 1]) return null;
       index++;
       continue;
     }
     if (
       typeof argument === 'string' &&
-      /^(?:--import=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
+      /^(?:--permission|--(?:import|allow-fs-read|allow-fs-write)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
         argument,
       )
     )

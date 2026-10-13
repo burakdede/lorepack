@@ -469,6 +469,9 @@ Checked import bootstraps also support a separate FD5 campaign stream when a fix
 already supplies its own file on FD4. Launch receipts bind the chosen descriptor. The
 adapters preserve the original FD4 file and visible output layout; arbitrary extra
 descriptors remain unsupported. Both sync and async streams require real close receipts.
+Temporary script and eval selection also consumes permission/read/write prefixes in
+separate-value and equals forms. Original grants and heap limits remain unchanged.
+Real launch tests compare denied and permitted writes with ordinary Node execution.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
