@@ -182,6 +182,71 @@ async function nativeFixture(code = 'export const value = 7;') {
 }
 
 describe('native instrumentation process capture', () => {
+  it.each(['module', 'commonjs'] as const)(
+    'captures real %s stdin without changing execution',
+    async (mode) => {
+      const fixture = await nativeFixture(
+        'export function choose(flag = false) { return flag ? 1 : 2; }\nexport function unused() { return 9; }\nchoose(); choose(true);',
+      );
+      const entry = createEvalCapture(
+        fixture.snapshot,
+        fixture.preparations,
+        join(directory, 'stdin-preload.mjs'),
+      );
+      const environment = { LOREPACK_STDIN_WITNESS: 'stdin-only' };
+      const args = [`--input-type=${mode}`, '-', 'stdin-argument'];
+      const input = `import(${JSON.stringify(pathToFileURL(fixture.source).href)}).then(()=>console.log(JSON.stringify({args:process.argv,execArgv:process.execArgv,cwd:process.cwd(),witness:process.env.LOREPACK_STDIN_WITNESS,moduleUrl:${mode === 'module' ? 'import.meta.url' : 'null'}})));`;
+      const expected = execFileSync(process.execPath, args, {
+        input,
+        encoding: 'utf8',
+        cwd: directory,
+        env: environment,
+      });
+      const captures = join(directory, 'stdin-captures');
+      const synchronous = registerSyncCommandCapture([entry], captures);
+      const asynchronous = registerCommandCapture([entry], captures);
+      try {
+        expect(
+          execFileSync(process.execPath, args, {
+            input,
+            encoding: 'utf8',
+            cwd: directory,
+            env: environment,
+          }),
+        ).toBe(expected);
+        const child = spawn(process.execPath, args, {
+          cwd: directory,
+          env: environment,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        const output: Buffer[] = [];
+        const errors: Buffer[] = [];
+        child.stdout.on('data', (value) => output.push(value));
+        child.stderr.on('data', (value) => errors.push(value));
+        const closed = new Promise((resolve, reject) => {
+          child.once('close', resolve);
+          child.once('error', reject);
+        });
+        child.stdin.end(input);
+        expect(await closed, Buffer.concat(errors).toString()).toBe(0);
+        expect(Buffer.concat(output).toString()).toBe(expected);
+        expect(Buffer.concat(errors).toString()).toBe('');
+        await asynchronous.settled();
+      } finally {
+        asynchronous.restore();
+        synchronous.restore();
+      }
+      const measured = await reconcileForkCapture(fixture.snapshot, captures, [entry]);
+      expect(measured.status).toBe('Pass');
+      expect(measured.processes).toBe(2);
+      const coverage = (measured.maps as Record<string, { f: Record<string, number> }>)[
+        fixture.source
+      ];
+      if (!coverage) throw new Error('Missing stdin execution counters.');
+      expect(Object.values(coverage.f).sort()).toEqual([0, 4]);
+    },
+  );
+
   it('accounts unregistered forks through command capture while preserving IPC', async () => {
     const fixture =
       await nativeFixture(`export function choose(flag = false) { if (flag) return 1; return 2; }
