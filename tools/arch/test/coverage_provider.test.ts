@@ -692,19 +692,31 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     expect(launch.entrySha256).toBe(
       createHash('sha256').update(readFileSync(launch.entry)).digest('hex'),
     );
-    const counterFile = join(project, 'cli-counters.jsonl');
-    const fd = openSync(counterFile, 'wx');
+    const parentDirectory = join(project, 'cli-counters');
+    const parentEntry = {
+      original: launch.entry,
+      target: launch.entry,
+      originalSha256: launch.entrySha256,
+      targetSha256: launch.entrySha256,
+      interruptionSignals: [],
+    };
+    const parentCapture = registerSyncCommandCapture([parentEntry], parentDirectory);
     let result: import('node:child_process').SpawnSyncReturns<string>;
     try {
       const { spawnSync } = await import('node:child_process');
       result = spawnSync(process.execPath, [launch.entry], {
         env: {},
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
     } finally {
-      closeSync(fd);
+      parentCapture.restore();
     }
+    expect(parentCapture.launches).toHaveLength(1);
+    const counterFile = join(parentDirectory, `${parentCapture.launches[0].id}.counters.jsonl`);
+    const parentEvidence = await reconcileForkCapture(captured, parentDirectory, [parentEntry]);
+    expect(parentEvidence.status).toBe('Pass');
+    expect(parentEvidence.processes).toBe(1);
     expect(result.stderr).toBe('');
     expect(result.status).toBe(7);
     expect(

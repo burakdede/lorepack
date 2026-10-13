@@ -451,6 +451,9 @@ An explicit fixture collector can temporarily layer over the campaign collector.
 Its launches retain their own receipts and counter streams; restoring it reinstates the
 campaign bindings. A second explicit collector is rejected, and private launch markers
 prevent the underlying campaign adapter from wrapping the same launch twice.
+Fixtures that launch a premeasured CLI register its hash-bound entrypoint with the
+synchronous adapter and reconcile the parent launch before inspecting its counter stream.
+They use the same descriptor allocation as campaign launches.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.
