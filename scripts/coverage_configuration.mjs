@@ -189,6 +189,14 @@ export function prepareSource(snapshot, id, code, map) {
       throw new Error(`Preparation mapped original differs: ${id}`);
   } else if (code !== original)
     throw new Error(`Transformed preparation requires a source map: ${id}`);
+  if (query !== undefined) {
+    const reportingFilename = `var _jsxFileName = ${JSON.stringify(id)};`;
+    const canonicalFilename = `var _jsxFileName = ${JSON.stringify(input)};`;
+    code = code
+      .split('\n')
+      .map((line) => (line === reportingFilename ? canonicalFilename : line))
+      .join('\n');
+  }
   return {
     schema: 1,
     kind: 'static-transform',

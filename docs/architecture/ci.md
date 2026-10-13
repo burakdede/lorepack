@@ -99,7 +99,10 @@ The campaign's custom instrumenter retains its actual first transform input in
 `preparations/`. Each record binds transformed code and its original source map to
 the inventory SHA. Source content must match before collection, including during
 Vitest's synthetic second mapping pass. Exclusive atomic publication preserves
-existing records and rejects conflicting transforms. These records contain no hit
+existing records and rejects conflicting transforms. Recognized uncovered-report
+queries use the physical filename in preparation records for generated JSX debug
+metadata. Code returned to the provider remains unchanged; altered code bodies,
+source maps and original bytes still fail validation. These records contain no hit
 counters; a real typed/private fixture replays them and requires exact equality
 for statement, function and branch maps and counts after remapping.
 
