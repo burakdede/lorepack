@@ -26,3 +26,7 @@ index 354c131859a3cc4d6ab4ee771892c39ef45d9d16..12a83b241ab3e97d726cf3b7574568fa
  }
  /**
  * Remove possible query parameters from filenames
+@@ -3765 +3773,2 @@
+-export { IstanbulCoverageProvider };
++const createNativeInstrumenter = srcExports.createInstrumenter;
++export { IstanbulCoverageProvider, createNativeInstrumenter, transformCoverage as remapNativeCoverage };

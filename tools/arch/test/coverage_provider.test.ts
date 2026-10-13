@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 type Coverage = {
@@ -122,5 +123,80 @@ describe('instrumented coverage source retention', () => {
       expect(maps[path]?.f).toEqual({});
       expect(maps[path]?.b).toEqual({});
     }
+  });
+});
+
+describe('pinned native instrumentation primitives', () => {
+  it('records actual initializer, private-method and early-throw execution', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const require = createRequire(join(repository, 'package.json'));
+    const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
+    const provider = await import(pathToFileURL(providerPath).href);
+    expect(provider.createNativeInstrumenter).toBeTypeOf('function');
+    expect(provider.remapNativeCoverage).toBeTypeOf('function');
+    const source = `class Witness {
+  #used() { return 7; }
+  #unused() { return 9; }
+  run() { return this.#used(); }
+}
+function choose(flag = false) {
+  if (flag) return 1;
+  return 2;
+}
+function fail() {
+  throw new Error('Expected failure');
+  return 99;
+}
+choose();
+choose(true);
+new Witness().run();
+try { fail(); } catch {}
+`;
+    const filename = join(root, 'native-witness.mjs');
+    const instrumenter = provider.createNativeInstrumenter({
+      produceSourceMap: true,
+      autoWrap: false,
+      esModules: true,
+      compact: false,
+      coverageVariable: '__LOREPACK_NATIVE_COVERAGE__',
+      coverageGlobalScope: 'globalThis',
+      coverageGlobalScopeFunc: false,
+      ignoreLines: true,
+    });
+    const code = instrumenter.instrumentSync(source, filename);
+    writeFileSync(
+      filename,
+      `${code}\nconsole.log(JSON.stringify(globalThis.__LOREPACK_NATIVE_COVERAGE__));\n`,
+    );
+    const raw = JSON.parse(execFileSync(process.execPath, [filename], { encoding: 'utf8' }));
+    const providerRequire = createRequire(providerPath);
+    const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
+    const remapped = await provider.remapNativeCoverage(createCoverageMap(raw));
+    const map = remapped.fileCoverageFor(filename).toJSON();
+    expect(map.s).toEqual(raw[filename].s);
+    expect(map.f).toEqual(raw[filename].f);
+    expect(map.b).toEqual(raw[filename].b);
+    const functions = Object.entries(map.fnMap).map(([id, fn]) => ({
+      line: (fn as { loc: { start: { line: number } } }).loc.start.line,
+      hits: map.f[id],
+    }));
+    expect(functions).toEqual(
+      expect.arrayContaining([
+        { line: 2, hits: 1 },
+        { line: 3, hits: 0 },
+        { line: 6, hits: 2 },
+        { line: 10, hits: 1 },
+      ]),
+    );
+    const initializer = Object.entries(map.branchMap).find(
+      ([, branch]) => (branch as { type: string }).type === 'default-arg',
+    );
+    if (!initializer) throw new Error('Missing initializer counter.');
+    expect(map.b[initializer[0]]).toEqual([1]);
+    const unreachable = Object.entries(map.statementMap).find(
+      ([, statement]) => (statement as { start: { line: number } }).start.line === 12,
+    );
+    if (!unreachable) throw new Error('Missing unreachable statement counter.');
+    expect(map.s[unreachable[0]]).toBe(0);
   });
 });

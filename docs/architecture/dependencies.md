@@ -159,6 +159,12 @@ bundled SQLite fixes the FTS5 CVEs: see
 
 ## Contributor patch versions
 
+The pinned Istanbul patch also exposes its existing instrumenter factory and
+source-map remapper for native-capture qualification. Reusing the bundled engine
+avoids an independently versioned instrumentation dependency. The regression runs
+real Node code and verifies default initializers, unused private methods and early
+throws. Full child capture remains a release gate.
+
 Studio pins `vite` at 7.3.7 on the existing 7.x major. This maintained patch includes
 the published development-server fixes, including the
 [Windows file policy correction](https://github.com/vitejs/vite/security/advisories/GHSA-fx2h-pf6j-xcff).
