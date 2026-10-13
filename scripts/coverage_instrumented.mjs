@@ -1,10 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  cpSync,
   linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   realpathSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync,
   writeSync,
@@ -19,6 +21,46 @@ import { prepareSource } from './coverage_configuration.mjs';
 const active = Symbol.for('lorepack.nativeCoverageCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
+
+export async function buildNativeCli(snapshot, preparations, output) {
+  const root = realpathSync(snapshot.root);
+  const directory = resolve(output);
+  if (directory === join(root, 'packages', 'cli', 'dist'))
+    throw new Error('Native measurement cannot overwrite ordinary CLI artifacts.');
+  mkdirSync(directory, { recursive: true });
+  if (readdirSync(directory).length) throw new Error('Native measurement output must be empty.');
+  const cli = join(root, 'packages', 'cli');
+  cpSync(join(cli, 'package.json'), join(dirname(directory), 'package.json'), {
+    errorOnExist: true,
+    force: false,
+  });
+  cpSync(join(cli, 'studio-dist'), join(dirname(directory), 'studio-dist'), {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+  });
+  symlinkSync(join(cli, 'node_modules'), join(dirname(directory), 'node_modules'), 'junction');
+  const { bundleCli } = await import('./bundle-cli.mjs');
+  const compilation = compiledCapturePlugin(snapshot, preparations);
+  await bundleCli({
+    root,
+    output: directory,
+    plugins: [compilation.plugin],
+    banner: {
+      js: `import {registerCounterStream} from ${JSON.stringify(import.meta.url)}; registerCounterStream(4);`,
+    },
+  });
+  const receipts = [...compilation.receipts.values()].sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+  if (!receipts.length) throw new Error('Native CLI build produced no owned compilation receipts.');
+  publish(directory, 'compilation.receipts.json', {
+    schema: 1,
+    provider: 'istanbul@4.1.11',
+    receipts,
+  });
+  return { directory, receipts };
+}
 
 export function compiledCapturePlugin(snapshot, preparations) {
   const root = realpathSync(snapshot.root);

@@ -533,6 +533,8 @@ real counters through a separate inherited descriptor, preserving IPC and permis
 Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
 Compiled measurement replays checked provider preparations while retaining ordinary
 compiler artifacts and their source-bound hash receipts.
+Measured CLI builds share the production entrypoint definitions and migration layout,
+with separate output, package metadata and Studio assets.
 Forced termination retains counters with an incomplete lifecycle; it does not qualify
 complete capture. Production child integration remains required.
 Configuration capture now prepares source maps before native execution, verifies

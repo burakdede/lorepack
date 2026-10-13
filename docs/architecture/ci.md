@@ -121,7 +121,6 @@ requires exact direct layouts where supplied, and checks compatibility before
 merging independent executions once. Failure returns unavailable maps; capture
 validity alone does not establish the original all-owned coverage targets.
 
-Vitest hard-excludes configuration files, even with an explicit coverage include.
 Compiled-child qualification fixtures instrument canonical preparations before
 bundling with esbuild. Instrumenting TypeScript compiler output after compilation
 does not reproduce the direct provider's source locations. `compiledCapturePlugin`
@@ -132,8 +131,16 @@ and instrumented code by SHA256; differing mapped sources, stale originals,
 altered preparations or changing inputs between loads fail compilation. The plugin
 supports the project's standard TypeScript `src` to `dist` layout and rejects
 unowned package distribution modules. Measurement bundles require a separate output
-directory and keep normal relative imports. `registerCounterStream`
-uses a separate inherited descriptor (4 or greater), preserving the existing IPC
+directory and keep normal relative imports.
+
+`buildNativeCli` uses the same `bundleCli` function as ordinary builds, emitting
+the two CLI entries and all three child entries into a separate fresh directory.
+It retains CLI package metadata, Studio assets, dependency resolution and copied
+migrations, and publishes source-bound compilation receipts. It refuses the
+ordinary CLI output and a nonempty measurement directory. Importing the ordinary
+builder no longer invokes a build; its command still uses the production defaults.
+
+`registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
 descriptor and child permissions. It forwards actual engine source registrations
 and cumulative counter mutations with contiguous sequence numbers. Strict replay
 rejects truncated frames, sequence gaps, duplicate sources, initial hits, invalid
@@ -150,7 +157,8 @@ host must still prove expected termination before that execution can qualify.
 These primitives do not yet replace the production child capture path; large
 source registrations and native Windows pipe behavior remain qualification work.
 
-Configuration capture therefore prepares them separately through Vite's public
+Vitest hard-excludes configuration files, even with an explicit coverage include.
+Configuration capture prepares them separately through Vite's public
 [transform API](https://vite.dev/guide/api-javascript#transformwithoxc), using the
 version resolved by Vitest and original source-map content. It uses the same
 pinned instrumenter, including the default-export expression statement correction.
