@@ -439,6 +439,10 @@ concurrency to two; test selection, assertions and deadlines stay unchanged.
 The final report combines direct, configuration and reconciled native records
 through the common pinned instrumenter, without a child V8 conversion pass.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
+An explicit fixture collector can temporarily layer over the campaign collector.
+Its launches retain their own receipts and counter streams; restoring it reinstates the
+campaign bindings. A second explicit collector is rejected, and private launch markers
+prevent the underlying campaign adapter from wrapping the same launch twice.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
 retained. Raw records, configuration assertions, collection parity, inventory, direct maps
 and accepted/rejected native evidence stay in the directory.

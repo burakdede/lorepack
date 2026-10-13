@@ -29,6 +29,8 @@ const forkCollector = Symbol.for('lorepack.nativeForkCollector');
 const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
 const syncCollector = Symbol.for('lorepack.nativeSyncCollector');
 const capturedForkSpawn = Symbol.for('lorepack.capturedForkSpawn');
+const campaignCollector = Symbol.for('lorepack.campaignCollector');
+const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -64,7 +66,9 @@ function recordUnregisteredNode(directory, kind, args) {
 }
 
 export function registerForkCapture(entries, directory, audit = false) {
-  if (globalThis[forkCollector]) throw new Error('Fork capture is already registered.');
+  const previous = globalThis[forkCollector];
+  if (previous && !previous[campaignCollector])
+    throw new Error('Fork capture is already registered.');
   const targets = new Map();
   for (const entry of entries) {
     const original = realpathSync(entry.original);
@@ -88,6 +92,8 @@ export function registerForkCapture(entries, directory, audit = false) {
   const pending = [];
   const launches = [];
   function measuredFork(...parameters) {
+    const providedOptions = Array.isArray(parameters[1]) ? parameters[2] : parameters[1];
+    if (providedOptions?.[capturedForkSpawn]) return originalFork.apply(this, parameters);
     let [modulePath, args, options] = parameters;
     let filename = modulePath instanceof URL ? fileURLToPath(modulePath) : resolve(modulePath);
     try {
@@ -186,7 +192,8 @@ export function registerForkCapture(entries, directory, audit = false) {
     restore() {
       if (childProcess.fork !== measuredFork) throw new Error('Fork capture binding changed.');
       childProcess.fork = originalFork;
-      delete globalThis[forkCollector];
+      if (previous) globalThis[forkCollector] = previous;
+      else delete globalThis[forkCollector];
       syncBuiltinESMExports();
     },
   };
@@ -251,7 +258,9 @@ function selectCommand(registry, args, cwd) {
 }
 
 export function registerCommandCapture(entries, directory, audit = false) {
-  if (globalThis[commandCollector]) throw new Error('Command capture is already registered.');
+  const previous = globalThis[commandCollector];
+  if (previous && !previous[campaignCollector])
+    throw new Error('Command capture is already registered.');
   const targets = new Map();
   for (const entry of entries) {
     assertNodeArguments(entry);
@@ -274,7 +283,8 @@ export function registerCommandCapture(entries, directory, audit = false) {
   function measuredSpawn(options) {
     if (options.file !== process.execPath && options.file !== node)
       return originalSpawn.call(this, options);
-    if (options[capturedForkSpawn]) return originalSpawn.call(this, options);
+    if (options[capturedForkSpawn] || options[capturedCommandSpawn])
+      return originalSpawn.call(this, options);
     const selected = selectCommand(targets, options.args?.slice(1), options.cwd);
     if (!selected) {
       if (audit && !['--version', '--help'].includes(options.args?.[1]))
@@ -297,6 +307,7 @@ export function registerCommandCapture(entries, directory, audit = false) {
     try {
       result = originalSpawn.call(this, {
         ...options,
+        [capturedCommandSpawn]: true,
         args:
           index === -1
             ? [
@@ -362,13 +373,16 @@ export function registerCommandCapture(entries, directory, audit = false) {
     restore() {
       if (prototype.spawn !== measuredSpawn) throw new Error('Command capture binding changed.');
       prototype.spawn = originalSpawn;
-      delete globalThis[commandCollector];
+      if (previous) globalThis[commandCollector] = previous;
+      else delete globalThis[commandCollector];
     },
   };
 }
 
 export function registerSyncCommandCapture(entries, directory, audit = false) {
-  if (globalThis[syncCollector]) throw new Error('Synchronous capture is already registered.');
+  const previous = globalThis[syncCollector];
+  if (previous && !previous[campaignCollector])
+    throw new Error('Synchronous capture is already registered.');
   const registry = new Map();
   for (const entry of entries) {
     assertNodeArguments(entry);
@@ -386,7 +400,7 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
   const originals = { spawnSync: childProcess.spawnSync, execFileSync: childProcess.execFileSync };
   const launches = [];
   function select(file, args, options) {
-    if (file !== process.execPath) return null;
+    if (file !== process.execPath || options?.[capturedCommandSpawn]) return null;
     const selected = selectCommand(registry, args, options?.cwd);
     if (!selected && audit && !['--version', '--help'].includes(args?.[0]))
       recordUnregisteredNode(directory, 'sync', args);
@@ -415,6 +429,7 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
           : [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
         {
           ...options,
+          [capturedCommandSpawn]: true,
           stdio: [...streams, 'ignore', fd],
         },
       );
@@ -492,7 +507,8 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
       if (childProcess.spawnSync !== spawn || childProcess.execFileSync !== exec)
         throw new Error('Synchronous capture binding changed');
       Object.assign(childProcess, originals);
-      delete globalThis[syncCollector];
+      if (previous) globalThis[syncCollector] = previous;
+      else delete globalThis[syncCollector];
       syncBuiltinESMExports();
     },
   };
@@ -573,6 +589,8 @@ export function registerCampaignCapture(snapshot, launch) {
     for (const capture of captures.reverse()) capture.restore();
     throw error;
   }
+  for (const key of [forkCollector, commandCollector, syncCollector])
+    globalThis[key][campaignCollector] = true;
   return {
     registry,
     async settled() {
