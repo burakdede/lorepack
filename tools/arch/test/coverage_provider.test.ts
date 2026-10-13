@@ -15,8 +15,9 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
+import { prepareSource, renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 import {
+  buildNativeCli,
   compiledCapturePlugin,
   prepareNativeCapture,
   reconcileNativeCapture,
@@ -432,6 +433,104 @@ else process.disconnect?.();
   it('preserves IPC and permission limits and exactly replays real bundled counters', async () => {
     const actual = await assertActualCounters(completed, 'completed');
     expect(actual.exitCode).toBe(0);
+  });
+
+  it('builds the CLI and every child in a separate complete measurement layout', async () => {
+    const project = join(root, 'build-project');
+    const files = [
+      'cli/src/entry.ts',
+      'cli/src/index.ts',
+      'backend-local/src/sql/query-child.ts',
+      'backend-local/src/archive-verify-child.ts',
+      'parsers/src/parse-child.ts',
+    ];
+    const included = files.map((file) => {
+      const path = `packages/${file}`;
+      const source = `export function marker() { return 'measured'; }\n${file === 'cli/src/entry.ts' ? 'console.log(marker());\n' : ''}`;
+      mkdirSync(dirname(join(project, path)), { recursive: true });
+      writeFileSync(join(project, path), source);
+      return { path, sha256: createHash('sha256').update(source).digest('hex') };
+    });
+    const repository = resolve(import.meta.dirname, '../../..');
+    const compiler = join(
+      dirname(createRequire(join(repository, 'package.json')).resolve('typescript/package.json')),
+      'bin/tsc',
+    );
+    for (const name of ['cli', 'backend-local', 'parsers']) {
+      execFileSync(
+        process.execPath,
+        [
+          compiler,
+          '--ignoreConfig',
+          '--target',
+          'ES2024',
+          '--module',
+          'NodeNext',
+          '--sourceMap',
+          '--skipLibCheck',
+          '--rootDir',
+          join(project, 'packages', name, 'src'),
+          '--outDir',
+          join(project, 'packages', name, 'dist'),
+          ...included
+            .filter((entry) => entry.path.startsWith(`packages/${name}/`))
+            .map((entry) => join(project, entry.path)),
+        ],
+        { stdio: 'pipe' },
+      );
+    }
+    mkdirSync(join(project, 'packages/cli/studio-dist'), { recursive: true });
+    mkdirSync(join(project, 'packages/cli/node_modules'));
+    mkdirSync(join(project, 'packages/backend-local/migrations'));
+    writeFileSync(join(project, 'package.json'), '{"type":"module"}');
+    writeFileSync(
+      join(project, 'packages/cli/package.json'),
+      '{"type":"module","version":"0.1.0"}',
+    );
+    writeFileSync(
+      join(project, 'packages/cli/studio-dist/index.html'),
+      '<main>Fixture Studio</main>',
+    );
+    writeFileSync(join(project, 'packages/backend-local/migrations/001_fixture.sql'), 'SELECT 1;');
+    const captured = { root: project, included };
+    const preparation = join(project, 'preparations');
+    mkdirSync(preparation);
+    for (const entry of included) {
+      const source = join(project, entry.path);
+      writeFileSync(
+        join(preparation, `${createHash('sha256').update(entry.path).digest('hex')}.json`),
+        JSON.stringify(prepareSource(captured, source, readFileSync(source, 'utf8'), null)),
+      );
+    }
+    const native = join(project, 'native');
+    await prepareNativeCapture(captured, preparation, native);
+    const before = included.map((entry) =>
+      readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
+    );
+    const output = join(project, 'measurement/dist');
+    const built = await buildNativeCli(captured, native, output);
+    expect(built.receipts).toHaveLength(5);
+    for (const file of [
+      'public-entry.js',
+      'public-index.js',
+      'query-child.js',
+      'parse-child.js',
+      'archive-verify-child.js',
+    ])
+      expect(readFileSync(join(output, file), 'utf8')).toContain('registerCounterStream(4)');
+    expect(readFileSync(join(output, '../studio-dist/index.html'), 'utf8')).toBe(
+      '<main>Fixture Studio</main>',
+    );
+    expect(readFileSync(join(output, 'migrations/001_fixture.sql'), 'utf8')).toBe('SELECT 1;');
+    expect(
+      included.map((entry) =>
+        readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
+      ),
+    ).toEqual(before);
+    await expect(
+      buildNativeCli(captured, native, join(project, 'packages/cli/dist')),
+    ).rejects.toThrow('ordinary');
+    await expect(buildNativeCli(captured, native, output)).rejects.toThrow('empty');
   });
 
   it('binds compilation to the real original artifact, map and source without editing them', () => {
