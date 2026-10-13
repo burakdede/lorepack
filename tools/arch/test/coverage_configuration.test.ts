@@ -284,6 +284,45 @@ it('retains canonical JSX preparations for reporting-only debug filenames', asyn
   ).toThrow('Conflicting preparation');
 });
 
+it('retains real erased type modules and rejects dropped executable source', async () => {
+  const { prepareSource, preparingInstrumenter } = await import(
+    '../../../scripts/coverage_configuration.mjs'
+  );
+  const require = createRequire(join(import.meta.dirname, '../../../package.json'));
+  const vr = createRequire(require.resolve('vitest/package.json'));
+  const { transformWithOxc } = await import(pathToFileURL(vr.resolve('vite')).href);
+  const path = 'contracts.ts';
+  const source = 'export interface Contract { value: string }';
+  put(path, source);
+  const id = join(root, path);
+  const inventory = {
+    root,
+    included: [{ path, sha256: createHash('sha256').update(source).digest('hex') }],
+  };
+  const transformed = await transformWithOxc(source, id, { lang: 'ts', sourcemap: true });
+  const emptyMap = { version: 3, sources: [], sourcesContent: [], names: [], mappings: '' };
+  const directory = join(root, 'preparations');
+  const factory = await preparingInstrumenter(inventory, directory);
+  const instrumenter = factory({ coverageVariable: '__witness__' });
+  instrumenter.instrumentSync(transformed.code, id, transformed.map);
+  const filename = join(directory, `${createHash('sha256').update(path).digest('hex')}.json`);
+  const retained = readFileSync(filename, 'utf8');
+  instrumenter.instrumentSync(transformed.code, id, emptyMap);
+  expect(readFileSync(filename, 'utf8')).toBe(retained);
+  const data = instrumenter.lastFileCoverage();
+  expect(data.statementMap).toEqual({});
+  expect(data.fnMap).toEqual({});
+  expect(data.branchMap).toEqual({});
+  const executable = 'export function meaningful() { return 1; }';
+  put(path, executable);
+  const changed = {
+    root,
+    included: [{ path, sha256: createHash('sha256').update(executable).digest('hex') }],
+  };
+  expect(() => prepareSource(changed, id, 'export {};', emptyMap)).toThrow('source map');
+  expect(() => prepareSource(changed, id, 'export {};', null)).toThrow('requires a source map');
+});
+
 it('preserves preparations when a later transform conflicts', async () => {
   const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
   const directory = join(root, 'preparations');
