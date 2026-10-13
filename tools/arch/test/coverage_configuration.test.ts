@@ -248,3 +248,17 @@ it('binds equivalent filesystem spellings to the owned canonical source', async 
   const map = { version: 3, sources: [id], sourcesContent: [configCode], mappings: '', names: [] };
   expect(prepareSource(snapshot(), id, configCode, map).path).toBe(configPath);
 });
+
+it('prepares configurations with original mapped content and no execution hits', async () => {
+  const { prepareConfigurations } = await import('../../../scripts/coverage_configuration.mjs');
+  const preparedDirectory = join(root, 'config-preparations');
+  const prepared = await prepareConfigurations(snapshot(), preparedDirectory);
+  expect(prepared.included.map((entry: { path: string }) => entry.path)).toEqual([configPath]);
+  const records = readdirSync(preparedDirectory).map((file) =>
+    JSON.parse(readFileSync(join(preparedDirectory, file), 'utf8')),
+  );
+  expect(records).toHaveLength(1);
+  expect(records[0].map.sourcesContent).toEqual([configCode]);
+  expect(records[0].sha256).toBe(snapshot().included[0]?.sha256);
+  expect('s' in records[0]).toBe(false);
+});

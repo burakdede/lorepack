@@ -229,8 +229,14 @@ export async function reconcileNativeCapture(snapshot, directory, direct = {}) {
   const merged = createCoverageMap({});
   for (const record of completions.values()) {
     const remapped = await remapNativeCoverage(createCoverageMap(structuredClone(record.maps)));
-    const maps = JSON.parse(JSON.stringify(remapped.toJSON()));
-    captureCoverage(snapshot, maps, record.id);
+    const wire = JSON.parse(JSON.stringify(remapped.toJSON()));
+    captureCoverage(snapshot, wire, record.id);
+    const maps = Object.fromEntries(
+      Object.entries(wire).map(([filename, map]) => {
+        const canonical = realpathSync(filename);
+        return [canonical, { ...map, path: canonical }];
+      }),
+    );
     for (const [filename, map] of Object.entries(maps)) {
       if (!record.loadedSources.some((source) => join(root, source.path) === filename))
         throw new Error(`Unexpected remapped native source: ${filename}`);

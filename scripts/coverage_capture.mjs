@@ -7,9 +7,12 @@ import { parseArgs } from 'node:util';
 import {
   assertCollectionParity,
   importConfigurations,
+  prepareConfigurations,
   renderCoverageConfig,
   sourceCoverageConfig,
 } from './coverage_configuration.mjs';
+import { prepareNativeCapture, reconcileNativeCapture } from './coverage_instrumented.mjs';
+import { captureCoverage } from './coverage_report.mjs';
 
 export function nodeCommand(root, args, environment = {}) {
   execFileSync(process.execPath, args, {
@@ -50,18 +53,9 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     join(output, 'collection.parity.json'),
     assertCollectionParity(json(ordinary), json(measured)),
   );
-  const rawConfigs = join(output, 'configs-v8');
-  nodeCommand(
-    root,
-    [
-      join(root, 'scripts/coverage_capture.mjs'),
-      '--import-configs',
-      inventoryPath,
-      '--results',
-      join(output, 'configuration.imports.json'),
-    ],
-    { NODE_V8_COVERAGE: rawConfigs },
-  );
+  const configurations = await captureConfigurations(inventory, join(output, 'configs-native'));
+  const configBundle = join(output, 'configs.bundle.json');
+  save(configBundle, configurations);
   const rawChildren = join(output, 'children-v8');
   nodeCommand(root, [vitest, 'run', '--config', configPath], { NODE_V8_COVERAGE: rawChildren });
   const directMap = join(directDirectory, 'coverage-final.json');
@@ -77,11 +71,8 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     '--out',
     directBundle,
   ]);
-  const bundles = [directBundle];
-  for (const [origin, raw] of [
-    ['configs', rawConfigs],
-    ['children', rawChildren],
-  ]) {
+  const bundles = [directBundle, configBundle];
+  for (const [origin, raw] of [['children', rawChildren]]) {
     const bundle = join(output, `${origin}.bundle.json`);
     nodeCommand(root, [
       join(root, 'scripts/coverage_native.mjs'),
@@ -104,6 +95,36 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     '--out',
     join(output, 'report.json'),
   ]);
+}
+
+export async function captureConfigurations(snapshot, output) {
+  mkdirSync(dirname(output), { recursive: true });
+  mkdirSync(output);
+  const preparations = join(output, 'preparations');
+  const configurations = await prepareConfigurations(snapshot, preparations);
+  const nativePreparations = join(output, 'native-preparations');
+  await prepareNativeCapture(configurations, preparations, nativePreparations);
+  const raw = join(output, 'records');
+  const bootstrap = join(output, 'bootstrap.mjs');
+  writeFileSync(
+    bootstrap,
+    `import {registerNativeCapture} from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'coverage_instrumented.mjs')).href)}; await registerNativeCapture(${JSON.stringify(configurations)},${JSON.stringify(nativePreparations)},${JSON.stringify(raw)});\n`,
+  );
+  const entry = join(output, 'import-configurations.mjs');
+  const results = join(output, 'configuration.imports.json');
+  writeFileSync(
+    entry,
+    `import {writeFileSync} from 'node:fs'; import {importConfigurations} from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'coverage_configuration.mjs')).href)}; const results = await importConfigurations(${JSON.stringify(configurations)}); writeFileSync(${JSON.stringify(results)},JSON.stringify(results,null,2)+'\\n');\n`,
+  );
+  nodeCommand(configurations.root, ['--import', pathToFileURL(bootstrap).href, entry]);
+  const measured = await reconcileNativeCapture(configurations, raw);
+  writeFileSync(join(output, 'reconciliation.json'), `${JSON.stringify(measured, null, 2)}\n`);
+  if (measured.status !== 'Pass')
+    throw new Error('Native configuration capture failed qualification.');
+  return {
+    ...captureCoverage(snapshot, measured.maps, 'configs'),
+    nativeEvidence: { acceptedExecutions: measured.processes, rejected: [] },
+  };
 }
 
 if (import.meta.main) {

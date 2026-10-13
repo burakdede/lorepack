@@ -591,3 +591,19 @@ it('rejects remapped layout changes and extra snapshot files', async () => {
     'Invalid native lifecycle',
   );
 });
+
+it('captures and reconciles actual configuration semantics through native instrumentation', async () => {
+  const { captureConfigurations } = await import('../../../scripts/coverage_capture.mjs');
+  const { path, snapshot } = inventory();
+  const original = JSON.parse(readFileSync(snapshot, 'utf8'));
+  const output = join(directory, 'config-capture');
+  const bundle = await captureConfigurations(original, output);
+  expect(Object.keys(bundle.files)).toEqual([path]);
+  const record = Object.values(bundle.files)[0] as { map: { s: Record<string, number> } };
+  expect(Object.values(record.map.s)).toEqual([1]);
+  expect(JSON.parse(readFileSync(join(output, 'configuration.imports.json'), 'utf8'))).toEqual([
+    { path, imported: true, configurationAssertions: 'passed' },
+  ]);
+  expect(JSON.parse(readFileSync(join(output, 'reconciliation.json'), 'utf8')).status).toBe('Pass');
+  await expect(captureConfigurations(original, output)).rejects.toMatchObject({ code: 'EEXIST' });
+});

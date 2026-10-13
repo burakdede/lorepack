@@ -27,6 +27,11 @@ versioned instrumenter. An actual Node execution fixture verifies default
 initializer counts, unused private methods and statements after an early throw.
 These primitives do not yet qualify the complete subprocess capture pipeline.
 
+Retain default-export expression statements with the existing statement-counter
+mechanism. The standard visitor ignores those expressions; accepting empty maps
+for the configuration files would discard their previously measured statements.
+Leave default-export declarations and genuine type-only/barrel records unchanged.
+
 Preserve every owned source and the original overall 95/95/95/90 and critical
 98/98/95/95 targets. Keep V8's pinned native conversion primitives until a
 common native instrumentation layout is qualified. Reject incompatible maps;
