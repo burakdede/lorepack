@@ -382,10 +382,11 @@ describe('compiled native counter stream', () => {
 const instance = new PrivateWitness();
 const outputs = [await instance.run(true), await instance.run(false)];
 if (process.argv[2] === 'stress') for (let i = 0; i < 5000; i++) await instance.run(true);
-const result = {outputs, writeAllowed: process.permission.has('fs.write')};
+const result = {outputs, writeAllowed: process.permission === undefined || process.permission.has('fs.write')};
 if (process.argv[3] === 'inspect') Object.assign(result, {execArgv: process.execArgv, inheritedMarker: process.env.LORE_CAPTURE_PARENT_ONLY ?? null});
 if (process.send) process.send(result);
 else console.log(JSON.stringify(result));
+if (process.argv[2] === 'fail') {process.stderr.write('fixture failure\\n');process.exitCode=7;}
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -741,6 +742,137 @@ console.log(JSON.stringify({message,optionsUnchanged:before===JSON.stringify(opt
     await expect(reconcileForkCapture(snapshot, directory, registry, different)).rejects.toThrow(
       'Fork coverage layout differs',
     );
+  });
+
+  it('captures spawn and callback or promised execFile without replacing Node output handling', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const original = join(root, 'ordinary-command-entry.mjs');
+    writeFileSync(original, 'throw new Error("The registered original must be redirected");');
+    const entry = {
+      original,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: ['SIGTERM'],
+    };
+    const alias = join(root, 'ordinary-command-alias.mjs');
+    writeFileSync(alias, 'throw new Error("The registered alias must be redirected");');
+    const entries = [
+      entry,
+      {
+        ...entry,
+        original: alias,
+        originalSha256: createHash('sha256').update(readFileSync(alias)).digest('hex'),
+      },
+      { ...entry, original: bundle, originalSha256: entry.targetSha256 },
+    ];
+    const directory = join(root, 'command-records');
+    const parent = join(root, 'command-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {spawn,execFile} from 'node:child_process';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {promisify} from 'node:util';
+import {registerCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const executeBefore = promisify(execFile);
+const capture = registerCommandCapture(${JSON.stringify(entries)},${JSON.stringify(directory)});
+const executeAfter = promisify(execFile);
+let duplicateRejected = false;
+try {registerCommandCapture(${JSON.stringify(entries)},${JSON.stringify(directory)});} catch(error) {duplicateRejected=error.message.includes('already registered');}
+const options = {env:{},cwd:${JSON.stringify(root)},encoding:'utf8',timeout:10000,maxBuffer:10000};
+const before = JSON.stringify(options);
+const outcomes = [];
+const child = spawn(process.execPath,[${JSON.stringify(original)},'exit','inspect'],{env:{},cwd:${JSON.stringify(root)},stdio:['ignore','pipe','pipe'],argv0:'captured-node'});
+let stdout='',stderr='';
+child.stdout.setEncoding('utf8').on('data',chunk=>stdout+=chunk);
+child.stderr.setEncoding('utf8').on('data',chunk=>stderr+=chunk);
+await new Promise((resolve,reject)=>{child.once('close',code=>{outcomes.push({code,stdout,stderr});resolve();});child.once('error',reject);});
+outcomes.push(await new Promise((resolve)=>execFile(process.execPath,[${JSON.stringify(alias)},'exit','inspect'],options,(error,stdout,stderr)=>resolve({code:error?.code??0,stdout,stderr}))));
+outcomes.push({code:0,...await executeBefore(process.execPath,[${JSON.stringify(original)},'exit','inspect'],options)});
+outcomes.push({code:0,...await executeAfter(process.execPath,[${JSON.stringify(bundle)},'exit','inspect'],options)});
+let failure;
+try {await executeBefore(process.execPath,[${JSON.stringify(original)},'fail'],options);} catch(error) {failure={code:error.code,stdout:error.stdout,stderr:error.stderr,killed:error.killed};}
+let timeout;
+try {await executeAfter(process.execPath,[${JSON.stringify(original)},'hold'],{...options,timeout:1000});} catch(error) {timeout={signal:error.signal,killed:error.killed,stdout:error.stdout};}
+let maxBuffer;
+try {await executeBefore(process.execPath,[${JSON.stringify(original)},'exit'],{...options,maxBuffer:8});} catch(error) {maxBuffer={code:error.code,stdout:error.stdout,killed:error.killed};}
+let extraDescriptorsRejected=false;
+try {spawn(process.execPath,[${JSON.stringify(original)}],{stdio:['ignore','ignore','ignore','ignore']});} catch(error) {extraDescriptorsRejected=error.message.includes('three-descriptor');}
+const foreign=await executeBefore(process.execPath,['--input-type=module','-e','console.log(JSON.stringify(process.argv.slice(1)))',${JSON.stringify(original)}],{env:{}});
+await capture.settled();
+const originalTarget=readFileSync(${JSON.stringify(bundle)});
+let changedEntryRejected=false;
+try {
+ writeFileSync(${JSON.stringify(bundle)},Buffer.concat([originalTarget,Buffer.from('\\n// changed target')]));
+ try {spawn(process.execPath,[${JSON.stringify(original)}]);} catch(error) {changedEntryRejected=error.message.includes('changed before launch');}
+} finally {writeFileSync(${JSON.stringify(bundle)},originalTarget);}
+capture.restore();
+const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},${JSON.stringify(entries)});
+console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,extraDescriptorsRejected,changedEntryRejected,foreign,optionsUnchanged:before===JSON.stringify(options),duplicateRejected,launches:capture.launches,reconciled}));
+`,
+    );
+    const result = JSON.parse(
+      execFileSync(process.execPath, [parent], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+    );
+    expect(result.optionsUnchanged).toBe(true);
+    expect(result.duplicateRejected).toBe(true);
+    expect(result.outcomes).toHaveLength(4);
+    for (const outcome of result.outcomes) {
+      expect(outcome.code).toBe(0);
+      expect(outcome.stderr).toBe('');
+      expect(JSON.parse(outcome.stdout)).toEqual({
+        outputs: [
+          [2, 'yes'],
+          [2, 'no'],
+        ],
+        writeAllowed: true,
+        execArgv: [],
+        inheritedMarker: null,
+      });
+    }
+    expect(result.failure.code).toBe(7);
+    expect(result.failure.stderr).toBe('fixture failure\n');
+    expect(result.failure.killed).toBe(false);
+    expect(JSON.parse(result.failure.stdout).outputs).toEqual([
+      [2, 'yes'],
+      [2, 'no'],
+    ]);
+    expect(result.timeout.signal).toBe('SIGTERM');
+    expect(result.timeout.killed).toBe(true);
+    expect(JSON.parse(result.timeout.stdout).writeAllowed).toBe(true);
+    expect(result.maxBuffer.code).toBe('ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
+    expect(result.maxBuffer.stdout).toBe('{"output');
+    expect(result.maxBuffer).not.toHaveProperty('killed');
+    expect(result.extraDescriptorsRejected).toBe(true);
+    expect(result.changedEntryRejected).toBe(true);
+    expect(JSON.parse(result.foreign.stdout)).toEqual([original]);
+    expect(result.launches).toHaveLength(7);
+    expect(
+      result.launches.slice(0, 4).map((launch: { original: string }) => launch.original),
+    ).toEqual([original, alias, original, bundle]);
+    expect(
+      result.launches.every(
+        (launch: { environment: string }) => launch.environment === 'normalized',
+      ),
+    ).toBe(true);
+    expect(result.reconciled.processes).toBe(7);
+    const timedOut = result.reconciled.executions.find(
+      (execution: { launchId: string }) => execution.launchId === result.launches[5].id,
+    );
+    expect(timedOut).toMatchObject({ state: 'interrupted', signal: 'SIGTERM', exitCode: null });
+    const filename = join(root, 'private.ts');
+    const actual = result.reconciled.maps[filename];
+    if (!maps[filename] || !actual) throw new Error('Missing reconciled command map.');
+    for (const field of ['statementMap', 'fnMap', 'branchMap'])
+      expect(actual[field]).toEqual(maps[filename][field as keyof Coverage]);
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(maps[filename][field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 7);
+    for (const [key, arms] of Object.entries(maps[filename].b))
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 7));
   });
 
   it('refuses a target that changes after registration before any child starts', () => {
