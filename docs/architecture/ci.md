@@ -102,7 +102,10 @@ Vitest's synthetic second mapping pass. Exclusive atomic publication preserves
 existing records and rejects conflicting transforms. Recognized uncovered-report
 queries use the physical filename in preparation records for generated JSX debug
 metadata. Code returned to the provider remains unchanged; altered code bodies,
-source maps and original bytes still fail validation. These records contain no hit
+source maps and original bytes still fail validation. Type-only erasure accepts an
+empty map only when Node's type stripper confirms the original has no executable
+code; its empty module marker and map are canonicalized in preparation records.
+Dropped executable declarations remain rejected. These records contain no hit
 counters; a real typed/private fixture replays them and requires exact equality
 for statement, function and branch maps and counts after remapping.
 
