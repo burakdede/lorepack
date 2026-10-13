@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
+import { prepareNativeCapture } from '../../../scripts/coverage_instrumented.mjs';
 
 type Coverage = {
   path: string;
@@ -242,27 +243,29 @@ it('captures actual typed transforms and reproduces every direct map and counter
   const repository = resolve(import.meta.dirname, '../../..');
   const require = createRequire(join(repository, 'package.json'));
   const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
-  const { createNativeInstrumenter, remapNativeCoverage } = await import(
-    pathToFileURL(providerPath).href
-  );
-  const instrumenter = createNativeInstrumenter({
-    produceSourceMap: true,
-    autoWrap: false,
-    esModules: true,
-    compact: false,
-    coverageVariable: '__LOREPACK_NATIVE_COVERAGE__',
-    coverageGlobalScope: 'globalThis',
-    coverageGlobalScopeFunc: false,
-    ignoreLines: true,
-  });
+  const { remapNativeCoverage } = await import(pathToFileURL(providerPath).href);
   const filename = join(root, 'private.ts');
-  const instrumented = instrumenter.instrumentSync(preparation.code, filename, preparation.map);
   const entry = join(root, 'prepared-native.mjs');
+  const bootstrap = join(root, 'native-bootstrap.mjs');
+  const output = join(root, 'native-records');
+  const snapshot = { root, included: [{ path: 'private.ts', sha256: preparation.sha256 }] };
+  const nativePreparations = join(root, 'native-preparations');
+  await prepareNativeCapture(snapshot, join(root, 'preparations'), nativePreparations);
+  writeFileSync(
+    bootstrap,
+    `import {registerNativeCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)}; await registerNativeCapture(${JSON.stringify(snapshot)},${JSON.stringify(nativePreparations)},${JSON.stringify(output)});`,
+  );
   writeFileSync(
     entry,
-    `${instrumented}\nconst instance = new PrivateWitness(); await instance.run(true); await instance.run(false); console.log(JSON.stringify(globalThis.__LOREPACK_NATIVE_COVERAGE__));\n`,
+    `import {PrivateWitness} from ${JSON.stringify(pathToFileURL(filename).href)}; const instance = new PrivateWitness(); await instance.run(true); await instance.run(false);`,
   );
-  const raw = JSON.parse(execFileSync(process.execPath, [entry], { encoding: 'utf8' }));
+  execFileSync(process.execPath, ['--import', bootstrap, entry], { stdio: 'pipe' });
+  const completed = readdirSync(output)
+    .map((file) => JSON.parse(readFileSync(join(output, file), 'utf8')))
+    .find((record) => record.state === 'completed');
+  expect(completed.rejected).toEqual([]);
+  expect(completed.loadedSources).toEqual([{ path: 'private.ts', sha256: preparation.sha256 }]);
+  const raw = completed.maps;
   const { createCoverageMap } = createRequire(providerPath)('istanbul-lib-coverage');
   const remapped = await remapNativeCoverage(createCoverageMap(raw));
   const actual = JSON.parse(JSON.stringify(remapped.fileCoverageFor(filename).toJSON()));

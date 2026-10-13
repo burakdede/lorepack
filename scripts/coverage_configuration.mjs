@@ -149,7 +149,8 @@ export async function importConfigurations(snapshot) {
 }
 
 export function prepareSource(snapshot, id, code, map) {
-  const [source, query] = id.split('?');
+  const [input, query] = id.split('?');
+  const source = resolve(input);
   if (query !== undefined && !/^(?:cache=\d+&)?vitest-uncovered-coverage=true$/.test(query))
     throw new Error(`Unsupported preparation query: ${id}`);
   const root = realpathSync(snapshot.root);

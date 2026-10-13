@@ -241,3 +241,10 @@ it('rechecks original bytes during the provider synthetic-map pass', async () =>
     }),
   ).toThrow('Stale preparation');
 });
+
+it('binds equivalent filesystem spellings to the owned canonical source', async () => {
+  const { prepareSource } = await import('../../../scripts/coverage_configuration.mjs');
+  const id = `${dirname(join(root, configPath))}/./${basename(configPath)}`;
+  const map = { version: 3, sources: [id], sourcesContent: [configCode], mappings: '', names: [] };
+  expect(prepareSource(snapshot(), id, configCode, map).path).toBe(configPath);
+});
