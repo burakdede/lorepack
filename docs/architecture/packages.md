@@ -8,7 +8,9 @@ Lorepack is modular in the repository, but the first public release has one npm 
 |---|---|---|
 | `@lorepack/cli` | Complete local Lorepack product: project setup, deterministic builds, inspection, serving, MCP connection and deployment commands | `npm install -g @lorepack/cli`, then `lorepack` |
 
-The CLI build bundles the internal Lorepack packages into its published `dist/` entry point.
+The CLI build bundles the internal Lorepack packages into published `dist/` entrypoints
+and shared ESM chunks. Chunks remain beside the entries so child and migration lookup
+retain their directory layout, and dynamic protocol imports remain deferred.
 Its tarball also carries the SQL migrations and Studio assets required by an installed CLI.
 Users should not need to install or import the internal packages separately.
 
@@ -36,9 +38,9 @@ policy and a reason for users to depend on it directly.
 CLI deployment, token and retention operations import `@lorepack/deploy-cloudflare/client`.
 That entrypoint exposes the control operations without evaluating Worker protocol adapters.
 The package root retains its existing Worker factories and the same control implementations.
-CLI source handlers load protocol SDKs when MCP, HTTP serving or client verification starts.
-The published build must preserve those module boundaries; its resource qualification uses
-the actual packaged binary rather than source imports alone.
+CLI handlers load protocol SDKs when MCP, HTTP serving or client verification starts.
+The published build preserves those module boundaries; resource qualification uses
+the actual packaged binary. See [ADR 0020](../adr/0020-cli-protocol-loading.md).
 
 ## Release rule
 

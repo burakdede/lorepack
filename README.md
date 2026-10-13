@@ -474,6 +474,7 @@ your Node.js version in a bug report.
 CLI deployment tooling uses the [deployment client boundary](docs/architecture/packages.md)
 so control operations do not initialize Worker protocol adapters.
 Keep protocol SDK loading inside the handlers that use it.
+Published CLI builds preserve that boundary with shared ESM chunks.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).

@@ -2,6 +2,13 @@
 
 Date: 2026-08-14.
 
+Archive RSS update, 2026-10-13: the unchanged 512MiB streamed-member regression
+exceeded its 256MiB ceiling before deferred protocol loading. Five focused macOS
+arm64/Node24.21.0 measurements after the build correction remain below that ceiling.
+The [measurement artifact](archive_rss_2026_10_13.json) records values and executable
+hashes. This focused result does not requalify the historical release gates below;
+full verification and three-platform qualification remain required.
+
 This report is the v0.1 release-gate evidence for issue `#101`. It links every published
 performance claim to a committed benchmark artifact or a behavioural test. Claims that are not
 earned are marked reported-only and must not be advertised as release gates.

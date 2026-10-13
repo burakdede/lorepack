@@ -1,0 +1,118 @@
+{
+  "node": "v24.21.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "binarySha256": "d950714893e3921fa66127ecade2328fa55109026ce469acfbfaaaa4a76b8bed",
+  "ceiling": 268435456,
+  "fixtureUncompressedBytes": 536870912,
+  "samples": [
+    {
+      "peakRss": 213286912,
+      "rss": 213286912,
+      "durationMs": 1406.814208,
+      "intact": true
+    },
+    {
+      "peakRss": 198901760,
+      "rss": 198901760,
+      "durationMs": 1326.8690830000003,
+      "intact": true
+    },
+    {
+      "peakRss": 195772416,
+      "rss": 195788800,
+      "durationMs": 1590.5454999999997,
+      "intact": true
+    },
+    {
+      "peakRss": 217186304,
+      "rss": 217202688,
+      "durationMs": 1539.3117499999998,
+      "intact": true
+    },
+    {
+      "peakRss": 204111872,
+      "rss": 204128256,
+      "durationMs": 1590.6420829999997,
+      "intact": true
+    }
+  ],
+  "date": "2026-10-13",
+  "issue": 722,
+  "qualification": "Focused macOS archive RSS evidence; full verification and three-platform CI pending",
+  "sourceCommit": "63db4d54b85f0a751be79d958e48378f604bc37c",
+  "sourceDirty": true,
+  "measurement": "Actual ordinary CLI; exit-time process.resourceUsage().maxRSS, no GC or heap flags",
+  "fixture": "Existing valid archive plus a checksum-listed reports/large.bin containing 512MiB streamed zeros",
+  "before": {
+    "sourceCommit": "20c8159b01a66ef8f21cc62f492da8fc0af54db5",
+    "fullVerifierPeakRss": 281985024,
+    "ceiling": 268435456
+  },
+  "artifacts": [
+    {
+      "path": "archive-verify-child.js",
+      "sha256": "b15385cd29445a9798e4c0298f42810f25b1f0b8b5b201ff40ee30d12daa4be9"
+    },
+    {
+      "path": "chunk-CPFGIHNK.js",
+      "sha256": "65091a65c36af1b1a59f591a76cf3259a8cb4ca412f1b9ff4f99f4928e2f9fcc"
+    },
+    {
+      "path": "chunk-G4AKNQB6.js",
+      "sha256": "fe4f5b0e3621a04a439bfc4cd067ab5be8fe96f0cc4d898d480ad9a3652b93d6"
+    },
+    {
+      "path": "chunk-GAVPRIJP.js",
+      "sha256": "fb751064217417abbb3b6708ece97397514c781ec3c0b16468ea43d12b231935"
+    },
+    {
+      "path": "chunk-HVXHRYZI.js",
+      "sha256": "9a4cf18241fb335278eddc9b7816a892a3864ac79297a95087ecb820dd52269b"
+    },
+    {
+      "path": "chunk-IGJGGNF3.js",
+      "sha256": "61415ba933853a57805a40a6ffb27a356843003120a5608aa2686635e6ecd0ec"
+    },
+    {
+      "path": "chunk-JWX3WHCB.js",
+      "sha256": "78be603c156c32ddd56b6d5a02cc253f0059f819a74ef368dcc6492c609abc8a"
+    },
+    {
+      "path": "chunk-NVVXSNBR.js",
+      "sha256": "aa1f4e43bd42673a8f2d0ed8f76b6bf3c9aac0b74c9aeb749e246f0e48f21e85"
+    },
+    {
+      "path": "chunk-PGIZ3F7T.js",
+      "sha256": "ac2caf1ef2cee65f28bf2e85735960ca8f8fb97213c1a202528eabee7a270545"
+    },
+    {
+      "path": "chunk-PX6F3LHL.js",
+      "sha256": "cc2e066b0889eba4cce48e6643c45372346d8e75837a4b01ff922c784d9d08eb"
+    },
+    {
+      "path": "chunk-RXWGOXIX.js",
+      "sha256": "c919d26faa404014d293cc9f31c9cdde5f3b1380b9e57a3cc6fae0ee54b0191a"
+    },
+    {
+      "path": "chunk-S6NZJ4NW.js",
+      "sha256": "e37d9ad32c115283da335ad384000929a1312dbca9c0d388ff5c9535fe6b1bb0"
+    },
+    {
+      "path": "parse-child.js",
+      "sha256": "2af64d551037d595543d6942f5e4167abcaba805b26a6e66109e8340b51f9d7e"
+    },
+    {
+      "path": "public-entry.js",
+      "sha256": "d950714893e3921fa66127ecade2328fa55109026ce469acfbfaaaa4a76b8bed"
+    },
+    {
+      "path": "public-index.js",
+      "sha256": "547286c179ad21af1bd2b4073f2a33c9d056b3de9e2038740e5fb8a98771a36f"
+    },
+    {
+      "path": "query-child.js",
+      "sha256": "b80d2af0797f5c3eac6fe06fd9d33fc7fca86e42c0799055e2ff6571fc575359"
+    }
+  ]
+}
