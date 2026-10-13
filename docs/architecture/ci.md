@@ -165,8 +165,8 @@ The `settled()` finalizer drains child close receipts after the host returns. It
 temporarily keeps the capture parent's event loop alive because the query host
 deliberately unrefs its child. Query execution still returns without waiting for
 termination. The finalizer must run after registered hosts stop their children.
-Extra existing descriptors remain unsupported; campaign integration, synchronous
-CLI/verification launches, and parent-exit integration remain open.
+Extra existing descriptors remain unsupported; complete CLI/verification launch
+integration and parent-exit qualification remain open.
 
 `registerCommandCapture` intercepts the shared asynchronous `ChildProcess.spawn`
 method before descriptor normalization. Node's original `spawn`, callback `execFile`
@@ -183,7 +183,18 @@ numeric signals from Node's timeout handling. Reconciliation matches them agains
 the platform's signal constants and observed close signal.
 Real fixtures retain exact callback/promise results, nonzero errors, timeout behavior
 and output truncation, with eight independent executions contributing exactly eight
-times the direct counts. Synchronous launches and complete campaign integration remain open.
+times the direct counts. Complete campaign integration remains open.
+
+`registerSyncCommandCapture` registers both `spawnSync` and `execFileSync` because
+Node's latter API calls its internal spawn function. The adapter uses actual native
+results and PIDs, retains caller options and original output slots, and preserves
+stderr forwarding, stdout returns and nonzero error fields. Separate parent-opened
+descriptor 4 avoids waiting for a pipe while the parent is blocked.
+Native timeout/buffer stops retain their observed error code and requested signal
+separately from JavaScript kill receipts; reconciliation requires the registered signal
+and matching native error evidence. Real timeout fixtures remain interrupted and
+contribute their actual counters once. Registered shell entrypoints and additional
+descriptors remain unsupported. Integration into the complete campaign remains open.
 
 `registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
 descriptor and child permissions. It forwards actual engine source registrations
