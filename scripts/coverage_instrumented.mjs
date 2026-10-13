@@ -158,10 +158,38 @@ export function registerForkCapture(entries, directory) {
   };
 }
 
+function assertNodeArguments(entry) {
+  if (entry.nodeArguments === undefined) return;
+  if (
+    !Array.isArray(entry.nodeArguments) ||
+    entry.nodeArguments.some(
+      (value) => typeof value !== 'string' || !/^--max-old-space-size=[1-9][0-9]*$/.test(value),
+    )
+  )
+    throw new Error('Invalid command capture Node argument prefix.');
+}
+
+function selectCommand(registry, args, cwd) {
+  if (!Array.isArray(args)) return null;
+  const index = args.findIndex(
+    (argument) => typeof argument === 'string' && !argument.startsWith('-'),
+  );
+  if (index < 0) return null;
+  let filename = resolve(cwd ?? process.cwd(), args[index]);
+  try {
+    filename = realpathSync(filename);
+  } catch {}
+  const entry = registry.get(filename);
+  if (!entry) return null;
+  if (index && !isDeepStrictEqual(args.slice(0, index), entry.nodeArguments ?? [])) return null;
+  return { entry, index };
+}
+
 export function registerCommandCapture(entries, directory) {
   if (globalThis[commandCollector]) throw new Error('Command capture is already registered.');
   const targets = new Map();
   for (const entry of entries) {
+    assertNodeArguments(entry);
     const original = realpathSync(entry.original);
     const target = realpathSync(entry.target);
     if (
@@ -181,15 +209,9 @@ export function registerCommandCapture(entries, directory) {
   function measuredSpawn(options) {
     if (options.file !== process.execPath && options.file !== node)
       return originalSpawn.call(this, options);
-    const argument = options.args?.[1];
-    if (typeof argument !== 'string' || argument.startsWith('-'))
-      return originalSpawn.call(this, options);
-    let filename = resolve(options.cwd ?? process.cwd(), argument);
-    try {
-      filename = realpathSync(filename);
-    } catch {}
-    const entry = targets.get(filename);
-    if (!entry) return originalSpawn.call(this, options);
+    const selected = selectCommand(targets, options.args?.slice(1), options.cwd);
+    if (!selected) return originalSpawn.call(this, options);
+    const { entry, index } = selected;
     if (
       digest(readFileSync(entry.original)) !== entry.originalSha256 ||
       digest(readFileSync(entry.target)) !== entry.targetSha256
@@ -205,7 +227,7 @@ export function registerCommandCapture(entries, directory) {
     try {
       result = originalSpawn.call(this, {
         ...options,
-        args: [options.args[0], entry.target, ...options.args.slice(2)],
+        args: [...options.args.slice(0, index + 1), entry.target, ...options.args.slice(index + 2)],
         stdio: [...streams, 'ignore', fd],
       });
     } catch (error) {
@@ -270,6 +292,7 @@ export function registerSyncCommandCapture(entries, directory) {
   if (globalThis[syncCollector]) throw new Error('Synchronous capture is already registered.');
   const registry = new Map();
   for (const entry of entries) {
+    assertNodeArguments(entry);
     const original = realpathSync(entry.original),
       target = realpathSync(entry.target);
     if (
@@ -284,20 +307,11 @@ export function registerSyncCommandCapture(entries, directory) {
   const originals = { spawnSync: childProcess.spawnSync, execFileSync: childProcess.execFileSync };
   const launches = [];
   function select(file, args, options) {
-    if (
-      file !== process.execPath ||
-      !Array.isArray(args) ||
-      typeof args[0] !== 'string' ||
-      args[0].startsWith('-')
-    )
-      return null;
-    let filename = resolve(options?.cwd ?? process.cwd(), args[0]);
-    try {
-      filename = realpathSync(filename);
-    } catch {}
-    return registry.get(filename) ?? null;
+    if (file !== process.execPath) return null;
+    return selectCommand(registry, args, options?.cwd);
   }
-  function measured(entry, args, options) {
+  function measured(selected, args, options) {
+    const { entry, index } = selected;
     if (options.shell) throw new Error('Synchronous capture does not support shell entrypoints');
     if (
       digest(readFileSync(entry.original)) !== entry.originalSha256 ||
@@ -312,10 +326,14 @@ export function registerSyncCommandCapture(entries, directory) {
     const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
     let result;
     try {
-      result = originals.spawnSync(process.execPath, [entry.target, ...args.slice(1)], {
-        ...options,
-        stdio: [...streams, 'ignore', fd],
-      });
+      result = originals.spawnSync(
+        process.execPath,
+        [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
+        {
+          ...options,
+          stdio: [...streams, 'ignore', fd],
+        },
+      );
     } finally {
       closeSync(fd);
     }
