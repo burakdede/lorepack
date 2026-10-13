@@ -508,6 +508,9 @@ execution prevents qualification even when another record covers the same source
 unused counters and recording rejected layouts. Execution offsets must match the source
 or Node's position-preserving type stripping; wrapped code cannot be mapped as original. It reads raw
 records one file at a time.
+Native counter IDs align with direct instrumentation only through unique exact source
+descriptors. Ambiguous matches and changed branch-arm order remain rejected.
+V8 records cannot qualify default-parameter branches; those require direct instrumentation.
 Capture tools support native Windows
 module imports and can be imported without invoking their commands. See the [CI contract](docs/architecture/ci.md)
 for the checked files, capture limits and native matrix.
