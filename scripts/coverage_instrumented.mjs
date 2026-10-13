@@ -207,6 +207,11 @@ export function registerForkCapture(entries, directory, audit = false) {
 
 function assertNodeArguments(entry) {
   if (
+    entry.captureDescriptor !== undefined &&
+    (entry.captureDescriptor !== 5 || entry.captureMode === undefined)
+  )
+    throw new Error('Invalid command capture descriptor.');
+  if (
     entry.captureMode !== undefined &&
     !['eval-import', 'script-import'].includes(entry.captureMode)
   )
@@ -221,14 +226,27 @@ function assertNodeArguments(entry) {
     throw new Error('Invalid command capture Node argument prefix.');
 }
 
-function selectCommand(registry, args, cwd) {
+function validCaptureStreams(streams, entry) {
+  if ((entry.captureDescriptor ?? 4) === 4) return streams.length === 3;
+  return (
+    streams.length === 5 &&
+    streams[3] === 'ignore' &&
+    Number.isSafeInteger(streams[4]) &&
+    streams[4] >= 0
+  );
+}
+
+function selectCommand(registry, args, cwd, descriptor = 4) {
   if (!Array.isArray(args)) return null;
   let index = 0;
   for (; index < args.length; index++) {
     const argument = args[index];
     if (argument === '-e' || argument === '--eval') {
       if (typeof args[index + 1] !== 'string') return null;
-      const entry = [...registry.values()].find((value) => value.captureMode === 'eval-import');
+      const entry = [...registry.values()].find(
+        (value) =>
+          value.captureMode === 'eval-import' && (value.captureDescriptor ?? 4) === descriptor,
+      );
       return entry ? { entry, index: -1 } : null;
     }
     if (argument === '--import') {
@@ -253,7 +271,10 @@ function selectCommand(registry, args, cwd) {
   } catch {}
   const entry = registry.get(filename);
   if (!entry) {
-    const preload = [...registry.values()].find((value) => value.captureMode === 'script-import');
+    const preload = [...registry.values()].find(
+      (value) =>
+        value.captureMode === 'script-import' && (value.captureDescriptor ?? 4) === descriptor,
+    );
     if (!preload) return null;
     try {
       if (!statSync(filename).isFile()) return null;
@@ -294,7 +315,12 @@ export function registerCommandCapture(entries, directory, audit = false) {
       return originalSpawn.call(this, options);
     if (options[capturedForkSpawn] || options[capturedCommandSpawn])
       return originalSpawn.call(this, options);
-    const selected = selectCommand(targets, options.args?.slice(1), options.cwd);
+    const selected = selectCommand(
+      targets,
+      options.args?.slice(1),
+      options.cwd,
+      Array.isArray(options.stdio) && options.stdio.length === 5 ? 5 : 4,
+    );
     if (!selected) {
       if (audit && !['--version', '--help'].includes(options.args?.[1]))
         recordUnregisteredNode(directory, 'async', options.args);
@@ -308,7 +334,7 @@ export function registerCommandCapture(entries, directory, audit = false) {
       throw new Error('Command capture entrypoint changed before launch.');
     const stdio = options.stdio ?? 'pipe';
     const streams = Array.isArray(stdio) ? [...stdio] : [stdio, stdio, stdio];
-    if (streams.length !== 3)
+    if (!validCaptureStreams(streams, entry))
       throw new Error('Command capture requires the original three-descriptor layout.');
     const id = randomUUID();
     const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
@@ -326,12 +352,13 @@ export function registerCommandCapture(entries, directory, audit = false) {
                 ...options.args.slice(1),
               ]
             : [...options.args.slice(0, index + 1), entry.target, ...options.args.slice(index + 2)],
-        stdio: [...streams, 'ignore', fd],
+        stdio: [...streams, ...(streams.length === 3 ? ['ignore'] : []), fd],
       });
     } catch (error) {
       closeSync(fd);
       throw error;
     }
+    if (Array.isArray(this.stdio)) this.stdio = this.stdio.slice(0, streams.length);
     const record = {
       schema: 1,
       id,
@@ -344,6 +371,7 @@ export function registerCommandCapture(entries, directory, audit = false) {
       originalSha256: entry.originalSha256,
       targetSha256: entry.targetSha256,
       ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
+      ...(entry.captureDescriptor ? { captureDescriptor: entry.captureDescriptor } : {}),
       environment: 'normalized',
       argumentsSha256: digest(JSON.stringify(options.args)),
     };
@@ -410,7 +438,12 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
   const launches = [];
   function select(file, args, options) {
     if (file !== process.execPath || options?.[capturedCommandSpawn]) return null;
-    const selected = selectCommand(registry, args, options?.cwd);
+    const selected = selectCommand(
+      registry,
+      args,
+      options?.cwd,
+      Array.isArray(options?.stdio) && options.stdio.length === 5 ? 5 : 4,
+    );
     if (!selected && audit && !['--version', '--help'].includes(args?.[0]))
       recordUnregisteredNode(directory, 'sync', args);
     return selected;
@@ -425,7 +458,7 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
       throw new Error('Synchronous capture entrypoint changed before launch');
     const stdio = options.stdio ?? 'pipe';
     const streams = Array.isArray(stdio) ? [...stdio] : [stdio, stdio, stdio];
-    if (streams.length !== 3)
+    if (!validCaptureStreams(streams, entry))
       throw new Error('Synchronous capture requires three original descriptors');
     const id = randomUUID();
     const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
@@ -439,13 +472,13 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
         {
           ...options,
           [capturedCommandSpawn]: true,
-          stdio: [...streams, 'ignore', fd],
+          stdio: [...streams, ...(streams.length === 3 ? ['ignore'] : []), fd],
         },
       );
     } finally {
       closeSync(fd);
     }
-    if (Array.isArray(result.output)) result.output = result.output.slice(0, 3);
+    if (Array.isArray(result.output)) result.output = result.output.slice(0, streams.length);
     if (result.error?.spawnargs) result.error.spawnargs = [...args];
     const record = {
       schema: 1,
@@ -459,6 +492,7 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
       originalSha256: entry.originalSha256,
       targetSha256: entry.targetSha256,
       ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
+      ...(entry.captureDescriptor ? { captureDescriptor: entry.captureDescriptor } : {}),
       environment:
         options.env === undefined
           ? 'inherited'
@@ -680,7 +714,14 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       throw new Error(`Invalid fork launch receipt: ${file}`);
     const entry = registry.get(launch.original);
     if (!entry) throw new Error(`Unregistered fork launch: ${file}`);
-    for (const key of ['original', 'target', 'originalSha256', 'targetSha256', 'captureMode'])
+    for (const key of [
+      'original',
+      'target',
+      'originalSha256',
+      'targetSha256',
+      'captureMode',
+      'captureDescriptor',
+    ])
       if (entry[key] !== launch[key]) throw new Error(`Fork entrypoint receipt differs: ${file}`);
     const closeFile = `${launch.id}.close.json`;
     const counterFile = `${launch.id}.counters.jsonl`;
@@ -896,6 +937,22 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
       'script-import',
       coverageVariable,
     ),
+    createEvalCapture(
+      snapshot,
+      preparations,
+      join(directory, 'capture-eval-fd5.mjs'),
+      'eval-import',
+      coverageVariable,
+      5,
+    ),
+    createEvalCapture(
+      snapshot,
+      preparations,
+      join(directory, 'capture-script-fd5.mjs'),
+      'script-import',
+      coverageVariable,
+      5,
+    ),
   ];
   const artifacts = readdirSync(directory)
     .filter((filename) => /\.(?:m?js|js\.map)$/.test(filename))
@@ -1061,14 +1118,16 @@ export function createEvalCapture(
   filename,
   captureMode = 'eval-import',
   coverageVariable = variable,
+  descriptor = 4,
 ) {
   assertCoverageVariable(coverageVariable);
+  if (![4, 5].includes(descriptor)) throw new Error('Invalid import capture descriptor.');
   if (!['eval-import', 'script-import'].includes(captureMode))
     throw new Error('Invalid import capture mode.');
   const bootstrap = `import {registerCompiledCapture} from ${JSON.stringify(import.meta.url)};
 if(process.execArgv[0]!=='--import'||process.execArgv[1]!==import.meta.url)throw new Error('Eval capture preload arguments differ.');
 process.execArgv.splice(0,2);
-registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},4,${JSON.stringify(coverageVariable)});
+registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparations)},${descriptor},${JSON.stringify(coverageVariable)});
 `;
   writeFileSync(filename, bootstrap, { flag: 'wx' });
   const target = realpathSync(filename),
@@ -1079,6 +1138,7 @@ registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(preparation
     originalSha256: hash,
     targetSha256: hash,
     captureMode,
+    ...(descriptor === 5 ? { captureDescriptor: descriptor } : {}),
     interruptionSignals: ['SIGTERM', 'SIGKILL'],
   };
 }

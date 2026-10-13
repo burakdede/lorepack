@@ -19,8 +19,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { captureCampaign, nodeCommand } from '../../../scripts/coverage_capture.mjs';
 import { preparingInstrumenter } from '../../../scripts/coverage_configuration.mjs';
 import {
+  createEvalCapture,
   prepareNativeCapture,
+  reconcileForkCapture,
   reconcileNativeCapture,
+  registerCommandCapture,
+  registerSyncCommandCapture,
   replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
 
@@ -177,6 +181,111 @@ async function nativeFixture(code = 'export const value = 7;') {
 }
 
 describe('native instrumentation process capture', () => {
+  it('preserves explicit fixture streams alongside sync and async campaign capture', async () => {
+    const fixture =
+      await nativeFixture(`function choose(flag = false) { if (flag) return 1; return 2; }
+function unused() { return 9; }
+choose(); choose(true);`);
+    const namespace = '__LOREPACK_CAMPAIGN_COVERAGE__';
+    const preparations = join(directory, 'separate-stream-preparations');
+    await prepareNativeCapture(fixture.snapshot, fixture.preparations, preparations, namespace);
+    const key = `${createHash('sha256').update('owned.mjs').digest('hex')}.json`;
+    const fixtureModule = join(directory, 'fixture-module.mjs');
+    writeFileSync(
+      fixtureModule,
+      JSON.parse(readFileSync(join(fixture.preparations, key), 'utf8')).instrumentedCode,
+    );
+    const driver = join(directory, 'separate-stream-driver.mjs');
+    writeFileSync(
+      driver,
+      `import {registerCounterStream} from ${JSON.stringify(pathToFileURL(join(ROOT, 'scripts/coverage_instrumented.mjs')).href)};
+registerCounterStream(4);
+await import(${JSON.stringify(pathToFileURL(fixtureModule).href)});
+await import(${JSON.stringify(pathToFileURL(fixture.source).href)});
+console.log(JSON.stringify({execArgv:process.execArgv,argv:process.argv}));`,
+    );
+    const entry = createEvalCapture(
+      fixture.snapshot,
+      preparations,
+      join(directory, 'separate-stream-preload.mjs'),
+      'script-import',
+      namespace,
+      5,
+    );
+    const captureDirectory = join(directory, 'separate-stream-captures');
+    const asynchronous = registerCommandCapture([entry], captureDirectory);
+    const synchronous = registerSyncCommandCapture([entry], captureDirectory);
+    try {
+      const syncFile = join(directory, 'fixture-sync.jsonl');
+      const syncFd = openSync(syncFile, 'wx');
+      let result: ReturnType<typeof spawnSync>;
+      try {
+        result = spawnSync(process.execPath, [driver], {
+          encoding: 'utf8',
+          env: {},
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', syncFd],
+        });
+      } finally {
+        closeSync(syncFd);
+      }
+      expect(result.status, String(result.stderr)).toBe(0);
+      expect(String(result.stderr)).toBe('');
+      expect(result.output).toHaveLength(5);
+      expect(JSON.parse(String(result.stdout))).toEqual({
+        execArgv: [],
+        argv: [process.execPath, driver],
+      });
+      const asyncFile = join(directory, 'fixture-async.jsonl');
+      const asyncFd = openSync(asyncFile, 'wx');
+      try {
+        const child = spawn(process.execPath, [driver], {
+          env: {},
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', asyncFd],
+        });
+        expect(child.stdio).toHaveLength(5);
+        const output: Buffer[] = [];
+        const errors: Buffer[] = [];
+        child.stdout?.on('data', (data) => output.push(data));
+        child.stderr?.on('data', (data) => errors.push(data));
+        const code = await new Promise((resolve, reject) => {
+          child.once('close', resolve);
+          child.once('error', reject);
+        });
+        expect(code).toBe(0);
+        expect(Buffer.concat(errors).toString()).toBe('');
+        expect(JSON.parse(Buffer.concat(output).toString())).toEqual({
+          execArgv: [],
+          argv: [process.execPath, driver],
+        });
+      } finally {
+        closeSync(asyncFd);
+      }
+      await asynchronous.settled();
+      for (const filename of [syncFile, asyncFile]) {
+        const fixtureCounters = await replayCounterStream(
+          fixture.snapshot,
+          readFileSync(filename, 'utf8'),
+        );
+        expect(fixtureCounters.state).toBe('completed');
+        const maps = fixtureCounters.maps as Record<string, { f: Record<string, number> }>;
+        const coverage = maps[fixture.source];
+        if (!coverage) throw new Error('Missing fixture stream counters.');
+        expect(Object.values(coverage.f).sort()).toEqual([0, 2]);
+      }
+    } finally {
+      synchronous.restore();
+      asynchronous.restore();
+    }
+    const campaign = await reconcileForkCapture(fixture.snapshot, captureDirectory, [entry]);
+    expect(campaign.status).toBe('Pass');
+    expect(campaign.processes).toBe(2);
+    const coverage = (campaign.maps as Record<string, { f: Record<string, number> }>)[
+      fixture.source
+    ];
+    if (!coverage) throw new Error('Missing campaign stream counters.');
+    expect(Object.values(coverage.f).sort()).toEqual([0, 4]);
+  });
+
   it('captures owned raw scripts and rejects changed source bytes', async () => {
     const fixture =
       await nativeFixture(`export function choose(flag = false) { if (flag) return 1; return 2; }

@@ -748,7 +748,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     expect(Object.keys(parent.maps)).toHaveLength(2);
     const registry = createCampaignRegistry(captured, launch);
     expect(registry.forkEntries).toHaveLength(6);
-    expect(registry.commandEntries).toHaveLength(8);
+    expect(registry.commandEntries).toHaveLength(10);
     const worker = join(project, 'captured-worker.mjs');
     writeFileSync(
       worker,
@@ -803,6 +803,7 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
       'measurement-public-entry.js',
       'measurement-query-child.js',
       'capture-bootstrap.mjs',
+      'capture-script-fd5.mjs',
       sharedChunk as string,
     ]) {
       const changed = join(output, filename);
@@ -826,11 +827,17 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
     const ownedEval = `const {marker}=await import(${JSON.stringify(pathToFileURL(join(project, 'packages/core/dist/shared.js')).href)});console.log(marker());`;
     const temporary = join(project, 'temporary-driver.mjs');
     writeFileSync(temporary, ownedEval);
+    const separateDriver = join(project, 'separate-stream-driver.mjs');
+    writeFileSync(
+      separateDriver,
+      `import {writeSync} from 'node:fs';writeSync(4,'fixture');${ownedEval}`,
+    );
     const automaticTest = join(project, 'automatic.test.ts');
     writeFileSync(
       automaticTest,
       `import {expect,test} from 'vitest';
 import {spawnSync} from 'node:child_process';
+import {openSync,closeSync,readFileSync} from 'node:fs';
 import {registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
 test('restores campaign capture after a nested explicit collector',async()=>{
  const entries=${JSON.stringify(registry.commandEntries)};
@@ -847,6 +854,16 @@ test('restores campaign capture after a nested explicit collector',async()=>{
 test('captures the ordinary CLI automatically',()=>{
  const result=spawnSync(process.execPath,[${JSON.stringify(join(project, 'packages/cli/dist/public-entry.js'))}],{encoding:'utf8',env:{}});
  expect(result.status).toBe(7);expect(result.stderr).toBe('');
+});
+test('preserves a caller stream during automatic capture',()=>{
+ const file=${JSON.stringify(join(project, 'caller-stream.txt'))};
+ const fd=openSync(file,'wx');
+ try {
+  const result=spawnSync(process.execPath,[${JSON.stringify(separateDriver)}],{encoding:'utf8',env:{},stdio:['ignore','pipe','pipe','ignore',fd]});
+  expect(result.status).toBe(0);expect(result.stdout).toBe('measured\\n');expect(result.stderr).toBe('');
+  expect(result.output).toHaveLength(5);
+ } finally {closeSync(fd);}
+ expect(readFileSync(file,'utf8')).toBe('fixture');
 });
 test('captures unregistered eval and temporary drivers automatically',()=>{
  for(const args of [['--input-type=module','-e',${JSON.stringify(ownedEval)}],[${JSON.stringify(temporary)}]]) {
@@ -877,7 +894,7 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       ...registry.commandEntries,
     ]);
     expect(automaticCapture.status).toBe('Pass');
-    expect(automaticCapture.processes).toBe(19);
+    expect(automaticCapture.processes).toBe(20);
     expect(
       included.map((entry) =>
         readFileSync(join(project, entry.path.replace('/src/', '/dist/').replace(/\.ts$/, '.js'))),
