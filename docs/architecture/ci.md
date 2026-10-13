@@ -158,8 +158,25 @@ The `settled()` finalizer drains child close receipts after the host returns. It
 temporarily keeps the capture parent's event loop alive because the query host
 deliberately unrefs its child. Query execution still returns without waiting for
 termination. The finalizer must run after registered hosts stop their children.
-Extra existing descriptors remain unsupported; campaign integration, asynchronous
-and synchronous CLI/verification launches, and parent-exit integration remain open.
+Extra existing descriptors remain unsupported; campaign integration, synchronous
+CLI/verification launches, and parent-exit integration remain open.
+
+`registerCommandCapture` intercepts the shared asynchronous `ChildProcess.spawn`
+method before descriptor normalization. Node's original `spawn`, callback `execFile`
+and custom promise wrapper remain intact, including buffering, errors and timeouts.
+Only the current Node executable with an explicitly registered first script argument
+is mapped. Multiple ordinary entrypoints may share a measured artifact; the invoked
+entrypoint is retained in its receipt. A measured target is registered explicitly
+when launched directly. Other commands and Node eval/flag launches delegate unchanged.
+The original three streams are preserved, descriptor 3 is ignored and descriptor 4
+receives the parent-opened capture file. Additional existing descriptors reject capture.
+Environment mode is recorded as `normalized` because this boundary receives Node's
+resolved environment; no values are recorded or changed. Kill receipts retain actual
+numeric signals from Node's timeout handling. Reconciliation matches them against
+the platform's signal constants and observed close signal.
+Real fixtures retain exact callback/promise results, nonzero errors, timeout behavior
+and output truncation, with seven independent executions contributing exactly seven
+times the direct counts. Synchronous launches and complete campaign integration remain open.
 
 `registerCounterStream` uses a separate inherited descriptor (4 or greater), preserving the existing IPC
 descriptor and child permissions. It forwards actual engine source registrations

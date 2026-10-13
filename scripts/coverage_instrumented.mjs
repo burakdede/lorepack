@@ -15,6 +15,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { createRequire, registerHooks, syncBuiltinESMExports } from 'node:module';
+import { constants } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -23,6 +24,7 @@ import { prepareSource } from './coverage_configuration.mjs';
 
 const active = Symbol.for('lorepack.nativeCoverageCollector');
 const forkCollector = Symbol.for('lorepack.nativeForkCollector');
+const commandCollector = Symbol.for('lorepack.nativeCommandCollector');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -144,6 +146,114 @@ export function registerForkCapture(entries, directory) {
   };
 }
 
+export function registerCommandCapture(entries, directory) {
+  if (globalThis[commandCollector]) throw new Error('Command capture is already registered.');
+  const targets = new Map();
+  for (const entry of entries) {
+    const original = realpathSync(entry.original);
+    const target = realpathSync(entry.target);
+    if (
+      digest(readFileSync(original)) !== entry.originalSha256 ||
+      digest(readFileSync(target)) !== entry.targetSha256
+    )
+      throw new Error('Command capture entrypoint differs from its receipt.');
+    if (targets.has(original)) throw new Error('Duplicate command capture entrypoint.');
+    targets.set(original, { ...entry, original, target });
+  }
+  mkdirSync(directory, { recursive: true });
+  const prototype = childProcess.ChildProcess.prototype;
+  const originalSpawn = prototype.spawn;
+  const node = realpathSync(process.execPath);
+  const pending = [];
+  const launches = [];
+  function measuredSpawn(options) {
+    if (options.file !== process.execPath && options.file !== node)
+      return originalSpawn.call(this, options);
+    const argument = options.args?.[1];
+    if (typeof argument !== 'string' || argument.startsWith('-'))
+      return originalSpawn.call(this, options);
+    let filename = resolve(options.cwd ?? process.cwd(), argument);
+    try {
+      filename = realpathSync(filename);
+    } catch {}
+    const entry = targets.get(filename);
+    if (!entry) return originalSpawn.call(this, options);
+    if (
+      digest(readFileSync(entry.original)) !== entry.originalSha256 ||
+      digest(readFileSync(entry.target)) !== entry.targetSha256
+    )
+      throw new Error('Command capture entrypoint changed before launch.');
+    const stdio = options.stdio ?? 'pipe';
+    const streams = Array.isArray(stdio) ? [...stdio] : [stdio, stdio, stdio];
+    if (streams.length !== 3)
+      throw new Error('Command capture requires the original three-descriptor layout.');
+    const id = randomUUID();
+    const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
+    let result;
+    try {
+      result = originalSpawn.call(this, {
+        ...options,
+        args: [options.args[0], entry.target, ...options.args.slice(2)],
+        stdio: [...streams, 'ignore', fd],
+      });
+    } catch (error) {
+      closeSync(fd);
+      throw error;
+    }
+    const record = {
+      schema: 1,
+      id,
+      provider: 'istanbul@4.1.11',
+      parentPid: process.pid,
+      parentThreadId: threadId,
+      pid: this.pid ?? null,
+      original: entry.original,
+      target: entry.target,
+      originalSha256: entry.originalSha256,
+      targetSha256: entry.targetSha256,
+      environment: 'normalized',
+      argumentsSha256: digest(JSON.stringify(options.args)),
+    };
+    publish(directory, `${id}.launch.json`, record);
+    launches.push(record);
+    const kills = [];
+    const kill = this.kill;
+    this.kill = function (signal) {
+      const killed = kill.call(this, signal);
+      kills.push({ signal: signal ?? 'SIGTERM', result: killed });
+      return killed;
+    };
+    pending.push(
+      new Promise((resolveClosed) => {
+        this.prependOnceListener('close', (code, signal) => {
+          closeSync(fd);
+          publish(directory, `${id}.close.json`, { ...record, code, signal, kills });
+          resolveClosed();
+        });
+      }),
+    );
+    return result;
+  }
+  prototype.spawn = measuredSpawn;
+  globalThis[commandCollector] = measuredSpawn;
+  return {
+    launches,
+    async settled() {
+      const keepAlive = setInterval(() => {}, 1000);
+      try {
+        await Promise.all(pending);
+      } finally {
+        clearInterval(keepAlive);
+      }
+    },
+    restore() {
+      if (prototype.spawn !== measuredSpawn) throw new Error('Command capture binding changed.');
+      prototype.spawn = originalSpawn;
+      delete globalThis[commandCollector];
+    },
+  };
+}
+
 export async function reconcileForkCapture(snapshot, directory, entries, direct = {}) {
   const registry = new Map();
   for (const entry of entries) {
@@ -178,7 +288,7 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       launch.parentPid <= 0 ||
       !Number.isSafeInteger(launch.parentThreadId) ||
       launch.parentThreadId < 0 ||
-      !['inherited', 'explicit', 'empty'].includes(launch.environment) ||
+      !['inherited', 'explicit', 'empty', 'normalized'].includes(launch.environment) ||
       !/^[0-9a-f]{64}$/.test(launch.argumentsSha256)
     )
       throw new Error(`Invalid fork launch receipt: ${file}`);
@@ -216,7 +326,11 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     } else if (
       code !== null ||
       !entry.interruptionSignals.includes(signal) ||
-      !kills.some((kill) => kill.result === true && kill.signal === signal)
+      !kills.some(
+        (kill) =>
+          kill.result === true &&
+          (kill.signal === signal || kill.signal === constants.signals[signal]),
+      )
     )
       throw new Error(`Unqualified fork interruption: ${closeFile}`);
     for (const name of [file, closeFile, counterFile]) consumed.add(name);

@@ -612,6 +612,8 @@ Measured CLI builds share the production entrypoint definitions and migration la
 with separate output, package metadata and Studio assets.
 Explicit fork capture records matched child identities and kill/close receipts while
 preserving the existing IPC, environment and flags. Complete launch integration remains open.
+Asynchronous command capture preserves Node's own callback and promise output handling,
+including timeouts and output limits, through registered entrypoints only.
 Fork reconciliation rejects missing receipts, mismatched child identities and repeated
 execution streams before merging source-compatible maps once. Interrupted streams require
 an explicitly permitted signal and a successful matching kill receipt from the host.
