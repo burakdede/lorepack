@@ -443,6 +443,9 @@ An explicit fixture collector can temporarily layer over the campaign collector.
 Its launches retain their own receipts and counter streams; restoring it reinstates the
 campaign bindings. A second explicit collector is rejected, and private launch markers
 prevent the underlying campaign adapter from wrapping the same launch twice.
+An explicit fork collector also marks dispatch through a previous campaign fork collector.
+This marker delegates only the fork dispatcher: the command collector still captures the
+actual child and supplies its close receipt. A different-directory explicit audit still rejects.
 Fixtures that launch a premeasured CLI register its hash-bound entrypoint with the
 synchronous adapter and reconcile the parent launch before inspecting its counter stream.
 They use the same descriptor allocation as campaign launches.
