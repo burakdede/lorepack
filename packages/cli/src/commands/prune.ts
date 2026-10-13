@@ -14,7 +14,7 @@ import {
   type RemoteRetentionApplyResult,
   type RemoteRetentionPlan,
   type RemoteRetentionResumeState,
-} from '@lorepack/deploy-cloudflare';
+} from '@lorepack/deploy-cloudflare/client';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { openStateStore } from '../services/builds.js';
 import {

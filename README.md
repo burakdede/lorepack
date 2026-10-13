@@ -471,6 +471,9 @@ your Node.js version in a bug report.
 
 ## Contributing
 
+CLI deployment tooling uses the [deployment client boundary](docs/architecture/packages.md)
+so control operations do not initialize Worker protocol adapters.
+
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.

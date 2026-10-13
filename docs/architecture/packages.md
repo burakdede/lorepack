@@ -33,6 +33,10 @@ The internal packages are private workspace packages in the first release. They 
 public later when a package has a documented audience, a stable API, independent compatibility
 policy and a reason for users to depend on it directly.
 
+CLI deployment, token and retention operations import `@lorepack/deploy-cloudflare/client`.
+That entrypoint exposes the control operations without evaluating Worker protocol adapters.
+The package root retains its existing Worker factories and the same control implementations.
+
 ## Release rule
 
 Release discovery uses `private: false`, so only `@lorepack/cli` is preflighted, packed and
