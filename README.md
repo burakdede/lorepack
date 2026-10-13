@@ -541,6 +541,8 @@ with separate output, package metadata and Studio assets.
 Explicit fork capture records matched child identities and kill/close receipts while
 preserving the existing IPC, environment and flags. Complete launch integration remains open.
 Already measured child entrypoints keep their exact path when capture is attached.
+The CLI capture bootstrap drains registered child close receipts before honoring
+the CLI's requested process exit. Complete campaign qualification remains open.
 Asynchronous command capture preserves Node's own callback and promise output handling,
 including timeouts and output limits, through registered entrypoints only.
 Synchronous capture preserves native results and errors through both Node launch APIs,

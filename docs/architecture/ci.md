@@ -167,6 +167,13 @@ The `settled()` finalizer drains child close receipts after the host returns. It
 temporarily keeps the capture parent's event loop alive because the query host
 deliberately unrefs its child. Query execution still returns without waiting for
 termination. The finalizer must run after registered hosts stop their children.
+`runCapturedCli` intercepts a requested CLI exit with a private control exception,
+unwinds the normal entrypoint import, drains child close receipts, restores the original
+bindings and invokes the original exit with its exact arguments. Unexpected import
+errors remain errors. Real fixtures retain exit code 7, skip statements after exit,
+preserve permission/IPC limits and reconcile the actual child SIGKILL receipt.
+Normal build, HTTP query/SIGTERM and MCP client-close probes pass, but complete
+signal/failure qualification and installation into the campaign remain open.
 Extra existing descriptors remain unsupported; complete CLI/verification launch
 integration and parent-exit qualification remain open.
 
