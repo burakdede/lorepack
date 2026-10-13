@@ -1025,6 +1025,75 @@ console.log(JSON.stringify({outcomes,failure,timeout,maxBuffer,closingKilled,ext
       expect(actual.b[key]).toEqual(arms.map((hits) => hits * 8));
   });
 
+  it('captures registered heap-prefixed commands without changing Node arguments', () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const original = join(root, 'ordinary-prefixed-entry.mjs');
+    writeFileSync(original, 'throw new Error("The registered entry must be redirected");');
+    const entry = {
+      original,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(original)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: ['SIGTERM'],
+      nodeArguments: ['--max-old-space-size=128'],
+    };
+    const directory = join(root, 'prefixed-command-records');
+    const parent = join(root, 'prefixed-command-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {execFile,spawnSync,execFileSync} from 'node:child_process';
+import {promisify} from 'node:util';
+import {registerCommandCapture,registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const entry=${JSON.stringify(entry)},directory=${JSON.stringify(directory)};
+const execute=promisify(execFile),options={env:{},encoding:'utf8',stdio:'pipe'};
+const args=[...entry.nodeArguments,entry.original,'exit','inspect'];
+const originalArgs=JSON.stringify(args),originalOptions=JSON.stringify(options);
+const asyncCapture=registerCommandCapture([entry],directory);
+const asynchronous=await execute(process.execPath,args,options);
+await asyncCapture.settled();asyncCapture.restore();
+const syncCapture=registerSyncCommandCapture([entry],directory);
+const synchronous=spawnSync(process.execPath,args,options);
+const executed=execFileSync(process.execPath,args,options);
+const delegated=spawnSync(process.execPath,['--max-old-space-size=64',entry.original],options);
+syncCapture.restore();
+const invalid=[];
+for(const register of [registerCommandCapture,registerSyncCommandCapture]){
+ try{register([{...entry,nodeArguments:['-e']}],directory);}catch(error){invalid.push(error.message);}
+}
+const reconciled=await reconcileForkCapture(${JSON.stringify(snapshot)},directory,[entry],${JSON.stringify(maps)});
+console.log(JSON.stringify({asynchronous,synchronous:{status:synchronous.status,stdout:synchronous.stdout,stderr:synchronous.stderr},executed,delegated:{status:delegated.status,stderr:delegated.stderr},invalid,unchanged:JSON.stringify(args)===originalArgs&&JSON.stringify(options)===originalOptions,reconciled}));`,
+    );
+    const result = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+    expect(result.unchanged).toBe(true);
+    expect(result.asynchronous.stderr).toBe('');
+    expect(result.synchronous.status).toBe(0);
+    expect(result.synchronous.stderr).toBe('');
+    expect(result.executed).toBe(result.asynchronous.stdout);
+    expect(result.synchronous.stdout).toBe(result.executed);
+    expect(JSON.parse(result.executed)).toMatchObject({
+      execArgv: ['--max-old-space-size=128'],
+      inheritedMarker: null,
+    });
+    expect(result.delegated.status).toBe(1);
+    expect(result.delegated.stderr).toContain('The registered entry must be redirected');
+    expect(result.invalid).toEqual([
+      'Invalid command capture Node argument prefix.',
+      'Invalid command capture Node argument prefix.',
+    ]);
+    expect(result.reconciled.status).toBe('Pass');
+    expect(result.reconciled.processes).toBe(3);
+    const filename = join(root, 'private.ts');
+    const actual = result.reconciled.maps[filename];
+    if (!maps[filename] || !actual) throw new Error('Missing reconciled prefixed command map.');
+    for (const field of ['statementMap', 'fnMap', 'branchMap'])
+      expect(actual[field]).toEqual(maps[filename][field as keyof Coverage]);
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(maps[filename][field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 3);
+    for (const [key, arms] of Object.entries(maps[filename].b))
+      expect(actual.b[key]).toEqual(arms.map((hits) => hits * 3));
+  });
+
   it('captures synchronous result, errors and native timeout evidence', async () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const original = join(root, 'ordinary-sync-entry.mjs');
