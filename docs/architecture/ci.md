@@ -94,6 +94,22 @@ Vitest's synthetic second mapping pass. Exclusive atomic publication preserves
 existing records and rejects conflicting transforms. These records contain no hit
 counters; a real typed/private fixture replays them and requires exact equality
 for statement, function and branch maps and counts after remapping.
+
+`scripts/coverage_instrumented.mjs` prepares native instrumentation with the same
+pinned engine outside the measured child. Its explicit synchronous Node load hook
+replays source-bound code without importing the provider inside restricted processes.
+The child validates original loaded bytes, preparation identity and instrumented-code
+hashes. It changes no permission flags or environment variables. Unsupported owned
+formats and query variants fail with retained rejection details.
+
+Each process/thread registration publishes an exclusive atomic start record and one
+completion record containing its final cumulative counters. Empty execution has an
+explicit empty map. Duplicate registration fails; repeated cumulative snapshots are
+not independent execution. Explicit exit and uncaught failure retain their exit codes.
+Forced termination leaves a start record without a fabricated completion. Real fixtures
+verify these cases, exact typed/private map replay and file-access denial under identical
+permissions. Missing completion still needs campaign reconciliation; compiled children
+and complete campaign qualification remain open.
 See [ADR 0017](../adr/0017-instrumented-coverage.md). V8 conversion remains separately pinned
 for native execution; incompatible layouts still fail and cannot be merged into direct maps.
 
