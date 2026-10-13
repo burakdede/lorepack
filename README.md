@@ -521,6 +521,7 @@ Explicit fixture files and pipes retain their descriptors and IPC alongside camp
 Fork capture retains IPC while binding actual command launch and close records.
 Measurement regressions check each boundary independently within unchanged test deadlines.
 Eval and temporary-script fixtures compile once, then verify each launch prefix independently.
+Generated bundle fixtures stay under build output so parallel inventory checks retain strict ownership.
 Native capture validates owned scripts loaded directly from source as well as compiled packages.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.

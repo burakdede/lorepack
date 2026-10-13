@@ -35,7 +35,7 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
   });
 
   it('renders bundled CLI help without initializing protocol SDKs', () => {
-    const outputDirectory = mkdtempSync(join(REPO_ROOT, 'packages/cli/.bundle-help-'));
+    const outputDirectory = mkdtempSync(join(REPO_ROOT, 'packages/cli/dist/.bundle-help-'));
     try {
       execFileSync(
         process.execPath,
@@ -47,6 +47,18 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
         ],
         { cwd: REPO_ROOT, encoding: 'utf8' },
       );
+      const inventoryFile = join(outputDirectory, 'owned-inventory.json');
+      execFileSync(
+        process.execPath,
+        [join(REPO_ROOT, 'scripts/coverage_inventory.mjs'), '--out', inventoryFile],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      const inventory = JSON.parse(readFileSync(inventoryFile, 'utf8'));
+      expect(inventory.frozenOwned).toBe(345);
+      expect(inventory.frozenCritical).toBe(49);
+      expect(
+        inventory.included.some((entry: { path: string }) => entry.path.includes('.bundle-help-')),
+      ).toBe(false);
       const output = execFileSync(
         process.execPath,
         [
