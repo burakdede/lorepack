@@ -14,7 +14,7 @@ import {
   type ProjectionMigrationStatementLike,
   type R2BucketLike,
   remoteMutationCompletionUnknown,
-} from '@lorepack/deploy-cloudflare';
+} from '@lorepack/deploy-cloudflare/client';
 import {
   type CloudflareTargetAdapter,
   createWranglerAdapter,

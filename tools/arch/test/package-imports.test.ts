@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
@@ -10,6 +11,53 @@ const NODE_BUILTINS = new Set([
 ]);
 
 describe('published package dependency declarations', () => {
+  it('loads deployment client operations without loading Worker protocol adapters', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+import {registerHooks} from 'node:module';
+registerHooks({resolve(specifier,context,next){
+ if(specifier.startsWith('@modelcontextprotocol/'))throw new Error('Deployment client loaded a protocol adapter');
+ return next(specifier,context);
+}});
+const client=await import('@lorepack/deploy-cloudflare/client');
+console.log(JSON.stringify({target:typeof client.createCloudflareDeploymentTarget,retention:typeof client.planRemoteRetention,tokens:typeof client.hashRuntimeToken}));
+`,
+      ],
+      { cwd: join(REPO_ROOT, 'packages/deploy-cloudflare'), encoding: 'utf8' },
+    );
+    expect(JSON.parse(output)).toEqual({
+      target: 'function',
+      retention: 'function',
+      tokens: 'function',
+    });
+  });
+
+  it('retains root Worker exports and the same deployment client operations', () => {
+    const output = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+const root=await import('@lorepack/deploy-cloudflare');
+const client=await import('@lorepack/deploy-cloudflare/client');
+console.log(JSON.stringify({worker:typeof root.createCloudflareWorkerApp,target:root.createCloudflareDeploymentTarget===client.createCloudflareDeploymentTarget,retention:root.planRemoteRetention===client.planRemoteRetention,tokens:root.hashRuntimeToken===client.hashRuntimeToken}));
+`,
+      ],
+      { cwd: join(REPO_ROOT, 'packages/deploy-cloudflare'), encoding: 'utf8' },
+    );
+    expect(JSON.parse(output)).toEqual({
+      worker: 'function',
+      target: true,
+      retention: true,
+      tokens: true,
+    });
+  });
+
   it('declares every runtime package imported by compiled JavaScript', () => {
     const problems: string[] = [];
 
@@ -93,10 +141,10 @@ function importSpecifiers(source: string): string[] {
   const dynamicImport = /import\(\s*['"]([^'"]+)['"]\s*\)/g;
 
   for (const match of source.matchAll(importFrom)) {
-    specifiers.push(match[1]);
+    specifiers.push(...match.slice(1, 2));
   }
   for (const match of source.matchAll(dynamicImport)) {
-    specifiers.push(match[1]);
+    specifiers.push(...match.slice(1, 2));
   }
 
   return specifiers;
@@ -107,5 +155,6 @@ function packageName(specifier: string): string {
     const [scope, name] = specifier.split('/');
     return `${scope}/${name}`;
   }
-  return specifier.split('/')[0];
+  const slash = specifier.indexOf('/');
+  return slash === -1 ? specifier : specifier.slice(0, slash);
 }

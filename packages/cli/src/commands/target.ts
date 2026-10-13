@@ -19,7 +19,7 @@ import {
   rotateRuntimeTokenHash,
   runProjectionMigrations,
   storeRuntimeTokenHash,
-} from '@lorepack/deploy-cloudflare';
+} from '@lorepack/deploy-cloudflare/client';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
 import { targetsDirectory } from '../services/config-resolve.js';
