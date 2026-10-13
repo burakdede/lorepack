@@ -584,7 +584,7 @@ records one file at a time.
 Measured CLI entry wrappers initialize capture before shared chunks execute, and launch
 receipts bind the emitted JavaScript graph.
 Explicit fixture collectors reconcile their launches and restore campaign capture after use.
-Measured eval and temporary-script launches preserve import preloads, permissions and arguments.
+Measured eval and script launches preserve preloads, permissions, conditions and arguments.
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture streams retain their original descriptor alongside campaign capture.
 Fork capture retains IPC while binding actual command launch and close records.
