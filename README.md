@@ -595,6 +595,11 @@ coverage gates fail, retaining the evidence for review.
 The campaign retains actual provider transformation preparations under `preparations/`,
 bound to original source hashes and mapped source content. These contain static code and
 maps, not execution hits. Conflicting transforms cannot overwrite retained evidence.
+Preparation identities normalize filesystem paths, including Vite's Windows separators.
+Native module capture compiles instrumented preparations before entering restricted
+processes, preserving their permissions. Its process records distinguish started,
+completed, empty and rejected execution; interrupted capture remains incomplete.
+Complete campaign integration and compiled-child qualification remain open.
 Direct coverage uses pinned Istanbul instrumentation with a recorded dependency patch
 to retain private-method counters and empty source records. The patch also exposes its
 instrumenter and remapper for native-capture qualification, with real initializer and
