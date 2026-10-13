@@ -515,6 +515,7 @@ Measured eval and script launches preserve preloads, permissions, conditions and
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture streams retain their original descriptor alongside campaign capture.
 Fork capture retains IPC while binding actual command launch and close records.
+Measurement regressions check each boundary independently within unchanged test deadlines.
 Native capture validates owned scripts loaded directly from source as well as compiled packages.
 Native counter IDs align with direct instrumentation only through unique exact source
 descriptors. Ambiguous matches and changed branch-arm order remain rejected.
