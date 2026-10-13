@@ -385,7 +385,7 @@ console.log(JSON.stringify({execArgv:process.execArgv,argv:process.argv}));`,
       await nativeFixture(`export function choose(flag = false) { if (flag) return 1; return 2; }
 export function unused() { return 9; }
 choose(); choose(true);`);
-    const namespace = '__LOREPACK_CAMPAIGN_COVERAGE__';
+    const namespace = '__LOREPACK_NATIVE_COVERAGE__';
     const preparations = join(directory, 'raw-script-preparations');
     await prepareNativeCapture(fixture.snapshot, fixture.preparations, preparations, namespace);
     const bootstrap = join(directory, 'raw-script-bootstrap.mjs');
@@ -477,17 +477,31 @@ globalThis.campaignOnly=false;await import(${JSON.stringify(pathToFileURL(fixtur
 await import(${JSON.stringify(pathToFileURL(fixture.entry).href)});
 console.log(JSON.stringify({duplicateRejected}));`,
     );
-    const counterFile = join(directory, 'campaign.jsonl');
-    const fd = openSync(counterFile, 'wx');
+    const captures = join(directory, 'explicit-namespace-capture');
+    const entry = {
+      original: script,
+      target: script,
+      originalSha256: createHash('sha256').update(readFileSync(script)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(script)).digest('hex'),
+      interruptionSignals: [],
+    };
+    const explicit = registerSyncCommandCapture([entry], captures);
     let result: ReturnType<typeof spawnSync>;
     try {
       result = spawnSync(process.execPath, [script], {
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
     } finally {
-      closeSync(fd);
+      explicit.restore();
     }
+    expect(explicit.launches).toHaveLength(1);
+    const execution = explicit.launches[0];
+    if (!execution) throw new Error('Missing explicit collector launch.');
+    const counterFile = join(captures, `${execution.id}.counters.jsonl`);
+    const launchEvidence = await reconcileForkCapture(fixture.snapshot, captures, [entry]);
+    expect(launchEvidence.status).toBe('Pass');
+    expect(launchEvidence.processes).toBe(1);
     expect(result.status, String(result.stderr)).toBe(0);
     expect(preparation.coverageVariable).toBe(namespace);
     expect(String(result.stderr)).toBe('');
