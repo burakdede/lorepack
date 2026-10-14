@@ -29,6 +29,7 @@ import {
   reconcileNativeCapture,
   registerCommandCapture,
   registerSyncCommandCapture,
+  replayCounterFile,
   replayCounterStream,
 } from '../../../scripts/coverage_instrumented.mjs';
 
@@ -818,6 +819,62 @@ await capture.settled();capture.restore();console.log(JSON.stringify({closed,std
     const actual = reconciled.maps[join(root, 'private.ts')];
     for (const field of ['s', 'f', 'b'])
       expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+  });
+
+  it('reconciles real native counters without reading the complete stream into a string', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const hash = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+    const entry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: hash,
+      targetSha256: hash,
+      interruptionSignals: [],
+    };
+    const directory = join(root, 'streaming-replay-records');
+    const parent = join(root, 'streaming-replay-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {fork} from 'node:child_process';
+import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';
+import {registerForkCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerForkCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const child=fork(${JSON.stringify(bundle)},['exit'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],stdio:['ignore','ignore','pipe','ipc'],serialization:'advanced'});
+let stderr='';child.stderr.setEncoding('utf8').on('data',chunk=>stderr+=chunk);
+await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>code===0?resolve():reject(new Error('Unexpected fork closure')));});
+await capture.settled();capture.restore();
+const read=fs.readFileSync;fs.readFileSync=function(filename,...args){if(String(filename).endsWith('.counters.jsonl'))throw new Error('Whole native counter file read');return read.call(this,filename,...args);};syncBuiltinESMExports();
+const result=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},[${JSON.stringify(entry)}],${JSON.stringify(maps)});
+console.log(JSON.stringify({result,stderr}));`,
+    );
+    const output = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+    expect(output.stderr).toBe('');
+    expect(output.result.status).toBe('Pass');
+    const actual = output.result.maps[join(root, 'private.ts')];
+    for (const field of ['s', 'f', 'b'])
+      expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+  });
+
+  it('keeps file and string replay identical across JSON and UTF8 chunk boundaries', async () => {
+    const records = completed
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    records[0].note = '';
+    const prefixBytes = Buffer.byteLength(JSON.stringify(records[0])) - 2;
+    records[0].note = 'x'.repeat(64 * 1024 - 1 - prefixBytes) + '界'.repeat(100);
+    const text = `${records.map((record) => JSON.stringify(record)).join('\n')}\n`;
+    expect(Buffer.from(text).subarray(64 * 1024 - 1, 64 * 1024 + 2)).toEqual(Buffer.from('界'));
+    const filename = join(root, 'chunk-boundary-counters.jsonl');
+    writeFileSync(filename, text);
+    expect(await replayCounterFile(snapshot, filename)).toEqual(
+      await replayCounterStream(snapshot, text),
+    );
+    for (const invalid of ['', text.slice(0, -1), text.replace('"sequence":2', '"sequence":3')]) {
+      writeFileSync(filename, invalid);
+      await expect(replayCounterFile(snapshot, filename)).rejects.toThrow();
+    }
+    writeFileSync(filename, text);
   });
 
   async function remapCounters(

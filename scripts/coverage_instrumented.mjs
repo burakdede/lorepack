@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
   cpSync,
+  createReadStream,
   linkSync,
   mkdirSync,
   openSync,
@@ -20,6 +21,7 @@ import {
 import { createRequire, registerHooks, syncBuiltinESMExports } from 'node:module';
 import { constants } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { threadId } from 'node:worker_threads';
@@ -921,17 +923,13 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       validateHeapDiagnostic(heapAbort);
       consumed.add(expected);
     }
-    const counters = await replayCounterStream(
-      snapshot,
-      readFileSync(join(directory, counterFile), 'utf8'),
-      {
-        pid: launch.pid,
-        threadId: 0,
-        code,
-        signal,
-        ...(heapAbort ? { nativeAbort: heapAbort } : {}),
-      },
-    );
+    const counters = await replayCounterFile(snapshot, join(directory, counterFile), {
+      pid: launch.pid,
+      threadId: 0,
+      code,
+      signal,
+      ...(heapAbort ? { nativeAbort: heapAbort } : {}),
+    });
     if (identities.has(counters.id) || counters.pid !== launch.pid || counters.threadId !== 0)
       throw new Error(`Repeated or mismatched fork execution: ${counterFile}`);
     identities.add(counters.id);
@@ -1553,49 +1551,82 @@ export function registerCounterStream(fd, coverageVariable = variable) {
   return identity.id;
 }
 
+function* counterTextRecords(text) {
+  let offset = 0;
+  for (let end = text.indexOf('\n'); end !== -1; end = text.indexOf('\n', offset)) {
+    yield JSON.parse(text.slice(offset, end));
+    offset = end + 1;
+  }
+}
+
+async function* counterFileRecords(filename) {
+  const decoder = new StringDecoder('utf8');
+  let pending = '';
+  let observed = false;
+  for await (const chunk of createReadStream(filename, { highWaterMark: 64 * 1024 })) {
+    pending += decoder.write(chunk);
+    let offset = 0;
+    for (let end = pending.indexOf('\n'); end !== -1; end = pending.indexOf('\n', offset)) {
+      observed = true;
+      yield JSON.parse(pending.slice(offset, end));
+      offset = end + 1;
+    }
+    pending = pending.slice(offset);
+  }
+  pending += decoder.end();
+  if (!observed || pending) throw new Error('Empty or truncated native counter stream.');
+}
+
 export async function replayCounterStream(snapshot, text, hostClose) {
   if (typeof text !== 'string' || !text || !text.endsWith('\n'))
     throw new Error('Empty or truncated native counter stream.');
-  const records = text
-    .slice(0, -1)
-    .split('\n')
-    .map((line) => JSON.parse(line));
-  const start = records[0];
-  if (
-    start.state !== 'started' ||
-    start.schema !== 1 ||
-    start.provider !== 'istanbul@4.1.11' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(start.id) ||
-    !Number.isSafeInteger(start.pid) ||
-    start.pid <= 0 ||
-    !Number.isSafeInteger(start.threadId) ||
-    start.threadId < 0
-  )
-    throw new Error('Invalid native counter stream identity.');
-  if (
-    hostClose &&
-    (hostClose.pid !== start.pid ||
-      hostClose.threadId !== start.threadId ||
-      !(
-        (Number.isSafeInteger(hostClose.code) && hostClose.signal === null) ||
-        (hostClose.code === null && typeof hostClose.signal === 'string')
-      ))
-  )
-    throw new Error('Native counter host close identity differs.');
-  if (hostClose?.nativeAbort) {
-    validateHeapDiagnostic(hostClose.nativeAbort);
-    if (!nativeHeapClosure(hostClose.code, hostClose.signal))
-      throw new Error('Native heap-abort host close differs.');
-  }
+  return replayCounterRecords(snapshot, counterTextRecords(text), hostClose);
+}
+
+export async function replayCounterFile(snapshot, filename, hostClose) {
+  return replayCounterRecords(snapshot, counterFileRecords(filename), hostClose);
+}
+
+async function replayCounterRecords(snapshot, records, hostClose) {
   const root = realpathSync(snapshot.root);
   const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
   const maps = {};
   const { captureCoverage } = await import('./coverage_report.mjs');
+  let start = null;
   let sequence = 0;
   let completed = null;
   let replacement = null;
   const attempts = new Set();
-  for (const record of records) {
+  for await (const record of records) {
+    if (start === null) {
+      start = record;
+      if (
+        start.state !== 'started' ||
+        start.schema !== 1 ||
+        start.provider !== 'istanbul@4.1.11' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(start.id) ||
+        !Number.isSafeInteger(start.pid) ||
+        start.pid <= 0 ||
+        !Number.isSafeInteger(start.threadId) ||
+        start.threadId < 0
+      )
+        throw new Error('Invalid native counter stream identity.');
+      if (
+        hostClose &&
+        (hostClose.pid !== start.pid ||
+          hostClose.threadId !== start.threadId ||
+          !(
+            (Number.isSafeInteger(hostClose.code) && hostClose.signal === null) ||
+            (hostClose.code === null && typeof hostClose.signal === 'string')
+          ))
+      )
+        throw new Error('Native counter host close identity differs.');
+      if (hostClose?.nativeAbort) {
+        validateHeapDiagnostic(hostClose.nativeAbort);
+        if (!nativeHeapClosure(hostClose.code, hostClose.signal))
+          throw new Error('Native heap-abort host close differs.');
+      }
+    }
     if ((completed && !hostClose) || record.sequence !== ++sequence)
       throw new Error('Native counter stream sequence differs.');
     if (sequence === 1) continue;
@@ -1664,6 +1695,7 @@ export async function replayCounterStream(snapshot, text, hostClose) {
       completed = record;
     } else throw new Error('Unknown native counter stream record.');
   }
+  if (start === null) throw new Error('Empty or truncated native counter stream.');
   let replacementCompiler = null;
   if (replacement) {
     if (!hostClose) throw new Error('Native image replacement requires host close.');
