@@ -654,5 +654,9 @@ same attempt without changing the actual process-image replacement.
 
 The real execve regressions are skipped on Windows and IBM i because Node does not
 support this API there. Their exact conditional source line and reason are recorded
-in the boundary suite's skip registry. The compiler's own fallback remains unchanged. See
+in the boundary suite's skip registry. Rejection cases replay altered image receipts
+from real compiler handoffs; executing an unregistered image inside the outer campaign
+would correctly invalidate that campaign. Actual process replacement, failed attempts,
+source hits and launch/close custody still run against real processes.
+The compiler's own fallback remains unchanged. See
 [ADR 0023](../adr/0023-native-compiler-image-replacement.md).

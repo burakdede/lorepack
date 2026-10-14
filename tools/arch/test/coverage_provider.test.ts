@@ -490,7 +490,6 @@ if (['compiler-replace','compiler-replace-failed'].includes(process.argv[2])) {
     catch(error) {if(!(error instanceof TypeError))throw error;}
   } else process.execve(executable,[executable,'--version']);
 }
-if(process.argv[2]==='unregistered-replace')process.execve(process.execPath,[process.execPath,'--eval','process.exit(0)']);
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -626,13 +625,13 @@ else process.disconnect?.();
   );
 
   it.skipIf(['win32', 'os400'].includes(process.platform))(
-    'rejects an unregistered replacement image even after successful host close',
+    'rejects a receipt for an unregistered replacement image after host close',
     async () => {
       const filename = join(root, 'unregistered-replacement.jsonl');
       const fd = openSync(filename, 'wx');
       let result: ReturnType<typeof spawnSync>;
       try {
-        result = spawnSync(process.execPath, [bundle, 'unregistered-replace'], {
+        result = spawnSync(process.execPath, [bundle, 'compiler-replace'], {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
           env: {},
@@ -642,8 +641,19 @@ else process.disconnect?.();
       }
       expect(result.status).toBe(0);
       expect(result.stderr).toBe('');
+      const records = readFileSync(filename, 'utf8')
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      const replacement = records.find((record) => record.state === 'execve');
+      if (!replacement) throw new Error('Missing actual native image handoff.');
+      replacement.executable = realpathSync(process.execPath);
+      replacement.executableSha256 = createHash('sha256')
+        .update(readFileSync(process.execPath))
+        .digest('hex');
+      const text = `${records.map((record) => JSON.stringify(record)).join('\n')}\n`;
       await expect(
-        replayCounterStream(snapshot, readFileSync(filename, 'utf8'), {
+        replayCounterStream(snapshot, text, {
           pid: result.pid,
           threadId: 0,
           code: result.status,
