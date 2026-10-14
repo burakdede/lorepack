@@ -496,7 +496,10 @@ actual inventory command while the bundle exists, retaining the frozen ownership
 The default suite uses one worker because several architecture fixtures launch their
 own compilers and Node children. Unbounded file parallelism can exceed
 unchanged per-case deadlines on hosts with many advertised CPUs. The worker limit
-changes scheduling, while retaining every test, assertion and deadline.
+changes scheduling, while retaining every test, assertion and deadline. The capture
+configuration retains the ordinary root test settings, including worker count and file
+parallelism, and the campaign does not override them. A real shared-resource worker
+regression verifies this policy; preparation and measurement follow the same scheduling.
 The fresh help bundle is compiled and executed in the same captured child. Its actual
 recipe receives the canonical capture plugin only while a compiled collector is active.
 Graph authentication uses a reusable bounded buffer instead of allocating each complete
