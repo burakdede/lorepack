@@ -24,7 +24,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { threadId } from 'node:worker_threads';
+import workerThreads, { threadId } from 'node:worker_threads';
 import { prepareSource } from './coverage_configuration.mjs';
 
 const active = Symbol.for('lorepack.nativeCoverageCollector');
@@ -38,6 +38,7 @@ const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
 const compiledContexts = Symbol.for('lorepack.compiledCaptureContexts');
 const imageCollectors = Symbol.for('lorepack.nativeImageCollectors');
+const workerCollectors = Symbol.for('lorepack.nativeWorkerCollectors');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
 function assertCoverageVariable(value) {
@@ -1496,6 +1497,38 @@ function registerImageCollector(emit) {
   globalThis[imageCollectors].add(emit);
 }
 
+function registerWorkerCollector(emit) {
+  if (!globalThis[workerCollectors]) {
+    const collectors = new Set();
+    globalThis[workerCollectors] = collectors;
+    workerThreads.Worker = new Proxy(workerThreads.Worker, {
+      construct(target, args, newTarget) {
+        const worker = Reflect.construct(target, args, newTarget);
+        const workerThreadId = worker.threadId;
+        const observers = [...collectors];
+        for (const observer of observers) observer({ state: 'worker-started', workerThreadId });
+        let closed = false;
+        worker.on('exit', (exitCode) => {
+          if (closed || worker.threadId !== -1) return;
+          closed = true;
+          for (const observer of observers)
+            observer({ state: 'worker-closed', workerThreadId, exitCode });
+        });
+        const terminate = worker.terminate;
+        worker.terminate = function (...values) {
+          if (this === worker && !closed)
+            for (const observer of observers)
+              observer({ state: 'worker-terminate', workerThreadId });
+          return terminate.apply(this, values);
+        };
+        return worker;
+      },
+    });
+    syncBuiltinESMExports();
+  }
+  globalThis[workerCollectors].add(emit);
+}
+
 export function registerCounterStream(fd, coverageVariable = variable) {
   assertCoverageVariable(coverageVariable);
   const collector = coverageVariable === variable ? active : Symbol.for(coverageVariable);
@@ -1512,7 +1545,9 @@ export function registerCounterStream(fd, coverageVariable = variable) {
   };
   let sequence = 0;
   const emit = (record) => {
-    const bytes = Buffer.from(`${JSON.stringify({ ...record, sequence: ++sequence })}\n`);
+    const bytes = Buffer.from(
+      `${JSON.stringify({ ...(threadId > 0 ? { id: identity.id } : {}), ...record, sequence: ++sequence })}\n`,
+    );
     if (writeSync(fd, bytes) !== bytes.length)
       throw new Error('Incomplete native counter stream write.');
   };
@@ -1547,6 +1582,7 @@ export function registerCounterStream(fd, coverageVariable = variable) {
   );
   globalThis[collector] = true;
   registerImageCollector((record) => emit({ ...identity, ...record }));
+  registerWorkerCollector((record) => emit({ ...identity, ...record }));
   afterProcessExit((exitCode) => emit({ ...identity, state: 'completed', exitCode }));
   return identity.id;
 }
@@ -1590,146 +1626,270 @@ export async function replayCounterFile(snapshot, filename, hostClose) {
 async function replayCounterRecords(snapshot, records, hostClose) {
   const root = realpathSync(snapshot.root);
   const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
-  const maps = {};
   const { captureCoverage } = await import('./coverage_report.mjs');
-  let start = null;
-  let sequence = 0;
-  let completed = null;
-  let replacement = null;
-  const attempts = new Set();
+  const contexts = new Map();
+  const workers = new Map();
+  let rootId = null;
   for await (const record of records) {
-    if (start === null) {
-      start = record;
-      if (
-        start.state !== 'started' ||
-        start.schema !== 1 ||
-        start.provider !== 'istanbul@4.1.11' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(start.id) ||
-        !Number.isSafeInteger(start.pid) ||
-        start.pid <= 0 ||
-        !Number.isSafeInteger(start.threadId) ||
-        start.threadId < 0
-      )
-        throw new Error('Invalid native counter stream identity.');
-      if (
-        hostClose &&
-        (hostClose.pid !== start.pid ||
-          hostClose.threadId !== start.threadId ||
-          !(
-            (Number.isSafeInteger(hostClose.code) && hostClose.signal === null) ||
-            (hostClose.code === null && typeof hostClose.signal === 'string')
-          ))
-      )
-        throw new Error('Native counter host close identity differs.');
-      if (hostClose?.nativeAbort) {
-        validateHeapDiagnostic(hostClose.nativeAbort);
-        if (!nativeHeapClosure(hostClose.code, hostClose.signal))
-          throw new Error('Native heap-abort host close differs.');
-      }
+    if (record.state === 'started') {
+      if (contexts.has(record.id)) throw new Error('Repeated native counter identity.');
+      if (rootId === null) rootId = record.id;
+      contexts.set(record.id, {
+        start: null,
+        sequence: 0,
+        completed: null,
+        replacement: null,
+        attempts: new Set(),
+        maps: {},
+      });
     }
-    if ((completed && !hostClose) || record.sequence !== ++sequence)
-      throw new Error('Native counter stream sequence differs.');
-    if (sequence === 1) continue;
-    if (replacement && record.state !== 'execve-returned')
-      throw new Error('Native image replacement has subsequent execution.');
-    if (record.state === 'source') {
-      const entry = owned.get(record.path);
-      if (!entry || Object.hasOwn(maps, record.path) || record.data?.path !== record.path)
-        throw new Error('Invalid or repeated native counter source.');
-      if (digest(readFileSync(record.path)) !== entry.sha256)
-        throw new Error(`Stale native counter source: ${entry.path}`);
-      captureCoverage(snapshot, { [record.path]: record.data }, start.id);
-      if (
-        [
-          ...Object.values(record.data.s),
-          ...Object.values(record.data.f),
-          ...Object.values(record.data.b).flat(),
-        ].some((value) => value !== 0)
-      )
-        throw new Error('Native counter source starts with execution hits.');
-      maps[record.path] = record.data;
-    } else if (record.state === 'counter') {
-      const map = maps[record.path];
-      if (
-        !map ||
-        !['s', 'f', 'b'].includes(record.field) ||
-        typeof record.key !== 'string' ||
-        !Object.hasOwn(map[record.field], record.key)
-      )
-        throw new Error('Unknown native counter.');
-      const target = record.field === 'b' ? map.b[record.key] : map[record.field];
-      const key = record.field === 'b' ? record.arm : record.key;
-      if (record.field === 'b' && (!Number.isSafeInteger(key) || key < 0 || key >= target.length))
-        throw new Error('Unknown native branch arm.');
-      if (!Number.isSafeInteger(record.value) || record.value !== target[key] + 1)
-        throw new Error('Native counter increment differs.');
-      target[key] = record.value;
-    } else if (record.state === 'execve' || record.state === 'execve-returned') {
-      for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
-        if (record[key] !== start[key])
-          throw new Error('Native image replacement identity differs.');
-      if (record.state === 'execve') {
+    const contextId = record.id ?? rootId;
+    const context = contexts.get(contextId);
+    if (!context) throw new Error('Unknown native counter context.');
+    let { start, sequence, completed, replacement } = context;
+    const { attempts, maps } = context;
+    const contextClose = contextId === rootId ? hostClose : null;
+    const workerHost =
+      contextId === rootId
+        ? null
+        : workers.get(
+            `${record.pid ?? context.start?.pid}:${record.threadId ?? context.start?.threadId}`,
+          );
+    if (workerHost && workerHost.closed !== null)
+      throw new Error('Native worker execution continued after host close.');
+    try {
+      if (start === null) {
+        start = record;
         if (
-          completed ||
-          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-            record.attempt,
-          ) ||
-          attempts.has(record.attempt) ||
-          !/^[0-9a-f]{64}$/.test(record.argumentsSha256)
+          start.state !== 'started' ||
+          start.schema !== 1 ||
+          start.provider !== 'istanbul@4.1.11' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(start.id) ||
+          !Number.isSafeInteger(start.pid) ||
+          start.pid <= 0 ||
+          !Number.isSafeInteger(start.threadId) ||
+          start.threadId < 0
         )
-          throw new Error('Invalid native image replacement attempt.');
-        attempts.add(record.attempt);
-        replacement = record;
-      } else {
-        if (!replacement || replacement.attempt !== record.attempt)
-          throw new Error('Native image replacement return differs.');
-        replacement = null;
-      }
-    } else if (record.state === 'completed') {
-      if (completed) throw new Error('Repeated native counter completion.');
-      for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
-        if (record[key] !== start[key])
-          throw new Error('Native counter completion identity differs.');
-      if (!Number.isSafeInteger(record.exitCode))
-        throw new Error('Invalid native counter exit code.');
-      completed = record;
-    } else throw new Error('Unknown native counter stream record.');
-  }
-  if (start === null) throw new Error('Empty or truncated native counter stream.');
-  let replacementCompiler = null;
-  if (replacement) {
-    if (!hostClose) throw new Error('Native image replacement requires host close.');
-    replacementCompiler = nativeCompilerIdentity();
-    if (
-      replacement.executable !== replacementCompiler.executable ||
-      replacement.executableSha256 !== replacementCompiler.executableSha256
-    )
-      throw new Error('Unqualified native image replacement.');
-  }
-  if (
-    hostClose?.signal === null &&
-    !hostClose.nativeAbort &&
-    !replacement &&
-    (!completed || hostClose.code !== completed.exitCode)
-  )
-    throw new Error('Native counter completion differs from host close.');
-  captureCoverage(snapshot, maps, start.id);
-  return {
-    id: start.id,
-    pid: start.pid,
-    threadId: start.threadId,
-    state: replacement ? 'replaced' : completed ? 'completed' : 'interrupted',
-    ...(replacement
-      ? {
-          replacement: {
-            ...replacement,
-            compilerVersion: replacementCompiler.compilerVersion,
-          },
+          throw new Error('Invalid native counter stream identity.');
+        if (
+          contextClose &&
+          (contextClose.pid !== start.pid ||
+            contextClose.threadId !== start.threadId ||
+            !(
+              (Number.isSafeInteger(contextClose.code) && contextClose.signal === null) ||
+              (contextClose.code === null && typeof contextClose.signal === 'string')
+            ))
+        )
+          throw new Error('Native counter host close identity differs.');
+        if (contextClose?.nativeAbort) {
+          validateHeapDiagnostic(contextClose.nativeAbort);
+          if (!nativeHeapClosure(contextClose.code, contextClose.signal))
+            throw new Error('Native heap-abort host close differs.');
         }
-      : {}),
-    exitCode: completed?.exitCode ?? null,
-    maps,
-  };
+      }
+      if ((completed && !hostClose) || record.sequence !== ++sequence)
+        throw new Error('Native counter stream sequence differs.');
+      if (sequence === 1) continue;
+      if (replacement && record.state !== 'execve-returned')
+        throw new Error('Native image replacement has subsequent execution.');
+      if (record.state === 'source') {
+        const entry = owned.get(record.path);
+        if (!entry || Object.hasOwn(maps, record.path) || record.data?.path !== record.path)
+          throw new Error('Invalid or repeated native counter source.');
+        if (digest(readFileSync(record.path)) !== entry.sha256)
+          throw new Error(`Stale native counter source: ${entry.path}`);
+        captureCoverage(snapshot, { [record.path]: record.data }, start.id);
+        if (
+          [
+            ...Object.values(record.data.s),
+            ...Object.values(record.data.f),
+            ...Object.values(record.data.b).flat(),
+          ].some((value) => value !== 0)
+        )
+          throw new Error('Native counter source starts with execution hits.');
+        maps[record.path] = record.data;
+      } else if (record.state === 'counter') {
+        const map = maps[record.path];
+        if (
+          !map ||
+          !['s', 'f', 'b'].includes(record.field) ||
+          typeof record.key !== 'string' ||
+          !Object.hasOwn(map[record.field], record.key)
+        )
+          throw new Error('Unknown native counter.');
+        const target = record.field === 'b' ? map.b[record.key] : map[record.field];
+        const key = record.field === 'b' ? record.arm : record.key;
+        if (record.field === 'b' && (!Number.isSafeInteger(key) || key < 0 || key >= target.length))
+          throw new Error('Unknown native branch arm.');
+        if (!Number.isSafeInteger(record.value) || record.value !== target[key] + 1)
+          throw new Error('Native counter increment differs.');
+        target[key] = record.value;
+      } else if (record.state === 'execve' || record.state === 'execve-returned') {
+        for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
+          if (record[key] !== start[key])
+            throw new Error('Native image replacement identity differs.');
+        if (record.state === 'execve') {
+          if (
+            completed ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+              record.attempt,
+            ) ||
+            attempts.has(record.attempt) ||
+            !/^[0-9a-f]{64}$/.test(record.argumentsSha256)
+          )
+            throw new Error('Invalid native image replacement attempt.');
+          attempts.add(record.attempt);
+          replacement = record;
+        } else {
+          if (!replacement || replacement.attempt !== record.attempt)
+            throw new Error('Native image replacement return differs.');
+          replacement = null;
+        }
+      } else if (['worker-started', 'worker-closed', 'worker-terminate'].includes(record.state)) {
+        for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
+          if (record[key] !== start[key])
+            throw new Error('Native worker observer identity differs.');
+        if (
+          !Number.isSafeInteger(record.workerThreadId) ||
+          record.workerThreadId <= 0 ||
+          record.workerThreadId === start.threadId
+        )
+          throw new Error('Invalid native worker thread identity.');
+        const key = `${start.pid}:${record.workerThreadId}`;
+        if (record.state === 'worker-started') {
+          if (workers.has(key)) throw new Error('Repeated native worker launch.');
+          workers.set(key, {
+            parent: start.id,
+            threadId: record.workerThreadId,
+            closed: null,
+            terminated: false,
+          });
+        } else {
+          const worker = workers.get(key);
+          if (!worker || worker.parent !== start.id || worker.closed !== null)
+            throw new Error('Native worker lifecycle differs.');
+          if (record.state === 'worker-terminate') worker.terminated = true;
+          else {
+            if (!Number.isSafeInteger(record.exitCode))
+              throw new Error('Invalid native worker exit code.');
+            worker.closed = record.exitCode;
+          }
+        }
+      } else if (record.state === 'completed') {
+        if (completed) throw new Error('Repeated native counter completion.');
+        for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
+          if (record[key] !== start[key])
+            throw new Error('Native counter completion identity differs.');
+        if (!Number.isSafeInteger(record.exitCode))
+          throw new Error('Invalid native counter exit code.');
+        completed = record;
+      } else throw new Error('Unknown native counter stream record.');
+    } finally {
+      Object.assign(context, { start, sequence, completed, replacement });
+    }
+  }
+  if (rootId === null) throw new Error('Empty or truncated native counter stream.');
+  const results = [];
+  const threadIds = new Set();
+  for (const [id, context] of contexts) {
+    const { start, completed, replacement, maps } = context;
+    let contextClose = hostClose;
+    let workerHost = null;
+    if (id !== rootId) {
+      if (
+        !hostClose ||
+        start.pid !== contexts.get(rootId).start.pid ||
+        start.threadId <= 0 ||
+        threadIds.has(start.threadId)
+      )
+        throw new Error('Native worker context identity differs.');
+      threadIds.add(start.threadId);
+      const worker = workers.get(`${start.pid}:${start.threadId}`);
+      workerHost = worker;
+      if (!worker || worker.closed === null) throw new Error('Native worker host close missing.');
+      if (!completed && !worker.terminated) throw new Error('Native worker completion missing.');
+      contextClose = {
+        pid: start.pid,
+        threadId: start.threadId,
+        code: worker.closed,
+        signal: null,
+      };
+    }
+
+    let replacementCompiler = null;
+    if (replacement) {
+      if (!contextClose) throw new Error('Native image replacement requires host close.');
+      replacementCompiler = nativeCompilerIdentity();
+      if (
+        replacement.executable !== replacementCompiler.executable ||
+        replacement.executableSha256 !== replacementCompiler.executableSha256
+      )
+        throw new Error('Unqualified native image replacement.');
+    }
+    if (
+      contextClose?.signal === null &&
+      !contextClose.nativeAbort &&
+      !replacement &&
+      !(workerHost?.terminated && !completed) &&
+      (!completed || contextClose.code !== completed.exitCode)
+    )
+      throw new Error('Native counter completion differs from host close.');
+    captureCoverage(snapshot, maps, start.id);
+    results.push({
+      id: start.id,
+      pid: start.pid,
+      threadId: start.threadId,
+      state: replacement ? 'replaced' : completed ? 'completed' : 'interrupted',
+      ...(replacement
+        ? {
+            replacement: {
+              ...replacement,
+              compilerVersion: replacementCompiler.compilerVersion,
+            },
+          }
+        : {}),
+      exitCode: completed?.exitCode ?? null,
+      ...(workerHost
+        ? {
+            hostClose: {
+              parentId: workerHost.parent,
+              exitCode: workerHost.closed,
+              terminationRequested: workerHost.terminated,
+            },
+          }
+        : {}),
+      maps,
+    });
+  }
+  if (workers.size !== threadIds.size) throw new Error('Native worker counter context missing.');
+  const rootResult = results.find((result) => result.id === rootId);
+  const threads = results.filter((result) => result.id !== rootId);
+  if (!rootResult) throw new Error('Native root counter context missing.');
+  const merged = threads.length ? structuredClone(rootResult.maps) : rootResult.maps;
+  for (const worker of threads)
+    for (const [filename, map] of Object.entries(worker.maps)) {
+      if (!merged[filename]) {
+        merged[filename] = structuredClone(map);
+        continue;
+      }
+      const prior = merged[filename];
+      for (const field of ['statementMap', 'fnMap', 'branchMap'])
+        if (!isDeepStrictEqual(prior[field], map[field]))
+          throw new Error('Native worker coverage layout differs.');
+      for (const field of ['s', 'f'])
+        for (const key of Object.keys(map[field])) {
+          prior[field][key] += map[field][key];
+          if (!Number.isSafeInteger(prior[field][key]))
+            throw new Error('Native worker counter overflow.');
+        }
+      for (const key of Object.keys(map.b))
+        for (let arm = 0; arm < map.b[key].length; arm++) {
+          prior.b[key][arm] += map.b[key][arm];
+          if (!Number.isSafeInteger(prior.b[key][arm]))
+            throw new Error('Native worker counter overflow.');
+        }
+    }
+  return { ...rootResult, maps: merged, ...(threads.length ? { threads } : {}) };
 }
 
 function publish(directory, name, value) {
