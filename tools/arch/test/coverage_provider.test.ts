@@ -490,6 +490,7 @@ if (['compiler-replace','compiler-replace-failed'].includes(process.argv[2])) {
     catch(error) {if(!(error instanceof TypeError))throw error;}
   } else process.execve(executable,[executable,'--version']);
 }
+if(process.argv[2]==='heap-abort') {const retained=[];while(true)retained.push(new Array(100000).fill(1));}
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -703,6 +704,121 @@ await capture.settled();capture.restore();console.log(JSON.stringify({stdout,std
         expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
     },
   );
+
+  it('reconciles a real guarded V8 heap abort without inventing completion', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const hash = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+    const entry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: hash,
+      targetSha256: hash,
+      interruptionSignals: [],
+      nativeHeapAbort: true,
+    };
+    const directory = join(root, 'native-heap-abort-records');
+    const parent = join(root, 'native-heap-abort-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {fork} from 'node:child_process';
+import {registerForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerForkCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const child=fork(${JSON.stringify(bundle)},['heap-abort'],{env:{},execArgv:['--permission','--allow-fs-read=*','--max-old-space-size=64'],stdio:['ignore','pipe','pipe','ipc'],serialization:'advanced'});
+const originalListeners=child.stderr.listenerCount('data');
+let stderr='';child.stderr.setEncoding('utf8').on('data',chunk=>stderr+=chunk);
+const closed=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',(code,signal)=>resolve({code,signal,pid:child.pid}));});
+await capture.settled();capture.restore();console.log(JSON.stringify({closed,stderr,originalListeners,spawnargs:child.spawnargs}));`,
+    );
+    const output = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+    expect(output.originalListeners).toBe(0);
+    expect(output.spawnargs).toEqual([
+      process.execPath,
+      '--permission',
+      '--allow-fs-read=*',
+      '--max-old-space-size=64',
+      bundle,
+      'heap-abort',
+    ]);
+    expect(output.stderr).toMatch(
+      /FATAL ERROR:.*Allocation failed - JavaScript heap out of memory/,
+    );
+    expect(output.closed).toMatchObject(
+      process.platform === 'win32'
+        ? { code: 134, signal: null }
+        : { code: null, signal: 'SIGABRT' },
+    );
+    const reconciled = await reconcileForkCapture(snapshot, directory, [entry], maps);
+    expect(reconciled.status).toBe('Pass');
+    expect(reconciled.processes).toBe(1);
+    expect(reconciled.executions[0]).toMatchObject({
+      state: 'interrupted',
+      counterState: 'interrupted',
+      counterExitCode: null,
+    });
+    await expect(
+      reconcileForkCapture(snapshot, directory, [{ ...entry, nativeHeapAbort: false }], maps),
+    ).rejects.toThrow('Unqualified native heap abort');
+    const nativeDiagnostic = reconciled.executions[0]?.nativeAbort;
+    if (!nativeDiagnostic) throw new Error('Missing reconciled native heap diagnostic.');
+    expect(nativeDiagnostic.stderrSha256).toBe(
+      createHash('sha256').update(output.stderr).digest('hex'),
+    );
+    expect(nativeDiagnostic.stderrBytes).toBe(Buffer.byteLength(output.stderr));
+    const files = readdirSync(directory);
+    const closeName = files.find((filename) => filename.endsWith('.close.json'));
+    const evidenceName = files.find((filename) => filename.endsWith('.native-abort.json'));
+    if (!closeName || !evidenceName) throw new Error('Missing native heap termination evidence.');
+    const closePath = join(directory, closeName),
+      evidencePath = join(directory, evidenceName);
+    const closed = readFileSync(closePath, 'utf8'),
+      evidence = readFileSync(evidencePath, 'utf8');
+    const mutate = async (change: (value: Record<string, unknown>) => void, reason: string) => {
+      const value = JSON.parse(evidence);
+      change(value);
+      const encoded = `${JSON.stringify(value)}\n`;
+      const receipt = JSON.parse(closed);
+      receipt.nativeAbort.sha256 = createHash('sha256').update(encoded).digest('hex');
+      writeFileSync(evidencePath, encoded);
+      writeFileSync(closePath, JSON.stringify(receipt));
+      try {
+        await expect(reconcileForkCapture(snapshot, directory, [entry], maps)).rejects.toThrow(
+          reason,
+        );
+      } finally {
+        writeFileSync(evidencePath, evidence);
+        writeFileSync(closePath, closed);
+      }
+    };
+    await mutate((value) => {
+      value.pid = output.closed.pid + 1;
+    }, 'identity differs');
+    await mutate((value) => {
+      value.message = 'unexplained abort';
+      value.messageSha256 = createHash('sha256').update('unexplained abort').digest('hex');
+    }, 'Invalid native heap-abort diagnostic');
+    await mutate((value) => {
+      value.heapLimitMb = 32;
+    }, 'identity differs');
+    writeFileSync(evidencePath, `${evidence} `);
+    try {
+      await expect(reconcileForkCapture(snapshot, directory, [entry], maps)).rejects.toThrow(
+        'evidence hash differs',
+      );
+    } finally {
+      writeFileSync(evidencePath, evidence);
+    }
+    const absent = JSON.parse(closed);
+    delete absent.nativeAbort;
+    writeFileSync(closePath, JSON.stringify(absent));
+    try {
+      await expect(reconcileForkCapture(snapshot, directory, [entry], maps)).rejects.toThrow();
+    } finally {
+      writeFileSync(closePath, closed);
+    }
+    const actual = reconciled.maps[join(root, 'private.ts')];
+    for (const field of ['s', 'f', 'b'])
+      expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+  });
 
   async function remapCounters(
     text: string,

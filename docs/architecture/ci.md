@@ -668,3 +668,21 @@ would correctly invalidate that campaign. Actual process replacement, failed att
 source hits and launch/close custody still run against real processes.
 The compiler's own fallback remains unchanged. See
 [ADR 0023](../adr/0023-native-compiler-image-replacement.md).
+
+### Guarded native parser heap aborts
+
+The parser suite intentionally exercises V8 memory ceilings. Native exhaustion ends
+without JavaScript exit handlers, through SIGABRT on POSIX or Node exit134 on Windows.
+Only explicitly registered heap-abort entries can qualify those closures. Capture
+records the caller's unchanged heap argument and observes existing stderr delivery
+without adding a data listener, changing encoding or starting the stream.
+
+The observer retains at most64KiB internally and publishes only the matched native
+fatal line, its digest, the actual stderr byte count/digest and launch/close identity
+in a hashed sidecar. It does not publish arbitrary parser stderr or document text.
+Reconciliation checks the sidecar, exact identity, configured64-32768MiB limit,
+fatal heap message and actual native closure. JavaScript completion stays absent;
+genuine pre-abort counters remain interrupted. Missing/tampered/unregistered abort
+evidence rejects qualification. Previous folders without this evidence stay invalid.
+
+See [ADR0024](../adr/0024-native-parser-heap-aborts.md).
