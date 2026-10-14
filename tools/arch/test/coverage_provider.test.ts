@@ -1,6 +1,7 @@
-import { execFileSync, fork } from 'node:child_process';
+import { execFileSync, fork, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  appendFileSync,
   closeSync,
   mkdirSync,
   mkdtempSync,
@@ -10,6 +11,7 @@ import {
   realpathSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -921,6 +923,45 @@ console.log(JSON.stringify({messages,archive,registrationRejected,forkRestored,c
       ]);
       expect(workerCapture.status).toBe('Pass');
       expect(workerCapture.processes).toBe(7);
+    });
+    it('authenticates a large artifact graph with bounded resident memory', () => {
+      const { output, captured, built } = scenario;
+      const large = join(output, 'large-authentication.map');
+      const block = Buffer.alloc(1024 * 1024);
+      const hash = createHash('sha256');
+      const descriptor = openSync(large, 'wx');
+      try {
+        for (let index = 0; index < 32; index++) {
+          expect(writeSync(descriptor, block)).toBe(block.length);
+          hash.update(block);
+        }
+      } finally {
+        closeSync(descriptor);
+      }
+      const launch = {
+        ...built.launch,
+        artifacts: [...built.launch.artifacts, { path: large, sha256: hash.digest('hex') }],
+      };
+      const parent = join(output, 'large-graph-parent.mjs');
+      const repository = resolve(import.meta.dirname, '../../..');
+      writeFileSync(
+        parent,
+        `import {createCampaignRegistry} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const before=process.resourceUsage().maxRSS*1024;
+const registry=createCampaignRegistry(${JSON.stringify(captured)},${JSON.stringify(launch)});
+console.log(JSON.stringify({delta:process.resourceUsage().maxRSS*1024-before,forks:registry.forkEntries.length,commands:registry.commandEntries.length}));`,
+      );
+      const result = JSON.parse(
+        execFileSync(process.execPath, [parent], { encoding: 'utf8', env: {} }),
+      );
+      expect(result.forks).toBeGreaterThan(0);
+      expect(result.commands).toBeGreaterThan(0);
+      expect(result.delta).toBeLessThan(8 * 1024 * 1024);
+      appendFileSync(large, 'changed final byte');
+      const rejected = spawnSync(process.execPath, [parent], { encoding: 'utf8', env: {} });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toBe('');
+      expect(rejected.stderr).toContain('Native CLI artifact differs from its receipt.');
     });
     it.each([
       'query-child.js',
