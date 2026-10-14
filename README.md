@@ -621,6 +621,7 @@ manually emitted events keep their ordinary listener behavior without finalizing
 On POSIX, the pinned native TypeScript compiler's process-image replacement has a
 separate handoff receipt authenticated against its executable bytes and observed host
 close. It does not invent a JavaScript exit; other replacement images remain unqualified.
+Collector metadata uses filesystem paths so Node and Studio retain one canonical preparation.
 Owned execution after a file snapshot rejects qualification instead of accepting stale hits.
 Reconciliation validates matched lifecycle identities, loaded-source hashes and exact
 maps before merging each final snapshot once. Rejected or incomplete records produce
