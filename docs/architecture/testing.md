@@ -156,3 +156,8 @@ starts the inherited counter stream before original ESM preloads and restores th
 caller-visible arguments before they execute. A preload failure therefore has actual
 start and completion frames with no owned source hits. Empty or truncated streams
 remain invalid. See [ADR0026](../adr/0026-project-capture-custody.md).
+
+HTTP contract tests exercise optional host plan/source reads through actual routes,
+including retained-build selection, typed host failures and absent capabilities.
+MCP header tests verify UTF8 resource URI decoding without changing the delivered
+JSON body, and reject invalid base64 before the transport handler runs.
