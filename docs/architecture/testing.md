@@ -152,6 +152,11 @@ It checks corpus/workload hashes, query counts, estimated prompt tokens and expl
 unmeasured answer/cost fields. Missing build paths and unsupported modes fail in
 real subprocesses before database access. These tests make no provider or model calls.
 
+The direct SQLite comparison runs its worker over a newly compiled mixed fixture
+and verifies that the build database remains byte-identical. The current report
+must retain real corpus/workload identities, original sample counts and explicit
+unavailable context/token fields; historical reports alone cannot establish that.
+
 `pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
 machine metadata alongside the numbers. CI runs the same script and uploads the JSON as an
 artifact.
