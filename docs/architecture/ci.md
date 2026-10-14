@@ -725,3 +725,11 @@ Contiguous sequences and exact increments remain mandatory. No missing frame is
 invented or ignored. Partial/unterminated frames still reject qualification, even
 when the host was interrupted. The retained parser gap during recursive Markdown
 traversal is diagnostic evidence; its failed full campaign remains ineligible.
+
+The coverage campaign runs the inexpensive read-only verification scripts twice,
+first ordinarily and then through the existing native command collector. Both
+runs must exit successfully and preserve exact stdout and stderr. Changed output
+rejects the campaign and restores the surrounding capture hooks. The retained
+`verification.commands.json` records that contract. Actual command counters join
+the existing child-process bundle and strict reconciliation; they replace no
+default, acceptance or boundary-suite evidence and relax no ownership or target.

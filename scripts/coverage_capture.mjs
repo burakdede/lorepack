@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { parseArgs } from 'node:util';
+import { isDeepStrictEqual, parseArgs } from 'node:util';
 import {
   assertCollectionParity,
   importConfigurations,
@@ -17,6 +17,7 @@ import {
   prepareNativeCapture,
   reconcileForkCapture,
   reconcileNativeCapture,
+  registerCampaignCapture,
 } from './coverage_instrumented.mjs';
 import { captureCoverage } from './coverage_report.mjs';
 
@@ -26,6 +27,67 @@ export function nodeCommand(root, args, environment = {}) {
     stdio: 'inherit',
     env: { ...process.env, ...environment },
   });
+}
+
+const VERIFICATION_COMMANDS = [
+  'check-no-native',
+  'check-no-em-dash',
+  'check-public-branding',
+  'check-no-conflict-claims',
+  'check-counted-nouns',
+  'check-command-set',
+  'check-studio-bundle',
+  'check-sources-tracked',
+  'check-docs-images',
+  'check-docs-links',
+  'check-templates',
+  'check-license-policy',
+  'check-release-policy',
+  'check-performance-report',
+  'check-verify-parity',
+].map((name) => `scripts/${name}.mjs`);
+
+export async function captureVerificationCommands(
+  snapshot,
+  launch,
+  commands = VERIFICATION_COMMANDS,
+) {
+  const root = realpathSync(snapshot.root);
+  const invoke = (script) => {
+    const result = spawnSync(process.execPath, [join(root, script)], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    return {
+      script,
+      code: result.status,
+      signal: result.signal,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  };
+  const ordinary = commands.map((script) => {
+    const result = invoke(script);
+    if (result.code !== 0 || result.signal !== null)
+      throw new Error(`Ordinary verification command failed: ${script}`);
+    return result;
+  });
+  const capture = registerCampaignCapture(snapshot, launch);
+  try {
+    for (const expected of ordinary) {
+      if (!isDeepStrictEqual(invoke(expected.script), expected))
+        throw new Error(`Measured verification command differs: ${expected.script}`);
+    }
+    await capture.settled();
+  } finally {
+    capture.restore();
+  }
+  return {
+    schemaVersion: 1,
+    candidate: snapshot.candidate ?? null,
+    status: 'Pass',
+    commands: ordinary,
+  };
 }
 
 export function writeCampaignSetup(snapshot, launch, filename) {
@@ -95,6 +157,10 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
     '__LOREPACK_CAMPAIGN_COVERAGE__',
   );
   save(join(output, 'native-build.json'), built);
+  save(
+    join(output, 'verification.commands.json'),
+    await captureVerificationCommands(inventory, built.launch),
+  );
   const setup = join(output, 'worker-setup.mjs');
   writeCampaignSetup(inventory, built.launch, setup);
   const configPath = join(output, 'source.config.mjs');
