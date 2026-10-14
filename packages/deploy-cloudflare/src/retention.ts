@@ -311,19 +311,11 @@ async function applyOwnedRemoteRetentionPlan(
       objectKeysToRemove: plan.objectKeysToRemove.filter((key) => !retainedObjects.has(key)),
     };
     if (!progress.archivesCompleted) {
-      progress.archiveKeysRemoved = await deletePlannedR2Keys(
-        bucket,
-        plan.archiveKeysToRemove,
-        progress.archiveKeysRemoved,
-      );
+      await deletePlannedR2Keys(bucket, plan.archiveKeysToRemove, progress.archiveKeysRemoved);
       progress.archivesCompleted = true;
     }
     if (!progress.objectsCompleted) {
-      progress.objectKeysRemoved = await deletePlannedR2Keys(
-        bucket,
-        plan.objectKeysToRemove,
-        progress.objectKeysRemoved,
-      );
+      await deletePlannedR2Keys(bucket, plan.objectKeysToRemove, progress.objectKeysRemoved);
       progress.objectsCompleted = true;
     }
   } catch (cause) {
@@ -635,13 +627,12 @@ async function deleteRows(
 async function deletePlannedR2Keys(
   bucket: R2BucketLike,
   keys: readonly string[],
-  alreadyRemoved: readonly string[],
-): Promise<string[]> {
+  removed: string[],
+): Promise<void> {
   if (bucket.delete === undefined) {
     throw new Error('The configured R2 bucket adapter cannot delete objects.');
   }
 
-  const removed = [...alreadyRemoved];
   const seen = new Set(removed);
   for (const key of keys) {
     if (seen.has(key)) continue;
@@ -650,7 +641,6 @@ async function deletePlannedR2Keys(
     removed.push(key);
     seen.add(key);
   }
-  return removed;
 }
 
 function emptyD1Report(): MutableD1RetentionReport {

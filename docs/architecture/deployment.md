@@ -177,6 +177,13 @@ projected physical tables they name are dropped from `TABLES_DB`, where projecti
 ([ADR](adr-d1-table-query-isolation.md)). Physical tables are dropped first, so a failed catalog
 delete still leaves the rows a resume needs to find them.
 
+R2 cleanup records each confirmed archive or object deletion immediately in the
+operation's progress receipt. If a later key fails, the error preserves that
+completed prefix. Resuming skips those keys and appends later successful removals.
+The caller's saved receipt is copied, so a resumed attempt cannot mutate its
+original evidence. Missing objects are not reported as successful deletions.
+
+
 A table is reported in `physicalTablesDropped` only when `sqlite_master` listed it before the
 `DROP TABLE` and no longer lists it afterwards. `DROP TABLE IF EXISTS` on its own cannot prove
 anything: it succeeds on a missing table, which is how releases before #557 reported drops

@@ -745,3 +745,84 @@ describe('remote retention with separate catalog and tables databases, issue 557
     expect(hasTable(tables, ORPHAN_TABLE)).toBe(true);
   });
 });
+
+describe('partial R2 cleanup progress, issue732', () => {
+  it.each(['archives', 'objects'] as const)(
+    'retains completed %s when the next deletion fails and resumes exactly once',
+    async (stage) => {
+      const { catalog, tables, bucket } = await seedSplitDeployment();
+      const archiveKey = r2ArchiveKey('demo', PRUNED_BUILD);
+      let firstKey: string;
+      let secondKey: string;
+      if (stage === 'archives') {
+        const extraBuild = `lore_${'d'.repeat(64)}`;
+        catalog.raw
+          .prepare(`INSERT INTO projected_builds
+        (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+        VALUES ('demo', ?, 1, '0.1.0', 4, '2026-08-09T12:03:00.000Z')`)
+          .run(extraBuild);
+        firstKey = r2ArchiveKey('demo', extraBuild);
+        secondKey = archiveKey;
+        await bucket.put(firstKey, new Uint8Array([2]));
+      } else {
+        for (const [name, hash] of [
+          ['first.md', '1'.repeat(64)],
+          ['second.md', '2'.repeat(64)],
+        ] as const) {
+          catalog.raw
+            .prepare(`INSERT INTO artifacts
+          (id, project_id, build_id, source_id, relative_path, display_path, media_type, byte_size,
+           content_hash, parser_id, parser_version, title, status, authority, object_hash, metadata_json)
+          VALUES (?, 'demo', ?, ?, ?, ?, 'text/markdown', 1, ?, 'markdown', '1.0.0', ?, 'active', 50, ?, '{}')`)
+            .run(name, PRUNED_BUILD, name, name, name, hash, name, hash);
+          await bucket.put(r2ObjectKey('demo', hash), new Uint8Array([3]));
+        }
+        firstKey = r2ObjectKey('demo', '1'.repeat(64));
+        secondKey = r2ObjectKey('demo', '2'.repeat(64));
+      }
+      const plan = await planRemoteRetention(catalog, tables, 'demo', 1);
+      expect(stage === 'archives' ? plan.archiveKeysToRemove : plan.objectKeysToRemove).toEqual([
+        firstKey,
+        secondKey,
+      ]);
+      bucket.failOnDeleteKey = secondKey;
+      const failure: unknown = await applyRemoteRetentionPlan(catalog, tables, bucket, plan).catch(
+        (cause: unknown) => cause,
+      );
+      expect(failure).toBeInstanceOf(RemoteRetentionApplyError);
+      if (!(failure instanceof RemoteRetentionApplyError))
+        throw new Error('Expected a cleanup failure.');
+      expect(failure.cause).toMatchObject({ message: `Refused delete for ${secondKey}` });
+      expect(failure.progress.d1Completed).toBe(true);
+      expect(failure.progress.archivesCompleted).toBe(stage === 'objects');
+      expect(failure.progress.objectsCompleted).toBe(false);
+      expect(failure.progress.archiveKeysRemoved).toEqual(
+        stage === 'archives' ? [firstKey] : [archiveKey],
+      );
+      expect(failure.progress.objectKeysRemoved).toEqual(stage === 'objects' ? [firstKey] : []);
+      const deletedPrefix = stage === 'archives' ? [firstKey] : [archiveKey, firstKey];
+      expect(bucket.deletedKeys).toEqual(deletedPrefix);
+      expect(await bucket.head(firstKey)).toBeNull();
+      expect(await bucket.head(secondKey)).not.toBeNull();
+      const receipt = structuredClone(failure.progress);
+      bucket.failOnDeleteKey = null;
+      const resumed = await applyRemoteRetentionPlan(
+        catalog,
+        tables,
+        bucket,
+        plan,
+        failure.progress,
+      );
+      expect(
+        stage === 'archives' ? resumed.r2.archiveKeysRemoved : resumed.r2.objectKeysRemoved,
+      ).toEqual([firstKey, secondKey]);
+      expect(bucket.deletedKeys).toEqual([...deletedPrefix, secondKey]);
+      expect(failure.progress).toEqual(receipt);
+      expect(resumed.d1).toEqual(receipt.d1);
+      expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+      expect(
+        catalog.raw.prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1').get(),
+      ).toEqual({ buildId: ACTIVE_BUILD });
+    },
+  );
+});
