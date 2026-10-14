@@ -686,3 +686,16 @@ genuine pre-abort counters remain interrupted. Missing/tampered/unregistered abo
 evidence rejects qualification. Previous folders without this evidence stay invalid.
 
 See [ADR0024](../adr/0024-native-parser-heap-aborts.md).
+
+### Streaming native counter replay
+
+Stress cases can produce counter files larger than Node's maximum string size.
+Reconciliation reads64KiB chunks,decodes UTF8 across chunk boundaries,and parses
+LF-delimited records through the same state machine as string replay. It retains
+one incomplete record and live source maps rather than the complete file or an
+array of every event. Every sequence and exact increment remains validated.
+
+Empty/unterminated streams,changed sources,unknown counters,invalid lifecycle
+identities,unsupported closures and conflicting layouts still fail. File/string
+parity and an actual registered-fork filesystem guard verify that full-file reads
+cannot replace streaming. No sampling,discarded hits or arithmetic clamps.
