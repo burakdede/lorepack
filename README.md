@@ -489,6 +489,7 @@ Studio development uses Vite 7.3.7. Users receive Studio's built assets in the C
 see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
 Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
+Their bounded propagation retries require successful upload evidence for the newer API.
 Contract tests use the same MCP client version as the shipped CLI.
 `pnpm check:supply-chain` checks production dependencies and rejects High or Critical
 findings in contributor dependencies.

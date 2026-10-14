@@ -165,6 +165,22 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     ).toBe(false);
   });
 
+  it('recognizes the newer Worker endpoint only after a matching successful upload', () => {
+    const failure =
+      'A request to the Cloudflare API (/accounts/acc/workers/workers/runtime) failed.\nThis Worker does not exist on your account. [code: 10007]';
+    const uploaded = `${failure}\nUploaded runtime (1.76 sec)`;
+    expect(isCloudflareWorkerPropagationError(new Error(uploaded))).toBe(true);
+    for (const rejected of [
+      failure,
+      uploaded.replace('Uploaded runtime', 'Uploaded another-worker'),
+      uploaded.replace('/workers/workers/runtime)', '/workers/workers/runtime/settings)'),
+      uploaded.replace('[code: 10007]', '[code: 10000]'),
+      uploaded.replace('This Worker does not exist on your account.', 'Unauthorized'),
+      uploaded.replace('/accounts/acc/workers/workers/', '/unrelated/workers/workers/'),
+    ])
+      expect(isCloudflareWorkerPropagationError(new Error(rejected))).toBe(false);
+  });
+
   it('builds the direct Cloudflare Worker delete URL from account and worker names', () => {
     expect(
       cloudflareWorkerDeleteUrl(
