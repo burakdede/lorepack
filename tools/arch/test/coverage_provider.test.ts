@@ -17,7 +17,10 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { writeCampaignSetup } from '../../../scripts/coverage_capture.mjs';
+import {
+  captureVerificationCommands,
+  writeCampaignSetup,
+} from '../../../scripts/coverage_capture.mjs';
 import { prepareSource, renderCoverageConfig } from '../../../scripts/coverage_configuration.mjs';
 import {
   buildNativeCli,
@@ -1586,6 +1589,59 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
         expect(result.executions[0]).toMatchObject({ state: 'completed', exitCode: 1 });
       },
     );
+
+    it('captures successful verification commands with actual source-bound counters', async () => {
+      const { project, captured, built } = scenario;
+      const report = await captureVerificationCommands(captured, built.launch, [
+        'packages/core/dist/shared.js',
+      ]);
+      expect(report).toMatchObject({
+        status: 'Pass',
+        commands: [{ script: 'packages/core/dist/shared.js', code: 0, stdout: '', stderr: '' }],
+      });
+      const registry = createCampaignRegistry(captured, built.launch);
+      const evidence = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(evidence.status).toBe('Pass');
+      expect(evidence.processes).toBe(1);
+      expect(Object.keys(evidence.maps)).toEqual([join(project, 'packages/core/src/shared.ts')]);
+      expect(evidence.executions[0]).toMatchObject({ state: 'completed', exitCode: 0 });
+    });
+
+    it('rejects changed command output and restores the surrounding capture', async () => {
+      const { project, captured, built } = scenario;
+      const preload = join(project, 'command-output-observer.mjs');
+      writeFileSync(preload, 'console.log(JSON.stringify({args:process.execArgv}));');
+      const before = process.env.NODE_OPTIONS;
+      const surrounding = spawnSync;
+      process.env.NODE_OPTIONS = [before, `--import=${pathToFileURL(preload).href}`]
+        .filter(Boolean)
+        .join(' ');
+      try {
+        await expect(
+          captureVerificationCommands(captured, built.launch, ['packages/core/dist/shared.js']),
+        ).rejects.toThrow('Measured verification command differs');
+        expect(spawnSync).toBe(surrounding);
+      } finally {
+        if (before === undefined) delete process.env.NODE_OPTIONS;
+        else process.env.NODE_OPTIONS = before;
+      }
+      expect(
+        spawnSync(process.execPath, [join(project, 'packages/core/dist/shared.js')], {
+          encoding: 'utf8',
+        }).status,
+      ).toBe(0);
+    });
+
+    it('refuses a failed ordinary verification command before collecting measured execution', async () => {
+      const { captured, built } = scenario;
+      await expect(
+        captureVerificationCommands(captured, built.launch, ['packages/cli/dist/public-entry.js']),
+      ).rejects.toThrow('Ordinary verification command failed');
+      expect(() => readdirSync(built.launch.captureDirectory)).toThrow();
+    });
 
     it('reconciles actual parent counters and every CLI child', async () => {
       const { project, captured, built } = scenario;
