@@ -575,6 +575,7 @@ workspace. See [release supply chain](docs/architecture/release-supply-chain.md)
 The default suite uses one worker to bound its child-process fixtures.
 Coverage preparation and measurement preserve the ordinary test scheduling settings.
 Read-only verification scripts also retain exact ordinary/measured output parity.
+Temporary-script capture preserves the exact project-write profile and preload failures.
 Contract tests cover HTTP hosts, retention, activation, archives, tables and offline reports.
 Comparison tests check input identities, accounting and explicitly unmeasured fields.
 Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.

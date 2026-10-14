@@ -463,6 +463,11 @@ the original preload order and removes only its inserted import from observable 
 Registered CLI and child entrypoints also retain user import preloads in either form.
 Only import arguments are separated from the registered fixed Node prefix comparison;
 heap flags and every other declared prefix still require an exact match.
+Temporary scripts also accept the existing permission profile with read-all access,
+write access to the canonical working directory and child processes. The inherited
+counter descriptor records real completion, including original preload failures,
+without adding grants. Broader write access or additional Node prefixes remain
+unregistered and prevent qualification; their rejection records are retained.
 Node's stdin driver (`-`) uses the same checked import preload. Module and CommonJS
 programs retain their actual stdin bytes, arguments, execution flags, environment,
 working directory and module URL. Synchronous and asynchronous launches reconcile real
