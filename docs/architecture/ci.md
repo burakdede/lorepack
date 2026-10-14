@@ -507,6 +507,10 @@ unchanged per-case deadlines on hosts with many advertised CPUs. The worker limi
 changes scheduling, while retaining every test, assertion and deadline.
 The fresh help bundle is compiled and executed in the same captured child. Its actual
 recipe receives the canonical capture plugin only while a compiled collector is active.
+Graph authentication uses a reusable bounded buffer instead of allocating each complete
+artifact. The [real registry memory regression](../../tools/arch/test/coverage_provider.test.ts)
+authenticates a large graph in a fresh Node process and rejects a changed final byte.
+The archive verification memory ceiling remains unchanged and must pass qualification.
 The collector binds every emitted JavaScript/map artifact and original compiled input,
 source and preparation before loading. Changes to any of those inputs reject capture.
 The real help assertions and protocol-SDK loading guard remain in place. Multiple active

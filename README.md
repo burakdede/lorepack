@@ -630,7 +630,8 @@ Compiled measurement replays checked provider preparations while retaining ordin
 compiler artifacts and their source-bound hash receipts.
 Measured CLI builds share the production entrypoint definitions and migration layout,
 with separate output, package metadata and Studio assets.
-Their generated launch bootstrap binds the CLI and all child artifacts by hash,
+Their generated launch bootstrap authenticates artifacts with bounded hashing memory.
+It binds the CLI and all child artifacts by hash,
 captures fork and archive-command execution, and drains close receipts before exit.
 Explicit fork capture records matched child identities and kill/close receipts while
 preserving the existing IPC, environment and flags. Complete launch integration remains open.

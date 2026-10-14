@@ -8,6 +8,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   realpathSync,
   renameSync,
   statSync,
@@ -595,12 +596,28 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
   };
 }
 
+function digestFile(filename, buffer) {
+  const descriptor = openSync(filename, 'r');
+  const hash = createHash('sha256');
+  try {
+    for (;;) {
+      const bytes = readSync(descriptor, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      hash.update(buffer.subarray(0, bytes));
+    }
+    return hash.digest('hex');
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
 function verifyArtifactGraph(artifacts) {
   if (!Array.isArray(artifacts) || artifacts.length === 0)
     throw new Error('Native CLI artifact graph is missing.');
   const paths = new Set();
+  const buffer = Buffer.alloc(64 * 1024);
   for (const artifact of artifacts) {
-    if (paths.has(artifact.path) || digest(readFileSync(artifact.path)) !== artifact.sha256)
+    if (paths.has(artifact.path) || digestFile(artifact.path, buffer) !== artifact.sha256)
       throw new Error('Native CLI artifact differs from its receipt.');
     paths.add(artifact.path);
   }
@@ -1201,11 +1218,12 @@ export function registerCompiledCapture(snapshot, preparations, fd, coverageVari
       if (graph) {
         if (address.search || address.hash)
           throw new Error('Unsupported generated capture URL variant.');
+        const buffer = Buffer.alloc(64 * 1024);
         for (const [artifact, sha256] of graph.artifacts)
-          if (digest(readFileSync(artifact)) !== sha256)
+          if (digestFile(artifact, buffer) !== sha256)
             throw new Error('Generated capture artifact changed before load.');
         for (const [input, sha256] of graph.inputs)
-          if (digest(readFileSync(input)) !== sha256)
+          if (digestFile(input, buffer) !== sha256)
             throw new Error('Generated capture input changed before load.');
         const loaded = nextLoad(url, context);
         if (
