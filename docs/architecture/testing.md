@@ -175,3 +175,7 @@ with their expected digests, and bound manifest/identity bytes before decoding.
 Activation failure tests abort the final build-state update in actual SQLite,
 after the pointer update and old-build demotion. They assert rollback of all three
 facts, reopen the state database and retry without consuming a generation.
+
+Query contracts check token and byte budgets independently, compound remote row
+estimates and ordinary nested/window forms. Local and remote profiles keep their
+existing admission rules and limits; defensive guards are not removed for coverage.
