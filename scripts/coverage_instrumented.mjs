@@ -76,6 +76,59 @@ function recordUnregisteredNode(directory, kind, args) {
   });
 }
 
+const nativeHeapDiagnostic =
+  /^FATAL ERROR: [^\r\n]*Allocation failed - JavaScript heap out of memory\r?$/m;
+
+function nativeHeapClosure(code, signal) {
+  return (code === null && signal === 'SIGABRT') || (code === 134 && signal === null);
+}
+
+function observeHeapDiagnostic(stream) {
+  let head = Buffer.alloc(0);
+  let bytes = 0;
+  const hash = createHash('sha256');
+  if (stream) {
+    const push = stream.push;
+    stream.push = function (chunk, ...args) {
+      if (chunk !== null) {
+        const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, args[0]);
+        bytes += data.length;
+        hash.update(data);
+        if (head.length < 64 * 1024)
+          head = Buffer.concat([head, data.subarray(0, 64 * 1024 - head.length)]);
+      }
+      return push.call(this, chunk, ...args);
+    };
+  }
+  return () => {
+    const message = head.toString('utf8').match(nativeHeapDiagnostic)?.[0].replace(/\r$/, '');
+    if (!message) return null;
+    return {
+      message,
+      messageSha256: digest(message),
+      stderrBytes: bytes,
+      stderrSha256: hash.digest('hex'),
+    };
+  };
+}
+
+function validateHeapDiagnostic(record) {
+  if (
+    record?.cause !== 'v8-heap-oom' ||
+    !Number.isSafeInteger(record.heapLimitMb) ||
+    record.heapLimitMb < 64 ||
+    record.heapLimitMb > 32768 ||
+    typeof record.message !== 'string' ||
+    record.message.includes('\n') ||
+    !nativeHeapDiagnostic.test(record.message) ||
+    record.messageSha256 !== digest(record.message) ||
+    !Number.isSafeInteger(record.stderrBytes) ||
+    record.stderrBytes < Buffer.byteLength(record.message) ||
+    !/^[0-9a-f]{64}$/.test(record.stderrSha256)
+  )
+    throw new Error('Invalid native heap-abort diagnostic.');
+}
+
 export function registerForkCapture(entries, directory, audit = false) {
   const previous = globalThis[forkCollector];
   if (previous && !previous[campaignCollector])
@@ -159,7 +212,14 @@ export function registerForkCapture(entries, directory, audit = false) {
       closeSync(fd);
       throw error;
     }
+    const heapArguments = (options.execArgv ?? process.execArgv).filter((value) =>
+      /^--max-old-space-size=[1-9][0-9]*$/.test(value),
+    );
+    const heapLimitMb = heapArguments.length === 1 ? Number(heapArguments[0].split('=')[1]) : null;
+    const heapDiagnostic =
+      entry.nativeHeapAbort === true ? observeHeapDiagnostic(child.stderr) : null;
     const record = {
+      ...(entry.nativeHeapAbort === true ? { heapLimitMb } : {}),
       schema: 1,
       id,
       provider: 'istanbul@4.1.11',
@@ -193,7 +253,23 @@ export function registerForkCapture(entries, directory, audit = false) {
       new Promise((resolveClosed) => {
         child.prependOnceListener('close', (code, signal) => {
           closeSync(fd);
-          publish(directory, `${id}.close.json`, { ...record, code, signal, kills });
+          let nativeAbort;
+          if (heapDiagnostic && nativeHeapClosure(code, signal) && heapLimitMb !== null) {
+            const diagnostic = heapDiagnostic();
+            if (diagnostic) {
+              const evidence = { ...record, code, signal, cause: 'v8-heap-oom', ...diagnostic };
+              const filename = `${id}.native-abort.json`;
+              publish(directory, filename, evidence);
+              nativeAbort = { filename, sha256: digest(readFileSync(join(directory, filename))) };
+            }
+          }
+          publish(directory, `${id}.close.json`, {
+            ...record,
+            code,
+            signal,
+            kills,
+            ...(nativeAbort ? { nativeAbort } : {}),
+          });
           resolveClosed();
         });
       }),
@@ -783,7 +859,7 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     const counterFile = `${launch.id}.counters.jsonl`;
     if (!files.includes(closeFile) || !files.includes(counterFile))
       throw new Error(`Missing fork close receipt or counters: ${launch.id}`);
-    const { code, signal, kills, nativeStop, ...identity } = JSON.parse(
+    const { code, signal, kills, nativeStop, nativeAbort, ...identity } = JSON.parse(
       readFileSync(join(directory, closeFile), 'utf8'),
     );
     if (
@@ -803,15 +879,66 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
         (nativeStop.signal !== signal && nativeStop.signal !== constants.signals[signal]))
     )
       throw new Error(`Native synchronous termination evidence differs: ${closeFile}`);
+    let heapAbort = null;
+    if (nativeAbort != null) {
+      const expected = `${launch.id}.native-abort.json`;
+      if (
+        entry.nativeHeapAbort !== true ||
+        nativeAbort.filename !== expected ||
+        !files.includes(expected) ||
+        !nativeHeapClosure(code, signal) ||
+        nativeStop != null ||
+        kills.length
+      )
+        throw new Error('Unqualified native heap abort.');
+      const bytes = readFileSync(join(directory, expected));
+      if (nativeAbort.sha256 !== digest(bytes))
+        throw new Error('Native heap-abort evidence hash differs.');
+      const {
+        cause,
+        message,
+        messageSha256,
+        stderrBytes,
+        stderrSha256,
+        code: observedCode,
+        signal: observedSignal,
+        ...observed
+      } = JSON.parse(bytes);
+      if (
+        !isDeepStrictEqual(observed, launch) ||
+        observedCode !== code ||
+        observedSignal !== signal
+      )
+        throw new Error('Native heap-abort identity differs.');
+      heapAbort = {
+        cause,
+        heapLimitMb: launch.heapLimitMb,
+        message,
+        messageSha256,
+        stderrBytes,
+        stderrSha256,
+      };
+      validateHeapDiagnostic(heapAbort);
+      consumed.add(expected);
+    }
     const counters = await replayCounterStream(
       snapshot,
       readFileSync(join(directory, counterFile), 'utf8'),
-      { pid: launch.pid, threadId: 0, code, signal },
+      {
+        pid: launch.pid,
+        threadId: 0,
+        code,
+        signal,
+        ...(heapAbort ? { nativeAbort: heapAbort } : {}),
+      },
     );
     if (identities.has(counters.id) || counters.pid !== launch.pid || counters.threadId !== 0)
       throw new Error(`Repeated or mismatched fork execution: ${counterFile}`);
     identities.add(counters.id);
-    if (signal === null) {
+    if (heapAbort) {
+      if (counters.state !== 'interrupted')
+        throw new Error('Native heap abort has a JavaScript completion.');
+    } else if (signal === null) {
       if (
         !['completed', 'replaced'].includes(counters.state) ||
         !Number.isSafeInteger(code) ||
@@ -834,7 +961,8 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       ...counters,
       counterState: counters.state,
       counterExitCode: counters.exitCode,
-      state: signal === null ? 'completed' : 'interrupted',
+      state: heapAbort || signal !== null ? 'interrupted' : 'completed',
+      ...(heapAbort ? { nativeAbort: heapAbort } : {}),
       exitCode: code,
       launchId: launch.id,
       signal,
@@ -1035,6 +1163,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
       originalSha256: hash,
       targetSha256: hash,
       interruptionSignals: ['SIGKILL'],
+      ...(filename === 'parse-child.js' ? { nativeHeapAbort: true } : {}),
     };
   };
   const forkEntries = ['parse-child.js', 'query-child.js'].map(childEntry);
@@ -1453,6 +1582,11 @@ export async function replayCounterStream(snapshot, text, hostClose) {
       ))
   )
     throw new Error('Native counter host close identity differs.');
+  if (hostClose?.nativeAbort) {
+    validateHeapDiagnostic(hostClose.nativeAbort);
+    if (!nativeHeapClosure(hostClose.code, hostClose.signal))
+      throw new Error('Native heap-abort host close differs.');
+  }
   const root = realpathSync(snapshot.root);
   const owned = new Map(snapshot.included.map((entry) => [join(root, entry.path), entry]));
   const maps = {};
@@ -1542,6 +1676,7 @@ export async function replayCounterStream(snapshot, text, hostClose) {
   }
   if (
     hostClose?.signal === null &&
+    !hostClose.nativeAbort &&
     !replacement &&
     (!completed || hostClose.code !== completed.exitCode)
   )
