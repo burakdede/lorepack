@@ -171,3 +171,7 @@ Missing archives are never reported as successful deletions.
 Archive contracts use complete ZIPs with actual catalog bytes. Tests distinguish
 matching envelope checksums from supported build identity, report missing members
 with their expected digests, and bound manifest/identity bytes before decoding.
+
+Activation failure tests abort the final build-state update in actual SQLite,
+after the pointer update and old-build demotion. They assert rollback of all three
+facts, reopen the state database and retry without consuming a generation.
