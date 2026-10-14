@@ -746,7 +746,6 @@ describe('remote retention with separate catalog and tables databases, issue 557
   });
 });
 
-
 describe('partial R2 cleanup progress, issue732', () => {
   it.each(['archives', 'objects'] as const)(
     'retains completed %s when the next deletion fails and resumes exactly once',
@@ -827,7 +826,6 @@ describe('partial R2 cleanup progress, issue732', () => {
     },
   );
 });
-
 
 describe('remote retention cold and tied states', () => {
   it('leaves an uninitialized target untouched during planning and apply', async () => {
