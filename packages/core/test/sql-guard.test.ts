@@ -519,3 +519,50 @@ describe('the lexer', () => {
     expect(tokens.find((token) => token.kind === 'string')?.value).toBe("c'd");
   });
 });
+
+describe('query boundaries across compound and nested forms', () => {
+  it.each(['local', 'remote'] as const)(
+    'bounds token count independently of bytes for %s queries',
+    (profile) => {
+      const sql = `VALUES ${Array.from({ length: 501 }, () => '(0)').join(',')}`;
+      expect(new TextEncoder().encode(sql).byteLength).toBeLessThan(QUERY_GUARD_LIMITS.maxBytes);
+      expect(
+        lexSql(sql).filter((token) => token.kind !== 'space' && token.kind !== 'comment').length,
+      ).toBeGreaterThan(QUERY_GUARD_LIMITS.maxTokens);
+      refuses(sql, profile);
+    },
+  );
+
+  it('bounds the combined remote row estimate even when each SELECT fits independently', () => {
+    const sql = `SELECT sku FROM ${TABLE} UNION ALL SELECT sku FROM ${TABLE}`;
+    expect(() => guard(sql, 'remote', { rowCount: 3_000_000 })).toThrow(
+      expect.objectContaining(REFUSED),
+    );
+    expect(guard(sql, 'local', { rowCount: 3_000_000 })).toBe(sql);
+  });
+
+  it.each(['local', 'remote'] as const)(
+    'refuses schema-qualified sources and expressions in CTE column lists for %s queries',
+    (profile) => {
+      refuses(`SELECT sku FROM reports.${TABLE}`, profile);
+      refuses(
+        `WITH selected(sku + 1) AS (SELECT sku FROM ${TABLE}) SELECT sku FROM selected`,
+        profile,
+      );
+    },
+  );
+
+  it.each(['local', 'remote'] as const)(
+    'retains valid named windows, same-table membership and nested date values for %s queries',
+    (profile) => {
+      for (const sql of [
+        `SELECT sku, row_number() OVER w AS position FROM ${TABLE} WINDOW w AS (ORDER BY sku) ORDER BY sku`,
+        `SELECT sku FROM ${TABLE} WHERE sku IN ${TABLE}`,
+        `SELECT date(coalesce(sku, '2024-01-01')) AS day FROM ${TABLE}`,
+        `SELECT strftime('%Y', coalesce(sku, '2024-01-01')) AS year FROM ${TABLE}`,
+      ])
+        expect(guard(sql, profile), sql).toBe(sql);
+      refuses(`SELECT strftime(coalesce('%Y', '%m')) FROM ${TABLE}`, profile);
+    },
+  );
+});
