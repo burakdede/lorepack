@@ -828,6 +828,35 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
   const consumed = new Set();
   const identities = new Set();
   const executions = [];
+  const require = createRequire(import.meta.url);
+  const providerRequire = createRequire(require.resolve('@vitest/coverage-istanbul'));
+  const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
+  const { captureCoverage } = await import('./coverage_report.mjs');
+  const { remapNativeCoverage } = await import('@vitest/coverage-istanbul/dist/provider.js');
+  const merged = createCoverageMap({});
+  async function mergeExecution(execution) {
+    const remapped = await remapNativeCoverage(createCoverageMap(structuredClone(execution.maps)));
+    const wire = JSON.parse(JSON.stringify(remapped.toJSON()));
+    captureCoverage(snapshot, wire, execution.id);
+    const maps = Object.fromEntries(
+      Object.entries(wire).map(([filename, map]) => {
+        const canonical = realpathSync(filename);
+        return [canonical, { ...map, path: canonical }];
+      }),
+    );
+    if (!isDeepStrictEqual(Object.keys(maps).sort(), Object.keys(execution.maps).sort()))
+      throw new Error(`Fork remapping lost loaded sources: ${execution.id}`);
+    for (const [filename, map] of Object.entries(maps)) {
+      const previous = [direct[filename]];
+      if (merged.files().includes(filename))
+        previous.push(merged.fileCoverageFor(filename).toJSON());
+      for (const prior of previous.filter(Boolean))
+        for (const field of ['statementMap', 'fnMap', 'branchMap'])
+          if (!isDeepStrictEqual(prior[field], map[field]))
+            throw new Error(`Fork coverage layout differs: ${filename}.${field}`);
+    }
+    merged.merge(maps);
+  }
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   for (const file of files) {
     if (!file.endsWith('.launch.json')) continue;
@@ -956,8 +985,11 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     )
       throw new Error(`Unqualified fork interruption: ${closeFile}`);
     for (const name of [file, closeFile, counterFile]) consumed.add(name);
+    await mergeExecution(counters);
+    const { maps: _maps, threads, ...receipt } = counters;
     executions.push({
-      ...counters,
+      ...receipt,
+      ...(threads ? { threads: threads.map(({ maps: _workerMaps, ...thread }) => thread) } : {}),
       counterState: counters.state,
       counterExitCode: counters.exitCode,
       state: heapAbort || signal !== null ? 'interrupted' : 'completed',
@@ -969,39 +1001,10 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
   }
   if (!executions.length || consumed.size !== files.length)
     throw new Error('Missing fork launches or orphaned capture records.');
-  const require = createRequire(import.meta.url);
-  const providerRequire = createRequire(require.resolve('@vitest/coverage-istanbul'));
-  const { createCoverageMap } = providerRequire('istanbul-lib-coverage');
-  const { captureCoverage } = await import('./coverage_report.mjs');
-  const { remapNativeCoverage } = await import('@vitest/coverage-istanbul/dist/provider.js');
-  const merged = createCoverageMap({});
-  for (const execution of executions) {
-    const remapped = await remapNativeCoverage(createCoverageMap(structuredClone(execution.maps)));
-    const wire = JSON.parse(JSON.stringify(remapped.toJSON()));
-    captureCoverage(snapshot, wire, execution.id);
-    const maps = Object.fromEntries(
-      Object.entries(wire).map(([filename, map]) => {
-        const canonical = realpathSync(filename);
-        return [canonical, { ...map, path: canonical }];
-      }),
-    );
-    if (!isDeepStrictEqual(Object.keys(maps).sort(), Object.keys(execution.maps).sort()))
-      throw new Error(`Fork remapping lost loaded sources: ${execution.id}`);
-    for (const [filename, map] of Object.entries(maps)) {
-      const previous = [direct[filename]];
-      if (merged.files().includes(filename))
-        previous.push(merged.fileCoverageFor(filename).toJSON());
-      for (const prior of previous.filter(Boolean))
-        for (const field of ['statementMap', 'fnMap', 'branchMap'])
-          if (!isDeepStrictEqual(prior[field], map[field]))
-            throw new Error(`Fork coverage layout differs: ${filename}.${field}`);
-    }
-    merged.merge(maps);
-  }
   return {
     status: 'Pass',
     processes: executions.length,
-    executions: executions.map(({ maps, ...execution }) => execution),
+    executions,
     maps: JSON.parse(JSON.stringify(merged.toJSON())),
   };
 }

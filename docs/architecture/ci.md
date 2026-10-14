@@ -665,6 +665,10 @@ LF-delimited records through the same state machine as string replay. It retains
 one incomplete record and live source maps rather than the complete file or an
 array of every event. Every sequence and exact increment remains validated.
 
+Native reconciliation validates and merges one child at a time. It retains process and
+worker lifecycle receipts without duplicate per-execution maps. Each child still undergoes
+source, layout, sequence and closure checks; orphan records reject the entire result.
+
 Empty/unterminated streams,changed sources,unknown counters,invalid lifecycle
 identities,unsupported closures and conflicting layouts still fail. File/string
 parity and an actual registered-fork filesystem guard verify that full-file reads
