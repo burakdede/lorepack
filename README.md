@@ -575,7 +575,7 @@ workspace. See [release supply chain](docs/architecture/release-supply-chain.md)
 The default suite uses one worker to bound its child-process fixtures.
 Coverage preparation and measurement preserve the ordinary test scheduling settings.
 Read-only verification scripts also retain exact ordinary/measured output parity.
-Contract tests cover HTTP hosts, retention, activation, archives and table queries.
+Contract tests cover HTTP hosts, retention, activation, archives, tables and offline reports.
 Local lifecycle cases check damaged-catalog recovery and refusal before pointer changes.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression

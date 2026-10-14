@@ -140,6 +140,13 @@ PR from ever completing its Cloudflare gate during concurrent work.
 
 ## Benchmarks
 
+The existing pruning research command also has an offline report-contract test.
+It runs the small mixed fixture, compares stdout with the written JSON, verifies
+input digests and query coverage, and reconciles posting counters and exact top-k
+results. Separate cases cover unknown terms, repeated Unicode tokens and cutoff
+ties. These checks establish report correctness, not a runtime speed claim; the
+prototype remains outside the default runtime.
+
 `pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
 machine metadata alongside the numbers. CI runs the same script and uploads the JSON as an
 artifact.
