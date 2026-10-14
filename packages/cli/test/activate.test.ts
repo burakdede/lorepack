@@ -1419,3 +1419,93 @@ describe('a project written by a newer Lorepack', () => {
     });
   });
 });
+
+describe('partial cleanup receipts through the CLI, issue732', () => {
+  it.each(['human', 'json'] as const)(
+    'persists a partial archive prefix and resumes with exact %s output',
+    async (format) => {
+      await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
+        writeCloudflareReceipt(temp.root);
+        const fixture = seedRemoteCleanupFixture(new DatabaseSync(':memory:'));
+        try {
+          const extraBuild = `lore_${'d'.repeat(64)}`;
+          const extraArchive = `demo/builds/${extraBuild}/archive.lorepack`;
+          fixture.db
+            .prepare(`INSERT INTO projected_builds
+          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at)
+          VALUES ('demo', ?, 1, '0.1.0', 4, '2026-08-09T12:03:00.000Z')`)
+            .run(extraBuild);
+          fixture.objects.seed(extraArchive);
+          fixture.objects.failOnDeleteKey = fixture.archiveKey;
+          const commands = [
+            pruneCommand({
+              cloudflareAdapter: fakeCloudflareRollbackAdapter(
+                fixture.db,
+                fixture.objects,
+                fixture.tables,
+              ),
+            }),
+          ];
+          const failed = await run(
+            ['--cwd', temp.root, 'prune', '--target', 'cloudflare', '--yes'],
+            { commands },
+          );
+          expect(failed.code).toBe(5);
+          const receiptId = failed.stderr.match(/--resume (cloudflare-prune-[a-z0-9]+)/)?.[1];
+          expect(receiptId).toBeDefined();
+          const receiptPath = join(temp.root, '.lore', 'receipts', `${receiptId}.json`);
+          const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+          expect(receipt).toMatchObject({
+            state: 'failed',
+            completedSteps: ['plan', 'd1'],
+            r2: { archiveKeysRemoved: [extraArchive], objectKeysRemoved: [] },
+          });
+          expect(fixture.objects.deletedKeys).toEqual([extraArchive]);
+          fixture.objects.failOnDeleteKey = null;
+          const resumed = await run(
+            [
+              ...(format === 'json' ? ['--json'] : []),
+              '--cwd',
+              temp.root,
+              'prune',
+              '--target',
+              'cloudflare',
+              '--yes',
+              '--resume',
+              receiptId as string,
+            ],
+            { commands },
+          );
+          expect(resumed.code).toBe(0);
+          if (format === 'json')
+            expect(JSON.parse(resumed.stdout)).toMatchObject({
+              receiptId,
+              applied: true,
+              r2: {
+                archiveKeysRemoved: [extraArchive, fixture.archiveKey],
+                objectKeysRemoved: [fixture.objectKey],
+              },
+            });
+          else expect(resumed.stdout).toContain('2 build archives');
+          const finished = JSON.parse(readFileSync(receiptPath, 'utf8'));
+          expect(finished).toMatchObject({
+            state: 'applied',
+            completedSteps: ['plan', 'd1', 'archives', 'objects'],
+            r2: {
+              archiveKeysRemoved: [extraArchive, fixture.archiveKey],
+              objectKeysRemoved: [fixture.objectKey],
+            },
+          });
+          expect(fixture.objects.deletedKeys).toEqual([
+            extraArchive,
+            fixture.archiveKey,
+            fixture.objectKey,
+          ]);
+        } finally {
+          fixture.db.close();
+          fixture.tables.close();
+        }
+      });
+    },
+  );
+});

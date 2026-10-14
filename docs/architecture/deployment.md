@@ -182,7 +182,8 @@ operation's progress receipt. If a later key fails, the error preserves that
 completed prefix. Resuming skips those keys and appends later successful removals.
 The caller's saved receipt is copied, so a resumed attempt cannot mutate its
 original evidence. Missing objects are not reported as successful deletions.
-
+The CLI writes the failed receipt before returning its cleanup error. Resumed
+human reports and JSON output include confirmed deletions from earlier attempts.
 
 A table is reported in `physicalTablesDropped` only when `sqlite_master` listed it before the
 `DROP TABLE` and no longer lists it afterwards. `DROP TABLE IF EXISTS` on its own cannot prove
