@@ -728,9 +728,11 @@ async function deployAcceptanceWorker(
 
 export function isCloudflareWorkerPropagationError(error: unknown): boolean {
   const message = messageOf(error);
+  const worker = message.match(/\/accounts\/[^/\s)]+\/workers\/workers\/([^/\s)]+)\)/);
+  const postUpload = worker !== null && message.includes(`Uploaded ${worker[1]} (`);
+  const legacySubdomain = message.includes('/workers/scripts/') && message.includes('/subdomain');
   return (
-    message.includes('/workers/scripts/') &&
-    message.includes('/subdomain') &&
+    (legacySubdomain || postUpload) &&
     message.includes('This Worker does not exist on your account.') &&
     message.includes('[code: 10007]')
   );

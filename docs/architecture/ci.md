@@ -116,7 +116,10 @@ section 8.1: add one only when measured timings demand it.
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 After Wrangler deploys it, the harness writes that Worker's actual endpoint into
 the target receipt alongside its name. Deploy and resume confirm activation
-against the same Worker that serves the acceptance requests.
+against the same Worker that serves the acceptance requests. Bounded deployment
+retries recognize the legacy subdomain propagation response and the newer Worker
+endpoint response10007 only after a matching successful upload. Pre-upload missing
+Workers, unrelated endpoints and authentication errors remain failures.
 
 The privacy namespace invokes the already installed Vitest entry point with
 Node directly. Running pnpm under sudo would change its environment and trigger
