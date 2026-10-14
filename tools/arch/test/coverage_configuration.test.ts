@@ -467,14 +467,14 @@ it('keeps native collector preparations identical in Node and Studio environment
     ],
   });
   try {
-    await server.environments.ssr.moduleGraph.ensureEntryFromUrl(
+    const ssrModule = await server.environments.ssr.moduleGraph.ensureEntryFromUrl(
       `/@fs/${helper.replaceAll('\\', '/')}`,
     );
-    await server.environments.ssr.pluginContainer.transform(source, helper);
-    await server.environments.client.moduleGraph.ensureEntryFromUrl(
+    await server.environments.ssr.pluginContainer.transform(source, ssrModule.id);
+    const clientModule = await server.environments.client.moduleGraph.ensureEntryFromUrl(
       `/@fs/${helper.replaceAll('\\', '/')}`,
     );
-    await server.environments.client.pluginContainer.transform(source, helper);
+    await server.environments.client.pluginContainer.transform(source, clientModule.id);
   } finally {
     await server.close();
   }
