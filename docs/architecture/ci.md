@@ -515,6 +515,10 @@ The collector binds every emitted JavaScript/map artifact and original compiled 
 source and preparation before loading. Changes to any of those inputs reject capture.
 The real help assertions and protocol-SDK loading guard remain in place. Multiple active
 counter namespaces require an explicit selection; ordinary execution delegates unchanged.
+Generated-graph fixtures select their native namespace explicitly. They retain an existing
+outer campaign collector and the original stream layout. Standalone dual-collector
+fixtures open a separate companion counter file. Both cases verify that fixture source
+counters stay out of the campaign namespace.
 Temporary compiled output must not look like untracked source to a concurrent inventory
 scan. The ownership guard and source denominator remain unchanged.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report

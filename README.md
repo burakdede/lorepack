@@ -625,6 +625,7 @@ real counters through a separate inherited descriptor, preserving IPC and permis
 Fresh fixture bundles use the actual compilation recipe and canonical capture plugin.
 The active collector checks emitted JavaScript, maps and original inputs before loading
 the graph; ordinary execution keeps the production recipe unchanged.
+Nested fixtures select their own counter namespace while preserving the outer campaign.
 Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
 Compiled measurement replays checked provider preparations while retaining ordinary
 compiler artifacts and their source-bound hash receipts.
