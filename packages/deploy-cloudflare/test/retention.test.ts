@@ -953,3 +953,212 @@ describe('remote retention orphan-only receipt boundaries', () => {
     },
   );
 });
+
+describe('remote retention failure and adapter contracts', () => {
+  it('rolls catalog deletions back and resumes after a real SQLite abort', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 1);
+    catalog.raw.exec(`CREATE TRIGGER refuse_cleanup BEFORE DELETE ON projected_builds
+      BEGIN SELECT RAISE(ABORT, 'cleanup blocked'); END`);
+    const failure: unknown = await applyRemoteRetentionPlan(catalog, tables, bucket, plan).catch(
+      (cause: unknown) => cause,
+    );
+    expect(failure).toBeInstanceOf(RemoteRetentionApplyError);
+    if (!(failure instanceof RemoteRetentionApplyError))
+      throw new Error('Expected a cleanup failure.');
+    expect(failure.cause).toMatchObject({ message: 'cleanup blocked' });
+    expect(failure.progress).toMatchObject({
+      d1Completed: false,
+      archivesCompleted: false,
+      objectsCompleted: false,
+      archiveKeysRemoved: [],
+      objectKeysRemoved: [],
+    });
+    expect(failure.progress.d1.physicalTablesDropped).toEqual([PRUNED_TABLE]);
+    expect(
+      catalog.raw
+        .prepare('SELECT count(*) AS count FROM tables WHERE build_id = ?')
+        .get(PRUNED_BUILD),
+    ).toEqual({ count: 1 });
+    expect(
+      catalog.raw
+        .prepare('SELECT count(*) AS count FROM projected_builds WHERE build_id = ?')
+        .get(PRUNED_BUILD),
+    ).toEqual({ count: 1 });
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(false);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(bucket.deletedKeys).toEqual([]);
+    catalog.raw.exec('DROP TRIGGER refuse_cleanup');
+    const resumed = await applyRemoteRetentionPlan(catalog, tables, bucket, plan, failure.progress);
+    expect(resumed.d1.projectedBuildsRemoved).toBe(1);
+    expect(resumed.d1.projectedTablesRemoved).toBe(1);
+    expect(resumed.d1.physicalTablesDropped).toEqual([PRUNED_TABLE]);
+    expect(bucket.deletedKeys).toEqual([r2ArchiveKey('demo', PRUNED_BUILD)]);
+    expect(
+      catalog.raw
+        .prepare('SELECT count(*) AS count FROM projected_builds WHERE build_id = ?')
+        .get(PRUNED_BUILD),
+    ).toEqual({ count: 0 });
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+  });
+
+  it('retains completed catalog progress when the bucket cannot delete and resumes safely', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 1);
+    const readWriteBucket = {
+      put: bucket.put.bind(bucket),
+      get: bucket.get.bind(bucket),
+      head: bucket.head.bind(bucket),
+    };
+    const failure: unknown = await applyRemoteRetentionPlan(
+      catalog,
+      tables,
+      readWriteBucket,
+      plan,
+    ).catch((cause: unknown) => cause);
+    expect(failure).toBeInstanceOf(RemoteRetentionApplyError);
+    if (!(failure instanceof RemoteRetentionApplyError))
+      throw new Error('Expected a cleanup failure.');
+    expect(failure.cause).toMatchObject({
+      message: 'The configured R2 bucket adapter cannot delete objects.',
+    });
+    expect(failure.progress).toMatchObject({
+      d1Completed: true,
+      archivesCompleted: false,
+      objectsCompleted: false,
+      archiveKeysRemoved: [],
+    });
+    expect(failure.progress.d1.projectedBuildsRemoved).toBe(1);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(await bucket.head(r2ArchiveKey('demo', PRUNED_BUILD))).not.toBeNull();
+    const resumed = await applyRemoteRetentionPlan(catalog, tables, bucket, plan, failure.progress);
+    expect(resumed.d1).toEqual(failure.progress.d1);
+    expect(resumed.r2.archiveKeysRemoved).toEqual([r2ArchiveKey('demo', PRUNED_BUILD)]);
+    expect(bucket.deletedKeys).toEqual(resumed.r2.archiveKeysRemoved);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+  });
+
+  it('does not report an already absent archive as deleted', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 1);
+    bucket.objects.delete(r2ArchiveKey('demo', PRUNED_BUILD));
+    const result = await applyRemoteRetentionPlan(catalog, tables, bucket, plan);
+    expect(result.d1.projectedBuildsRemoved).toBe(1);
+    expect(result.r2.archiveKeysRemoved).toEqual([]);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+  });
+
+  it('rejects a nonempty receipt without project-scoped keys before deletion', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const plan = await planRemoteRetention(catalog, tables, 'demo', 1);
+    await expect(
+      applyRemoteRetentionPlan(catalog, tables, bucket, {
+        ...plan,
+        archiveKeysToRemove: [],
+        objectKeysToRemove: [],
+      }),
+    ).rejects.toThrow('A non-empty remote retention plan did not include any project-scoped keys.');
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(true);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+    expect(catalog.raw.prepare('SELECT count(*) AS count FROM projected_builds').get()).toEqual({
+      count: 3,
+    });
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(await bucket.head(r2ArchiveKey('demo', PRUNED_BUILD))).not.toBeNull();
+    expect(
+      catalog.raw.prepare('SELECT count(*) AS count FROM remote_mutation_guard').get(),
+    ).toEqual({ count: 0 });
+  });
+});
+
+function omitEmptyQueryResults(db: SqliteProjectionDatabase): ProjectionMigrationDatabaseLike {
+  return {
+    prepare(query) {
+      const statement = db.prepare(query);
+      const run = statement.run.bind(statement);
+      statement.run = async <T = Record<string, unknown>>() => {
+        const result = await run<T>();
+        return result.results?.length === 0 ? {} : result;
+      };
+      return statement;
+    },
+  };
+}
+
+describe('retention adapters that omit empty result arrays', () => {
+  it.each(['uninitialized', 'initialized'] as const)(
+    'returns an empty plan for an %s target',
+    async (state) => {
+      const catalog = openDatabase();
+      const tables = openDatabase();
+      if (state === 'initialized') {
+        await runProjectionMigrations(catalog);
+        await runTableProjectionMigrations(tables);
+      }
+      const plan = await planRemoteRetention(
+        omitEmptyQueryResults(catalog),
+        omitEmptyQueryResults(tables),
+        'demo',
+        5,
+      );
+      expect(plan).toEqual({
+        activeBuildId: null,
+        keep: [],
+        remove: [],
+        archiveKeysToRemove: [],
+        objectKeysToRemove: [],
+        orphanTablesToRemove: [],
+      });
+    },
+  );
+
+  it('cleans up all unactivated staged builds without inventing missing R2 deletions', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    catalog.raw.exec(
+      'UPDATE active_build SET build_id = NULL; UPDATE projected_builds SET verified_at = NULL',
+    );
+    const catalogPort = omitEmptyQueryResults(catalog);
+    const tablesPort = omitEmptyQueryResults(tables);
+    const plan = await planRemoteRetention(catalogPort, tablesPort, 'demo', 0);
+    expect(plan.activeBuildId).toBeNull();
+    expect(plan.keep).toEqual([]);
+    expect(plan.remove).toEqual([PRUNED_BUILD, ACTIVE_BUILD, KEPT_BUILD]);
+    const result = await applyRemoteRetentionPlan(catalogPort, tablesPort, bucket, plan);
+    expect(result.d1.projectedBuildsRemoved).toBe(3);
+    expect(result.d1.physicalTablesDropped).toEqual([PRUNED_TABLE, KEPT_TABLE]);
+    expect(result.r2.archiveKeysRemoved).toEqual([r2ArchiveKey('demo', PRUNED_BUILD)]);
+    expect(result.r2.objectKeysRemoved).toEqual([]);
+    expect(bucket.deletedKeys).toEqual([r2ArchiveKey('demo', PRUNED_BUILD)]);
+    expect(catalog.raw.prepare('SELECT count(*) AS count FROM projected_builds').get()).toEqual({
+      count: 0,
+    });
+    expect(
+      catalog.raw.prepare('SELECT count(*) AS count FROM remote_mutation_guard').get(),
+    ).toEqual({ count: 0 });
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(false);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(false);
+    expect(hasTable(tables, 'schema_migrations')).toBe(true);
+  });
+
+  it('protects a build activated after a preview when the claim query returns no rows', async () => {
+    const { catalog, tables, bucket } = await seedSplitDeployment();
+    const catalogPort = omitEmptyQueryResults(catalog);
+    const tablesPort = omitEmptyQueryResults(tables);
+    const preview = await planRemoteRetention(catalogPort, tablesPort, 'demo', 1);
+    expect(preview.remove).toEqual([PRUNED_BUILD]);
+    catalog.raw.prepare('UPDATE active_build SET build_id = ? WHERE id = 1').run(PRUNED_BUILD);
+    const result = await applyRemoteRetentionPlan(catalogPort, tablesPort, bucket, preview);
+    expect(result.activeBuildId).toBe(PRUNED_BUILD);
+    expect(result.keep).toContain(PRUNED_BUILD);
+    expect(result.remove).toEqual([]);
+    expect(result.d1.projectedBuildsRemoved).toBe(0);
+    expect(result.d1.physicalTablesDropped).toEqual([]);
+    expect(result.r2).toEqual({ archiveKeysRemoved: [], objectKeysRemoved: [] });
+    expect(preview.remove).toEqual([PRUNED_BUILD]);
+    expect(bucket.deletedKeys).toEqual([]);
+    expect(await bucket.head(r2ArchiveKey('demo', PRUNED_BUILD))).not.toBeNull();
+    expect(hasTable(tables, PRUNED_TABLE)).toBe(true);
+    expect(hasTable(tables, KEPT_TABLE)).toBe(true);
+  });
+});

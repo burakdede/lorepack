@@ -161,3 +161,9 @@ HTTP contract tests exercise optional host plan/source reads through actual rout
 including retained-build selection, typed host failures and absent capabilities.
 MCP header tests verify UTF8 resource URI decoding without changing the delivered
 JSON body, and reject invalid base64 before the transport handler runs.
+
+Retention contracts use actual SQLite catalog/table fixtures and the existing R2
+port fixture. A real abort trigger proves catalog rollback and resumption after
+physical-table removal. Empty-result port variants preserve decisions for cold
+targets, unactivated staged builds and previews whose build later became active.
+Missing archives are never reported as successful deletions.

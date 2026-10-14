@@ -577,6 +577,7 @@ workspace. See [release supply chain](docs/architecture/release-supply-chain.md)
 The default suite uses one worker to bound its child-process fixtures.
 Coverage preparation and measurement preserve the ordinary test scheduling settings.
 HTTP contract tests cover optional host reads and encoded MCP resource headers.
+Retention tests exercise rollback, cleanup resumption and omitted empty adapter results.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
 executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that
