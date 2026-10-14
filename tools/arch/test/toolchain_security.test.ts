@@ -24,9 +24,10 @@ beforeAll(() => {
     writeFileSync(join(fixture, 'outside.js'), 'export const value = "outside-marker";');
     writeFileSync(join(project, '.env'), 'denied-environment-marker');
     writeFileSync(join(project, 'allowed.js'), 'export const value = "allowed-marker";');
-    const server = await createServer({ root: project, configFile: false,
+    const server = await createServer({ root: project, configFile: false, logLevel: 'silent',
       server: { middlewareMode: true, hmr: false, fs: { strict: true, allow: [project], deny: ['**/.env*'] } } });
     try {
+      server.config.logger.info('toolchain-fixture-startup');
       const listeners = new Map();
       server.ws.on = (event, listener) => { listeners.set(event, listener); return server.ws; };
       const plugin = interceptorPlugin();
