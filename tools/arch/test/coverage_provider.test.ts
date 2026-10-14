@@ -2218,6 +2218,134 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
         expect(Object.values(map.f).sort()).toEqual([0, 4]);
       },
     );
+    it.each([
+      ['sync', false],
+      ['async', false],
+      ['sync', true],
+      ['async', true],
+    ] as const)(
+      'captures project-write temporary scripts (%s, preload failure: %s)',
+      async (mode, fails) => {
+        const { project, path, snapshot, scriptPreload, observable } = fixture;
+        const working = join(project, `script-project-${mode}-${fails}`);
+        mkdirSync(working);
+        const script = join(project, `project-script-${mode}-${fails}.mjs`);
+        writeFileSync(
+          script,
+          `${observable}\nconsole.log(JSON.stringify({projectWrite:process.permission.has('fs.write',${JSON.stringify(working)}),outsideWrite:process.permission.has('fs.write',${JSON.stringify(project)}),worker:process.permission.has('worker')}));\n`,
+        );
+        const userPreload = join(project, `project-preload-${mode}-${fails}.mjs`);
+        writeFileSync(
+          userPreload,
+          fails ? "throw new Error('Original project preload failed');" : '',
+        );
+        const args = [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${working}`,
+          '--allow-child-process',
+          '--import',
+          pathToFileURL(userPreload).href,
+          script,
+        ];
+        const options = { cwd: working, env: { NODE_NO_WARNINGS: '1' }, encoding: 'utf8' as const };
+        const expected = spawnSync(process.execPath, args, options);
+        expect(expected.status).toBe(fails ? 1 : 0);
+        const directory = join(project, `project-script-counters-${mode}-${fails}`);
+        const capture =
+          mode === 'sync'
+            ? registerSyncCommandCapture([scriptPreload], directory, true)
+            : registerCommandCapture([scriptPreload], directory, true);
+        let actual: { status: number | null; stdout: string; stderr: string };
+        try {
+          if (mode === 'sync') actual = spawnSync(process.execPath, args, options);
+          else {
+            const child = spawn(process.execPath, args, options);
+            const output: Buffer[] = [];
+            const errors: Buffer[] = [];
+            child.stdout.on('data', (value) => output.push(value));
+            child.stderr.on('data', (value) => errors.push(value));
+            const status = await new Promise<number | null>((resolve, reject) => {
+              child.once('close', resolve);
+              child.once('error', reject);
+            });
+            if ('settled' in capture && typeof capture.settled === 'function')
+              await capture.settled();
+            actual = {
+              status,
+              stdout: Buffer.concat(output).toString(),
+              stderr: Buffer.concat(errors).toString(),
+            };
+          }
+        } finally {
+          capture.restore();
+        }
+        expect(actual.status).toBe(expected.status);
+        expect(actual.stdout).toBe(expected.stdout);
+        expect(actual.stderr).toBe(expected.stderr);
+        const captured = await reconcileForkCapture(snapshot, directory, [scriptPreload]);
+        expect(captured.status).toBe('Pass');
+        expect(captured.processes).toBe(1);
+        if (fails) expect(Object.keys(captured.maps)).toHaveLength(0);
+        else {
+          expect(JSON.parse(actual.stdout.trim().split('\n').at(-1) ?? '')).toEqual({
+            projectWrite: true,
+            outsideWrite: false,
+            worker: false,
+          });
+          const map = (captured.maps as Record<string, Coverage>)[join(project, path)];
+          if (!map) throw new Error('Missing project-script coverage.');
+          expect(Object.values(map.f).sort()).toEqual([0, 2]);
+        }
+      },
+    );
+    it.each(['missing-cwd', 'broader-write', 'extra-prefix'] as const)(
+      'preserves native outcomes inside an isolated rejection audit (%s)',
+      async (profile) => {
+        const { project, snapshot, scriptPreload } = fixture;
+        const working = join(project, `rejected-script-project-${profile}`);
+        if (profile !== 'missing-cwd') mkdirSync(working);
+        const args = [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${profile === 'broader-write' ? project : working}`,
+          '--allow-child-process',
+          ...(profile === 'extra-prefix' ? ['--max-old-space-size=64'] : []),
+          join(project, 'temporary.mjs'),
+        ];
+        const collector = pathToFileURL(
+          resolve(import.meta.dirname, '../../../scripts/coverage_instrumented.mjs'),
+        ).href;
+        const code = `
+import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {reconcileForkCapture,registerSyncCommandCapture} from ${JSON.stringify(collector)};
+const entry=${JSON.stringify(scriptPreload)};
+const snapshot=${JSON.stringify(snapshot)};
+const args=${JSON.stringify(args)};
+const options={cwd:${JSON.stringify(working)},encoding:'utf8',env:{NODE_NO_WARNINGS:'1'}};
+const expected=spawnSync(process.execPath,args,options);
+assert.equal(expected.status,${profile === 'missing-cwd' ? 'null' : '0'});
+assert.equal(expected.error?.code,${profile === 'missing-cwd' ? "'ENOENT'" : 'undefined'});
+const directory=${JSON.stringify(join(project, `rejected-${profile}-counters`))};
+const capture=registerSyncCommandCapture([entry],directory,true);
+let actual;
+try{actual=spawnSync(process.execPath,args,options);}finally{capture.restore();}
+assert.equal(actual.status,expected.status);
+assert.equal(actual.stdout,expected.stdout);
+assert.equal(actual.stderr,expected.stderr);
+assert.equal(actual.error?.code,expected.error?.code);
+await assert.rejects(reconcileForkCapture(snapshot,directory,[entry]),/Unregistered Node launches/);
+console.log('native-outcome-preserved');
+`;
+        expect(
+          execFileSync(process.execPath, ['--input-type=module', '--eval', code], {
+            encoding: 'utf8',
+            env: { NODE_NO_WARNINGS: '1' },
+          }).trim(),
+        ).toBe('native-outcome-preserved');
+      },
+    );
     it('rejects an unregistered launch without recording its eval text', async () => {
       const { project, snapshot, preload, observable, arguments_ } = fixture;
       const args = ['--no-warnings', ...arguments_];
