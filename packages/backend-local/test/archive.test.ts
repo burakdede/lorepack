@@ -425,3 +425,114 @@ describe('archive verification', () => {
     });
   });
 });
+
+describe('archive identity and index boundaries', () => {
+  it('refuses a complete ZIP without a checksum index', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'no-index.lorepack');
+      await writeZip(archive, validBuild(project.root));
+      await expect(verifyArchive(archive)).rejects.toMatchObject({ code: 'LORE_E_OBJECT_CORRUPT' });
+    });
+  });
+
+  it('requires retained identity inputs even when a legacy package has matching checksums', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'legacy.lorepack');
+      const members = validBuild(project.root).filter(
+        ([name]) => name !== 'reports/build-id-inputs.json',
+      );
+      await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        subject: 'reports/build-id-inputs.json',
+      });
+    });
+  });
+
+  it.each(['manifest.json', 'reports/build-id-inputs.json'])(
+    'refuses checksummed but unsupported identity data in %s',
+    async (name) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'unsupported.lorepack');
+        const members = validBuild(project.root).map(
+          ([member, bytes]) =>
+            [member, member === name ? new TextEncoder().encode('{}') : bytes] as const,
+        );
+        await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+        await expect(verifyArchive(archive)).rejects.toMatchObject({
+          code: 'LORE_E_SCHEMA_MISMATCH',
+        });
+      });
+    },
+  );
+
+  it('names an unreadable checksum index as a corrupt package', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'bad-index.lorepack');
+      await writeZip(archive, [
+        ...validBuild(project.root),
+        ['checksums.json', new TextEncoder().encode('{')],
+      ]);
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
+        code: 'LORE_E_OBJECT_CORRUPT',
+        subject: 'checksums.json',
+      });
+    });
+  });
+});
+
+describe('archive declared-member and metadata limits', () => {
+  it('reports the expected digest of a listed member missing from the ZIP', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'missing-catalog.lorepack');
+      const members = validBuild(project.root);
+      const catalog = members.find(([name]) => name === 'context.sqlite');
+      if (catalog === undefined) throw new Error('Expected a fixture catalog.');
+      await writeZip(archive, [
+        ...members.filter(([name]) => name !== 'context.sqlite'),
+        ['checksums.json', indexOf(members)],
+      ]);
+      const result = await verifyArchive(archive);
+      expect(result.ok).toBe(false);
+      expect(result.failures).toEqual([
+        { member: 'context.sqlite', reason: 'missing', expected: sha256Hex(catalog[1]) },
+      ]);
+    });
+  });
+
+  it.each(['manifest.json', 'reports/build-id-inputs.json'])(
+    'applies the metadata byte limit to %s after checking the index',
+    async (name) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'large-metadata.lorepack');
+        const members = validBuild(project.root);
+        const peerBytes = Math.max(
+          ...members
+            .filter(([member]) => member !== name && member !== 'context.sqlite')
+            .map(([, bytes]) => bytes.byteLength),
+        );
+        const padded = members.map(
+          ([member, bytes]) =>
+            [
+              member,
+              member === name
+                ? new TextEncoder().encode(
+                    `${new TextDecoder().decode(bytes)}${' '.repeat(peerBytes + 1024)}`,
+                  )
+                : bytes,
+            ] as const,
+        );
+        const index = indexOf(padded);
+        const maxIndexBytes = Math.max(index.byteLength, peerBytes);
+        await writeZip(archive, [...padded, ['checksums.json', index]]);
+        await expect(
+          verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxIndexBytes } }),
+        ).rejects.toMatchObject({
+          code: 'LORE_E_LIMIT_EXCEEDED',
+          subject: name,
+          details: { limit: 'maxIndexBytes', value: maxIndexBytes, member: name },
+        });
+      });
+    },
+  );
+});
