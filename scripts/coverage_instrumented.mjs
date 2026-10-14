@@ -1316,7 +1316,9 @@ function nativeCompilerIdentity() {
   const require = createRequire(import.meta.url);
   const packageFile = require.resolve('typescript/package.json');
   const compiler = JSON.parse(readFileSync(packageFile, 'utf8'));
-  const project = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const project = JSON.parse(
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'),
+  );
   const platformRequire = createRequire(packageFile);
   const platformFile = platformRequire.resolve(
     `@typescript/typescript-${process.platform}-${process.arch}/package.json`,

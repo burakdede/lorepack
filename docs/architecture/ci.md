@@ -614,6 +614,12 @@ collector records an attempt before calling the original API with unchanged
 arguments and environment. Returned or failed attempts receive a matching return
 frame and must still have ordinary exit or permitted interruption evidence.
 
+Resolve the collector's package metadata through a filesystem path. Vite treats
+literal `new URL(..., import.meta.url)` expressions as browser assets in Studio's
+environment, producing a different transform from Node. The real two-environment
+regression transforms the collector through both environment pipelines and requires one retained
+source-bound preparation. Conflicting transformations remain rejected.
+
 A successful handoff qualifies only with the same-PID/thread host close and the
 canonical installed TypeScript native executable's matching byte hash and pinned
 package version. Its counter state is `replaced`, with no JavaScript exit code;

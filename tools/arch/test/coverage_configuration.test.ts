@@ -420,3 +420,73 @@ it('prepares configurations with original mapped content and no execution hits',
   expect(records[0].sha256).toBe(snapshot().included[0]?.sha256);
   expect('s' in records[0]).toBe(false);
 });
+
+it('keeps native collector preparations identical in Node and Studio environments', async () => {
+  const { preparingInstrumenter } = await import('../../../scripts/coverage_configuration.mjs');
+  const repository = realpathSync(join(import.meta.dirname, '../../..'));
+  const require = createRequire(join(repository, 'package.json'));
+  const viteRequire = createRequire(require.resolve('vitest/package.json'));
+  const { createServer } = await import(pathToFileURL(viteRequire.resolve('vite')).href);
+  const helper = join(repository, 'scripts/coverage_instrumented.mjs');
+  const source = readFileSync(helper, 'utf8');
+  const inventory = {
+    root: repository,
+    included: [
+      {
+        path: 'scripts/coverage_instrumented.mjs',
+        sha256: createHash('sha256').update(source).digest('hex'),
+      },
+    ],
+  };
+  const directory = join(root, 'collector-preparations');
+  const factory = await preparingInstrumenter(inventory, directory);
+  const instrumenter = factory({ coverageVariable: '__collector_transform_witness__' });
+  const environments: string[] = [];
+  const server = await createServer({
+    configFile: join(repository, 'apps/studio/vitest.config.ts'),
+    root: join(repository, 'apps/studio'),
+    cacheDir: join(root, 'vite-cache'),
+    optimizeDeps: { noDiscovery: true, include: [] },
+    environments: { ssr: { optimizeDeps: { noDiscovery: true, include: [] } } },
+    server: { middlewareMode: true, watch: null },
+    logLevel: 'silent',
+    plugins: [
+      {
+        name: 'collector-preparation-witness',
+        enforce: 'post',
+        transform(
+          this: { environment: { name: string }; getCombinedSourcemap: () => unknown },
+          code: string,
+          id: string,
+        ) {
+          if (realpathSync(id) !== helper) return;
+          environments.push(this.environment.name);
+          instrumenter.instrumentSync(code, id, this.getCombinedSourcemap());
+        },
+      },
+    ],
+  });
+  try {
+    await server.environments.ssr.moduleGraph.ensureEntryFromUrl(
+      `/@fs/${helper.replaceAll('\\', '/')}`,
+    );
+    await server.environments.ssr.pluginContainer.transform(source, helper);
+    await server.environments.client.moduleGraph.ensureEntryFromUrl(
+      `/@fs/${helper.replaceAll('\\', '/')}`,
+    );
+    await server.environments.client.pluginContainer.transform(source, helper);
+  } finally {
+    await server.close();
+  }
+  expect(environments).toEqual(['ssr', 'client']);
+  const prepared = JSON.parse(
+    readFileSync(
+      join(
+        directory,
+        `${createHash('sha256').update('scripts/coverage_instrumented.mjs').digest('hex')}.json`,
+      ),
+      'utf8',
+    ),
+  );
+  expect(prepared.sha256).toBe(inventory.included[0]?.sha256);
+});
