@@ -649,6 +649,8 @@ literal `new URL(..., import.meta.url)` expressions as browser assets in Studio'
 environment, producing a different transform from Node. The real two-environment
 regression transforms the collector through both environment pipelines and requires one retained
 source-bound preparation. Conflicting transformations remain rejected.
+The fixture transforms Vite's returned module IDs, since native Windows paths
+can have a different spelling from the registered graph IDs.
 
 A successful handoff qualifies only with the same-PID/thread host close and the
 canonical installed TypeScript native executable's matching byte hash and pinned
