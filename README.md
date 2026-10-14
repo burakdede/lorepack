@@ -547,6 +547,7 @@ On POSIX, the pinned native TypeScript compiler's process-image replacement has 
 separate handoff receipt authenticated against its executable bytes and observed host
 close. It does not invent a JavaScript exit; other replacement images remain unqualified.
 Collector metadata uses filesystem paths so Node and Studio retain one canonical preparation.
+Native reconciliation streams every JSONL counter record, avoiding whole-file string limits.
 Guarded parser heap aborts require matching native diagnostics, an unchanged explicit heap
 limit and the actual host closure; unexplained aborts still reject qualification.
 Owned execution after a file snapshot rejects qualification instead of accepting stale hits.
