@@ -505,6 +505,7 @@ Read-only verification scripts also retain exact ordinary/measured output parity
 Contract tests cover HTTP hosts, retention, activation, archives, tables and offline reports.
 Comparison tests check input identities, accounting and explicitly unmeasured fields.
 Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.
+Runtime-token tests cover malformed stored hashes and revocation with empty adapter results.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
