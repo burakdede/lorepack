@@ -548,6 +548,8 @@ separate handoff receipt authenticated against its executable bytes and observed
 close. It does not invent a JavaScript exit; other replacement images remain unqualified.
 Collector metadata uses filesystem paths so Node and Studio retain one canonical preparation.
 Native reconciliation streams every JSONL counter record, avoiding whole-file string limits.
+Counter emission writes complete UTF8 frames directly and checks their exact byte count,
+reducing temporary allocations during resource-bound tests.
 Worker threads retain independent identities, sequences and observed lifecycle receipts.
 Only compatible validated maps merge; termination never invents an exit snapshot.
 Guarded parser heap aborts require matching native diagnostics, an unchanged explicit heap

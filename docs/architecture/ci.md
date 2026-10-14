@@ -690,3 +690,19 @@ only after every context qualifies; the report retains each worker's lifecycle a
 Real two-worker tests check every statement, function and branch hit plus original
 caller data. A live-worker termination test checks genuine partial execution and
 rejection when its observed termination receipt is removed.
+
+
+### Counter emission allocation
+
+A real512MiB archive regression exceeded its unchanged256MiB resident-memory ceiling
+under instrumentation while ordinary verification stayed below it. A paired diagnostic
+and allocation profile identified169207 Buffer writes during one measured verification.
+The collector writes each complete JSONL string synchronously with explicit UTF8
+encoding and checks the actual returned byte count against Buffer.byteLength. This
+removes the extra JavaScript Buffer per record while retaining every frame and the
+short-write rejection. No sampling, batching, GC flags or resource-limit changes.
+
+Provider fixtures use real Unicode filesystem paths. Their exact source/counter hits,
+file/string parity and independent worker lifecycle checks exercise multibyte output.
+The unchanged archive test and fresh ordinary/measured diagnostics must still qualify
+resource behavior; a scoped success cannot rehabilitate a failed full campaign.

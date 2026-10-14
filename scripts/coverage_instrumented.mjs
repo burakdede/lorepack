@@ -1545,10 +1545,8 @@ export function registerCounterStream(fd, coverageVariable = variable) {
   };
   let sequence = 0;
   const emit = (record) => {
-    const bytes = Buffer.from(
-      `${JSON.stringify({ ...(threadId > 0 ? { id: identity.id } : {}), ...record, sequence: ++sequence })}\n`,
-    );
-    if (writeSync(fd, bytes) !== bytes.length)
+    const text = `${JSON.stringify({ ...(threadId > 0 ? { id: identity.id } : {}), ...record, sequence: ++sequence })}\n`;
+    if (writeSync(fd, text, null, 'utf8') !== Buffer.byteLength(text))
       throw new Error('Incomplete native counter stream write.');
   };
   const counters = (target, path, field, key) =>
