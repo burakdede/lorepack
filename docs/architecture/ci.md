@@ -605,3 +605,23 @@ build. Counterexamples must transmit packets, then leave a clean build at zero.
 The repository architecture scan opens one TypeScript snapshot for all package
 and Studio source files. Package rules still apply separately to every import;
 sharing the snapshot avoids starting a compiler process per package.
+
+### Native compiler process-image replacement
+
+TypeScript 7's POSIX Node shim calls `process.execve` to replace itself with the
+native compiler. Node does not run exit hooks for image replacement. The counter
+collector records an attempt before calling the original API with unchanged
+arguments and environment. Returned or failed attempts receive a matching return
+frame and must still have ordinary exit or permitted interruption evidence.
+
+A successful handoff qualifies only with the same-PID/thread host close and the
+canonical installed TypeScript native executable's matching byte hash and pinned
+package version. Its counter state is `replaced`, with no JavaScript exit code;
+the launch receipt separately retains the actual host code/signal. Source hashes,
+contiguous frames and exact increments remain mandatory. Started-only streams and
+unregistered replacement images still fail. Independent collectors observe the
+same attempt without changing the actual process-image replacement.
+
+The real execve regressions are skipped on Windows and IBM i because Node does not
+support this API there. The compiler's own fallback remains unchanged. See
+[ADR 0023](../adr/0023-native-compiler-image-replacement.md).
