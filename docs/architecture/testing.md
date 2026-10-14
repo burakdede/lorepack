@@ -69,6 +69,14 @@ expected warnings, and a canonical hash.
 
 ## Adding a test
 
+Local lifecycle regressions use compiled temporary projects and real SQLite files.
+`runtime-local.test.ts` checks missing manifests and unknown-table refusal followed by
+a valid query. `damaged-build.test.ts` deletes migration history, checks the typed
+schema error, then proves the documented rebuild restores a cited read.
+`activate.test.ts` verifies complete missing-object details with a bounded human
+summary and an unchanged active pointer. Unsupported rollback targets must fail
+before any deployment adapter operation or local configuration change.
+
 1. Put it beside the module, in that package's `test/` directory.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
