@@ -1435,6 +1435,8 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
           : join(root, `generated-graph-${mode}`);
       mkdirSync(directory, { recursive: true });
       const parent = join(root, `generated-graph-parent-${mode}.mjs`);
+      const companionCounters = join(root, 'generated-graph-companion-counters.jsonl');
+      const observation = join(root, 'generated-graph-companion-observation.json');
       const tampered =
         mode === 'changed-source'
           ? join(root, 'private.ts')
@@ -1459,28 +1461,29 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       writeFileSync(
         parent,
         `import {pathToFileURL} from 'node:url';
-import {appendFileSync,readFileSync,writeFileSync} from 'node:fs';
+import {appendFileSync,readFileSync,writeFileSync,openSync} from 'node:fs';
 import {build} from ${JSON.stringify(compiler)};
 import {registerCompiledCapture,captureCompiledBuild} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
 const capture=registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'stream-preparations'))},4);
-const companion=${JSON.stringify(mode)}==='dual'?registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'graph-campaign-preparations'))},5,'__LOREPACK_CAMPAIGN_COVERAGE__'):null;
-if(companion){
+const externalCampaign=Object.hasOwn(globalThis,'__LOREPACK_CAMPAIGN_COVERAGE__');
+const companion=${JSON.stringify(mode)}==='dual'&&!externalCampaign?registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'graph-campaign-preparations'))},openSync(${JSON.stringify(companionCounters)},'wx'),'__LOREPACK_CAMPAIGN_COVERAGE__'):null;
+if(${JSON.stringify(mode)}==='dual'){
  let rejected=false;try{await captureCompiledBuild(build,{},${JSON.stringify(directory)});}catch(error){rejected=error.message==='Generated capture requires an explicit counter namespace.';}
  if(!rejected)throw new Error('Ambiguous generated graph was accepted');
 }
-await captureCompiledBuild(build,{entryPoints:[${JSON.stringify(join(root, 'dist/private.js'))}],outdir:${JSON.stringify(directory)},bundle:true,format:'esm',platform:'node',sourcemap:true},${JSON.stringify(directory)},companion?'__LOREPACK_NATIVE_COVERAGE__':undefined);
+await captureCompiledBuild(build,{entryPoints:[${JSON.stringify(join(root, 'dist/private.js'))}],outdir:${JSON.stringify(directory)},bundle:true,format:'esm',platform:'node',sourcemap:true},${JSON.stringify(directory)},'__LOREPACK_NATIVE_COVERAGE__');
 const tampered=${JSON.stringify(tampered)};
 const retained=['clean','dual'].includes(${JSON.stringify(mode)})?null:readFileSync(tampered);
 if(retained)appendFileSync(tampered,' ');
 try {
 const {PrivateWitness}=await import(pathToFileURL(${JSON.stringify(join(directory, 'private.js'))}).href);
-const instance=new PrivateWitness();console.log(JSON.stringify([await instance.run(true),await instance.run(false)]));
+const instance=new PrivateWitness();const result=[await instance.run(true),await instance.run(false)];
+if(${JSON.stringify(mode)}==='dual')writeFileSync(${JSON.stringify(observation)},JSON.stringify({external:externalCampaign,maps:Object.keys(globalThis.__LOREPACK_CAMPAIGN_COVERAGE__)}));
+console.log(JSON.stringify(result));
 } finally {if(retained)writeFileSync(tampered,retained);companion?.restore();capture.restore();}`,
       );
       const counters = join(root, `generated-graph-${mode}-counters.jsonl`);
       const fd = openSync(counters, 'wx');
-      const companionCounters = join(root, 'generated-graph-companion-counters.jsonl');
-      const companionFd = mode === 'dual' ? openSync(companionCounters, 'wx') : null;
       let output: string;
       try {
         if (mode !== 'clean' && mode !== 'dual') {
@@ -1502,26 +1505,23 @@ const instance=new PrivateWitness();console.log(JSON.stringify([await instance.r
         output = execFileSync(process.execPath, [parent], {
           encoding: 'utf8',
           env: {},
-          stdio: [
-            'ignore',
-            'pipe',
-            'pipe',
-            'ignore',
-            fd,
-            ...(companionFd === null ? [] : [companionFd]),
-          ],
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
         });
       } finally {
         closeSync(fd);
-        if (companionFd !== null) closeSync(companionFd);
       }
       if (mode === 'dual') {
-        const companion = await replayCounterStream(
-          snapshot,
-          readFileSync(companionCounters, 'utf8'),
-        );
-        expect(companion.state).toBe('completed');
-        expect(companion.maps).toEqual({});
+        const observed = JSON.parse(readFileSync(observation, 'utf8'));
+        expect(typeof observed.external).toBe('boolean');
+        expect(observed.maps).not.toContain(join(root, 'private.ts'));
+        if (!observed.external) {
+          const companion = await replayCounterStream(
+            snapshot,
+            readFileSync(companionCounters, 'utf8'),
+          );
+          expect(companion.state).toBe('completed');
+          expect(companion.maps).toEqual({});
+        }
       }
       expect(JSON.parse(output)).toEqual([
         [2, 'yes'],
