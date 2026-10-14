@@ -25,7 +25,10 @@ const CONFIG = 'version: 1\nname: damaged\nsources:\n  - .\n';
 const RUNBOOK = '# Runbook\n\n## Rollback\n\nActivation is a pointer change.\n';
 
 /** Damages the active build, then proves a rebuild puts the project back. */
-async function recoversFrom(damage: (database: string, directory: string) => void): Promise<void> {
+async function recoversFrom(
+  damage: (database: string, directory: string) => void,
+  expectedFailure?: Record<string, unknown>,
+): Promise<void> {
   await withTempProject({ files: { 'lore.yaml': CONFIG, 'runbook.md': RUNBOOK } }, async (temp) => {
     const config = () => loadConfig({ cwd: temp.root });
     const first = await runBuild({ config: config(), progress: new ProgressBus() });
@@ -42,6 +45,7 @@ async function recoversFrom(damage: (database: string, directory: string) => voi
     broken.close();
     expect((failure as { code?: string }).code).toMatch(/^LORE_E_/);
     expect((failure as { code?: string }).code).not.toBe('LORE_E_INTERNAL');
+    if (expectedFailure !== undefined) expect(failure).toMatchObject(expectedFailure);
 
     // The rebuild, which is what the remediation tells a reader to run.
     const again = await runBuild({ config: config(), progress: new ProgressBus() });
@@ -65,6 +69,24 @@ async function recoversFrom(damage: (database: string, directory: string) => voi
 }
 
 describe('a build damaged on disk', () => {
+  it('recovers when the catalog has no recorded migrations', async () => {
+    await recoversFrom(
+      (database) => {
+        const writable = new DatabaseSync(database);
+        try {
+          writable.exec('DELETE FROM schema_migrations');
+        } finally {
+          writable.close();
+        }
+      },
+      {
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        details: { actual: '0000', expected: expect.stringMatching(/^\d{4}$/) },
+        remediation: expect.stringContaining('lorepack build'),
+      },
+    );
+  });
+
   it('recovers when the database was deleted', async () => {
     await recoversFrom((database) => rmSync(database));
   });

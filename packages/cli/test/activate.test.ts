@@ -479,6 +479,48 @@ describe('lorepack builds', () => {
 });
 
 describe('lorepack activate', () => {
+  it.each(['human', 'json'] as const)(
+    'reports every missing object without changing activation in %s mode',
+    async (mode) => {
+      const files = Object.fromEntries(
+        ['a', 'b', 'c', 'd', 'e'].map((name) => [`${name}.md`, `# ${name}\n\nOriginal ${name}.`]),
+      );
+      await project(files, async (root, lore) => {
+        const candidate = await build(root);
+        for (const name of Object.keys(files)) {
+          writeFileSync(join(root, name), `# ${name}\n\nReplacement ${name}.`);
+        }
+        await build(root);
+        const before = readActiveBuild(join(root, '.lore'));
+        const missing = objectHashes(root, candidate.buildId);
+        expect(missing).toHaveLength(5);
+        for (const hash of missing) rmSync(objectFile(root, hash));
+
+        const result = await lore([
+          ...(mode === 'json' ? ['--json'] : []),
+          'activate',
+          candidate.buildId,
+        ]);
+        expect(result.code).toBe(2);
+        if (mode === 'json') {
+          const parsed = JSON.parse(result.stdout);
+          expect(parsed.error).toMatchObject({
+            code: 'LORE_E_OBJECT_CORRUPT',
+            details: { missing: expect.arrayContaining(missing) },
+          });
+          expect(parsed.error.details.missing).toHaveLength(missing.length);
+        } else {
+          expect(result.stderr).toContain('5 objects that are missing');
+          expect(result.stderr).toContain('...');
+          for (const hash of missing.slice(0, 3)) expect(result.stderr).toContain(hash);
+          for (const hash of missing.slice(3)) expect(result.stderr).not.toContain(hash);
+          expect(result.stdout).not.toContain('Activated');
+        }
+        expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+      });
+    },
+  );
+
   it('accepts a full id and moves the pointer', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { first, third } = await threeBuilds(root);
@@ -576,6 +618,42 @@ describe('lorepack activate', () => {
 });
 
 describe('lorepack rollback', () => {
+  it.each([false, true])(
+    'refuses an unsupported remote target before adapter use, named build: %s',
+    async (named) => {
+      await project({ 'a.md': '# A\n\nOriginal.' }, async (root) => {
+        const built = await build(root);
+        const before = readActiveBuild(join(root, '.lore'));
+        const configuration = readFileSync(join(root, 'lore.yaml'));
+        const calls: string[] = [];
+        const unexpected = (operation: string): never => {
+          calls.push(operation);
+          throw new Error(`Unsupported targets must not call ${operation}.`);
+        };
+        const adapter: CloudflareResolverAdapter = {
+          detect: async () => unexpected('detect'),
+          whoami: async () => unexpected('whoami'),
+          listDatabases: async () => unexpected('listDatabases'),
+          openCatalogDatabase: () => unexpected('openCatalogDatabase'),
+          openTablesDatabase: () => unexpected('openTablesDatabase'),
+          openObjectsBucket: () => unexpected('openObjectsBucket'),
+        };
+        const result = await run(
+          ['--cwd', root, 'rollback', '--target', 'unsupported', ...(named ? [built.buildId] : [])],
+          { commands: [rollbackCommand({ cloudflareAdapter: adapter })] },
+        );
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+        expect(result.stderr).toContain('Unknown rollback target unsupported');
+        expect(result.stderr).toContain('Use `cloudflare`');
+        expect(calls).toEqual([]);
+        expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+        expect(readFileSync(join(root, 'lore.yaml'))).toEqual(configuration);
+        expect(existsSync(join(root, '.lore', 'targets', 'cloudflare.json'))).toBe(false);
+      });
+    },
+  );
+
   it('returns to the previous verified build with no argument', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { second, third } = await threeBuilds(root);
