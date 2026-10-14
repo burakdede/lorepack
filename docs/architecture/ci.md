@@ -653,5 +653,6 @@ unregistered replacement images still fail. Independent collectors observe the
 same attempt without changing the actual process-image replacement.
 
 The real execve regressions are skipped on Windows and IBM i because Node does not
-support this API there. The compiler's own fallback remains unchanged. See
+support this API there. Their exact conditional source line and reason are recorded
+in the boundary suite's skip registry. The compiler's own fallback remains unchanged. See
 [ADR 0023](../adr/0023-native-compiler-image-replacement.md).

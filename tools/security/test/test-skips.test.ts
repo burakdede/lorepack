@@ -49,6 +49,11 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
     why: 'Normalization-insensitive APFS cannot retain distinct NFC/NFD filenames; Linux and Windows exercise the real discovery collision (#589)',
   },
   {
+    file: 'tools/arch/test/coverage_provider.test.ts',
+    line: "it.skipIf(['win32', 'os400'].includes(process.platform))(",
+    why: 'Node execve is unavailable on Windows and IBM i; the four actual native-image regressions run on POSIX (#700)',
+  },
+  {
     file: 'packages/backend-local/test/storage-faults.test.ts',
     line: "it.skipIf(process.platform === 'win32')(",
     why: 'POSIX archive modes have no Windows equivalent; interrupted replacement still runs there (#686)',
