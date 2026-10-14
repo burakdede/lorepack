@@ -34,7 +34,9 @@ Test results and coverage upload as artifacts on every run, including failures.
 Vitest and its coverage provider are pinned together at 4.1.11. The architecture suite
 exercises the installed public redirect-mock registration handler against real files and
 Vite's serving policy: an opaque URL cannot escape the project, a denied in-root `.env`
-cannot load, and a permitted redirect still works. These checks cover the contributor
+cannot load, and a permitted redirect still works. The child reserves stdout for one
+JSON reply, with Vite logging disabled. A real logger startup message exercises this
+contract; malformed replies still fail instead of being filtered or partially parsed. These checks cover the contributor
 toolchain fix for [GHSA-82fw-gwwq-j7x9](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9).
 They do not claim that an ordinary local test run exposes the development WebSocket.
 
