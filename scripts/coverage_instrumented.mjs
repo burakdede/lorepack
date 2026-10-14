@@ -479,7 +479,23 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
   } catch {}
   const entry = registry.get(filename);
   if (!entry) {
-    if (nodeArguments.includes('--allow-child-process')) return null;
+    if (nodeArguments.includes('--allow-child-process')) {
+      let projectRoot;
+      try {
+        projectRoot = realpathSync(cwd ?? process.cwd());
+      } catch {
+        return null;
+      }
+      if (
+        !isDeepStrictEqual(nodeArguments, [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${projectRoot}`,
+          '--allow-child-process',
+        ])
+      )
+        return null;
+    }
     const preload = [...registry.values()].find(
       (value) =>
         value.captureMode === 'script-import' && (value.captureDescriptor ?? 4) === descriptor,
