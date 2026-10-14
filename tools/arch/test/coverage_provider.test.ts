@@ -492,6 +492,23 @@ if (['compiler-replace','compiler-replace-failed'].includes(process.argv[2])) {
   } else process.execve(executable,[executable,'--version']);
 }
 if(process.argv[2]==='heap-abort') {const retained=[];while(true)retained.push(new Array(100000).fill(1));}
+if(process.argv[2]==='encoding-failure') {
+  const source=Object.values(globalThis.__LOREPACK_NATIVE_COVERAGE__)[0];
+  const key=Object.keys(source.s)[0],before=source.s[key];
+  let caught=false;
+  try {source.s[key]=1n;} catch(error) {if(!(error instanceof TypeError))throw error;caught=true;}
+  const after=source.s[key];
+  instance.close();
+  console.log(JSON.stringify({caught,before,after,maps:globalThis.__LOREPACK_NATIVE_COVERAGE__}));
+}
+if(process.argv[2]==='stack-overflow') {
+  let caught=false;
+  const recurse=()=>{instance.close();recurse();};
+  try {recurse();} catch(error) {if(!(error instanceof RangeError))throw error;caught=true;}
+  instance.close();
+  console.log(JSON.stringify({caught,maps:globalThis.__LOREPACK_NATIVE_COVERAGE__}));
+}
+
 if(process.argv[2]==='worker-run') {
   const {parentPort,workerData}=await import('node:worker_threads');
   if(workerData.nested) {
@@ -881,6 +898,64 @@ console.log(JSON.stringify({result,stderr}));`,
     const actual = output.result.maps[join(root, 'private.ts')];
     for (const field of ['s', 'f', 'b'])
       expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+  });
+
+  it('leaves sequence and counter uncommitted when native JSON encoding rejects a write', async () => {
+    const filename = join(root, 'rejected-encoding-counters.jsonl');
+    const fd = openSync(filename, 'wx');
+    let result: ReturnType<typeof spawnSync>;
+    try {
+      result = spawnSync(process.execPath, [bundle, 'encoding-failure'], {
+        encoding: 'utf8',
+        env: {},
+        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const actual = JSON.parse(String(result.stdout).trimEnd().split('\n').at(-1) ?? '{}');
+    expect(actual.caught).toBe(true);
+    expect(actual.after).toBe(actual.before);
+    const replay = await replayCounterFile(snapshot, filename, {
+      pid: result.pid,
+      threadId: 0,
+      code: result.status,
+      signal: result.signal,
+    });
+    expect(replay.state).toBe('completed');
+    expect(replay.maps).toEqual(actual.maps);
+  });
+
+  it('retains exact counters after real stack exhaustion during frame emission', async () => {
+    const filename = join(root, 'stack-exhaustion-counters.jsonl');
+    const fd = openSync(filename, 'wx');
+    let result: ReturnType<typeof spawnSync>;
+    try {
+      result = spawnSync(process.execPath, [bundle, 'stack-overflow'], {
+        encoding: 'utf8',
+        env: {},
+        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const actual = JSON.parse(String(result.stdout).trimEnd().split('\n').at(-1) ?? '{}');
+    expect(actual.caught).toBe(true);
+    const replay = await replayCounterFile(snapshot, filename, {
+      pid: result.pid,
+      threadId: 0,
+      code: result.status,
+      signal: result.signal,
+    });
+    expect(replay.state).toBe('completed');
+    expect(replay.maps).toEqual(actual.maps);
+    const privateMap = replay.maps[join(root, 'private.ts')] as Coverage | undefined;
+    if (!privateMap) throw new Error('Missing owned stack-exhaustion execution.');
+    expect(Math.max(...Object.values(privateMap.f))).toBeGreaterThan(100);
   });
 
   it('keeps file and string replay identical across JSON and UTF8 chunk boundaries', async () => {
