@@ -35,6 +35,7 @@ const campaignCollector = Symbol.for('lorepack.campaignCollector');
 const capturedCommandSpawn = Symbol.for('lorepack.capturedCommandSpawn');
 const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
 const compiledContexts = Symbol.for('lorepack.compiledCaptureContexts');
+const imageCollectors = Symbol.for('lorepack.nativeImageCollectors');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
 function assertCoverageVariable(value) {
@@ -812,9 +813,9 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
     identities.add(counters.id);
     if (signal === null) {
       if (
-        counters.state !== 'completed' ||
+        !['completed', 'replaced'].includes(counters.state) ||
         !Number.isSafeInteger(code) ||
-        code !== counters.exitCode
+        (counters.state === 'completed' && code !== counters.exitCode)
       )
         throw new Error(`Fork completion differs from close: ${closeFile}`);
     } else if (
@@ -1311,6 +1312,61 @@ export async function captureCompiledBuild(builder, options, directory, coverage
   return result;
 }
 
+function nativeCompilerIdentity() {
+  const require = createRequire(import.meta.url);
+  const packageFile = require.resolve('typescript/package.json');
+  const compiler = JSON.parse(readFileSync(packageFile, 'utf8'));
+  const project = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const platformRequire = createRequire(packageFile);
+  const platformFile = platformRequire.resolve(
+    `@typescript/typescript-${process.platform}-${process.arch}/package.json`,
+  );
+  const platform = JSON.parse(readFileSync(platformFile, 'utf8'));
+  if (
+    compiler.version !== project.devDependencies.typescript ||
+    platform.version !== compiler.version
+  )
+    throw new Error('Native compiler version differs from the pinned toolchain.');
+  const executable = realpathSync(join(dirname(platformFile), 'lib/tsc'));
+  return {
+    executable,
+    executableSha256: digestFile(executable, Buffer.alloc(64 * 1024)),
+    compilerVersion: compiler.version,
+  };
+}
+
+function registerImageCollector(emit) {
+  if (typeof process.execve !== 'function') return;
+  if (!globalThis[imageCollectors]) {
+    const collectors = new Set();
+    globalThis[imageCollectors] = collectors;
+    const execve = process.execve;
+    process.execve = function (...args) {
+      const attempt = randomUUID();
+      let executable = null;
+      let executableSha256 = null;
+      try {
+        executable = realpathSync(args[0]);
+        executableSha256 = digestFile(executable, Buffer.alloc(64 * 1024));
+      } catch {}
+      const record = {
+        state: 'execve',
+        attempt,
+        executable,
+        executableSha256,
+        argumentsSha256: digest(JSON.stringify(args[1] ?? null)),
+      };
+      for (const collector of collectors) collector(record);
+      try {
+        return execve.apply(this, args);
+      } finally {
+        for (const collector of collectors) collector({ state: 'execve-returned', attempt });
+      }
+    };
+  }
+  globalThis[imageCollectors].add(emit);
+}
+
 export function registerCounterStream(fd, coverageVariable = variable) {
   assertCoverageVariable(coverageVariable);
   const collector = coverageVariable === variable ? active : Symbol.for(coverageVariable);
@@ -1361,6 +1417,7 @@ export function registerCounterStream(fd, coverageVariable = variable) {
     },
   );
   globalThis[collector] = true;
+  registerImageCollector((record) => emit({ ...identity, ...record }));
   afterProcessExit((exitCode) => emit({ ...identity, state: 'completed', exitCode }));
   return identity.id;
 }
@@ -1400,10 +1457,14 @@ export async function replayCounterStream(snapshot, text, hostClose) {
   const { captureCoverage } = await import('./coverage_report.mjs');
   let sequence = 0;
   let completed = null;
+  let replacement = null;
+  const attempts = new Set();
   for (const record of records) {
     if ((completed && !hostClose) || record.sequence !== ++sequence)
       throw new Error('Native counter stream sequence differs.');
     if (sequence === 1) continue;
+    if (replacement && record.state !== 'execve-returned')
+      throw new Error('Native image replacement has subsequent execution.');
     if (record.state === 'source') {
       const entry = owned.get(record.path);
       if (!entry || Object.hasOwn(maps, record.path) || record.data?.path !== record.path)
@@ -1436,6 +1497,27 @@ export async function replayCounterStream(snapshot, text, hostClose) {
       if (!Number.isSafeInteger(record.value) || record.value !== target[key] + 1)
         throw new Error('Native counter increment differs.');
       target[key] = record.value;
+    } else if (record.state === 'execve' || record.state === 'execve-returned') {
+      for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
+        if (record[key] !== start[key])
+          throw new Error('Native image replacement identity differs.');
+      if (record.state === 'execve') {
+        if (
+          completed ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+            record.attempt,
+          ) ||
+          attempts.has(record.attempt) ||
+          !/^[0-9a-f]{64}$/.test(record.argumentsSha256)
+        )
+          throw new Error('Invalid native image replacement attempt.');
+        attempts.add(record.attempt);
+        replacement = record;
+      } else {
+        if (!replacement || replacement.attempt !== record.attempt)
+          throw new Error('Native image replacement return differs.');
+        replacement = null;
+      }
     } else if (record.state === 'completed') {
       if (completed) throw new Error('Repeated native counter completion.');
       for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])
@@ -1446,14 +1528,36 @@ export async function replayCounterStream(snapshot, text, hostClose) {
       completed = record;
     } else throw new Error('Unknown native counter stream record.');
   }
-  if (hostClose?.signal === null && (!completed || hostClose.code !== completed.exitCode))
+  let replacementCompiler = null;
+  if (replacement) {
+    if (!hostClose) throw new Error('Native image replacement requires host close.');
+    replacementCompiler = nativeCompilerIdentity();
+    if (
+      replacement.executable !== replacementCompiler.executable ||
+      replacement.executableSha256 !== replacementCompiler.executableSha256
+    )
+      throw new Error('Unqualified native image replacement.');
+  }
+  if (
+    hostClose?.signal === null &&
+    !replacement &&
+    (!completed || hostClose.code !== completed.exitCode)
+  )
     throw new Error('Native counter completion differs from host close.');
   captureCoverage(snapshot, maps, start.id);
   return {
     id: start.id,
     pid: start.pid,
     threadId: start.threadId,
-    state: completed ? 'completed' : 'interrupted',
+    state: replacement ? 'replaced' : completed ? 'completed' : 'interrupted',
+    ...(replacement
+      ? {
+          replacement: {
+            ...replacement,
+            compilerVersion: replacementCompiler.compilerVersion,
+          },
+        }
+      : {}),
     exitCode: completed?.exitCode ?? null,
     maps,
   };
