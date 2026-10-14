@@ -146,3 +146,13 @@ no intermediate directory to replace with a link. The connector safety contract
 checks that layout explicitly. File-link and permission evidence runs for every
 connector; intermediate-directory link evidence runs for Codex and VS Code,
 whose configuration is nested inside the project.
+
+
+Native coverage of the original project-write profile retains nested launch, close and
+counter records beneath a host-created private namespace in `.lorepack`. The parent
+checks ownership and moves only its own regular receipt files before fixture cleanup.
+No outside filesystem write grant is added. A hash-bound CommonJS collector preload
+starts the inherited counter stream before original ESM preloads and restores the
+caller-visible arguments before they execute. A preload failure therefore has actual
+start and completion frames with no owned source hits. Empty or truncated streams
+remain invalid. See [ADR0026](../adr/0026-project-capture-custody.md).

@@ -1,4 +1,4 @@
-import { execFileSync, fork, spawnSync } from 'node:child_process';
+import { execFileSync, fork, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   appendFileSync,
@@ -1446,6 +1446,146 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       expect(children.status).toBe('Pass');
       expect(children.processes).toBe(3);
     });
+
+    it.each(['sync', 'async'] as const)(
+      'captures the original project-write profile without adding grants (%s)',
+      async (mode) => {
+        const { project, captured, built } = scenario;
+        const working = join(project, `permission-project-${mode}`);
+        mkdirSync(working);
+        const preload = join(project, 'permission-observer.mjs');
+        writeFileSync(
+          preload,
+          `console.log(JSON.stringify({args:process.execArgv,projectWrite:process.permission.has('fs.write',${JSON.stringify(working)}),outsideWrite:process.permission.has('fs.write',${JSON.stringify(project)}),worker:process.permission.has('worker')}));`,
+        );
+        const args = [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${working}`,
+          '--allow-child-process',
+          '--import',
+          pathToFileURL(preload).href,
+          join(project, 'packages/cli/dist/public-entry.js'),
+        ];
+        const options = { cwd: working, env: { NODE_NO_WARNINGS: '1' }, encoding: 'utf8' as const };
+        const expected = spawnSync(process.execPath, args, options);
+        expect(expected.status).toBe(7);
+        const registry = createCampaignRegistry(captured, built.launch);
+        const directory = join(project, `project-permission-parent-counters-${mode}`);
+        const capture =
+          mode === 'sync'
+            ? registerSyncCommandCapture(registry.commandEntries, directory, true)
+            : registerCommandCapture(registry.commandEntries, directory, true);
+        const before = JSON.stringify({ args, options });
+        let actual: { status: number | null; stdout: string; stderr: string };
+        try {
+          if (mode === 'sync') actual = spawnSync(process.execPath, args, options);
+          else {
+            const child = spawn(process.execPath, args, options);
+            let stdout = '';
+            let stderr = '';
+            child.stdout.on('data', (value) => {
+              stdout += value;
+            });
+            child.stderr.on('data', (value) => {
+              stderr += value;
+            });
+            const status = await new Promise<number | null>((resolve, reject) => {
+              child.once('close', resolve);
+              child.once('error', reject);
+            });
+            if ('settled' in capture && typeof capture.settled === 'function')
+              await capture.settled();
+            actual = { status, stdout, stderr };
+          }
+        } finally {
+          capture.restore();
+        }
+        expect(JSON.stringify({ args, options })).toBe(before);
+        expect(actual.status).toBe(expected.status);
+        expect(actual.stdout).toBe(expected.stdout);
+        expect(actual.stderr).toBe(expected.stderr);
+        const observation = JSON.parse(actual.stdout.split('\n')[0] ?? '{}');
+        expect(observation).toMatchObject({
+          projectWrite: true,
+          outsideWrite: false,
+          worker: false,
+        });
+        const parent = await reconcileForkCapture(captured, directory, registry.commandEntries);
+        expect(parent.status).toBe('Pass');
+        expect(parent.processes).toBe(1);
+        const children = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+          ...registry.forkEntries,
+          ...registry.commandEntries,
+        ]);
+        expect(children.status).toBe('Pass');
+        expect(children.processes).toBe(3);
+        expect(readdirSync(join(working, '.lorepack'))).toEqual([]);
+      },
+    );
+
+    it.each(['sync', 'async'] as const)(
+      'accounts a real preload failure before the owned entrypoint starts (%s)',
+      async (mode) => {
+        const { project, captured, built } = scenario;
+        const working = join(project, `pre-entry-project-${mode}`);
+        mkdirSync(working);
+        const preload = join(project, 'pre-entry-failure.mjs');
+        writeFileSync(
+          preload,
+          "throw new Error('Original preload stopped before the owned entrypoint');",
+        );
+        const args = [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${working}`,
+          '--allow-child-process',
+          '--import',
+          pathToFileURL(preload).href,
+          join(project, 'packages/cli/dist/public-entry.js'),
+        ];
+        const options = { cwd: working, env: { NODE_NO_WARNINGS: '1' }, encoding: 'utf8' as const };
+        const expected = spawnSync(process.execPath, args, options);
+        expect(expected.status).toBe(1);
+        const registry = createCampaignRegistry(captured, built.launch);
+        const directory = join(project, `pre-entry-parent-counters-${mode}`);
+        const capture =
+          mode === 'sync'
+            ? registerSyncCommandCapture(registry.commandEntries, directory, true)
+            : registerCommandCapture(registry.commandEntries, directory, true);
+        let actual: { status: number | null; stdout: string; stderr: string };
+        try {
+          if (mode === 'sync') actual = spawnSync(process.execPath, args, options);
+          else {
+            const child = spawn(process.execPath, args, options);
+            let stdout = '';
+            let stderr = '';
+            child.stdout.on('data', (value) => {
+              stdout += value;
+            });
+            child.stderr.on('data', (value) => {
+              stderr += value;
+            });
+            const status = await new Promise<number | null>((resolve, reject) => {
+              child.once('close', resolve);
+              child.once('error', reject);
+            });
+            if ('settled' in capture && typeof capture.settled === 'function')
+              await capture.settled();
+            actual = { status, stdout, stderr };
+          }
+        } finally {
+          capture.restore();
+        }
+        expect(actual.status).toBe(expected.status);
+        expect(actual.stdout).toBe(expected.stdout);
+        expect(actual.stderr).toBe(expected.stderr);
+        const result = await reconcileForkCapture(captured, directory, registry.commandEntries);
+        expect(result.processes).toBe(1);
+        expect(result.maps).toEqual({});
+        expect(result.executions[0]).toMatchObject({ state: 'completed', exitCode: 1 });
+      },
+    );
 
     it('reconciles actual parent counters and every CLI child', async () => {
       const { project, captured, built } = scenario;

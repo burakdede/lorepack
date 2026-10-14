@@ -2,9 +2,12 @@ import childProcess from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  copyFileSync,
   cpSync,
   createReadStream,
+  constants as fsConstants,
   linkSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -12,6 +15,7 @@ import {
   readSync,
   realpathSync,
   renameSync,
+  rmdirSync,
   statSync,
   symlinkSync,
   unlinkSync,
@@ -40,6 +44,8 @@ const compiledContexts = Symbol.for('lorepack.compiledCaptureContexts');
 const imageCollectors = Symbol.for('lorepack.nativeImageCollectors');
 const workerCollectors = Symbol.for('lorepack.nativeWorkerCollectors');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
+const projectCaptureOwners = new Map();
+const earlyCounterStreams = new Map();
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
 function assertCoverageVariable(value) {
   if (value !== variable && value !== campaignVariable)
@@ -209,6 +215,7 @@ export function registerForkCapture(entries, directory, audit = false) {
       child = originalFork.call(this, entry.target, args, {
         ...options,
         [capturedForkSpawn]: true,
+        execArgv: prependCounterPreload(entry, options.execArgv ?? process.execArgv),
         stdio: [...streams, fd],
       });
     } catch (error) {
@@ -303,7 +310,90 @@ export function registerForkCapture(entries, directory, audit = false) {
   };
 }
 
+function projectCaptureParent(root, parentPid, directory) {
+  return join(root, '.lorepack', `.coverage-${parentPid}-${digest(directory).slice(0, 16)}`);
+}
+
+function claimProjectCapture(root, directory) {
+  const managed = join(root, '.lorepack');
+  mkdirSync(managed, { recursive: true });
+  const canonical = realpathSync(managed);
+  const contained = relative(root, canonical);
+  if (contained === '..' || contained.startsWith(`..${sep}`))
+    throw new Error('Project capture managed directory escapes the original grant.');
+  const parent = projectCaptureParent(root, process.pid, directory);
+  let owner = projectCaptureOwners.get(parent);
+  if (!owner) {
+    mkdirSync(parent, { mode: 0o700 });
+    const stat = lstatSync(parent);
+    owner = { parent, dev: stat.dev, ino: stat.ino, references: 0 };
+    projectCaptureOwners.set(parent, owner);
+  }
+  const stat = lstatSync(parent);
+  if (
+    !stat.isDirectory() ||
+    stat.isSymbolicLink() ||
+    stat.dev !== owner.dev ||
+    stat.ino !== owner.ino
+  )
+    throw new Error('Project capture ownership changed.');
+  owner.references++;
+  return owner;
+}
+
+function retainProjectCapture(owner, pid, directory) {
+  const stat = lstatSync(owner.parent);
+  if (
+    !stat.isDirectory() ||
+    stat.isSymbolicLink() ||
+    stat.dev !== owner.dev ||
+    stat.ino !== owner.ino
+  )
+    throw new Error('Project capture ownership changed before close.');
+  if (!Number.isSafeInteger(pid) || pid <= 0)
+    throw new Error('Project capture child identity missing.');
+  const child = join(owner.parent, String(pid));
+  const childStat = lstatSync(child);
+  if (!childStat.isDirectory() || childStat.isSymbolicLink())
+    throw new Error('Project capture child directory differs.');
+  const files = readdirSync(child);
+  mkdirSync(directory, { recursive: true });
+  for (const file of files) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:launch\.json|close\.json|counters\.jsonl|native-abort\.json|unregistered\.json)$/.test(
+        file,
+      ) ||
+      !lstatSync(join(child, file)).isFile() ||
+      lstatSync(join(child, file)).isSymbolicLink()
+    )
+      throw new Error('Foreign project capture record.');
+    copyFileSync(join(child, file), join(directory, file), fsConstants.COPYFILE_EXCL);
+  }
+  for (const file of files) unlinkSync(join(child, file));
+  rmdirSync(child);
+  owner.references--;
+  if (owner.references === 0) {
+    rmdirSync(owner.parent);
+    projectCaptureOwners.delete(owner.parent);
+  }
+}
+
+function prependCounterPreload(entry, args) {
+  if (entry.counterPreload === undefined) return args;
+  const { path, sha256 } = entry.counterPreload;
+  if (typeof path !== 'string' || digest(readFileSync(path)) !== sha256)
+    throw new Error('Early counter initializer differs from its receipt.');
+  return ['--require', path, ...args];
+}
+
 function assertNodeArguments(entry) {
+  if (
+    entry.projectCaptureDirectory !== undefined &&
+    (typeof entry.projectCaptureDirectory !== 'string' ||
+      !entry.projectCaptureDirectory ||
+      entry.captureMode !== undefined)
+  )
+    throw new Error('Invalid project capture profile.');
   if (
     entry.captureDescriptor !== undefined &&
     (entry.captureDescriptor !== 5 || entry.captureMode === undefined)
@@ -372,7 +462,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
     }
     if (
       typeof argument === 'string' &&
-      /^(?:--permission|--no-warnings|--experimental-import-meta-resolve|--(?:import|allow-fs-read|allow-fs-write|require|conditions)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
+      /^(?:--permission|--allow-child-process|--no-warnings|--experimental-import-meta-resolve|--(?:import|allow-fs-read|allow-fs-write|require|conditions)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
         argument,
       )
     ) {
@@ -389,6 +479,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
   } catch {}
   const entry = registry.get(filename);
   if (!entry) {
+    if (nodeArguments.includes('--allow-child-process')) return null;
     const preload = [...registry.values()].find(
       (value) =>
         value.captureMode === 'script-import' && (value.captureDescriptor ?? 4) === descriptor,
@@ -401,7 +492,20 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
     }
     return { entry: preload, index: -1 };
   }
-  if (index && !isDeepStrictEqual(nodeArguments, entry.nodeArguments ?? [])) return null;
+  if (index && !isDeepStrictEqual(nodeArguments, entry.nodeArguments ?? [])) {
+    if (entry.projectCaptureDirectory === undefined) return null;
+    const projectRoot = realpathSync(cwd ?? process.cwd());
+    if (
+      !isDeepStrictEqual(nodeArguments, [
+        '--permission',
+        '--allow-fs-read=*',
+        `--allow-fs-write=${projectRoot}`,
+        '--allow-child-process',
+      ])
+    )
+      return null;
+    return { entry, index, projectRoot };
+  }
   return { entry, index };
 }
 
@@ -456,20 +560,27 @@ export function registerCommandCapture(entries, directory, audit = false) {
       throw new Error('Command capture requires the original three-descriptor layout.');
     const id = randomUUID();
     const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
+    const projectCapture = selected.projectRoot
+      ? claimProjectCapture(selected.projectRoot, entry.projectCaptureDirectory)
+      : null;
     let result;
     try {
       result = originalSpawn.call(this, {
         ...options,
         [capturedCommandSpawn]: true,
-        args:
-          index === -1
-            ? [
-                options.args[0],
-                '--import',
-                pathToFileURL(entry.target).href,
-                ...options.args.slice(1),
-              ]
-            : [...options.args.slice(0, index + 1), entry.target, ...options.args.slice(index + 2)],
+        args: [
+          options.args[0],
+          ...prependCounterPreload(
+            entry,
+            index === -1
+              ? ['--import', pathToFileURL(entry.target).href, ...options.args.slice(1)]
+              : [
+                  ...options.args.slice(1, index + 1),
+                  entry.target,
+                  ...options.args.slice(index + 2),
+                ],
+          ),
+        ],
         stdio: [...streams, ...(streams.length === 3 ? ['ignore'] : []), fd],
       });
     } catch (error) {
@@ -504,11 +615,17 @@ export function registerCommandCapture(entries, directory, audit = false) {
       return killed;
     };
     pending.push(
-      new Promise((resolveClosed) => {
+      new Promise((resolveClosed, rejectClosed) => {
         this.prependOnceListener('close', (code, signal) => {
-          closeSync(fd);
-          publish(directory, `${id}.close.json`, { ...record, code, signal, kills });
-          resolveClosed();
+          try {
+            closeSync(fd);
+            if (projectCapture)
+              retainProjectCapture(projectCapture, this.pid, entry.projectCaptureDirectory);
+            publish(directory, `${id}.close.json`, { ...record, code, signal, kills });
+            resolveClosed();
+          } catch (error) {
+            rejectClosed(error);
+          }
         });
       }),
     );
@@ -581,13 +698,19 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
       throw new Error('Synchronous capture requires three original descriptors');
     const id = randomUUID();
     const fd = openSync(join(directory, `${id}.counters.jsonl`), 'wx');
+    const projectCapture = selected.projectRoot
+      ? claimProjectCapture(selected.projectRoot, entry.projectCaptureDirectory)
+      : null;
     let result;
     try {
       result = originals.spawnSync(
         process.execPath,
-        index === -1
-          ? ['--import', pathToFileURL(entry.target).href, ...args]
-          : [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
+        prependCounterPreload(
+          entry,
+          index === -1
+            ? ['--import', pathToFileURL(entry.target).href, ...args]
+            : [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
+        ),
         {
           ...options,
           [capturedCommandSpawn]: true,
@@ -597,6 +720,8 @@ export function registerSyncCommandCapture(entries, directory, audit = false) {
     } finally {
       closeSync(fd);
     }
+    if (projectCapture)
+      retainProjectCapture(projectCapture, result.pid, entry.projectCaptureDirectory);
     if (Array.isArray(result.output)) result.output = result.output.slice(0, streams.length);
     if (result.error?.spawnargs) result.error.spawnargs = [...args];
     const record = {
@@ -742,6 +867,8 @@ export function createCampaignRegistry(snapshot, launch) {
   const cli = {
     original: launch.entry,
     target: launch.entry,
+    projectCaptureDirectory: launch.captureDirectory,
+    counterPreload: launch.counterPreload,
     originalSha256: launch.entrySha256,
     targetSha256: launch.entrySha256,
     interruptionSignals: ['SIGTERM', 'SIGKILL'],
@@ -1017,6 +1144,29 @@ export async function runCapturedCli(
   entrypointSha256,
   artifacts,
 ) {
+  const projectRoot = realpathSync(process.cwd());
+  const profile = process.execArgv.filter((value) => !value.startsWith('--import='));
+  const permissionArguments = [];
+  for (let index = 0; index < profile.length; index++) {
+    if (profile[index] === '--import') {
+      index++;
+      continue;
+    }
+    permissionArguments.push(profile[index]);
+  }
+  if (
+    isDeepStrictEqual(permissionArguments, [
+      '--permission',
+      '--allow-fs-read=*',
+      `--allow-fs-write=${projectRoot}`,
+      '--allow-child-process',
+    ])
+  ) {
+    const parent = projectCaptureParent(projectRoot, process.ppid, directory);
+    if (!lstatSync(parent).isDirectory() || !process.permission?.has('fs.write', parent))
+      throw new Error('Project capture parent is unavailable under the original grant.');
+    directory = join(parent, String(process.pid));
+  }
   if (artifacts !== undefined) verifyArtifactGraph(artifacts);
   if (entrypointSha256 !== undefined && digest(readFileSync(entrypoint)) !== entrypointSha256)
     throw new Error('Captured CLI entrypoint differs from its receipt.');
@@ -1087,10 +1237,21 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     output: directory,
     plugins: [compilation.plugin],
   });
+  const counterPreload = join(directory, 'capture-preload.cjs');
+  const captureDirectory = join(directory, 'captures');
+  writeFileSync(
+    counterPreload,
+    `require(${JSON.stringify(fileURLToPath(import.meta.url))}).initializeEarlyCounterStream(__filename,4,${JSON.stringify(coverageVariable)},${JSON.stringify(captureDirectory)});\n`,
+    { flag: 'wx' },
+  );
+  const counterPreloadReceipt = {
+    path: counterPreload,
+    sha256: digest(readFileSync(counterPreload)),
+  };
   const initialization = join(directory, 'capture-bootstrap.mjs');
   writeFileSync(
     initialization,
-    `import {registerCounterStream} from ${JSON.stringify(import.meta.url)};registerCounterStream(4,${JSON.stringify(coverageVariable)});\n`,
+    `import {continueCounterStream} from ${JSON.stringify(import.meta.url)};continueCounterStream(4,${JSON.stringify(coverageVariable)});\n`,
     { flag: 'wx' },
   );
   for (const filename of [
@@ -1141,7 +1302,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     ),
   ];
   const artifacts = readdirSync(directory)
-    .filter((filename) => /\.(?:m?js|js\.map)$/.test(filename))
+    .filter((filename) => /\.(?:c?js|mjs|js\.map)$/.test(filename))
     .sort()
     .map((filename) => {
       const path = join(directory, filename);
@@ -1162,6 +1323,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     return {
       original: target,
       target,
+      counterPreload: counterPreloadReceipt,
       originalSha256: hash,
       targetSha256: hash,
       interruptionSignals: ['SIGKILL'],
@@ -1174,7 +1336,6 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     ...importEntries,
   ];
   const entry = join(directory, 'capture-entry.mjs');
-  const captureDirectory = join(directory, 'captures');
   const entrypoint = join(directory, 'public-entry.js');
   const entrypointSha256 = digest(readFileSync(entrypoint));
   const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)},${JSON.stringify(artifacts)});\n`;
@@ -1188,6 +1349,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     entrypointSha256,
     artifacts,
     captureDirectory,
+    counterPreload: counterPreloadReceipt,
     forkEntries,
     commandEntries,
   };
@@ -1530,6 +1692,34 @@ function registerWorkerCollector(emit) {
     syncBuiltinESMExports();
   }
   globalThis[workerCollectors].add(emit);
+}
+
+export function initializeEarlyCounterStream(filename, fd, coverageVariable, directory) {
+  if (process.execArgv[0] !== '--require' || process.execArgv[1] !== filename)
+    throw new Error('Early counter initializer arguments differ.');
+  process.execArgv.splice(0, 2);
+  const id = registerCounterStream(fd, coverageVariable);
+  earlyCounterStreams.set(coverageVariable, { fd, id });
+  const root = realpathSync(process.cwd());
+  if (process.execArgv.includes(`--allow-fs-write=${root}`)) {
+    const parent = projectCaptureParent(root, process.ppid, directory);
+    const stat = lstatSync(parent);
+    if (
+      !stat.isDirectory() ||
+      stat.isSymbolicLink() ||
+      !process.permission?.has('fs.write', parent)
+    )
+      throw new Error('Early project capture parent differs.');
+    mkdirSync(join(parent, String(process.pid)));
+  }
+}
+
+export function continueCounterStream(fd, coverageVariable = variable) {
+  const early = earlyCounterStreams.get(coverageVariable);
+  if (early === undefined) return registerCounterStream(fd, coverageVariable);
+  if (early.fd !== fd) throw new Error('Early counter descriptor differs.');
+  earlyCounterStreams.delete(coverageVariable);
+  return early.id;
 }
 
 export function registerCounterStream(fd, coverageVariable = variable) {
