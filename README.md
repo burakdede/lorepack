@@ -626,6 +626,7 @@ Fresh fixture bundles use the actual compilation recipe and canonical capture pl
 The active collector checks emitted JavaScript, maps and original inputs before loading
 the graph; ordinary execution keeps the production recipe unchanged.
 Nested fixtures select their own counter namespace while preserving the outer campaign.
+Standalone companion sinks reserve low descriptors and keep native capture on descriptor4.
 Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
 Compiled measurement replays checked provider preparations while retaining ordinary
 compiler artifacts and their source-bound hash receipts.
