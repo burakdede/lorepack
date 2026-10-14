@@ -501,7 +501,7 @@ CLI packaging preserves dependency patches with the frozen lockfile in its tempo
 workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
 The default suite uses one worker to bound its child-process fixtures.
 Coverage preparation and measurement preserve the ordinary test scheduling settings.
-Contract tests cover HTTP hosts, remote retention and archive boundaries.
+Contract tests cover HTTP hosts, retention, activation and archive boundaries.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new

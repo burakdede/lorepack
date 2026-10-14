@@ -463,6 +463,71 @@ describe('LocalStateStore', () => {
     });
   });
 
+  it('rolls back pointer, generation and build states when the final SQLite update fails', async () => {
+    await withTempProject({}, (project) => {
+      const lore = project.path('.lore');
+      const state = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      try {
+        state.recordBuild(summary(BUILD_A));
+        state.recordBuild(summary(BUILD_B));
+        expect(state.activate(BUILD_A)).toBe(1);
+        const control = openWritable(join(lore, 'state.sqlite'));
+        try {
+          control.exec(`CREATE TRIGGER refuse_activation BEFORE UPDATE OF state ON builds
+            WHEN NEW.build_id = '${BUILD_B}' AND NEW.state = 'active'
+            BEGIN SELECT RAISE(ABORT, 'activation refused'); END`);
+        } finally {
+          control.close();
+        }
+        expect(() => state.activate(BUILD_B)).toThrowError(
+          expect.objectContaining({
+            code: 'LORE_E_INTERNAL',
+            cause: expect.objectContaining({ message: 'activation refused' }),
+          }),
+        );
+        expect(state.current()).toEqual({ buildId: BUILD_A, generation: 1 });
+        expect(state.getBuild(BUILD_A)?.state).toBe('active');
+        expect(state.getBuild(BUILD_B)?.state).toBe('verified');
+      } finally {
+        state.close();
+      }
+      const reopened = LocalStateStore.open(lore, STATE_MIGRATIONS);
+      try {
+        expect(reopened.current()).toEqual({ buildId: BUILD_A, generation: 1 });
+        expect(reopened.getBuild(BUILD_A)?.state).toBe('active');
+        expect(reopened.getBuild(BUILD_B)?.state).toBe('verified');
+        const control = openWritable(join(lore, 'state.sqlite'));
+        try {
+          control.exec('DROP TRIGGER refuse_activation');
+        } finally {
+          control.close();
+        }
+        expect(reopened.activate(BUILD_B)).toBe(2);
+        expect(reopened.current()).toEqual({ buildId: BUILD_B, generation: 2 });
+        expect(reopened.getBuild(BUILD_A)?.state).toBe('verified');
+      } finally {
+        reopened.close();
+      }
+    });
+  });
+
+  it('preserves a typed activation-clock failure without moving the active build', async () => {
+    await withState((state) => {
+      state.recordBuild(summary(BUILD_A));
+      state.recordBuild(summary(BUILD_B));
+      state.activate(BUILD_A);
+      const failure = new LoreError('LORE_E_INTERNAL', 'The activation clock is unavailable.');
+      expect(() =>
+        state.activate(BUILD_B, () => {
+          throw failure;
+        }),
+      ).toThrow(failure);
+      expect(state.current()).toEqual({ buildId: BUILD_A, generation: 1 });
+      expect(state.getBuild(BUILD_A)?.state).toBe('active');
+      expect(state.getBuild(BUILD_B)?.state).toBe('verified');
+    });
+  });
+
   it('survives reopening, so the pointer is durable', async () => {
     await withTempProject({}, (project) => {
       const lore = project.path('.lore');
