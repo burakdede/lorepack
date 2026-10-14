@@ -271,6 +271,8 @@ database fence, so a build claimed for deletion cannot become active. An unconfi
 write blocks later mutations until its completion is established; it is never blindly retried. See
 [remote cleanup](docs/architecture/deployment.md#cloudflare-remote-cleanup) for the lifetime
 and concurrent-operation behavior.
+Cleanup progress retains each confirmed R2 deletion if a later deletion fails, so a
+resumed operation reports the complete set of completed removals in human and JSON output.
 
 Rollback points at an existing immutable build. It does not recompile the sources, and it
 works after the source directory and parser cache are removed. Keep `lore.yaml` and `.lore/`:
