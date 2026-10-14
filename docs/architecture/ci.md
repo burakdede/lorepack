@@ -509,7 +509,9 @@ The real help assertions and protocol-SDK loading guard remain in place. Multipl
 counter namespaces require an explicit selection; ordinary execution delegates unchanged.
 Generated-graph fixtures select their native namespace explicitly. They retain an existing
 outer campaign collector and the original stream layout. Standalone dual-collector
-fixtures open a separate companion counter file. Both cases verify that fixture source
+fixtures open a separate companion counter file, reserving low descriptors while the
+native collector keeps descriptor4. Windows may allocate an opened file below4;
+the collector still rejects that descriptor rather than borrowing stdio or IPC. Both cases verify that fixture source
 counters stay out of the campaign namespace.
 Temporary compiled output must not look like untracked source to a concurrent inventory
 scan. The ownership guard and source denominator remain unchanged.

@@ -1466,7 +1466,12 @@ import {build} from ${JSON.stringify(compiler)};
 import {registerCompiledCapture,captureCompiledBuild} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
 const capture=registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'stream-preparations'))},4);
 const externalCampaign=Object.hasOwn(globalThis,'__LOREPACK_CAMPAIGN_COVERAGE__');
-const companion=${JSON.stringify(mode)}==='dual'&&!externalCampaign?registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'graph-campaign-preparations'))},openSync(${JSON.stringify(companionCounters)},'wx'),'__LOREPACK_CAMPAIGN_COVERAGE__'):null;
+let companionDescriptor=null;
+if(${JSON.stringify(mode)}==='dual'&&!externalCampaign){
+ companionDescriptor=openSync(${JSON.stringify(companionCounters)},'wx');
+ while(companionDescriptor<=4)companionDescriptor=openSync(${JSON.stringify(companionCounters)},'a');
+}
+const companion=companionDescriptor===null?null:registerCompiledCapture(${JSON.stringify(snapshot)},${JSON.stringify(join(root, 'graph-campaign-preparations'))},companionDescriptor,'__LOREPACK_CAMPAIGN_COVERAGE__');
 if(${JSON.stringify(mode)}==='dual'){
  let rejected=false;try{await captureCompiledBuild(build,{},${JSON.stringify(directory)});}catch(error){rejected=error.message==='Generated capture requires an explicit counter namespace.';}
  if(!rejected)throw new Error('Ambiguous generated graph was accepted');
@@ -1478,7 +1483,7 @@ if(retained)appendFileSync(tampered,' ');
 try {
 const {PrivateWitness}=await import(pathToFileURL(${JSON.stringify(join(directory, 'private.js'))}).href);
 const instance=new PrivateWitness();const result=[await instance.run(true),await instance.run(false)];
-if(${JSON.stringify(mode)}==='dual')writeFileSync(${JSON.stringify(observation)},JSON.stringify({external:externalCampaign,maps:Object.keys(globalThis.__LOREPACK_CAMPAIGN_COVERAGE__)}));
+if(${JSON.stringify(mode)}==='dual')writeFileSync(${JSON.stringify(observation)},JSON.stringify({external:externalCampaign,descriptor:companionDescriptor,maps:Object.keys(globalThis.__LOREPACK_CAMPAIGN_COVERAGE__)}));
 console.log(JSON.stringify(result));
 } finally {if(retained)writeFileSync(tampered,retained);companion?.restore();capture.restore();}`,
       );
@@ -1515,6 +1520,7 @@ console.log(JSON.stringify(result));
         expect(typeof observed.external).toBe('boolean');
         expect(observed.maps).not.toContain(join(root, 'private.ts'));
         if (!observed.external) {
+          expect(observed.descriptor).toBeGreaterThan(4);
           const companion = await replayCounterStream(
             snapshot,
             readFileSync(companionCounters, 'utf8'),
