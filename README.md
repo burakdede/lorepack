@@ -517,6 +517,9 @@ Nested fork collectors retain their own command receipts; the surrounding campai
 the fork once without auditing the same child again. Different-directory custody still rejects.
 Measured eval and script launches preserve preloads, permissions, conditions and arguments.
 Registered CLI launches also retain user import preloads while checking their fixed heap flags.
+Restricted build measurement keeps the original project-only write grant and retains nested
+receipts before fixture cleanup. Early collector initialization records real preload failures
+without assigning execution hits to an entrypoint that never ran.
 Node programs read from stdin retain their bytes, module mode and observable arguments.
 Campaign counters remain separate from native fixture counters in shared child processes.
 Explicit fixture files and pipes retain their descriptors and IPC alongside campaign capture.
