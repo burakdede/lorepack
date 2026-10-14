@@ -492,6 +492,34 @@ if (['compiler-replace','compiler-replace-failed'].includes(process.argv[2])) {
   } else process.execve(executable,[executable,'--version']);
 }
 if(process.argv[2]==='heap-abort') {const retained=[];while(true)retained.push(new Array(100000).fill(1));}
+if(process.argv[2]==='worker-run') {
+  const {parentPort,workerData}=await import('node:worker_threads');
+  if(workerData.nested) {
+    const {Worker}=await import('node:worker_threads');
+    await new Promise((resolve,reject)=>{
+      const child=new Worker(new URL(import.meta.url),{argv:['worker-run'],workerData:{tag:'leaf'}});
+      child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error('Nested worker failed')));
+    });
+  }
+  parentPort.postMessage({argv:process.argv.slice(2),workerData});
+  if(workerData.hold)setInterval(()=>{},1000);
+}
+if(['workers','workers-nested'].includes(process.argv[2])) {
+  const {Worker}=await import('node:worker_threads');
+  const messages=await Promise.all([1,2].map(tag=>new Promise((resolve,reject)=>{
+    const worker=new Worker(new URL(import.meta.url),{argv:['worker-run'],workerData:{tag,...(tag===1&&process.argv[2]==='workers-nested'?{nested:true}:{})},resourceLimits:{maxOldGenerationSizeMb:64}});
+    let message;worker.once('message',value=>message=value);worker.once('error',reject);
+    worker.once('exit',code=>code===0?resolve(message):reject(new Error('Worker failed')));
+  })));
+  console.log(JSON.stringify({messages}));
+}
+if(process.argv[2]==='worker-terminate') {
+  const {Worker}=await import('node:worker_threads');
+  const worker=new Worker(new URL(import.meta.url),{argv:['worker-run'],workerData:{hold:true}});
+  await new Promise((resolve,reject)=>{worker.once('message',resolve);worker.once('error',reject);});
+  worker.emit('exit',0);
+  console.log(JSON.stringify({terminated:await worker.terminate()}));
+}
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -875,6 +903,162 @@ console.log(JSON.stringify({result,stderr}));`,
       await expect(replayCounterFile(snapshot, filename)).rejects.toThrow();
     }
     writeFileSync(filename, text);
+  });
+
+  it.each(['workers', 'workers-nested'])(
+    'qualifies independent worker streams for %s with exact owned hits and original worker options',
+    async (mode) => {
+      const filename = join(root, `${mode}-counter-streams.jsonl`);
+      const fd = openSync(filename, 'wx');
+      let result: ReturnType<typeof spawnSync>;
+      try {
+        result = spawnSync(process.execPath, [bundle, mode], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+          env: {},
+        });
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+      const output = JSON.parse(String(result.stdout).trimEnd().split('\n').at(-1) ?? '{}');
+      expect(output.messages).toEqual([
+        {
+          argv: ['worker-run'],
+          workerData: { tag: 1, ...(mode === 'workers-nested' ? { nested: true } : {}) },
+        },
+        { argv: ['worker-run'], workerData: { tag: 2 } },
+      ]);
+      const replay = await replayCounterFile(snapshot, filename, {
+        pid: result.pid,
+        threadId: 0,
+        code: result.status,
+        signal: result.signal,
+      });
+      const count = mode === 'workers-nested' ? 3 : 2;
+      const threads = replay.threads;
+      if (!threads || threads.length !== count || !threads[0])
+        throw new Error('Missing worker lifecycles.');
+      expect(threads).toHaveLength(count);
+      expect(new Set(threads.map((thread: { threadId: number }) => thread.threadId)).size).toBe(
+        count,
+      );
+      const actual = replay.maps[join(root, 'private.ts')];
+      const expected = maps[join(root, 'private.ts')];
+      if (!actual || !expected) throw new Error('Missing real owned worker counts.');
+      for (const field of ['s', 'f'])
+        for (const [key, hits] of Object.entries(expected[field as 's' | 'f']))
+          expect(actual[field][key]).toBe(hits * (count + 1));
+      for (const [key, hits] of Object.entries(expected.b))
+        expect(actual.b[key]).toEqual(hits.map((value) => value * (count + 1)));
+      const host = { pid: result.pid, threadId: 0, code: result.status, signal: result.signal };
+      const records = readFileSync(filename, 'utf8')
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      expect(await replayCounterStream(snapshot, readFileSync(filename, 'utf8'), host)).toEqual(
+        replay,
+      );
+      const workerId = threads[0].id;
+      const reject = async (values: typeof records, reason: string) => {
+        const sequences = new Map<string, number>();
+        const rootId = records[0].id;
+        for (const record of values) {
+          const id = record.id ?? rootId;
+          record.sequence = (sequences.get(id) ?? 0) + 1;
+          sequences.set(id, record.sequence);
+        }
+        await expect(
+          replayCounterStream(
+            snapshot,
+            `${values.map((value) => JSON.stringify(value)).join('\n')}\n`,
+            host,
+          ),
+        ).rejects.toThrow(reason);
+      };
+      await reject(
+        structuredClone(records).filter((record) => record.state !== 'worker-closed'),
+        'host close missing',
+      );
+      await reject(
+        structuredClone(records).filter(
+          (record) => !(record.state === 'completed' && record.id === workerId),
+        ),
+        'completion missing',
+      );
+      await reject(
+        structuredClone(records).filter((record) => record.state !== 'worker-started'),
+        'lifecycle differs',
+      );
+      const mismatch = structuredClone(records);
+      mismatch.find((record) => record.state === 'worker-closed').exitCode = 12;
+      await reject(mismatch, 'completion differs');
+      const late = structuredClone(records);
+      late.push(
+        structuredClone(
+          records.find((record) => record.id === workerId && record.state === 'counter'),
+        ),
+      );
+      await reject(late, 'continued after host close');
+      const orphan = structuredClone(records);
+      orphan.find((record) => record.id === workerId && record.state === 'counter').id = 'missing';
+      await reject(orphan, 'Unknown native counter context');
+    },
+  );
+
+  it('retains terminated worker hits without inventing completion or accepting manual exit events', async () => {
+    const filename = join(root, 'terminated-worker-counters.jsonl');
+    const fd = openSync(filename, 'wx');
+    let result: ReturnType<typeof spawnSync>;
+    try {
+      result = spawnSync(process.execPath, [bundle, 'worker-terminate'], {
+        encoding: 'utf8',
+        env: {},
+        stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+      });
+    } finally {
+      closeSync(fd);
+    }
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const text = readFileSync(filename, 'utf8');
+    const host = { pid: result.pid, threadId: 0, code: result.status, signal: result.signal };
+    const replay = await replayCounterStream(snapshot, text, host);
+    const threads = replay.threads;
+    if (threads?.length !== 1) throw new Error('Missing terminated worker lifecycle.');
+    expect(threads).toHaveLength(1);
+    expect(threads[0]).toMatchObject({
+      state: 'interrupted',
+      exitCode: null,
+      hostClose: { parentId: replay.id, exitCode: 1, terminationRequested: true },
+    });
+    const records = text
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(records.filter((record) => record.state === 'worker-closed')).toHaveLength(1);
+    expect(records.find((record) => record.state === 'worker-closed').exitCode).toBe(1);
+    expect(records.some((record) => record.state === 'completed' && record.threadId > 0)).toBe(
+      false,
+    );
+    const actual = replay.maps[join(root, 'private.ts')];
+    const expected = maps[join(root, 'private.ts')];
+    if (!actual || !expected) throw new Error('Missing terminated worker execution.');
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(expected[field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 2);
+    const invalid = records.filter((record) => record.state !== 'worker-terminate');
+    let parentSequence = 0;
+    for (const record of invalid)
+      if (!record.id || record.id === records[0].id) record.sequence = ++parentSequence;
+    await expect(
+      replayCounterStream(
+        snapshot,
+        `${invalid.map((record) => JSON.stringify(record)).join('\n')}\n`,
+        host,
+      ),
+    ).rejects.toThrow('completion missing');
   });
 
   async function remapCounters(

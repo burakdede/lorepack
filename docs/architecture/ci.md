@@ -699,3 +699,24 @@ Empty/unterminated streams,changed sources,unknown counters,invalid lifecycle
 identities,unsupported closures and conflicting layouts still fail. File/string
 parity and an actual registered-fork filesystem guard verify that full-file reads
 cannot replace streaming. No sampling,discarded hits or arithmetic clamps.
+
+
+### Inherited worker counter streams
+
+A shared descriptor can contain the parent and multiple worker contexts. Each worker
+record names its collector; each context retains its own contiguous sequence, source
+hashes, zero initial counters and exact increments. The Worker constructor observer
+forwards the original arguments with Reflect.construct. It records actual creation,
+termination requests and real exit events without changing argv, workerData, preloads,
+resource limits or stream options. A manual exit event while the worker is live cannot
+close its ledger.
+
+Replay requires the parent process's actual close and a matching worker creation/close
+pair for every thread. Natural worker completion must match the observed exit code.
+Explicit termination retains an interrupted context without inventing JavaScript
+completion. Missing collectors, missing closure, duplicate threads, unknown context
+frames and execution after worker closure fail qualification. Compatible maps merge
+only after every context qualifies; the report retains each worker's lifecycle and maps.
+Real two-worker tests check every statement, function and branch hit plus original
+caller data. A live-worker termination test checks genuine partial execution and
+rejection when its observed termination receipt is removed.
