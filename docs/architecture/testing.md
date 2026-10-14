@@ -167,3 +167,7 @@ port fixture. A real abort trigger proves catalog rollback and resumption after
 physical-table removal. Empty-result port variants preserve decisions for cold
 targets, unactivated staged builds and previews whose build later became active.
 Missing archives are never reported as successful deletions.
+
+Archive contracts use complete ZIPs with actual catalog bytes. Tests distinguish
+matching envelope checksums from supported build identity, report missing members
+with their expected digests, and bound manifest/identity bytes before decoding.
