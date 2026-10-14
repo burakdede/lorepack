@@ -2195,6 +2195,63 @@ console.log(JSON.stringify(result));
     );
   });
 
+  it('merges real worker counts once and retains only lifecycle receipts', async () => {
+    const repository = resolve(import.meta.dirname, '../../..');
+    const entry = {
+      original: bundle,
+      target: bundle,
+      originalSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      targetSha256: createHash('sha256').update(readFileSync(bundle)).digest('hex'),
+      interruptionSignals: [],
+    };
+    const directory = join(root, 'worker-receipt-records');
+    const parent = join(root, 'worker-receipt-parent.mjs');
+    writeFileSync(
+      parent,
+      `import {spawnSync} from 'node:child_process';
+import {registerSyncCommandCapture,reconcileForkCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerSyncCommandCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+try {
+ for(const mode of ['workers','workers-nested']) {
+  const child=spawnSync(process.execPath,[${JSON.stringify(bundle)},mode],{encoding:'utf8',env:{}});
+  if(child.status!==0||child.stderr) throw new Error('Worker execution failed: '+child.stderr);
+ }
+} finally {capture.restore();}
+const result=await reconcileForkCapture(${JSON.stringify(snapshot)},${JSON.stringify(directory)},[${JSON.stringify(entry)}],${JSON.stringify(maps)});
+console.log(JSON.stringify(result));`,
+    );
+    const result = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+    expect(result.status).toBe('Pass');
+    expect(result.processes).toBe(2);
+    expect(
+      result.executions.map((execution: { threads: unknown[] }) => execution.threads.length).sort(),
+    ).toEqual([2, 3]);
+    for (const execution of result.executions) {
+      expect(execution).not.toHaveProperty('maps');
+      expect(execution.counterState).toBe('completed');
+      for (const thread of execution.threads) {
+        expect(thread).not.toHaveProperty('maps');
+        expect(thread.state).toBe('completed');
+        expect(thread.hostClose).toEqual({
+          parentId: expect.any(String),
+          exitCode: 0,
+          terminationRequested: false,
+        });
+      }
+    }
+    const filename = join(root, 'private.ts');
+    const expected = maps[filename];
+    if (!expected) throw new Error('Missing original worker map.');
+    const actual = result.maps[filename];
+    for (const field of ['statementMap', 'fnMap', 'branchMap'])
+      expect(actual[field]).toEqual(expected[field as keyof Coverage]);
+    for (const field of ['s', 'f'])
+      for (const [key, hits] of Object.entries(expected[field as 's' | 'f']))
+        expect(actual[field][key]).toBe(hits * 7);
+    for (const [key, hits] of Object.entries(expected.b))
+      expect(actual.b[key]).toEqual(hits.map((value) => value * 7));
+  });
+
   it('captures normal host forks and drains unrefed children without changing their options', async () => {
     const repository = resolve(import.meta.dirname, '../../..');
     const original = join(root, 'ordinary-fork-entry.mjs');
@@ -2281,6 +2338,7 @@ console.log(JSON.stringify({message,optionsUnchanged:before===JSON.stringify(opt
     const reconciled = await reconcileForkCapture(snapshot, directory, registry, maps);
     expect(reconciled.status).toBe('Pass');
     expect(reconciled.processes).toBe(2);
+    for (const execution of reconciled.executions) expect(execution).not.toHaveProperty('maps');
     expect(
       reconciled.executions.map((execution: { state: string }) => execution.state).sort(),
     ).toEqual(['completed', 'interrupted']);

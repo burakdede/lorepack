@@ -623,6 +623,9 @@ separate handoff receipt authenticated against its executable bytes and observed
 close. It does not invent a JavaScript exit; other replacement images remain unqualified.
 Collector metadata uses filesystem paths so Node and Studio retain one canonical preparation.
 Native reconciliation streams every JSONL counter record, avoiding whole-file string limits.
+It validates and merges each child before reading the next, retaining lifecycle receipts
+rather than all child maps in memory. Worker receipts retain identities and host closures;
+their validated counts contribute to the process aggregate once.
 Counter emission writes complete UTF8 frames directly and checks their exact byte count,
 reducing temporary allocations during resource-bound tests. It commits a sequence only
 after a complete write, so a rejected encoding cannot leave a phantom event.
