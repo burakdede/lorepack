@@ -481,6 +481,16 @@ if (process.argv[2] === 'fail') {process.stderr.write('fixture failure\\n');proc
 if (process.argv[2] === 'exit-window') {const emit=process.emit;process.emit=function(event,...args){const result=emit.call(this,event,...args);if(event==='exit')Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10000);return result;};}
 if (['late-exit','manual-exit'].includes(process.argv[2])) {process.on('exit',()=>process.stdout.write(String(instance.close())));if(process.argv[2]==='manual-exit')process.emit('exit',0);}
 if (process.argv[2] === 'exit-microtask') process.once('exit',()=>Promise.resolve().then(()=>process.stdout.write(String(instance.close()))));
+if (['compiler-replace','compiler-replace-failed'].includes(process.argv[2])) {
+  const compilerModule=${JSON.stringify(pathToFileURL(join(dirname(createRequire(join(repository, 'package.json')).resolve('typescript/package.json')), 'lib/getExePath.js')).href)};
+  const {default:getExePath}=await import(compilerModule);
+  const executable=getExePath();
+  if(process.argv[2]==='compiler-replace-failed') {
+    try {process.execve(executable,[executable,'invalid\\u0000argument']);}
+    catch(error) {if(!(error instanceof TypeError))throw error;}
+  } else process.execve(executable,[executable,'--version']);
+}
+if(process.argv[2]==='unregistered-replace')process.execve(process.execPath,[process.execPath,'--eval','process.exit(0)']);
 if (process.argv[2] === 'hold') setInterval(() => {}, 1000);
 else process.disconnect?.();
 `,
@@ -506,8 +516,189 @@ else process.disconnect?.();
     completed = result.text;
   });
 
-  async function remapCounters(text: string) {
-    const actual = await replayCounterStream(snapshot, text);
+  it.skipIf(['win32', 'os400'].includes(process.platform))(
+    'qualifies actual native compiler image replacement without a JavaScript exit',
+    async () => {
+      const filename = join(root, 'compiler-replacement.jsonl');
+      const fd = openSync(filename, 'wx');
+      let result: ReturnType<typeof spawnSync>;
+      try {
+        result = spawnSync(process.execPath, [bundle, 'compiler-replace'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+          env: {},
+        });
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status).toBe(0);
+      expect(result.signal).toBeNull();
+      expect(result.stderr).toBe('');
+      expect(String(result.stdout)).toContain('Version 7.0.2');
+      const text = readFileSync(filename, 'utf8');
+      const hostClose = {
+        pid: result.pid,
+        threadId: 0,
+        code: result.status,
+        signal: result.signal,
+      };
+      const replay = await replayCounterStream(snapshot, text, hostClose);
+      expect(replay).toMatchObject({ state: 'replaced', exitCode: null, pid: result.pid });
+      expect(text).not.toContain('"state":"completed"');
+      const { actualMap } = await remapCounters(text, hostClose);
+      for (const field of ['statementMap', 'fnMap', 'branchMap', 's', 'f', 'b'])
+        expect(actualMap[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+      await expect(replayCounterStream(snapshot, text)).rejects.toThrow('requires host close');
+      await expect(
+        replayCounterStream(snapshot, text, { ...hostClose, pid: result.pid + 1 }),
+      ).rejects.toThrow('host close identity differs');
+      const records = text
+        .trimEnd()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+      const replacement = records.find((record) => record.state === 'execve');
+      expect(replacement).toBeDefined();
+      await expect(
+        replayCounterStream(
+          snapshot,
+          `${records
+            .slice(0, -1)
+            .map((record) => JSON.stringify(record))
+            .join('\n')}\n`,
+          hostClose,
+        ),
+      ).rejects.toThrow('completion differs from host close');
+      replacement.pid += 1;
+      await expect(
+        replayCounterStream(
+          snapshot,
+          `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+          hostClose,
+        ),
+      ).rejects.toThrow('image replacement identity differs');
+      replacement.pid -= 1;
+      replacement.executableSha256 = '0'.repeat(64);
+      await expect(
+        replayCounterStream(
+          snapshot,
+          `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+          hostClose,
+        ),
+      ).rejects.toThrow('Unqualified native image replacement');
+    },
+  );
+
+  it.skipIf(['win32', 'os400'].includes(process.platform))(
+    'keeps failed image replacement attempts distinct from actual replacements',
+    async () => {
+      const filename = join(root, 'failed-replacement.jsonl');
+      const fd = openSync(filename, 'wx');
+      let result: ReturnType<typeof spawnSync>;
+      try {
+        result = spawnSync(process.execPath, [bundle, 'compiler-replace-failed'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+          env: {},
+        });
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status).toBe(0);
+      expect(String(result.stderr)).toMatch(
+        /^\(node:\d+\) ExperimentalWarning: process\.execve is an experimental feature/,
+      );
+      const text = readFileSync(filename, 'utf8');
+      expect(text).toContain('"state":"execve-returned"');
+      const hostClose = {
+        pid: result.pid,
+        threadId: 0,
+        code: result.status,
+        signal: result.signal,
+      };
+      expect(await replayCounterStream(snapshot, text, hostClose)).toMatchObject({
+        state: 'completed',
+        exitCode: 0,
+      });
+      const { actualMap } = await remapCounters(text, hostClose);
+      for (const field of ['s', 'f', 'b'])
+        expect(actualMap[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+    },
+  );
+
+  it.skipIf(['win32', 'os400'].includes(process.platform))(
+    'rejects an unregistered replacement image even after successful host close',
+    async () => {
+      const filename = join(root, 'unregistered-replacement.jsonl');
+      const fd = openSync(filename, 'wx');
+      let result: ReturnType<typeof spawnSync>;
+      try {
+        result = spawnSync(process.execPath, [bundle, 'unregistered-replace'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+          env: {},
+        });
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+      await expect(
+        replayCounterStream(snapshot, readFileSync(filename, 'utf8'), {
+          pid: result.pid,
+          threadId: 0,
+          code: result.status,
+          signal: result.signal,
+        }),
+      ).rejects.toThrow('Unqualified native image replacement');
+    },
+  );
+
+  it.skipIf(['win32', 'os400'].includes(process.platform))(
+    'reconciles native compiler replacement with registered launch and close receipts',
+    async () => {
+      const repository = resolve(import.meta.dirname, '../../..');
+      const hash = createHash('sha256').update(readFileSync(bundle)).digest('hex');
+      const entry = {
+        original: bundle,
+        target: bundle,
+        originalSha256: hash,
+        targetSha256: hash,
+        interruptionSignals: [],
+      };
+      const directory = join(root, 'replacement-command-records');
+      const parent = join(root, 'replacement-command-parent.mjs');
+      writeFileSync(
+        parent,
+        `import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {registerCommandCapture} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const capture=registerCommandCapture([${JSON.stringify(entry)}],${JSON.stringify(directory)});
+const {stdout,stderr}=await promisify(execFile)(process.execPath,[${JSON.stringify(bundle)},'compiler-replace'],{env:{}});
+await capture.settled();capture.restore();console.log(JSON.stringify({stdout,stderr}));`,
+      );
+      const output = JSON.parse(execFileSync(process.execPath, [parent], { encoding: 'utf8' }));
+      expect(output.stdout).toContain('Version 7.0.2');
+      expect(output.stderr).toBe('');
+      const reconciled = await reconcileForkCapture(snapshot, directory, [entry], maps);
+      expect(reconciled.status).toBe('Pass');
+      expect(reconciled.processes).toBe(1);
+      expect(reconciled.executions[0]).toMatchObject({
+        state: 'completed',
+        exitCode: 0,
+        counterState: 'replaced',
+        counterExitCode: null,
+      });
+      const actual = reconciled.maps[join(root, 'private.ts')];
+      for (const field of ['s', 'f', 'b'])
+        expect(actual[field]).toEqual(maps[join(root, 'private.ts')]?.[field as keyof Coverage]);
+    },
+  );
+
+  async function remapCounters(
+    text: string,
+    hostClose?: { pid: number; threadId: number; code: number | null; signal: string | null },
+  ) {
+    const actual = await replayCounterStream(snapshot, text, hostClose);
     const require = createRequire(join(resolve(import.meta.dirname, '../../..'), 'package.json'));
     const providerPath = join(dirname(require.resolve('@vitest/coverage-istanbul')), 'provider.js');
     const { remapNativeCoverage } = await import(pathToFileURL(providerPath).href);

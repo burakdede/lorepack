@@ -635,3 +635,23 @@ commands and depth from CI. Their import creates the PR ref directly; cloning pe
 `fetch.prune` through [git clone --config](https://git-scm.com/docs/git-clone), and the test
 checks that stored configuration before using it. This removes three redundant Git launches
 per case without reducing history, skipping the real clone/fetch or changing the 5000ms deadline.
+
+### Native compiler process-image replacement
+
+TypeScript 7's POSIX Node shim calls `process.execve` to replace itself with the
+native compiler. Node does not run exit hooks for image replacement. The counter
+collector records an attempt before calling the original API with unchanged
+arguments and environment. Returned or failed attempts receive a matching return
+frame and must still have ordinary exit or permitted interruption evidence.
+
+A successful handoff qualifies only with the same-PID/thread host close and the
+canonical installed TypeScript native executable's matching byte hash and pinned
+package version. Its counter state is `replaced`, with no JavaScript exit code;
+the launch receipt separately retains the actual host code/signal. Source hashes,
+contiguous frames and exact increments remain mandatory. Started-only streams and
+unregistered replacement images still fail. Independent collectors observe the
+same attempt without changing the actual process-image replacement.
+
+The real execve regressions are skipped on Windows and IBM i because Node does not
+support this API there. The compiler's own fallback remains unchanged. See
+[ADR 0023](../adr/0023-native-compiler-image-replacement.md).
