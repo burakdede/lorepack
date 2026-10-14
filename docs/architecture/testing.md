@@ -147,6 +147,11 @@ results. Separate cases cover unknown terms, repeated Unicode tokens and cutoff
 ties. These checks establish report correctness, not a runtime speed claim; the
 prototype remains outside the default runtime.
 
+The offline RAG report test runs the existing command with its full iteration counts.
+It checks corpus/workload hashes, query counts, estimated prompt tokens and explicit
+unmeasured answer/cost fields. Missing build paths and unsupported modes fail in
+real subprocesses before database access. These tests make no provider or model calls.
+
 `pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
 machine metadata alongside the numbers. CI runs the same script and uploads the JSON as an
 artifact.
