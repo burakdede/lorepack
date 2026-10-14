@@ -138,6 +138,41 @@ test('both setup hooks execute',()=>{expect(globalThis.inheritedSetup).toBe(true
     ).not.toThrow();
   });
 
+  it('retains root worker policy for real files sharing an exclusive resource', () => {
+    const repository = join(import.meta.dirname, '../../..');
+    symlinkSync(join(repository, 'node_modules'), join(root, 'node_modules'), 'junction');
+    const lock = join(root, 'exclusive-worker.lock');
+    for (const name of ['first', 'second'])
+      put(
+        `packages/core/test/${name}.test.ts`,
+        `import {test} from 'vitest';
+import {openSync,closeSync,unlinkSync} from 'node:fs';
+test('owns the shared resource',async()=>{
+ const file=${JSON.stringify(lock)};const descriptor=openSync(file,'wx');
+ try{await new Promise(resolve=>setTimeout(resolve,500));}finally{closeSync(descriptor);unlinkSync(file);}
+});`,
+      );
+    const config = sourceCoverageConfig(
+      root,
+      ['packages/core'],
+      snapshot(),
+      join(root, 'reports'),
+      '',
+      { maxWorkers: 1, fileParallelism: false },
+    );
+    const generated = join(root, 'worker-policy.config.mjs');
+    writeFileSync(generated, renderCoverageConfig(config));
+    const require = createRequire(join(repository, 'package.json'));
+    const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+    expect(() =>
+      execFileSync(process.execPath, [vitest, 'run', '--config', generated], {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }),
+    ).not.toThrow();
+  });
+
   it('rejects absent default projects', () => {
     expect(() =>
       sourceCoverageConfig(root, ['missing/*'], snapshot(), join(root, 'reports')),

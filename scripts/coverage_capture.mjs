@@ -59,11 +59,18 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
   writeFileSync(
     preparationConfig,
     renderCoverageConfig(
-      sourceCoverageConfig(root, base.test.projects, inventory, join(output, 'preparation-direct')),
+      sourceCoverageConfig(
+        root,
+        base.test.projects,
+        inventory,
+        join(output, 'preparation-direct'),
+        '',
+        base.test,
+      ),
       { snapshot: inventory, directory: preparations },
     ),
   );
-  nodeCommand(root, [vitest, 'run', '--config', preparationConfig, '--maxWorkers=2']);
+  nodeCommand(root, [vitest, 'run', '--config', preparationConfig]);
   const preparedPaths = new Set(
     readdirSync(preparations).map((file) => json(join(preparations, file)).path),
   );
@@ -95,7 +102,7 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
   writeFileSync(
     configPath,
     renderCoverageConfig(
-      sourceCoverageConfig(root, base.test.projects, inventory, directDirectory, setup),
+      sourceCoverageConfig(root, base.test.projects, inventory, directDirectory, setup, base.test),
       { snapshot: inventory, directory: preparations },
     ),
   );
@@ -110,7 +117,7 @@ export async function captureCampaign(root, output, pnpmEntrypoint) {
   const configurations = await captureConfigurations(inventory, join(output, 'configs-native'));
   const configBundle = join(output, 'configs.bundle.json');
   save(configBundle, configurations);
-  nodeCommand(root, [vitest, 'run', '--config', configPath, '--maxWorkers=2']);
+  nodeCommand(root, [vitest, 'run', '--config', configPath]);
   const directMap = join(directDirectory, 'coverage-final.json');
   const directBundle = join(output, 'direct.bundle.json');
   nodeCommand(root, [

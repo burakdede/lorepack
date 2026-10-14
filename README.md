@@ -575,6 +575,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changi
 CLI packaging preserves dependency patches with the frozen lockfile in its temporary build
 workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
 The default suite uses one worker to bound its child-process fixtures.
+Coverage preparation and measurement preserve the ordinary test scheduling settings.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
 executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that

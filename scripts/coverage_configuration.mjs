@@ -16,7 +16,14 @@ import { createRequire, stripTypeScriptTypes } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory, setupFile = '') {
+export function sourceCoverageConfig(
+  root,
+  patterns,
+  inventory,
+  reportsDirectory,
+  setupFile = '',
+  rootTest = {},
+) {
   root = realpathSync(root);
   const alias = [];
   for (const directory of readdirSync(join(root, 'packages'))) {
@@ -71,6 +78,7 @@ export function sourceCoverageConfig(root, patterns, inventory, reportsDirectory
   });
   return {
     test: {
+      ...rootTest,
       projects,
       coverage: {
         provider: 'istanbul',
