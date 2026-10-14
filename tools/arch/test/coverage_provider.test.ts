@@ -54,7 +54,7 @@ beforeAll(() => {
   const require = createRequire(join(repository, 'package.json'));
   const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
   mkdirSync(join(repository, 'coverage'), { recursive: true });
-  root = realpathSync(mkdtempSync(join(repository, 'coverage/provider-')));
+  root = realpathSync(mkdtempSync(join(repository, 'coverage/provider-界-')));
   writeFileSync(
     join(root, 'private.ts'),
     `export class PrivateWitness {
