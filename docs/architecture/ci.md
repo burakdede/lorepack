@@ -706,3 +706,18 @@ Provider fixtures use real Unicode filesystem paths. Their exact source/counter 
 file/string parity and independent worker lifecycle checks exercise multibyte output.
 The unchanged archive test and fresh ordinary/measured diagnostics must still qualify
 resource behavior; a scoped success cannot rehabilitate a failed full campaign.
+
+
+### Counter sequence commit
+
+Frame preparation, JSON encoding and UTF8 byte counting precede the actual write.
+Only a successful complete write commits the next sequence. The target counter is
+updated only after emission succeeds. A caught encoding failure therefore leaves
+both sequence and counter unchanged; later owned execution still replays exactly.
+A real native JSON rejection reproduces the old gap and compares replay with the
+actual live counter map. A real stack-exhaustion probe also compares complete maps.
+
+Contiguous sequences and exact increments remain mandatory. No missing frame is
+invented or ignored. Partial/unterminated frames still reject qualification, even
+when the host was interrupted. The retained parser gap during recursive Markdown
+traversal is diagnostic evidence; its failed full campaign remains ineligible.
