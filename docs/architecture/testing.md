@@ -82,6 +82,12 @@ then delete sources before reading both snapshots. JSON and human output must
 retain the declared target IDs. Missing manifests and blank build references
 must produce actionable errors without changing the active pointer.
 
+Runtime-token tests use real SQLite storage for malformed hash refusal and
+revocation. The optional-results adapter wraps real queries and omits only actual
+empty arrays; revocation must still remove access, report the removed count and
+leave an empty inventory. Header normalization is checked through the public
+authorizer, without exposing private comparison helpers.
+
 1. Put it beside the module, in that package's `test/` directory.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
