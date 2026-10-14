@@ -501,6 +501,10 @@ retaining the original fourteen processes and `[0,28]` counts per seven-prefix g
 The direct-import witness and missing-registry rejection remain separate checks.
 Generated CLI-help bundles live under the existing ignored `dist` tree. The test runs the
 actual inventory command while the bundle exists, retaining the frozen ownership counts.
+The default suite uses one worker because several architecture fixtures launch their
+own compilers and Node children. Unbounded file parallelism can exceed
+unchanged per-case deadlines on hosts with many advertised CPUs. The worker limit
+changes scheduling, while retaining every test, assertion and deadline.
 The fresh help bundle is compiled and executed in the same captured child. Its actual
 recipe receives the canonical capture plugin only while a compiled collector is active.
 The collector binds every emitted JavaScript/map artifact and original compiled input,
