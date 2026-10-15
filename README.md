@@ -591,7 +591,7 @@ check context filters and explicit historical expansion with labeled alternative
 contracts use loopback HTTP fixtures to check report usage and failures without external calls.
 Statement tests check useful diagnostics and quoted-name preservation through real SQLite.
 Archive parent-process tests cover cancellation and incomplete helper installs without changing
-retained catalog bytes. Relocated fixtures preserve the compiler map's original source references.
+retained catalog bytes. Isolated test layouts preserve the compiler map's original source references.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests. Include each changed audit test in `tsconfig.audit_tests.json`; fixtures implement the
 current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`

@@ -22,7 +22,7 @@ beforeEach(() => {
     writeFileSync(join(directory, relative), bytes);
     original.set(relative, Buffer.from(bytes));
   }
-  layout = mkdtempSync(join(PACKAGE, 'dist', '.archive-parent-'));
+  layout = mkdtempSync(join(import.meta.dirname, '.archive-parent-'));
   mkdirSync(join(layout, 'module'));
   copied = join(layout, 'module', 'archive-verification.js');
   copyCompiledFixture(COMPILED, copied);

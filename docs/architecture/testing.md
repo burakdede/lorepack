@@ -114,7 +114,8 @@ These cases exercise statement shape without changing query policy or engine lim
 
 Archive parent-process tests run the actual child for a valid catalog and check
 pre-aborted cancellation.
-Separate installed-layout fixtures use a copy of the compiled parent to exercise
+Separate installed-layout fixtures live under the test directory and use a copy of
+the compiled parent to exercise
 missing, failed and malformed helpers. No helper reply without a logical proof is
 accepted, and retained catalog/identity bytes remain unchanged in every case.
 
@@ -125,7 +126,9 @@ references before moving it, preserving the same actual source URLs as described
 compiler maps with an empty source root and preserves the module filename. A copied
 map with stale relative paths cannot establish execution of the original source.
 Focused diagnostics verify mapping behavior; final all-owned qualification still
-requires every original bundle and source/lifecycle reconciliation.
+requires every original bundle and source/lifecycle reconciliation. Generated helper
+reply fixtures stay outside the production `dist` namespace: the capture loader
+correctly refuses unowned code presented as compiled production output.
 
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.

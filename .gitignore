@@ -61,3 +61,5 @@ packages/cli/studio-dist/
 # Playwright's own output from the browser suite: traces, screenshots and the HTML report.
 tools/studio-e2e/test-results/
 tools/studio-e2e/playwright-report/
+
+/packages/backend-local/test/.archive-parent-*/
