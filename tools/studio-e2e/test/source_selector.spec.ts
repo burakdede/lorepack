@@ -59,6 +59,7 @@ test('reads the selected artifact when its ID is another source path, issue752',
     await page.screenshot({ path: screenshot, fullPage: true });
     await info.attach('source selector', { path: screenshot, contentType: 'image/png' });
   } finally {
+    await page.close();
     await server?.close();
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }

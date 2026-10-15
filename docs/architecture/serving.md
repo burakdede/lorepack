@@ -461,3 +461,9 @@ The actual Studio inventory and selector browser flows passed with Playwright1.6
 and Chromium151.0.7922.34. Both captures were visually inspected; the isolated inventory
 fixture has57indexed sources, while the separate CLI stdio fixture has52. These are
 functional regression corpora, not release-performance qualification.
+
+
+Browser fixtures close their owned page before draining an independently started server.
+This ends Studio polling before teardown waits for in-flight requests. The integrated
+45-case browser suite passes with this order; the original read, axe, keyboard and
+confirmation assertions remain in place.
