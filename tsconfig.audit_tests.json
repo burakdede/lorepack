@@ -8,6 +8,7 @@
   },
   "files": [
     "packages/backend-local/test/archive.test.ts",
+    "packages/backend-local/test/archive_cancellation.test.ts",
     "packages/backend-local/test/archive_extraction.test.ts",
     "packages/backend-local/test/archive_verification.test.ts",
     "packages/backend-local/test/archive_verify_child.test.ts",
