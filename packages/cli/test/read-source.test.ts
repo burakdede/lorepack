@@ -145,6 +145,82 @@ describe('a line range means source lines', () => {
   });
 });
 
+describe('sealed range boundaries', () => {
+  it('reads a parent heading and nested section in document order after source removal', async () => {
+    await withRuntime(async (runtime, root) => {
+      rmSync(join(root, 'guides'), { recursive: true, force: true });
+      const result = await runtime.readSource({
+        path: 'guides/spaced.md',
+        headingPath: ['Title'],
+      });
+      expect(result.text).toContain('First paragraph');
+      expect(result.text).toContain('Second paragraph');
+      expect(result.text.indexOf('First paragraph')).toBeLessThan(
+        result.text.indexOf('Second paragraph'),
+      );
+      expect(result.locator).toMatchObject({
+        relativePath: 'guides/spaced.md',
+        headingPath: ['Title'],
+        lineStart: 5,
+        lineEnd: 13,
+      });
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  it.each([
+    {
+      range: { lineStart: 13 },
+      included: 'Second paragraph',
+      excluded: 'First paragraph',
+      start: 13,
+      end: 13,
+    },
+    {
+      range: { lineEnd: 5 },
+      included: 'First paragraph',
+      excluded: 'Second paragraph',
+      start: 5,
+      end: 5,
+    },
+  ])(
+    'resolves the open-ended range $range from sealed nodes',
+    async ({ range, included, excluded, start, end }) => {
+      await withRuntime(async (runtime, root) => {
+        rmSync(join(root, 'guides'), { recursive: true, force: true });
+        const result = await runtime.readSource({ path: 'guides/spaced.md', ...range });
+        expect(result.text).toContain(included);
+        expect(result.text).not.toContain(excluded);
+        expect(result.locator).toMatchObject({ lineStart: start, lineEnd: end });
+      });
+    },
+  );
+
+  it('does not invent heading provenance for a plain text range', async () => {
+    await withRuntime(async (runtime) => {
+      const result = await runtime.readSource({ path: 'notes/plain.txt', lineStart: 2 });
+      expect(result.text).toContain('Second line of the note.');
+      expect(result.locator.relativePath).toBe('notes/plain.txt');
+      expect(result.locator.headingPath).toBeUndefined();
+    });
+  });
+
+  it('explains how to read a PDF when a line range has no recorded coordinates', async () => {
+    await withPdfRuntime(async (runtime) => {
+      await expect(
+        runtime.readSource({ path: 'contract.pdf', lineStart: 1 }),
+      ).rejects.toMatchObject({
+        code: 'LORE_E_INVALID_ARGUMENT',
+        remediation: 'This artifact records no line numbers, so read it whole.',
+      });
+      const whole = await runtime.readSource({ path: 'contract.pdf' });
+      expect(whole.text).toContain('Support contract');
+      expect(whole.text).toContain('Escalation');
+      expect(whole.locator.page).toBeUndefined();
+    });
+  });
+});
+
 describe('addressing', () => {
   it('accepts an artifact id as readily as a path', async () => {
     await withRuntime(async (runtime) => {
