@@ -510,7 +510,8 @@ Runtime-token tests cover malformed stored hashes and revocation with empty adap
 Source-read tests check open-ended ranges, nested headings and spreadsheet locators after source removal.
 Local runtime cases distinguish released handles from damaged builds and preserve newer catalogs on refusal.
 The archived XLSX measurement command uses pinned parser dependencies and real fixture tests.
-See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
+See [testing](docs/architecture/testing.md) for failure/resume, adapter and real-SQLite
+projection preflight cases, including byte limits and source coordinates.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests. Include each changed audit test in `tsconfig.audit_tests.json`; fixtures implement the
 current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`

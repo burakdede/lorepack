@@ -19,6 +19,7 @@
     "packages/cli/test/read-source.test.ts",
     "packages/cli/test/runtime-local.test.ts",
     "packages/core/test/sql-guard.test.ts",
+    "packages/deploy-cloudflare/test/projection-preflight.test.ts",
     "packages/deploy-cloudflare/test/retention.test.ts",
     "packages/deploy-cloudflare/test/runtime-auth.test.ts",
     "packages/runtime/test/http.test.ts",
