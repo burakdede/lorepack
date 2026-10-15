@@ -59,8 +59,10 @@ test('reads the selected artifact when its ID is another source path, issue752',
     await page.screenshot({ path: screenshot, fullPage: true });
     await info.attach('source selector', { path: screenshot, contentType: 'image/png' });
   } finally {
-    await page.close();
-    await server?.close();
+    await test.step('Dispose the owned browser context', () => page.context().close());
+    await test.step('Drain the owned serving fixture', async () => {
+      await server?.close();
+    });
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
