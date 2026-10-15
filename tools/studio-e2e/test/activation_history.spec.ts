@@ -135,8 +135,8 @@ for (const viewport of [
         contentType: 'image/png',
       });
     } finally {
-      await page.close();
-      await fixture.close();
+      await test.step('Dispose the owned browser context', () => page.context().close());
+      await test.step('Drain the owned serving fixture', () => fixture.close());
     }
   });
 }
@@ -171,7 +171,7 @@ test('labels legacy history honestly and enables explicit activation, issue422',
     await expect(page.locator('.rollback-line')).toContainText(fixture.third.slice(0, 17));
     await expect(events.getByRole('row')).toHaveCount(3);
   } finally {
-    await page.close();
-    await fixture.close();
+    await test.step('Dispose the owned browser context', () => page.context().close());
+    await test.step('Drain the owned serving fixture', () => fixture.close());
   }
 });
