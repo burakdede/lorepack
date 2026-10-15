@@ -469,6 +469,12 @@ native counters through the generated worker registry. Both passes inherit the o
 root and package scheduling; test selection, assertions and deadlines stay unchanged.
 The final report combines direct, configuration and reconciled native records
 through the common pinned instrumenter, without a child V8 conversion pass.
+The command inventory preserves the original fifteen zero-argument policy checks and adds
+the existing schema, CLI-reference, acceptance-document and README-demo checks with their
+actual `--check` argument, plus the FTS5 probe. All twenty run ordinarily and measured.
+Each receipt records its argument array; status, signal, stdout and stderr must agree.
+A failed ordinary command stops before measured execution. Writing documentation modes
+are never used by this capture.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
 An explicit fixture collector can temporarily layer over the campaign collector.
 Its launches retain their own receipts and counter streams; restoring it reinstates the
