@@ -46,6 +46,23 @@ async function withRuntime<T>(
   });
 }
 
+describe('released local runtime handles', () => {
+  it('keeps a released handle error distinct from a damaged build', async () => {
+    await withRuntime(async (_runtime, root) => {
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      try {
+        const handle = await backend.provider.acquire();
+        handle.release();
+        await expect(backend.open(handle)).rejects.toMatchObject({
+          code: 'LORE_E_INVALID_ARGUMENT',
+        });
+      } finally {
+        backend.close();
+      }
+    });
+  });
+});
+
 describe('describeBuild over the local ports', () => {
   it('reports a manifest removed after the build scope was opened', async () => {
     await withRuntime(async (_runtime, root) => {
