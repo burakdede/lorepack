@@ -533,7 +533,8 @@ changing committed artifacts. Live dependency-health checks remain part of verif
 The comparison command contract runs the real small-corpus controller and checks both reports
 against the same corpus/workload identity, preserving its original sample and query counts.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
-tests. Include each changed audit test in `tsconfig.audit_tests.json`; fixtures implement the
+tests. Node cases belong in `tsconfig.audit_tests.json`; Studio browser tests use their existing
+project with DOM types and the same strict settings. Fixtures implement the
 current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`
 to retain the audit ownership baseline and include new executable sources. `pnpm coverage:report`
 binds and merges coverage artifacts against that inventory, refusing stale hashes, incompatible
