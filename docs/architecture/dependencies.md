@@ -144,7 +144,8 @@ provenance when two candidates are otherwise equivalent.
 | `unified` | Shared parser pipeline for Markdown and HTML. | Replace if the parser stack stops being maintained together. |
 | `vite` | Studio build tooling. | Replace if it adds install-time surprises or cannot keep the bundle deterministic. |
 | `vitest` | Unit and integration test runner. | Replace if it cannot run the workspace projects on all supported platforms. |
-| `@vitest/coverage-v8` | V8 coverage provider for the configured Vitest report. It is pinned to Vitest 4.1.11 because Vitest loads coverage providers as separate packages, and keeping the versions aligned makes the local coverage command reproducible. | Replace if Vitest changes its coverage-provider contract or if the provider adds native code or install hooks. |
+| `@vitest/coverage-v8` | Pinned 4.1.11 dependency for the native-record conversion primitives. Direct Vitest coverage uses Istanbul because the V8 mapper produced an invalid negative branch count. | Remove when native execution uses a qualified common instrumentation layout. |
+| `@vitest/coverage-istanbul` | Direct instrumentation pinned to Vitest 4.1.11. Checked 2026-10-13: MIT, 119,700 bytes unpacked, no install hook or native code. A pnpm dependency patch retains executable private-method function counters and genuine empty source records. Real regression fixtures fail before the patch and pass after a frozen install. See [ADR 0017](../adr/0017-instrumented-coverage.md). | Remove the patch when the maintained provider passes the same source-retention regressions without it; reject replacements that shrink counter or source scope. |
 | `wrangler` | Contributor-only Cloudflare deployment and smoke tooling, declared as a devDependency of `deploy-cloudflare` and of `cli` (so the in-repo bundle resolves it by package name). Users supply their own at runtime; the CLI finds it with Node resolution, never a relative path (#580). | Keep isolated from published packages; replace if Cloudflare CLI syntax changes incompatibly. |
 | `yaml` | `lore.yaml`, lockfile and frontmatter parsing. | Replace if it stops preserving actionable error locations. |
 | `yauzl` | ZIP reader for `.lorepack` and XLSX. | Replace only with an equally low-level pure-JS ZIP reader. |
@@ -157,6 +158,16 @@ bundled SQLite fixes the FTS5 CVEs: see
 [`docs/compatibility/sqlite-fts5.md`](../compatibility/sqlite-fts5.md).
 
 ## Contributor patch versions
+
+The pinned Istanbul patch also exposes its existing instrumenter factory and
+source-map remapper for native-capture qualification. Reusing the bundled engine
+avoids an independently versioned instrumentation dependency. The regression runs
+real Node code and verifies default initializers, unused private methods and early
+throws. Full child capture remains a release gate.
+The patch also counts default-export expressions with its existing statement
+visitor. A real native configuration regression was red before this correction.
+All 17 repository configurations preserve their earlier statement/function/branch
+counts; no configuration source is dropped or reclassified as nonexecuted.
 
 Studio pins `vite` at 7.3.7 on the existing 7.x major. This maintained patch includes
 the published development-server fixes, including the

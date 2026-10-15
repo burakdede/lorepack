@@ -4,6 +4,7 @@ import type {
   BuildManifest,
   BuildScope,
   CatalogArtifact,
+  CatalogArtifactSummary,
   CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
@@ -80,6 +81,11 @@ const catalog: CatalogStore = {
       warnings: [],
     } as BuildManifest;
   },
+  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+    const artifact = await this.artifact('guides/a.md');
+    if (artifact === null) throw new Error('Expected the HTTP catalog fixture.');
+    return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 1, nodeCount: 2 }];
+  },
   async countChunks() {
     return 1;
   },
@@ -147,7 +153,10 @@ const tables: TableStore = {
   },
 };
 
-function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
+function appFor(
+  overrides: Partial<Parameters<typeof createApiApp>[0]> = {},
+  includeFreshness = true,
+) {
   const scope: BuildScope = {
     ...IDENTITY,
     buildId: BUILD,
@@ -182,7 +191,7 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   return createApiApp({
     runtime,
     currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
-    freshness: async () => 'clean',
+    ...(includeFreshness ? { freshness: async () => 'clean' as const } : {}),
     ...overrides,
   });
 }
@@ -1266,4 +1275,229 @@ describe('search filters reach the store, architecture 14.5', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: { subject: 'artifactId' } });
   });
+});
+
+describe('optional host reads retain their capability boundary', () => {
+  it('serves a supplied plan and propagates typed host failures', async () => {
+    let calls = 0;
+    const app = appFor({
+      plan: async () => {
+        calls++;
+        if (calls === 2) throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'No retained build.');
+        return { action: 'rebuild', changed: ['guides/a.md'] };
+      },
+    });
+    const response = await app.request('/v1/plan');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ action: 'rebuild', changed: ['guides/a.md'] });
+    const failed = await app.request('/v1/plan');
+    expect(failed.status).toBe(404);
+    expect(await failed.json()).toMatchObject({ error: { code: 'LORE_E_BUILD_NOT_FOUND' } });
+    expect((await appFor().request('/v1/plan')).status).toBe(404);
+  });
+
+  it('forwards active and retained source selections and refuses an invalid selection', async () => {
+    const selections: unknown[] = [];
+    const app = appFor({
+      sources: async (selection) => {
+        selections.push(selection);
+        return {
+          artifacts: [{ artifactId: 'p:guides/a.md', buildId: selection.buildId ?? BUILD }],
+        };
+      },
+    });
+    for (const path of ['/v1/sources', `/v1/sources?buildId=${BUILD}`]) {
+      const response = await app.request(path);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        artifacts: [{ artifactId: 'p:guides/a.md', buildId: BUILD }],
+      });
+    }
+    expect((await app.request('/v1/sources?buildId=missing')).status).toBe(400);
+    expect(selections).toEqual([{}, { buildId: BUILD }]);
+    expect((await appFor().request('/v1/sources')).status).toBe(404);
+  });
+});
+
+describe('encoded MCP names retain the request body contract', () => {
+  it('passes a UTF8 resource URI unchanged to the supplied transport', async () => {
+    const uri = 'lorepack://guides/caf\u00e9';
+    const payload = { jsonrpc: '2.0', id: 7, method: 'resources/read', params: { uri } };
+    let delivered: unknown;
+    const app = appFor({
+      authorize: () => true,
+      mcpHandler: async (request) => {
+        delivered = await request.json();
+        return Response.json({ jsonrpc: '2.0', id: 7, result: { contents: [] } });
+      },
+    });
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'resources/read',
+        'Mcp-Name': `=?base64?${Buffer.from(uri).toString('base64')}?=`,
+      },
+      body: JSON.stringify(payload),
+    });
+    expect(response.status).toBe(200);
+    expect(delivered).toEqual(payload);
+    expect(await response.json()).toMatchObject({ id: 7, result: { contents: [] } });
+  });
+
+  it('rejects invalid base64 before delivering the body to the transport', async () => {
+    let calls = 0;
+    const app = appFor({
+      authorize: () => true,
+      mcpHandler: () => {
+        calls++;
+        return Response.json({});
+      },
+    });
+    const response = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'resources/read',
+        'Mcp-Name': '=?base64?A?=',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'read-7',
+        method: 'resources/read',
+        params: { uri: 'lorepack://guides/a' },
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: 'read-7',
+      error: { code: -32020 },
+    });
+    expect(calls).toBe(0);
+  });
+});
+
+describe('host defaults and optional assets', () => {
+  it('reports a first-run host without an active build or freshness provider', async () => {
+    const response = await appFor({ currentBuild: async () => null }, false).request('/health');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: 'no-build',
+      buildId: null,
+      generation: null,
+      sourceState: 'unknown',
+    });
+  });
+
+  it('requires a host allowlist before enabling same-origin browser reads', () => {
+    expect(() => appFor({ allowSameOrigin: true })).toThrow('allowSameOrigin needs allowedHosts');
+  });
+
+  it('returns a typed missing-route response when the asset host has no matching file', async () => {
+    const requests: string[] = [];
+    const response = await appFor({
+      assets: (request) => {
+        requests.push(new URL(request.url).pathname);
+        return null;
+      },
+    }).request('/missing.css');
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'LORE_E_INVALID_ARGUMENT', subject: '/missing.css' },
+    });
+    expect(requests).toEqual(['/missing.css']);
+  });
+
+  it('identifies the retained build when listing its tables', async () => {
+    const response = await appFor().request(`/v1/tables?buildId=${BUILD}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ...IDENTITY, buildId: BUILD, tables: [] });
+  });
+});
+
+describe('MCP header validation preserves transport responsibilities', () => {
+  it.each(['GET', 'DELETE'])(
+    'forwards %s without trying to parse a JSON request body',
+    async (method) => {
+      let delivered: string | undefined;
+      const response = await appFor({
+        authorize: () => true,
+        mcpHandler: (request) => {
+          delivered = request.method;
+          return new Response(null, { status: 204 });
+        },
+      }).request('/mcp', { method, headers: { 'Mcp-Method': 'tools/list' } });
+      expect(response.status).toBe(204);
+      expect(delivered).toBe(method);
+    },
+  );
+
+  it.each([
+    ['older client without mirror headers', '{}', {}],
+    ['invalid JSON', '{', { 'Mcp-Method': 'tools/list' }],
+    ['non-object JSON', '[]', { 'Mcp-Method': 'tools/list' }],
+    ['missing method', '{}', { 'Mcp-Method': 'tools/list' }],
+    ['method without a name field', '{"method":"initialize"}', { 'Mcp-Method': 'initialize' }],
+    ['missing parameters', '{"method":"tools/call"}', { 'Mcp-Method': 'tools/call' }],
+    [
+      'parameters without a name',
+      '{"method":"tools/call","params":{}}',
+      { 'Mcp-Method': 'tools/call' },
+    ],
+  ] as const)(
+    'leaves %s validation to the transport with the original body',
+    async (_name, body, headers) => {
+      let delivered: string | undefined;
+      const response = await appFor({
+        authorize: () => true,
+        mcpHandler: async (request) => {
+          delivered = await request.text();
+          return Response.json({ transport: 'validated' }, { status: 400 });
+        },
+      }).request('/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body,
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ transport: 'validated' });
+      expect(delivered).toBe(body);
+    },
+  );
+
+  it.each([
+    ['method', { 'Mcp-Name': 'lore_search' }],
+    ['name', { 'Mcp-Method': 'tools/call' }],
+  ] as const)(
+    'rejects a missing mirror %s header and never echoes a non-scalar ID',
+    async (_name, headers) => {
+      let handled = 0;
+      const response = await appFor({
+        authorize: () => true,
+        mcpHandler: () => {
+          handled++;
+          return Response.json({});
+        },
+      }).request('/mcp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: { private: 'value' },
+          method: 'tools/call',
+          params: { name: 'lore_search' },
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32020 },
+      });
+      expect(handled).toBe(0);
+    },
+  );
 });

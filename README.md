@@ -270,7 +270,9 @@ Cloudflare reads also own their captured build and normalized objects during cle
 remote operation must finish within five minutes; an expired operation returns an explicit
 limit error, even when its data was already loaded. Cleanup and activation share a primary
 database fence, so a build claimed for deletion cannot become active. An unconfirmed remote
-write blocks later mutations until its completion is established; it is never blindly retried. See
+write blocks later mutations until its completion is established; it is never blindly retried.
+Cleanup rechecks orphan table references before dropping them. Orphan-only plans refuse
+metadata-table names in edited receipts. See
 [remote cleanup](docs/architecture/deployment.md#cloudflare-remote-cleanup) for the lifetime
 and concurrent-operation behavior.
 Cleanup progress retains each confirmed R2 deletion if a later deletion fails, so a
@@ -310,9 +312,11 @@ lorepack --cwd ./consumer mcp --active-only
 ```
 
 The archive path is relative to `--cwd`. Import verifies the complete build, retains its
-exact ID and normalized content, and creates a minimal consumer configuration if needed.
+exact ID and normalized content from a private snapshot, and creates a minimal consumer
+configuration if needed. Later replacement of the sender's archive cannot change those bytes.
 It never compiles or activates. Existing projects keep their active version and runtime
-identity. Original source files are not restored. See the
+identity. Original source files are not restored. Catalog verification that is already cancelled
+returns before launching its helper. See the
 [import contract](docs/package-format/README.md#importing-a-build) for limits and failures.
 
 Cloudflare deployment is an optional target. It projects the same build rather than compiling a
@@ -402,11 +406,15 @@ Newly compiled builds retain the exact identity inputs in `reports/build-id-inpu
 These support independent verification without returning to live sources. Canonical hashing
 uses the same byte serialization in local Node and the portable Worker-safe core.
 
-Archive verification requires a compatible manifest, catalog and complete identity inputs.
+Retained-object checksum verification streams bytes and refuses corruption without modifying
+evidence. Archive verification requires a compatible manifest, catalog and complete identity inputs.
 First-run state is initialized privately and published without replacing existing state.
+Damaged catalog ledgers produce a typed error and rebuild guidance without rewriting the build.
 It recomputes catalog roots and the build ID, checks required content-addressed objects,
-and refuses link or device entries. Success reports integrity only and an unsigned publisher.
+and refuses link or device entries. Malformed verifier inputs are refused; incompatible
+hashing versions retain their typed error. Success reports integrity only and an unsigned publisher.
 Older archives missing identity inputs are explicitly unsupported for verification.
+Archive collection tests also verify changed originals, object checksums and stable member ordering.
 See the [package format](docs/package-format/README.md#archive-structure).
 
 ### Provenance on every result
@@ -421,9 +429,16 @@ Markdown headings, code boundaries, directories, spreadsheet sheets, columns, an
 remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
 through a bounded read-only SQL surface.
 
+Misspelled leading SQL keywords remain rejected. A single insertion, deletion, substitution
+or adjacent-letter swap can suggest the intended keyword, including `VALUES`. Lorepack
+reports the suggestion through the runtime, HTTP and MCP without rewriting the query.
+
 Table query results identify the captured build, table and query. Their locator is
 explicitly table-level, including filtered or aggregate results; exact source-row and
 cell attribution is unsupported. See the [query contract](docs/adr/0014-table-query-identity.md).
+Unicode string values and numeric or blob literals are supported; identifiers follow the
+[SQL security contract](docs/architecture/security.md), including the local query engine's
+per-table authorization and bounded results.
 
 ### Read-only AI boundary
 
@@ -488,6 +503,153 @@ Keep protocol SDK loading inside the handlers that use it.
 Published CLI builds preserve that boundary with shared ESM chunks.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
+CLI packaging preserves dependency patches with the frozen lockfile in its temporary build
+workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
+The default suite retains the original audit scheduling, including package-level policies.
+Coverage preparation and measurement inherit those settings without a global worker cap.
+Read-only verification scripts retain their exact arguments and ordinary/measured output parity,
+including documentation checks and the actual README demo.
+Missing native child custody blocks qualification even when command output matches.
+Generic measured scripts pass a hash-bound registry to their children, retaining each
+actual launch, close and counter stream across process generations.
+Temporary-script capture preserves the exact project-write profile and preload failures.
+Contract tests cover HTTP hosts, retention with interrupted candidates and idle readers,
+activation, archives, tables and offline reports.
+Comparison tests check input identities, accounting and explicitly unmeasured fields.
+Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.
+Runtime-token tests cover malformed stored hashes and revocation with empty adapter results.
+Source-read tests check open-ended ranges, nested headings and spreadsheet locators after source removal.
+Local runtime cases distinguish released handles from damaged builds and preserve newer catalogs on refusal.
+The archived XLSX measurement command uses pinned parser dependencies and real fixture tests.
+See [testing](docs/architecture/testing.md) for failure/resume, adapter and real-SQLite
+projection preflight cases, including byte limits and source coordinates. Runtime port tests
+check context filters and explicit historical expansion with labeled alternatives. RAG worker
+contracts use loopback HTTP fixtures to check report usage and failures without external calls.
+Statement tests check useful diagnostics and quoted-name preservation through real SQLite.
+Archive parent-process tests cover cancellation and incomplete helper installs without changing
+retained catalog bytes. Isolated test layouts preserve the compiler map's original source references.
+Target failure tests check actionable errors, resource drift and unchanged receipts through
+the command framework and declared adapter ports; credentialed Cloudflare acceptance remains separate.
+Discovery tests cover sources disappearing after configuration resolves and retain explicit warnings.
+Filesystem race tests also remove entries and symlink targets between real discovery calls.
+Supply-chain policy tests use explicit registry fixtures and capture report writes without
+changing committed artifacts. Live dependency-health checks remain part of verification.
+The comparison command contract runs the real small-corpus controller and checks both reports
+against the same corpus/workload identity, preserving its original sample and query counts.
+Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
+tests. Node cases belong in `tsconfig.audit_tests.json`; Studio browser tests use their existing
+project with DOM types and the same strict settings. Fixtures implement the
+current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`
+to retain the audit ownership baseline and include new executable sources. `pnpm coverage:report`
+binds and merges coverage artifacts against that inventory, refusing stale hashes, incompatible
+maps and missing owned files. Rejected native
+execution prevents qualification even when another record covers the same source.
+`pnpm coverage:native` converts actual Node configuration/script execution, preserving
+unused counters and recording rejected layouts. Execution offsets must match the source
+or Node's position-preserving type stripping; wrapped code cannot be mapped as original. It reads raw
+records one file at a time.
+Measured CLI entry wrappers initialize capture before shared chunks execute, and launch
+receipts bind the emitted JavaScript graph.
+Explicit fixture collectors reconcile their launches and restore campaign capture after use.
+Nested fork collectors retain their own command receipts; the surrounding campaign delegates
+the fork once without auditing the same child again. Different-directory custody still rejects.
+Measured eval and script launches preserve preloads, permissions, conditions and arguments.
+Registered CLI launches also retain user import preloads while checking their fixed heap flags.
+Restricted build measurement keeps the original project-only write grant and retains nested
+receipts before fixture cleanup. Early collector initialization records real preload failures
+without assigning execution hits to an entrypoint that never ran.
+Node programs read from stdin retain their bytes, module mode and observable arguments.
+Campaign counters remain separate from native fixture counters in shared child processes.
+Explicit fixture files and pipes retain their descriptors and IPC alongside campaign capture.
+Fork capture retains IPC while binding actual command launch and close records.
+Measurement regressions check each boundary independently within unchanged test deadlines.
+Eval and temporary-script fixtures compile once, then verify each launch prefix independently.
+Generated bundle fixtures stay under build output so parallel inventory checks retain strict ownership.
+Native capture validates owned scripts loaded directly from source as well as compiled packages.
+Native counter IDs align with direct instrumentation only through unique exact source
+descriptors. Ambiguous matches and changed branch-arm order remain rejected.
+V8 records cannot qualify default-parameter branches; those require direct instrumentation.
+Capture tools support native Windows
+module imports and can be imported without invoking their commands. See the [CI contract](docs/architecture/ci.md)
+for the checked files, capture limits and native matrix.
+`pnpm coverage:capture --out coverage/<fresh-name>` runs a default-suite campaign with
+configuration and subprocess capture. It fails when ownership, collection, tests or
+coverage gates fail, retaining the evidence for review.
+The campaign retains actual provider transformation preparations under `preparations/`,
+bound to original source hashes and mapped source content. These contain static code and
+maps, not execution hits. Conflicting transforms cannot overwrite retained evidence.
+Preparation identities normalize filesystem paths, including Vite's Windows separators.
+Native module capture compiles instrumented preparations before entering restricted
+processes, preserving their permissions. Its process records distinguish started,
+completed, empty and rejected execution; interrupted capture remains incomplete.
+Both collectors retain synchronous cleanup hits before finalizing the real exit event;
+manually emitted events keep their ordinary listener behavior without finalizing capture.
+On POSIX, the pinned native TypeScript compiler's process-image replacement has a
+separate handoff receipt authenticated against its executable bytes and observed host
+close. It does not invent a JavaScript exit; other replacement images remain unqualified.
+Collector metadata uses filesystem paths so Node and Studio retain one canonical preparation.
+Native reconciliation streams every JSONL counter record, avoiding whole-file string limits.
+It validates and merges each child before reading the next, retaining lifecycle receipts
+rather than all child maps in memory. Worker receipts retain identities and host closures;
+their validated counts contribute to the process aggregate once.
+Counter emission writes complete UTF8 frames directly and checks their exact byte count,
+reducing temporary allocations during resource-bound tests. It commits a sequence only
+after a complete write, so a rejected encoding cannot leave a phantom event.
+Worker threads retain independent identities, sequences and observed lifecycle receipts.
+Only compatible validated maps merge; termination never invents an exit snapshot.
+Guarded parser heap aborts require matching native diagnostics, an unchanged explicit heap
+limit and the actual host closure; unexplained aborts still reject qualification.
+Owned execution after a file snapshot rejects qualification instead of accepting stale hits.
+Reconciliation validates matched lifecycle identities, loaded-source hashes and exact
+maps before merging each final snapshot once. Rejected or incomplete records produce
+unavailable aggregates. Native preloads use file URLs for Windows compatibility.
+Subprocess integration and compiled-child qualification remain open.
+Compiled-capture fixtures instrument canonical preparations before bundling and replay
+real counters through a separate inherited descriptor, preserving IPC and permissions.
+Fresh fixture bundles use the actual compilation recipe and canonical capture plugin.
+The active collector checks emitted JavaScript, maps and original inputs before loading
+the graph; ordinary execution keeps the production recipe unchanged.
+Nested fixtures select their own counter namespace while preserving the outer campaign.
+Standalone companion sinks reserve low descriptors and keep native capture on descriptor4.
+Synchronous child fixtures use a parent-opened capture file without a filesystem grant.
+Compiled measurement replays checked provider preparations while retaining ordinary
+compiler artifacts and their source-bound hash receipts.
+Measured CLI builds share the production entrypoint definitions and migration layout,
+with separate output, package metadata and Studio assets.
+Their generated launch bootstrap authenticates artifacts with bounded hashing memory.
+It binds the CLI and all child artifacts by hash,
+captures fork and archive-command execution, and drains close receipts before exit.
+Explicit fork capture records matched child identities and kill/close receipts while
+preserving the existing IPC, environment and flags. Complete launch integration remains open.
+Already measured child entrypoints keep their exact path when capture is attached.
+Worker registration also binds ordinary compiled and bundled aliases to the measured
+CLI and child artifacts, preserving shared targets and actual launch identities.
+The CLI capture bootstrap drains registered child close receipts before honoring
+the CLI's requested process exit. Complete campaign qualification remains open.
+Asynchronous command capture preserves Node's own callback and promise output handling,
+including timeouts and output limits, through registered entrypoints only.
+Synchronous capture preserves native results and errors through both Node launch APIs,
+using a separate inherited file descriptor and observed native termination evidence.
+Registered heap-flag prefixes preserve the archive verifier's Node memory limit;
+unregistered flag prefixes keep Node's original launch behavior.
+Fork reconciliation rejects missing receipts, mismatched child identities and repeated
+execution streams before merging source-compatible maps once. Interrupted streams require
+an explicitly permitted signal and a successful matching kill receipt from the host.
+Host termination remains separate from the counter collector's JavaScript exit event.
+Observed process close qualifies genuine shutdown-microtask counters after that event;
+standalone replay still rejects an unqualified continuation.
+Forced termination retains counters with an incomplete lifecycle; it does not qualify
+complete capture. Production child integration remains required.
+Configuration capture now prepares source maps before native execution, verifies
+all configuration assertions, and reconciles process evidence before bundling counts.
+The provider patch retains default-export expression statements so configurations
+keep their measured statement scope.
+Direct coverage uses pinned Istanbul instrumentation with a recorded dependency patch
+to retain private-method counters and empty source records. The patch also exposes its
+instrumenter and remapper for native-capture qualification, with real initializer and
+early-throw regression tests. Complete subprocess measurement and the release
+coverage targets remain open. See the
+[provider decision](docs/adr/0017-instrumented-coverage.md) and CI guide.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
 Its integration fixtures keep startup diagnostics separate from machine-readable results.

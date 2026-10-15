@@ -31,6 +31,17 @@ duplication of the first.
 in the shared runtime contract (`tools/test-support/src/runtime-contract.ts`), which every
 backend, local and Cloudflare, must pass.
 
+The guard accepts Unicode inside string literals, hexadecimal numbers, scientific notation
+and well-formed blob literals. It refuses non-ASCII identifiers even when quoted, incomplete
+quoted identifiers and malformed blobs before database execution. The shared runtime contract
+checks exact literal values and table provenance on both backends, so rejection rules cannot
+silently narrow the supported data literals.
+
+`packages/backend-local/test/query_child.test.ts` exercises the query child's message handler
+against real read-only SQLite connections. It checks setup-error redaction, engine-level
+read/write denial, empty-result columns and exact row/byte limits. The forked SQL surface suite
+also verifies process isolation, concurrency and deadlines.
+
 | Attempt | Refused by |
 |---|---|
 | `DELETE`, `UPDATE`, `DROP` | The statement shape check: only one SELECT |

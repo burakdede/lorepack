@@ -18,6 +18,23 @@ physical: a sealed build never changes, and everything that does change lives el
   lock.reclaimed-*/         tombstones of reclaimed locks, removed after an hour
 ```
 
+Archive collection contracts use real filesystem fixtures in
+[`archive.test.ts`](../../packages/backend-local/test/archive.test.ts). They check stable
+member ordering and exact binary bytes, reject missing or changed addressed objects,
+and refuse an original source changed to a directory, removed or edited after its hash
+was recorded. Refused collection leaves the current source bytes untouched.
+
+Local retention contracts in
+[`activate.test.ts`](../../packages/cli/test/activate.test.ts) use real compiled builds and
+runtime references. They verify the default five-build window with tied timestamps and
+failed attempts, candidate-object protection during cleanup, and reader explanations from
+active requests through an idle cached catalog to backend shutdown.
+
+Damaged-catalog recovery tests remove the migration ledger or its identifier column from a
+real sealed database. Reads refuse the damaged catalog without changing its bytes, then
+rebuilding restores the same content-derived build ID and provenance-bearing search.
+See [`damaged-build.test.ts`](../../packages/cli/test/damaged-build.test.ts).
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build
@@ -49,6 +66,15 @@ Directory `fsync` is a POSIX guarantee with no Windows equivalent, so that call 
 effort. What we actually depend on, atomic same-volume rename, holds on both.
 
 ## Object store
+
+`FileObjectStore.verify(hash, signal)` streams the checksum and returns false for a missing
+object without creating storage. A checksum mismatch raises `LORE_E_OBJECT_CORRUPT`, naming
+the object hash and preserving the corrupt bytes for recovery. An aborted signal propagates
+the stream's `AbortError`; retrying without that signal can verify the unchanged object.
+Malformed hashes are refused. Verification never quarantines or rewrites data.
+[`object_verify.test.ts`](../../packages/backend-local/test/object_verify.test.ts) checks
+multi-chunk content, missing/corrupt objects, cancellation and invalid hashes using real files.
+
 
 Content-addressed with two levels of fan-out (`objects/sha256/ab/cd/<rest>`), so no
 directory grows unmanageable. An object is written with `writeFileAtomic`, and every fan-out
@@ -347,9 +373,19 @@ rather than trimmed. Every result carries the table's locator, including sheet a
 
 **A typo is not an attempted write.** A first word that is not a SQL statement keyword is
 refused as a misspelling, with the keyword named where one is a single edit away, including an
-adjacent-letter swap. `SELEC` used to be told "Only SELECT is allowed here" with a remediation
+adjacent-letter swap. Substitutions work at every position: `SELXCT` suggests `SELECT` and
+`WIXH` suggests `WITH`. The vocabulary and invalid-keyword message include `VALUES`, which
+SQLite supports as a [SELECT form](https://www.sqlite.org/lang_select.html#the_values_clause).
+The query stays rejected and is never rewritten or retried with the suggestion.
+`SELEC` used to be told "Only SELECT is allowed here" with a remediation
 explaining that writes are forbidden, which is a rule that user did not break; for a model it was
 worse, because the obvious repair was what it had already tried (#253).
+
+The Studio console was verified on 2026-10-15 with Playwright 1.62.1 and
+Chromium 151.0.7922.34. Its malformed-query alert preserves the code and suggestion;
+the rejected query produces no result.
+
+![Studio SQL keyword suggestion](../images/sql_keyword_suggestion.png)
 
 **Errors say what rule was broken and nothing about the machine.** SQLite words a denial as
 `access to t_secrets_f13bc4051aa0.c_0_sku is prohibited`, which names something the caller was
@@ -395,5 +431,7 @@ before returning the failure. An existing owned connection keeps its valid refer
 catalog/manifest/identity inputs in OS scratch. The archive verifier writes a
 reference FTS catalog beside its input, so it must never run directly inside a
 sealed build directory. Object checksums are streamed. Verification does not
-rewrite retained reports or activate a build. See the
+rewrite retained reports or activate a build. A signal that is already aborted returns
+`LORE_E_CANCELLED` before the catalog verifier creates a child process; its scratch inputs
+remain unchanged. This avoids starting work that is already cancelled. See the
 [validation contract](../validation.md) for coverage and limits.

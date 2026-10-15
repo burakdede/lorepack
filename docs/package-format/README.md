@@ -86,6 +86,12 @@ Payloads stream to private staging with bounded memory. Unsupported member layou
 refused. Only manifest, catalog, flat reports and content-addressed normalized objects are
 installed. `originals/*` are verified but never restored or executed.
 
+The private snapshot determines the extracted bytes even if the sender later replaces the
+archive. Extraction failures remove that private staging directory; an existing staging
+destination is refused before its contents are touched. Regression checks in
+[`archive_extraction.test.ts`](../../packages/backend-local/test/archive_extraction.test.ts)
+cover snapshot replacement, exact bytes, unsupported layouts, extra object addresses and cleanup.
+
 Every normalized object must match its address, including extra packaged objects. Existing
 objects are rechecked and corrupt ones refused. Import never replaces an existing immutable
 build; importing that ID again reports that it already exists. Import refuses links in its
@@ -146,6 +152,14 @@ unsigned package. No signature or trusted-builder assertion is inferred.
 Legacy archives without complete identity inputs fail with `LORE_E_SCHEMA_MISMATCH`.
 Existing immutable builds are never retrofitted. Catalog verification runs read-only in a
 child process with a 60-second deadline, 128 MiB JavaScript heap and 4 MiB reply ceiling.
+An already-aborted verification returns `LORE_E_CANCELLED` before resolving or launching
+that child. Default and custom abort reasons retain the same public cancellation error.
+The verifier returns one JSON reply: an exact logical proof on success, or a typed failure.
+Malformed manifest, identity or catalog data receives a sanitized corruption response.
+Unsupported hashing versions preserve the schema-mismatch code and subject. The read-only
+catalog connection closes after both successful and failing logical verification.
+[`archive_verify_child.test.ts`](../../packages/backend-local/test/archive_verify_child.test.ts)
+checks these boundaries against real SQLite, including all missing input arguments.
 Only fixed verification files are copied to a private temporary directory, removed after
 success or failure. No archive member is extracted into a user-selected destination.
 

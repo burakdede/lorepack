@@ -69,6 +69,82 @@ expected warnings, and a canonical hash.
 
 ## Adding a test
 
+Local lifecycle regressions use compiled temporary projects and real SQLite files.
+`runtime-local.test.ts` checks missing manifests and unknown-table refusal followed by
+a valid query. `damaged-build.test.ts` deletes migration history, checks the typed
+schema error, then proves the documented rebuild restores a cited read.
+`activate.test.ts` verifies complete missing-object details with a bounded human
+summary and an unchanged active pointer. Unsupported rollback targets must fail
+before any deployment adapter operation or local configuration change.
+
+CLI diff tests compile multiple declared supersession targets, change the rules,
+then delete sources before reading both snapshots. JSON and human output must
+retain the declared target IDs. Missing manifests and blank build references
+must produce actionable errors without changing the active pointer.
+
+Runtime-token tests use real SQLite storage for malformed hash refusal and
+revocation. The optional-results adapter wraps real queries and omits only actual
+empty arrays; revocation must still remove access, report the removed count and
+leave an empty inventory. Header normalization is checked through the public
+authorizer, without exposing private comparison helpers.
+
+The explicit `tsconfig.audit_tests.json` program includes changed audit regressions,
+including real-build CLI tests and runtime fixtures. Add new regression files to that
+list. Fixtures implement complete current ports: absent coordinates use `null`,
+authorization requests carry headers, and byte fixtures retain their binary input
+type. SQLite-backed test adapters keep the native binding and result boundaries.
+Vitest matchers use supported signatures with typed expected values. No assertion
+or compiler strictness is relaxed to include these files.
+
+Projection preflight tests use a real SQLite catalog to check the exact UTF-8 value
+limit, per-row byte totals, source coordinates, missing/unopenable databases and
+identifier refusal. Contributor advice accumulates bytes by path and sorts ties
+before selecting the largest three sources. Tables without projected columns are
+skipped. No synthetic database return types are used to reach defensive branches.
+
+Runtime port tests verify that context path, type and status filters reach the
+catalog together. Historical duplicate text appears as labeled alternatives only
+with explicit expansion; default responses keep omission reasons and locators.
+Both paths release the captured build handle.
+
+Statement diagnostics cover comment-only input, unfinished quoted identifiers and
+incomplete common table expressions. An escaped quote and separator in a column
+name round-trip through real SQLite, and single-edit keyword advice stays specific.
+These cases exercise statement shape without changing query policy or engine limits.
+
+Archive parent-process tests run the actual child for a valid catalog and check
+pre-aborted cancellation.
+Separate installed-layout fixtures live under the test directory and use a copy of
+the compiled parent to exercise
+missing, failed and malformed helpers. No helper reply without a logical proof is
+accepted, and retained catalog/identity bytes remain unchanged in every case.
+
+Relocated compiled fixtures keep their emitted JavaScript, mapping positions, names
+and embedded source contents. The copy helper resolves the original compiler map
+references before moving it, preserving the same actual source URLs as described by
+[ECMA-426 section 9.3](https://tc39.es/ecma426/#sec-resolving-sources). It accepts flat
+compiler maps with an empty source root and preserves the module filename. A copied
+map with stale relative paths cannot establish execution of the original source.
+Focused diagnostics verify mapping behavior; final all-owned qualification still
+requires every original bundle and source/lifecycle reconciliation. Generated helper
+reply fixtures stay outside the production `dist` namespace: the capture loader
+correctly refuses unowned code presented as compiled production output.
+
+Local backend boundary cases distinguish a released handle from catalog corruption.
+A future catalog migration produces version advice without changing sealed bytes.
+
+Sealed source-read cases cover parent-heading order, open-ended line ranges and plain
+text locators after source removal. PDF line-range refusals explain how to read the
+whole artifact without inventing missing line coordinates. Single-sheet reads retain
+sheet/range provenance; whole multi-sheet reads omit ambiguous coordinates and
+heading-selected reads recover the precise sheet/range from the sealed build.
+
+The archived XLSX spike command resolves its libraries through the parser workspace.
+Actual ZIP/XML fixtures verify shared/cached strings, numeric/boolean/empty cells,
+formula text, date styles, merge ranges and named-sheet selection. Its sample stays
+bounded while total cell counts remain complete. Malformed ZIP and DTD inputs must
+fail without a report. These checks add no current performance claim.
+
 1. Put it beside the module, in that package's `test/` directory.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
@@ -132,6 +208,30 @@ PR from ever completing its Cloudflare gate during concurrent work.
 
 ## Benchmarks
 
+The existing pruning research command also has an offline report-contract test.
+It runs the small mixed fixture, compares stdout with the written JSON, verifies
+input digests and query coverage, and reconciles posting counters and exact top-k
+results. Separate cases cover unknown terms, repeated Unicode tokens and cutoff
+ties. These checks establish report correctness, not a runtime speed claim; the
+prototype remains outside the default runtime.
+
+The offline RAG report test runs the existing command with its full iteration counts.
+It checks corpus/workload hashes, query counts, estimated prompt tokens and explicit
+unmeasured answer/cost fields. Missing build paths and unsupported modes fail in
+real subprocesses before database access.
+
+Hosted worker contract tests use a real loopback HTTP provider fixture and temporary
+SQLite catalog. They preserve the original three index samples, 30 queries and 20
+context iterations, and check complete/incomplete usage, report arithmetic, source
+mentions, HTTP/transport failures and missing configuration. Empty offline retrieval
+retains zero citations and unmeasured answer quality. No external provider or model
+is called; fixture values do not qualify performance, prices or answer quality.
+
+The direct SQLite comparison runs its worker over a newly compiled mixed fixture
+and verifies that the build database remains byte-identical. The current report
+must retain real corpus/workload identities, original sample counts and explicit
+unavailable context/token fields; historical reports alone cannot establish that.
+
 `pnpm bench` measures a full build, an incremental rebuild and warm search, and writes
 machine metadata alongside the numbers. CI runs the same script and uploads the JSON as an
 artifact.
@@ -146,3 +246,36 @@ no intermediate directory to replace with a link. The connector safety contract
 checks that layout explicitly. File-link and permission evidence runs for every
 connector; intermediate-directory link evidence runs for Codex and VS Code,
 whose configuration is nested inside the project.
+
+
+Native coverage of the original project-write profile retains nested launch, close and
+counter records beneath a host-created private namespace in `.lorepack`. The parent
+checks ownership and moves only its own regular receipt files before fixture cleanup.
+No outside filesystem write grant is added. A hash-bound CommonJS collector preload
+starts the inherited counter stream before original ESM preloads and restores the
+caller-visible arguments before they execute. A preload failure therefore has actual
+start and completion frames with no owned source hits. Empty or truncated streams
+remain invalid. See [ADR0026](../adr/0026-project-capture-custody.md).
+
+HTTP contract tests exercise optional host plan/source reads through actual routes,
+including retained-build selection, typed host failures and absent capabilities.
+MCP header tests verify UTF8 resource URI decoding without changing the delivered
+JSON body, and reject invalid base64 before the transport handler runs.
+
+Retention contracts use actual SQLite catalog/table fixtures and the existing R2
+port fixture. A real abort trigger proves catalog rollback and resumption after
+physical-table removal. Empty-result port variants preserve decisions for cold
+targets, unactivated staged builds and previews whose build later became active.
+Missing archives are never reported as successful deletions.
+
+Archive contracts use complete ZIPs with actual catalog bytes. Tests distinguish
+matching envelope checksums from supported build identity, report missing members
+with their expected digests, and bound manifest/identity bytes before decoding.
+
+Activation failure tests abort the final build-state update in actual SQLite,
+after the pointer update and old-build demotion. They assert rollback of all three
+facts, reopen the state database and retry without consuming a generation.
+
+Query contracts check token and byte budgets independently, compound remote row
+estimates and ordinary nested/window forms. Local and remote profiles keep their
+existing admission rules and limits; defensive guards are not removed for coverage.

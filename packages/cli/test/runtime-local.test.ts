@@ -1,6 +1,6 @@
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createLocalRuntimeBackend } from '@lorepack/backend-local';
+import { createLocalRuntimeBackend, LocalActiveBuildProvider } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
@@ -46,7 +46,45 @@ async function withRuntime<T>(
   });
 }
 
+describe('released local runtime handles', () => {
+  it('keeps a released handle error distinct from a damaged build', async () => {
+    await withRuntime(async (_runtime, root) => {
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      try {
+        const handle = await backend.provider.acquire();
+        handle.release();
+        await expect(backend.open(handle)).rejects.toMatchObject({
+          code: 'LORE_E_INVALID_ARGUMENT',
+        });
+      } finally {
+        backend.close();
+      }
+    });
+  });
+});
+
 describe('describeBuild over the local ports', () => {
+  it('reports a manifest removed after the build scope was opened', async () => {
+    await withRuntime(async (_runtime, root) => {
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      try {
+        const handle = await backend.provider.acquire();
+        try {
+          const scope = await backend.open(handle);
+          rmSync(join(root, '.lore', 'builds', handle.buildId, 'manifest.json'));
+          await expect(scope.catalog.manifest()).rejects.toMatchObject({
+            code: 'LORE_E_BUILD_NOT_FOUND',
+            remediation: expect.stringContaining('lorepack build'),
+          });
+        } finally {
+          handle.release();
+        }
+      } finally {
+        backend.close();
+      }
+    });
+  });
+
   it('reads the manifest, the counts and the warnings the build actually holds', async () => {
     await withRuntime(async (runtime) => {
       const described = await runtime.describeBuild();
@@ -60,6 +98,45 @@ describe('describeBuild over the local ports', () => {
       expect(described.compilerVersion).toMatch(/^\d+\.\d+\.\d+$/);
       expect(described.sourceState).toBe('unknown');
     });
+  });
+});
+
+describe('table queries over the local ports', () => {
+  it('refuses an unknown table without damaging subsequent valid reads', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'quotas.csv': 'team,budget\nplatform,42\n' } },
+      async (project) => {
+        await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
+        const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+        try {
+          const handle = await backend.provider.acquire();
+          try {
+            const scope = await backend.open(handle);
+            await expect(
+              scope.tables.query({ tableId: 'missing-table', sql: 'SELECT * FROM t' }),
+            ).rejects.toMatchObject({
+              code: 'LORE_E_BUILD_NOT_FOUND',
+              subject: 'missing-table',
+              remediation: expect.stringContaining('lorepack inspect tables'),
+            });
+            const [table] = await scope.tables.list();
+            if (table === undefined) throw new Error('The compiled CSV table is missing.');
+            const described = await scope.tables.describe(table.tableId);
+            if (described === null) throw new Error('The compiled CSV schema is missing.');
+            const result = await scope.tables.query({
+              tableId: table.tableId,
+              sql: `SELECT * FROM ${described.sqlName}`,
+            });
+            expect(result.rows).toEqual([{ team: 'platform', budget: 42 }]);
+            expect(result.locator.relativePath).toBe('quotas.csv');
+          } finally {
+            handle.release();
+          }
+        } finally {
+          backend.close();
+        }
+      },
+    );
   });
 });
 
@@ -112,9 +189,10 @@ describe('search over the local ports', () => {
         const handle = await backend.provider.acquire();
         try {
           await backend.open(handle);
-          const db = (
-            backend.provider as { database(h: unknown): { prepare(sql: string): unknown } }
-          ).database(handle);
+          if (!(backend.provider instanceof LocalActiveBuildProvider)) {
+            throw new Error('Expected the local build provider fixture.');
+          }
+          const db = backend.provider.database(handle);
           // `schema_migrations` exists in the build database and is not part of the read
           // surface. The authorizer, not the query author, is what stops this.
           expect(() => db.prepare('SELECT * FROM schema_migrations')).toThrow();

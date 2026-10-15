@@ -194,6 +194,52 @@ describe('statement shape', () => {
     expect(() => validateStatement("SELECT 'it''s; fine' FROM t")).not.toThrow();
   });
 
+  it.each(['  \t\n', '-- a note', '/* a note */', '-- a note\n/* another */'])(
+    'explains empty statement text: %s',
+    (sql) => {
+      expect(() => validateStatement(sql)).toThrowError(
+        expect.objectContaining({
+          code: 'LORE_E_SQL_REJECTED',
+          message: 'The query is empty.',
+          remediation: 'Write a SELECT, for example `SELECT * FROM <table> LIMIT 10`.',
+        }),
+      );
+    },
+  );
+
+  it.each(['SELECT "unfinished', 'SELECT [unfinished', 'SELECT `unfinished'])(
+    'explains an unclosed identifier: %s',
+    (sql) => {
+      expect(() => validateStatement(sql)).toThrowError(
+        expect.objectContaining({
+          code: 'LORE_E_SQL_REJECTED',
+          message: 'The query ends inside a quoted identifier.',
+        }),
+      );
+    },
+  );
+
+  it('preserves an escaped quote and separator inside a real SQLite column name', () => {
+    const sql = 'SELECT 7 AS "lim""it;here";';
+    const statement = validateStatement(sql);
+    expect(statement).toEqual({ sql: sql.slice(0, -1), hasLimit: false });
+    const db = new DatabaseSync(':memory:', { enableDoubleQuotedStringLiterals: false });
+    try {
+      expect(db.prepare(statement.sql).get()).toEqual({ 'lim"it;here': 7 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('explains a common table expression without a final result statement', () => {
+    expect(() => validateStatement('WITH x AS (SELECT 1)')).toThrowError(
+      expect.objectContaining({
+        code: 'LORE_E_SQL_REJECTED',
+        message: 'A WITH clause here must end in a SELECT.',
+      }),
+    );
+  });
+
   it('fails closed on text it cannot read to the end', () => {
     expect(() => validateStatement("SELECT 'unterminated")).toThrowError(/ends inside/);
     expect(() => validateStatement('SELECT 1 /* unterminated')).toThrowError(/ends inside/);
@@ -400,6 +446,8 @@ describe('a misspelled first word', () => {
   it('suggests the keyword when one is a single edit away', () => {
     for (const [typo, meant] of [
       ['SELEC', 'SELECT'],
+      ['SELECX', 'SELECT'],
+      ['SSELECT', 'SELECT'],
       ['SELCT', 'SELECT'],
       // A transposition, which is the typo people actually make and which two substitutions
       // would miss.

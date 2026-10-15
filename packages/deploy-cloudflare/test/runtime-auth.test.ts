@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createRuntimeTokenAuthorizer,
@@ -17,7 +17,7 @@ import {
 class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -25,14 +25,14 @@ class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   }
 
   bind(...values: unknown[]): RuntimeAuthStatementLike {
-    this.#bindings = values;
+    this.#bindings = values as SQLInputValue[];
     return this;
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
     const statement = this.#db.prepare(this.#query);
     if (this.#query.trim().toLowerCase().startsWith('select')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
@@ -69,6 +69,73 @@ afterEach(() => {
 });
 
 describe('runtime token auth, issue 90', () => {
+  it.each(['a', 'zz'.repeat(32), 'ff', '00'.repeat(32)])(
+    'refuses an invalid or mismatched stored hash: %s',
+    async (storedHash) => {
+      const { auth } = openRuntimeDatabase();
+      const token = `${RUNTIME_TOKEN_PREFIX}stored_hash_fixture`;
+      await storeRuntimeTokenHash(auth, storedHash, '2026-08-09T10:00:00.000Z');
+      const authorize = createRuntimeTokenAuthorizer(auth);
+      expect(
+        await authorize({
+          method: 'GET',
+          path: '/v1/build',
+          authorization: `Bearer ${token}`,
+          headers: new Headers(),
+        }),
+      ).toBe('This token is not valid for this build.');
+    },
+  );
+
+  it('keeps revocation effective when the adapter omits genuinely empty results', async () => {
+    const { auth } = openRuntimeDatabase();
+    const omitted: RuntimeAuthDatabaseLike = {
+      prepare(query) {
+        const statement = auth.prepare(query);
+        const wrapped: RuntimeAuthStatementLike = {
+          bind(...values) {
+            statement.bind(...values);
+            return wrapped;
+          },
+          async run<T>() {
+            const result = await statement.run<T>();
+            return result.results?.length === 0 ? {} : result;
+          },
+        };
+        return wrapped;
+      },
+    };
+    const token = `${RUNTIME_TOKEN_PREFIX}revoked_fixture`;
+    await storeRuntimeTokenHash(omitted, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
+    const authorize = createRuntimeTokenAuthorizer(omitted);
+    const request = {
+      method: 'GET',
+      path: '/v1/build',
+      authorization: `Bearer ${token}`,
+      headers: new Headers(),
+    };
+    expect(await authorize(request)).toBe(true);
+    expect(await revokeRuntimeTokens(omitted)).toBe(1);
+    expect(await hasRuntimeToken(omitted)).toBe(false);
+    expect(await listRuntimeTokens(omitted)).toEqual([]);
+    expect(await authorize(request)).toBe('This token is not valid for this build.');
+    expect(await revokeRuntimeTokens(omitted)).toBe(0);
+  });
+
+  it('accepts surrounding whitespace and a case-insensitive bearer scheme', async () => {
+    const { auth } = openRuntimeDatabase();
+    const token = `${RUNTIME_TOKEN_PREFIX}header_fixture`;
+    await storeRuntimeTokenHash(auth, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
+    expect(
+      await createRuntimeTokenAuthorizer(auth)({
+        method: 'GET',
+        path: '/v1/build',
+        authorization: `  bEaReR ${token}  `,
+        headers: new Headers(),
+      }),
+    ).toBe(true);
+  });
+
   it('stores only the hash and authorizes the matching bearer token', async () => {
     const { db, auth } = openRuntimeDatabase();
     const token = `${RUNTIME_TOKEN_PREFIX}test_token`;
@@ -93,6 +160,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${token}`,
+        headers: new Headers(),
       }),
     ).toBe(true);
   });
@@ -103,14 +171,20 @@ describe('runtime token auth, issue 90', () => {
     await storeRuntimeTokenHash(auth, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
     const authorize = createRuntimeTokenAuthorizer(auth);
 
-    expect(await authorize({ method: 'GET', path: '/v1/build' })).toBe(
-      'This token is not valid for this build.',
-    );
+    expect(
+      await authorize({
+        method: 'GET',
+        path: '/v1/build',
+        headers: new Headers(),
+        authorization: undefined,
+      }),
+    ).toBe('This token is not valid for this build.');
     expect(
       await authorize({
         method: 'GET',
         path: '/v1/build',
         authorization: 'Bearer wrong',
+        headers: new Headers(),
       }),
     ).toBe('This token is not valid for this build.');
     expect(
@@ -118,6 +192,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: 'Basic abc',
+        headers: new Headers(),
       }),
     ).toBe('This token is not valid for this build.');
   });
@@ -137,6 +212,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${deploymentCredential}`,
+        headers: new Headers(),
       }),
     ).toBe('This token is not valid for this build.');
   });
@@ -177,6 +253,7 @@ describe('runtime token auth, issue 90', () => {
       method: 'GET',
       path: '/v1/build',
       authorization: `Bearer ${token}`,
+      headers: new Headers(),
     });
     expect(await at('2026-08-09T00:15:00.000Z')(request(tokenA))).toBe(
       'This token is not valid for this build.',
@@ -223,6 +300,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${firstToken}`,
+        headers: new Headers(),
       }),
     ).toBe(true);
     expect(
@@ -230,6 +308,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${secondToken}`,
+        headers: new Headers(),
       }),
     ).toBe(true);
 
@@ -239,6 +318,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${firstToken}`,
+        headers: new Headers(),
       }),
     ).toBe('This token is not valid for this build.');
     expect(
@@ -246,6 +326,7 @@ describe('runtime token auth, issue 90', () => {
         method: 'GET',
         path: '/v1/build',
         authorization: `Bearer ${secondToken}`,
+        headers: new Headers(),
       }),
     ).toBe(true);
 

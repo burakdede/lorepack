@@ -1,6 +1,19 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import {
+  createLocalRuntimeBackend,
+  ProjectLock,
+  withReadReferenceLock,
+} from '@lorepack/backend-local';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -8,8 +21,15 @@ import { PROJECTION_MIGRATIONS } from '../../deploy-cloudflare/src/projection-mi
 import { rollbackCommand } from '../src/commands/activate.js';
 import { pruneCommand } from '../src/commands/prune.js';
 import { runBuild } from '../src/services/build.js';
+import { openStateStore } from '../src/services/builds.js';
 import type { CloudflareResolverAdapter } from '../src/services/cloudflare-target.js';
 import { readActiveBuild } from '../src/services/project.js';
+import {
+  applyRetention,
+  planRetention,
+  reconcileRetention,
+  renderRetentionPlan,
+} from '../src/services/retention.js';
 import { run } from './helpers.js';
 
 const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
@@ -108,7 +128,7 @@ function fakeRemoteRollbackTarget(
 class SqliteStatement {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -116,7 +136,7 @@ class SqliteStatement {
   }
 
   bind(...values: unknown[]): SqliteStatement {
-    this.#bindings = values;
+    this.#bindings = values as SQLInputValue[];
     return this;
   }
 
@@ -128,7 +148,7 @@ class SqliteStatement {
       trimmed.startsWith('pragma') ||
       /\bRETURNING\b/i.test(this.#query)
     ) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
@@ -177,17 +197,13 @@ function writeCloudflareReceipt(root: string): void {
   );
 }
 
-interface FakeCloudflareObjectsBucket {
+type FakeCloudflareObjectsBucket = ReturnType<CloudflareResolverAdapter['openObjectsBucket']> & {
   readonly deletedKeys: string[];
   failOnDeleteKey: string | null;
   seed(key: string, value?: Uint8Array): void;
-}
+};
 
-function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObjectsBucket'] extends (
-  ...args: never[]
-) => infer T
-  ? T & FakeCloudflareObjectsBucket
-  : never {
+function createFakeCloudflareObjectsBucket(): FakeCloudflareObjectsBucket {
   const objects = new Map<string, Uint8Array>();
   const deletedKeys: string[] = [];
   return {
@@ -479,6 +495,48 @@ describe('lorepack builds', () => {
 });
 
 describe('lorepack activate', () => {
+  it.each(['human', 'json'] as const)(
+    'reports every missing object without changing activation in %s mode',
+    async (mode) => {
+      const files = Object.fromEntries(
+        ['a', 'b', 'c', 'd', 'e'].map((name) => [`${name}.md`, `# ${name}\n\nOriginal ${name}.`]),
+      );
+      await project(files, async (root, lore) => {
+        const candidate = await build(root);
+        for (const name of Object.keys(files)) {
+          writeFileSync(join(root, name), `# ${name}\n\nReplacement ${name}.`);
+        }
+        await build(root);
+        const before = readActiveBuild(join(root, '.lore'));
+        const missing = objectHashes(root, candidate.buildId);
+        expect(missing).toHaveLength(5);
+        for (const hash of missing) rmSync(objectFile(root, hash));
+
+        const result = await lore([
+          ...(mode === 'json' ? ['--json'] : []),
+          'activate',
+          candidate.buildId,
+        ]);
+        expect(result.code).toBe(2);
+        if (mode === 'json') {
+          const parsed = JSON.parse(result.stdout);
+          expect(parsed.error).toMatchObject({
+            code: 'LORE_E_OBJECT_CORRUPT',
+            details: { missing: expect.arrayContaining(missing) },
+          });
+          expect(parsed.error.details.missing).toHaveLength(missing.length);
+        } else {
+          expect(result.stderr).toContain('5 objects that are missing');
+          expect(result.stderr).toContain('...');
+          for (const hash of missing.slice(0, 3)) expect(result.stderr).toContain(hash);
+          for (const hash of missing.slice(3)) expect(result.stderr).not.toContain(hash);
+          expect(result.stdout).not.toContain('Activated');
+        }
+        expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+      });
+    },
+  );
+
   it('accepts a full id and moves the pointer', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { first, third } = await threeBuilds(root);
@@ -576,6 +634,42 @@ describe('lorepack activate', () => {
 });
 
 describe('lorepack rollback', () => {
+  it.each([false, true])(
+    'refuses an unsupported remote target before adapter use, named build: %s',
+    async (named) => {
+      await project({ 'a.md': '# A\n\nOriginal.' }, async (root) => {
+        const built = await build(root);
+        const before = readActiveBuild(join(root, '.lore'));
+        const configuration = readFileSync(join(root, 'lore.yaml'));
+        const calls: string[] = [];
+        const unexpected = (operation: string): never => {
+          calls.push(operation);
+          throw new Error(`Unsupported targets must not call ${operation}.`);
+        };
+        const adapter: CloudflareResolverAdapter = {
+          detect: async () => unexpected('detect'),
+          whoami: async () => unexpected('whoami'),
+          listDatabases: async () => unexpected('listDatabases'),
+          openCatalogDatabase: () => unexpected('openCatalogDatabase'),
+          openTablesDatabase: () => unexpected('openTablesDatabase'),
+          openObjectsBucket: () => unexpected('openObjectsBucket'),
+        };
+        const result = await run(
+          ['--cwd', root, 'rollback', '--target', 'unsupported', ...(named ? [built.buildId] : [])],
+          { commands: [rollbackCommand({ cloudflareAdapter: adapter })] },
+        );
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+        expect(result.stderr).toContain('Unknown rollback target unsupported');
+        expect(result.stderr).toContain('Use `cloudflare`');
+        expect(calls).toEqual([]);
+        expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+        expect(readFileSync(join(root, 'lore.yaml'))).toEqual(configuration);
+        expect(existsSync(join(root, '.lore', 'targets', 'cloudflare.json'))).toBe(false);
+      });
+    },
+  );
+
   it('returns to the previous verified build with no argument', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { second, third } = await threeBuilds(root);
@@ -1508,4 +1602,142 @@ describe('partial cleanup receipts through the CLI, issue732', () => {
       });
     },
   );
+});
+
+describe('retention plans over real local builds', () => {
+  it('uses the default five-build window with tied timestamps and skips a newer failed attempt', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const ids: BuildId[] = [];
+      for (let index = 0; index < 7; index += 1) {
+        writeFileSync(join(root, 'a.md'), `# A\n\nVersion ${index}.`);
+        const built = await runBuild({
+          config: loadConfig({ cwd: root }),
+          progress: new ProgressBus(),
+          activate: false,
+          now: () => new Date('2026-10-01T00:00:00.000Z'),
+        });
+        ids.push(built.buildId);
+      }
+      const lore = join(root, '.lore');
+      const state = openStateStore(lore);
+      try {
+        const failed = `lore_${'f'.repeat(64)}` as BuildId;
+        state.recordBuild({
+          buildId: failed,
+          state: 'failed',
+          createdAt: '2026-10-02T00:00:00.000Z',
+          counts: { artifacts: 0, nodes: 0, chunks: 0, tables: 0, tableRows: 0 },
+        });
+        expect(state.current()).toBeNull();
+        const history = state.listBuilds();
+        const before = ids.map((id) => readFileSync(join(lore, 'builds', id, 'context.sqlite')));
+        const ordered = ids.toSorted((a, b) => b.localeCompare(a));
+        const plan = planRetention(lore, history, null);
+        expect(plan.keep).toEqual(ordered.slice(0, 5));
+        expect(plan.remove).toEqual([failed, ...ordered.slice(5)]);
+        expect(plan.bytesFreed).toBeGreaterThan(0);
+        expect(plan.protectedReads).toEqual([]);
+        expect(ids.map((id) => readFileSync(join(lore, 'builds', id, 'context.sqlite')))).toEqual(
+          before,
+        );
+        expect(state.listBuilds()).toEqual(history);
+      } finally {
+        state.close();
+      }
+    });
+  });
+
+  it('keeps objects referenced by an interrupted candidate created after the cleanup preview', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const { first, third } = await threeBuilds(root);
+      const lore = join(root, '.lore');
+      const state = openStateStore(lore);
+      try {
+        const active = state.current()?.buildId;
+        if (active === undefined) throw new Error('The real build must activate its result.');
+        const preview = planRetention(lore, state.listBuilds(), active, 0);
+        const originalHashes = objectHashes(root, first);
+        expect(originalHashes.length).toBeGreaterThan(0);
+        expect(preview.objectsToRemove).toEqual(expect.arrayContaining(originalHashes));
+        const candidate = join(lore, 'tmp', 'interrupted');
+        mkdirSync(candidate, { recursive: true });
+        const catalog = join(candidate, 'context.sqlite');
+        copyFileSync(join(lore, 'builds', first, 'context.sqlite'), catalog);
+        const before = readFileSync(catalog);
+        writeFileSync(join(lore, 'tmp', 'notes.txt'), 'not a candidate directory');
+        writeFileSync(join(lore, 'builds', 'notes.txt'), 'not a build directory');
+        await new ProjectLock(join(lore, 'lock')).withLock(() =>
+          withReadReferenceLock(lore, () => {
+            const checked = reconcileRetention(lore, preview, state.listBuilds(), active, 0);
+            expect(checked.remove).toEqual(preview.remove);
+            expect(checked.objectsToRemove).not.toEqual(expect.arrayContaining(originalHashes));
+            for (const hash of originalHashes) expect(checked.objectsToRemove).not.toContain(hash);
+            state.forgetBuilds(checked.remove);
+            applyRetention(lore, checked);
+          }),
+        );
+        expect(state.listBuilds().map((record) => record.buildId)).toEqual([third]);
+        expect(readFileSync(catalog)).toEqual(before);
+        for (const hash of originalHashes) expect(existsSync(objectFile(root, hash))).toBe(true);
+        expect(existsSync(join(lore, 'builds', first))).toBe(false);
+        expect(existsSync(join(lore, 'builds', third, 'context.sqlite'))).toBe(true);
+        expect(readFileSync(join(lore, 'tmp', 'notes.txt'), 'utf8')).toBe(
+          'not a candidate directory',
+        );
+      } finally {
+        state.close();
+      }
+    });
+  });
+
+  it('explains request and cached reader protection until backend shutdown', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const built = await build(root);
+      const lore = join(root, '.lore');
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      const handles = await Promise.all([backend.provider.acquire(), backend.provider.acquire()]);
+      const state = openStateStore(lore);
+      try {
+        const held = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(held.protectedReads).toEqual([{ buildId: built.buildId, readers: 2 }]);
+        expect(renderRetentionPlan(held)).toContain(
+          `${built.buildId}: kept by 2 open runtime references`,
+        );
+        expect(renderRetentionPlan(held)).toContain('Nothing to remove. 1 build retained.');
+        for (const handle of handles) handle.release();
+        const idle = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(idle.protectedReads).toEqual([{ buildId: built.buildId, readers: 1 }]);
+        expect(renderRetentionPlan(idle)).toContain(
+          `${built.buildId}: kept by 1 open runtime reference`,
+        );
+        backend.close();
+        const released = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(released.protectedReads).toEqual([]);
+        expect(renderRetentionPlan(released)).toBe('Nothing to remove. 1 build retained.');
+        const { protectedReads: _references, ...legacy } = released;
+        expect(renderRetentionPlan(legacy)).toBe(renderRetentionPlan(released));
+      } finally {
+        for (const handle of handles) handle.release();
+        backend.close();
+        state.close();
+      }
+    });
+  });
+
+  it('plans and renders empty storage without creating build or temporary directories', async () => {
+    await withTempProject({}, async (temp) => {
+      const lore = join(temp.root, '.lore');
+      const preview = planRetention(lore, [], null);
+      expect(preview).toEqual({
+        protectedReads: [],
+        keep: [],
+        remove: [],
+        objectsToRemove: [],
+        bytesFreed: 0,
+      });
+      expect(reconcileRetention(lore, preview, [], null, 0)).toEqual(preview);
+      expect(renderRetentionPlan(preview)).toBe('Nothing to remove. 0 builds retained.');
+      expect(existsSync(lore)).toBe(false);
+    });
+  });
 });

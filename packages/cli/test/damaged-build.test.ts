@@ -1,4 +1,4 @@
-import { rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
@@ -25,13 +25,18 @@ const CONFIG = 'version: 1\nname: damaged\nsources:\n  - .\n';
 const RUNBOOK = '# Runbook\n\n## Rollback\n\nActivation is a pointer change.\n';
 
 /** Damages the active build, then proves a rebuild puts the project back. */
-async function recoversFrom(damage: (database: string, directory: string) => void): Promise<void> {
+async function recoversFrom(
+  damage: (database: string, directory: string) => void,
+  expectedFailure?: Record<string, unknown>,
+): Promise<void> {
   await withTempProject({ files: { 'lore.yaml': CONFIG, 'runbook.md': RUNBOOK } }, async (temp) => {
     const config = () => loadConfig({ cwd: temp.root });
     const first = await runBuild({ config: config(), progress: new ProgressBus() });
 
     const directory = join(temp.root, '.lore', 'builds', first.buildId);
     damage(join(directory, 'context.sqlite'), directory);
+    const databasePath = join(directory, 'context.sqlite');
+    const beforeRead = existsSync(databasePath) ? readFileSync(databasePath) : null;
 
     // Reading is expected to fail, and to fail in the taxonomy's terms rather than with a
     // raw SQLite string. Which code depends on the damage; that it is typed does not.
@@ -40,8 +45,11 @@ async function recoversFrom(damage: (database: string, directory: string) => voi
       .search({ query: 'rollback', limit: 5, includeArchived: false, debug: false })
       .catch((error: unknown) => error);
     broken.close();
+    if (beforeRead === null) expect(existsSync(databasePath)).toBe(false);
+    else expect(readFileSync(databasePath)).toEqual(beforeRead);
     expect((failure as { code?: string }).code).toMatch(/^LORE_E_/);
     expect((failure as { code?: string }).code).not.toBe('LORE_E_INTERNAL');
+    if (expectedFailure !== undefined) expect(failure).toMatchObject(expectedFailure);
 
     // The rebuild, which is what the remediation tells a reader to run.
     const again = await runBuild({ config: config(), progress: new ProgressBus() });
@@ -64,7 +72,88 @@ async function recoversFrom(damage: (database: string, directory: string) => voi
   });
 }
 
+describe('a build from a newer catalog schema', () => {
+  it('reports the version mismatch without modifying the sealed catalog', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'runbook.md': RUNBOOK } },
+      async (project) => {
+        const built = await runBuild({
+          config: loadConfig({ cwd: project.root }),
+          progress: new ProgressBus(),
+        });
+        const filename = join(project.root, '.lore', 'builds', built.buildId, 'context.sqlite');
+        const database = new DatabaseSync(filename);
+        try {
+          database.exec(
+            "UPDATE schema_migrations SET id = '9999' WHERE id = (SELECT max(id) FROM schema_migrations)",
+          );
+        } finally {
+          database.close();
+        }
+        const sealed = readFileSync(filename);
+        const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+        try {
+          await expect(
+            createRuntime(backend).search({
+              query: 'rollback',
+              limit: 5,
+              includeArchived: false,
+              debug: false,
+            }),
+          ).rejects.toMatchObject({
+            code: 'LORE_E_SCHEMA_MISMATCH',
+            subject: built.buildId,
+            details: { actual: '9999', expected: expect.stringMatching(/^0[0-9]{3}$/) },
+            remediation: expect.stringContaining('Upgrade Lorepack, or rebuild'),
+          });
+        } finally {
+          backend.close();
+        }
+        expect(readFileSync(filename)).toEqual(sealed);
+      },
+    );
+  });
+});
+
 describe('a build damaged on disk', () => {
+  it.each([
+    { name: 'missing ledger', sql: 'DROP TABLE schema_migrations' },
+    {
+      name: 'missing migration identifier',
+      sql: 'ALTER TABLE schema_migrations RENAME COLUMN id TO removed_id',
+    },
+  ])('recovers from a $name after refusing the unchanged damaged catalog', async ({ sql }) => {
+    await recoversFrom(
+      (database) => {
+        const writable = new DatabaseSync(database);
+        try {
+          writable.exec(sql);
+        } finally {
+          writable.close();
+        }
+      },
+      { code: 'LORE_E_OBJECT_CORRUPT', remediation: expect.stringContaining('lorepack build') },
+    );
+  });
+
+  it('recovers when the catalog has no recorded migrations', async () => {
+    await recoversFrom(
+      (database) => {
+        const writable = new DatabaseSync(database);
+        try {
+          writable.exec('DELETE FROM schema_migrations');
+        } finally {
+          writable.close();
+        }
+      },
+      {
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        details: { actual: '0000', expected: expect.stringMatching(/^\d{4}$/) },
+        remediation: expect.stringContaining('lorepack build'),
+      },
+    );
+  });
+
   it('recovers when the database was deleted', async () => {
     await recoversFrom((database) => rmSync(database));
   });

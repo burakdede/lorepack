@@ -1,10 +1,26 @@
-import { createWriteStream, readFileSync, writeFileSync } from 'node:fs';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { type LoreError, sha256Hex } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import yazl from 'yazl';
-import { ARCHIVE_LIMITS, readArchive, verifyArchive } from '../src/archive.js';
+import {
+  ARCHIVE_LIMITS,
+  archivePath,
+  collectBuildMembers,
+  collectObjects,
+  collectOriginals,
+  readArchive,
+  verifyArchive,
+} from '../src/archive.js';
 import { validBuild } from './archive_fixture.js';
 
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
@@ -124,9 +140,9 @@ describe('archive verification', () => {
       const archive = join(project.root, 'duplicate.lorepack');
       await writeDuplicateArchive(archive);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -194,13 +210,13 @@ describe('archive verification', () => {
       ]);
       for (const [name] of bombs) declareSize(archive, name, 0xfffffff0);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxTotalBytes' }),
-      });
-      await expect(readArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      } satisfies Partial<LoreError>);
+      await expect(readArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -211,10 +227,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxMemberBytes: 8 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxMemberBytes', member: 'manifest.json' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -250,10 +266,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxMembers: 2 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxMembers' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -264,10 +280,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxIndexBytes: 16 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxIndexBytes' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -277,10 +293,10 @@ describe('archive verification', () => {
       await writeZip(archive, [...BUILD, ['checksums.json', indexOf(BUILD)]]);
       declareSize(archive, 'context.sqlite', 4);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
         subject: 'context.sqlite',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -294,10 +310,10 @@ describe('archive verification', () => {
       const archive = join(project.root, 'schema.lorepack');
       await writeZip(archive, [...BUILD, ['checksums.json', indexOf(BUILD, overrides)]]);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
         subject: 'checksums.json',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -351,10 +367,10 @@ describe('archive verification', () => {
       declareHost(archive, 'reports/link', host);
 
       for (const read of [verifyArchive, readArchive]) {
-        await expect(read(archive)).rejects.toMatchObject<Partial<LoreError>>({
+        await expect(read(archive)).rejects.toMatchObject({
           code: 'LORE_E_OBJECT_CORRUPT',
           subject: 'reports/link',
-        });
+        } satisfies Partial<LoreError>);
       }
     });
   });
@@ -424,4 +440,232 @@ describe('archive verification', () => {
       ]);
     });
   });
+});
+
+describe('archive identity and index boundaries', () => {
+  it('refuses a complete ZIP without a checksum index', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'no-index.lorepack');
+      await writeZip(archive, validBuild(project.root));
+      await expect(verifyArchive(archive)).rejects.toMatchObject({ code: 'LORE_E_OBJECT_CORRUPT' });
+    });
+  });
+
+  it('requires retained identity inputs even when a legacy package has matching checksums', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'legacy.lorepack');
+      const members = validBuild(project.root).filter(
+        ([name]) => name !== 'reports/build-id-inputs.json',
+      );
+      await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
+        code: 'LORE_E_SCHEMA_MISMATCH',
+        subject: 'reports/build-id-inputs.json',
+      });
+    });
+  });
+
+  it.each(['manifest.json', 'reports/build-id-inputs.json'])(
+    'refuses checksummed but unsupported identity data in %s',
+    async (name) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'unsupported.lorepack');
+        const members = validBuild(project.root).map(
+          ([member, bytes]) =>
+            [member, member === name ? new TextEncoder().encode('{}') : bytes] as const,
+        );
+        await writeZip(archive, [...members, ['checksums.json', indexOf(members)]]);
+        await expect(verifyArchive(archive)).rejects.toMatchObject({
+          code: 'LORE_E_SCHEMA_MISMATCH',
+        });
+      });
+    },
+  );
+
+  it('names an unreadable checksum index as a corrupt package', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'bad-index.lorepack');
+      await writeZip(archive, [
+        ...validBuild(project.root),
+        ['checksums.json', new TextEncoder().encode('{')],
+      ]);
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
+        code: 'LORE_E_OBJECT_CORRUPT',
+        subject: 'checksums.json',
+      });
+    });
+  });
+});
+
+describe('archive declared-member and metadata limits', () => {
+  it('reports the expected digest of a listed member missing from the ZIP', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'missing-catalog.lorepack');
+      const members = validBuild(project.root);
+      const catalog = members.find(([name]) => name === 'context.sqlite');
+      if (catalog === undefined) throw new Error('Expected a fixture catalog.');
+      await writeZip(archive, [
+        ...members.filter(([name]) => name !== 'context.sqlite'),
+        ['checksums.json', indexOf(members)],
+      ]);
+      const result = await verifyArchive(archive);
+      expect(result.ok).toBe(false);
+      expect(result.failures).toEqual([
+        { member: 'context.sqlite', reason: 'missing', expected: sha256Hex(catalog[1]) },
+      ]);
+    });
+  });
+
+  it.each(['manifest.json', 'reports/build-id-inputs.json'])(
+    'applies the metadata byte limit to %s after checking the index',
+    async (name) => {
+      await withTempProject({}, async (project) => {
+        const archive = join(project.root, 'large-metadata.lorepack');
+        const members = validBuild(project.root);
+        const peerBytes = Math.max(
+          ...members
+            .filter(([member]) => member !== name && member !== 'context.sqlite')
+            .map(([, bytes]) => bytes.byteLength),
+        );
+        const padded = members.map(
+          ([member, bytes]) =>
+            [
+              member,
+              member === name
+                ? new TextEncoder().encode(
+                    `${new TextDecoder().decode(bytes)}${' '.repeat(peerBytes + 1024)}`,
+                  )
+                : bytes,
+            ] as const,
+        );
+        const index = indexOf(padded);
+        const maxIndexBytes = Math.max(index.byteLength, peerBytes);
+        await writeZip(archive, [...padded, ['checksums.json', index]]);
+        await expect(
+          verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxIndexBytes } }),
+        ).rejects.toMatchObject({
+          code: 'LORE_E_LIMIT_EXCEEDED',
+          subject: name,
+          details: { limit: 'maxIndexBytes', value: maxIndexBytes, member: name },
+        });
+      });
+    },
+  );
+});
+
+describe('archive member collection', () => {
+  it('collects a minimal build without reports or an explicit object list', async () => {
+    await withTempProject(
+      { files: { 'build/manifest.json': MANIFEST, 'build/context.sqlite': DATABASE } },
+      async (project) => {
+        expect(collectBuildMembers(project.path('build'))).toEqual([
+          { path: 'manifest.json', bytes: MANIFEST },
+          { path: 'context.sqlite', bytes: DATABASE },
+        ]);
+      },
+    );
+  });
+
+  it('orders report files and objects while preserving binary bytes and caller order', async () => {
+    const binary = new Uint8Array([0, 128, 255]);
+    await withTempProject(
+      {
+        files: {
+          'build/manifest.json': MANIFEST,
+          'build/context.sqlite': DATABASE,
+          'build/reports/z.json': binary,
+          'build/reports/a.json': '{}\n',
+        },
+      },
+      async (project) => {
+        mkdirSync(project.path('build/reports/not-a-report'));
+        const objects = [
+          { path: 'objects/z', bytes: binary },
+          { path: 'objects/a', bytes: new Uint8Array([1]) },
+        ];
+        const result = collectBuildMembers(project.path('build'), objects);
+        expect(result.map((member) => member.path)).toEqual([
+          'manifest.json',
+          'context.sqlite',
+          'reports/a.json',
+          'reports/z.json',
+          'objects/a',
+          'objects/z',
+        ]);
+        expect(result.find((member) => member.path === 'reports/z.json')?.bytes).toEqual(binary);
+        expect(result.find((member) => member.path === 'objects/z')?.bytes).toEqual(binary);
+        expect(objects.map((member) => member.path)).toEqual(['objects/z', 'objects/a']);
+      },
+    );
+  });
+
+  it.each(['changed', 'removed', 'directory'] as const)(
+    'refuses a source that was %s after its content hash was recorded',
+    async (state) => {
+      await withTempProject({ files: { 'source.md': 'recorded bytes' } }, async (project) => {
+        const source = project.path('source.md');
+        const contentHash = sha256Hex(readFileSync(source));
+        if (state === 'changed') writeFileSync(source, 'new bytes');
+        else {
+          rmSync(source);
+          if (state === 'directory') mkdirSync(source);
+        }
+        expect(() =>
+          collectOriginals(project.root, [{ path: 'source.md', contentHash }]),
+        ).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_STALE_SOURCES', path: 'source.md' }),
+        );
+        if (state === 'changed') expect(readFileSync(source, 'utf8')).toBe('new bytes');
+        else if (state === 'directory') expect(statSync(source).isDirectory()).toBe(true);
+        else expect(existsSync(source)).toBe(false);
+      });
+    },
+  );
+
+  it('retains original binary bytes in stable archive order without reordering the input', async () => {
+    const binary = new Uint8Array([0, 128, 255]);
+    await withTempProject(
+      { files: { 'docs/z.bin': binary, 'docs/a.md': 'source' } },
+      async (project) => {
+        const originals = ['docs/z.bin', 'docs/a.md'].map((path) => ({
+          path,
+          contentHash: sha256Hex(readFileSync(project.path(path))),
+        }));
+        const result = collectOriginals(project.root, originals);
+        expect(result.map((member) => member.path)).toEqual([
+          'originals/docs/a.md',
+          'originals/docs/z.bin',
+        ]);
+        expect(result[1]?.bytes).toEqual(binary);
+        expect(originals.map((source) => source.path)).toEqual(['docs/z.bin', 'docs/a.md']);
+        expect(archivePath(project.root, project.path('docs/a.md'))).toBe('docs/a.md');
+      },
+    );
+  });
+});
+
+describe('archive object collection', () => {
+  it.each(['intact', 'missing', 'changed'] as const)(
+    'checks the %s addressed object before packaging',
+    async (state) => {
+      const bytes = new Uint8Array([0, 128, 255]);
+      const hash = sha256Hex(bytes);
+      const path = `objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+      await withTempProject({ files: { [path]: bytes } }, async (project) => {
+        if (state === 'missing') rmSync(project.path(path));
+        if (state === 'changed') writeFileSync(project.path(path), 'changed bytes');
+        const collect = () => collectObjects(project.path('objects'), [hash, hash]);
+        if (state === 'intact') {
+          expect(collect()).toEqual([{ path, bytes }]);
+          expect(readFileSync(project.path(path))).toEqual(Buffer.from(bytes));
+        } else {
+          expect(collect).toThrowError(
+            expect.objectContaining({ code: 'LORE_E_OBJECT_CORRUPT', subject: hash }),
+          );
+          if (state === 'missing') expect(existsSync(project.path(path))).toBe(false);
+          else expect(readFileSync(project.path(path), 'utf8')).toBe('changed bytes');
+        }
+      });
+    },
+  );
 });
