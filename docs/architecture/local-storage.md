@@ -37,6 +37,14 @@ Windows has no equivalent POSIX mode bits for Node to set. There, `.lore` inheri
 parent directory ACLs. Lorepack does not install or audit a separate Windows ACL; use a
 parent directory whose access matches the project owner's requirements.
 
+## Archive collection contracts
+
+Archive collection contracts use real filesystem fixtures in
+[`archive.test.ts`](../../packages/backend-local/test/archive.test.ts). They check stable
+member ordering and exact binary bytes, reject missing or changed addressed objects,
+and refuse an original source changed to a directory, removed or edited after its hash
+was recorded. Refused collection leaves the current source bytes untouched.
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build
