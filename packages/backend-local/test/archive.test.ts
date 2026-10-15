@@ -1,10 +1,26 @@
-import { createWriteStream, readFileSync, writeFileSync } from 'node:fs';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { type LoreError, sha256Hex } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import yazl from 'yazl';
-import { ARCHIVE_LIMITS, readArchive, verifyArchive } from '../src/archive.js';
+import {
+  ARCHIVE_LIMITS,
+  archivePath,
+  collectBuildMembers,
+  collectObjects,
+  collectOriginals,
+  readArchive,
+  verifyArchive,
+} from '../src/archive.js';
 import { validBuild } from './archive_fixture.js';
 
 const MANIFEST = new TextEncoder().encode('{"buildId":"lore_test"}\n');
@@ -532,6 +548,123 @@ describe('archive declared-member and metadata limits', () => {
           subject: name,
           details: { limit: 'maxIndexBytes', value: maxIndexBytes, member: name },
         });
+      });
+    },
+  );
+});
+
+describe('archive member collection', () => {
+  it('collects a minimal build without reports or an explicit object list', async () => {
+    await withTempProject(
+      { files: { 'build/manifest.json': MANIFEST, 'build/context.sqlite': DATABASE } },
+      async (project) => {
+        expect(collectBuildMembers(project.path('build'))).toEqual([
+          { path: 'manifest.json', bytes: MANIFEST },
+          { path: 'context.sqlite', bytes: DATABASE },
+        ]);
+      },
+    );
+  });
+
+  it('orders report files and objects while preserving binary bytes and caller order', async () => {
+    const binary = new Uint8Array([0, 128, 255]);
+    await withTempProject(
+      {
+        files: {
+          'build/manifest.json': MANIFEST,
+          'build/context.sqlite': DATABASE,
+          'build/reports/z.json': binary,
+          'build/reports/a.json': '{}\n',
+        },
+      },
+      async (project) => {
+        mkdirSync(project.path('build/reports/not-a-report'));
+        const objects = [
+          { path: 'objects/z', bytes: binary },
+          { path: 'objects/a', bytes: new Uint8Array([1]) },
+        ];
+        const result = collectBuildMembers(project.path('build'), objects);
+        expect(result.map((member) => member.path)).toEqual([
+          'manifest.json',
+          'context.sqlite',
+          'reports/a.json',
+          'reports/z.json',
+          'objects/a',
+          'objects/z',
+        ]);
+        expect(result.find((member) => member.path === 'reports/z.json')?.bytes).toEqual(binary);
+        expect(result.find((member) => member.path === 'objects/z')?.bytes).toEqual(binary);
+        expect(objects.map((member) => member.path)).toEqual(['objects/z', 'objects/a']);
+      },
+    );
+  });
+
+  it.each(['changed', 'removed', 'directory'] as const)(
+    'refuses a source that was %s after its content hash was recorded',
+    async (state) => {
+      await withTempProject({ files: { 'source.md': 'recorded bytes' } }, async (project) => {
+        const source = project.path('source.md');
+        const contentHash = sha256Hex(readFileSync(source));
+        if (state === 'changed') writeFileSync(source, 'new bytes');
+        else {
+          rmSync(source);
+          if (state === 'directory') mkdirSync(source);
+        }
+        expect(() =>
+          collectOriginals(project.root, [{ path: 'source.md', contentHash }]),
+        ).toThrowError(
+          expect.objectContaining({ code: 'LORE_E_STALE_SOURCES', path: 'source.md' }),
+        );
+        if (state === 'changed') expect(readFileSync(source, 'utf8')).toBe('new bytes');
+        else if (state === 'directory') expect(statSync(source).isDirectory()).toBe(true);
+        else expect(existsSync(source)).toBe(false);
+      });
+    },
+  );
+
+  it('retains original binary bytes in stable archive order without reordering the input', async () => {
+    const binary = new Uint8Array([0, 128, 255]);
+    await withTempProject(
+      { files: { 'docs/z.bin': binary, 'docs/a.md': 'source' } },
+      async (project) => {
+        const originals = ['docs/z.bin', 'docs/a.md'].map((path) => ({
+          path,
+          contentHash: sha256Hex(readFileSync(project.path(path))),
+        }));
+        const result = collectOriginals(project.root, originals);
+        expect(result.map((member) => member.path)).toEqual([
+          'originals/docs/a.md',
+          'originals/docs/z.bin',
+        ]);
+        expect(result[1]?.bytes).toEqual(binary);
+        expect(originals.map((source) => source.path)).toEqual(['docs/z.bin', 'docs/a.md']);
+        expect(archivePath(project.root, project.path('docs/a.md'))).toBe('docs/a.md');
+      },
+    );
+  });
+});
+
+describe('archive object collection', () => {
+  it.each(['intact', 'missing', 'changed'] as const)(
+    'checks the %s addressed object before packaging',
+    async (state) => {
+      const bytes = new Uint8Array([0, 128, 255]);
+      const hash = sha256Hex(bytes);
+      const path = `objects/sha256/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash.slice(4)}`;
+      await withTempProject({ files: { [path]: bytes } }, async (project) => {
+        if (state === 'missing') rmSync(project.path(path));
+        if (state === 'changed') writeFileSync(project.path(path), 'changed bytes');
+        const collect = () => collectObjects(project.path('objects'), [hash, hash]);
+        if (state === 'intact') {
+          expect(collect()).toEqual([{ path, bytes }]);
+          expect(readFileSync(project.path(path))).toEqual(Buffer.from(bytes));
+        } else {
+          expect(collect).toThrowError(
+            expect.objectContaining({ code: 'LORE_E_OBJECT_CORRUPT', subject: hash }),
+          );
+          if (state === 'missing') expect(existsSync(project.path(path))).toBe(false);
+          else expect(readFileSync(project.path(path), 'utf8')).toBe('changed bytes');
+        }
       });
     },
   );
