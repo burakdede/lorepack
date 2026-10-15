@@ -92,6 +92,7 @@ interface TestFixtures {
 
 /** Worker-scoped: one project and one server for the whole run. */
 interface WorkerFixtures {
+  readonly inventorySourceCount: number;
   readonly session: Session;
 }
 
@@ -127,12 +128,18 @@ async function setupStep(project: string, args: readonly string[]): Promise<void
 
 /** One project and one server for the whole run, because building per test is minutes. */
 export const test = base.extend<TestFixtures, WorkerFixtures>({
+  inventorySourceCount: [0, { scope: 'worker', option: true }],
   session: [
-    // biome-ignore lint/correctness/noEmptyPattern: Playwright's fixture signature.
-    async ({}, use) => {
+    async ({ inventorySourceCount }, use) => {
       const projectRoot = mkdtempSync(join(tmpdir(), 'lore-studio-e2e-'));
       mkdirSync(join(projectRoot, 'docs'));
       writeFileSync(join(projectRoot, 'docs', 'runbook.md'), RUNBOOK, 'utf8');
+      for (let index = 0; index < inventorySourceCount; index += 1) {
+        writeFileSync(
+          join(projectRoot, 'docs', `page-${String(index).padStart(2, '0')}.md`),
+          `# Inventory page ${index}\n\nA retained source document.\n`,
+        );
+      }
       writeFileSync(join(projectRoot, 'docs', 'onboarding.md'), ONBOARDING, 'utf8');
       // A file no parser handles, so the exclusion list on Sources has something real in it.
       writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));

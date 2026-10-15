@@ -1,20 +1,9 @@
-import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from './fixture.js';
 
+test.use({ inventorySourceCount: 51 });
+
 test('browses a source beyond the first inventory page', async ({ page, session, checkA11y }) => {
-  for (let index = 0; index < 51; index += 1) {
-    writeFileSync(
-      join(session.projectRoot, 'docs', `page-${String(index).padStart(2, '0')}.md`),
-      `# Inventory page ${index}\n\nA retained source document.\n`,
-    );
-  }
-  await expect
-    .poll(async () => {
-      const response = await page.request.get(`${session.url}/v1/build`);
-      return ((await response.json()) as { counts: { artifacts: number } }).counts.artifacts;
-    })
-    .toBeGreaterThan(50);
   const firstResponse = await page.request.get(`${session.url}/v1/sources`);
   const first = (await firstResponse.json()) as {
     buildId: string;
