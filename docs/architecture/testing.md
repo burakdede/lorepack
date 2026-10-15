@@ -195,7 +195,14 @@ prototype remains outside the default runtime.
 The offline RAG report test runs the existing command with its full iteration counts.
 It checks corpus/workload hashes, query counts, estimated prompt tokens and explicit
 unmeasured answer/cost fields. Missing build paths and unsupported modes fail in
-real subprocesses before database access. These tests make no provider or model calls.
+real subprocesses before database access.
+
+Hosted worker contract tests use a real loopback HTTP provider fixture and temporary
+SQLite catalog. They preserve the original three index samples, 30 queries and 20
+context iterations, and check complete/incomplete usage, report arithmetic, source
+mentions, HTTP/transport failures and missing configuration. Empty offline retrieval
+retains zero citations and unmeasured answer quality. No external provider or model
+is called; fixture values do not qualify performance, prices or answer quality.
 
 The direct SQLite comparison runs its worker over a newly compiled mixed fixture
 and verifies that the build database remains byte-identical. The current report
