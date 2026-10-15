@@ -1,0 +1,68 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 90,
+    "contentHash": "f01b007c1426b314bceec80bcd275122263ee6cf410121cb93bb23051aa46283",
+    "displayPath": "documents/text/operations.txt",
+    "id": "fixtures:documents/text/operations.txt",
+    "mediaType": "text/plain",
+    "metadata": {},
+    "parserId": "text",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/text/operations.txt",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "operations"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/text/operations.txt",
+      "id": "fixtures:documents/text/operations.txt#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/text/operations.txt",
+        "lineEnd": 5,
+        "lineStart": 1,
+        "relativePath": "documents/text/operations.txt"
+      },
+      "metadata": {},
+      "ordinal": 0,
+      "revisionHash": "c5b76bfa27c931b7f0ec149098d9a045f375e9f61d7905bbfc177034d2893a0d",
+      "title": "operations"
+    },
+    {
+      "artifactId": "fixtures:documents/text/operations.txt",
+      "id": "fixtures:documents/text/operations.txt#0.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/text/operations.txt",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/text/operations.txt"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/text/operations.txt#0",
+      "revisionHash": "c098a75a4c48e26197af1e9b36c358e3a03fb6e131c757f8eb57350a7ed2cb2e",
+      "text": "Release checklist"
+    },
+    {
+      "artifactId": "fixtures:documents/text/operations.txt",
+      "id": "fixtures:documents/text/operations.txt#0.2",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/text/operations.txt",
+        "lineEnd": 4,
+        "lineStart": 3,
+        "relativePath": "documents/text/operations.txt"
+      },
+      "metadata": {},
+      "ordinal": 2,
+      "parentId": "fixtures:documents/text/operations.txt#0",
+      "revisionHash": "420c1663b8a73b23db2bca481df295ce4f8176acf61975809de6c3555aebe72f",
+      "text": "Ask the owner before activation.\nKeep the previous build for rollback."
+    }
+  ],
+  "warnings": []
+}

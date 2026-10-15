@@ -15,6 +15,20 @@ ordinal path, locator construction, and strict decoding.
 | CSV | `csv-parse` | 5 |
 | XLSX | [our own reader](./adr-xlsx-parser.md) over `yauzl` and `sax` | 5 |
 
+## Committed structural contracts
+
+`packages/parsers/test/golden.test.ts` compares actual source bytes against committed
+artifact metadata, node trees, locators and warnings for every supported format ID.
+CSV and XLSX goldens also retain complete typed tables, rows and inference metadata.
+Plain text and source code have separate cases; a registry check catches a newly
+available format without a golden fixture. Every case parses twice for byte-identical
+output. The existing HTML-specific golden tests remain in place.
+
+The [fixture guide](../../fixtures/README.md) records source provenance and the deliberate
+regeneration command. Review a golden diff against its source, not just the current
+parser output. Independent fixture landmarks check the PDF page gap, DOCX hierarchy,
+code line ranges and spreadsheet cached formula/row values.
+
 ## A parser may return a promise
 
 See [build orchestration](./build-orchestration.md#a-parser-may-return-a-promise). PDF and DOCX

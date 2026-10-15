@@ -1,0 +1,4 @@
+Release checklist
+
+Ask the owner before activation.
+Keep the previous build for rollback.

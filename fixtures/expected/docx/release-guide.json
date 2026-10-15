@@ -1,0 +1,141 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 1963,
+    "contentHash": "c0cf6b365b2ed776db91821d8026c786d2cd4028742d6fe4f477d3c4f412752e",
+    "displayPath": "documents/docx/release-guide.docx",
+    "id": "fixtures:documents/docx/release-guide.docx",
+    "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "metadata": {
+      "noisePolicyVersion": 1,
+      "pagination": "none: a DOCX is paginated at render time, so it has no page numbers"
+    },
+    "parserId": "docx",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/docx/release-guide.docx",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "Release guide"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {
+        "noisePolicyVersion": 1
+      },
+      "ordinal": 0,
+      "revisionHash": "06694d18844029c380279d0e400664959c9d623d2ad47b55bb73adbbd9cf69eb",
+      "title": "Release guide"
+    },
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0.1",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {
+        "depth": 1
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/docx/release-guide.docx#0",
+      "revisionHash": "e35161ce6d66ed2c7c8d5380d18dd1240bda720ef0b05768a002da449061708c",
+      "title": "Release guide"
+    },
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0.1.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "headingPath": [
+          "Release guide"
+        ],
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/docx/release-guide.docx#0.1",
+      "revisionHash": "6a66e4f47b3a70f3631299cb0cac0020c81af42a40346e325197fb8d16e32711",
+      "text": "Keep the approved build."
+    },
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0.1.2",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "headingPath": [
+          "Release guide"
+        ],
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {
+        "depth": 2
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/docx/release-guide.docx#0.1",
+      "revisionHash": "e275c6fe44a0d08b16504d93f5876fa1d417daf30ed031c1edb7cd75d4c10c37",
+      "title": "Rollback"
+    },
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0.1.2.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "headingPath": [
+          "Release guide",
+          "Rollback"
+        ],
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/docx/release-guide.docx#0.1.2",
+      "revisionHash": "03c21dfa7e2d5a0f4f5e31c9ba4c0e9f122b66e01578fdba68d9de75cde451c3",
+      "text": "Ask the owner before activation."
+    },
+    {
+      "artifactId": "fixtures:documents/docx/release-guide.docx",
+      "id": "fixtures:documents/docx/release-guide.docx#0.1.2.2",
+      "kind": "table",
+      "locator": {
+        "artifactId": "fixtures:documents/docx/release-guide.docx",
+        "headingPath": [
+          "Release guide",
+          "Rollback"
+        ],
+        "lineEnd": 1,
+        "lineStart": 1,
+        "relativePath": "documents/docx/release-guide.docx"
+      },
+      "metadata": {
+        "rows": 2
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/docx/release-guide.docx#0.1.2",
+      "revisionHash": "8197a54f82bf296c83640d357b6918b02b0e0fb22d9166ade8348c9c208ae56e",
+      "text": "Step\nOwner\nActivate\nRelease manager"
+    }
+  ],
+  "warnings": []
+}

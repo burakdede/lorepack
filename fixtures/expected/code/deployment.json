@@ -1,0 +1,72 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 126,
+    "contentHash": "39460c8267eef6fb57a114a4c7d3c89153ed3035af429f36f7ab0dae60a422bd",
+    "displayPath": "documents/code/deployment.ts",
+    "id": "fixtures:documents/code/deployment.ts",
+    "mediaType": "text/plain",
+    "metadata": {
+      "language": "ts"
+    },
+    "parserId": "code",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/code/deployment.ts",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "deployment"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/code/deployment.ts",
+      "id": "fixtures:documents/code/deployment.ts#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/code/deployment.ts",
+        "lineEnd": 6,
+        "lineStart": 1,
+        "relativePath": "documents/code/deployment.ts"
+      },
+      "metadata": {
+        "language": "ts"
+      },
+      "ordinal": 0,
+      "revisionHash": "e2c6016ad205b76838a71fd1023ae3acf5002484dc4e53e0124ad1b55e40bf66",
+      "title": "deployment"
+    },
+    {
+      "artifactId": "fixtures:documents/code/deployment.ts",
+      "id": "fixtures:documents/code/deployment.ts#0.1",
+      "kind": "code",
+      "locator": {
+        "artifactId": "fixtures:documents/code/deployment.ts",
+        "lineEnd": 3,
+        "lineStart": 1,
+        "relativePath": "documents/code/deployment.ts"
+      },
+      "metadata": {},
+      "ordinal": 1,
+      "parentId": "fixtures:documents/code/deployment.ts#0",
+      "revisionHash": "5249dad45ceed59f62d489b99402030c05a860da058a9e4f50d4cafd9f397a29",
+      "text": "export function releaseName(version: string): string {\n  return `release-${version}`;\n}"
+    },
+    {
+      "artifactId": "fixtures:documents/code/deployment.ts",
+      "id": "fixtures:documents/code/deployment.ts#0.2",
+      "kind": "code",
+      "locator": {
+        "artifactId": "fixtures:documents/code/deployment.ts",
+        "lineEnd": 5,
+        "lineStart": 5,
+        "relativePath": "documents/code/deployment.ts"
+      },
+      "metadata": {},
+      "ordinal": 2,
+      "parentId": "fixtures:documents/code/deployment.ts#0",
+      "revisionHash": "195d2d9d1c0170855f6ebee8df7fdd328448dc0f1dbccfb8d7a7b048a8915ec0",
+      "text": "export const rollbackEnabled = true;"
+    }
+  ],
+  "warnings": []
+}
