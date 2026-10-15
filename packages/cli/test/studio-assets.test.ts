@@ -25,6 +25,8 @@ beforeAll(() => {
     'utf8',
   );
   writeFileSync(join(root, 'assets', 'app.js'), 'console.log(1);\n', 'utf8');
+  mkdirSync(join(root, 'v2'));
+  writeFileSync(join(root, 'v2', 'build'), 'This file must not shadow the API namespace.');
 });
 
 afterAll(() => {
@@ -51,6 +53,18 @@ function directives(policy: string | null): Map<string, string> {
 }
 
 describe('Studio responses', () => {
+  it.each(['/v2', '/v2/build', '/v0/search', '/v01/build', '/v999/other'])(
+    'leaves numeric API versions to the typed router: %s',
+    (path) => {
+      expect(createStudioAssets(root)(new Request(`http://127.0.0.1:4321${path}`))).toBeNull();
+    },
+  );
+
+  it.each(['/version-notes', '/v2-notes'])('keeps non-API Studio fallback paths: %s', (path) => {
+    expect(get(path).status).toBe(200);
+    expect(get(path).headers.get('Content-Type')).toContain('text/html');
+  });
+
   it.each(['/', '/#/versions', '/assets/app.js'])('refuse framing and sniffing on %s', (path) => {
     const response = get(path);
     expect(response.headers.get('X-Frame-Options')).toBe('DENY');

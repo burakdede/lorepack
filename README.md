@@ -74,6 +74,8 @@ platform in v0.1.
 - Versions shows build history, diffs, activation, rollback, and portable packaging.
 - Diagnostics shows environment checks, watcher state, and detected AI clients.
 
+Studio keeps API errors as JSON, including requests for unsupported API versions.
+
 ![Lorepack Studio, showing the active build, next steps, and the MCP endpoint for an agent](docs/images/studio-overview.png)
 
 Read the [Studio tour](docs/studio-tour.md) for route-by-route screenshots, workflow recordings,

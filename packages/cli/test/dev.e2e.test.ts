@@ -171,6 +171,21 @@ describe('one command on an unconfigured folder', () => {
     expect(started.stdout).toContain('lorepack connect vscode');
   }, 120_000);
 
+  it('returns typed errors for numeric API versions through the actual dev binary', async () => {
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    for (const path of ['/v2', '/v2/build', '/v0/search', '/v01/build', '/v999/other']) {
+      const response = await fetch(`${base}${path}`);
+      expect(response.status, path).toBe(404);
+      expect(response.headers.get('Content-Type'), path).toContain('application/json');
+      expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_INVALID_ARGUMENT' } });
+    }
+    const root = await fetch(base);
+    expect(root.status).toBe(200);
+    expect(root.headers.get('Content-Type')).toContain('text/html');
+    expect((await fetch(`${base}/v1/build`)).status).toBe(200);
+  }, 120_000);
+
   it('serves Studio at the root without shadowing the API', async () => {
     const started = await dev();
     const base = `http://127.0.0.1:${started.port}`;

@@ -56,6 +56,7 @@ export function createStudioAssets(root: string = studioRoot()): AssetHandler {
     if (!existsSync(index)) return null;
 
     const url = new URL(request.url);
+    if (/^\/v\d+(?:\/|$)/.test(url.pathname)) return null;
     const decoded = safePath(root, url.pathname);
 
     // Outside the asset root. Not dangerous so much as meaningless, but it is the one thing
@@ -66,8 +67,7 @@ export function createStudioAssets(root: string = studioRoot()): AssetHandler {
       return file(decoded);
     }
 
-    // A hash route, so every path that is not a file is the app itself. `/v1` and `/mcp` are
-    // registered before this handler and never reach it.
+    // A hash route: non-file paths outside the API namespace use the app shell.
     return file(index);
   };
 }

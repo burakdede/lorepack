@@ -189,6 +189,34 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 
+describe('numeric API versions with Studio mounted, issue427', () => {
+  it.each(['/v2', '/v2/build', '/v0/search', '/v01/build', '/v999/other'])(
+    'returns a typed 404 for %s before calling assets',
+    async (path) => {
+      let assetsRead = false;
+      const app = appFor({
+        assets: () => {
+          assetsRead = true;
+          return new Response('<main>Studio</main>', { headers: { 'Content-Type': 'text/html' } });
+        },
+      });
+      const response = await app.request(path);
+      expect(response.status).toBe(404);
+      expect(response.headers.get('Content-Type')).toContain('application/json');
+      expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_INVALID_ARGUMENT' } });
+      expect(assetsRead).toBe(false);
+    },
+  );
+
+  it.each(['/version-notes', '/v2-notes'])('keeps the Studio fallback for %s', async (path) => {
+    const response = await appFor({ assets: () => new Response('<main>Studio</main>') }).request(
+      path,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('<main>Studio</main>');
+  });
+});
+
 function registeredRoutes(app: ReturnType<typeof appFor>): string[] {
   return app.routes.map((route) => `${route.method} ${route.path}`);
 }
