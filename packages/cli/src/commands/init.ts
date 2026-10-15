@@ -51,7 +51,7 @@ function renderHuman(result: InitResult, dryRun: boolean): string {
     lines.push(
       `Warning: ${count(result.secretShaped.length, 'file')} ${
         result.secretShaped.length === 1 ? 'looks' : 'look'
-      } like credentials and will not be indexed:`,
+      } like credentials and are excluded by default:`,
     );
     for (const file of result.secretShaped.slice(0, 10)) lines.push(`  ${file}`);
     if (result.secretShaped.length > 10) {

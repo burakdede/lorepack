@@ -1,4 +1,5 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -67,6 +68,46 @@ function connectors(codexHome: string, vscodeUser: string): ClientConnector[] {
 }
 
 describe('what init and connect put in a project stays out of the build', () => {
+  it('keeps the real binary warning, exclusions and explicit opt-in consistent', async () => {
+    await withTempProject(
+      {
+        files: {
+          'docs/a.md': '# Ordinary context',
+          'Prod-Credentials.json': '{"key":"credentialCASEexample"}\n',
+          ID_RSA: 'example key name\n',
+          'Server.PEM': 'example certificate name\n',
+        },
+      },
+      (temp) => {
+        const cli = (...args: string[]) => {
+          const result = spawnSync(
+            process.execPath,
+            [join(import.meta.dirname, '..', 'dist', 'public-entry.js'), ...args],
+            { cwd: temp.root, encoding: 'utf8', input: '', timeout: 110_000 },
+          );
+          expect(result.error).toBeUndefined();
+          expect(result.status, result.stderr).toBe(0);
+          return result.stdout;
+        };
+        const initialized = cli('init');
+        expect(initialized).toContain('excluded by default');
+        for (const filename of ['Prod-Credentials.json', 'ID_RSA', 'Server.PEM']) {
+          expect(initialized).toContain(filename);
+        }
+        cli('build');
+        const exclusions = cli('inspect', 'exclusions');
+        for (const filename of ['Prod-Credentials.json', 'ID_RSA', 'Server.PEM']) {
+          expect(exclusions).toContain(filename);
+        }
+        expect(cli('search', 'credentialCASEexample')).toContain('No matches');
+        writeFileSync(join(temp.root, '.loreignore'), '!Prod-Credentials.json\n');
+        cli('build');
+        expect(cli('search', 'credentialCASEexample')).toContain('Prod-Credentials.json');
+        expect(cli('init')).toContain('excluded by default');
+      },
+    );
+  }, 120_000);
+
   it('indexes none of the client configuration, its backups, or credential-shaped files', async () => {
     await withTempProject({ files: FILES }, async (temp) => {
       const root = temp.root;
@@ -139,6 +180,9 @@ describe('what init and connect put in a project stays out of the build', () => 
           'docs/a.md': '# A\n',
           'Prod-Credentials.json': '{"key":"mixedCASEsecret"}\n',
           'keys/prod-credentials.json': '{"key":"lowerCASEsecret"}\n',
+          ID_RSA: 'keyNAMEexample\n',
+          'Server.PEM': 'certificateNAMEexample\n',
+          'nested/ID_RSA.txt': 'mixedCASEkeytext\n',
         },
       },
       async (temp) => {
@@ -147,11 +191,25 @@ describe('what init and connect put in a project stays out of the build', () => 
           .split('\n')
           .filter((line) => line.startsWith('  ') && !line.startsWith('  +'))
           .map((line) => line.trim());
-        expect(named).toContain('keys/prod-credentials.json');
+        expect(initialized.code).toBe(0);
+        for (const file of [
+          'keys/prod-credentials.json',
+          'Prod-Credentials.json',
+          'ID_RSA',
+          'Server.PEM',
+          'nested/ID_RSA.txt',
+        ])
+          expect(named).toContain(file);
 
         expect((await run(['--cwd', temp.root, 'build'])).code).toBe(0);
         const sources = (await run(['--cwd', temp.root, 'inspect', 'sources'])).stdout;
         for (const file of named) expect(sources, file).not.toContain(file);
+        expect(sources).toContain('docs/a.md');
+        for (const token of ['mixedCASEsecret', 'mixedCASEkeytext']) {
+          const searched = await run(['--cwd', temp.root, 'search', token]);
+          expect(searched.code).toBe(0);
+          expect(searched.stdout).toContain('No matches');
+        }
       },
     );
   }, 120_000);

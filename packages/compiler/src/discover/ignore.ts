@@ -15,6 +15,7 @@ export interface IgnoreRule {
   readonly pattern: string;
   readonly negated: boolean;
   readonly source: string;
+  readonly nocase?: boolean;
 }
 
 export interface Matcher {
@@ -98,11 +99,14 @@ function expand(pattern: string): string[] {
 export function createMatcher(rules: readonly IgnoreRule[]): Matcher {
   const compiled = rules.map((rule) => ({
     rule,
-    isMatch: picomatch(expand(rule.pattern), { dot: true }),
+    isMatch: picomatch(expand(rule.pattern), { dot: true, nocase: rule.nocase ?? false }),
     // A second matcher that answers "does this rule exclude the directory *itself*", which
     // is a different question from "does it exclude things inside it" and the reason
     // pruning needs its own form. See `decideDirectory`.
-    matchesDirectory: picomatch(directoryForms(rule.pattern), { dot: true }),
+    matchesDirectory: picomatch(directoryForms(rule.pattern), {
+      dot: true,
+      nocase: rule.nocase ?? false,
+    }),
   }));
 
   function decide(canonicalPath: string): IgnoreRule | null {

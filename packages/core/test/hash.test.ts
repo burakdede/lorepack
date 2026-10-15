@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import { loadConfig } from '../src/config/load.js';
 import { LoreError } from '../src/errors/lore-error.js';
 import {
   assertBuildId,
@@ -14,6 +15,7 @@ import {
 } from '../src/hash/build-id.js';
 import {
   CANONICALIZATION_VERSION,
+  type Canonical,
   canonicalize,
   EMPTY_ROOT,
   hashCanonical,
@@ -89,6 +91,25 @@ describe('hashRoot', () => {
 });
 
 describe('deriveBuildId', () => {
+  it('versions credential matching even when the project has no credential files', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': 'version: 1\nname: p\nsources: [.]\n', 'a.md': '# A' } },
+      (project) => {
+        const effectiveConfig = loadConfig({ cwd: project.root }).effective;
+        expect(effectiveConfig.defaultsVersion).toBe(2);
+        const current = deriveBuildId({
+          ...BASE,
+          effectiveConfig: effectiveConfig as unknown as Canonical,
+        });
+        const previous = deriveBuildId({
+          ...BASE,
+          effectiveConfig: { ...effectiveConfig, defaultsVersion: 1 } as unknown as Canonical,
+        });
+        expect(current).not.toBe(previous);
+      },
+    );
+  });
+
   it('produces lore_ followed by a full lowercase sha256', () => {
     const id = deriveBuildId(BASE);
     expect(id.startsWith('lore_')).toBe(true);

@@ -6,7 +6,7 @@
  * resolved value only if there is something to enumerate.
  */
 
-export const DEFAULTS_VERSION = 1 as const;
+export const DEFAULTS_VERSION = 2 as const;
 
 export interface ChunkingDefaults {
   readonly targetTokens: number;
@@ -38,7 +38,7 @@ export interface ProductDefaults {
 
 /**
  * Files that look like credentials. `lorepack init` names any it finds and promises they are
- * never indexed, so this list is spread into `ALWAYS_EXCLUDE` below rather than kept beside
+ * excluded by default, so this list is spread into `ALWAYS_EXCLUDE` below rather than kept beside
  * it. Two literals drifted once: `*.jks` and `*credentials*.json` were warned about and then
  * built (#585).
  *

@@ -515,7 +515,82 @@ describe('scale envelope', () => {
   });
 });
 
+describe('credential filename case policy', () => {
+  it('excludes mixed-case credential names at every depth and reports their default rule', async () => {
+    await withProject(
+      {
+        'a.md': '# Control',
+        'Prod-Credentials.json': '{"key":"example"}',
+        ID_RSA: 'example',
+        'Server.PEM': 'example',
+        'nested/ID_RSA.txt': 'example',
+        'nested/Client-CrEdEnTiAlS.JsOn': '{}',
+        'nested/.EnVrC': 'example',
+      },
+      (root) => {
+        const result = discoverIn(root);
+        expect(paths(result)).toEqual(['a.md']);
+        const excluded = result.exclusions.flatMap((entry) => entry.sample);
+        for (const path of [
+          'Prod-Credentials.json',
+          'ID_RSA',
+          'Server.PEM',
+          'nested/ID_RSA.txt',
+          'nested/Client-CrEdEnTiAlS.JsOn',
+          'nested/.EnVrC',
+        ]) {
+          expect(excluded).toContain(path);
+        }
+        expect(result.exclusions.every((entry) => entry.source === 'defaults')).toBe(true);
+      },
+    );
+  });
+
+  it('keeps user patterns and noncredential defaults case-sensitive', async () => {
+    await withProject(
+      {
+        '.loreignore': '*.TXT\n',
+        'allowed.txt': 'included',
+        'blocked.TXT': 'excluded',
+        'NODE_MODULES/notes.md': '# Included',
+      },
+      (root) => {
+        expect(paths(discoverIn(root))).toEqual(['NODE_MODULES/notes.md', 'allowed.txt']);
+      },
+    );
+  });
+
+  it.each([
+    ['Prod-Credentials.json', ['Prod-Credentials.json']],
+    ['prod-credentials.json', []],
+  ])('keeps the user negation %s case-sensitive', async (negated, expected) => {
+    await withProject(
+      {
+        '.loreignore': `!${negated}\n`,
+        'Prod-Credentials.json': '{}',
+        'other-CREDENTIALS.json': '{}',
+      },
+      (root) => {
+        const result = discoverIn(root);
+        expect(paths(result)).toEqual(expected);
+        expect(
+          result.exclusions.find((entry) => entry.pattern === '*credentials*.json')?.sample,
+        ).toContain('other-CREDENTIALS.json');
+      },
+    );
+  });
+});
+
 describe('ignore matching', () => {
+  it('applies an explicit nocase rule consistently to paths and directory pruning', () => {
+    const matcher = createMatcher([
+      { pattern: 'private/', negated: false, source: 'test', nocase: true },
+    ]);
+    expect(matcher.excludes('nested/PrIvAtE/notes.md')).toBe(true);
+    expect(matcher.decideDirectory('nested/PrIvAtE')?.pattern).toBe('private/');
+    expect(matcher.decideDirectory('nested/public')).toBeNull();
+  });
+
   it('parses comments, blank lines and negations', () => {
     const rules = parseIgnoreFile('# comment\n\ndrafts/\n!drafts/keep.md\n', '.loreignore');
     expect(rules).toEqual([
