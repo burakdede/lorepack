@@ -61,8 +61,18 @@ pnpm bench:rag -- --out /tmp/rag-hosted.json
 
 Optional pricing variables are `RAG_BENCH_INPUT_USD_PER_MILLION` and
 `RAG_BENCH_OUTPUT_USD_PER_MILLION`. The report records model, provider, tokenizer, stage latency,
-provider usage fields and estimated cost only when both prices are supplied. Errors redact the API
-key and bearer values. The benchmark does not print model responses.
+provider usage fields and estimated cost only when complete provider usage and both finite,
+nonnegative prices are supplied. Absent, blank, invalid, infinite or negative prices leave cost
+fields unavailable (`not-applicable` with null values). Explicit zero prices remain valid; an
+unknown price is never treated as free. Errors redact the API key and bearer values. The
+benchmark does not print model responses.
+
+Pricing regressions run the actual worker against a loopback HTTP fixture and temporary SQLite
+catalog. They check unavailable rates, explicit zero, arithmetic and incomplete usage without
+external credentials. Each pricing case runs the full worker workload, using the existing RAG
+command test's 30-second harness timeout rather than the five-second unit-test default. Worker
+sample counts and benchmark limits are unchanged. Fixture outputs are test evidence, not provider
+measurements.
 
 Hosted numbers are provider-, model-, tokenizer-, prompt- and date-dependent. They must remain
 separate from offline and Lorepack rows, and a hosted result without those identities is invalid.
