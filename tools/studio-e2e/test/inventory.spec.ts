@@ -1,9 +1,12 @@
-import { join } from 'node:path';
 import { expect, test } from './fixture.js';
 
 test.use({ inventorySourceCount: 51 });
 
-test('browses a source beyond the first inventory page', async ({ page, session, checkA11y }) => {
+test('browses a source beyond the first inventory page', async ({
+  page,
+  session,
+  checkA11y,
+}, testInfo) => {
   const firstResponse = await page.request.get(`${session.url}/v1/sources`);
   const first = (await firstResponse.json()) as {
     buildId: string;
@@ -30,7 +33,10 @@ test('browses a source beyond the first inventory page', async ({ page, session,
     expect(url.searchParams.get('offset')).toBe('50');
   }
   await checkA11y();
-  await page.screenshot({
-    path: join(import.meta.dirname, '../../../docs/images/studio_source_inventory.png'),
+  const screenshot = testInfo.outputPath('source-inventory.png');
+  await page.screenshot({ path: screenshot });
+  await testInfo.attach('Source inventory beyond page one', {
+    path: screenshot,
+    contentType: 'image/png',
   });
 });
