@@ -405,5 +405,7 @@ before returning the failure. An existing owned connection keeps its valid refer
 catalog/manifest/identity inputs in OS scratch. The archive verifier writes a
 reference FTS catalog beside its input, so it must never run directly inside a
 sealed build directory. Object checksums are streamed. Verification does not
-rewrite retained reports or activate a build. See the
+rewrite retained reports or activate a build. A signal that is already aborted returns
+`LORE_E_CANCELLED` before the catalog verifier creates a child process; its scratch inputs
+remain unchanged. This avoids starting work that is already cancelled. See the
 [validation contract](../validation.md) for coverage and limits.

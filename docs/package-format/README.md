@@ -146,6 +146,8 @@ unsigned package. No signature or trusted-builder assertion is inferred.
 Legacy archives without complete identity inputs fail with `LORE_E_SCHEMA_MISMATCH`.
 Existing immutable builds are never retrofitted. Catalog verification runs read-only in a
 child process with a 60-second deadline, 128 MiB JavaScript heap and 4 MiB reply ceiling.
+An already-aborted verification returns `LORE_E_CANCELLED` before resolving or launching
+that child. Default and custom abort reasons retain the same public cancellation error.
 Only fixed verification files are copied to a private temporary directory, removed after
 success or failure. No archive member is extracted into a user-selected destination.
 
