@@ -102,7 +102,7 @@ runRuntimeContract({
           };
         },
       }),
-      knownArtifactId: 'rollback.md',
+      knownArtifactId: 'contracted:rollback.md',
       matchingQuery: 'rollback',
       knownTableId: 'contracted:pricing.csv#table',
       close: () => {
@@ -186,7 +186,7 @@ describe('the suite catches what it exists to catch', () => {
       root,
       fixture: {
         runtime: createRuntime(backend),
-        knownArtifactId: 'rollback.md',
+        knownArtifactId: 'contracted:rollback.md',
         matchingQuery: 'rollback',
         close: () => {
           backend.close();

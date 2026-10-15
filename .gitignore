@@ -26,6 +26,7 @@ dist/
 # Lorepack workspace state (never committed; see docs/package-format)
 .lore/
 *.lorepack
+!fixtures/builds/source_selector.lorepack
 .wrangler/
 
 # test and coverage output

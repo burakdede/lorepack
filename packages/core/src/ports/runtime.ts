@@ -102,8 +102,8 @@ export interface CatalogStore {
    * pairs matter to `lorepack diff` and to the Phase 5 rule resolver, which read them directly.
    */
   supersededArtifacts(): Promise<ReadonlySet<string>>;
-  /** By artifact id or by canonical path. Null when the build has no such artifact. */
-  artifact(idOrPath: string): Promise<CatalogArtifact | null>;
+  /** Exact IDs and canonical paths are separate namespaces. Duplicate paths are refused. */
+  artifact(reference: string, by: 'id' | 'path'): Promise<CatalogArtifact | null>;
   /**
    * Every artifact in the build, in canonical order.
    *

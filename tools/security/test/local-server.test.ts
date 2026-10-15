@@ -130,10 +130,27 @@ describe('DNS rebinding: a foreign Host header reaches nothing (#547)', () => {
   });
 
   it('still answers the same read on a loopback name, so the guard is not refusing everything', async () => {
+    const listed = await send('/v1/sources', { headers: { Host: `127.0.0.1:${PORT}` } });
+    expect(listed.status).toBe(200);
+    const inventory = JSON.parse(listed.body) as {
+      buildId: string;
+      artifacts: { artifactId: string; displayPath: string }[];
+    };
+    const artifact = inventory.artifacts.find((item) => item.displayPath === 'docs/secret.md');
+    if (artifact === undefined) throw new Error('The server fixture did not index docs/secret.md.');
+    const path = `/v1/sources/${encodeURIComponent(artifact.artifactId)}`;
+    const refused = await send(path, { headers: { Host: `attacker.example:${PORT}` } });
+    expect(refused.status).toBe(403);
+    expect(refused.body).not.toContain('launch date');
+    expect(refused.body).not.toContain(project);
     for (const host of [`127.0.0.1:${PORT}`, `localhost:${PORT}`]) {
-      const answer = await send('/v1/sources/docs%2Fsecret.md', { headers: { Host: host } });
+      const answer = await send(path, { headers: { Host: host } });
       expect(answer.status, host).toBe(200);
       expect(answer.body).toContain('launch date');
+      expect(JSON.parse(answer.body)).toMatchObject({
+        buildId: inventory.buildId,
+        locator: { artifactId: artifact.artifactId },
+      });
     }
   });
 });

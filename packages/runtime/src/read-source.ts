@@ -56,7 +56,10 @@ async function resolveArtifact(
   request: SourceReadRequest,
 ): Promise<CatalogArtifact> {
   const wanted = request.artifactId ?? request.path ?? '';
-  const artifact = await scope.catalog.artifact(wanted);
+  const artifact = await scope.catalog.artifact(
+    wanted,
+    request.artifactId === undefined ? 'path' : 'id',
+  );
   if (artifact !== null) return artifact;
 
   // Reachable from MCP and REST, where the reader is a model with no shell, so the advice
