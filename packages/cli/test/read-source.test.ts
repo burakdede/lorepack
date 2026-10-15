@@ -3,7 +3,14 @@ import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus, RUNTIME_LIMITS } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
-import { makePdf, withTempProject } from '@lorepack/test-support';
+import {
+  inlineString,
+  makePdf,
+  makeXlsx,
+  number,
+  row,
+  withTempProject,
+} from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
@@ -279,6 +286,76 @@ describe('addressing', () => {
       expect(result.locator.lineEnd).toBeUndefined();
     });
   });
+});
+
+describe('sealed spreadsheet coordinates', () => {
+  it.each([false, true])(
+    'retains precise coordinates without inventing a whole-workbook location (multiple sheets: %s)',
+    async (multipleSheets) => {
+      const orders = {
+        name: 'Orders',
+        rows:
+          row(1, [inlineString('A1', 'Product'), inlineString('B1', 'Quantity')]) +
+          row(2, [inlineString('A2', 'Notebook'), number('B2', 3)]) +
+          row(3, [inlineString('A3', 'Pencil'), number('B3', 7)]),
+      };
+      const workbook = await makeXlsx({
+        sheets: [
+          orders,
+          ...(multipleSheets
+            ? [
+                {
+                  name: 'Budget',
+                  rows:
+                    row(1, [inlineString('A1', 'Team'), inlineString('B1', 'Amount')]) +
+                    row(2, [inlineString('A2', 'Support'), number('B2', 120)]),
+                },
+              ]
+            : []),
+        ],
+      });
+      await withTempProject(
+        { files: { 'lore.yaml': CONFIG, 'inventory.xlsx': workbook } },
+        async (project) => {
+          await runBuild({
+            config: loadConfig({ cwd: project.root }),
+            progress: new ProgressBus(),
+          });
+          rmSync(join(project.root, 'inventory.xlsx'));
+          const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+          try {
+            const runtime = createRuntime(backend);
+            const whole = await runtime.readSource({ path: 'inventory.xlsx' });
+            expect(whole.text).toContain('Notebook');
+            expect(whole.locator.relativePath).toBe('inventory.xlsx');
+            expect(whole.locator.lineStart).toBeUndefined();
+            expect(whole.locator.lineEnd).toBeUndefined();
+            if (multipleSheets) {
+              expect(whole.text).toContain('Support');
+              expect(whole.locator.sheet).toBeUndefined();
+              expect(whole.locator.cellRange).toBeUndefined();
+            } else {
+              expect(whole.locator).toMatchObject({ sheet: 'Orders', cellRange: 'A1:B3' });
+            }
+            const selected = await runtime.readSource({
+              path: 'inventory.xlsx',
+              headingPath: ['Orders'],
+            });
+            expect(selected.text).toContain('Notebook');
+            expect(selected.text).not.toContain('Support');
+            expect(selected.locator).toMatchObject({
+              relativePath: 'inventory.xlsx',
+              headingPath: ['Orders'],
+              sheet: 'Orders',
+              cellRange: 'A1:B3',
+            });
+          } finally {
+            backend.close();
+          }
+        },
+      );
+    },
+  );
 });
 
 describe('the request never reaches a filesystem', () => {
