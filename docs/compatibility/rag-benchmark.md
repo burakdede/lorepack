@@ -67,6 +67,13 @@ fields unavailable (`not-applicable` with null values). Explicit zero prices rem
 unknown price is never treated as free. Errors redact the API key and bearer values. The
 benchmark does not print model responses.
 
+Every SQLite connection closes before temporary index cleanup, including failed source
+queries and hosted requests. A provider, transport or missing-setting failure produces
+no successful report and keeps its original diagnostic instead of a Windows file-removal
+error. Resource regressions inspect real SQLite connection state and run both successful
+workloads and failure cases against local fixtures; they do not establish provider quality
+or reference-hardware performance.
+
 Pricing regressions run the actual worker against a loopback HTTP fixture and temporary SQLite
 catalog. They check unavailable rates, explicit zero, arithmetic and incomplete usage without
 external credentials. Each pricing case runs the full worker workload, using the existing RAG
