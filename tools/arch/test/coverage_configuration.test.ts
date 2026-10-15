@@ -64,6 +64,22 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('source-layout coverage configuration', () => {
+  it('preserves the original audit root scheduling in capture', async () => {
+    const { default: original } = await import('../../../vitest.config.js');
+    expect(original.test?.maxWorkers).toBeUndefined();
+    expect(original.test?.fileParallelism).toBeUndefined();
+    const captured = sourceCoverageConfig(
+      root,
+      ['packages/core'],
+      snapshot(),
+      join(root, 'reports'),
+      '',
+      original.test,
+    );
+    expect(captured.test).not.toHaveProperty('maxWorkers');
+    expect(captured.test).not.toHaveProperty('fileParallelism');
+  });
+
   it('uses exact export aliases and retains the parser compiled layout', () => {
     const config = configuration();
     const project = config.test.projects[0];
