@@ -277,6 +277,8 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       const rulesById = new Map(ruleResolution.resolved.map((entry) => [entry.artifactId, entry]));
 
       const cache = new ParseCache(join(loreDirectory, 'cache', 'parse'));
+      let reusedArtifacts = 0;
+      let rebuiltArtifacts = 0;
       progress.start('parsing', 'Parsing', fingerprint.artifacts.length);
       const parsed: CachedParse[] = [];
       const parseExclusions: { code: string; path: string; message: string }[] = [];
@@ -315,6 +317,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           // produce a build that cannot answer a source read.
           const cached = cache.get(key);
           if (cached !== null && (await objects.has(cached.objectHash))) {
+            reusedArtifacts += 1;
             parsed.push(withRules(cached, rulesById));
             handled += 1;
             continue;
@@ -325,6 +328,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             // In a separate process, under a deadline and a heap ceiling (#594). A rejection is
             // the parser's own error, rebuilt on this side with its class, so the handling
             // below is the same as when the parser ran here.
+            rebuiltArtifacts += 1;
             outcome = await host.parse(
               parser,
               {
@@ -508,8 +512,8 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           activated,
           counts: countsOf(parsed),
           warnings: warnings.length,
-          reusedArtifacts: cache.hits,
-          rebuiltArtifacts: cache.misses,
+          reusedArtifacts,
+          rebuiltArtifacts,
           durationMs: now().getTime() - startedAt.getTime(),
         };
       }
@@ -678,8 +682,8 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
         activated,
         counts,
         warnings: warnings.length,
-        reusedArtifacts: cache.hits,
-        rebuiltArtifacts: cache.misses,
+        reusedArtifacts,
+        rebuiltArtifacts,
         durationMs: now().getTime() - startedAt.getTime(),
       };
     } finally {

@@ -106,6 +106,26 @@ produce a build that cannot answer a source read.
 A corrupt, truncated or unwritable cache is treated as a miss. A cache must never fail a
 build that is otherwise complete.
 
+Build-result reuse counts advance only when the cached parse and its normalized body
+are both eligible. A lookup hit with a missing body triggers a real parse and counts as
+rebuilt. Raw `ParseCache.hits/misses` remain lookup statistics; they do not describe
+actual build work. CSV/XLSX table-bearing parses are deliberately not cached, so their
+unchanged inputs still count as rebuilt.
+
+The cold/warm regressions in `packages/cli/test/build.test.ts` seed only cache and CAS
+objects into a fresh project, with no state or sealed output copied. An independent cold
+project uses another absolute path and reversed source creation order. Both must seal
+new output with identical IDs, logical catalog/index records, locators, typed rows,
+normalized bytes, warnings and manifests. Real parser-call observations check the
+baseline, source-edit, rule-change, chunking-policy and missing-body paths; a real CLI
+process checks the reported counts and restored output. Cache warning round-trips also
+have a focused storage test.
+
+A declared-rule change conservatively invalidates the shared rule cache key. Chunking
+is versioned effective configuration, not a new `lore.yaml` setting. These functional
+fixtures do not establish reference-hardware performance or release qualification.
+
+
 ## Storage choice: no WAL
 
 Both the state database and every build database use SQLite's rollback journal, not WAL.
