@@ -27,5 +27,5 @@ jobs:
       - run: pnpm build
       - name: Record the actual diagnostic environment
         run: node -p 'JSON.stringify({node:process.versions.node,sqlite:process.versions.sqlite,platform:process.platform,arch:process.arch})'
-      - name: Run original default scheduling until first failure (diagnostic only)
-        run: pnpm exec vitest run --bail=1 --reporter=verbose
+      - name: Probe six coordinated cold opens (diagnostic only)
+        run: pnpm exec vitest run packages/backend-local/test/state_open_barrier.test.ts --reporter=verbose
