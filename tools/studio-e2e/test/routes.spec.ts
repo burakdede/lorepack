@@ -541,3 +541,50 @@ test.describe('a confirmation that went stale', () => {
     await expect(page.locator('.outcome')).toContainText(`Activated ${target}`);
   });
 });
+
+test('shows a stale rollback refusal and preserves the competing activation', async ({
+  page,
+  session,
+}, testInfo) => {
+  const history = (await (await fetch(`${session.url}/v1/builds`)).json()) as {
+    activeBuildId: string;
+    builds: readonly { buildId: string }[];
+  };
+  const newest = history.builds[0]?.buildId;
+  expect(newest).toBeDefined();
+  const activate = await fetch(`${session.url}/v1/builds/activate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ build: newest, expectActive: history.activeBuildId }),
+  });
+  expect(activate.status).toBe(200);
+  const live = async (): Promise<string> =>
+    ((await (await fetch(`${session.url}/v1/builds`)).json()) as { activeBuildId: string })
+      .activeBuildId;
+  await page.goto(`${session.url}/#/versions`);
+  await page.getByRole('button', { name: 'Roll back', exact: true }).click();
+  const confirmation = page.getByRole('region', { name: /^Roll back to lore_/ });
+  await expect(confirmation).toBeVisible();
+  writeFileSync(
+    join(session.projectRoot, 'docs', 'rollback-confirmation.md'),
+    '# New activation\n\nPublished while the rollback confirmation was open.\n',
+  );
+  await expect.poll(live, { timeout: 60_000 }).not.toBe(newest);
+  const competing = await live();
+  await confirmation.getByRole('button', { name: /^Roll back to lore_/ }).click();
+  await expect(
+    page.getByText('The build history changed while this confirmation was open.'),
+  ).toBeVisible();
+  expect(await live()).toBe(competing);
+  await expect(page.locator('.header-id')).toContainText(competing.slice(0, 17));
+  const screenshot = testInfo.outputPath('stale-rollback.png');
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await testInfo.attach('Stale rollback refusal', { path: screenshot, contentType: 'image/png' });
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Roll back', exact: true }).click();
+  const refreshed = page.getByRole('region', { name: /^Roll back to lore_/ });
+  await expect(refreshed).toBeVisible();
+  await refreshed.getByRole('button', { name: /^Roll back to lore_/ }).click();
+  await expect(page.locator('.outcome')).toContainText('Rolled back to lore_');
+  expect(await live()).not.toBe(competing);
+});
