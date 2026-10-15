@@ -444,3 +444,20 @@ check. Sources are absent locally, so the dirty annotation is expected.
 ![Captured source pane](../images/studio_source_selector.png). The real-browser regression
 is `tools/studio-e2e/test/source_selector.spec.ts`; actual workerd HTTP/MCP readback is
 covered in `packages/deploy-cloudflare/test/wrangler-dev.test.ts`.
+
+
+### Inventory locator integration verification
+
+On 2026-10-15 (Node24.21.0, macOS arm64), the real portable source-selector build
+was enumerated in three pages of two, two and one artifacts. All five returned
+locators were read back through local/projected runtime, HTTP/SDK and MCP tools;
+the MCP resource inventory and build-qualified source resources were also checked.
+Independent body markers distinguish ID/path aliases and duplicate relative paths.
+No document was deduplicated by its relative path. Actual workerd D1/R2 pagination
+checks both alias-first and primary-source pages, their returned locators, and the
+empty final offset. This extends the original selected-build/activation pinning cases.
+
+The actual Studio inventory and selector browser flows passed with Playwright1.62.1
+and Chromium151.0.7922.34. Both captures were visually inspected; the isolated inventory
+fixture has57indexed sources, while the separate CLI stdio fixture has52. These are
+functional regression corpora, not release-performance qualification.

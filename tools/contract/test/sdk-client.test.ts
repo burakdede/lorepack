@@ -94,12 +94,12 @@ const catalog: CatalogStore = {
     return new Set<string>();
   },
   async artifacts() {
-    const artifact = await this.artifact('p:guides/a.md');
+    const artifact = await this.artifact('p:guides/a.md', 'id');
     if (artifact === null) throw new Error('Expected the SDK catalog fixture.');
     return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 1, nodeCount: 1 }];
   },
-  async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
-    if (idOrPath !== 'p:guides/a.md') return null;
+  async artifact(reference: string, by: 'id' | 'path'): Promise<CatalogArtifact | null> {
+    if (reference !== (by === 'id' ? 'p:guides/a.md' : 'guides/a.md')) return null;
     return {
       artifactId: 'p:guides/a.md',
       relativePath: 'guides/a.md',

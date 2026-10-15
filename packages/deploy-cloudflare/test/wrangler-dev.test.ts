@@ -389,10 +389,45 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       corpusId: build.corpusId,
       namespaceId: build.namespaceId,
       buildId: BUILD,
+      artifacts: [{ locator: { artifactId: ALIAS_ID, relativePath: ARTIFACT_ID } }],
+      nextOffset: 1,
+    });
+    const continuation = await worker.fetch(
+      `/v1/sources?buildId=${inventory.buildId}&offset=1&limit=1`,
+      { headers: auth },
+    );
+    expect(continuation.status).toBe(200);
+    const second = (await continuation.json()) as SourceListResult;
+    expect(second).toMatchObject({
+      corpusId: build.corpusId,
+      namespaceId: build.namespaceId,
+      buildId: BUILD,
       artifacts: [{ locator: { artifactId: ARTIFACT_ID, relativePath: ARTIFACT_PATH } }],
       nextOffset: null,
     });
-    const end = await worker.fetch(`/v1/sources?buildId=${BUILD}&offset=1`, { headers: auth });
+    for (const [page, body] of [
+      [inventory, ALIAS_BODY],
+      [second, OBJECT_BODY],
+    ] as const) {
+      expect(page.artifacts).toHaveLength(1);
+      const locator = page.artifacts[0]?.locator;
+      if (locator?.artifactId === undefined)
+        throw new Error('Inventory omitted its artifact locator');
+      const response = await worker.fetch(
+        `/v1/sources/${encodeURIComponent(locator.artifactId)}?buildId=${page.buildId}`,
+        { headers: auth },
+      );
+      expect(response.status).toBe(200);
+      const read = (await response.json()) as SourceReadResult;
+      expect(read).toMatchObject({
+        buildId: page.buildId,
+        corpusId: page.corpusId,
+        namespaceId: page.namespaceId,
+        locator: { artifactId: locator.artifactId, relativePath: locator.relativePath },
+      });
+      expect(read.text).toBe(body);
+    }
+    const end = await worker.fetch(`/v1/sources?buildId=${BUILD}&offset=2`, { headers: auth });
     expect(await end.json()).toMatchObject({ buildId: BUILD, artifacts: [], nextOffset: null });
     const inventoryTool = await worker.fetch('/mcp', {
       method: 'POST',

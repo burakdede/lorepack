@@ -12,6 +12,10 @@ import {
   type BuildScope,
   buildManifestSchema,
   type LoreRuntime,
+  type SourceListRequest,
+  type SourceListResult,
+  type SourceReadResult,
+  sourceListResultSchema,
   sourceReadResultSchema,
 } from '@lorepack/core';
 import { createMcpHttpHandler, MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
@@ -180,6 +184,105 @@ async function rpc(
 
 for (const kind of ['local', 'projected'] as const) {
   describe(`source selector contract: ${kind}`, () => {
+    it('pages every collision artifact and reads each returned locator across shared transports', async () => {
+      await withFixture(kind, async (fixture) => {
+        const expected = new Map([
+          ['alpha:omega/z.md', 'DISPLAY_ALIAS_BODY'],
+          ['alpha:omega:z.md', 'PATH_TARGET_BODY'],
+          ['alpha:z.md', 'DUPLICATE_PATH_BODY'],
+          ['beta:z.md', 'THIRD_DUPLICATE_BODY'],
+          ['omega:z.md', 'ID_TARGET_BODY'],
+        ]);
+        const sdk = new LoreClient({
+          baseUrl: ORIGIN,
+          buildId: fixture.buildId,
+          fetch: async (input, init) => fixture.fetch(new Request(input, init)),
+        });
+        const transports: Array<{
+          name: string;
+          list(request: SourceListRequest): Promise<SourceListResult>;
+          read(id: string, buildId: string): Promise<SourceReadResult>;
+        }> = [
+          {
+            name: 'runtime',
+            list: (request) => fixture.runtime.listSources(request),
+            read: (artifactId, buildId) => fixture.runtime.readSource({ artifactId, buildId }),
+          },
+          {
+            name: 'HTTP/SDK',
+            list: (request) => sdk.listSources(request),
+            read: (artifactId, buildId) => sdk.readSource(artifactId, { buildId }),
+          },
+          {
+            name: 'MCP',
+            list: async (request) =>
+              sourceListResultSchema.parse(
+                (
+                  await rpc(fixture, 'tools/call', 'lore_list_sources', {
+                    name: 'lore_list_sources',
+                    arguments: request,
+                  })
+                ).result.structuredContent,
+              ),
+            read: async (artifactId, buildId) =>
+              sourceReadResultSchema.parse(
+                (
+                  await rpc(fixture, 'tools/call', 'lore_read_source', {
+                    name: 'lore_read_source',
+                    arguments: { artifactId, buildId },
+                  })
+                ).result.structuredContent,
+              ),
+          },
+        ];
+        for (const transport of transports) {
+          const seen: string[] = [];
+          for (const offset of [0, 2, 4]) {
+            const page = await transport.list({ buildId: fixture.buildId, offset, limit: 2 });
+            expect(page.buildId, transport.name).toBe(fixture.buildId);
+            expect(page.nextOffset, transport.name).toBe(offset === 4 ? null : offset + 2);
+            expect(page.artifacts).toHaveLength(offset === 4 ? 1 : 2);
+            for (const source of page.artifacts) {
+              const id = source.locator.artifactId;
+              if (id === undefined)
+                throw new Error('Inventory source omitted its artifact locator');
+              expect(id).toBe(source.artifactId);
+              const marker = expected.get(id);
+              if (marker === undefined) throw new Error(`Unexpected inventory artifact ${id}`);
+              const read = await transport.read(id, page.buildId);
+              expect(read).toMatchObject({
+                buildId: page.buildId,
+                corpusId: page.corpusId,
+                namespaceId: page.namespaceId,
+                locator: { artifactId: id, relativePath: source.relativePath },
+              });
+              expect(read.text, `${transport.name}: ${id}`).toContain(marker);
+              seen.push(id);
+            }
+          }
+          expect(seen, transport.name).toEqual([...expected.keys()]);
+          expect(new Set(seen).size).toBe(5);
+        }
+        const uri = 'lore://project/sources';
+        const resource = await rpc(fixture, 'resources/read', uri, { uri });
+        const page = sourceListResultSchema.parse(
+          JSON.parse(resource.result.contents?.[0]?.text ?? '{}'),
+        );
+        expect(page.buildId).toBe(fixture.buildId);
+        expect(page.artifacts.map((source) => source.artifactId)).toEqual([...expected.keys()]);
+        for (const source of page.artifacts) {
+          const sourceUri = `lore://build/${page.buildId}/source/${encodeURIComponent(source.artifactId)}`;
+          const frame = await rpc(fixture, 'resources/read', sourceUri, { uri: sourceUri });
+          const read = sourceReadResultSchema.parse(
+            JSON.parse(frame.result.contents?.[0]?.text ?? '{}'),
+          );
+          expect(read.buildId).toBe(page.buildId);
+          expect(read.locator.artifactId).toBe(source.locator.artifactId);
+          expect(read.text).toContain(expected.get(source.artifactId));
+        }
+      });
+    });
+
     it('reads the exact ID when it is also another artifact path', async () => {
       await withFixture(kind, async ({ runtime, buildId }) => {
         const read = await runtime.readSource({ artifactId: 'omega:z.md', buildId });
