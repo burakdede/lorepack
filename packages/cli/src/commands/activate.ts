@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import {
+  assertBuildId,
+  type BuildHistorySnapshot,
   type BuildId,
-  type BuildSummary,
   type DeploymentTarget,
   LORE_DIRECTORY,
   LoreError,
@@ -14,14 +15,13 @@ import {
   openStateStore,
   previousBuild,
   resolveBuildId,
+  rollbackStatus,
 } from '../services/builds.js';
 import {
   type CloudflareResolverAdapter,
-  createWranglerDeployAdapter,
   resolveCloudflareTarget,
   resolveCloudflareTargetWithAdapter,
 } from '../services/cloudflare-target.js';
-import { readCloudflareTargetReceipt } from './target.js';
 
 /**
  * Activation and rollback are pointer changes (architecture section 18.4). Neither
@@ -44,14 +44,18 @@ export function activateCommand(): CommandDefinition {
     description: 'Point this project at a build. Never recompiles.',
     arguments: [{ name: 'build', description: 'build id or unambiguous prefix' }],
     handler: async (args, _flags, context): Promise<CommandResult> =>
-      switchTo(context.options.cwd, (builds) => resolveBuildId(builds, args[0] ?? ''), 'Activated'),
+      switchTo(
+        context.options.cwd,
+        (history) => resolveBuildId(history.builds, args[0] ?? ''),
+        'Activated',
+      ),
   };
 }
 
 export function rollbackCommand(options: ActivateCommandOptions = {}): CommandDefinition {
   return {
     name: 'rollback',
-    description: 'Return to the previous verified build. Never recompiles.',
+    description: 'Return to the previously active build. Never recompiles.',
     arguments: [{ name: 'build', description: 'build id or unambiguous prefix', required: false }],
     flags: [{ flags: '--target <target>', description: 'roll back a remote deployment target' }],
     handler: async (args, flags, context): Promise<CommandResult> => {
@@ -68,8 +72,8 @@ export function rollbackCommand(options: ActivateCommandOptions = {}): CommandDe
       }
       return await switchTo(
         context.options.cwd,
-        (builds, active) =>
-          args[0] === undefined ? previousBuild(builds, active) : resolveBuildId(builds, args[0]),
+        (history) =>
+          args[0] === undefined ? previousBuild(history) : resolveBuildId(history.builds, args[0]),
         'Rolled back to',
       );
     },
@@ -80,13 +84,19 @@ export function buildsCommand(): CommandDefinition {
   return {
     name: 'builds',
     description: 'List build history, newest first.',
-    handler: (_args, _flags, context): CommandResult => {
+    flags: [
+      {
+        flags: '--activations',
+        description: 'show recorded activation events instead of build creation order',
+      },
+    ],
+    handler: (_args, flags, context): CommandResult => {
       const config = loadProjectConfig({ cwd: context.options.cwd });
       const state = openStateStore(join(config.projectRoot, LORE_DIRECTORY));
       try {
-        const builds = state.listBuilds();
-        const active = state.current();
-        const rows = builds.map((build) => ({
+        const history = state.history();
+        const active = history.active;
+        const rows = history.builds.map((build) => ({
           buildId: build.buildId,
           createdAt: build.createdAt,
           state: build.state,
@@ -94,8 +104,14 @@ export function buildsCommand(): CommandDefinition {
           counts: build.counts,
         }));
         return {
-          human: renderBuilds(rows),
-          json: { builds: rows, activeBuildId: active?.buildId ?? null },
+          human: flags.activations === true ? renderActivations(history) : renderBuilds(rows),
+          json: {
+            builds: rows,
+            activeBuildId: active?.buildId ?? null,
+            activationHistory: history.activationHistory,
+            historyTruncated: history.historyTruncated,
+            ...rollbackStatus(history),
+          },
         };
       } finally {
         state.close();
@@ -106,7 +122,7 @@ export function buildsCommand(): CommandDefinition {
 
 async function switchTo(
   cwd: string,
-  choose: (builds: readonly BuildSummary[], active: BuildId | null) => BuildId,
+  choose: (history: BuildHistorySnapshot) => BuildId,
   verb: string,
 ): Promise<CommandResult> {
   const config = loadProjectConfig({ cwd });
@@ -115,29 +131,29 @@ async function switchTo(
   const state = openStateStore(loreDirectory);
 
   try {
-    const builds = state.listBuilds();
-    const active = state.current();
-    const target = choose(builds, active?.buildId ?? null);
-    const summary = builds.find((build) => build.buildId === target) as BuildSummary;
-
-    // Pre-flight before the pointer moves. A corrupt build must fail with the previous one
-    // still serving, not after it has already been made live.
-    assertActivatable(loreDirectory, summary);
-
-    if (active?.buildId === target) {
+    return await lock.withLock(() => {
+      const history = state.history();
+      const target = choose(history);
+      const summary = history.builds.find((build) => build.buildId === target);
+      if (summary === undefined) {
+        throw new LoreError('LORE_E_BUILD_NOT_FOUND', `Build ${target} is no longer retained.`, {
+          remediation: 'Select a retained verified build. The active build is unchanged.',
+          subject: target,
+        });
+      }
+      assertActivatable(loreDirectory, summary);
+      if (history.active?.buildId === target) {
+        return {
+          human: `Build ${target} is already active.`,
+          json: { buildId: target, generation: history.active.generation, changed: false },
+        };
+      }
+      const generation = state.activate(target);
       return {
-        human: `Build ${target} is already active.`,
-        json: { buildId: target, generation: active.generation, changed: false },
+        human: `${verb} ${target} (generation ${generation}).`,
+        json: { buildId: target, generation, changed: true },
       };
-    }
-
-    // Held only across the pointer change itself, which is one transaction.
-    const generation = await lock.withLock(() => state.activate(target));
-
-    return {
-      human: `${verb} ${target} (generation ${generation}).`,
-      json: { buildId: target, generation, changed: true },
-    };
+    });
   } finally {
     state.close();
   }
@@ -166,6 +182,23 @@ function renderBuilds(builds: readonly BuildRow[]): string {
   return lines.join('\n');
 }
 
+function renderActivations(history: BuildHistorySnapshot): string {
+  if (history.activationHistory.length === 0) return 'No activation events are recorded yet.';
+  const lines = ['Activation history (newest first):'];
+  for (const event of history.activationHistory) {
+    const previous =
+      event.previousBuildId?.slice(0, 17) ?? (event.kind === 'baseline' ? 'unknown' : 'none');
+    lines.push(
+      `${event.generation}  ${event.kind === 'baseline' ? 'Observed active' : 'Activated'} ${event.buildId.slice(0, 17)}  from ${previous}  ${event.recordedAt}`,
+    );
+  }
+  if (history.historyTruncated) lines.push('Earlier recorded events are not shown.');
+  if (history.activationHistory.some((event) => event.kind === 'baseline')) {
+    lines.push('Baseline observations do not establish earlier activation history.');
+  }
+  return lines.join('\n');
+}
+
 async function rollbackRemote(
   cwd: string,
   targetName: string,
@@ -175,9 +208,7 @@ async function rollbackRemote(
 ): Promise<CommandResult> {
   const config = loadProjectConfig({ cwd });
   const requestedBuildId =
-    buildId === undefined || buildId.trim() === ''
-      ? await previousRemoteBuildId(targetName, config.projectRoot, cloudflareAdapter)
-      : (buildId.trim() as BuildId);
+    buildId === undefined || buildId.trim() === '' ? undefined : assertBuildId(buildId.trim());
   const target =
     resolveTargetOverride === undefined
       ? await resolveRemoteTarget(
@@ -206,57 +237,6 @@ async function rollbackRemote(
       changed: true,
     },
   };
-}
-
-async function previousRemoteBuildId(
-  targetName: string,
-  projectRoot: string,
-  cloudflareAdapter: CloudflareResolverAdapter | undefined,
-): Promise<BuildId> {
-  if (targetName !== 'cloudflare') {
-    throw new LoreError('LORE_E_INVALID_ARGUMENT', `Unknown rollback target ${targetName}.`, {
-      remediation:
-        'Use `cloudflare`. Additional remote rollback targets are not implemented in v0.1.',
-      subject: targetName,
-    });
-  }
-
-  const receipt = readCloudflareTargetReceipt(projectRoot);
-  const adapter = cloudflareAdapter ?? createWranglerDeployAdapter(projectRoot);
-  const db = adapter.openCatalogDatabase(receipt.catalogDatabaseName);
-  const hasProjectedBuilds = await db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'projected_builds'")
-    .run<{ name: string }>();
-  if ((hasProjectedBuilds.results?.length ?? 0) === 0) {
-    throw new LoreError(
-      'LORE_E_BUILD_NOT_FOUND',
-      'There is no earlier verified remote build to return to.',
-      { remediation: 'Run `lorepack target status cloudflare` to see the remote history.' },
-    );
-  }
-
-  const active = await db
-    .prepare('SELECT build_id AS buildId FROM active_build WHERE id = 1')
-    .run<{ buildId: string | null }>();
-  const activeBuildId = active.results?.[0]?.buildId ?? null;
-  const projected = await db
-    .prepare(
-      `SELECT build_id AS buildId, verified_at AS verifiedAt
-FROM projected_builds
-WHERE project_id = ? AND verified_at IS NOT NULL
-ORDER BY verified_at DESC, projected_at DESC, build_id DESC`,
-    )
-    .bind(receipt.project)
-    .run<{ buildId: string; verifiedAt: string }>();
-  const previous = (projected.results ?? []).find((row) => row.buildId !== activeBuildId);
-  if (previous === undefined) {
-    throw new LoreError(
-      'LORE_E_BUILD_NOT_FOUND',
-      'There is no earlier verified remote build to return to.',
-      { remediation: 'Run `lorepack target status cloudflare` to see the remote history.' },
-    );
-  }
-  return previous.buildId as BuildId;
 }
 
 async function resolveRemoteTarget(

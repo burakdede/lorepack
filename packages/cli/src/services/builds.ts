@@ -14,6 +14,7 @@ import {
 import type { BuildSnapshot } from '@lorepack/compiler';
 import {
   assertBuildId,
+  type BuildHistorySnapshot,
   type BuildId,
   type BuildSummary,
   buildManifestSchema,
@@ -21,6 +22,7 @@ import {
   count,
   LoreError,
   objectKey,
+  previousActivation,
   type TableValue,
 } from '@lorepack/core';
 
@@ -84,26 +86,47 @@ export function resolveBuildId(builds: readonly BuildSummary[], reference: strin
   );
 }
 
-/**
- * The build a rollback returns to: the newest activatable one that is not already live.
- *
- * One definition, used by `lorepack rollback` and by the Studio endpoint behind the same button,
- * because two definitions is how a terminal and a browser end up returning to different
- * builds from the same history.
- */
-export function previousBuild(builds: readonly BuildSummary[], active: BuildId | null): BuildId {
-  const candidates = builds.filter(
-    (build) => build.buildId !== active && (build.state === 'verified' || build.state === 'active'),
-  );
-  const previous = candidates[0];
+export function previousBuild(history: BuildHistorySnapshot): BuildId {
+  const target = previousActivation(history.active, history.activationHistory[0]);
+  const previous = history.builds.find((build) => build.buildId === target);
   if (previous === undefined) {
     throw new LoreError(
       'LORE_E_BUILD_NOT_FOUND',
-      'There is no earlier verified build to return to.',
-      { remediation: 'Run `lorepack builds` to see the history.' },
+      `The previously active build ${target} is no longer retained.`,
+      {
+        remediation: 'Select another retained build ID explicitly. The active build is unchanged.',
+        subject: target,
+      },
     );
   }
-  return previous.buildId;
+  if (previous.state !== 'verified' && previous.state !== 'active') {
+    throw new LoreError(
+      'LORE_E_BUILD_VALIDATION',
+      `The previously active build ${target} is ${previous.state}.`,
+      {
+        remediation:
+          'Select a retained verified build ID explicitly. The active build is unchanged.',
+        subject: target,
+      },
+    );
+  }
+  return target;
+}
+
+export function rollbackStatus(history: BuildHistorySnapshot): {
+  rollbackBuildId: BuildId | null;
+  rollbackUnavailable: string | null;
+} {
+  try {
+    return { rollbackBuildId: previousBuild(history), rollbackUnavailable: null };
+  } catch (cause) {
+    if (
+      !(cause instanceof LoreError) ||
+      (cause.code !== 'LORE_E_BUILD_NOT_FOUND' && cause.code !== 'LORE_E_BUILD_VALIDATION')
+    )
+      throw cause;
+    return { rollbackBuildId: null, rollbackUnavailable: cause.message };
+  }
 }
 
 export function buildDirectory(loreDirectory: string, buildId: BuildId): string {

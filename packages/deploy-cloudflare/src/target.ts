@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
+  type ActivationEvent,
   type ActivationReceipt,
+  assertBuildId,
   type BuildId,
   buildManifestSchema,
   type Capability,
@@ -13,6 +15,7 @@ import {
   type DeployPlan,
   type DeployPlanDisplay,
   LoreError,
+  previousActivation,
   runtimeIdentitySchema,
   type TargetCapabilities,
   type TargetDetection,
@@ -70,7 +73,7 @@ export interface CloudflareDeploymentTargetOptions {
   readonly verifyCandidate?: (receipt: DeploymentReceipt) => Promise<VerificationResult>;
   readonly activateCandidate?: (receipt: DeploymentReceipt) => Promise<ActivationReceipt>;
   readonly publicBuildId?: () => Promise<BuildId | null>;
-  readonly rollbackBuild?: (buildId: DeploymentReceipt['buildId']) => Promise<ActivationReceipt>;
+  readonly rollbackBuild?: (buildId?: DeploymentReceipt['buildId']) => Promise<ActivationReceipt>;
   readonly preflight?: (buildDirectory: string) => ProjectionPreflightResult;
   readonly projectionRetryAttempts?: number;
   readonly projectionRetryDelayMs?: number;
@@ -845,26 +848,89 @@ async function activateCandidateBuild(
   options: CloudflareDeploymentTargetOptions,
   receipt: DeploymentReceipt,
 ): Promise<ActivationReceipt> {
+  await runProjectionMigrations(options.catalogDb, options.now);
   return await switchActiveBuild(options, receipt.buildId as BuildId, { requireVerified: true });
 }
 
 async function rollbackProjectedBuild(
   options: CloudflareDeploymentTargetOptions,
-  buildId: BuildId,
+  buildId: BuildId | undefined,
 ): Promise<ActivationReceipt> {
-  await assertProjectionReadable(options.catalogDb, { projectId: options.projectId, buildId });
-  // Not `requireVerified`: rollback targets a build that already served, and builds projected
-  // before the `verified_at` column existed carry NULL there.
-  return await switchActiveBuild(options, buildId, { requireVerified: false });
+  await runProjectionMigrations(options.catalogDb, options.now);
+  let selected = buildId;
+  let expectedActive: { readonly buildId: BuildId; readonly generation: number } | null | undefined;
+  if (selected === undefined) {
+    const snapshot = await previousRemoteActivation(options.catalogDb);
+    selected = previousActivation(snapshot.active, snapshot.latest);
+    expectedActive = snapshot.active;
+  }
+  await assertProjectionReadable(options.catalogDb, {
+    projectId: options.projectId,
+    buildId: selected,
+  });
+  return await switchActiveBuild(options, selected, {
+    requireVerified: false,
+    ...(expectedActive === undefined ? {} : { expectedActive }),
+  });
+}
+
+async function previousRemoteActivation(db: ProjectionMigrationDatabaseLike): Promise<{
+  active: { buildId: BuildId; generation: number } | null;
+  latest: ActivationEvent | undefined;
+}> {
+  const row = (
+    await db
+      .prepare(`SELECT a.build_id AS activeBuildId, a.generation AS activeGeneration,
+    e.generation AS eventGeneration, e.previous_build_id AS previousBuildId,
+    e.build_id AS eventBuildId, e.kind, e.recorded_at AS recordedAt
+  FROM active_build a LEFT JOIN activation_events e ON e.generation =
+    (SELECT generation FROM activation_events ORDER BY generation DESC LIMIT 1)
+  WHERE a.id = 1`)
+      .run<{
+        activeBuildId: string | null;
+        activeGeneration: number;
+        eventGeneration: number | null;
+        previousBuildId: string | null;
+        eventBuildId: string | null;
+        kind: ActivationEvent['kind'];
+        recordedAt: string;
+      }>()
+  ).results?.[0];
+  return {
+    active:
+      row === undefined || row.activeBuildId === null
+        ? null
+        : {
+            buildId: assertBuildId(row.activeBuildId),
+            generation: Number(row.activeGeneration),
+          },
+    latest:
+      row === undefined || row.eventBuildId === null || row.eventGeneration === null
+        ? undefined
+        : {
+            generation: Number(row.eventGeneration),
+            previousBuildId:
+              row.previousBuildId === null ? null : assertBuildId(row.previousBuildId),
+            buildId: assertBuildId(row.eventBuildId),
+            kind: row.kind,
+            recordedAt: row.recordedAt,
+          },
+  };
 }
 
 async function switchActiveBuild(
   options: CloudflareDeploymentTargetOptions,
   buildId: BuildId,
-  guard: { readonly requireVerified: boolean },
+  guard: {
+    readonly requireVerified: boolean;
+    readonly expectedActive?: { readonly buildId: BuildId; readonly generation: number } | null;
+  },
 ): Promise<ActivationReceipt> {
   const switchedAt = options.now?.() ?? new Date().toISOString();
-  const previous = await currentActiveBuild(options.catalogDb);
+  const previous =
+    guard.expectedActive === undefined
+      ? await currentActiveBuild(options.catalogDb)
+      : guard.expectedActive;
   let switched = false;
   try {
     if (guard.requireVerified && !(await projectedBuildVerified(options, buildId))) {

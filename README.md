@@ -62,7 +62,8 @@ The Terraform analogy describes the context lifecycle. `lore.yaml` is
 the desired context configuration. `lorepack plan` previews the candidate, `lorepack build`
 compiles an immutable artifact, `lorepack validate` compiles and checks a candidate without moving the active pointer,
 and `lorepack activate` changes that pointer. `lorepack diff` reviews versions and
-`lorepack rollback` selects a previous immutable build. This separates desired inputs, review,
+`lorepack rollback` returns to the build that was active immediately before the current one.
+A newer candidate that never served is not a rollback target. This separates desired inputs, review,
 and activation. Local compilation uses no cloud resources and never mutates source files.
 Optional Cloudflare target setup provisions D1 and R2 resources for a completed build's deployment.
 

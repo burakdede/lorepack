@@ -167,7 +167,8 @@ export interface DeploymentTarget {
   verify(receipt: DeploymentReceipt): Promise<VerificationResult>;
   /** The smallest possible pointer mutation, and nothing else. */
   activate(receipt: DeploymentReceipt): Promise<ActivationReceipt>;
-  rollback(buildId: BuildId): Promise<ActivationReceipt>;
+  /** Omit the ID to return to the actual previous activation, never a timestamp-ranked build. */
+  rollback(buildId?: BuildId): Promise<ActivationReceipt>;
 }
 
 /**
