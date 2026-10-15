@@ -189,3 +189,8 @@ Manual reproduction:
 ![Recorded transitions on mobile](../images/studio_activation_history_mobile.png)
 
 ![Legacy active pointer with unknown earlier history](../images/studio_activation_history_baseline.png)
+
+
+The integrated 47-case browser suite also passes after fixtures close each owned page
+before draining its independent server. This stops polling before graceful teardown;
+all read, history, axe, keyboard and stale-confirmation assertions remain in place.
