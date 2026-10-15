@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
-import { assertBuildId, type BuildId, LoreError, writeFileAtomic } from '@lorepack/core';
+import {
+  assertBuildId,
+  type BuildId,
+  LoreError,
+  mkdirOwnerOnly,
+  writeFileAtomic,
+} from '@lorepack/core';
 import { ProjectLock } from './lock.js';
 import { ownProcessStart, processStart, sameProcessStart } from './process-start.js';
 
@@ -32,7 +38,7 @@ export function withReadReferenceLock<T>(
 // Registration and catalog acquisition share the cleanup guard. The record outlives it.
 export function registerReadReference(loreDirectory: string, buildId: BuildId): () => void {
   const directory = join(loreDirectory, 'readers');
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  mkdirOwnerOnly(directory);
   const token = randomUUID();
   const path = join(directory, `${token}.json`);
   const record: ReadReference = {
@@ -43,7 +49,7 @@ export function registerReadReference(loreDirectory: string, buildId: BuildId): 
     hostname: hostname(),
     token,
   };
-  writeFileAtomic(path, JSON.stringify(record));
+  writeFileAtomic(path, JSON.stringify(record), { ownerOnly: true });
   let released = false;
   return () => {
     if (released) return;

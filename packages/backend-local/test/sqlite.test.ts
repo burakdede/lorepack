@@ -1,5 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 import { LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +17,26 @@ import {
   SAFE_QUERY_LIMITS,
   sqliteVersion,
 } from '../src/sqlite.js';
+
+it('opens an in-memory database without creating a literal filesystem entry', async () => {
+  await withTempProject({}, (temp) => {
+    const module = pathToFileURL(join(import.meta.dirname, '..', 'dist', 'sqlite.js')).href;
+    const script = `
+      const { openWritable } = await import(${JSON.stringify(module)});
+      const db = openWritable(':memory:');
+      db.exec('CREATE TABLE probe (n INTEGER); INSERT INTO probe VALUES (42)');
+      process.stdout.write(JSON.stringify(db.prepare('SELECT n FROM probe').get()));
+      db.close();
+    `;
+    const result = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: temp.root,
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    expect(JSON.parse(result)).toEqual({ n: 42 });
+    expect(readdirSync(temp.root)).toEqual([]);
+  });
+});
 
 describe('node:sqlite API surface', () => {
   it('has every member this adapter depends on', () => {

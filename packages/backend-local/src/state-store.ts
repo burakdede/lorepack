@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, linkSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -11,6 +11,7 @@ import {
   buildSelectionSchema,
   fsyncDirectory,
   LoreError,
+  mkdirOwnerOnly,
   type RuntimeIdentity,
   runtimeIdentitySchema,
 } from '@lorepack/core';
@@ -38,7 +39,7 @@ export class LocalStateStore {
   }
 
   static open(loreDirectory: string, migrationsDirectory: string): LocalStateStore {
-    mkdirSync(loreDirectory, { recursive: true });
+    mkdirOwnerOnly(loreDirectory);
     const path = join(loreDirectory, 'state.sqlite');
     const migrations = loadMigrations(migrationsDirectory);
     if (!existsSync(path)) LocalStateStore.#initialize(loreDirectory, path, migrations);
@@ -66,7 +67,7 @@ export class LocalStateStore {
 
   static #initialize(loreDirectory: string, path: string, migrations: readonly Migration[]): void {
     const staging = join(loreDirectory, 'tmp');
-    mkdirSync(staging, { recursive: true });
+    mkdirOwnerOnly(staging);
     const directory = mkdtempSync(join(staging, 'state-init-'));
     const candidate = join(directory, 'state.sqlite');
     try {

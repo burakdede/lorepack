@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   fsyncDirectory,
   hashBytes,
   hashFile,
   LoreError,
+  mkdirOwnerOnly,
   type ObjectStore,
   objectKey,
   writeFileAtomic,
@@ -52,8 +53,8 @@ export class FileObjectStore implements ObjectStore {
       return hash;
     }
     const directory = dirname(path);
-    const firstCreated = mkdirSync(directory, { recursive: true });
-    writeFileAtomic(path, data);
+    const firstCreated = mkdirOwnerOnly(directory);
+    writeFileAtomic(path, data, { ownerOnly: true });
     // `writeFileAtomic` makes the file's entry durable in its directory, but a directory
     // created here is itself only an entry in its parent. Without syncing each new one, a
     // power loss after the build record commits could lose the path to an object the
