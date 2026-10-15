@@ -54,6 +54,9 @@ adapter ports. They check rejected setup, login/account prerequisites, resource 
 receipt validation, including unchanged persisted bytes and no unintended mutation calls.
 These checks do not replace credentialed Cloudflare acceptance. The merged benchmark pricing
 regression also belongs to the strict audit program; unavailable prices cannot imply zero cost.
+Discovery tests remove actual file and directory sources after configuration resolves and assert
+unreadable warnings rather than invented artifacts. They also cover byte-unit boundaries and
+empty ignore negations. Run `pnpm exec vitest run packages/compiler/test/discover.test.ts`.
 
 The `privacy sandbox (ubuntu-latest)` job builds the project and runs
 `tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
