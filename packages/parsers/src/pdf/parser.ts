@@ -100,6 +100,7 @@ export const pdfParser: ArtifactParser = {
       if (pagesWithText < pageCount) {
         warnings.push({
           code: 'pdf-pages-without-text',
+          loss: {},
           message: `${pageCount - pagesWithText} of ${pageCount} pages have no text layer and contributed nothing. Pages: ${unreadPages.join(', ')}. Optical character recognition is out of scope for v0.1.`,
         });
       }
@@ -205,6 +206,7 @@ async function readPage(
     // quality loss, and not a build that dies on page 400 of 600.
     warnings.push({
       code: 'pdf-page-unreadable',
+      loss: {},
       message: `Page ${number} could not be read and contributed nothing: ${
         cause instanceof Error ? cause.message.split('\n')[0] : String(cause)
       }`,

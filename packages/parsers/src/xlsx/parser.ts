@@ -221,6 +221,7 @@ async function readSheetTable(
     const reason = `it has more than the ${count(XLSX_LIMITS.maxRows, 'row')} Lorepack imports`;
     warnings.push({
       code: 'xlsx-too-many-rows',
+      loss: { sheet: sheet.name },
       message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Split it, or filter it to the rows the project needs. Every row is imported into the build and served from it.`,
       line: 1,
     });
@@ -244,6 +245,7 @@ async function readSheetTable(
   if (region === null) {
     warnings.push({
       code: 'xlsx-no-table',
+      loss: { sheet: sheet.name },
       message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Its cells are described rather than guessed at.`,
       line: 1,
     });
@@ -260,6 +262,7 @@ async function readSheetTable(
     const reason = `it has ${count(width, 'column')}, above the supported limit of ${String(XLSX_LIMITS.maxColumns)}`;
     warnings.push({
       code: 'xlsx-too-many-columns',
+      loss: { sheet: sheet.name },
       message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`,
       line: 1,
     });

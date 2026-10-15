@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed, implementation and qualification in #412.
+Accepted. Implementation and qualification are tracked in #412.
 
 ## Context
 

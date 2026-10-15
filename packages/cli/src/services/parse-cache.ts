@@ -46,7 +46,7 @@ interface CacheEnvelope extends CachedParse {
 }
 
 /** Bumped when the cached shape changes, so old entries are ignored instead of misread. */
-const CACHE_FORMAT_VERSION = 2;
+const CACHE_FORMAT_VERSION = 3;
 
 export class ParseCache {
   readonly #directory: string;

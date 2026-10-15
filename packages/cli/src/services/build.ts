@@ -25,6 +25,7 @@ import {
   buildLockfile,
   type Chunk,
   cacheKey,
+  checkRequiredCoverage,
   chunkArtifact,
   compareLockfiles,
   createPlan,
@@ -425,7 +426,9 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       // One list from here on. Discovery decides an extension has no parser; parsing decides
       // the bytes are not readable text. Both are the same promise to the user, which is
       // that a file the build left out is named rather than silently missing.
+      const coverageWarnings = checkRequiredCoverage(config.effective.build, parsed);
       const warnings: readonly BuildWarning[] = [
+        ...coverageWarnings,
         ...discovery.warnings,
         ...fingerprint.warnings,
         ...parseExclusions,

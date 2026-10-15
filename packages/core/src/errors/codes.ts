@@ -28,6 +28,7 @@ export const ERROR_CODES = {
   // Build integrity (exit 2)
   LORE_E_PARSE_FAILED: 'A supported, included file could not be parsed.',
   LORE_E_BUILD_VALIDATION: 'The candidate build failed a validation check.',
+  LORE_E_REQUIRED_COVERAGE: 'A required source or worksheet was not fully imported.',
   LORE_E_OBJECT_CORRUPT: 'A content-addressed object failed its checksum.',
   LORE_E_LOCKFILE_DRIFT: 'The lockfile would change, but the build was run with --frozen.',
   LORE_E_STALE_SOURCES: 'Sources changed and the project could not be rebuilt.',
@@ -81,6 +82,7 @@ const EXIT_BY_CODE: Readonly<Record<ErrorCode, ExitCode>> = {
   LORE_E_CANCELLED: EXIT_CODES.USER,
   LORE_E_PARSE_FAILED: EXIT_CODES.BUILD,
   LORE_E_BUILD_VALIDATION: EXIT_CODES.BUILD,
+  LORE_E_REQUIRED_COVERAGE: EXIT_CODES.BUILD,
   LORE_E_OBJECT_CORRUPT: EXIT_CODES.BUILD,
   LORE_E_LOCKFILE_DRIFT: EXIT_CODES.BUILD,
   LORE_E_STALE_SOURCES: EXIT_CODES.BUILD,
