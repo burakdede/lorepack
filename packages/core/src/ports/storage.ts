@@ -21,6 +21,21 @@ export interface BuildSummary {
   };
 }
 
+export interface ActivationEvent {
+  readonly generation: number;
+  readonly previousBuildId: BuildId | null;
+  readonly buildId: BuildId;
+  readonly kind: 'transition' | 'baseline';
+  readonly recordedAt: string;
+}
+
+export interface BuildHistorySnapshot {
+  readonly active: { readonly buildId: BuildId; readonly generation: number } | null;
+  readonly builds: readonly BuildSummary[];
+  readonly activationHistory: readonly ActivationEvent[];
+  readonly historyTruncated: boolean;
+}
+
 export interface CandidateBuild {
   readonly directory: string;
   readonly databasePath: string;

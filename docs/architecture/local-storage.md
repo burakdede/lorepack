@@ -428,3 +428,28 @@ rewrite retained reports or activate a build. A signal that is already aborted r
 `LORE_E_CANCELLED` before the catalog verifier creates a child process; its scratch inputs
 remain unchanged. This avoids starting work that is already cancelled. See the
 [validation contract](../validation.md) for coverage and limits.
+
+## Activation history
+
+State migration `0003_activation-history.sql` records pointer transitions in
+`activation_events`, outside the sealed build and its identity. An AFTER UPDATE trigger
+records the previous/new build IDs, generation and database UTC observation time in the
+same statement as the pointer update. Failure to insert an event rolls the pointer update
+back. Events survive pruning; they have no foreign key that could erase activation facts.
+
+Same-ID writes do not create a transition. The local store retains its existing generation
+increment behavior, so event generations can have gaps. Generation determines event order;
+wall-clock timestamps do not. The history snapshot reads pointer, build states and the
+latest 50 events in one read transaction and labels truncation. Rollback uses the latest
+transition, never a search through older retained candidates. A pruned predecessor is a
+refusal, and an explicit retained build ID remains available.
+
+An upgraded already-active state records a `baseline` observed at migration time. Its
+previous ID is unknown; its timestamp is not an invented historical activation time. Bare
+rollback refuses until a real predecessor is known. Explicit activation or rollback then
+records a real transition. See the [activation-history decision](../adr/0031-record-activation-transitions.md).
+
+`lorepack builds --activations` displays recorded transitions and baseline observations.
+`lorepack builds --json` includes the same bounded events, truncation, rollback target
+and unavailable reason alongside the existing build list. The default human build list
+continues to show creation order; creation order is not a rollback selector.

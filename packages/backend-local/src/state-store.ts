@@ -2,9 +2,11 @@ import { existsSync, linkSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  type ActivationEvent,
   type ActiveBuildProvider,
   assertBuildId,
   type BuildHandle,
+  type BuildHistorySnapshot,
   type BuildId,
   type BuildSelection,
   type BuildSummary,
@@ -178,6 +180,37 @@ export class LocalStateStore {
       .prepare('SELECT * FROM builds ORDER BY created_at DESC, build_id DESC')
       .all() as Array<Record<string, string | number>>;
     return rows.map(toSummary);
+  }
+
+  history(): BuildHistorySnapshot {
+    this.#db.exec('BEGIN');
+    try {
+      const active = this.current();
+      const builds = this.listBuilds();
+      const rows = this.#db
+        .prepare(`SELECT generation, previous_build_id AS previousBuildId,
+          build_id AS buildId, kind, recorded_at AS recordedAt
+        FROM activation_events ORDER BY generation DESC LIMIT 51`)
+        .all() as Array<{
+        generation: number;
+        previousBuildId: string | null;
+        buildId: string;
+        kind: ActivationEvent['kind'];
+        recordedAt: string;
+      }>;
+      const activationHistory = rows.slice(0, 50).map(
+        (row): ActivationEvent => ({
+          ...row,
+          buildId: assertBuildId(row.buildId),
+          previousBuildId: row.previousBuildId === null ? null : assertBuildId(row.previousBuildId),
+        }),
+      );
+      this.#db.exec('COMMIT');
+      return { active, builds, activationHistory, historyTruncated: rows.length > 50 };
+    } catch (cause) {
+      if (this.#db.isTransaction) this.#db.exec('ROLLBACK');
+      throw cause;
+    }
   }
 
   getBuild(buildId: BuildId): BuildSummary | null {
