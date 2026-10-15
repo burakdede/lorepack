@@ -1,6 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createLocalRuntimeBackend } from '@lorepack/backend-local';
+import { createLocalRuntimeBackend, LocalActiveBuildProvider } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
@@ -189,9 +189,10 @@ describe('search over the local ports', () => {
         const handle = await backend.provider.acquire();
         try {
           await backend.open(handle);
-          const db = (
-            backend.provider as { database(h: unknown): { prepare(sql: string): unknown } }
-          ).database(handle);
+          if (!(backend.provider instanceof LocalActiveBuildProvider)) {
+            throw new Error('Expected the local build provider fixture.');
+          }
+          const db = backend.provider.database(handle);
           // `schema_migrations` exists in the build database and is not part of the read
           // surface. The authorizer, not the query author, is what stops this.
           expect(() => db.prepare('SELECT * FROM schema_migrations')).toThrow();

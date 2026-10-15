@@ -203,12 +203,12 @@ describe('FileObjectStore', () => {
       const store = new FileObjectStore(project.path('objects'));
       writeFileSync(project.path('escape.txt'), 'not an object', 'utf8');
 
-      await expect(store.get('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(store.get('../../../escape.txt')).rejects.toMatchObject({
         code: 'LORE_E_INVALID_ARGUMENT',
-      });
-      await expect(store.has('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+      } satisfies Partial<LoreError>);
+      await expect(store.has('../../../escape.txt')).rejects.toMatchObject({
         code: 'LORE_E_INVALID_ARGUMENT',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 

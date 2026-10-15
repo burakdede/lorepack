@@ -115,7 +115,7 @@ function fakeRemoteRollbackTarget(
 class SqliteStatement {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -123,7 +123,7 @@ class SqliteStatement {
   }
 
   bind(...values: unknown[]): SqliteStatement {
-    this.#bindings = values;
+    this.#bindings = values as SQLInputValue[];
     return this;
   }
 
@@ -186,17 +186,13 @@ function writeCloudflareReceipt(root: string): void {
   );
 }
 
-interface FakeCloudflareObjectsBucket {
+type FakeCloudflareObjectsBucket = ReturnType<CloudflareResolverAdapter['openObjectsBucket']> & {
   readonly deletedKeys: string[];
   failOnDeleteKey: string | null;
   seed(key: string, value?: Uint8Array): void;
-}
+};
 
-function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObjectsBucket'] extends (
-  ...args: never[]
-) => infer T
-  ? T & FakeCloudflareObjectsBucket
-  : never {
+function createFakeCloudflareObjectsBucket(): FakeCloudflareObjectsBucket {
   const objects = new Map<string, Uint8Array>();
   const deletedKeys: string[] = [];
   return {

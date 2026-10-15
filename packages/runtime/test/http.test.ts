@@ -153,7 +153,10 @@ const tables: TableStore = {
   },
 };
 
-function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
+function appFor(
+  overrides: Partial<Parameters<typeof createApiApp>[0]> = {},
+  includeFreshness = true,
+) {
   const scope: BuildScope = {
     ...IDENTITY,
     buildId: BUILD,
@@ -188,7 +191,7 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   return createApiApp({
     runtime,
     currentBuild: async () => ({ buildId: BUILD, generation: 7 }),
-    freshness: async () => 'clean',
+    ...(includeFreshness ? { freshness: async () => 'clean' as const } : {}),
     ...overrides,
   });
 }
@@ -1454,9 +1457,7 @@ describe('encoded MCP names retain the request body contract', () => {
 
 describe('host defaults and optional assets', () => {
   it('reports a first-run host without an active build or freshness provider', async () => {
-    const response = await appFor({ currentBuild: async () => null, freshness: undefined }).request(
-      '/health',
-    );
+    const response = await appFor({ currentBuild: async () => null }, false).request('/health');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       status: 'no-build',
