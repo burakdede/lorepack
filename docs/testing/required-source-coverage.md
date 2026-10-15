@@ -34,3 +34,9 @@ The automated tests cover the CLI paths, HTTP warning delivery and Studio Overvi
 checklist also calls for operator review of Sources. It records what
 an operator should verify on their supported client/platform; it does not claim OS-level
 assistive-technology or external-client testing.
+
+The existing stale-rollback browser setup assertion records the selected build, expected
+active build, HTTP status and actual response body on refusal. The successful path adds no
+await, retry or delay, and the assertion remains HTTP200. This is diagnostic context for
+[#758](https://github.com/burakdede/lorepack/issues/758), not a claimed correction of its
+unproven cause. Preserve failed browser artifacts before another run.
