@@ -10,6 +10,7 @@ import {
   sourceReadRequestSchema,
   sourceReadResultSchema,
   tableDescriptionSchema,
+  tableListResultSchema,
   tableQueryRequestSchema,
   tableQueryResultSchema,
   taskContextRequestSchema,
@@ -121,29 +122,10 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
       description:
         'List the typed tables this build contains. A build compiled from documents alone has none, and says so rather than failing.',
       inputSchema: buildSelectionSchema,
-      outputSchema: z.object({
-        buildId: buildSelectionSchema.shape.buildId,
-        corpusId: z.string().optional(),
-        namespaceId: z.string().optional(),
-        tables: z.array(z.object({ tableId: z.string(), name: z.string() }).strict()),
-      }),
+      outputSchema: tableListResultSchema,
       annotations: READ_ONLY,
     },
-    async (selection) =>
-      guard(async () => {
-        const described =
-          selection.buildId === undefined ? undefined : await runtime.describeBuild(selection);
-        return reply({
-          ...(described === undefined
-            ? {}
-            : {
-                buildId: described.buildId,
-                corpusId: described.corpusId,
-                namespaceId: described.namespaceId,
-              }),
-          tables: [...(await runtime.listTables(selection))],
-        });
-      }),
+    async (selection) => guard(async () => reply(await runtime.listTables(selection))),
   );
 
   server.registerTool(

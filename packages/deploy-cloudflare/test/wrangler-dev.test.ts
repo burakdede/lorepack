@@ -382,9 +382,61 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
 
     const listResponse = await worker.fetch('/v1/tables', { headers: auth });
     expect(listResponse.status).toBe(200);
-    expect(await listResponse.json()).toEqual({
+    const tableList = {
+      corpusId: CORPUS_ID,
+      namespaceId: build.namespaceId,
+      buildId: BUILD,
+      sourceState: 'unknown',
       tables: [{ tableId: TABLE_ID, name: 'Products' }],
-    });
+    };
+    expect(await listResponse.json()).toEqual(tableList);
+    const pinnedList = await worker.fetch(`/v1/tables?buildId=${BUILD}`, { headers: auth });
+    expect(pinnedList.status).toBe(200);
+    expect(await pinnedList.json()).toEqual(tableList);
+
+    for (const selection of [{}, { buildId: BUILD }]) {
+      const response = await worker.fetch('/mcp', {
+        method: 'POST',
+        headers: {
+          ...auth,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'tools/call',
+          'Mcp-Name': 'lore_list_tables',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'lore_list_tables', arguments: selection, _meta: envelope },
+        }),
+      });
+      expect(response.status).toBe(200);
+      const frame = await decodeMcp(response);
+      expect((frame.result as { structuredContent: unknown }).structuredContent).toEqual(tableList);
+    }
+    for (const uri of ['lore://project/tables', `lore://build/${BUILD}/tables`]) {
+      const response = await worker.fetch('/mcp', {
+        method: 'POST',
+        headers: {
+          ...auth,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Mcp-Method': 'resources/read',
+          'Mcp-Name': uri,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'resources/read',
+          params: { uri, _meta: envelope },
+        }),
+      });
+      expect(response.status).toBe(200);
+      const frame = await decodeMcp(response);
+      const contents = (frame.result as { contents: Array<{ text: string }> }).contents;
+      expect(JSON.parse(contents[0]?.text ?? '{}')).toEqual(tableList);
+    }
 
     const describeResponse = await worker.fetch(`/v1/tables/${encodeURIComponent(TABLE_ID)}`, {
       headers: auth,

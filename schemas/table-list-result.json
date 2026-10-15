@@ -1,0 +1,57 @@
+{
+  "$id": "https://lorepack.dev/schemas/table-list-result.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "buildId": {
+      "description": "Content-derived build identifier",
+      "pattern": "^lore_[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "corpusId": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "namespaceId": {
+      "pattern": "^namespace_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "sourceState": {
+      "enum": [
+        "clean",
+        "dirty",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "tables": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tableId": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "tableId",
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "corpusId",
+    "namespaceId",
+    "buildId",
+    "sourceState",
+    "tables"
+  ],
+  "title": "table-list-result",
+  "type": "object"
+}

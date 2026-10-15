@@ -49,6 +49,12 @@ export interface SearchHit {
   scoreComponents?: Record<string, number> | undefined;
 }
 
+export interface TableListResult extends RuntimeIdentity {
+  buildId: string;
+  sourceState: SourceState;
+  tables: Array<{ tableId: string; name: string }>;
+}
+
 export interface SearchResult extends RuntimeIdentity {
   buildId: string;
   sourceState: SourceState;

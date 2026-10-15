@@ -13,6 +13,7 @@ import {
   contextBundleSchema,
   searchRequestSchema,
   sourceReadRequestSchema,
+  tableListResultSchema,
   tableQueryRequestSchema,
 } from '../src/schemas/runtime.js';
 
@@ -24,6 +25,33 @@ function firstIssuePath(result: z.ZodSafeParseResult<unknown>): string {
   if (result.success) return '';
   return result.error.issues[0]?.path.join('.') ?? '';
 }
+
+describe('table listing schema, issue423', () => {
+  const result = {
+    corpusId: `corpus_${'c'.repeat(32)}`,
+    namespaceId: `namespace_${'d'.repeat(32)}`,
+    buildId: BUILD_ID,
+    sourceState: 'unknown',
+    tables: [],
+  };
+
+  it('publishes the strict envelope for empty and populated lists', () => {
+    expect(PUBLIC_SCHEMAS['table-list-result']).toBe(tableListResultSchema);
+    expect(tableListResultSchema.parse(result)).toEqual(result);
+    const populated = { ...result, tables: [{ tableId: 'prices#Products', name: 'Products' }] };
+    expect(tableListResultSchema.parse(populated)).toEqual(populated);
+    expect(tableListResultSchema.safeParse({ ...result, extra: true }).success).toBe(false);
+  });
+
+  it.each(['corpusId', 'namespaceId', 'buildId', 'sourceState', 'tables'])(
+    'requires %s even for an empty listing',
+    (field) => {
+      const missing: Record<string, unknown> = { ...result };
+      delete missing[field];
+      expect(tableListResultSchema.safeParse(missing).success).toBe(false);
+    },
+  );
+});
 
 describe('config schema', () => {
   const minimal = { version: 1, name: 'sarjbot', sources: ['./project-context'] };
@@ -551,6 +579,7 @@ describe('public registry', () => {
         'source-read-result',
         'status',
         'table-description',
+        'table-list-result',
         'table-query-request',
         'table-query-result',
         'task-context-request',

@@ -72,7 +72,7 @@ let currentRoot = '';
 runRuntimeContract({
   sqlProfile: 'local',
   name: 'local SQLite and filesystem',
-  create: async (): Promise<ContractFixture> => {
+  create: async (hooks): Promise<ContractFixture> => {
     const root = mkdtempSync(join(tmpdir(), 'lore-contract-'));
     writeFileSync(join(root, 'lore.yaml'), CONFIG, 'utf8');
     writeFileSync(join(root, 'rollback.md'), CORPUS['guides/rollback.md'], 'utf8');
@@ -85,7 +85,23 @@ runRuntimeContract({
     const backend = createLocalRuntimeBackend({ projectRoot: root });
 
     return {
-      runtime: createRuntime(backend),
+      runtime: createRuntime({
+        ...backend,
+        open: async (handle) => {
+          const scope = await backend.open(handle);
+          return {
+            ...scope,
+            tables: {
+              list: async () => {
+                await hooks?.beforeTableList?.();
+                return scope.tables.list();
+              },
+              describe: (id) => scope.tables.describe(id),
+              query: (request) => scope.tables.query(request),
+            },
+          };
+        },
+      }),
       knownArtifactId: 'rollback.md',
       matchingQuery: 'rollback',
       knownTableId: 'contracted:pricing.csv#table',
@@ -96,9 +112,7 @@ runRuntimeContract({
     };
   },
   /**
-   * Edits a source and rebuilds, which is how activation happens for real. A backend that
-   * cannot do this in a test omits the hook and the activation cases skip rather than
-   * quietly passing.
+   * Edits a source and rebuilds, which is how activation happens for real.
    */
   activateAnother: async (): Promise<string> => {
     writeFileSync(

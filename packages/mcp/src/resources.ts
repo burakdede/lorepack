@@ -142,23 +142,13 @@ export function registerResources(
     async (uri, variables) =>
       read(uri, async () => {
         const selection = { buildId: String(variables.buildId) };
-        const described = await runtime.describeBuild(selection);
         const tables = await runtime.listTables(selection);
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: 'application/json',
-              text: JSON.stringify(
-                {
-                  buildId: described.buildId,
-                  corpusId: described.corpusId,
-                  namespaceId: described.namespaceId,
-                  tables,
-                },
-                null,
-                2,
-              ),
+              text: JSON.stringify(tables, null, 2),
             },
           ],
         };
@@ -239,7 +229,7 @@ export function registerResources(
           {
             uri: uri.href,
             mimeType: 'application/json',
-            text: JSON.stringify({ tables: await runtime.listTables() }, null, 2),
+            text: JSON.stringify(await runtime.listTables(), null, 2),
           },
         ],
       })),

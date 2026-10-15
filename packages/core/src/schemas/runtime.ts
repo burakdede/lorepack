@@ -292,6 +292,13 @@ export const tableColumnSchema = z
   })
   .strict();
 
+export const tableListResultSchema = z
+  .object({
+    ...responseEnvelope,
+    tables: z.array(z.object({ tableId: z.string().min(1), name: z.string() }).strict()),
+  })
+  .strict();
+
 export const tableDescriptionSchema = z
   .object({
     ...responseEnvelope,
@@ -367,5 +374,6 @@ export type SourceReadRequest = z.infer<typeof sourceReadRequestSchema>;
 export type SourceReadResult = z.infer<typeof sourceReadResultSchema>;
 export type TableQueryRequest = z.infer<typeof tableQueryRequestSchema>;
 export type TableQueryResult = z.infer<typeof tableQueryResultSchema>;
+export type TableListResult = z.infer<typeof tableListResultSchema>;
 export type TableDescription = z.infer<typeof tableDescriptionSchema>;
 export type BuildDescription = z.infer<typeof buildDescriptionSchema>;

@@ -47,7 +47,7 @@ describe('exact selection over retained projection state, issue432', () => {
       });
       expect(query.buildId).toBe(ACTIVE_BUILD);
       expect(query.rows[0]).toMatchObject({ 'List Price': 19.99 });
-      expect((await fixture.runtime.listTables(selection)).length).toBeGreaterThan(0);
+      expect((await fixture.runtime.listTables(selection)).tables.length).toBeGreaterThan(0);
     } finally {
       await fixture.close();
     }

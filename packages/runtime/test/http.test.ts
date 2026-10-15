@@ -4,6 +4,7 @@ import type {
   BuildManifest,
   BuildScope,
   CatalogArtifact,
+  CatalogArtifactSummary,
   CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
@@ -79,6 +80,11 @@ const catalog: CatalogStore = {
       counts: { artifacts: 1, nodes: 2, chunks: 1, tables: 0, tableRows: 0 },
       warnings: [],
     } as BuildManifest;
+  },
+  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+    const artifact = await this.artifact('guides/a.md');
+    if (artifact === null) throw new Error('Expected the HTTP catalog fixture.');
+    return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 1, nodeCount: 2 }];
   },
   async countChunks() {
     return 1;
@@ -187,6 +193,51 @@ function appFor(overrides: Partial<Parameters<typeof createApiApp>[0]> = {}) {
   });
 }
 
+describe('table listing acquisition, issue423', () => {
+  it.each(['', `?buildId=${BUILD}`])('captures once through HTTP for %s', async (query) => {
+    let acquired = 0;
+    let released = 0;
+    const runtime = createRuntime({
+      provider: {
+        current: async () => ({ buildId: BUILD, generation: 1 }),
+        acquire: async () => {
+          acquired += 1;
+          return {
+            ...IDENTITY,
+            buildId: BUILD,
+            generation: 1,
+            release() {
+              released += 1;
+            },
+          };
+        },
+      },
+      open: async () => ({
+        ...IDENTITY,
+        buildId: BUILD,
+        catalog,
+        tables,
+        objects: {
+          get: async () => null,
+          put: async () => '',
+          has: async () => false,
+        },
+      }),
+      freshness: async () => 'dirty',
+    });
+    const response = await appFor({ runtime }).request(`/v1/tables${query}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD,
+      sourceState: 'dirty',
+      tables: [],
+    });
+    expect(acquired).toBe(1);
+    expect(released).toBe(1);
+  });
+});
+
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 
 describe('numeric API versions with Studio mounted, issue427', () => {
@@ -276,10 +327,15 @@ describe('the route list, architecture 14.5', () => {
     expect(page.status).toBe(400);
   });
 
-  it('answers the table routes as a build without tables, until Phase 5', async () => {
+  it('identifies a build without tables and refuses an unknown table', async () => {
     const list = await appFor().request('/v1/tables');
     expect(list.status).toBe(200);
-    expect(await list.json()).toEqual({ tables: [] });
+    expect(await list.json()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD,
+      sourceState: 'clean',
+      tables: [],
+    });
 
     const one = await appFor().request('/v1/tables/sales');
     expect(one.status).toBe(404);

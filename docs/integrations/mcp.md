@@ -44,7 +44,13 @@ including tools and resources. Selection implies source-free startup and rejects
 
 On an ordinary local or remote server, every read tool accepts an optional full `buildId`.
 Selected resources use `lore://build/{buildId}`, `lore://build/{buildId}/source/{artifactId}`
-and `lore://build/{buildId}/tables`. Missing selections fail without reading the active build.
+and `lore://build/{buildId}/tables`. Missing selections fail without reading the active build. Table listings from
+`lore_list_tables`, `lore://project/tables` and the selected tables resource include
+`corpusId`, `namespaceId`, `buildId`, `sourceState` and `tables`, including empty lists.
+The identity and table names come from one captured build, so activation during a read
+cannot change that response's identity. This table-list contract was checked on
+2026-10-15 with Node 24.21.0 and MCP client/server 2.0.0 through actual CLI stdio,
+and with Wrangler 4.149.0 through local Worker D1/R2 emulation.
 
 ## Protocol behavior
 

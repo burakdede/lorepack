@@ -9,6 +9,7 @@ import type {
   SourceReadOptions,
   SourceReadResult,
   TableDescription,
+  TableListResult,
   TableQueryResult,
   TaskContextRequest,
 } from './contracts.js';
@@ -161,7 +162,7 @@ export class LoreClient {
     return this.#get(`/v1/sources/${encodeURIComponent(artifactId)}${suffix}`, signal);
   }
 
-  listTables(signal?: AbortSignal): Promise<{ tables: Array<{ tableId: string; name: string }> }> {
+  listTables(signal?: AbortSignal): Promise<TableListResult> {
     return this.#get('/v1/tables', signal);
   }
 

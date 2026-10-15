@@ -7,6 +7,7 @@ import type {
   SourceLocator as CoreSourceLocator,
   SourceReadResult as CoreSourceReadResult,
   TableDescription as CoreTableDescription,
+  TableListResult as CoreTableListResult,
   TableQueryResult as CoreTableQueryResult,
   TaskContextRequest as CoreTaskContextRequest,
 } from '@lorepack/core';
@@ -19,6 +20,7 @@ import type {
   SourceLocator as SdkSourceLocator,
   SourceReadResult as SdkSourceReadResult,
   TableDescription as SdkTableDescription,
+  TableListResult as SdkTableListResult,
   TableQueryResult as SdkTableQueryResult,
   TaskContextRequest as SdkTaskContextRequest,
 } from '@lorepack/sdk';
@@ -53,6 +55,7 @@ describe('the SDK mirrors the server contracts exactly', () => {
     assertExact<Exact<SdkBuildDescription, CoreBuildDescription>>(true);
     assertExact<Exact<SdkSourceReadResult, CoreSourceReadResult>>(true);
     assertExact<Exact<SdkTableDescription, CoreTableDescription>>(true);
+    assertExact<Exact<SdkTableListResult, CoreTableListResult>>(true);
     assertExact<Exact<SdkTableQueryResult, CoreTableQueryResult>>(true);
     assertExact<Exact<SdkSourceLocator, CoreSourceLocator>>(true);
     expect(true).toBe(true);

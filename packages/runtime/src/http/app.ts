@@ -551,23 +551,7 @@ export function createApiApp(options: ApiOptions): Hono {
   );
 
   app.get('/v1/tables', (context) =>
-    answer(context, async () => {
-      const selection = selectionOf(context);
-      const described =
-        selection.buildId === undefined
-          ? undefined
-          : await options.runtime.describeBuild(selection);
-      return {
-        ...(described === undefined
-          ? {}
-          : {
-              buildId: described.buildId,
-              corpusId: described.corpusId,
-              namespaceId: described.namespaceId,
-            }),
-        tables: await options.runtime.listTables(selection),
-      };
-    }),
+    answer(context, () => options.runtime.listTables(selectionOf(context))),
   );
 
   app.get('/v1/tables/:tableId', (context) =>

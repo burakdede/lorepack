@@ -47,12 +47,18 @@ async function measuredFixture() {
       await target.verify(receipt);
       await target.activate(receipt);
     });
-    const tables = await fixture.runtime.listTables();
+    const { tables } = await fixture.runtime.listTables();
     const table = tables[0];
     if (table === undefined) throw new Error('The compiled fixture has no typed table.');
     const description = await fixture.runtime.describeTable(table.tableId);
-    const knownArtifactId = (await fixture.runtime.search({ query: MATCHING_QUERY })).hits[0]
-      ?.artifactId;
+    const knownArtifactId = (
+      await fixture.runtime.search({
+        query: MATCHING_QUERY,
+        limit: 10,
+        includeArchived: false,
+        debug: false,
+      })
+    ).hits[0]?.artifactId;
     if (knownArtifactId === undefined)
       throw new Error('The compiled fixture has no rollback source.');
     const calls: Array<{ query: string }> = [];
