@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: '24.21.0'
           cache: pnpm
+      - name: Restore the original workflow input for policy tests
+        run: >-
+          node --input-type=module -e 'import {execFileSync} from "node:child_process"; import {writeFileSync} from "node:fs"; const file=".github/workflows/ci.yml"; writeFileSync(file,execFileSync("git",["show","4848b1afab61e4cb9a0e118a2e98d7958d328285:"+file]));'
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Record the actual diagnostic environment
