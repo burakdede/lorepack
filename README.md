@@ -25,6 +25,7 @@ time:
   reviewable context build.
 - Let Claude Code, Codex, VS Code, or another MCP client answer from the same local build.
 - Preserve spreadsheets as typed tables instead of flattening them into prose.
+  Table listings identify the build and source freshness they read, including empty listings.
 - Review a context update before activating it, then recover immediately if a bad source update
   reaches the active version.
 - Inspect every answer back to a file, heading, line range, sheet, or cell range.

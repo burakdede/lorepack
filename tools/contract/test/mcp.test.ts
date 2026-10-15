@@ -11,7 +11,7 @@ import type {
   CatalogStore,
   TableStore,
 } from '@lorepack/core';
-import { LoreError, searchResultSchema } from '@lorepack/core';
+import { LoreError, searchResultSchema, tableListResultSchema } from '@lorepack/core';
 import { createMcpServer, RESOURCE_TEMPLATES, RESOURCE_URIS, TOOL_NAMES } from '@lorepack/mcp';
 import { createApiApp, createRuntime } from '@lorepack/runtime';
 import { Client } from '@modelcontextprotocol/client';
@@ -210,16 +210,19 @@ const EMPTY_DIFF = {
 } as unknown as BuildDiff;
 
 let client: Client;
+let acquired = 0;
 let comparedPairs: Array<[string, string]>;
 const criteriaSeen: CatalogSearchCriteria[] = [];
 
 beforeEach(async () => {
+  acquired = 0;
   const runtime = createRuntime({
     provider: {
       async current() {
         return { buildId: BUILD, generation: 1 };
       },
       async acquire(): Promise<BuildHandle> {
+        acquired += 1;
         return { ...IDENTITY, buildId: BUILD, generation: 1, release() {} };
       },
     },
@@ -248,6 +251,16 @@ beforeEach(async () => {
 });
 
 describe('the tool surface, architecture 14.1', () => {
+  it.each([{}, { buildId: BUILD }])(
+    'lists tables with one captured handle for %j',
+    async (selection) => {
+      const result = await client.callTool({ name: 'lore_list_tables', arguments: selection });
+      const parsed = tableListResultSchema.parse(result.structuredContent);
+      expect(parsed).toEqual({ ...IDENTITY, buildId: BUILD, sourceState: 'clean', tables: [] });
+      expect(acquired).toBe(1);
+    },
+  );
+
   it('is exactly the seven documented tools, in a deterministic order', async () => {
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name);
@@ -312,6 +325,7 @@ describe('results', () => {
   it('carries the build id and freshness on every tool that reads the build', async () => {
     for (const [name, args] of [
       ['lore_build_info', {}],
+      ['lore_list_tables', {}],
       ['lore_search', { query: 'rollback' }],
       ['lore_context_for_task', { task: 'how do I roll back' }],
       ['lore_read_source', { artifactId: 'p:guides/a.md' }],
@@ -391,6 +405,18 @@ describe('failures', () => {
 });
 
 describe('resources, architecture 14.2', () => {
+  it.each(['lore://project/tables', `lore://build/${BUILD}/tables`])(
+    'returns the captured table envelope from %s',
+    async (uri) => {
+      const result = await client.readResource({ uri });
+      const content = result.contents[0];
+      expect(content).toHaveProperty('text');
+      const parsed = tableListResultSchema.parse(JSON.parse((content as { text: string }).text));
+      expect(parsed).toEqual({ ...IDENTITY, buildId: BUILD, sourceState: 'clean', tables: [] });
+      expect(acquired).toBe(1);
+    },
+  );
+
   it('lists the project resources deterministically', async () => {
     const first = await client.listResources();
     const second = await client.listResources();

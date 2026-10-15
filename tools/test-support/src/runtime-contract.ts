@@ -35,12 +35,12 @@ export interface ContractFixture {
 export interface ContractOptions {
   /** Names the implementation in test output, for example "local SQLite". */
   readonly name: string;
-  readonly create: () => Promise<ContractFixture>;
+  readonly create: (hooks?: { beforeTableList?: () => Promise<void> }) => Promise<ContractFixture>;
   /**
-   * Activates a different build and returns its id, for the activation invariants. A
-   * backend that cannot do this in a test skips those cases, and says so here.
+   * Activates a different build and returns its id. Every adapter fixture must exercise
+   * activation during a table read to prove that rows retain their captured identity.
    */
-  readonly activateAnother?: () => Promise<string>;
+  readonly activateAnother: () => Promise<string>;
   /**
    * The SQL profile the backend's statement guard runs. The remote one is a documented subset
    * of the local one (`docs/architecture/adr-sql-surface.md`), and the cases that differ by
@@ -60,8 +60,11 @@ const CONTRACT_TIMEOUT_MS = 30_000;
  */
 export function runRuntimeContract(options: ContractOptions): void {
   describe(`LoreRuntime contract: ${options.name}`, () => {
-    async function withFixture<T>(body: (fixture: ContractFixture) => Promise<T>): Promise<T> {
-      const fixture = await options.create();
+    async function withFixture<T>(
+      body: (fixture: ContractFixture) => Promise<T>,
+      hooks?: { beforeTableList?: () => Promise<void> },
+    ): Promise<T> {
+      const fixture = await options.create(hooks);
       try {
         return await body(fixture);
       } finally {
@@ -76,6 +79,7 @@ export function runRuntimeContract(options: ContractOptions): void {
           await withFixture(async ({ runtime, knownArtifactId, matchingQuery }) => {
             const responses = [
               await runtime.describeBuild(),
+              await runtime.listTables(),
               await runtime.search({
                 query: matchingQuery,
                 limit: 5,
@@ -357,6 +361,34 @@ export function runRuntimeContract(options: ContractOptions): void {
      * presence check the whole time it was returning a locator naming a file rather than a
      * range, statistics that reached no reader, and a `boolean` column whose sample said `1`.
      */
+    it(
+      'keeps table rows and identity on the captured build during activation, issue423',
+      async () => {
+        let armed = false;
+        let activated: string | undefined;
+        await withFixture(
+          async ({ runtime, knownTableId }) => {
+            const before = await runtime.listTables();
+            expect(before.tables.map((table) => table.tableId)).toContain(knownTableId);
+            armed = true;
+            const during = await runtime.listTables();
+            expect(activated).toBeDefined();
+            expect(activated).not.toBe(before.buildId);
+            expect(during).toEqual(before);
+            expect((await runtime.listTables()).buildId).toBe(activated);
+          },
+          {
+            beforeTableList: async () => {
+              if (armed && activated === undefined) {
+                activated = await options.activateAnother();
+              }
+            },
+          },
+        );
+      },
+      CONTRACT_TIMEOUT_MS,
+    );
+
     describe('typed tables', () => {
       /** Runs `body` with a table id, or skips when the fixture has no tables. */
       async function withTable(
@@ -371,7 +403,7 @@ export function runRuntimeContract(options: ContractOptions): void {
       it('describes a table the listing offered', async () => {
         await withTable(async ({ runtime, knownTableId }) => {
           const listed = await runtime.listTables();
-          expect(listed.map((table) => table.tableId)).toContain(knownTableId);
+          expect(listed.tables.map((table) => table.tableId)).toContain(knownTableId);
 
           const described = await runtime.describeTable(knownTableId);
           expect(described.tableId).toBe(knownTableId);

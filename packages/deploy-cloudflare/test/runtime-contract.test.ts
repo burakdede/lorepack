@@ -9,7 +9,8 @@ import {
 runRuntimeContract({
   sqlProfile: 'remote',
   name: 'Cloudflare projected SQLite and object ports',
-  create: async (): Promise<ContractFixture> => await createProjectedWorkerRuntimeFixture(),
+  create: async (hooks): Promise<ContractFixture> =>
+    await createProjectedWorkerRuntimeFixture(hooks),
   activateAnother: async (): Promise<string> => await activateProjectedWorkerRuntimeFixture(),
 });
 
@@ -27,6 +28,8 @@ it('closes native qualifications from retained A after B activation in the real 
     await fixture.target.activate(fixture.candidateReceipt);
     const bundle = await fixture.runtime.contextForTask({
       task: 'rollback permitted',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
       budget: 8000,
       buildId,
     });
@@ -51,6 +54,8 @@ it('omits oversized projected units instead of returning their permission fragme
   try {
     const bundle = await fixture.runtime.contextForTask({
       task: 'rollback permitted',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
       budget: 8000,
     });
     expect([...bundle.overview, ...bundle.selected, ...bundle.alternatives]).toEqual([]);

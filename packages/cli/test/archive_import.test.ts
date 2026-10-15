@@ -62,7 +62,7 @@ it('imports a verified build into an empty offline consumer without its producer
         const source = await runtime.readSource({ path: 'policy.md' });
         expect(source.buildId).toBe(built.buildId);
         expect(source.text).toContain('after approval');
-        const tables = await runtime.listTables();
+        const { tables } = await runtime.listTables();
         expect(tables).toHaveLength(1);
         const table = await runtime.describeTable(tables[0]?.tableId ?? '');
         const rows = await runtime.queryTable({

@@ -22,6 +22,7 @@ import {
   searchRequestSchema,
   sourceReadRequestSchema,
   type TableDescription,
+  type TableListResult,
   type TableQueryRequest,
   type TableQueryResult,
   type TaskContextRequest,
@@ -252,10 +253,11 @@ class PortedRuntime implements LoreRuntime {
     );
   }
 
-  async listTables(
-    selection: BuildSelection = {},
-  ): Promise<readonly { readonly tableId: string; readonly name: string }[]> {
-    return this.#withBuild(async ({ scope }) => scope.tables.list(), selection);
+  async listTables(selection: BuildSelection = {}): Promise<TableListResult> {
+    return this.#withBuild(
+      async ({ scope, envelope }) => ({ ...envelope, tables: [...(await scope.tables.list())] }),
+      selection,
+    );
   }
 
   async describeTable(tableId: string, selection: BuildSelection = {}): Promise<TableDescription> {

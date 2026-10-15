@@ -4,6 +4,7 @@ import type {
   BuildManifest,
   BuildScope,
   CatalogArtifact,
+  CatalogArtifactSummary,
   CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
@@ -55,7 +56,14 @@ it('refuses context adapters that omit native closure and releases the captured 
       return scope;
     },
   });
-  await expect(runtime.contextForTask({ task: 'match', budget: 8000 })).rejects.toMatchObject({
+  await expect(
+    runtime.contextForTask({
+      task: 'match',
+      budget: 8000,
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    }),
+  ).rejects.toMatchObject({
     code: 'LORE_E_SCHEMA_MISMATCH',
   });
   expect(provider.released).toBe(1);
@@ -91,6 +99,9 @@ function hitIn(buildId: BuildId): CatalogSearchHit {
     relativePath: 'guides/a.md',
     displayPath: 'guides/a.md',
     headingPath: ['Guides'],
+    page: null,
+    sheet: null,
+    cellRange: null,
     lineStart: 3,
     lineEnd: 4,
     status: 'active',
@@ -107,6 +118,11 @@ class FakeCatalog implements CatalogStore {
   constructor(private readonly buildId: BuildId) {}
   async manifest(): Promise<BuildManifest> {
     return manifestFor(this.buildId);
+  }
+  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+    const artifact = await this.artifact('guides/a.md');
+    if (artifact === null) throw new Error('Expected the catalog artifact fixture.');
+    return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 2, nodeCount: 3 }];
   }
   async countChunks(): Promise<number> {
     return 2;
@@ -140,6 +156,9 @@ class FakeCatalog implements CatalogStore {
         title: null,
         text: 'the body of the only node',
         headingPath: ['Guides'],
+        page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 3,
         lineEnd: 4,
       },
@@ -255,6 +274,55 @@ function scopeFor(buildId: BuildId): BuildScope {
   };
 }
 
+describe('table listing identity, issue423', () => {
+  it('keeps rows and envelope on A when B activates inside the table read', async () => {
+    const provider = new TrackingProvider();
+    const rows = [{ tableId: 'a-table', name: 'A table' }];
+    let entered!: () => void;
+    let release!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const runtime = runtimeOver(provider, {
+      freshness: async () => (provider.active === BUILD_A ? 'clean' : 'dirty'),
+      open: async (handle) => ({
+        ...scopeFor(handle.buildId),
+        tables: {
+          ...emptyTables,
+          list: async () => {
+            entered();
+            await gate;
+            return handle.buildId === BUILD_A ? rows : [];
+          },
+        },
+      }),
+    });
+    const pending = runtime.listTables();
+    await reading;
+    provider.activate(BUILD_B);
+    release();
+    expect(await pending).toEqual({
+      ...IDENTITY,
+      buildId: BUILD_A,
+      sourceState: 'clean',
+      tables: rows,
+    });
+    expect(provider.acquired).toBe(1);
+    expect(provider.released).toBe(1);
+    expect(provider.closed).toEqual([BUILD_A]);
+    expect(await runtime.listTables()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD_B,
+      sourceState: 'dirty',
+      tables: [],
+    });
+    expect(provider.leaked).toBe(0);
+  });
+});
+
 describe('the envelope', () => {
   it('carries operational corpus and namespace identity in runtime responses (#697)', async () => {
     const provider = new TrackingProvider();
@@ -262,7 +330,11 @@ describe('the envelope', () => {
     for (const result of [
       await runtime.describeBuild(),
       await runtime.search({ query: 'a', limit: 5, includeArchived: false, debug: false }),
-      await runtime.contextForTask({ task: 'a match', includeArchived: false }),
+      await runtime.contextForTask({
+        task: 'a match',
+        includeArchived: false,
+        allowUnsupportedBudget: false,
+      }),
       await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 }),
     ]) {
       expect(result).toMatchObject(IDENTITY);
@@ -377,7 +449,11 @@ describe('the handle', () => {
     await runtime.listTables();
     await expect(runtime.describeTable('nope')).rejects.toThrow();
     await expect(runtime.queryTable({ tableId: 'nope', sql: 'SELECT 1' })).rejects.toThrow();
-    await runtime.contextForTask({ task: 'anything', includeArchived: false });
+    await runtime.contextForTask({
+      task: 'anything',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    });
     await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 });
 
     expect(provider.acquired).toBe(7);
@@ -476,7 +552,11 @@ describe('activation, architecture section 15.2', () => {
 describe('capabilities this phase has not delivered yet', () => {
   it('assembles a bundle over any port, bounded and cited', async () => {
     const runtime = runtimeOver(new TrackingProvider());
-    const bundle = await runtime.contextForTask({ task: 'a match', includeArchived: false });
+    const bundle = await runtime.contextForTask({
+      task: 'a match',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    });
 
     expect(bundle.buildId).toBe(BUILD_A);
     expect(bundle.profile).toBe('agent');
@@ -504,7 +584,12 @@ describe('capabilities this phase has not delivered yet', () => {
 
   it('answers table calls as a build without tables, not as a missing method', async () => {
     const runtime = runtimeOver(new TrackingProvider());
-    expect(await runtime.listTables()).toEqual([]);
+    expect(await runtime.listTables()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD_A,
+      sourceState: 'unknown',
+      tables: [],
+    });
     await expect(runtime.describeTable('sales')).rejects.toMatchObject({
       code: 'LORE_E_BUILD_NOT_FOUND',
     });

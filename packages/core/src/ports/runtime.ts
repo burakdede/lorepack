@@ -10,6 +10,7 @@ import type {
   SourceReadResult,
   SourceState,
   TableDescription,
+  TableListResult,
   TableQueryRequest,
   TableQueryResult,
   TaskContextRequest,
@@ -250,9 +251,7 @@ export interface LoreRuntime {
   search(request: SearchRequest): Promise<SearchResult>;
   contextForTask(request: TaskContextRequest): Promise<ContextBundle>;
   readSource(request: SourceReadRequest): Promise<SourceReadResult>;
-  listTables(
-    selection?: BuildSelection,
-  ): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
+  listTables(selection?: BuildSelection): Promise<TableListResult>;
   describeTable(tableId: string, selection?: BuildSelection): Promise<TableDescription>;
   queryTable(request: TableQueryRequest): Promise<TableQueryResult>;
 }

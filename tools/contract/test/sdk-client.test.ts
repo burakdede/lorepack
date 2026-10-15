@@ -223,7 +223,12 @@ describe('every route has a typed method', () => {
 
   it('the table routes', async () => {
     const client = clientOverApp();
-    expect(await client.listTables()).toEqual({ tables: [] });
+    expect(await client.listTables()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD,
+      sourceState: 'clean',
+      tables: [],
+    });
     await expect(client.describeTable('sales')).rejects.toBeInstanceOf(LoreClientError);
   });
 });

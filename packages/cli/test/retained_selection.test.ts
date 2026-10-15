@@ -1,7 +1,7 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createLocalRuntimeBackend } from '@lorepack/backend-local';
+import { createLocalRuntimeBackend, LocalActiveBuildProvider } from '@lorepack/backend-local';
 import { type BuildId, loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
@@ -84,7 +84,8 @@ describe('exact retained-build selection, issue432', () => {
       const catalog = join(root, '.lore/builds', first, 'context.sqlite');
       if (process.platform === 'win32') {
         expect(() => rmSync(catalog)).toThrow(expect.objectContaining({ code: 'EPERM' }));
-        backend.provider.closeAll();
+        expect(backend.provider).toBeInstanceOf(LocalActiveBuildProvider);
+        (backend.provider as LocalActiveBuildProvider).closeAll();
       }
       rmSync(catalog);
       await expect(backend.provider.acquire({ buildId: first })).rejects.toMatchObject({
@@ -148,7 +149,7 @@ describe('exact retained-build selection, issue432', () => {
       const source = await runtime.readSource({ artifactId: artifactId as string });
       expect(source.buildId).toBe(first);
       expect(JSON.stringify(source)).toContain('original checkpoint');
-      const table = (await runtime.listTables())[0];
+      const table = (await runtime.listTables()).tables[0];
       expect(table).toBeDefined();
       const described = await runtime.describeTable(table?.tableId as string);
       expect(described.buildId).toBe(first);

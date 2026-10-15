@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import {
   type BuildId,
   type BuildManifest,
@@ -78,19 +78,23 @@ class SqliteStatement
 
   async first<T = Record<string, unknown>>(): Promise<T | null> {
     const statement = this.#db.prepare(this.#query);
-    return (statement.get(...this.#bindings) as T | undefined) ?? null;
+    return (statement.get(...(this.#bindings as SQLInputValue[])) as T | undefined) ?? null;
   }
 
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return {
+        results: statement.all(...(this.#bindings as SQLInputValue[])) as unknown as readonly T[],
+      };
     }
     if (/\breturning\b/i.test(this.#query)) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return {
+        results: statement.all(...(this.#bindings as SQLInputValue[])) as unknown as readonly T[],
+      };
     }
-    statement.run(...this.#bindings);
+    statement.run(...(this.#bindings as SQLInputValue[]));
     return {};
   }
 }
@@ -125,7 +129,11 @@ interface ProjectedFixtureState {
 let currentFixture: ProjectedFixtureState | null = null;
 
 export async function createProjectedWorkerRuntimeFixture(
-  options: { readonly nativeText?: string; readonly chunkText?: string } = {},
+  options: {
+    readonly nativeText?: string;
+    readonly chunkText?: string;
+    readonly beforeTableList?: () => Promise<void>;
+  } = {},
 ): Promise<{
   readonly buildDirectory: string;
   readonly candidateDirectory: string;
@@ -204,7 +212,20 @@ export async function createProjectedWorkerRuntimeFixture(
           namespace: { projectId: PROJECT, buildId: handle.buildId },
           manifestJson: provider.manifestFor(handle),
         }),
-        tables: new D1TableStore(projection, { projectId: PROJECT, buildId: handle.buildId }),
+        tables: (() => {
+          const tables = new D1TableStore(projection, {
+            projectId: PROJECT,
+            buildId: handle.buildId,
+          });
+          return {
+            list: async () => {
+              await options.beforeTableList?.();
+              return tables.list();
+            },
+            describe: (id: string) => tables.describe(id),
+            query: (request: Parameters<D1TableStore['query']>[0]) => tables.query(request),
+          };
+        })(),
         objects: new R2ObjectStore(PROJECT, bucket),
       }),
       freshness: async () => 'clean',

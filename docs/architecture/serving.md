@@ -12,12 +12,20 @@ without editing a single file per surface (invariant 10).
 `@lorepack/runtime`. REST, MCP and the CLI all call the same object, so a capability cannot
 exist in one interface and be missing from another.
 
-Build descriptions, search results, context bundles, source reads, table descriptions and
-table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. The runtime
-captures them from one acquired handle and checks that the opened scope belongs to the same
-corpus, namespace and build before reading its catalog. The table-name listing and health
-response retain their own existing shapes for unselected requests. Public JSON schemas and SDK types require the
-identity fields on the result envelopes.
+Build descriptions, search results, context bundles, source reads, table listings,
+table descriptions and table query results carry `corpusId`, `namespaceId`, `buildId`
+and `sourceState`. The runtime captures them from one acquired handle and checks that
+the opened scope belongs to the same corpus, namespace and build before reading its catalog.
+Public JSON schemas and SDK types require the identity fields on these result envelopes.
+The health response retains its separate shape.
+
+`GET /v1/tables`, `LoreClient.listTables()`, `lore_list_tables` and the MCP table
+resources return `{corpusId, namespaceId, buildId, sourceState, tables}` even when
+`tables` is empty. Table rows and identity come from the same captured reader: an
+activation during the read affects the next call. Consumers of the internal
+`LoreRuntime.listTables()` port must now read `result.tables` instead of a bare array.
+HTTP and MCP consumers retain their existing `tables` field and gain required metadata;
+no separate build-info request is needed.
 
 A missing or malformed provider identity is `LORE_E_SCHEMA_MISMATCH`; an adapter that opens
 a different binding is an internal contract violation. Acquired handles are opaque owner

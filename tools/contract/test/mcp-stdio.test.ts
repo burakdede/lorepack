@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tableListResultSchema } from '@lorepack/core';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
@@ -89,6 +90,30 @@ afterEach(async () => {
 });
 
 describe('a client launching the server', () => {
+  it.each([false, true])(
+    'identifies table listings through the actual binary, with tables=%s',
+    async (withTables) => {
+      if (withTables) writeFileSync(join(project, 'prices.csv'), 'sku,price\nA-1,10\n');
+      const connected = await connect(['--ensure-current']);
+      const listed = await connected.callTool({ name: 'lore_list_tables', arguments: {} });
+      const result = tableListResultSchema.parse(listed.structuredContent);
+      expect(result.sourceState).toBe('clean');
+      expect(result.tables).toHaveLength(withTables ? 1 : 0);
+      if (withTables) expect(result.tables[0]?.tableId).toBe('served:prices.csv#table');
+      const pinned = await connected.callTool({
+        name: 'lore_list_tables',
+        arguments: { buildId: result.buildId },
+      });
+      expect(tableListResultSchema.parse(pinned.structuredContent)).toEqual(result);
+      for (const uri of ['lore://project/tables', `lore://build/${result.buildId}/tables`]) {
+        const resource = await connected.readResource({ uri });
+        const text = resource.contents[0] as { text: string };
+        expect(tableListResultSchema.parse(JSON.parse(text.text))).toEqual(result);
+      }
+    },
+    120_000,
+  );
+
   it('builds the project first, then serves it, all before the first protocol frame', async () => {
     // No build exists yet, so --ensure-current has to create one. A client should never
     // have to know that happened.

@@ -801,7 +801,7 @@ async function verifyCandidateBuild(
   }
 
   try {
-    const tables = await runtime.listTables();
+    const { tables } = await runtime.listTables();
     if (tables.length === 0) {
       tableQuery = 'skipped';
     } else {
