@@ -124,9 +124,9 @@ describe('archive verification', () => {
       const archive = join(project.root, 'duplicate.lorepack');
       await writeDuplicateArchive(archive);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -194,13 +194,13 @@ describe('archive verification', () => {
       ]);
       for (const [name] of bombs) declareSize(archive, name, 0xfffffff0);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxTotalBytes' }),
-      });
-      await expect(readArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      } satisfies Partial<LoreError>);
+      await expect(readArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -211,10 +211,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxMemberBytes: 8 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxMemberBytes', member: 'manifest.json' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -250,10 +250,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxMembers: 2 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxMembers' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -264,10 +264,10 @@ describe('archive verification', () => {
 
       await expect(
         verifyArchive(archive, { limits: { ...ARCHIVE_LIMITS, maxIndexBytes: 16 } }),
-      ).rejects.toMatchObject<Partial<LoreError>>({
+      ).rejects.toMatchObject({
         code: 'LORE_E_LIMIT_EXCEEDED',
         details: expect.objectContaining({ limit: 'maxIndexBytes' }),
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -277,10 +277,10 @@ describe('archive verification', () => {
       await writeZip(archive, [...BUILD, ['checksums.json', indexOf(BUILD)]]);
       declareSize(archive, 'context.sqlite', 4);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
         subject: 'context.sqlite',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -294,10 +294,10 @@ describe('archive verification', () => {
       const archive = join(project.root, 'schema.lorepack');
       await writeZip(archive, [...BUILD, ['checksums.json', indexOf(BUILD, overrides)]]);
 
-      await expect(verifyArchive(archive)).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
         code: 'LORE_E_OBJECT_CORRUPT',
         subject: 'checksums.json',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -351,10 +351,10 @@ describe('archive verification', () => {
       declareHost(archive, 'reports/link', host);
 
       for (const read of [verifyArchive, readArchive]) {
-        await expect(read(archive)).rejects.toMatchObject<Partial<LoreError>>({
+        await expect(read(archive)).rejects.toMatchObject({
           code: 'LORE_E_OBJECT_CORRUPT',
           subject: 'reports/link',
-        });
+        } satisfies Partial<LoreError>);
       }
     });
   });

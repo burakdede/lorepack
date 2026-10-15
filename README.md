@@ -587,9 +587,11 @@ Local runtime cases distinguish released handles from damaged builds and preserv
 The archived XLSX measurement command uses pinned parser dependencies and real fixture tests.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
-tests, and `pnpm coverage:inventory` to retain the audit ownership baseline and include new
-executable sources. `pnpm coverage:report` binds and merges coverage artifacts against that
-inventory, refusing stale hashes, incompatible maps and missing owned files. Rejected native
+tests. Include each changed audit test in `tsconfig.audit_tests.json`; fixtures implement the
+current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`
+to retain the audit ownership baseline and include new executable sources. `pnpm coverage:report`
+binds and merges coverage artifacts against that inventory, refusing stale hashes, incompatible
+maps and missing owned files. Rejected native
 execution prevents qualification even when another record covers the same source.
 `pnpm coverage:native` converts actual Node configuration/script execution, preserving
 unused counters and recording rejected layouts. Execution offsets must match the source

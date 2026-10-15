@@ -88,6 +88,14 @@ empty arrays; revocation must still remove access, report the removed count and
 leave an empty inventory. Header normalization is checked through the public
 authorizer, without exposing private comparison helpers.
 
+The explicit `tsconfig.audit_tests.json` program includes changed audit regressions,
+including real-build CLI tests and runtime fixtures. Add new regression files to that
+list. Fixtures implement complete current ports: absent coordinates use `null`,
+authorization requests carry headers, and byte fixtures retain their binary input
+type. SQLite-backed test adapters keep the native binding and result boundaries.
+Vitest matchers use supported signatures with typed expected values. No assertion
+or compiler strictness is relaxed to include these files.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
