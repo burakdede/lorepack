@@ -57,6 +57,9 @@ regression also belongs to the strict audit program; unavailable prices cannot i
 Discovery tests remove actual file and directory sources after configuration resolves and assert
 unreadable warnings rather than invented artifacts. They also cover byte-unit boundaries and
 empty ignore negations. Run `pnpm exec vitest run packages/compiler/test/discover.test.ts`.
+`packages/compiler/test/discover_races.test.ts` deletes real paths after enumeration or
+symlink resolution, returning the original syscall result unchanged. The next real syscall
+must report the disappearance, preserving surviving artifacts without inventing missing ones.
 
 `tools/arch/test/supply_chain_command.test.ts` exercises the supply-chain command with
 explicit npm/pnpm response fixtures and the workspace's actual dependency inventory.
