@@ -118,6 +118,15 @@ Separate installed-layout fixtures use a copy of the compiled parent to exercise
 missing, failed and malformed helpers. No helper reply without a logical proof is
 accepted, and retained catalog/identity bytes remain unchanged in every case.
 
+Relocated compiled fixtures keep their emitted JavaScript, mapping positions, names
+and embedded source contents. The copy helper resolves the original compiler map
+references before moving it, preserving the same actual source URLs as described by
+[ECMA-426 section 9.3](https://tc39.es/ecma426/#sec-resolving-sources). It accepts flat
+compiler maps with an empty source root and preserves the module filename. A copied
+map with stale relative paths cannot establish execution of the original source.
+Focused diagnostics verify mapping behavior; final all-owned qualification still
+requires every original bundle and source/lifecycle reconciliation.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
