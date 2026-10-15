@@ -90,7 +90,9 @@ authorizer, without exposing private comparison helpers.
 
 Sealed source-read cases cover parent-heading order, open-ended line ranges and plain
 text locators after source removal. PDF line-range refusals explain how to read the
-whole artifact without inventing missing line coordinates.
+whole artifact without inventing missing line coordinates. Single-sheet reads retain
+sheet/range provenance; whole multi-sheet reads omit ambiguous coordinates and
+heading-selected reads recover the precise sheet/range from the sealed build.
 
 The archived XLSX spike command resolves its libraries through the parser workspace.
 Actual ZIP/XML fixtures verify shared/cached strings, numeric/boolean/empty cells,
