@@ -1,6 +1,19 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import {
+  createLocalRuntimeBackend,
+  ProjectLock,
+  withReadReferenceLock,
+} from '@lorepack/backend-local';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -13,8 +26,15 @@ import {
 import { rollbackCommand } from '../src/commands/activate.js';
 import { pruneCommand } from '../src/commands/prune.js';
 import { runBuild } from '../src/services/build.js';
+import { openStateStore } from '../src/services/builds.js';
 import type { CloudflareResolverAdapter } from '../src/services/cloudflare-target.js';
 import { readActiveBuild } from '../src/services/project.js';
+import {
+  applyRetention,
+  planRetention,
+  reconcileRetention,
+  renderRetentionPlan,
+} from '../src/services/retention.js';
 import { run } from './helpers.js';
 
 const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
@@ -1548,4 +1568,142 @@ describe('partial cleanup receipts through the CLI, issue732', () => {
       });
     },
   );
+});
+
+describe('retention plans over real local builds', () => {
+  it('uses the default five-build window with tied timestamps and skips a newer failed attempt', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const ids: BuildId[] = [];
+      for (let index = 0; index < 7; index += 1) {
+        writeFileSync(join(root, 'a.md'), `# A\n\nVersion ${index}.`);
+        const built = await runBuild({
+          config: loadConfig({ cwd: root }),
+          progress: new ProgressBus(),
+          activate: false,
+          now: () => new Date('2026-10-01T00:00:00.000Z'),
+        });
+        ids.push(built.buildId);
+      }
+      const lore = join(root, '.lore');
+      const state = openStateStore(lore);
+      try {
+        const failed = `lore_${'f'.repeat(64)}` as BuildId;
+        state.recordBuild({
+          buildId: failed,
+          state: 'failed',
+          createdAt: '2026-10-02T00:00:00.000Z',
+          counts: { artifacts: 0, nodes: 0, chunks: 0, tables: 0, tableRows: 0 },
+        });
+        expect(state.current()).toBeNull();
+        const history = state.listBuilds();
+        const before = ids.map((id) => readFileSync(join(lore, 'builds', id, 'context.sqlite')));
+        const ordered = ids.toSorted((a, b) => b.localeCompare(a));
+        const plan = planRetention(lore, history, null);
+        expect(plan.keep).toEqual(ordered.slice(0, 5));
+        expect(plan.remove).toEqual([failed, ...ordered.slice(5)]);
+        expect(plan.bytesFreed).toBeGreaterThan(0);
+        expect(plan.protectedReads).toEqual([]);
+        expect(ids.map((id) => readFileSync(join(lore, 'builds', id, 'context.sqlite')))).toEqual(
+          before,
+        );
+        expect(state.listBuilds()).toEqual(history);
+      } finally {
+        state.close();
+      }
+    });
+  });
+
+  it('keeps objects referenced by an interrupted candidate created after the cleanup preview', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const { first, third } = await threeBuilds(root);
+      const lore = join(root, '.lore');
+      const state = openStateStore(lore);
+      try {
+        const active = state.current()?.buildId;
+        if (active === undefined) throw new Error('The real build must activate its result.');
+        const preview = planRetention(lore, state.listBuilds(), active, 0);
+        const originalHashes = objectHashes(root, first);
+        expect(originalHashes.length).toBeGreaterThan(0);
+        expect(preview.objectsToRemove).toEqual(expect.arrayContaining(originalHashes));
+        const candidate = join(lore, 'tmp', 'interrupted');
+        mkdirSync(candidate, { recursive: true });
+        const catalog = join(candidate, 'context.sqlite');
+        copyFileSync(join(lore, 'builds', first, 'context.sqlite'), catalog);
+        const before = readFileSync(catalog);
+        writeFileSync(join(lore, 'tmp', 'notes.txt'), 'not a candidate directory');
+        writeFileSync(join(lore, 'builds', 'notes.txt'), 'not a build directory');
+        await new ProjectLock(join(lore, 'lock')).withLock(() =>
+          withReadReferenceLock(lore, () => {
+            const checked = reconcileRetention(lore, preview, state.listBuilds(), active, 0);
+            expect(checked.remove).toEqual(preview.remove);
+            expect(checked.objectsToRemove).not.toEqual(expect.arrayContaining(originalHashes));
+            for (const hash of originalHashes) expect(checked.objectsToRemove).not.toContain(hash);
+            state.forgetBuilds(checked.remove);
+            applyRetention(lore, checked);
+          }),
+        );
+        expect(state.listBuilds().map((record) => record.buildId)).toEqual([third]);
+        expect(readFileSync(catalog)).toEqual(before);
+        for (const hash of originalHashes) expect(existsSync(objectFile(root, hash))).toBe(true);
+        expect(existsSync(join(lore, 'builds', first))).toBe(false);
+        expect(existsSync(join(lore, 'builds', third, 'context.sqlite'))).toBe(true);
+        expect(readFileSync(join(lore, 'tmp', 'notes.txt'), 'utf8')).toBe(
+          'not a candidate directory',
+        );
+      } finally {
+        state.close();
+      }
+    });
+  });
+
+  it('explains request and cached reader protection until backend shutdown', async () => {
+    await project({ 'a.md': '# A\n\nInitial.' }, async (root) => {
+      const built = await build(root);
+      const lore = join(root, '.lore');
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      const handles = await Promise.all([backend.provider.acquire(), backend.provider.acquire()]);
+      const state = openStateStore(lore);
+      try {
+        const held = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(held.protectedReads).toEqual([{ buildId: built.buildId, readers: 2 }]);
+        expect(renderRetentionPlan(held)).toContain(
+          `${built.buildId}: kept by 2 open runtime references`,
+        );
+        expect(renderRetentionPlan(held)).toContain('Nothing to remove. 1 build retained.');
+        for (const handle of handles) handle.release();
+        const idle = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(idle.protectedReads).toEqual([{ buildId: built.buildId, readers: 1 }]);
+        expect(renderRetentionPlan(idle)).toContain(
+          `${built.buildId}: kept by 1 open runtime reference`,
+        );
+        backend.close();
+        const released = planRetention(lore, state.listBuilds(), built.buildId, 0);
+        expect(released.protectedReads).toEqual([]);
+        expect(renderRetentionPlan(released)).toBe('Nothing to remove. 1 build retained.');
+        const { protectedReads: _references, ...legacy } = released;
+        expect(renderRetentionPlan(legacy)).toBe(renderRetentionPlan(released));
+      } finally {
+        for (const handle of handles) handle.release();
+        backend.close();
+        state.close();
+      }
+    });
+  });
+
+  it('plans and renders empty storage without creating build or temporary directories', async () => {
+    await withTempProject({}, async (temp) => {
+      const lore = join(temp.root, '.lore');
+      const preview = planRetention(lore, [], null);
+      expect(preview).toEqual({
+        protectedReads: [],
+        keep: [],
+        remove: [],
+        objectsToRemove: [],
+        bytesFreed: 0,
+      });
+      expect(reconcileRetention(lore, preview, [], null, 0)).toEqual(preview);
+      expect(renderRetentionPlan(preview)).toBe('Nothing to remove. 0 builds retained.');
+      expect(existsSync(lore)).toBe(false);
+    });
+  });
 });
