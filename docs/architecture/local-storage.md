@@ -91,6 +91,15 @@ together. A crash leaves the old pointer, never a torn state. The generation nev
 including after a rollback, so a reader detects a change by comparing one integer rather
 than by watching the filesystem.
 
+A new state database is initialized under `.lore/tmp/state-init-*`, including its runtime
+identity, and closed before publication. Publication refuses an existing destination;
+concurrent first opens therefore read the same completed winner. They never open another
+initializer's private database. The private name is removed before its owner opens the
+canonical name. Normal failures remove staging; a killed initializer can leave an inert
+private directory. See [ADR 0027](../adr/0027-atomic-initial-state.md) for filesystem and
+SQLite alias constraints. Existing state is never replaced and keeps the five-second
+busy timeout, checksum checks and read-only newer-schema refusal.
+
 Several processes open `state.sqlite` at once by design: `lorepack dev`, MCP sessions, Studio
 and one-off commands. Every connection gets its five-second busy timeout from the constructor,
 before its first statement, so a writer holding the database makes an open wait rather than
