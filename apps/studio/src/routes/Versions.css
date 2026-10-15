@@ -299,3 +299,29 @@
     display: none;
   }
 }
+
+.activation-history {
+  margin-top: var(--space-8);
+  margin-bottom: var(--space-6);
+}
+
+.activation-history > summary {
+  width: fit-content;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.activation-history-note {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.activation-events td {
+  white-space: nowrap;
+}
+
+.activation-events time {
+  font-family: var(--font-mono);
+}
