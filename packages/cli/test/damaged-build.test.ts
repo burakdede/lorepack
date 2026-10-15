@@ -1,4 +1,4 @@
-import { readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
@@ -35,6 +35,8 @@ async function recoversFrom(
 
     const directory = join(temp.root, '.lore', 'builds', first.buildId);
     damage(join(directory, 'context.sqlite'), directory);
+    const databasePath = join(directory, 'context.sqlite');
+    const beforeRead = existsSync(databasePath) ? readFileSync(databasePath) : null;
 
     // Reading is expected to fail, and to fail in the taxonomy's terms rather than with a
     // raw SQLite string. Which code depends on the damage; that it is typed does not.
@@ -43,6 +45,8 @@ async function recoversFrom(
       .search({ query: 'rollback', limit: 5, includeArchived: false, debug: false })
       .catch((error: unknown) => error);
     broken.close();
+    if (beforeRead === null) expect(existsSync(databasePath)).toBe(false);
+    else expect(readFileSync(databasePath)).toEqual(beforeRead);
     expect((failure as { code?: string }).code).toMatch(/^LORE_E_/);
     expect((failure as { code?: string }).code).not.toBe('LORE_E_INTERNAL');
     if (expectedFailure !== undefined) expect(failure).toMatchObject(expectedFailure);
@@ -112,6 +116,26 @@ describe('a build from a newer catalog schema', () => {
 });
 
 describe('a build damaged on disk', () => {
+  it.each([
+    { name: 'missing ledger', sql: 'DROP TABLE schema_migrations' },
+    {
+      name: 'missing migration identifier',
+      sql: 'ALTER TABLE schema_migrations RENAME COLUMN id TO removed_id',
+    },
+  ])('recovers from a $name after refusing the unchanged damaged catalog', async ({ sql }) => {
+    await recoversFrom(
+      (database) => {
+        const writable = new DatabaseSync(database);
+        try {
+          writable.exec(sql);
+        } finally {
+          writable.close();
+        }
+      },
+      { code: 'LORE_E_OBJECT_CORRUPT', remediation: expect.stringContaining('lorepack build') },
+    );
+  });
+
   it('recovers when the catalog has no recorded migrations', async () => {
     await recoversFrom(
       (database) => {
