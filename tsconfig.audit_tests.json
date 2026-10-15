@@ -12,6 +12,7 @@
     "packages/backend-local/test/archive_verify_child.test.ts",
     "packages/backend-local/test/object_verify.test.ts",
     "packages/backend-local/test/query_child.test.ts",
+    "packages/backend-local/test/sql-surface.test.ts",
     "packages/backend-local/test/storage.test.ts",
     "packages/cli/test/activate.test.ts",
     "packages/cli/test/damaged-build.test.ts",
