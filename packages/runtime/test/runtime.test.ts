@@ -541,3 +541,99 @@ describe('capabilities this phase has not delivered yet', () => {
     });
   });
 });
+
+describe('context selection through runtime ports', () => {
+  it('translates all filters into catalog criteria and releases the selected build', async () => {
+    const provider = new TrackingProvider();
+    const scope = scopeFor(BUILD_A);
+    const search = vi.spyOn(scope.catalog, 'search');
+    const runtime = runtimeOver(provider, { open: async () => scope });
+    const bundle = await runtime.contextForTask({
+      task: 'match',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+      filters: [
+        { kind: 'path', value: 'guides/**' },
+        { kind: 'type', value: '.md' },
+        { kind: 'status', value: 'active' },
+        { kind: 'status', value: 'draft' },
+      ],
+    });
+    expect(search).toHaveBeenCalledExactlyOnceWith('match', {
+      match: 'all',
+      limit: 500,
+      nativeUnits: true,
+      pathGlob: 'guides/**',
+      extension: '.md',
+      statuses: ['active', 'draft'],
+    });
+    expect(bundle.buildId).toBe(BUILD_A);
+    expect(provider.acquired).toBe(1);
+    expect(provider.released).toBe(1);
+    expect(provider.leaked).toBe(0);
+  });
+
+  it.each([false, true])(
+    'offers historical duplicate text only after explicit expansion (%s)',
+    async (includeArchived) => {
+      const provider = new TrackingProvider();
+      const scope = scopeFor(BUILD_A);
+      const hit = hitIn(BUILD_A);
+      const candidates: readonly CatalogSearchHit[] = [
+        { ...hit, authority: 100, nativeUnit: { nodeIds: ['current#0'], text: hit.text } },
+        {
+          ...hit,
+          chunkId: 'archived@0',
+          artifactId: 'archived',
+          relativePath: 'archive.md',
+          status: 'archived',
+          nativeUnit: { nodeIds: ['archived#0'], text: hit.text },
+        },
+        {
+          ...hit,
+          chunkId: 'superseded@0',
+          artifactId: 'superseded',
+          relativePath: 'old.md',
+          nativeUnit: { nodeIds: ['superseded#0'], text: hit.text },
+        },
+      ];
+      vi.spyOn(scope.catalog, 'search').mockResolvedValue(candidates);
+      vi.spyOn(scope.catalog, 'supersededArtifacts').mockResolvedValue(new Set(['superseded']));
+      const runtime = runtimeOver(provider, { open: async () => scope });
+      const bundle = await runtime.contextForTask({
+        task: 'match',
+        includeArchived,
+        allowUnsupportedBudget: false,
+      });
+      const delivered = [...bundle.overview, ...bundle.selected];
+      expect(delivered.map((item) => item.chunkId)).toEqual([hit.chunkId]);
+      if (includeArchived) {
+        expect(bundle.alternatives).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              chunkId: 'archived@0',
+              labels: ['archived'],
+              locator: expect.objectContaining({ relativePath: 'archive.md' }),
+            }),
+            expect.objectContaining({
+              chunkId: 'superseded@0',
+              labels: ['superseded'],
+              locator: expect.objectContaining({ relativePath: 'old.md' }),
+            }),
+          ]),
+        );
+        expect(bundle.alternatives).toHaveLength(2);
+      } else {
+        expect(bundle.alternatives).toEqual([]);
+        expect(bundle.omitted).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ chunkId: 'archived@0', reason: 'archived' }),
+            expect.objectContaining({ chunkId: 'superseded@0', reason: 'superseded' }),
+          ]),
+        );
+      }
+      expect(provider.released).toBe(1);
+      expect(provider.leaked).toBe(0);
+    },
+  );
+});

@@ -102,6 +102,11 @@ identifier refusal. Contributor advice accumulates bytes by path and sorts ties
 before selecting the largest three sources. Tables without projected columns are
 skipped. No synthetic database return types are used to reach defensive branches.
 
+Runtime port tests verify that context path, type and status filters reach the
+catalog together. Historical duplicate text appears as labeled alternatives only
+with explicit expansion; default responses keep omission reasons and locators.
+Both paths release the captured build handle.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
