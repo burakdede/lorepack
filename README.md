@@ -73,6 +73,7 @@ platform in v0.1.
   the equivalent CLI, HTTP, and MCP request.
 - Tables shows typed schemas, sample rows, and bounded read-only queries when tables exist.
 - Versions shows build history, diffs, activation, rollback, and portable packaging.
+  Studio refuses stale rollback confirmations when a competing activation changes the target.
 - Diagnostics shows environment checks, watcher state, and detected AI clients.
 
 Studio keeps API errors as JSON, including requests for unsupported API versions.

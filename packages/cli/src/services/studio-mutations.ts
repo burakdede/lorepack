@@ -131,38 +131,40 @@ export function createRollbackEndpoint(
     const state = openStateStore(loreDirectory);
 
     try {
-      const builds = state.listBuilds();
-      const active = state.current();
-      const target = previousBuild(builds, active?.buildId ?? null);
+      return await lock.withLock(() => {
+        const builds = state.listBuilds();
+        const active = state.current();
+        const target = previousBuild(builds, active?.buildId ?? null);
 
-      // Studio names the build it is about to return to, and the history can move between
-      // rendering that name and confirming it: a rebuild finishing in the next terminal is
-      // enough. Rather than silently acting on a different build than the one confirmed, the
-      // stale confirmation is refused and the reader gets to look again.
-      const expected = (request as { expect?: unknown } | null)?.expect;
-      if (typeof expected === 'string' && expected !== target) {
-        // An argument that no longer holds, rather than a broken build: the caller can fix
-        // this by looking again, which is what separates a 400 from a 500.
-        throw new LoreError(
-          'LORE_E_INVALID_ARGUMENT',
-          'The build history changed while this confirmation was open.',
-          {
-            remediation: `Rolling back now would return to ${target}, not ${expected}. Check the history and confirm again.`,
-            subject: expected,
-          },
-        );
-      }
+        // Studio names the build it is about to return to, and the history can move between
+        // rendering that name and confirming it: a rebuild finishing in the next terminal is
+        // enough. Rather than silently acting on a different build than the one confirmed, the
+        // stale confirmation is refused and the reader gets to look again.
+        const expected = (request as { expect?: unknown } | null)?.expect;
+        if (typeof expected === 'string' && expected !== target) {
+          // An argument that no longer holds, rather than a broken build: the caller can fix
+          // this by looking again, which is what separates a 400 from a 500.
+          throw new LoreError(
+            'LORE_E_INVALID_ARGUMENT',
+            'The build history changed while this confirmation was open.',
+            {
+              remediation: `Rolling back now would return to ${target}, not ${expected}. Check the history and confirm again.`,
+              subject: expected,
+            },
+          );
+        }
 
-      const summary = builds.find((build) => build.buildId === target);
-      if (summary === undefined) {
-        throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'There is no earlier build to return to.', {
-          remediation: 'Build again, and this project will have a version to roll back to.',
-        });
-      }
-      assertActivatable(loreDirectory, summary);
+        const summary = builds.find((build) => build.buildId === target);
+        if (summary === undefined) {
+          throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'There is no earlier build to return to.', {
+            remediation: 'Build again, and this project will have a version to roll back to.',
+          });
+        }
+        assertActivatable(loreDirectory, summary);
 
-      const generation = await lock.withLock(() => state.activate(target));
-      return { buildId: target, generation, changed: true };
+        const generation = state.activate(target);
+        return { buildId: target, generation, changed: true };
+      });
     } finally {
       state.close();
     }

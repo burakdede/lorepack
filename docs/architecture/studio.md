@@ -27,6 +27,14 @@ activate, roll back, and pack. They exist only under `lorepack dev` on a loopbac
 and refuse any browser page that is not Studio itself (same host and port). Pack always
 writes to the default name in the project root.
 
+Rollback reads current history, chooses the target, compares the confirmed `expect` value
+and validates the retained build while holding the same project lock as activation. A
+competing build or activation cannot change the target between confirmation checking and
+the pointer transaction (#681). If history changed while the request waited, Studio gets
+`LORE_E_INVALID_ARGUMENT` and the competing activation's pointer/generation stay intact.
+The lock wait deadline and existing bare-target selection semantics are unchanged; durable
+activation history is tracked separately in #422.
+
 No other site may frame Studio (#553). A click inside a frame would carry Studio's own
 loopback `Origin`, which the write guard admits, so every Studio response is sent with
 `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`, plus
@@ -103,3 +111,19 @@ recorded with the screen reader name and version before closing issue #381.
 There is no server-side build button, no source editing, and no route that
 claims a document is wrong. The interface does not flatten structured source
 content or turn ranking heuristics into truth scores.
+
+## Rollback confirmation verification
+
+Verified on2026-10-15 with Node24.21.0, macOS arm64, Playwright1.62.1 and
+Chromium151.0.7922.34. The controlled second-process fixture holds the actual project
+lock, changes activation and releases it only after the rollback request is waiting.
+Before the correction two stale requests changed the pointer/generation; the unchanged
+history control passed. All three pass with confirmation checking under the lock.
+
+The browser checks cover normal rollback, stale activation and stale rollback refusal.
+For the rollback flow: open the confirmation, let a new build activate, confirm the old
+plan, and check the visible refusal plus the current build ID in both header and table.
+Cancel, review the refreshed rollback target and confirm: the new action succeeds.
+The refusal screen below was visually inspected; it is an actual served Studio capture.
+
+![Stale rollback is refused while the competing build stays active](../images/studio_rollback_stale.png)
