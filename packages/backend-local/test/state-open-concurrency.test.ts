@@ -62,7 +62,7 @@ function openInChildren(loreDirectory: string, count: number): Promise<string[]>
       LocalStateStore.open(${JSON.stringify(loreDirectory)}, ${JSON.stringify(STATE_MIGRATIONS)}).close();
       process.stdout.write('ok');
     } catch (error) {
-      process.stdout.write(String(error?.message ?? error) + ' ' + String(error?.cause?.message ?? ''));
+      process.stdout.write(JSON.stringify({ message: String(error?.message ?? error), stack: error?.stack, code: error?.code, errcode: error?.errcode, cause: error?.cause?.message, causeStack: error?.cause?.stack }));
     }`;
   return Promise.all(
     Array.from(
