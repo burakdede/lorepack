@@ -3,6 +3,10 @@
 The inspector. Six routes are served by the same process that serves the API,
 on the same port, from static files built into the CLI package.
 
+Numeric `/v<n>` paths belong to the API namespace, including unsupported versions.
+They return a typed JSON 404 with `LORE_E_INVALID_ARGUMENT` rather than the Studio
+shell. The asset callback declines those paths even if an asset with that name exists.
+
 The visual direction, tokens, and anti-brief are in
 [studio-design.md](./studio-design.md). The behavior and verification notes
 are recorded here.

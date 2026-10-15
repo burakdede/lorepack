@@ -676,7 +676,7 @@ function hostnameOf(host: string): string | undefined {
 
 /** Paths the API owns, whose failures must stay typed rather than becoming the Studio shell. */
 function isApiPath(path: string): boolean {
-  return path === '/health' || path === '/mcp' || path.startsWith('/v1/') || path === '/v1';
+  return path === '/health' || path === '/mcp' || /^\/v\d+(?:\/|$)/.test(path);
 }
 
 async function answer(context: Context, body: () => Promise<unknown>): Promise<Response> {
