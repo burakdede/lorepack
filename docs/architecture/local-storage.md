@@ -373,9 +373,19 @@ rather than trimmed. Every result carries the table's locator, including sheet a
 
 **A typo is not an attempted write.** A first word that is not a SQL statement keyword is
 refused as a misspelling, with the keyword named where one is a single edit away, including an
-adjacent-letter swap. `SELEC` used to be told "Only SELECT is allowed here" with a remediation
+adjacent-letter swap. Substitutions work at every position: `SELXCT` suggests `SELECT` and
+`WIXH` suggests `WITH`. The vocabulary and invalid-keyword message include `VALUES`, which
+SQLite supports as a [SELECT form](https://www.sqlite.org/lang_select.html#the_values_clause).
+The query stays rejected and is never rewritten or retried with the suggestion.
+`SELEC` used to be told "Only SELECT is allowed here" with a remediation
 explaining that writes are forbidden, which is a rule that user did not break; for a model it was
 worse, because the obvious repair was what it had already tried (#253).
+
+The Studio console was verified on 2026-10-15 with Playwright 1.62.1 and
+Chromium 151.0.7922.34. Its malformed-query alert preserves the code and suggestion;
+the rejected query produces no result.
+
+![Studio SQL keyword suggestion](../images/sql_keyword_suggestion.png)
 
 **Errors say what rule was broken and nothing about the machine.** SQLite words a denial as
 `access to t_secrets_f13bc4051aa0.c_0_sku is prohibited`, which names something the caller was
