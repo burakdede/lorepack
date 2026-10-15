@@ -480,8 +480,18 @@ launches through asynchronous spawn/fork and synchronous spawn/exec APIs; a laun
 without registered custody rejects replay. This does not change its arguments, streams
 or grants. Argument values are hashed in the observer. The CLI initializes this observer
 after validating its artifact graph and before installing its registered launch adapters.
-Complete nested-script child capture remains required before the expanded command
-workflow can qualify; an earlier parent-only pilot is retained as ineligible evidence.
+Generic eval/script launches also load a source-bound campaign registry after counter
+initialization and before original command-line import preloads. The registry is generated after the
+native artifact graph, and its separate hash receipt avoids a circular artifact identity.
+Every generic launch binds that preload receipt; host launch and reconciliation verify
+its bytes. Each generation registers the same CLI, fork, archive and generic-script targets.
+Measurement imports remove only their own arguments. Explicit child environments and
+original permission flags stay unchanged. A restricted parent retains nested receipts in
+its existing project grant before its host moves them into the campaign directory.
+Real three-generation tests check all four Node launch APIs, independent process identities,
+exact function hits and ordinary output; missing-custody and changed-preload controls reject.
+The earlier parent-only pilot remains ineligible. Fresh actual-command and complete
+nine-bundle evidence are still required before this workflow qualifies.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
 An explicit fixture collector can temporarily layer over the campaign collector.
 Its launches retain their own receipts and counter streams; restoring it reinstates the
