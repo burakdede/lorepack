@@ -422,6 +422,6 @@ Select `omega/z.md`, then `alpha/omega:z.md`. Each source pane must show its own
 `ID_TARGET_BODY` or `PATH_TARGET_BODY` and its request must return the corresponding
 locator and imported build ID. Both selections passed, as did the serious/critical axe
 check. Sources are absent locally, so the dirty annotation is expected.
-[Captured source pane](../images/studio_source_selector.png). The real-browser regression
+![Captured source pane](../images/studio_source_selector.png). The real-browser regression
 is `tools/studio-e2e/test/source_selector.spec.ts`; actual workerd HTTP/MCP readback is
 covered in `packages/deploy-cloudflare/test/wrangler-dev.test.ts`.
