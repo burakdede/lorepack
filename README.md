@@ -421,6 +421,10 @@ Markdown headings, code boundaries, directories, spreadsheet sheets, columns, an
 remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
 through a bounded read-only SQL surface.
 
+Misspelled leading SQL keywords remain rejected. A single insertion, deletion, substitution
+or adjacent-letter swap can suggest the intended keyword, including `VALUES`. Lorepack
+reports the suggestion through the runtime, HTTP and MCP without rewriting the query.
+
 Table query results identify the captured build, table and query. Their locator is
 explicitly table-level, including filtered or aggregate results; exact source-row and
 cell attribution is unsupported. See the [query contract](docs/adr/0014-table-query-identity.md).
