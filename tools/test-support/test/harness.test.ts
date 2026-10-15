@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkDeterminism } from '../src/determinism.js';
 import { canonicalJson, compareGolden, describeFirstDifference } from '../src/golden.js';
-import { withTempProject } from '../src/temp-project.js';
+import { copyCompiledFixture, withTempProject } from '../src/temp-project.js';
 
 describe('canonicalJson', () => {
   it('orders keys so a diff shows real changes', () => {
@@ -134,5 +135,40 @@ describe('checkDeterminism', () => {
       },
     });
     expect(report.deterministic).toBe(false);
+  });
+});
+
+describe('relocated compiled fixtures', () => {
+  it('retains emitted bytes, mappings and the original source identity across paths with spaces', async () => {
+    await withTempProject({}, (project) => {
+      const sourceText = 'export const value: number = 1;\n';
+      const javascript = 'export const value = 1;\n//# sourceMappingURL=fixture.js.map\n';
+      const map = {
+        version: 3,
+        file: 'fixture.js',
+        sourceRoot: '',
+        sources: ['../src/original.ts'],
+        names: ['value'],
+        mappings: 'AAAA',
+        sourcesContent: [sourceText],
+      };
+      project.write('source tree/src/original.ts', sourceText);
+      project.write('source tree/dist/fixture.js', javascript);
+      project.write('source tree/dist/fixture.js.map', JSON.stringify(map));
+      const source = project.path('source tree/dist/fixture.js');
+      const target = project.path('moved tree/deep/fixture.js');
+      mkdirSync(dirname(target), { recursive: true });
+      copyCompiledFixture(source, target);
+      const copied = JSON.parse(readFileSync(`${target}.map`, 'utf8'));
+      const originalUrl = new URL(map.sources[0] ?? '', pathToFileURL(`${source}.map`));
+      expect(new URL(copied.sources[0], pathToFileURL(`${target}.map`)).href).toBe(
+        originalUrl.href,
+      );
+      expect(readFileSync(target)).toEqual(Buffer.from(javascript));
+      expect(readFileSync(source)).toEqual(Buffer.from(javascript));
+      expect(readFileSync(`${source}.map`, 'utf8')).toBe(JSON.stringify(map));
+      expect({ ...copied, sources: map.sources }).toEqual(map);
+      expect(readFileSync(project.path('source tree/src/original.ts'), 'utf8')).toBe(sourceText);
+    });
   });
 });

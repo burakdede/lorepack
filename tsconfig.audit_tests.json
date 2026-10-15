@@ -12,6 +12,7 @@
     "packages/backend-local/test/archive_verification.test.ts",
     "packages/backend-local/test/archive_verify_child.test.ts",
     "packages/backend-local/test/object_verify.test.ts",
+    "packages/backend-local/test/query-child-entry.test.ts",
     "packages/backend-local/test/query_child.test.ts",
     "packages/backend-local/test/sql-surface.test.ts",
     "packages/backend-local/test/storage.test.ts",
@@ -39,6 +40,7 @@
     "tools/arch/test/retrieval-comparison.test.ts",
     "tools/arch/test/xlsx_spike.test.ts",
     "tools/security/test/test-skips.test.ts",
-    "tools/test-support/src/runtime-contract.ts"
+    "tools/test-support/src/runtime-contract.ts",
+    "tools/test-support/test/harness.test.ts"
   ]
 }

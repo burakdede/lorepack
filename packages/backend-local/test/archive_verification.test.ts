@@ -1,15 +1,8 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { copyCompiledFixture } from '@lorepack/test-support';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { verifyCatalogFiles } from '../src/archive-verification.js';
 import { validBuild } from './archive_fixture.js';
@@ -32,8 +25,7 @@ beforeEach(() => {
   layout = mkdtempSync(join(PACKAGE, 'dist', '.archive-parent-'));
   mkdirSync(join(layout, 'module'));
   copied = join(layout, 'module', 'archive-verification.js');
-  copyFileSync(COMPILED, copied);
-  if (existsSync(`${COMPILED}.map`)) copyFileSync(`${COMPILED}.map`, `${copied}.map`);
+  copyCompiledFixture(COMPILED, copied);
 });
 
 afterEach(() => {
