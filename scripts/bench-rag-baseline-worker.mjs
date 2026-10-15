@@ -160,6 +160,12 @@ async function requestHosted(prompt) {
   };
 }
 
+function configuredPrice(value) {
+  if (value === undefined || value.trim() === '') return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
 function sourceMentioned(answer, expected) {
   const normalized = answer.toLowerCase();
   return (
@@ -310,13 +316,10 @@ try {
     MODE === 'hosted' && providerUsageComplete ? totalModelTokens : totalPromptTokens;
   const inputTokens = totalInputTokens;
   const completionTokens = MODE === 'hosted' ? totalCompletionTokens : null;
-  const priceInput = Number(process.env.RAG_BENCH_INPUT_USD_PER_MILLION ?? '');
-  const priceOutput = Number(process.env.RAG_BENCH_OUTPUT_USD_PER_MILLION ?? '');
+  const priceInput = configuredPrice(process.env.RAG_BENCH_INPUT_USD_PER_MILLION);
+  const priceOutput = configuredPrice(process.env.RAG_BENCH_OUTPUT_USD_PER_MILLION);
   const canPrice =
-    MODE === 'hosted' &&
-    providerUsageComplete &&
-    Number.isFinite(priceInput) &&
-    Number.isFinite(priceOutput);
+    MODE === 'hosted' && providerUsageComplete && priceInput !== null && priceOutput !== null;
   const inputCost = canPrice ? (reportedPromptTokens / 1_000_000) * priceInput : null;
   const outputCost = canPrice ? (totalCompletionTokens / 1_000_000) * priceOutput : null;
   const costTotal = inputCost === null ? null : inputCost + outputCost;

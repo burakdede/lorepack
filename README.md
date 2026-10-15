@@ -385,6 +385,8 @@ metadata, build and incremental p50/p95, warm search, context assembly, typed-ta
 reuse counts. Read [benchmark methodology](benchmarks/README.md) before comparing results. The
 medium and large tiers are deterministic copies of repository-owned mixed-format material, so
 they show scale trends rather than proving performance on every customer corpus.
+The optional [RAG benchmark](docs/compatibility/rag-benchmark.md) estimates hosted cost only
+with complete provider usage and two known prices; missing prices remain unavailable.
 
 ## What makes the build trustworthy
 
