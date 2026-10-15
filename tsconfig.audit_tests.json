@@ -41,6 +41,7 @@
     "tools/arch/test/rag-pricing.test.ts",
     "tools/arch/test/research-safe-pruning.test.ts",
     "tools/arch/test/retrieval-comparison.test.ts",
+    "tools/arch/test/supply_chain_command.test.ts",
     "tools/arch/test/xlsx_spike.test.ts",
     "tools/security/test/test-skips.test.ts",
     "tools/test-support/src/runtime-contract.ts",

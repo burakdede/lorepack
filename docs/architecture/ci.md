@@ -66,6 +66,13 @@ Discovery tests remove actual file and directory sources after configuration res
 unreadable warnings rather than invented artifacts. They also cover byte-unit boundaries and
 empty ignore negations. Run `pnpm exec vitest run packages/compiler/test/discover.test.ts`.
 
+`tools/arch/test/supply_chain_command.test.ts` exercises the supply-chain command with
+explicit npm/pnpm response fixtures and the workspace's actual dependency inventory.
+Failure cases check licenses, audit errors, stale or missing reports, publication settings
+and missing dependency decisions. Its report/SBOM write port records output in memory and
+checks that committed artifacts remain unchanged. This is deterministic policy evidence;
+the verifier's live registry checks still establish current dependency health.
+
 The `privacy sandbox (ubuntu-latest)` job builds the project and runs
 `tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
 counts every packet (`tools/security/test/sandbox/netns.sh`). It is a separate job because it
