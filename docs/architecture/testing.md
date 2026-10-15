@@ -88,6 +88,12 @@ empty arrays; revocation must still remove access, report the removed count and
 leave an empty inventory. Header normalization is checked through the public
 authorizer, without exposing private comparison helpers.
 
+The archived XLSX spike command resolves its libraries through the parser workspace.
+Actual ZIP/XML fixtures verify shared/cached strings, numeric/boolean/empty cells,
+formula text, date styles, merge ranges and named-sheet selection. Its sample stays
+bounded while total cell counts remain complete. Malformed ZIP and DTD inputs must
+fail without a report. These checks add no current performance claim.
+
 1. Put it beside the module, in that package's `test/` directory.
 2. Use a helper rather than reinventing temp directories or snapshot comparison.
 3. For anything with a cross-platform dimension, do not skip on Windows. If you must,
