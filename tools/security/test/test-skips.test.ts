@@ -44,6 +44,16 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
     why: 'chmod is POSIX; Windows needs an ACL API Node does not expose',
   },
   {
+    file: 'packages/cli/test/lore-permissions.test.ts',
+    line: "describe.skipIf(posixOnly)('what a build writes under .lore', () => {",
+    why: 'Windows has no POSIX mode bits for Node to set; .lore inherits the user profile ACL there',
+  },
+  {
+    file: 'packages/core/test/atomic-write.test.ts',
+    line: "describe.skipIf(posixOnly)('writeFileAtomic modes', () => {",
+    why: 'Windows has no POSIX mode bits for Node to set beyond read-only, so there is nothing to assert',
+  },
+  {
     file: 'packages/cli/test/connect.test.ts',
     line: "it.skipIf(process.platform === 'win32')(",
     why: 'a symbolic link on Windows needs administrator rights or Developer Mode',

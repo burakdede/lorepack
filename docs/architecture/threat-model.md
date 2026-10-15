@@ -59,6 +59,7 @@ changes, and which threats are intentionally not solved.
 | Two processes hold the project lock after a crash, or a reused pid or a lock from another host defeats it, so a build, activation and prune run at once | A stale lock is reclaimed by renaming it to a tombstone named after the judged lock, so only one reclaimer can move it; liveness checks the owner's start time as well as its pid; a lock from another host is never reclaimed automatically (#565) | `packages/backend-local/test/lock-reclaim.e2e.test.ts`, `packages/backend-local/test/storage.test.ts`, `packages/cli/test/build.test.ts` |
 | A file name or document plants terminal escape sequences (title, OSC 8 link, screen clear, OSC 52 clipboard) in human CLI output | Every human string is passed through `sanitizeForTerminal`, which shows C0, DEL and C1 controls as `\xNN`; Lorepack's own colour is added afterwards; structured JSON preserves source values separately | `packages/cli/test/terminal-output.e2e.test.ts`, `packages/core/test/terminal.test.ts` |
 | A repository ships `.lore` as a link, so builds, objects (copies of every source) and state are written outside the project | Loading the configuration refuses a `.lore` that resolves outside the project with `LORE_E_PATH_ESCAPE`, including a dangling link; `doctor` fails its build-directory check (#572) | `packages/core/test/config.test.ts`, `packages/cli/test/security.e2e.test.ts`, `pnpm test:security` |
+| Another local user reads a 0600 source through the copy Lorepack made in `.lore/objects` or `.lore/cache` | Everything under `.lore` is created owner-only (0700 directories, 0600 files, including SQLite databases and temporary files), whatever the umask; on Windows `.lore` inherits the user profile's ACL (#569) | `packages/cli/test/lore-permissions.test.ts`, `packages/core/test/atomic-write.test.ts` |
 | Model-facing tools mutate the project | MCP tool list is exactly the documented read-only set | `tools/contract/test/mcp.test.ts` |
 | Build path sends source content over the network | There is no telemetry path. The security suite runs the real build over every parser's format under Node's permission model (no workers, add-ons or WASI, and no child process but the sandboxed parse child) with a monitor on every network channel and the DNS resolver; on Linux CI the same build runs in a network namespace that must transmit zero packets | `tools/security/test/privacy-defaults.test.ts`, `privacy sandbox (ubuntu-latest)` job |
 
@@ -68,7 +69,7 @@ changes, and which threats are intentionally not solved.
 |---|---|
 | Secret scanning source content | Credential-shaped warnings are guardrails, not a scanner |
 | Deciding which document is true | `authority`, `status` and `supersedes` are user-declared ranking hints |
-| Preventing local users from reading their own files | Lorepack runs with the user's OS permissions |
+| Preventing local users from reading their own files | Lorepack runs with the user's OS permissions. This does not extend to other users reading copies Lorepack made, which `.lore`'s owner-only modes prevent |
 | Protecting a loopback server from the same local user | Local auth would add a weak secret to a same-user boundary |
 | OCR, images and screenshots | Out of scope for v0.1 |
 | Server-side compilation on Cloudflare | Remote deployments are projections of immutable local builds |

@@ -41,6 +41,28 @@ export function fsyncDirectory(directory: string): void {
   }
 }
 
+/**
+ * Modes for everything under `.lore`, which holds a normalized copy of every source (#569).
+ *
+ * A source the owner made 0600 must not come back out world-readable as an object or a cache
+ * entry, so new directories request 0700 and files 0600. A restrictive umask can remove
+ * owner bits too. Node applies a mode
+ * only when it creates the file or directory; nothing here changes an existing one. Windows
+ * has no equivalent bits; `.lore` inherits its parent directory ACLs.
+ */
+export const OWNER_ONLY_FILE_MODE = 0o600;
+export const OWNER_ONLY_DIRECTORY_MODE = 0o700;
+
+export interface WriteOptions {
+  /** Create the file 0600 and any missing parent directories 0700. */
+  readonly ownerOnly?: boolean;
+}
+
+/** Creates `directory` and any missing parents owner-only, returning the first one created. */
+export function mkdirOwnerOnly(directory: string): string | undefined {
+  return mkdirSync(directory, { recursive: true, mode: OWNER_ONLY_DIRECTORY_MODE });
+}
+
 let counter = 0;
 function randomSuffix(): string {
   counter += 1;
@@ -48,12 +70,23 @@ function randomSuffix(): string {
 }
 
 /** Writes a file so a reader never observes partial content. */
-export function writeFileAtomic(path: string, data: string | Uint8Array): void {
+export function writeFileAtomic(
+  path: string,
+  data: string | Uint8Array,
+  options: WriteOptions = {},
+): void {
   const directory = dirname(path);
-  mkdirSync(directory, { recursive: true });
+  if (options.ownerOnly === true) mkdirOwnerOnly(directory);
+  else mkdirSync(directory, { recursive: true });
   const temporary = join(directory, `.tmp-${process.pid}-${randomSuffix()}`);
   try {
-    writeFileSync(temporary, data);
+    // The mode is set when the temporary file is created, so the content is never readable
+    // by anyone else, even for the moment before the rename.
+    writeFileSync(
+      temporary,
+      data,
+      options.ownerOnly === true ? { mode: OWNER_ONLY_FILE_MODE, flag: 'wx' } : {},
+    );
     const fd = openSync(temporary, 'r+');
     try {
       fsyncSync(fd);

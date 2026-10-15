@@ -35,6 +35,10 @@ time:
 Lorepack is a context build system, not a hosted knowledge base, generic crawler, chat app, or
 replacement for your source control. Retrieval is one capability of a versioned build.
 
+New local build files under `.lore` use owner-only POSIX permissions. Existing files
+retain their modes; Windows uses inherited directory ACLs. See
+[local storage permissions](docs/architecture/local-storage.md#permissions).
+
 ## Where Lorepack fits
 
 Lorepack is useful when an AI system depends on files that change and those changes need the
