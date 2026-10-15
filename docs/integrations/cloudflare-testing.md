@@ -1,11 +1,10 @@
 # Cloudflare integration testing
 
-Verified on **2026-08-08** against the current Phase 6 branch state and the checked-in
-Cloudflare target setup notes in [cloudflare-target-setup.md](./cloudflare-target-setup.md).
-
-This page defines the environment contract for `#93`, the Milestone 3 acceptance and
-integration gate. It does not claim the whole remote suite is finished today. It records the
-inputs, limits, visible skip behavior, and the current checked-in credentialed smoke.
+The acceptance lane exercises the real CLI's Cloudflare setup, deployment, authenticated
+reads, rollback and cleanup. It uses a dedicated test account and a repository-specific prefix.
+Local ownership and cleanup regressions were verified on 2026-10-15 with Node 24.21.0 and
+pinned Wrangler 4.149.0. Those tests simulate provider responses; credentialed CI runs the
+actual CLI and records the remote results as artifacts.
 
 ## Required environment
 
@@ -22,30 +21,32 @@ Optional CI metadata:
 - `GITHUB_RUN_ATTEMPT`
 - `LORE_CF_ARTIFACT_DIR`
 
-When CI metadata is present, the harness derives a per-run resource prefix by appending those
-numeric values. It prepends that prefix to the smoke project name before
-`lorepack target add cloudflare`, so the CLI's own deterministic D1 and R2 names stay aligned with
-the acceptance harness. Worker scripts are different: CI always deploys one singleton Worker
-named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`. The checked-in GitHub Actions job is serialized
-with a `cloudflare-acceptance` concurrency group so two CI runs do not race on that Worker.
-The job has a 35-minute workflow timeout. This is longer than the normal credentialed smoke,
-which is measured in minutes, while bounding a hung remote operation and preserving the
-diagnostic artifact upload path.
+The harness chooses a fresh `lpci-<32 hexadecimal characters>` project name. Its 128-bit
+random suffix keeps the CLI's deterministic resource slug below the 40-character truncation
+boundary. The real `lorepack target add cloudflare` command still provisions the catalog D1,
+tables D1 and build-object R2 bucket. Explicit resource flags would select connect-existing
+mode and would not exercise provisioning.
 
-Example:
+Before returning a target for setup, the harness checks that those names and the planned
+per-project Worker name are unused. It writes an ownership intent to the account-scoped
+`<LORE_CF_TEST_PREFIX>-acceptance-ledger` bucket under
+`ownership/v1/<project-name>.json`. The record binds the account, prefix, run ID, attempt
+and project name. It contains no API token, runtime token or source content. The ledger bucket
+persists between runs; it is never included in resource cleanup.
 
-```text
-LORE_CF_TEST_PREFIX=lorepack-ci
-GITHUB_RUN_ID=12345
-GITHUB_RUN_ATTEMPT=2
-```
+Worker deployment retains the shared name `<LORE_CF_TEST_PREFIX>-acceptance-runtime`.
+The GitHub Actions job uses the `cloudflare-acceptance` concurrency group with `queue: max`
+and a 35-minute timeout. This serializes access to the shared Worker. Manual runs using the
+same account and prefix must also avoid overlapping a credentialed CI run.
 
-This becomes the storage resource prefix `lorepack-ci-12345-2`, while the active Worker name is
-`lorepack-ci-acceptance-runtime`.
+Provide both `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`, or neither for a manual run. For example,
+`LORE_CF_TEST_PREFIX=lorepack-ci`, run `12345`, attempt `2` uses the persistent ledger bucket
+`lorepack-ci-acceptance-ledger`; its per-project names remain independently random.
 
 When `LORE_CF_ARTIFACT_DIR` is set, the credentialed smoke writes machine-readable command
 logs, deployment receipts, and a remote summary into that directory so CI can upload them as
-artifacts even when the run later fails during verification or teardown.
+artifacts even when the run later fails during verification or teardown. The ownership intent
+is also copied to `ownership-record.json` before CLI provisioning begins.
 
 Even when credentials are absent and the credentialed smoke skips, the acceptance tests now
 write summary JSON files into `LORE_CF_ARTIFACT_DIR` so CI still uploads a visible Cloudflare
@@ -53,39 +54,53 @@ artifact explaining that the run was a skip rather than a pass.
 
 ## Where this environment must exist
 
-The expected primary home for these credentials is the checked-in GitHub Actions job
-`cloudflare acceptance (ubuntu-latest)` in `.github/workflows/ci.yml`. That is the Phase 6
-lane that must eventually stop skipping and start producing credentialed remote artifacts for
-`#93`.
-
-If repository secrets are intentionally unavailable on a given branch or release candidate,
-the same variables must exist in another documented release-candidate environment before Phase 6
-can close. A local shell is useful for debugging, but it is not sufficient closure evidence for
-this phase because `#93` requires uploaded receipts and remote summaries from the acceptance
-lane.
+The primary release-candidate environment is the `cloudflare acceptance (ubuntu-latest)` job in
+`.github/workflows/ci.yml`. A release candidate requires its real credentialed receipts and
+remote summaries. Forks or local shells without the required secrets report a skip; those
+results cannot satisfy the remote qualification gate.
 
 ## Token scopes
 
-The least-privilege token shape for the current Phase 6 integration path matches the setup and
+The token permissions for credentialed acceptance match the setup and
 deploy surface already documented for the target receipt flow:
 
 - `Workers Scripts Edit`
 - `D1 Edit`
 - `Workers R2 Storage Edit`
 
-These are enough for the present contract because the Phase 6 path needs one Worker, one D1
-database, and one R2 bucket. It does not need Zones, Pages, KV, Queues, Durable Objects,
-Vectorize, or AI permissions.
+The lane needs the shared Worker, two D1 databases and a build-object bucket per smoke
+project, plus the persistent ownership-ledger bucket. It adds no permission scope beyond
+the existing account-scoped token. It does not use Zones, Pages, KV, Queues, Durable Objects,
+Vectorize or AI permissions.
 
-The credentialed smoke also lists Workers, D1 databases and R2 buckets before provisioning. It
-deletes stale CI resources whose names match
-`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-runtime`,
-`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-catalog`, or
-`LORE_CF_TEST_PREFIX-<older-run>-<attempt>-...-objects`. This is deliberately limited to older CI
-run ids or earlier attempts for the same run, so it does not delete the current run, a newer run,
-the singleton Worker, or resources outside the configured prefix. The cleanup exists because
-leaked resources can exhaust account quota before `lorepack target add cloudflare` reaches the deploy
-path.
+## Ownership and cleanup
+
+Cleanup reads the ledger rather than inferring ownership from resource names. It validates
+every record's schema, account, prefix and canonical object key before deleting anything.
+The cleanup scope must match the current environment. Only older run IDs and earlier
+attempts of the same run qualify; current, future and manual records remain untouched.
+
+For each stale intent, cleanup removes its planned Worker, lists every page of bucket objects,
+deletes the exact keys through Wrangler, deletes the empty bucket, then removes both the
+catalog and tables databases. Missing resources from a partial provisioning attempt are
+accepted. An API failure, malformed page or repeated cursor stops cleanup. The ledger entry
+is deleted only after all resource deletions succeed, so a failed cleanup can be retried.
+Normal teardown also verifies the stored intent against the actual target before deleting
+its resources and retiring its record. Each credentialed scenario adds an operational
+cleanup probe outside the build's known object keys immediately before teardown. Real
+bucket deletion can succeed only after listing and removing that otherwise unreferenced
+object. This complements the local multi-page and failed-deletion regressions. Existing operation deadlines and bucket-delete retry
+limits are unchanged.
+
+Legacy resources without ledger records are left untouched, even if their names resemble
+an older CI run. Review their original CI receipts and remote-summary artifacts before any
+manual removal. A new passing run does not prove removal of earlier leaked resources.
+Never empty a bucket based only on the historical name pattern.
+
+The local stateful regressions cover crashes before provisioning, after the first D1 database,
+and after object uploads; production-shaped names; catalog and tables cleanup; pagination;
+wrong-account and malformed records; failed journal writes; and retained records after a
+failed deletion. See [ADR 0032](../adr/0032-acceptance-resource-ownership.md).
 
 ## Shared corpus and acceptance shape
 
@@ -94,7 +109,7 @@ The remote-versus-local acceptance path must reuse the mixed corpus from
 scenarios already drive, so any remote comparison is over one corpus rather than over a second
 fixture that could drift.
 
-The eventual `#93` suite is expected to prove:
+The credentialed suite exercises:
 
 1. `lorepack target add cloudflare`
 2. `lorepack target token cloudflare`
@@ -126,9 +141,9 @@ The checked-in gates today are:
   invariant
 - `tools/acceptance/test/cloudflare-testing.test.ts`, which verifies the environment contract,
   the resource-prefix rule, and the documented skip behavior
-- `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions one Worker, one D1
-  runtime plus target resources, runs `lorepack target add cloudflare` in automatic provisioning
-  mode so the command itself creates the D1 database and R2 bucket, rewrites the non-secret
+- `tools/acceptance/test/cloudflare-smoke.test.ts`, which provisions the shared Worker and isolated D1/R2
+  target resources, runs `lorepack target add cloudflare` in automatic provisioning
+  mode so the command itself creates both D1 databases and the R2 bucket, rewrites the non-secret
   target receipt to the singleton CI Worker, then deploys the checked-in Worker package, runs
   `lorepack target token cloudflare`, runs
   `lorepack deploy cloudflare`, edits the mixed corpus, runs a second `lorepack deploy cloudflare`,
@@ -145,59 +160,43 @@ The checked-in gates today are:
   build to advertise `semantic-search`, then proves `lorepack deploy cloudflare` refuses it with
   `LORE_E_CAPABILITY_LOSS` unless the loss is explicitly named
 
-The broader Phase 2 contract-suite and CI artifact cases are still open work on `#93`.
+## Resource footprint
 
-## Cost expectations
-
-The current expected remote footprint during one integration scenario is:
-
-- at most one active Worker script named `<LORE_CF_TEST_PREFIX>-acceptance-runtime`
-- one D1 database
-- one R2 bucket
-- one projected mixed corpus build
-
-The corpus is intentionally small. It should stay close to the existing mixed acceptance
-fixture so the release-candidate gate is measured in minutes, not in large-account burn or
-benchmark-scale storage churn.
+Each smoke project uses two D1 databases and one build-object R2 bucket. Deployments share
+the `<LORE_CF_TEST_PREFIX>-acceptance-runtime` Worker name. The account/prefix also owns one
+persistent `<LORE_CF_TEST_PREFIX>-acceptance-ledger` bucket. The corpus stays the same small
+mixed acceptance fixture; this lane does not substitute a benchmark workload.
 
 ## Teardown and artifacts
 
-The final `#93` suite must delete every created Cloudflare resource at the end of the run,
-even after a failed assertion, so a credentialed CI run does not leak Workers, D1 databases,
-or R2 buckets.
+Successful teardown removes that project's resources and ownership record. The ledger
+bucket persists. If provisioning or teardown fails, its record remains for a later CI run;
+manual records are retained until their own teardown or reviewed operator cleanup.
+Resources from older protocols without a journal entry are not automatically deleted.
 
-Before provisioning a new target, the smoke also reclaims stale Workers, D1 catalog databases and
-R2 object buckets left by older CI runs under the same `LORE_CF_TEST_PREFIX`. Manual runs without
-`GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT` do not perform this stale cleanup, because the harness
-cannot distinguish old manual resources from resources a person is still inspecting.
-
-Manual cleanup and inspection should use the same prefix filter. The intended steady state after a
-CI run is zero active Workers. During a scenario there must be no more than one, the singleton
-Worker:
+Read-only inspection commands are:
 
 ```bash
 pnpm --filter @lorepack/deploy-cloudflare exec wrangler d1 list --json
 pnpm --filter @lorepack/deploy-cloudflare exec wrangler r2 bucket list
 ```
 
-For Workers, inspect the Cloudflare account's Workers list and remove only scripts under
-`LORE_CF_TEST_PREFIX` that match the old per-run `...-runtime` pattern. Do not remove manually
-named resources or production targets.
+Listings and prefixes do not establish ownership. Review the exact intent or original CI
+receipts before manually removing legacy resources. Never turn a prefix filter into a
+bucket-drain or deletion command.
 
-CI artifacts for that suite must include:
+CI artifacts are written under `LORE_CF_ARTIFACT_DIR` when it is set. Each project directory contains:
 
-- deployment receipts
-- the local build id and the remote build ids observed during verification
-- command logs for setup, deploy, resume, and rollback
-- any generated result summary used by the acceptance gate
+- its ownership intent, written before CLI provisioning
+- deployment receipts and the local/remote build IDs observed
+- command logs for setup, deploy, resume and rollback
+- remote summaries and the credential gate's skip/pass/failure summary
 
-The checked-in smoke now writes those files under `LORE_CF_ARTIFACT_DIR/<project-name>/`
-when the environment variable is present.
+These artifacts record what the run actually observed. A new passing run does not establish
+that an older failed run's resources were removed.
 
-Those artifacts are what make a skipped run visibly different from a failing or passing one,
-and what let a later session audit the exact remote state transitions that were observed.
+## References
 
-## Verified against
-
-Credentialed Cloudflare acceptance smoke in CI as of 2026-08-09, with current local Wrangler
-package 4.119.0 confirmed on 2026-08-13.
+- [Wrangler R2 commands](https://developers.cloudflare.com/r2/reference/wrangler-commands/)
+- [R2 object listing and pagination](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/objects/methods/list/)
+- [Raw R2 object reads](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/objects/methods/get/)

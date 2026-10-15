@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -17,10 +18,18 @@ import { promisify } from 'node:util';
 import type { BuildId, BuildManifest, ContextBundle } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import {
+  type CloudflareOwnershipRecord,
+  type CloudflareOwnershipScope,
+  cloudflareOwnershipKey,
+  cloudflareOwnershipNames,
+  OWNERSHIP_KEY_PREFIX,
+  readCloudflareOwnershipRecord,
+  staleCloudflareOwnershipRecords,
+} from './cloudflare_ownership.js';
+import {
   cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
-  resourcePrefixFor,
 } from './cloudflare-testing.js';
 import { writeMixedCorpus } from './mixed-corpus.js';
 
@@ -35,6 +44,7 @@ const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const COMPATIBILITY_DATE = '2026-08-08';
 const WORKER_DEPLOY_ATTEMPTS = 3;
 const WORKER_PROPAGATION_DELAY_MS = 2_000;
+let artifactSequence = 0;
 
 export interface CloudflareSmokeProject {
   readonly root: string;
@@ -47,6 +57,7 @@ export interface CloudflareSmokeProject {
 }
 
 export interface CloudflareSmokeTarget {
+  readonly ownership: CloudflareOwnershipRecord;
   readonly accountId: string;
   readonly workerName: string;
   readonly catalogDatabaseName: string;
@@ -77,10 +88,6 @@ interface D1DatabaseInfo {
 }
 
 interface CloudflareWorkerInfo {
-  readonly name: string;
-}
-
-interface R2BucketInfo {
   readonly name: string;
 }
 
@@ -145,12 +152,15 @@ export async function provisionCloudflareSmokeTarget(
     NO_D1_WARNING: 'true',
   } as Readonly<Record<string, string>>;
 
-  await cleanupStaleCloudflareWorkers(env, wranglerEnv);
-  await cleanupStaleCloudflareD1Databases(env, wranglerEnv);
-  await cleanupStaleCloudflareR2Buckets(env, wranglerEnv);
+  const ownership = readCloudflareOwnershipRecord({ ...env, formatVersion: 1, projectName }, env);
+  await ensureCloudflareOwnershipBucket(env, wranglerEnv);
+  await cleanupOwnedCloudflareResources(env, wranglerEnv);
+  await assertCloudflareNamesUnused(ownership, wranglerEnv);
+  await writeCloudflareOwnership(ownership, wranglerEnv);
 
   const configPath = join(WORKER_ROOT, `.wrangler-acceptance-${names.workerName}.jsonc`);
   return {
+    ownership,
     accountId: env.accountId,
     workerName: names.workerName,
     catalogDatabaseName: names.catalogDatabaseName,
@@ -165,12 +175,62 @@ export async function provisionCloudflareSmokeTarget(
   };
 }
 
+async function verifyCloudflareSmokeTarget(target: CloudflareSmokeTarget, projectName: string) {
+  const scope = readCloudflareTestingEnv(target.wranglerEnv);
+  const ownership = await readCloudflareOwnership(
+    cloudflareOwnershipBucketName(scope),
+    cloudflareOwnershipKey(target.ownership),
+    scope,
+    target.wranglerEnv,
+  );
+  const ownedNames = cloudflareOwnershipNames(ownership);
+  if (
+    ownership.projectName !== projectName ||
+    ownership.runId !== scope.runId ||
+    ownership.runAttempt !== scope.runAttempt ||
+    target.accountId !== ownership.accountId ||
+    target.catalogDatabaseName !== ownedNames.catalogDatabaseName ||
+    target.tablesDatabaseName !== ownedNames.tablesDatabaseName ||
+    target.objectsBucketName !== ownedNames.objectsBucketName ||
+    target.workerName !== activeCloudflareWorkerName(scope)
+  ) {
+    throw new Error('Cloudflare teardown target does not match its recorded ownership.');
+  }
+  return { scope, ownership, ownedNames };
+}
+
+export async function addCloudflareCleanupProbe(target: CloudflareSmokeTarget): Promise<void> {
+  await verifyCloudflareSmokeTarget(target, target.ownership.projectName);
+  const directory = mkdtempSync(join(tmpdir(), 'lore-cloudflare-cleanup-probe-'));
+  try {
+    const file = join(directory, 'probe.txt');
+    writeFileSync(file, 'Owned acceptance cleanup probe.\n', { mode: 0o600 });
+    await runWrangler(
+      [
+        'r2',
+        'object',
+        'put',
+        `${target.objectsBucketName}/acceptance-cleanup-probe`,
+        '--file',
+        file,
+        '--content-type',
+        'text/plain',
+        '--remote',
+      ],
+      target.wranglerEnv,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 export async function teardownCloudflareSmokeTarget(
   target: CloudflareSmokeTarget,
   projectName: string,
   projectRoot: string,
   buildIds: readonly BuildId[],
 ): Promise<void> {
+  const { scope, ownership, ownedNames } = await verifyCloudflareSmokeTarget(target, projectName);
   const artifactsRoot = cloudflareArtifactDirectory(process.env);
   const artifactDirectory =
     artifactsRoot === null ? null : join(artifactsRoot, sanitizeName(projectName));
@@ -217,6 +277,11 @@ export async function teardownCloudflareSmokeTarget(
   } catch (error) {
     failures.push(`delete worker ${target.workerName}: ${messageOf(error)}`);
   }
+  try {
+    await deleteCloudflareWorkerByName(target.accountId, ownedNames.workerName, target.wranglerEnv);
+  } catch (error) {
+    failures.push(`delete worker ${ownedNames.workerName}: ${messageOf(error)}`);
+  }
 
   try {
     await deleteCloudflareBucket(target.objectsBucketName, target.wranglerEnv);
@@ -255,6 +320,13 @@ export async function teardownCloudflareSmokeTarget(
   if (failures.length > 0) {
     throw new Error(`Cloudflare teardown failed:\n${failures.join('\n')}`);
   }
+  await runWrangler(
+    remoteR2ObjectDeleteArgs(
+      cloudflareOwnershipBucketName(scope),
+      cloudflareOwnershipKey(ownership),
+    ),
+    target.wranglerEnv,
+  );
 }
 
 export async function waitForRemoteBuild(
@@ -752,134 +824,222 @@ function parseD1DatabaseInfo(value: unknown): D1DatabaseInfo | null {
   return name === null || id === null ? null : { name, id };
 }
 
+function staleOwnedNames(
+  env: CloudflareOwnershipScope,
+  records: readonly CloudflareOwnershipRecord[],
+  fields: readonly (keyof ReturnType<typeof cloudflareOwnershipNames>)[],
+): ReadonlySet<string> {
+  return new Set(
+    staleCloudflareOwnershipRecords(records, env).flatMap((record) => {
+      const names = cloudflareOwnershipNames(record);
+      return fields.map((field) => names[field]);
+    }),
+  );
+}
+
 export function staleCloudflareD1DatabaseNames(
   databases: readonly { readonly name: string }[],
-  env: {
-    readonly testPrefix: string;
-    readonly runId: string | null;
-    readonly runAttempt: string | null;
-  },
+  env: CloudflareOwnershipScope,
+  records: readonly CloudflareOwnershipRecord[],
 ): readonly string[] {
-  if (env.runId === null || env.runAttempt === null) return [];
-  const prefix = sanitizeName(env.testPrefix);
-  const currentRun = BigInt(env.runId);
-  const currentAttempt = BigInt(env.runAttempt);
-  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-catalog$`);
+  const owned = staleOwnedNames(env, records, ['catalogDatabaseName', 'tablesDatabaseName']);
   return databases
-    .filter(({ name }) => {
-      const match = pattern.exec(name);
-      if (match === null || match[1] === undefined || match[2] === undefined) return false;
-      const run = BigInt(match[1]);
-      const attempt = BigInt(match[2]);
-      return run < currentRun || (run === currentRun && attempt < currentAttempt);
-    })
+    .filter(({ name }) => owned.has(name))
     .map(({ name }) => name)
-    .sort((a, b) => a.localeCompare(b));
+    .sort();
 }
 
 export function staleCloudflareWorkerNames(
   workers: readonly { readonly name: string }[],
-  env: {
-    readonly testPrefix: string;
-    readonly runId: string | null;
-    readonly runAttempt: string | null;
-  },
+  env: CloudflareOwnershipScope,
+  records: readonly CloudflareOwnershipRecord[],
 ): readonly string[] {
-  if (env.runId === null || env.runAttempt === null) return [];
-  const prefix = sanitizeName(env.testPrefix);
-  const singleton = activeCloudflareWorkerName(env);
-  const currentRun = BigInt(env.runId);
-  const currentAttempt = BigInt(env.runAttempt);
-  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-runtime$`);
+  const owned = staleOwnedNames(env, records, ['workerName']);
   return workers
-    .filter(({ name }) => {
-      if (name === singleton) return false;
-      const match = pattern.exec(name);
-      if (match === null || match[1] === undefined || match[2] === undefined) return false;
-      const run = BigInt(match[1]);
-      const attempt = BigInt(match[2]);
-      return run < currentRun || (run === currentRun && attempt < currentAttempt);
-    })
+    .filter(({ name }) => name !== activeCloudflareWorkerName(env) && owned.has(name))
     .map(({ name }) => name)
-    .sort((a, b) => a.localeCompare(b));
+    .sort();
 }
 
 export function staleCloudflareR2BucketNames(
   buckets: readonly { readonly name: string }[],
-  env: {
-    readonly testPrefix: string;
-    readonly runId: string | null;
-    readonly runAttempt: string | null;
-  },
+  env: CloudflareOwnershipScope,
+  records: readonly CloudflareOwnershipRecord[],
 ): readonly string[] {
-  if (env.runId === null || env.runAttempt === null) return [];
-  const prefix = sanitizeName(env.testPrefix);
-  const currentRun = BigInt(env.runId);
-  const currentAttempt = BigInt(env.runAttempt);
-  const pattern = new RegExp(`^${escapeRegExp(prefix)}-(\\d+)-(\\d+)-[a-z0-9-]+-objects$`);
+  const owned = staleOwnedNames(env, records, ['objectsBucketName']);
   return buckets
-    .filter(({ name }) => {
-      const match = pattern.exec(name);
-      if (match === null || match[1] === undefined || match[2] === undefined) return false;
-      const run = BigInt(match[1]);
-      const attempt = BigInt(match[2]);
-      return run < currentRun || (run === currentRun && attempt < currentAttempt);
-    })
+    .filter(({ name }) => owned.has(name))
     .map(({ name }) => name)
-    .sort((a, b) => a.localeCompare(b));
+    .sort();
 }
 
-async function cleanupStaleCloudflareWorkers(
-  env: ReturnType<typeof readCloudflareTestingEnv>,
-  wranglerEnv: Readonly<Record<string, string>>,
+export function cloudflareOwnershipBucketName(env: { readonly testPrefix: string }): string {
+  return `${sanitizeName(env.testPrefix)}-acceptance-ledger`;
+}
+
+async function ensureCloudflareOwnershipBucket(
+  scope: CloudflareOwnershipScope,
+  env: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const workers = await listCloudflareWorkers(env.accountId, wranglerEnv);
-  for (const name of staleCloudflareWorkerNames(workers, env)) {
-    await deleteCloudflareWorkerByName(env.accountId, name, wranglerEnv);
+  const name = cloudflareOwnershipBucketName(scope);
+  if (!(await cloudflareBucketExists(name, scope.accountId, env))) {
+    await runWrangler(['r2', 'bucket', 'create', name], env);
   }
 }
 
-async function cleanupStaleCloudflareD1Databases(
-  env: ReturnType<typeof readCloudflareTestingEnv>,
-  wranglerEnv: Readonly<Record<string, string>>,
+async function cloudflareBucketExists(
+  name: string,
+  accountId: string,
+  env: Readonly<Record<string, string>>,
+): Promise<boolean> {
+  try {
+    const value = await cloudflareR2Json(
+      new URL(
+        `${cloudflareR2BucketListUrl(encodeURIComponent(accountId))}/${encodeURIComponent(name)}`,
+      ),
+      'GET',
+      env,
+    );
+    const bucket = (value as { result?: { name?: unknown } }).result;
+    if (bucket?.name !== name)
+      throw new Error('Cloudflare bucket metadata names a different bucket.');
+    return true;
+  } catch (error) {
+    if (isMissingCloudflareBucketError(error)) return false;
+    throw error;
+  }
+}
+
+async function assertCloudflareNamesUnused(
+  record: CloudflareOwnershipRecord,
+  env: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const listed = await runWrangler(['d1', 'list', '--json'], wranglerEnv);
-  const databases = parseD1DatabaseList(listed.stdout);
-  for (const name of staleCloudflareD1DatabaseNames(databases, env)) {
-    try {
-      await runWrangler(['d1', 'delete', name, '--skip-confirmation'], wranglerEnv);
-    } catch (error) {
-      if (!isMissingCloudflareD1Error(error)) throw error;
+  const names = cloudflareOwnershipNames(record);
+  const workers = await listCloudflareWorkers(record.accountId, env);
+  const databases = parseD1DatabaseList((await runWrangler(['d1', 'list', '--json'], env)).stdout);
+  if (
+    workers.some(({ name }) => name === names.workerName) ||
+    databases.some(
+      ({ name }) => name === names.catalogDatabaseName || name === names.tablesDatabaseName,
+    ) ||
+    (await cloudflareBucketExists(names.objectsBucketName, record.accountId, env))
+  ) {
+    throw new Error('Refuse to record ownership of existing Cloudflare resources.');
+  }
+}
+
+async function writeCloudflareOwnership(
+  record: CloudflareOwnershipRecord,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), 'lore-cloudflare-ownership-'));
+  try {
+    const file = join(directory, 'ownership.json');
+    writeFileSync(file, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+    await runWrangler(
+      [
+        'r2',
+        'object',
+        'put',
+        `${cloudflareOwnershipBucketName(record)}/${cloudflareOwnershipKey(record)}`,
+        '--file',
+        file,
+        '--content-type',
+        'application/json',
+        '--remote',
+      ],
+      env,
+    );
+    const artifacts = cloudflareArtifactDirectory(env);
+    if (artifacts !== null) {
+      const destination = join(artifacts, record.projectName);
+      mkdirSync(destination, { recursive: true });
+      writeFileSync(join(destination, 'ownership-record.json'), `${JSON.stringify(record)}\n`, {
+        mode: 0o600,
+      });
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 
-async function cleanupStaleCloudflareR2Buckets(
-  env: ReturnType<typeof readCloudflareTestingEnv>,
-  wranglerEnv: Readonly<Record<string, string>>,
+async function readCloudflareOwnership(
+  bucket: string,
+  key: string,
+  scope: CloudflareOwnershipScope,
+  env: Readonly<Record<string, string>>,
+): Promise<CloudflareOwnershipRecord> {
+  if (!/^ownership\/v1\/lpci-[a-f0-9]{32}\.json$/.test(key)) {
+    throw new Error('Cloudflare ownership listing returned an invalid record key.');
+  }
+  const base = `${cloudflareR2BucketListUrl(encodeURIComponent(scope.accountId))}/${encodeURIComponent(bucket)}`;
+  const response = await fetch(`${base}/objects/${key}`, {
+    headers: { Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok)
+    throw new Error(`Cloudflare ownership record read failed (${response.status}).`);
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error('Cloudflare ownership record is not valid JSON.');
+  }
+  const record = readCloudflareOwnershipRecord(value, scope);
+  if (cloudflareOwnershipKey(record) !== key) {
+    throw new Error('Cloudflare ownership record does not match its stored key.');
+  }
+  return record;
+}
+
+export async function cleanupOwnedCloudflareResources(
+  scope: CloudflareOwnershipScope,
+  env: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const buckets = await listCloudflareR2Buckets(env.accountId, wranglerEnv);
-  for (const name of staleCloudflareR2BucketNames(buckets, env)) {
+  if (scope.accountId !== env.CLOUDFLARE_ACCOUNT_ID) {
+    throw new Error('Cloudflare cleanup account does not match its ownership scope.');
+  }
+  const actual = readCloudflareTestingEnv(env);
+  if (
+    scope.testPrefix !== actual.testPrefix ||
+    scope.runId !== actual.runId ||
+    scope.runAttempt !== actual.runAttempt
+  ) {
+    throw new Error('Cloudflare cleanup scope does not match the current environment.');
+  }
+  if (scope.runId === null || scope.runAttempt === null) return;
+  const bucket = cloudflareOwnershipBucketName(scope);
+  const keys = await listCloudflareBucketObjectKeys(bucket, env, OWNERSHIP_KEY_PREFIX);
+  const records: CloudflareOwnershipRecord[] = [];
+  for (const key of keys) records.push(await readCloudflareOwnership(bucket, key, scope, env));
+  for (const record of staleCloudflareOwnershipRecords(records, scope)) {
+    const names = cloudflareOwnershipNames(record);
+    await deleteCloudflareWorkerByName(scope.accountId, names.workerName, env);
     try {
-      await deleteCloudflareBucket(name, wranglerEnv);
+      await deleteCloudflareBucket(names.objectsBucketName, env);
     } catch (error) {
       if (!isMissingCloudflareBucketError(error)) throw error;
     }
+    for (const name of [names.catalogDatabaseName, names.tablesDatabaseName]) {
+      try {
+        await runWrangler(['d1', 'delete', name, '--skip-confirmation'], env);
+      } catch (error) {
+        if (!isMissingCloudflareD1Error(error)) throw error;
+      }
+    }
+    await runWrangler(remoteR2ObjectDeleteArgs(bucket, cloudflareOwnershipKey(record)), env);
   }
 }
 
 function parseD1DatabaseList(raw: string): readonly D1DatabaseInfo[] {
   const payload = JSON.parse(raw) as unknown;
-  const rows = Array.isArray(payload)
-    ? payload
-    : typeof payload === 'object' &&
-        payload !== null &&
-        Array.isArray((payload as { readonly result?: unknown }).result)
-      ? (payload as { readonly result: unknown[] }).result
-      : [];
-  return rows
-    .map((row) => parseD1DatabaseInfo(row))
-    .filter((row): row is D1DatabaseInfo => row !== null);
+  if (!Array.isArray(payload))
+    throw new Error('Cloudflare D1 listing returned an invalid envelope.');
+  return payload.map((row) => {
+    const database = parseD1DatabaseInfo(row);
+    if (database === null) throw new Error('Cloudflare D1 listing returned an invalid database.');
+    return database;
+  });
 }
 
 async function listCloudflareWorkers(
@@ -906,44 +1066,16 @@ async function listCloudflareWorkers(
   const rows =
     typeof payload === 'object' &&
     payload !== null &&
+    (payload as { success?: unknown }).success === true &&
     Array.isArray((payload as { readonly result?: unknown }).result)
       ? (payload as { readonly result: unknown[] }).result
-      : [];
-  return rows
-    .map((row) => parseNamedResource(row))
-    .filter((row): row is CloudflareWorkerInfo => row !== null);
-}
-
-async function listCloudflareR2Buckets(
-  accountId: string,
-  env: Readonly<Record<string, string>>,
-): Promise<readonly R2BucketInfo[]> {
-  const apiToken = env.CLOUDFLARE_API_TOKEN;
-  if (typeof apiToken !== 'string' || apiToken.trim() === '') {
-    throw new Error('CLOUDFLARE_API_TOKEN is required to list Cloudflare R2 buckets.');
-  }
-  const response = await fetch(cloudflareR2BucketListUrl(accountId), {
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-    },
-    signal: AbortSignal.timeout(30_000),
+      : null;
+  if (rows === null) throw new Error('Cloudflare Worker listing returned an invalid envelope.');
+  return rows.map((row) => {
+    const worker = parseNamedResource(row);
+    if (worker === null) throw new Error('Cloudflare Worker listing returned an invalid script.');
+    return worker;
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `Cloudflare API R2 bucket list failed with ${response.status}: ${body.trim() === '' ? '(empty response body)' : body}`,
-    );
-  }
-  const payload = (await response.json()) as unknown;
-  const rows =
-    typeof payload === 'object' &&
-    payload !== null &&
-    Array.isArray((payload as { readonly result?: unknown }).result)
-      ? (payload as { readonly result: unknown[] }).result
-      : [];
-  return rows
-    .map((row) => parseNamedResource(row))
-    .filter((row): row is R2BucketInfo => row !== null);
 }
 
 function parseNamedResource(value: unknown): { readonly name: string } | null {
@@ -1035,8 +1167,8 @@ export function smokeProjectName(
   if (missingCloudflareTestingEnv(env).length > 0) {
     return base;
   }
-  const prefix = sanitizeName(resourcePrefixFor(readCloudflareTestingEnv(env)));
-  return prefix === '' ? base : sanitizeName(`${prefix}-${base}`);
+  readCloudflareTestingEnv(env);
+  return `lpci-${randomBytes(16).toString('hex')}`;
 }
 
 export function parseCloudflareTargetReceipt(raw: string): CloudflareTargetReceiptJson {
@@ -1121,10 +1253,6 @@ function sanitizeName(value: string): string {
     .replace(/--+/g, '-');
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function withSuffix(base: string, suffix: string, limit: number): string {
   const tail = `-${suffix}`;
   const head = base.slice(0, Math.max(1, limit - tail.length)).replace(/-+$/g, '');
@@ -1168,7 +1296,10 @@ function writeCommandArtifact(
   result: CommandOutput,
 ): void {
   mkdirSync(root, { recursive: true });
-  const label = `${String(sequence).padStart(4, '0')}-${tool}-${sanitizeName(args.join('-') || tool)}`;
+  artifactSequence += 1;
+  const digest = createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0, 16);
+  const command = sanitizeName(args.join('-') || tool).slice(0, 72);
+  const label = `${String(sequence).padStart(4, '0')}-${tool}-${command}-${digest}-${artifactSequence}`;
   writeFileSync(
     join(root, `${label}.json`),
     `${JSON.stringify(
@@ -1202,7 +1333,7 @@ function runtimeTokenEnv(token: string | null): Readonly<Record<string, string>>
   return token === null ? {} : { LORE_REMOTE_BEARER_TOKEN: token };
 }
 
-async function deleteCloudflareBucket(
+export async function deleteCloudflareBucket(
   bucketName: string,
   env: Readonly<Record<string, string>>,
 ): Promise<void> {
@@ -1210,6 +1341,7 @@ async function deleteCloudflareBucket(
   let lastFailure: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      await emptyCloudflareBucket(bucketName, env);
       await runWrangler(['r2', 'bucket', 'delete', bucketName], env);
       return;
     } catch (error) {
@@ -1221,6 +1353,119 @@ async function deleteCloudflareBucket(
     }
   }
   throw lastFailure instanceof Error ? lastFailure : new Error(String(lastFailure));
+}
+
+async function listCloudflareBucketObjectKeys(
+  bucketName: string,
+  env: Readonly<Record<string, string>>,
+  prefix?: string,
+): Promise<readonly string[]> {
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  if (typeof accountId !== 'string' || accountId.trim() === '') {
+    throw new Error('CLOUDFLARE_ACCOUNT_ID is required to empty an acceptance bucket.');
+  }
+  const base = `${cloudflareR2BucketListUrl(encodeURIComponent(accountId))}/${encodeURIComponent(bucketName)}/objects`;
+  const keys = new Set<string>();
+  const cursors = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const url = new URL(base);
+    url.searchParams.set('per_page', '1000');
+    if (prefix !== undefined) url.searchParams.set('prefix', prefix);
+    if (cursor !== null) url.searchParams.set('cursor', cursor);
+    const payload = await cloudflareR2Json(url, 'GET', env);
+    if (typeof payload !== 'object' || payload === null) {
+      throw new Error('Cloudflare R2 object listing returned no object envelope.');
+    }
+    const result = payload as { result?: unknown; result_info?: unknown };
+    if (!Array.isArray(result.result) || result.result.length > 1000) {
+      throw new Error('Cloudflare R2 object listing returned an invalid page.');
+    }
+    for (const row of result.result) {
+      if (
+        typeof row !== 'object' ||
+        row === null ||
+        typeof row.key !== 'string' ||
+        row.key === ''
+      ) {
+        throw new Error('Cloudflare R2 object listing returned an invalid object key.');
+      }
+      keys.add(row.key);
+    }
+    const info = result.result_info;
+    if (info !== undefined && (typeof info !== 'object' || info === null || Array.isArray(info))) {
+      throw new Error('Cloudflare R2 object listing returned invalid pagination metadata.');
+    }
+    const page = info as { is_truncated?: unknown; cursor?: unknown } | undefined;
+    if (page?.is_truncated !== undefined && typeof page.is_truncated !== 'boolean') {
+      throw new Error('Cloudflare R2 object listing returned invalid truncation metadata.');
+    }
+    cursor = null;
+    if (page?.is_truncated === true) {
+      if (typeof page.cursor !== 'string' || page.cursor === '' || cursors.has(page.cursor)) {
+        throw new Error('Cloudflare R2 object listing returned a missing or repeated cursor.');
+      }
+      cursor = page.cursor;
+      cursors.add(cursor);
+    }
+  } while (cursor !== null);
+
+  return [...keys];
+}
+
+async function emptyCloudflareBucket(
+  bucketName: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const keys = await listCloudflareBucketObjectKeys(bucketName, env);
+  for (const key of keys) await runWrangler(remoteR2ObjectDeleteArgs(bucketName, key), env);
+}
+
+async function cloudflareR2Json(
+  url: URL,
+  method: 'GET',
+  env: Readonly<Record<string, string>>,
+): Promise<unknown> {
+  const token = env.CLOUDFLARE_API_TOKEN;
+  if (typeof token !== 'string' || token.trim() === '') {
+    throw new Error('CLOUDFLARE_API_TOKEN is required for acceptance bucket cleanup.');
+  }
+  const response = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  const body = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Cloudflare R2 ${method} returned an invalid JSON response (${response.status}).`,
+    );
+  }
+  if (
+    response.ok &&
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as { success?: unknown }).success === true
+  ) {
+    return payload;
+  }
+  const errors =
+    typeof payload === 'object' && payload !== null
+      ? (payload as { errors?: unknown }).errors
+      : undefined;
+  const details = Array.isArray(errors)
+    ? errors
+        .map((error: { message?: unknown; code?: unknown }) =>
+          error !== null && typeof error.message === 'string'
+            ? `${error.message} [code: ${String(error.code)}]`
+            : 'Unspecified API error',
+        )
+        .join('; ')
+    : 'Missing API error details';
+  throw new Error(`Cloudflare R2 ${method} failed (${response.status}): ${details}`);
 }
 
 async function deleteCloudflareWorker(target: CloudflareSmokeTarget): Promise<void> {

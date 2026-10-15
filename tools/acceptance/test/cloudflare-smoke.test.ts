@@ -2,11 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXIT_CODES, verifyContextReceipt } from '@lorepack/core';
-import type { ContextBundle, SearchResult } from '@lorepack/core/worker';
+import type { BuildId, ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
 import {
   activeCloudflareWorkerName,
+  addCloudflareCleanupProbe,
   addCloudflareTarget,
   addResumeMutationToken,
   addSemanticSearchCapability,
@@ -48,9 +49,46 @@ const UNIQUE_QUERY = 'phase6-rollback-token';
 const RESUME_MUTATION_QUERY = 'phase6-resume-mutation-token';
 const UNIQUE_FILE = 'docs/phase6-rollback-proof.md';
 const RECEIPTS_DIRECTORY = '.lore/receipts';
-const STALE_CI_ENV = { testPrefix: 'lorepack-ci', runId: '101', runAttempt: '2' };
-const MANUAL_CI_ENV = { testPrefix: 'lorepack-ci', runId: null, runAttempt: null };
+const STALE_CI_ENV = {
+  accountId: 'test-account',
+  testPrefix: 'lorepack-ci',
+  runId: '101',
+  runAttempt: '2',
+};
+const OLD_PROJECT = `lpci-${'a'.repeat(32)}`;
+const EARLIER_ATTEMPT_PROJECT = `lpci-${'b'.repeat(32)}`;
+const OWNERSHIP_RECORDS = [
+  {
+    ...STALE_CI_ENV,
+    formatVersion: 1 as const,
+    projectName: OLD_PROJECT,
+    runId: '100',
+    runAttempt: '1',
+  },
+  {
+    ...STALE_CI_ENV,
+    formatVersion: 1 as const,
+    projectName: EARLIER_ATTEMPT_PROJECT,
+    runId: '101',
+    runAttempt: '1',
+  },
+  { ...STALE_CI_ENV, formatVersion: 1 as const, projectName: `lpci-${'c'.repeat(32)}` },
+  {
+    ...STALE_CI_ENV,
+    formatVersion: 1 as const,
+    projectName: `lpci-${'d'.repeat(32)}`,
+    runId: '102',
+    runAttempt: '1',
+  },
+] as const;
+const MANUAL_CI_ENV = {
+  accountId: 'test-account',
+  testPrefix: 'lorepack-ci',
+  runId: null,
+  runAttempt: null,
+};
 const WORKERS_FOR_STALE_CLEANUP = [
+  ...OWNERSHIP_RECORDS.map((record) => ({ name: `${record.projectName}-runtime` })),
   { name: 'lorepack-ci-acceptance-runtime' },
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
   { name: 'lorepack-ci-101-1-cloudflare-acceptance-runtime' },
@@ -61,9 +99,11 @@ const WORKERS_FOR_STALE_CLEANUP = [
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' },
 ];
 const MANUAL_WORKERS_FOR_STALE_CLEANUP = [
+  ...OWNERSHIP_RECORDS.map((record) => ({ name: `${record.projectName}-runtime` })),
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
 ];
 const R2_BUCKETS_FOR_STALE_CLEANUP = [
+  ...OWNERSHIP_RECORDS.map((record) => ({ name: `${record.projectName}-objects` })),
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
   { name: 'lorepack-ci-101-1-cloudflare-acceptance-objects' },
   { name: 'lorepack-ci-101-2-cloudflare-acceptance-objects' },
@@ -73,10 +113,34 @@ const R2_BUCKETS_FOR_STALE_CLEANUP = [
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-runtime' },
 ];
 const MANUAL_R2_BUCKETS_FOR_STALE_CLEANUP = [
+  ...OWNERSHIP_RECORDS.map((record) => ({ name: `${record.projectName}-objects` })),
   { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
 ];
 
 describe('the credentialed Cloudflare smoke, issue 93', () => {
+  it.each([
+    ['Worker', staleCloudflareWorkerNames, 'runtime'],
+    ['D1 catalog', staleCloudflareD1DatabaseNames, 'catalog'],
+    ['D1 tables', staleCloudflareD1DatabaseNames, 'tables'],
+    ['R2 bucket', staleCloudflareR2BucketNames, 'objects'],
+  ] as const)(
+    'never selects a production-shaped %s for cleanup, issue 622',
+    (_, select, suffix) => {
+      expect(
+        select(
+          [{ name: `lorepack-2026-10-product-research-${suffix}` }],
+          {
+            accountId: 'test-account',
+            testPrefix: 'lorepack',
+            runId: '38788779701',
+            runAttempt: '1',
+          },
+          [],
+        ),
+      ).toEqual([]);
+    },
+  );
+
   it('builds a per-run unique project name when the Cloudflare environment is configured', () => {
     expect(
       smokeProjectName('Cloudflare Acceptance', {
@@ -86,7 +150,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         GITHUB_RUN_ID: '12345',
         GITHUB_RUN_ATTEMPT: '2',
       }),
-    ).toBe('lorepack-ci-12345-2-cloudflare-acceptance');
+    ).toMatch(/^lpci-[a-f0-9]{32}$/);
   });
 
   it('keeps the base project name when the Cloudflare environment is absent', () => {
@@ -248,20 +312,29 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
   });
 
   it('selects only stale CI Workers and never the singleton Worker for cleanup', () => {
-    expect(staleCloudflareWorkerNames(WORKERS_FOR_STALE_CLEANUP, STALE_CI_ENV)).toEqual([
-      'lorepack-ci-100-1-cloudflare-acceptance-runtime',
-      'lorepack-ci-101-1-cloudflare-acceptance-runtime',
-    ]);
+    expect(
+      staleCloudflareWorkerNames(WORKERS_FOR_STALE_CLEANUP, STALE_CI_ENV, OWNERSHIP_RECORDS),
+    ).toEqual([`${OLD_PROJECT}-runtime`, `${EARLIER_ATTEMPT_PROJECT}-runtime`]);
   });
 
   it('does not select Workers for manual runs without CI metadata', () => {
-    expect(staleCloudflareWorkerNames(MANUAL_WORKERS_FOR_STALE_CLEANUP, MANUAL_CI_ENV)).toEqual([]);
+    expect(
+      staleCloudflareWorkerNames(
+        MANUAL_WORKERS_FOR_STALE_CLEANUP,
+        MANUAL_CI_ENV,
+        OWNERSHIP_RECORDS,
+      ),
+    ).toEqual([]);
   });
 
-  it('selects only stale CI D1 catalog databases for cleanup', () => {
+  it('selects only stale owned catalog and tables databases for cleanup', () => {
     expect(
       staleCloudflareD1DatabaseNames(
         [
+          ...OWNERSHIP_RECORDS.flatMap((record) => [
+            { name: `${record.projectName}-catalog` },
+            { name: `${record.projectName}-tables` },
+          ]),
           { name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' },
           { name: 'lorepack-ci-101-1-cloudflare-acceptance-catalog' },
           { name: 'lorepack-ci-101-2-cloudflare-acceptance-catalog' },
@@ -270,33 +343,43 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
           { name: 'other-ci-100-1-cloudflare-acceptance-catalog' },
           { name: 'lorepack-ci-100-1-cloudflare-acceptance-objects' },
         ],
-        { testPrefix: 'lorepack-ci', runId: '101', runAttempt: '2' },
+        STALE_CI_ENV,
+        OWNERSHIP_RECORDS,
       ),
     ).toEqual([
-      'lorepack-ci-100-1-cloudflare-acceptance-catalog',
-      'lorepack-ci-101-1-cloudflare-acceptance-catalog',
+      `${OLD_PROJECT}-catalog`,
+      `${OLD_PROJECT}-tables`,
+      `${EARLIER_ATTEMPT_PROJECT}-catalog`,
+      `${EARLIER_ATTEMPT_PROJECT}-tables`,
     ]);
   });
 
   it('does not select D1 databases for manual runs without CI metadata', () => {
     expect(
       staleCloudflareD1DatabaseNames(
-        [{ name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' }],
-        { testPrefix: 'lorepack-ci', runId: null, runAttempt: null },
+        [
+          { name: 'lorepack-ci-100-1-cloudflare-acceptance-catalog' },
+          { name: `${OLD_PROJECT}-tables` },
+        ],
+        MANUAL_CI_ENV,
+        OWNERSHIP_RECORDS,
       ),
     ).toEqual([]);
   });
 
   it('selects only stale CI R2 object buckets for cleanup', () => {
-    expect(staleCloudflareR2BucketNames(R2_BUCKETS_FOR_STALE_CLEANUP, STALE_CI_ENV)).toEqual([
-      'lorepack-ci-100-1-cloudflare-acceptance-objects',
-      'lorepack-ci-101-1-cloudflare-acceptance-objects',
-    ]);
+    expect(
+      staleCloudflareR2BucketNames(R2_BUCKETS_FOR_STALE_CLEANUP, STALE_CI_ENV, OWNERSHIP_RECORDS),
+    ).toEqual([`${OLD_PROJECT}-objects`, `${EARLIER_ATTEMPT_PROJECT}-objects`]);
   });
 
   it('does not select R2 buckets for manual runs without CI metadata', () => {
     expect(
-      staleCloudflareR2BucketNames(MANUAL_R2_BUCKETS_FOR_STALE_CLEANUP, MANUAL_CI_ENV),
+      staleCloudflareR2BucketNames(
+        MANUAL_R2_BUCKETS_FOR_STALE_CLEANUP,
+        MANUAL_CI_ENV,
+        OWNERSHIP_RECORDS,
+      ),
     ).toEqual([]);
   });
 
@@ -415,10 +498,13 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
 
     await expect(
       addCloudflareTarget(project, {
+        ownership: OWNERSHIP_RECORDS[0],
         accountId: 'acct_123',
         workerName: 'demo-runtime',
         catalogDatabaseName: 'demo-catalog',
         catalogDatabaseId: 'db_123',
+        tablesDatabaseName: 'demo-tables',
+        tablesDatabaseId: 'tables_123',
         objectsBucketName: 'demo-objects',
         configPath: '/tmp/wrangler.jsonc',
         endpointBase: 'https://demo-runtime.workers.dev',
@@ -442,7 +528,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     `deploys, redeploys after an edit, and rolls back remotely (missing: ${missing.join(', ') || 'none'})`,
     async () => {
       const project = createCloudflareSmokeProject('Cloudflare Acceptance');
-      const buildIds: string[] = [];
+      const buildIds: BuildId[] = [];
       let target: Awaited<ReturnType<typeof provisionCloudflareSmokeTarget>> | undefined;
 
       try {
@@ -642,6 +728,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(rolledBackRollbackSearch.structuredContent.buildId).toBe(localBuildId);
         expect(rolledBackRollbackSearch.structuredContent.hits.length).toBeGreaterThan(0);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {
@@ -664,7 +751,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     `resumes a forced post-projection Cloudflare deploy without reprojection (missing: ${missing.join(', ') || 'none'})`,
     async () => {
       const project = createCloudflareSmokeProject('Cloudflare Resume');
-      const buildIds: string[] = [];
+      const buildIds: BuildId[] = [];
       let target: Awaited<ReturnType<typeof provisionCloudflareSmokeTarget>> | undefined;
 
       try {
@@ -710,6 +797,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(resumedSearch.structuredContent.buildId).toBe(buildId);
         expect(resumedSearch.structuredContent.hits).toHaveLength(0);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {
@@ -750,6 +838,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect(denied.stderr).toContain('semantic-search');
         expect(denied.stderr).toContain('--allow-capability-loss semantic-search');
         expect(existsSync(join(project.root, RECEIPTS_DIRECTORY))).toBe(false);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {

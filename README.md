@@ -58,12 +58,13 @@ same reviewability as code or infrastructure. Common environments include:
 - Teams serving several AI clients from one local or packaged build through MCP or HTTP while
   keeping lifecycle changes in developer-controlled tooling.
 
-The Terraform analogy describes the lifecycle, not infrastructure provisioning. `lore.yaml` is
+The Terraform analogy describes the context lifecycle. `lore.yaml` is
 the desired context configuration. `lorepack plan` previews the candidate, `lorepack build`
 compiles an immutable artifact, `lorepack validate` compiles and checks a candidate without moving the active pointer,
 and `lorepack activate` changes that pointer. `lorepack diff` reviews versions and
 `lorepack rollback` selects a previous immutable build. This separates desired inputs, review,
-and activation. Lorepack does not provision cloud resources and does not mutate source files.
+and activation. Local compilation uses no cloud resources and never mutates source files.
+Optional Cloudflare target setup provisions D1 and R2 resources for a completed build's deployment.
 
 This is a good fit when provenance, reproducibility, and safe updates matter as much as asking a
 question. It is not a replacement for OCR, SaaS connectors, or a hosted multi-user knowledge
@@ -519,6 +520,8 @@ see the [dependency decisions](docs/architecture/dependencies.md) for contributo
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
 Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
 Their bounded propagation retries require successful upload evidence for the newer API.
+Their [account-scoped ownership ledger](docs/integrations/cloudflare-testing.md#ownership-and-cleanup)
+records fresh test-resource intents before provisioning and keeps failed cleanup retryable.
 Contract tests use the same MCP client version as the shipped CLI.
 Committed [parser golden fixtures](fixtures/README.md) cover every supported format,
 including typed tables, page locators and visible loss warnings.
