@@ -578,7 +578,8 @@ CLI packaging preserves dependency patches with the frozen lockfile in its tempo
 workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
 The default suite retains the original audit scheduling, including package-level policies.
 Coverage preparation and measurement inherit those settings without a global worker cap.
-Read-only verification scripts also retain exact ordinary/measured output parity.
+Read-only verification scripts retain their exact arguments and ordinary/measured output parity,
+including documentation checks and the actual README demo.
 Temporary-script capture preserves the exact project-write profile and preload failures.
 Contract tests cover HTTP hosts, retention with interrupted candidates and idle readers,
 activation, archives, tables and offline reports.

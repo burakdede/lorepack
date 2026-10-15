@@ -1610,6 +1610,71 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       expect(evidence.executions[0]).toMatchObject({ state: 'completed', exitCode: 0 });
     });
 
+    it.each([
+      ['--check', 'path with space'],
+      ['--format=json', 'δ'],
+    ])('preserves actual verification arguments %j in both executions', async (...args) => {
+      const { project, captured, built } = scenario;
+      const preload = join(project, 'command-arguments-observer.mjs');
+      writeFileSync(
+        preload,
+        "process.on('beforeExit',()=>console.log(JSON.stringify(process.argv.slice(2))));",
+      );
+      const before = process.env.NODE_OPTIONS;
+      process.env.NODE_OPTIONS = [before, `--import=${pathToFileURL(preload).href}`]
+        .filter(Boolean)
+        .join(' ');
+      try {
+        const report = await captureVerificationCommands(captured, built.launch, [
+          { script: 'packages/core/dist/shared.js', args },
+        ]);
+        expect(report.commands).toEqual([
+          {
+            script: 'packages/core/dist/shared.js',
+            args,
+            code: 0,
+            signal: null,
+            stdout: `${JSON.stringify(args)}\n`,
+            stderr: '',
+          },
+        ]);
+        const registry = createCampaignRegistry(captured, built.launch);
+        const evidence = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+          ...registry.forkEntries,
+          ...registry.commandEntries,
+        ]);
+        expect(evidence.status).toBe('Pass');
+        expect(evidence.processes).toBe(1);
+        expect(Object.keys(evidence.maps)).toEqual([join(project, 'packages/core/src/shared.ts')]);
+      } finally {
+        if (before === undefined) delete process.env.NODE_OPTIONS;
+        else process.env.NODE_OPTIONS = before;
+      }
+    });
+
+    it('refuses an ordinary command rejected by its supplied argument before measurement', async () => {
+      const { project, captured, built } = scenario;
+      const preload = join(project, 'command-failure-observer.mjs');
+      writeFileSync(preload, "if(process.argv.includes('--reject')) process.exitCode=23;");
+      const before = process.env.NODE_OPTIONS;
+      const surrounding = spawnSync;
+      process.env.NODE_OPTIONS = [before, `--import=${pathToFileURL(preload).href}`]
+        .filter(Boolean)
+        .join(' ');
+      try {
+        await expect(
+          captureVerificationCommands(captured, built.launch, [
+            { script: 'packages/core/dist/shared.js', args: ['--reject'] },
+          ]),
+        ).rejects.toThrow('Ordinary verification command failed');
+        expect(() => readdirSync(built.launch.captureDirectory)).toThrow();
+        expect(spawnSync).toBe(surrounding);
+      } finally {
+        if (before === undefined) delete process.env.NODE_OPTIONS;
+        else process.env.NODE_OPTIONS = before;
+      }
+    });
+
     it('rejects changed command output and restores the surrounding capture', async () => {
       const { project, captured, built } = scenario;
       const preload = join(project, 'command-output-observer.mjs');

@@ -30,22 +30,29 @@ export function nodeCommand(root, args, environment = {}) {
 }
 
 const VERIFICATION_COMMANDS = [
-  'check-no-native',
-  'check-no-em-dash',
-  'check-public-branding',
-  'check-no-conflict-claims',
-  'check-counted-nouns',
-  'check-command-set',
-  'check-studio-bundle',
-  'check-sources-tracked',
-  'check-docs-images',
-  'check-docs-links',
-  'check-templates',
-  'check-license-policy',
-  'check-release-policy',
-  'check-performance-report',
-  'check-verify-parity',
-].map((name) => `scripts/${name}.mjs`);
+  ...[
+    'check-no-native',
+    'check-no-em-dash',
+    'check-public-branding',
+    'check-no-conflict-claims',
+    'check-counted-nouns',
+    'check-command-set',
+    'check-studio-bundle',
+    'check-sources-tracked',
+    'check-docs-images',
+    'check-docs-links',
+    'check-templates',
+    'check-license-policy',
+    'check-release-policy',
+    'check-performance-report',
+    'check-verify-parity',
+  ].map((name) => `scripts/${name}.mjs`),
+  { script: 'scripts/generate-schemas.mjs', args: ['--check'] },
+  { script: 'scripts/generate-cli-reference.mjs', args: ['--check'] },
+  { script: 'scripts/generate-acceptance-doc.mjs', args: ['--check'] },
+  { script: 'scripts/demo-readme.mjs', args: ['--check'] },
+  { script: 'scripts/probe-fts5.mjs', args: [] },
+];
 
 export async function captureVerificationCommands(
   snapshot,
@@ -53,13 +60,16 @@ export async function captureVerificationCommands(
   commands = VERIFICATION_COMMANDS,
 ) {
   const root = realpathSync(snapshot.root);
-  const invoke = (script) => {
-    const result = spawnSync(process.execPath, [join(root, script)], {
+  const invoke = (command) => {
+    const script = typeof command === 'string' ? command : command.script;
+    const args = typeof command === 'string' ? [] : command.args;
+    const result = spawnSync(process.execPath, [join(root, script), ...args], {
       cwd: root,
       encoding: 'utf8',
     });
     return {
       script,
+      args,
       code: result.status,
       signal: result.signal,
       stdout: result.stdout,
@@ -75,7 +85,7 @@ export async function captureVerificationCommands(
   const capture = registerCampaignCapture(snapshot, launch);
   try {
     for (const expected of ordinary) {
-      if (!isDeepStrictEqual(invoke(expected.script), expected))
+      if (!isDeepStrictEqual(invoke(expected), expected))
         throw new Error(`Measured verification command differs: ${expected.script}`);
     }
     await capture.settled();
