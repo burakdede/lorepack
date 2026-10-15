@@ -1,4 +1,4 @@
-import { rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
@@ -67,6 +67,49 @@ async function recoversFrom(
     }
   });
 }
+
+describe('a build from a newer catalog schema', () => {
+  it('reports the version mismatch without modifying the sealed catalog', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': CONFIG, 'runbook.md': RUNBOOK } },
+      async (project) => {
+        const built = await runBuild({
+          config: loadConfig({ cwd: project.root }),
+          progress: new ProgressBus(),
+        });
+        const filename = join(project.root, '.lore', 'builds', built.buildId, 'context.sqlite');
+        const database = new DatabaseSync(filename);
+        try {
+          database.exec(
+            "UPDATE schema_migrations SET id = '9999' WHERE id = (SELECT max(id) FROM schema_migrations)",
+          );
+        } finally {
+          database.close();
+        }
+        const sealed = readFileSync(filename);
+        const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+        try {
+          await expect(
+            createRuntime(backend).search({
+              query: 'rollback',
+              limit: 5,
+              includeArchived: false,
+              debug: false,
+            }),
+          ).rejects.toMatchObject({
+            code: 'LORE_E_SCHEMA_MISMATCH',
+            subject: built.buildId,
+            details: { actual: '9999', expected: expect.stringMatching(/^0[0-9]{3}$/) },
+            remediation: expect.stringContaining('Upgrade Lorepack, or rebuild'),
+          });
+        } finally {
+          backend.close();
+        }
+        expect(readFileSync(filename)).toEqual(sealed);
+      },
+    );
+  });
+});
 
 describe('a build damaged on disk', () => {
   it('recovers when the catalog has no recorded migrations', async () => {
