@@ -453,3 +453,7 @@ records a real transition. See the [activation-history decision](../adr/0031-rec
 `lorepack builds --json` includes the same bounded events, truncation, rollback target
 and unavailable reason alongside the existing build list. The default human build list
 continues to show creation order; creation order is not a rollback selector.
+
+An empty active pointer remains valid for explicitly selected retained-build reads. It is
+not an activation of a build and creates no event. A subsequent activation records a null
+predecessor rather than guessing a previous build across the empty state.

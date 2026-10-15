@@ -1091,11 +1091,11 @@ async function candidateSmokeQuery(catalog: D1CatalogStore): Promise<string | nu
 
 async function currentActiveBuild(
   db: ProjectionMigrationDatabaseLike,
-): Promise<{ readonly buildId: BuildId; readonly generation: number } | null> {
+): Promise<{ readonly buildId: BuildId | null; readonly generation: number } | null> {
   const rows = await db
     .prepare('SELECT build_id AS buildId, generation FROM active_build WHERE id = 1')
     .run<{ buildId: string | null; generation: number }>();
   const row = rows.results?.[0];
-  if (row === undefined || row.buildId === null) return null;
-  return { buildId: row.buildId as BuildId, generation: Number(row.generation) };
+  if (row === undefined) return null;
+  return { buildId: row.buildId as BuildId | null, generation: Number(row.generation) };
 }

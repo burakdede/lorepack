@@ -72,6 +72,26 @@ describe('projected activation history', () => {
     });
   });
 
+  it('preserves retained reads and records reactivation from an empty pointer', async () => {
+    await withHistory(async (fixture) => {
+      const recorded = events(fixture);
+      fixture.projection.raw.exec('UPDATE active_build SET build_id = NULL WHERE id = 1');
+      expect(events(fixture)).toEqual(recorded);
+      expect((await fixture.runtime.describeBuild({ buildId: A })).buildId).toBe(A);
+      await expect(fixture.target.rollback()).rejects.toMatchObject({
+        code: 'LORE_E_BUILD_NOT_FOUND',
+      });
+      await fixture.target.activate(fixture.candidateReceipt);
+      expect(pointer(fixture)).toEqual({ build_id: B, generation: 3 });
+      expect(events(fixture)[2]).toMatchObject({
+        generation: 3,
+        previous_build_id: null,
+        build_id: B,
+        kind: 'transition',
+      });
+    });
+  });
+
   it('uses the same backend selection through the real CLI command with no local sources', async () => {
     await withHistory(async (fixture) => {
       await withTempProject(

@@ -268,7 +268,7 @@ const PROJECTION_MIGRATIONS_SOURCE = [
   recorded_at TEXT NOT NULL
 )`,
       `CREATE TRIGGER IF NOT EXISTS record_activation AFTER UPDATE OF build_id ON active_build
-WHEN OLD.build_id IS NOT NEW.build_id
+WHEN NEW.build_id IS NOT NULL AND OLD.build_id IS NOT NEW.build_id
 BEGIN
   INSERT INTO activation_events (generation, previous_build_id, build_id, kind, recorded_at)
   VALUES (NEW.generation, OLD.build_id, NEW.build_id, 'transition',

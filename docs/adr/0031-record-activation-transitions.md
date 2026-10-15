@@ -16,7 +16,9 @@ arbitrary transaction across separate command invocations.
 ## Decision
 
 Record operational pointer transitions with an AFTER UPDATE trigger in each backend.
-Pointer and event succeed together. Use monotonic generation for ordering and database
+For transitions to a build, pointer and event succeed together. A nullable empty pointer
+remains valid for retained-build reads and is not labelled as a build activation.
+Reactivation from that state records no previous active build. Use monotonic generation for ordering and database
 UTC time for observation, outside immutable build identity. Same-ID writes create no
 transition; preserve each backend's existing generation behavior. History has no foreign
 key to retained builds, so pruning cannot rewrite the activation facts.

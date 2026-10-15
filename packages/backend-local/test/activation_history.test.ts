@@ -80,6 +80,37 @@ describe('persistent activation history', () => {
     });
   });
 
+  it('preserves an empty active pointer without inventing a null activation event', async () => {
+    await withTempProject({}, (temp) => {
+      const lore = temp.path('.lore');
+      const state = LocalStateStore.open(lore, MIGRATIONS);
+      try {
+        state.recordBuild(summary(A));
+        state.recordBuild(summary(B));
+        state.activate(A);
+        const recorded = events(lore);
+        const db = openWritable(join(lore, 'state.sqlite'));
+        try {
+          db.exec('UPDATE active_build SET build_id = NULL WHERE id = 1');
+        } finally {
+          db.close();
+        }
+        expect(state.history().active).toBeNull();
+        expect(state.getBuild(A)).not.toBeNull();
+        expect(events(lore)).toEqual(recorded);
+        expect(state.activate(B)).toBe(2);
+        expect(events(lore)[1]).toMatchObject({
+          generation: 2,
+          previous_build_id: null,
+          build_id: B,
+          kind: 'transition',
+        });
+      } finally {
+        state.close();
+      }
+    });
+  });
+
   it('observes an upgraded active pointer without inventing earlier transitions', async () => {
     await withTempProject({}, (temp) => {
       const lore = temp.path('.lore');
