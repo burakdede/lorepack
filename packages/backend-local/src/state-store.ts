@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
@@ -9,11 +9,17 @@ import {
   type BuildSelection,
   type BuildSummary,
   buildSelectionSchema,
+  fsyncDirectory,
   LoreError,
   type RuntimeIdentity,
   runtimeIdentitySchema,
 } from '@lorepack/core';
-import { assertMigrationsKnown, loadMigrations, runMigrations } from './migrations.js';
+import {
+  assertMigrationsKnown,
+  loadMigrations,
+  type Migration,
+  runMigrations,
+} from './migrations.js';
 import { registerReadReference, withReadReferenceLock } from './read_references.js';
 import { inTransaction, openReadOnly, openWritable } from './sqlite.js';
 
@@ -35,6 +41,7 @@ export class LocalStateStore {
     mkdirSync(loreDirectory, { recursive: true });
     const path = join(loreDirectory, 'state.sqlite');
     const migrations = loadMigrations(migrationsDirectory);
+    if (!existsSync(path)) LocalStateStore.#initialize(loreDirectory, path, migrations);
     // Checked on a read-only connection first, because opening for writing already writes:
     // it sets the journal mode. State from a newer Lorepack is refused untouched (#570).
     if (existsSync(path)) {
@@ -54,6 +61,30 @@ export class LocalStateStore {
     } catch (cause) {
       db.close();
       throw cause;
+    }
+  }
+
+  static #initialize(loreDirectory: string, path: string, migrations: readonly Migration[]): void {
+    const staging = join(loreDirectory, 'tmp');
+    mkdirSync(staging, { recursive: true });
+    const directory = mkdtempSync(join(staging, 'state-init-'));
+    const candidate = join(directory, 'state.sqlite');
+    try {
+      const db = openWritable(candidate);
+      try {
+        runMigrations(db, migrations);
+        new LocalStateStore(db, loreDirectory).identity();
+      } finally {
+        db.close();
+      }
+      try {
+        linkSync(candidate, path);
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== 'EEXIST') throw cause;
+      }
+      fsyncDirectory(loreDirectory);
+    } finally {
+      rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
     }
   }
 
