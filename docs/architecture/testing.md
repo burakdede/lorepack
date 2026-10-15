@@ -107,6 +107,11 @@ catalog together. Historical duplicate text appears as labeled alternatives only
 with explicit expansion; default responses keep omission reasons and locators.
 Both paths release the captured build handle.
 
+Statement diagnostics cover comment-only input, unfinished quoted identifiers and
+incomplete common table expressions. An escaped quote and separator in a column
+name round-trip through real SQLite, and single-edit keyword advice stays specific.
+These cases exercise statement shape without changing query policy or engine limits.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
