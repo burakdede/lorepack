@@ -1,4 +1,4 @@
-name: State open diagnosis (not release qualification)
+name: State open full-schedule diagnosis (not release qualification)
 
 on:
   workflow_dispatch:
@@ -13,6 +13,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
@@ -22,5 +24,5 @@ jobs:
       - run: pnpm build
       - name: Record the actual diagnostic environment
         run: node -p 'JSON.stringify({node:process.versions.node,sqlite:process.versions.sqlite,platform:process.platform,arch:process.arch})'
-      - name: Run the original state-open workload with failure stacks
-        run: pnpm exec vitest run packages/backend-local/test/state-open-concurrency.test.ts --reporter=verbose
+      - name: Run original default scheduling until first failure (diagnostic only)
+        run: pnpm exec vitest run --bail=1 --reporter=verbose
