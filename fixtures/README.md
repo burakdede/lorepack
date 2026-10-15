@@ -1,4 +1,4 @@
-# Parser fixtures
+# Test fixtures
 
 `documents/` contains committed source bytes; `expected/` contains canonical parsed
 outputs with matching paths and a `.json` extension. The shared golden test covers
@@ -39,3 +39,36 @@ present. Do not remove locators, formula metadata, warnings or hashes to make a 
 pass. Separate landmark assertions check facts from the source fixture independently
 of the generated expectations. These small fixtures establish regression contracts;
 they do not qualify performance, arbitrary documents or release readiness.
+
+## Source selector build
+
+`builds/source_selector.lorepack` is a repository-owned synthetic build made by the
+actual compiler and packer with Node24.21.0/SQLite3.53.4. It has five Markdown artifacts
+in the distinct source roots `alpha`, `beta` and `omega`:
+
+| Project-relative input | Body marker |
+|---|---|
+| `omega/z.md` | `ID_TARGET_BODY` |
+| `alpha/omega:z.md` | `PATH_TARGET_BODY` |
+| `alpha/z.md` | `DUPLICATE_PATH_BODY` |
+| `beta/z.md` | `THIRD_DUPLICATE_BODY` |
+| `alpha/omega/z.md` | `DISPLAY_ALIAS_BODY` |
+
+The immutable build ID is
+`lore_377479447fdd9340e72cc9498d6d812842dbae2db709b4f8341411198e373ed4`.
+Original sources are excluded from the archive. Its metadata preserves the colon-containing
+path, while all extracted member names are ordinary catalog/manifest/hash paths. Tests import
+and verify this same archive on Windows, macOS and Linux; they do not create an illegal
+Windows filename or skip the case.
+
+Regenerate on POSIX after an intentional fixture change, then review the package proof:
+
+```sh
+pnpm build
+node fixtures/builds/generate_source_selector.mjs
+pnpm exec vitest run packages/deploy-cloudflare/test/source_selector.test.ts
+```
+
+The generator creates and removes its own temporary project. Archive bytes may change with
+packaging metadata; the logical build ID is the identity asserted above. These inputs test
+source selection and provenance, not performance or release qualification.

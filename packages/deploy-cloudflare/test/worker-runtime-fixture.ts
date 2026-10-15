@@ -193,30 +193,32 @@ ORDER BY a.relative_path`,
         : [],
   );
 
-  db.handlers.set(
-    `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
+  for (const column of ['id', 'relative_path'] as const) {
+    db.handlers.set(
+      `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
        status, authority, media_type AS mediaType, object_hash AS objectHash
 FROM artifacts
-WHERE project_id = ? AND build_id = ? AND (id = ? OR relative_path = ?)
-LIMIT 1`,
-    ([projectId, buildId, wantedId, wantedPath]) =>
-      projectId === PROJECT &&
-      buildId === BUILD &&
-      (wantedId === ARTIFACT_ID || wantedPath === 'guides/rollback.md')
-        ? [
-            {
-              id: ARTIFACT_ID,
-              relativePath: 'guides/rollback.md',
-              displayPath: 'guides/rollback.md',
-              title: 'Rollback',
-              status: 'active',
-              authority: 50,
-              mediaType: 'text/markdown',
-              objectHash: OBJECT_HASH,
-            },
-          ]
-        : [],
-  );
+WHERE project_id = ? AND build_id = ? AND ${column} = ?
+ORDER BY id LIMIT 2`,
+      ([projectId, buildId, wanted]) =>
+        projectId === PROJECT &&
+        buildId === BUILD &&
+        wanted === (column === 'id' ? ARTIFACT_ID : 'guides/rollback.md')
+          ? [
+              {
+                id: ARTIFACT_ID,
+                relativePath: 'guides/rollback.md',
+                displayPath: 'guides/rollback.md',
+                title: 'Rollback',
+                status: 'active',
+                authority: 50,
+                mediaType: 'text/markdown',
+                objectHash: OBJECT_HASH,
+              },
+            ]
+          : [],
+    );
+  }
 
   db.handlers.set(
     `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,

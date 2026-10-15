@@ -392,3 +392,36 @@ and reports unknown. `--build` selects a full retained ID. Bare MCP retains ensu
 startup for development; contradictory startup modes fail explicitly. Polling freshness
 checks active pointer generation independently of source metadata and interval, so rollback
 invalidates the prior observation without compiling or activating another build.
+
+## Source selectors
+
+`readSource` preserves the caller's selector namespace. An `artifactId` matches only
+an artifact ID; otherwise `path` matches a canonical source-relative path. If both are
+provided, the existing artifact-ID precedence remains. A filename that happens to equal
+another document's ID cannot redirect either lookup. This applies to HTTP, MCP resources
+and tools, SDK and Worker reads through the same runtime.
+
+Two source roots can each contain `z.md` while their artifact IDs remain distinct.
+Reading that short path is a typed `LORE_E_INVALID_ARGUMENT`, with at most two candidate
+IDs in the explanation. Use an `artifactId` from a returned locator to select the document.
+A missing exact ID is a miss even when the same string matches a path.
+
+CLI `inspect` resolves its project-relative display path first, then an unambiguous
+source-relative path, then an existing unambiguous artifact ID. A duplicate relative path
+is refused; choose the full project-relative path shown by `lorepack inspect sources`.
+The [selector decision](../adr/0030-explicit-source-selectors.md) records the catalog boundary.
+
+Verified on 2026-10-15 using the portable source-selector fixture: actual immutable archive
+import, local SQLite and real SQLite-backed D1 projection, HTTP/SDK, MCP tool/resource reads,
+search-locator readback and actual CLI inspection. The fixture provenance and regeneration
+command are in [fixtures](../../fixtures/README.md#source-selector-build).
+
+Studio manual check (2026-10-15, development CLI 0.1.0, Node 24.21.0, Playwright
+1.62.1 Chromium): import the fixture and serve its retained build with Studio mounted.
+Select `omega/z.md`, then `alpha/omega:z.md`. Each source pane must show its own
+`ID_TARGET_BODY` or `PATH_TARGET_BODY` and its request must return the corresponding
+locator and imported build ID. Both selections passed, as did the serious/critical axe
+check. Sources are absent locally, so the dirty annotation is expected.
+[Captured source pane](../images/studio_source_selector.png). The real-browser regression
+is `tools/studio-e2e/test/source_selector.spec.ts`; actual workerd HTTP/MCP readback is
+covered in `packages/deploy-cloudflare/test/wrangler-dev.test.ts`.

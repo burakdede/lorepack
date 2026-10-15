@@ -621,12 +621,23 @@ interface ArtifactRow extends Record<string, string | number> {
 }
 
 function findArtifact(db: import('node:sqlite').DatabaseSync, path: string): ArtifactRow {
-  const row = db
-    .prepare(
-      'SELECT * FROM artifacts WHERE display_path = ? OR relative_path = ? OR id = ? LIMIT 1',
-    )
-    .get(path, path, path) as ArtifactRow | undefined;
-  if (row !== undefined) return row;
+  for (const column of ['display_path', 'relative_path', 'id'] as const) {
+    const rows = db
+      .prepare(`SELECT * FROM artifacts WHERE ${column} = ? ORDER BY id LIMIT 2`)
+      .all(path) as ArtifactRow[];
+    if (rows.length > 1) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'This source path matches multiple artifacts.',
+        {
+          subject: path,
+          remediation: 'Use a project-relative path from `lorepack inspect sources`.',
+          details: { artifactIds: rows.map((row) => row.id) },
+        },
+      );
+    }
+    if (rows[0] !== undefined) return rows[0];
+  }
 
   const all = (
     db.prepare('SELECT display_path FROM artifacts ORDER BY display_path').all() as Array<{

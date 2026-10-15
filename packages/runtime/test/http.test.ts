@@ -82,7 +82,7 @@ const catalog: CatalogStore = {
     } as BuildManifest;
   },
   async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
-    const artifact = await this.artifact('guides/a.md');
+    const artifact = await this.artifact('guides/a.md', 'path');
     if (artifact === null) throw new Error('Expected the HTTP catalog fixture.');
     return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 1, nodeCount: 2 }];
   },

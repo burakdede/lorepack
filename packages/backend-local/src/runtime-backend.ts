@@ -108,18 +108,29 @@ class LocalCatalogStore implements CatalogStore {
     }));
   }
 
-  async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
-    // Two lookups, one statement, both parameterized: an artifact id and a canonical path
-    // are the two things a caller can legitimately name, and neither reaches SQL as text.
-    const row = this.#db
+  async artifact(reference: string, by: 'id' | 'path'): Promise<CatalogArtifact | null> {
+    const rows = this.#db
       .prepare(
         `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
                 status, authority, media_type AS mediaType, object_hash AS objectHash
            FROM artifacts
-          WHERE id = ? OR relative_path = ?
-          LIMIT 1`,
+          WHERE ${by === 'id' ? 'id' : 'relative_path'} = ?
+          ORDER BY id LIMIT 2`,
       )
-      .get(idOrPath, idOrPath) as Record<string, string | number | null> | undefined;
+      .all(reference) as Array<Record<string, string | number | null>>;
+    if (by === 'path' && rows.length > 1) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'This source path matches multiple artifacts.',
+        {
+          subject: reference,
+          remediation:
+            'Use an artifactId from search results or source inventory to select one document.',
+          details: { artifactIds: rows.map((row) => String(row.id)) },
+        },
+      );
+    }
+    const row = rows[0];
     if (row === undefined) return null;
 
     return {

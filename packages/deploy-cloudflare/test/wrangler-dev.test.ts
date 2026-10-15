@@ -32,6 +32,9 @@ const CONFIG = join(WORKER_ROOT, 'wrangler.jsonc');
 const OBJECT_BODY =
   '# Rollback\n\nTo roll back a release, activate the previous build.\n\nTell the team what changed after the rollback.\n';
 const OBJECT_HASH = hashBytes(new TextEncoder().encode(OBJECT_BODY));
+const ALIAS_ID = 'demo:alias.md';
+const ALIAS_BODY = '# Namespace alias\n\nThe alias body belongs to another source.\n';
+const ALIAS_HASH = hashBytes(new TextEncoder().encode(ALIAS_BODY));
 const TOKEN = 'lore_rt_acceptance_worker_token';
 const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex');
 const DEPLOYMENT_CREDENTIAL = 'cf_api_token_for_deploy';
@@ -53,7 +56,7 @@ const MANIFEST: BuildManifest = {
     objects: '4'.repeat(64),
   },
   capabilities: ['lexical-search', 'structured-context', 'table-query'],
-  counts: { artifacts: 1, nodes: 2, chunks: 1, tables: 1, tableRows: 2 },
+  counts: { artifacts: 2, nodes: 3, chunks: 1, tables: 1, tableRows: 2 },
   warnings: [],
 };
 
@@ -61,6 +64,7 @@ let persistTo = '';
 let schemaFile = '';
 let tableSchemaFile = '';
 let objectFile = '';
+let aliasFile = '';
 let worker: Unstable_DevWorker | null = null;
 
 const envelope = {
@@ -77,7 +81,7 @@ function runWrangler(args: readonly string[]): void {
   });
 }
 
-async function decodeMcp(response: Response): Promise<Record<string, unknown>> {
+async function decodeMcp(response: Pick<Response, 'text'>): Promise<Record<string, unknown>> {
   const text = await response.text();
   const payload = text.startsWith('event:')
     ? (text.split('\n').find((line) => line.startsWith('data: ')) ?? '').slice('data: '.length)
@@ -90,6 +94,7 @@ beforeAll(async () => {
   schemaFile = join(persistTo, 'seed.sql');
   tableSchemaFile = join(persistTo, 'table-seed.sql');
   objectFile = join(persistTo, 'rollback.md');
+  aliasFile = join(persistTo, 'alias.md');
 
   writeFileSync(
     schemaFile,
@@ -238,9 +243,12 @@ VALUES ('${TOKEN_HASH}', '2026-08-08T12:00:00.000Z', NULL);
 INSERT INTO runtime_tokens (token_hash, created_at, expires_at)
 VALUES ('${DEPLOYMENT_CREDENTIAL_HASH}', '2026-08-08T12:00:01.000Z', NULL);
 INSERT INTO artifacts (id, project_id, build_id, relative_path, display_path, title, status, authority, media_type, object_hash)
-VALUES ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
+VALUES
+  ('${ALIAS_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', '${ARTIFACT_ID}', 'Alias', 'active', 50, 'text/markdown', '${ALIAS_HASH}'),
+  ('${ARTIFACT_ID}', '${PROJECT}', '${BUILD}', '${ARTIFACT_PATH}', '${ARTIFACT_PATH}', 'Rollback', 'active', 50, 'text/markdown', '${OBJECT_HASH}');
 INSERT INTO nodes (id, project_id, build_id, artifact_id, kind, ordinal, title, text, heading_path, line_start, line_end)
 VALUES
+  ('alias', '${PROJECT}', '${BUILD}', '${ALIAS_ID}', 'paragraph', 0, NULL, 'The alias body belongs to another source.', '[]', 3, 3),
   ('n0', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 0, NULL, 'To roll back a release, activate the previous build.', '["Rollback"]', 3, 3),
   ('n1', '${PROJECT}', '${BUILD}', '${ARTIFACT_ID}', 'paragraph', 1, NULL, 'Tell the team what changed after the rollback.', '["Rollback"]', 5, 5);
 INSERT INTO chunks (id, project_id, build_id, artifact_id, node_ids, heading_path, text, estimated_tokens, relative_path, line_start, line_end)
@@ -275,6 +283,7 @@ VALUES
 `,
   );
   writeFileSync(objectFile, OBJECT_BODY);
+  writeFileSync(aliasFile, ALIAS_BODY);
   writeFileSync(
     tableSchemaFile,
     `CREATE TABLE ${TABLE_SQL} (c_0_sku TEXT NOT NULL, c_1_price INTEGER NOT NULL);
@@ -320,6 +329,19 @@ INSERT INTO ${CANDIDATE_TABLE_SQL} (c_0_sku, c_1_price) VALUES ('SKU-C', 99);
     persistTo,
     '--file',
     objectFile,
+  ]);
+  runWrangler([
+    'r2',
+    'object',
+    'put',
+    `lorepack-build-objects-local/${r2ObjectKey(PROJECT, ALIAS_HASH)}`,
+    '--local',
+    '--config',
+    CONFIG,
+    '--persist-to',
+    persistTo,
+    '--file',
+    aliasFile,
   ]);
 
   worker = await unstable_dev(join(WORKER_ROOT, 'src', 'worker.ts'), {
@@ -379,6 +401,35 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
     expect(source.buildId).toBe(BUILD);
     expect(source.text).toContain('activate the previous build');
     expect(source.locator.artifactId).toBe(ARTIFACT_ID);
+    const aliasResponse = await worker.fetch('/mcp', {
+      method: 'POST',
+      headers: {
+        ...auth,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'lore_read_source',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 9,
+        method: 'tools/call',
+        params: {
+          name: 'lore_read_source',
+          arguments: { path: ARTIFACT_ID, buildId: BUILD },
+          _meta: envelope,
+        },
+      }),
+    });
+    expect(aliasResponse.status).toBe(200);
+    const aliasFrame = await decodeMcp(aliasResponse);
+    expect(
+      (aliasFrame.result as { structuredContent: SourceReadResult }).structuredContent,
+    ).toMatchObject({
+      buildId: BUILD,
+      text: ALIAS_BODY,
+      locator: { artifactId: ALIAS_ID, relativePath: ARTIFACT_ID },
+    });
 
     const listResponse = await worker.fetch('/v1/tables', { headers: auth });
     expect(listResponse.status).toBe(200);

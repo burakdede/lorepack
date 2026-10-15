@@ -52,7 +52,7 @@ const MANIFEST: BuildManifest = {
     tables: '4'.repeat(64),
     objects: '5'.repeat(64),
   },
-  capabilities: ['lexical-search', 'structured-context', 'typed-tables'],
+  capabilities: ['lexical-search', 'structured-context', 'table-query'],
   counts: { artifacts: 2, nodes: 3, chunks: 2, tables: 1, tableRows: 3 },
   warnings: [],
 };
@@ -115,30 +115,32 @@ ORDER BY a.relative_path`,
         : [],
   );
 
-  db.handlers.set(
-    `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
+  for (const column of ['id', 'relative_path'] as const) {
+    db.handlers.set(
+      `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
        status, authority, media_type AS mediaType, object_hash AS objectHash
 FROM artifacts
-WHERE project_id = ? AND build_id = ? AND (id = ? OR relative_path = ?)
-LIMIT 1`,
-    ([projectId, buildId, wantedId, wantedPath]) =>
-      projectId === PROJECT &&
-      buildId === BUILD &&
-      (wantedId === 'contracted:guides/rollback.md' || wantedPath === 'guides/rollback.md')
-        ? [
-            {
-              id: 'contracted:guides/rollback.md',
-              relativePath: 'guides/rollback.md',
-              displayPath: 'guides/rollback.md',
-              title: 'Rollback',
-              status: 'active',
-              authority: 50,
-              mediaType: 'text/markdown',
-              objectHash: 'f'.repeat(64),
-            },
-          ]
-        : [],
-  );
+WHERE project_id = ? AND build_id = ? AND ${column} = ?
+ORDER BY id LIMIT 2`,
+      ([projectId, buildId, wanted]) =>
+        projectId === PROJECT &&
+        buildId === BUILD &&
+        wanted === (column === 'id' ? 'contracted:guides/rollback.md' : 'guides/rollback.md')
+          ? [
+              {
+                id: 'contracted:guides/rollback.md',
+                relativePath: 'guides/rollback.md',
+                displayPath: 'guides/rollback.md',
+                title: 'Rollback',
+                status: 'active',
+                authority: 50,
+                mediaType: 'text/markdown',
+                objectHash: 'f'.repeat(64),
+              },
+            ]
+          : [],
+    );
+  }
 
   db.handlers.set(
     `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
@@ -247,7 +249,7 @@ describe('D1CatalogStore', () => {
 
     expect(await store.countChunks()).toBe(2);
     expect(await store.countWarnings()).toBe(1);
-    expect(await store.artifact('guides/rollback.md')).toEqual({
+    expect(await store.artifact('guides/rollback.md', 'path')).toEqual({
       artifactId: 'contracted:guides/rollback.md',
       relativePath: 'guides/rollback.md',
       displayPath: 'guides/rollback.md',
@@ -259,12 +261,7 @@ describe('D1CatalogStore', () => {
     });
     expect(db.calls[0]?.bindings).toEqual([PROJECT, BUILD]);
     expect(db.calls[1]?.bindings).toEqual([PROJECT, BUILD]);
-    expect(db.calls[2]?.bindings).toEqual([
-      PROJECT,
-      BUILD,
-      'guides/rollback.md',
-      'guides/rollback.md',
-    ]);
+    expect(db.calls[2]?.bindings).toEqual([PROJECT, BUILD, 'guides/rollback.md']);
   });
 
   it('returns namespaced nodes and superseded artifact ids', async () => {

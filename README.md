@@ -8,6 +8,8 @@ Every build is immutable and content-addressed. You can inspect what entered it,
 excluded and why, ask for bounded context with citations, compare versions, activate a known
 version, and roll back without rebuilding. AI clients read the active build over MCP or HTTP.
 They cannot edit sources, build, deploy, or run shell commands through the Lorepack boundary.
+Source reads distinguish artifact IDs from source-relative paths. A short path shared by
+multiple sources requires an artifact ID from a locator.
 
 Local project state keeps a persistent corpus ID and runtime namespace separately from the
 content digest and display name. These identify the collection; local owner access remains

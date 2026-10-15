@@ -34,7 +34,7 @@ export const ARTIFACT_ID = 'contracted:guides/rollback.md';
 export const TABLE_ID = 'contracted:pricing.xlsx#Products';
 const ENDPOINT = 'https://example.workers.dev/mcp';
 
-class FakeR2Bucket implements R2BucketLike {
+export class FakeR2Bucket implements R2BucketLike {
   readonly objects = new Map<string, Uint8Array>();
 
   async put(key: string, value: Uint8Array): Promise<void> {
@@ -99,7 +99,7 @@ class SqliteStatement
   }
 }
 
-class SqliteProjectionDatabase
+export class SqliteProjectionDatabase
   implements
     ProjectionMigrationDatabaseLike,
     D1CatalogDatabaseLike,

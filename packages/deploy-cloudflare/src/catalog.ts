@@ -7,6 +7,7 @@ import {
   type CatalogSearchHit,
   type CatalogStore,
   escapeFtsQuery,
+  LoreError,
   NATIVE_UNIT_LIMITS,
 } from '@lorepack/core/worker';
 
@@ -116,11 +117,13 @@ FROM artifacts a
 WHERE a.project_id = ? AND a.build_id = ?
 ORDER BY a.relative_path`;
 
-const ARTIFACT_QUERY = `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
+const artifactQuery = (
+  by: 'id' | 'path',
+) => `SELECT id, relative_path AS relativePath, display_path AS displayPath, title,
        status, authority, media_type AS mediaType, object_hash AS objectHash
 FROM artifacts
-WHERE project_id = ? AND build_id = ? AND (id = ? OR relative_path = ?)
-LIMIT 1`;
+WHERE project_id = ? AND build_id = ? AND ${by === 'id' ? 'id' : 'relative_path'} = ?
+ORDER BY id LIMIT 2`;
 
 const NODES_QUERY = `SELECT id, artifact_id AS artifactId, kind, ordinal, title, text,
        heading_path AS headingPath, line_start AS lineStart, line_end AS lineEnd,
@@ -189,15 +192,25 @@ export class D1CatalogStore implements CatalogStore {
     }));
   }
 
-  async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
-    const row = (
-      await this.#run<ArtifactRow>(ARTIFACT_QUERY, [
-        this.#namespace.projectId,
-        this.#namespace.buildId,
-        idOrPath,
-        idOrPath,
-      ])
-    )[0];
+  async artifact(reference: string, by: 'id' | 'path'): Promise<CatalogArtifact | null> {
+    const rows = await this.#run<ArtifactRow>(artifactQuery(by), [
+      this.#namespace.projectId,
+      this.#namespace.buildId,
+      reference,
+    ]);
+    if (by === 'path' && rows.length > 1) {
+      throw new LoreError(
+        'LORE_E_INVALID_ARGUMENT',
+        'This source path matches multiple artifacts.',
+        {
+          subject: reference,
+          remediation:
+            'Use an artifactId from search results or source inventory to select one document.',
+          details: { artifactIds: rows.map((row) => row.id) },
+        },
+      );
+    }
+    const row = rows[0];
     if (row === undefined) return null;
     return {
       artifactId: row.id,
