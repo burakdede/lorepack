@@ -1,0 +1,222 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 2673,
+    "contentHash": "4d1b940096109062c4d834a4e5f0d4f68c631c319c6cf1b948c84fba19ef3138",
+    "displayPath": "documents/xlsx/pricing.xlsx",
+    "id": "fixtures:documents/xlsx/pricing.xlsx",
+    "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "metadata": {
+      "date1904": false,
+      "normalizationVersion": 1,
+      "sheets": [
+        "Products",
+        "Owners"
+      ]
+    },
+    "parserId": "xlsx",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/xlsx/pricing.xlsx",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "pricing"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+      "id": "fixtures:documents/xlsx/pricing.xlsx#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+        "relativePath": "documents/xlsx/pricing.xlsx"
+      },
+      "metadata": {
+        "sheets": [
+          "Products",
+          "Owners"
+        ]
+      },
+      "ordinal": 0,
+      "revisionHash": "9283cda3ae7226c8a138b315cea7ede32d575f0317cd4e9b474a2dc716b5d1b9",
+      "title": "pricing"
+    },
+    {
+      "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+      "id": "fixtures:documents/xlsx/pricing.xlsx#0.1",
+      "kind": "sheet",
+      "locator": {
+        "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+        "headingPath": [
+          "Products"
+        ],
+        "relativePath": "documents/xlsx/pricing.xlsx"
+      },
+      "metadata": {
+        "cellRange": "A1:C3",
+        "imported": true,
+        "rowCount": 2,
+        "sheet": "Products",
+        "tableId": "fixtures:documents/xlsx/pricing.xlsx#products"
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/xlsx/pricing.xlsx#0",
+      "revisionHash": "5082f6239ebf50e32f7cd5846189ae8cee3749f8d05bd6a76e0c8ca4c84d8c5e",
+      "text": "Sheet Products at A1:C3: 2 rows, 3 columns.\nColumns: sku (text), price (real), enabled (boolean).\nFirst rows:\nA-1 | 12.5 | true\nB-2 | 8 | false",
+      "title": "Products"
+    },
+    {
+      "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+      "id": "fixtures:documents/xlsx/pricing.xlsx#0.2",
+      "kind": "sheet",
+      "locator": {
+        "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+        "headingPath": [
+          "Owners"
+        ],
+        "relativePath": "documents/xlsx/pricing.xlsx"
+      },
+      "metadata": {
+        "cellRange": "A1:B2",
+        "imported": true,
+        "rowCount": 1,
+        "sheet": "Owners",
+        "tableId": "fixtures:documents/xlsx/pricing.xlsx#owners"
+      },
+      "ordinal": 2,
+      "parentId": "fixtures:documents/xlsx/pricing.xlsx#0",
+      "revisionHash": "cd9559aee70e845cb6a8088df176df8887d45c0b6b45a296f35716c90630e60d",
+      "text": "Sheet Owners at A1:B2: 1 row, 2 columns.\nColumns: role (text), name (text).\nFirst rows:\nRelease | Ada",
+      "title": "Owners"
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "sku",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": "B-2",
+            "min": "A-1",
+            "nullCount": 0
+          },
+          "type": "text"
+        },
+        {
+          "name": "price",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": 12.5,
+            "min": 8,
+            "nullCount": 0
+          },
+          "type": "real"
+        },
+        {
+          "name": "enabled",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": true,
+            "min": false,
+            "nullCount": 0
+          },
+          "type": "boolean"
+        }
+      ],
+      "locator": {
+        "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+        "cellRange": "A1:C3",
+        "relativePath": "documents/xlsx/pricing.xlsx",
+        "sheet": "Products"
+      },
+      "metadata": {
+        "cellRange": "A1:C3",
+        "date1904": false,
+        "formulas": [
+          "B2=10+2.5"
+        ],
+        "headerReason": "row 1 is a header above data",
+        "headerRow": 1,
+        "mergedRanges": [],
+        "normalizationVersion": 1,
+        "sheet": "Products"
+      },
+      "name": "Products",
+      "rows": [
+        [
+          "A-1",
+          12.5,
+          true
+        ],
+        [
+          "B-2",
+          8,
+          false
+        ]
+      ],
+      "sheet": "Products",
+      "tableId": "fixtures:documents/xlsx/pricing.xlsx#products"
+    },
+    {
+      "columns": [
+        {
+          "name": "role",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 1,
+            "distinctIsExact": true,
+            "max": "Release",
+            "min": "Release",
+            "nullCount": 0
+          },
+          "type": "text"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 1,
+            "distinctIsExact": true,
+            "max": "Ada",
+            "min": "Ada",
+            "nullCount": 0
+          },
+          "type": "text"
+        }
+      ],
+      "locator": {
+        "artifactId": "fixtures:documents/xlsx/pricing.xlsx",
+        "cellRange": "A1:B2",
+        "relativePath": "documents/xlsx/pricing.xlsx",
+        "sheet": "Owners"
+      },
+      "metadata": {
+        "cellRange": "A1:B2",
+        "date1904": false,
+        "formulas": [],
+        "headerReason": "row 1 is a header above data",
+        "headerRow": 1,
+        "mergedRanges": [],
+        "normalizationVersion": 1,
+        "sheet": "Owners"
+      },
+      "name": "Owners",
+      "rows": [
+        [
+          "Release",
+          "Ada"
+        ]
+      ],
+      "sheet": "Owners",
+      "tableId": "fixtures:documents/xlsx/pricing.xlsx#owners"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,134 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 44,
+    "contentHash": "856402778b3843da87a0089e6ee87bff898dca1ce86ebb477b1e01389716775b",
+    "displayPath": "documents/csv/pricing.csv",
+    "id": "fixtures:documents/csv/pricing.csv",
+    "mediaType": "text/csv",
+    "metadata": {
+      "delimiter": ",",
+      "normalizationVersion": 1
+    },
+    "parserId": "csv",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/csv/pricing.csv",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "pricing"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/csv/pricing.csv",
+      "id": "fixtures:documents/csv/pricing.csv#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/csv/pricing.csv",
+        "lineEnd": 3,
+        "lineStart": 1,
+        "relativePath": "documents/csv/pricing.csv"
+      },
+      "metadata": {},
+      "ordinal": 0,
+      "revisionHash": "9283cda3ae7226c8a138b315cea7ede32d575f0317cd4e9b474a2dc716b5d1b9",
+      "title": "pricing"
+    },
+    {
+      "artifactId": "fixtures:documents/csv/pricing.csv",
+      "id": "fixtures:documents/csv/pricing.csv#0.1",
+      "kind": "table",
+      "locator": {
+        "artifactId": "fixtures:documents/csv/pricing.csv",
+        "lineEnd": 3,
+        "lineStart": 1,
+        "relativePath": "documents/csv/pricing.csv"
+      },
+      "metadata": {
+        "columns": [
+          "sku",
+          "price",
+          "enabled"
+        ],
+        "rowCount": 2,
+        "tableId": "fixtures:documents/csv/pricing.csv#table"
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/csv/pricing.csv#0",
+      "revisionHash": "cc9b71849f519ee3e05ca9131d59bfdaf807a4b0d8b35f21adeefdcd0f91126b",
+      "text": "Table pricing: 2 rows, 3 columns.\nColumns: sku (text), price (real), enabled (boolean).\nFirst rows:\nA-1 | 12.5 | true\nB-2 | 8 | false",
+      "title": "pricing"
+    }
+  ],
+  "tables": [
+    {
+      "columns": [
+        {
+          "name": "sku",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": "B-2",
+            "min": "A-1",
+            "nullCount": 0
+          },
+          "type": "text"
+        },
+        {
+          "name": "price",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": 12.5,
+            "min": 8,
+            "nullCount": 0
+          },
+          "type": "real"
+        },
+        {
+          "name": "enabled",
+          "nullable": false,
+          "statistics": {
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "max": true,
+            "min": false,
+            "nullCount": 0
+          },
+          "type": "boolean"
+        }
+      ],
+      "locator": {
+        "artifactId": "fixtures:documents/csv/pricing.csv",
+        "lineEnd": 3,
+        "lineStart": 1,
+        "relativePath": "documents/csv/pricing.csv"
+      },
+      "metadata": {
+        "delimiter": ",",
+        "delimiterReason": "consistent 3 fields across 3 sampled rows",
+        "hasHeader": true,
+        "headerReason": "row 1 is all non-empty text",
+        "inferenceSampleRows": 2,
+        "normalizationVersion": 1
+      },
+      "name": "pricing",
+      "rows": [
+        [
+          "A-1",
+          12.5,
+          true
+        ],
+        [
+          "B-2",
+          8,
+          false
+        ]
+      ],
+      "tableId": "fixtures:documents/csv/pricing.csv#table"
+    }
+  ],
+  "warnings": []
+}

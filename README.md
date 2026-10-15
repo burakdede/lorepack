@@ -506,6 +506,8 @@ Release preparation uses Changesets 3.0.3 with the existing private-package vers
 Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
 Their bounded propagation retries require successful upload evidence for the newer API.
 Contract tests use the same MCP client version as the shipped CLI.
+Committed [parser golden fixtures](fixtures/README.md) cover every supported format,
+including typed tables, page locators and visible loss warnings.
 `pnpm check:supply-chain` checks production dependencies and rejects High or Critical
 findings in contributor dependencies.
 

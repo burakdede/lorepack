@@ -1,0 +1,118 @@
+{
+  "artifact": {
+    "authority": 50,
+    "byteSize": 1279,
+    "contentHash": "9d0f9026c35e3eeb955c054784abf8111b2fd7e30fd8db3f0d50d1aab1fbc53a",
+    "displayPath": "documents/pdf/release-guide.pdf",
+    "id": "fixtures:documents/pdf/release-guide.pdf",
+    "mediaType": "application/pdf",
+    "metadata": {
+      "pages": 3
+    },
+    "parserId": "pdf-text",
+    "parserVersion": "0.1.0",
+    "relativePath": "documents/pdf/release-guide.pdf",
+    "sourceId": "fixtures",
+    "status": "active",
+    "supersedes": [],
+    "title": "Release guide"
+  },
+  "nodes": [
+    {
+      "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+      "id": "fixtures:documents/pdf/release-guide.pdf#0",
+      "kind": "document",
+      "locator": {
+        "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+        "relativePath": "documents/pdf/release-guide.pdf"
+      },
+      "metadata": {
+        "pages": 3,
+        "textNormalizationVersion": 1
+      },
+      "ordinal": 0,
+      "revisionHash": "06694d18844029c380279d0e400664959c9d623d2ad47b55bb73adbbd9cf69eb",
+      "title": "Release guide"
+    },
+    {
+      "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+      "id": "fixtures:documents/pdf/release-guide.pdf#0.1",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+        "page": 1,
+        "relativePath": "documents/pdf/release-guide.pdf"
+      },
+      "metadata": {
+        "page": 1
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/pdf/release-guide.pdf#0",
+      "revisionHash": "6833bbf15fd5f57d854f1dd9f3d61058db3e64d5b2d9e03d5ef17df5d7f5aaca",
+      "title": "Page 1"
+    },
+    {
+      "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+      "id": "fixtures:documents/pdf/release-guide.pdf#0.1.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+        "headingPath": [
+          "Page 1"
+        ],
+        "page": 1,
+        "relativePath": "documents/pdf/release-guide.pdf"
+      },
+      "metadata": {
+        "page": 1
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/pdf/release-guide.pdf#0.1",
+      "revisionHash": "197d9adf0e5a55ed40df79f9d70ac168696c667d8bbfff5b68e0015a5aec054d",
+      "text": "Release guide Keep the approved build."
+    },
+    {
+      "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+      "id": "fixtures:documents/pdf/release-guide.pdf#0.3",
+      "kind": "section",
+      "locator": {
+        "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+        "page": 3,
+        "relativePath": "documents/pdf/release-guide.pdf"
+      },
+      "metadata": {
+        "page": 3
+      },
+      "ordinal": 3,
+      "parentId": "fixtures:documents/pdf/release-guide.pdf#0",
+      "revisionHash": "686b941c9183f2d8c9e4de83ce86e74cbe6455043c8cc97ec0500db000b4ee48",
+      "title": "Page 3"
+    },
+    {
+      "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+      "id": "fixtures:documents/pdf/release-guide.pdf#0.3.1",
+      "kind": "paragraph",
+      "locator": {
+        "artifactId": "fixtures:documents/pdf/release-guide.pdf",
+        "headingPath": [
+          "Page 3"
+        ],
+        "page": 3,
+        "relativePath": "documents/pdf/release-guide.pdf"
+      },
+      "metadata": {
+        "page": 3
+      },
+      "ordinal": 1,
+      "parentId": "fixtures:documents/pdf/release-guide.pdf#0.3",
+      "revisionHash": "d32c206bacf15f095f6ce5677ee39387fb6041036f46a0ef8c50c5bf04617658",
+      "text": "Rollback guide Activate the previous build."
+    }
+  ],
+  "warnings": [
+    {
+      "code": "pdf-pages-without-text",
+      "message": "1 of 3 pages have no text layer and contributed nothing. Optical character recognition is out of scope for v0.1."
+    }
+  ]
+}
