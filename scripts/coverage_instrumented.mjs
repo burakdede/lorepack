@@ -43,6 +43,7 @@ const capturedCommandLaunch = Symbol.for('lorepack.capturedCommandLaunch');
 const compiledContexts = Symbol.for('lorepack.compiledCaptureContexts');
 const imageCollectors = Symbol.for('lorepack.nativeImageCollectors');
 const workerCollectors = Symbol.for('lorepack.nativeWorkerCollectors');
+const childCollectors = Symbol.for('lorepack.nativeChildCollectors');
 const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const projectCaptureOwners = new Map();
 const earlyCounterStreams = new Map();
@@ -1159,6 +1160,7 @@ export async function runCapturedCli(
   commandEntries = [],
   entrypointSha256,
   artifacts,
+  initialization,
 ) {
   const projectRoot = realpathSync(process.cwd());
   const profile = process.execArgv.filter((value) => !value.startsWith('--import='));
@@ -1186,6 +1188,11 @@ export async function runCapturedCli(
   if (artifacts !== undefined) verifyArtifactGraph(artifacts);
   if (entrypointSha256 !== undefined && digest(readFileSync(entrypoint)) !== entrypointSha256)
     throw new Error('Captured CLI entrypoint differs from its receipt.');
+  if (initialization !== undefined) {
+    if (!artifacts?.some((artifact) => artifact.path === initialization))
+      throw new Error('Native CLI initializer differs from its receipt.');
+    await import(pathToFileURL(initialization).href);
+  }
   const capture = registerForkCapture(entries, directory);
   let commands;
   try {
@@ -1354,7 +1361,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
   const entry = join(directory, 'capture-entry.mjs');
   const entrypoint = join(directory, 'public-entry.js');
   const entrypointSha256 = digest(readFileSync(entrypoint));
-  const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)},${JSON.stringify(artifacts)});\n`;
+  const bootstrap = `import {runCapturedCli} from ${JSON.stringify(import.meta.url)}; await runCapturedCli(${JSON.stringify(entrypoint)},${JSON.stringify(forkEntries)},${JSON.stringify(captureDirectory)},${JSON.stringify(commandEntries)},${JSON.stringify(entrypointSha256)},${JSON.stringify(artifacts)},${JSON.stringify(initialization)});\n`;
   writeFileSync(entry, bootstrap, { flag: 'wx' });
   const launch = {
     schema: 1,
@@ -1710,6 +1717,50 @@ function registerWorkerCollector(emit) {
   globalThis[workerCollectors].add(emit);
 }
 
+function registerChildCollector(emit) {
+  if (!globalThis[childCollectors]) {
+    const collectors = new Set();
+    globalThis[childCollectors] = collectors;
+    const node = realpathSync(process.execPath);
+    const observe = (kind, file, args, options) => {
+      if (
+        (file !== process.execPath && file !== node) ||
+        options?.[capturedForkSpawn] ||
+        options?.[capturedCommandSpawn] ||
+        ['--version', '--help'].includes(args?.[0])
+      )
+        return;
+      const record = {
+        state: 'unregistered-node',
+        kind,
+        argumentsSha256: digest(JSON.stringify(args ?? null)),
+      };
+      for (const observer of collectors) observer(record);
+    };
+    const prototype = childProcess.ChildProcess.prototype;
+    const spawn = prototype.spawn;
+    prototype.spawn = function (options) {
+      observe('async', options.file, options.args?.slice(1), options);
+      return spawn.call(this, options);
+    };
+    for (const name of ['spawnSync', 'execFileSync']) {
+      const original = childProcess[name];
+      childProcess[name] = function (...parameters) {
+        const optionsIndex = Array.isArray(parameters[1]) || parameters[1] == null ? 2 : 1;
+        observe(
+          name,
+          parameters[0],
+          Array.isArray(parameters[1]) ? parameters[1] : [],
+          parameters[optionsIndex],
+        );
+        return original.apply(this, parameters);
+      };
+    }
+    syncBuiltinESMExports();
+  }
+  globalThis[childCollectors].add(emit);
+}
+
 export function initializeEarlyCounterStream(filename, fd, coverageVariable, directory) {
   if (process.execArgv[0] !== '--require' || process.execArgv[1] !== filename)
     throw new Error('Early counter initializer arguments differ.');
@@ -1793,6 +1844,7 @@ export function registerCounterStream(fd, coverageVariable = variable) {
   globalThis[collector] = true;
   registerImageCollector((record) => emit({ ...identity, ...record }));
   registerWorkerCollector((record) => emit({ ...identity, ...record }));
+  registerChildCollector((record) => emit({ ...identity, ...record }));
   afterProcessExit((exitCode) => emit({ ...identity, state: 'completed', exitCode }));
   return identity.id;
 }
@@ -1985,6 +2037,8 @@ async function replayCounterRecords(snapshot, records, hostClose) {
             worker.closed = record.exitCode;
           }
         }
+      } else if (record.state === 'unregistered-node') {
+        throw new Error('Native subprocess lacks registered capture custody.');
       } else if (record.state === 'completed') {
         if (completed) throw new Error('Repeated native counter completion.');
         for (const key of ['id', 'schema', 'provider', 'pid', 'threadId'])

@@ -483,6 +483,13 @@ actual `--check` argument, plus the FTS5 probe. All twenty run ordinarily and me
 Each receipt records its argument array; status, signal, stdout and stderr must agree.
 A failed ordinary command stops before measured execution. Writing documentation modes
 are never used by this capture.
+Output parity alone does not qualify native execution. Counter streams observe Node
+launches through asynchronous spawn/fork and synchronous spawn/exec APIs; a launch
+without registered custody rejects replay. This does not change its arguments, streams
+or grants. Argument values are hashed in the observer. The CLI initializes this observer
+after validating its artifact graph and before installing its registered launch adapters.
+Complete nested-script child capture remains required before the expanded command
+workflow can qualify; an earlier parent-only pilot is retained as ineligible evidence.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
 An explicit fixture collector can temporarily layer over the campaign collector.
 Its launches retain their own receipts and counter streams; restoring it reinstates the

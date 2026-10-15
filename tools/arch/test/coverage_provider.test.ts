@@ -1675,6 +1675,38 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
       }
     });
 
+    it.each(['spawnSync', 'execFileSync', 'spawn', 'fork'] as const)(
+      'rejects missing custody for an owned grandchild launched with %s',
+      async (api) => {
+        const { project, captured, built } = scenario;
+        const parent = join(project, 'nested-verification.mjs');
+        const child = JSON.stringify(join(project, 'packages/core/dist/shared.js'));
+        const body =
+          api === 'spawnSync'
+            ? `const child=childProcess.spawnSync(process.execPath,[${child}],{encoding:'utf8'});if(child.status!==0)throw new Error(child.stderr);`
+            : api === 'execFileSync'
+              ? `childProcess.execFileSync(process.execPath,[${child}],{encoding:'utf8'});`
+              : `const child=${
+                  api === 'fork'
+                    ? `childProcess.fork(${child},[],{stdio:['ignore','pipe','pipe','ipc']})`
+                    : `childProcess.spawn(process.execPath,[${child}],{stdio:['ignore','pipe','pipe']})`
+                };
+await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error('Owned child failed')));});`;
+        writeFileSync(parent, `import * as childProcess from 'node:child_process';\n${body}`);
+        const parity = await captureVerificationCommands(captured, built.launch, [
+          'nested-verification.mjs',
+        ]);
+        expect(parity.status).toBe('Pass');
+        const registry = createCampaignRegistry(captured, built.launch);
+        await expect(
+          reconcileForkCapture(captured, built.launch.captureDirectory, [
+            ...registry.forkEntries,
+            ...registry.commandEntries,
+          ]),
+        ).rejects.toThrow('Native subprocess lacks registered capture custody.');
+      },
+    );
+
     it('rejects changed command output and restores the surrounding capture', async () => {
       const { project, captured, built } = scenario;
       const preload = join(project, 'command-output-observer.mjs');
@@ -1706,6 +1738,24 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
         captureVerificationCommands(captured, built.launch, ['packages/cli/dist/public-entry.js']),
       ).rejects.toThrow('Ordinary verification command failed');
       expect(() => readdirSync(built.launch.captureDirectory)).toThrow();
+    });
+
+    it('refuses an initializer outside the validated artifact graph before loading it', () => {
+      const { project, repository, built } = scenario;
+      const launch = built.launch;
+      const outside = join(project, 'outside-receipt.mjs');
+      writeFileSync(outside, "process.stdout.write('unverified initializer ran');");
+      const script = `import {runCapturedCli} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+await runCapturedCli(${JSON.stringify(launch.entrypoint)},${JSON.stringify(launch.forkEntries)},${JSON.stringify(launch.captureDirectory)},${JSON.stringify(launch.commandEntries)},${JSON.stringify(launch.entrypointSha256)},${JSON.stringify(launch.artifacts)},${JSON.stringify(outside)});`;
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+        cwd: project,
+        env: {},
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Native CLI initializer differs from its receipt.');
+      expect(() => readdirSync(launch.captureDirectory)).toThrow();
     });
 
     it('reconciles actual parent counters and every CLI child', async () => {
