@@ -7,6 +7,7 @@ import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { describe, expect, it } from 'vitest';
 import {
   activeCloudflareWorkerName,
+  addCloudflareCleanupProbe,
   addCloudflareTarget,
   addResumeMutationToken,
   addSemanticSearchCapability,
@@ -727,6 +728,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(rolledBackRollbackSearch.structuredContent.buildId).toBe(localBuildId);
         expect(rolledBackRollbackSearch.structuredContent.hits.length).toBeGreaterThan(0);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {
@@ -795,6 +797,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         );
         expect(resumedSearch.structuredContent.buildId).toBe(buildId);
         expect(resumedSearch.structuredContent.hits).toHaveLength(0);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {
@@ -835,6 +838,7 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
         expect(denied.stderr).toContain('semantic-search');
         expect(denied.stderr).toContain('--allow-capability-loss semantic-search');
         expect(existsSync(join(project.root, RECEIPTS_DIRECTORY))).toBe(false);
+        await addCloudflareCleanupProbe(target);
       } finally {
         try {
           if (target !== undefined) {

@@ -175,12 +175,7 @@ export async function provisionCloudflareSmokeTarget(
   };
 }
 
-export async function teardownCloudflareSmokeTarget(
-  target: CloudflareSmokeTarget,
-  projectName: string,
-  projectRoot: string,
-  buildIds: readonly BuildId[],
-): Promise<void> {
+async function verifyCloudflareSmokeTarget(target: CloudflareSmokeTarget, projectName: string) {
   const scope = readCloudflareTestingEnv(target.wranglerEnv);
   const ownership = await readCloudflareOwnership(
     cloudflareOwnershipBucketName(scope),
@@ -201,6 +196,41 @@ export async function teardownCloudflareSmokeTarget(
   ) {
     throw new Error('Cloudflare teardown target does not match its recorded ownership.');
   }
+  return { scope, ownership, ownedNames };
+}
+
+export async function addCloudflareCleanupProbe(target: CloudflareSmokeTarget): Promise<void> {
+  await verifyCloudflareSmokeTarget(target, target.ownership.projectName);
+  const directory = mkdtempSync(join(tmpdir(), 'lore-cloudflare-cleanup-probe-'));
+  try {
+    const file = join(directory, 'probe.txt');
+    writeFileSync(file, 'Owned acceptance cleanup probe.\n', { mode: 0o600 });
+    await runWrangler(
+      [
+        'r2',
+        'object',
+        'put',
+        `${target.objectsBucketName}/acceptance-cleanup-probe`,
+        '--file',
+        file,
+        '--content-type',
+        'text/plain',
+        '--remote',
+      ],
+      target.wranglerEnv,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+export async function teardownCloudflareSmokeTarget(
+  target: CloudflareSmokeTarget,
+  projectName: string,
+  projectRoot: string,
+  buildIds: readonly BuildId[],
+): Promise<void> {
+  const { scope, ownership, ownedNames } = await verifyCloudflareSmokeTarget(target, projectName);
   const artifactsRoot = cloudflareArtifactDirectory(process.env);
   const artifactDirectory =
     artifactsRoot === null ? null : join(artifactsRoot, sanitizeName(projectName));

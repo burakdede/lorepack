@@ -86,7 +86,10 @@ catalog and tables databases. Missing resources from a partial provisioning atte
 accepted. An API failure, malformed page or repeated cursor stops cleanup. The ledger entry
 is deleted only after all resource deletions succeed, so a failed cleanup can be retried.
 Normal teardown also verifies the stored intent against the actual target before deleting
-its resources and retiring its record. Existing operation deadlines and bucket-delete retry
+its resources and retiring its record. Each credentialed scenario adds an operational
+cleanup probe outside the build's known object keys immediately before teardown. Real
+bucket deletion can succeed only after listing and removing that otherwise unreferenced
+object. This complements the local multi-page and failed-deletion regressions. Existing operation deadlines and bucket-delete retry
 limits are unchanged.
 
 Legacy resources without ledger records are left untouched, even if their names resemble

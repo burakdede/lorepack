@@ -88,6 +88,7 @@ import {
   readCloudflareOwnershipRecord,
 } from '../src/cloudflare_ownership.js';
 import {
+  addCloudflareCleanupProbe,
   cleanupOwnedCloudflareResources,
   cloudflareOwnershipBucketName,
   provisionCloudflareSmokeTarget,
@@ -383,6 +384,10 @@ describe('durable Cloudflare acceptance ownership, issue 622', () => {
     seed(target.ownership);
     remote.workers.add(target.workerName);
     remote.workers.add(`${PROJECT}-runtime`);
+    await addCloudflareCleanupProbe(target);
+    expect(remote.buckets.get(target.objectsBucketName)?.get('acceptance-cleanup-probe')).toBe(
+      'Owned acceptance cleanup probe.\n',
+    );
     await expect(
       teardownCloudflareSmokeTarget(
         { ...target, tablesDatabaseName: 'production-tables' },
