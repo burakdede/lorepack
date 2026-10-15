@@ -455,6 +455,7 @@ uses the same byte serialization in local Node and the portable Worker-safe core
 Retained-object checksum verification streams bytes and refuses corruption without modifying
 evidence. Archive verification requires a compatible manifest, catalog and complete identity inputs.
 First-run state is initialized privately and published without replacing existing state.
+Damaged catalog ledgers produce a typed error and rebuild guidance without rewriting the build.
 It recomputes catalog roots and the build ID, checks required content-addressed objects,
 and refuses link or device entries. Malformed verifier inputs are refused; incompatible
 hashing versions retain their typed error. Success reports integrity only and an unsigned publisher.

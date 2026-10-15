@@ -51,6 +51,11 @@ runtime references. They verify the default five-build window with tied timestam
 failed attempts, candidate-object protection during cleanup, and reader explanations from
 active requests through an idle cached catalog to backend shutdown.
 
+Damaged-catalog recovery tests remove the migration ledger or its identifier column from a
+real sealed database. Reads refuse the damaged catalog without changing its bytes, then
+rebuilding restores the same content-derived build ID and provenance-bearing search.
+See [`damaged-build.test.ts`](../../packages/cli/test/damaged-build.test.ts).
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build
