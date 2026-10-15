@@ -112,6 +112,12 @@ incomplete common table expressions. An escaped quote and separator in a column
 name round-trip through real SQLite, and single-edit keyword advice stays specific.
 These cases exercise statement shape without changing query policy or engine limits.
 
+Archive parent-process tests run the actual child for a valid catalog and check
+pre-aborted cancellation.
+Separate installed-layout fixtures use a copy of the compiled parent to exercise
+missing, failed and malformed helpers. No helper reply without a logical proof is
+accepted, and retained catalog/identity bytes remain unchanged in every case.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
