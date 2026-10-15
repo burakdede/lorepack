@@ -504,7 +504,8 @@ The default suite retains the original audit scheduling, including package-level
 Coverage preparation and measurement inherit those settings without a global worker cap.
 Read-only verification scripts also retain exact ordinary/measured output parity.
 Temporary-script capture preserves the exact project-write profile and preload failures.
-Contract tests cover HTTP hosts, retention, activation, archives, tables and offline reports.
+Contract tests cover HTTP hosts, retention with interrupted candidates and idle readers,
+activation, archives, tables and offline reports.
 Comparison tests check input identities, accounting and explicitly unmeasured fields.
 Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.
 Runtime-token tests cover malformed stored hashes and revocation with empty adapter results.
