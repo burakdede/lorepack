@@ -42,6 +42,7 @@ security-affecting change before release.
 | `.lore` linked outside the project is refused, and doctor reports it (#572) | `packages/core/test/config.test.ts`, `packages/cli/test/security.e2e.test.ts` | Covered |
 | Archive replacement retains private permissions, including its temporary file (#686) | `packages/backend-local/test/storage-faults.test.ts`, `packages/cli/test/pack-verify.e2e.test.ts` | Covered on POSIX; Windows lacks POSIX mode semantics |
 | Disk-full causes survive rollback and interrupted pack writes preserve the previous archive (#572) | `packages/backend-local/test/storage-faults.test.ts` | Covered |
+| `.lore` objects, cache and state are owner-only (#569) | `packages/cli/test/lore-permissions.test.ts`, `packages/core/test/atomic-write.test.ts` | Covered on POSIX; Windows relies on profile ACLs |
 | Model-facing tools are read-only | `tools/contract/test/mcp.test.ts` | Covered |
 
 ## Commands To Run For Sign-off

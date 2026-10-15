@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   LORE_DIRECTORY,
@@ -48,10 +48,10 @@ export function writeRemotePruneReceipt(
   projectRoot: string,
   receipt: RemoteRetentionReceipt,
 ): void {
-  mkdirSync(remotePruneReceiptsDirectory(projectRoot), { recursive: true });
   writeFileAtomic(
     remotePruneReceiptPath(projectRoot, receipt.receiptId),
     `${JSON.stringify(receipt, null, 2)}\n`,
+    { ownerOnly: true },
   );
 }
 

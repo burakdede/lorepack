@@ -18,6 +18,25 @@ physical: a sealed build never changes, and everything that does change lives el
   lock.reclaimed-*/         tombstones of reclaimed locks, removed after an hour
 ```
 
+## Permissions
+
+On POSIX, new paths under `.lore` are created owner-only: directories 0700, files0600
+under the usual umask022 (#569). A stricter umask can further restrict owner access. `objects/` and `cache/` hold a normalized copy of every source, so a document the
+owner made 0600 used to come back out as a world-readable 0644 object, and on a shared machine
+(a CI runner, a lab server, a development VM) another user could read it. The modes are set
+when each file or directory is created, including the temporary file an atomic write renames
+into place, so the content is never readable by anyone else even briefly. SQLite databases are
+created 0600 before SQLite opens them, and their journals inherit that mode.
+
+Lorepack sets a mode only when it creates something; it never changes the mode of an existing
+`.lore`, so a project built by an earlier version keeps its old modes until `.lore` is removed
+and rebuilt. Sharing one `.lore` between Unix users is not supported in v0.1 (multi-user
+tenancy is out of scope): each user builds their own.
+
+Windows has no equivalent POSIX mode bits for Node to set. There, `.lore` inherits the
+parent directory ACLs. Lorepack does not install or audit a separate Windows ACL; use a
+parent directory whose access matches the project owner's requirements.
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build

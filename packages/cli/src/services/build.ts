@@ -607,18 +607,22 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           writeFileAtomic(
             join(candidate.path, 'manifest.json'),
             `${JSON.stringify(manifest, null, 2)}\n`,
+            { ownerOnly: true },
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'validation.json'),
             `${JSON.stringify({ ...report, checks: report.checksRun.map((name) => ({ name, ok: !report.failures.some((failure) => failure.check === name) })) }, null, 2)}\n`,
+            { ownerOnly: true },
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'warnings.json'),
             `${JSON.stringify(warnings, null, 2)}\n`,
+            { ownerOnly: true },
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'build-id-inputs.json'),
             `${JSON.stringify(buildIdInputs, null, 2)}\n`,
+            { ownerOnly: true },
           );
           writeFileAtomic(
             join(candidate.path, 'reports', 'canonical-hashes.json'),
@@ -631,6 +635,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
               null,
               2,
             )}\n`,
+            { ownerOnly: true },
           );
         } finally {
           db.close();

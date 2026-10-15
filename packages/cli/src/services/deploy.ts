@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type ActivationReceipt,
@@ -122,10 +122,10 @@ export function readReceipt(projectRoot: string, receiptId: string): DeploymentR
 }
 
 function writeReceipt(projectRoot: string, receipt: DeploymentReceipt): void {
-  mkdirSync(receiptsDirectory(projectRoot), { recursive: true });
   writeFileAtomic(
     receiptPath(projectRoot, receipt.receiptId),
     `${JSON.stringify(receipt, null, 2)}\n`,
+    { ownerOnly: true },
   );
 }
 
