@@ -580,6 +580,7 @@ Contract tests cover HTTP hosts, retention, activation, archives, tables and off
 Comparison tests check input identities, accounting and explicitly unmeasured fields.
 Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.
 Runtime-token tests cover malformed stored hashes and revocation with empty adapter results.
+Source-read tests check open-ended ranges and nested headings after source removal.
 The archived XLSX measurement command uses pinned parser dependencies and real fixture tests.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression

@@ -88,6 +88,10 @@ empty arrays; revocation must still remove access, report the removed count and
 leave an empty inventory. Header normalization is checked through the public
 authorizer, without exposing private comparison helpers.
 
+Sealed source-read cases cover parent-heading order, open-ended line ranges and plain
+text locators after source removal. PDF line-range refusals explain how to read the
+whole artifact without inventing missing line coordinates.
+
 The archived XLSX spike command resolves its libraries through the parser workspace.
 Actual ZIP/XML fixtures verify shared/cached strings, numeric/boolean/empty cells,
 formula text, date styles, merge ranges and named-sheet selection. Its sample stays
