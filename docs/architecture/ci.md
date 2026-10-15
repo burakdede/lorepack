@@ -62,6 +62,8 @@ adapter ports. They check rejected setup, login/account prerequisites, resource 
 receipt validation, including unchanged persisted bytes and no unintended mutation calls.
 These checks do not replace credentialed Cloudflare acceptance. The merged benchmark pricing
 regression also belongs to the strict audit program; unavailable prices cannot imply zero cost.
+Archive cancellation regressions are included too, covering default and custom abort reasons
+before helper creation without changing worker execution limits.
 Discovery tests remove actual file and directory sources after configuration resolves and assert
 unreadable warnings rather than invented artifacts. They also cover byte-unit boundaries and
 empty ignore negations. Run `pnpm exec vitest run packages/compiler/test/discover.test.ts`.
