@@ -6,7 +6,7 @@ export interface TempProject {
   /** Randomised absolute path. Building the same tree from two of these is the
    *  "different absolute workspace paths" determinism condition. */
   readonly root: string;
-  readonly write: (relativePath: string, contents: string) => void;
+  readonly write: (relativePath: string, contents: string | Uint8Array) => void;
   readonly path: (relativePath: string) => string;
 }
 
@@ -14,7 +14,7 @@ export interface TempProjectOptions {
   /** Directory to copy in, typically under `fixtures/`. */
   readonly from?: string;
   /** Inline files, keyed by POSIX-style relative path. */
-  readonly files?: Readonly<Record<string, string>>;
+  readonly files?: Readonly<Record<string, string | Uint8Array>>;
   readonly prefix?: string;
 }
 

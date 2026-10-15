@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
@@ -108,7 +108,7 @@ function fakeRemoteRollbackTarget(
 class SqliteStatement {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -116,7 +116,7 @@ class SqliteStatement {
   }
 
   bind(...values: unknown[]): SqliteStatement {
-    this.#bindings = values;
+    this.#bindings = values as SQLInputValue[];
     return this;
   }
 
@@ -128,7 +128,7 @@ class SqliteStatement {
       trimmed.startsWith('pragma') ||
       /\bRETURNING\b/i.test(this.#query)
     ) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
@@ -177,17 +177,13 @@ function writeCloudflareReceipt(root: string): void {
   );
 }
 
-interface FakeCloudflareObjectsBucket {
+type FakeCloudflareObjectsBucket = ReturnType<CloudflareResolverAdapter['openObjectsBucket']> & {
   readonly deletedKeys: string[];
   failOnDeleteKey: string | null;
   seed(key: string, value?: Uint8Array): void;
-}
+};
 
-function createFakeCloudflareObjectsBucket(): CloudflareResolverAdapter['openObjectsBucket'] extends (
-  ...args: never[]
-) => infer T
-  ? T & FakeCloudflareObjectsBucket
-  : never {
+function createFakeCloudflareObjectsBucket(): FakeCloudflareObjectsBucket {
   const objects = new Map<string, Uint8Array>();
   const deletedKeys: string[] = [];
   return {

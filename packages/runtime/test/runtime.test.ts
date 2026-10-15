@@ -4,6 +4,7 @@ import type {
   BuildManifest,
   BuildScope,
   CatalogArtifact,
+  CatalogArtifactSummary,
   CatalogNode,
   CatalogSearchCriteria,
   CatalogSearchHit,
@@ -55,7 +56,14 @@ it('refuses context adapters that omit native closure and releases the captured 
       return scope;
     },
   });
-  await expect(runtime.contextForTask({ task: 'match', budget: 8000 })).rejects.toMatchObject({
+  await expect(
+    runtime.contextForTask({
+      task: 'match',
+      budget: 8000,
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    }),
+  ).rejects.toMatchObject({
     code: 'LORE_E_SCHEMA_MISMATCH',
   });
   expect(provider.released).toBe(1);
@@ -91,6 +99,9 @@ function hitIn(buildId: BuildId): CatalogSearchHit {
     relativePath: 'guides/a.md',
     displayPath: 'guides/a.md',
     headingPath: ['Guides'],
+    page: null,
+    sheet: null,
+    cellRange: null,
     lineStart: 3,
     lineEnd: 4,
     status: 'active',
@@ -107,6 +118,11 @@ class FakeCatalog implements CatalogStore {
   constructor(private readonly buildId: BuildId) {}
   async manifest(): Promise<BuildManifest> {
     return manifestFor(this.buildId);
+  }
+  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+    const artifact = await this.artifact('guides/a.md');
+    if (artifact === null) throw new Error('Expected the catalog artifact fixture.');
+    return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 2, nodeCount: 3 }];
   }
   async countChunks(): Promise<number> {
     return 2;
@@ -140,6 +156,9 @@ class FakeCatalog implements CatalogStore {
         title: null,
         text: 'the body of the only node',
         headingPath: ['Guides'],
+        page: null,
+        sheet: null,
+        cellRange: null,
         lineStart: 3,
         lineEnd: 4,
       },
@@ -262,7 +281,11 @@ describe('the envelope', () => {
     for (const result of [
       await runtime.describeBuild(),
       await runtime.search({ query: 'a', limit: 5, includeArchived: false, debug: false }),
-      await runtime.contextForTask({ task: 'a match', includeArchived: false }),
+      await runtime.contextForTask({
+        task: 'a match',
+        includeArchived: false,
+        allowUnsupportedBudget: false,
+      }),
       await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 }),
     ]) {
       expect(result).toMatchObject(IDENTITY);
@@ -377,7 +400,11 @@ describe('the handle', () => {
     await runtime.listTables();
     await expect(runtime.describeTable('nope')).rejects.toThrow();
     await expect(runtime.queryTable({ tableId: 'nope', sql: 'SELECT 1' })).rejects.toThrow();
-    await runtime.contextForTask({ task: 'anything', includeArchived: false });
+    await runtime.contextForTask({
+      task: 'anything',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    });
     await runtime.readSource({ path: 'guides/a.md', lineStart: 3, lineEnd: 4 });
 
     expect(provider.acquired).toBe(7);
@@ -476,7 +503,11 @@ describe('activation, architecture section 15.2', () => {
 describe('capabilities this phase has not delivered yet', () => {
   it('assembles a bundle over any port, bounded and cited', async () => {
     const runtime = runtimeOver(new TrackingProvider());
-    const bundle = await runtime.contextForTask({ task: 'a match', includeArchived: false });
+    const bundle = await runtime.contextForTask({
+      task: 'a match',
+      includeArchived: false,
+      allowUnsupportedBudget: false,
+    });
 
     expect(bundle.buildId).toBe(BUILD_A);
     expect(bundle.profile).toBe('agent');
