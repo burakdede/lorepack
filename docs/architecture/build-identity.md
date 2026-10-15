@@ -109,8 +109,11 @@ what a build of the same directory contains, so two releases that disagree about
 not claim the same identity, and the cost is the same one-time rebuild a `compilerVersion`
 change already causes. The client configuration and credential patterns added for #573 and
 #585 moved every id once, before `0.1.0` was published; no published build carries the
-earlier list. The next change to the list should bump `DEFAULTS_VERSION` and say so in a
-changeset.
+earlier list. Defaults version2 also makes credential-shaped default rules case-insensitive
+(#633), while preserving written case for project rules. This version is part of
+`effectiveConfig`, so every new build gets a different identity from version1 even if it
+contains no affected files. The pattern list is unchanged. Future changes to default
+exclusions or their semantics must bump `DEFAULTS_VERSION` and include a changeset.
 
 ## Rules in build identity
 

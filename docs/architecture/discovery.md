@@ -23,21 +23,24 @@ Patterns are gitignore-style, evaluated with picomatch:
 The always-on exclusions from architecture section 19.2 are applied first, then
 `.loreignore`.
 
-## Credentials and client configuration are always excluded
+## Default credential and client configuration exclusions
 
 `ALWAYS_EXCLUDE` in `packages/core/src/config/defaults.ts` is built from two named lists, so
 each can be reasoned about on its own and neither can drift from the rules discovery runs:
 
 | List | Patterns | Why |
 |---|---|---|
-| `SECRET_SHAPED` | `.env*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `*.pfx`, `*.jks`, `*credentials*.json` | Section 19.2's filename guardrail. `lorepack init` names any it finds and promises they will not be indexed |
+| `SECRET_SHAPED` | `.env*`, `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*`, `*.p12`, `*.pfx`, `*.jks`, `*credentials*.json` | Section 19.2's filename guardrail. `lorepack init` names any it finds; their default rules match without regard to case |
 | `CLIENT_CONFIG` | `.mcp.json`, `.claude/`, `.codex/`, `.cursor/`, `.vscode/`, `*.lorepack-*.bak` | MCP client configuration, which `lorepack connect` itself writes into the project, and the backups it takes before each edit |
 
 Both are spread into `ALWAYS_EXCLUDE` rather than repeated, and a unit test asserts each is a
 subset of it. They were separate literals until #585, and `*.jks` and `*credentials*.json`
 were warned about at init and then built. `init` also matches with discovery's own matcher
 rather than a regex of its own, so the files it names are exactly the files the build leaves
-out: matching is case-sensitive, as everywhere else in discovery.
+out by default. Only `SECRET_SHAPED` default rules are case-insensitive, including at
+nested paths: `Prod-Credentials.json`, `ID_RSA` and `Server.PEM` are excluded and named
+at init. Other defaults and all `.loreignore` rules remain case-sensitive. An exact
+negation such as `!Prod-Credentials.json` explicitly re-includes that file.
 
 The client entries exist because `init` makes the whole project a source and `connect` then
 writes into it. Those files routinely carry tokens in a server's `env` block, and before
@@ -55,6 +58,21 @@ and name the configuration file again after it, since the last matching rule win
 !.vscode/
 .vscode/mcp.json
 ```
+
+### Credential case verification
+
+Manual CLI check on2026-10-15 with Node24.21.0 on macOS arm64:
+
+- Place ordinary `guide.md` beside `Prod-Credentials.json`, `ID_RSA` and `Server.PEM`.
+  `lorepack init` names all three and says they are excluded by default.
+- Run `build`, then `inspect exclusions`: the three names appear under their default
+  rules. Searching the JSON fixture's unique text returns no matches; `guide.md` remains.
+- Replace `.loreignore` with `!Prod-Credentials.json`, rebuild and search again: the JSON
+  file becomes retrievable. A repeated `init` still describes default exclusion, without
+  claiming that the explicit opt-in is ineffective.
+
+Automated coverage: compiler `discover.test.ts`, CLI `secret-exclusions.e2e.test.ts`
+(including the actual binary) and core `hash.test.ts`. Native OS checks remain required.
 
 ## Source roots are disjoint identities
 

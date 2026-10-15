@@ -360,6 +360,9 @@ lorepack export --task "prepare a cited rollback checklist"
 
 This is useful when a result is missing. It shows whether the file was parsed, excluded by a
 project rule, refused because no parser supports it, or simply did not match the query.
+Credential-shaped names such as `Prod-Credentials.json`, `ID_RSA` and `Server.PEM` are
+excluded by default regardless of case. `.loreignore` stays case-sensitive; an exact
+`!Prod-Credentials.json` explicitly opts that file in.
 
 ### Review context in Studio
 

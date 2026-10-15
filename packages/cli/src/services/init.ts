@@ -69,7 +69,7 @@ export function renderConfig(name: string, sources: readonly string[]): string {
 
 export function renderIgnore(): string {
   return [
-    '# Paths Lorepack never reads. Patterns are gitignore-style.',
+    '# Default exclusions. Use !pattern to explicitly re-include a path.',
     '# Everything here is excluded before this file is consulted; it is listed so the',
     '# defaults are visible and can be extended.',
     '',
@@ -85,12 +85,17 @@ export function renderIgnore(): string {
  * is a guardrail rather than a secret scanner, so contents are never read.
  *
  * Matched with discovery's own matcher, never a second implementation of the patterns. The
- * warning promises these files are not indexed, and a separate case-insensitive regex once
- * named `Prod-Credentials.json` while discovery, matching as written, built it (#585).
+ * warning describes the default exclusions. Both callers mark credential rules case-insensitive;
+ * project rules and explicit negations keep their written case.
  */
 export function findSecretShaped(root: string, limit = 5000): string[] {
   const matcher = createMatcher(
-    SECRET_SHAPED.map((pattern) => ({ pattern, negated: false, source: 'defaults' })),
+    SECRET_SHAPED.map((pattern) => ({
+      pattern,
+      negated: false,
+      source: 'defaults',
+      nocase: true,
+    })),
   );
   const found: string[] = [];
   let visited = 0;
