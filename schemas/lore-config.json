@@ -3,6 +3,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "build": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "enum": [
+            "permissive",
+            "strict"
+          ],
+          "type": "string"
+        },
+        "required": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheets": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "context": {
       "additionalProperties": false,
       "properties": {

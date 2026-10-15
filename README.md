@@ -459,6 +459,8 @@ actions remain explicit CLI or Studio operations performed by the developer.
 The alpha supports the document, text, PDF, CSV, and XLSX paths described in the parser guide.
 It preserves the structure those parsers expose and records unsupported or excluded files as
 warnings. Partly scanned PDFs name the unread pages in `lorepack inspect warnings`.
+Effective configuration exposes declared source-coverage settings through
+`lorepack config show --effective`.
 The default install has no Python, Docker, native add-on, model download, API key,
 account, or hosted service requirement.
 

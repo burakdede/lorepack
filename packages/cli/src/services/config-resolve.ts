@@ -101,6 +101,16 @@ export function resolveConfiguration(
   values.push(fromProjectOrDefaults('exclude', effective.exclude, true));
   values.push(fromProjectOrDefaults('followSymlinks', effective.followSymlinks, true));
   values.push(fromProjectOrDefaults('strictRules', effective.strictRules, true));
+  for (const key of ['profile', 'required'] as const) {
+    const explicit = config.config.build?.[key] !== undefined;
+    values.push({
+      path: `build.${key}`,
+      value: effective.build[key],
+      layer: explicit ? 'project' : 'defaults',
+      source: explicit ? config.configPath : 'built-in',
+      buildId: true,
+    });
+  }
   values.push(fromProjectOrDefaults('includeOriginals', effective.includeOriginals, true));
   values.push(fromProjectOrDefaults('contextProfile', effective.contextProfile, true));
 
@@ -213,7 +223,13 @@ function byPath(left: ResolvedValue, right: ResolvedValue): number {
 export function displayValue(entry: ResolvedValue): string {
   if (entry.secret === true) return '[redacted]';
   if (Array.isArray(entry.value)) {
-    return entry.value.length === 0 ? '(none)' : entry.value.map((item) => String(item)).join(', ');
+    return entry.value.length === 0
+      ? '(none)'
+      : entry.value
+          .map((item) =>
+            typeof item === 'object' && item !== null ? JSON.stringify(item) : String(item),
+          )
+          .join(', ');
   }
   if (typeof entry.value === 'object' && entry.value !== null) return JSON.stringify(entry.value);
   return String(entry.value);

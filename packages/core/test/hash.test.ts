@@ -96,7 +96,7 @@ describe('deriveBuildId', () => {
       { files: { 'lore.yaml': 'version: 1\nname: p\nsources: [.]\n', 'a.md': '# A' } },
       (project) => {
         const effectiveConfig = loadConfig({ cwd: project.root }).effective;
-        expect(effectiveConfig.defaultsVersion).toBe(2);
+        expect(effectiveConfig.defaultsVersion).toBe(3);
         const current = deriveBuildId({
           ...BASE,
           effectiveConfig: effectiveConfig as unknown as Canonical,
