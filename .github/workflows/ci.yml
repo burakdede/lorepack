@@ -10,7 +10,7 @@ jobs:
   state-open-diagnostic:
     name: State open diagnostic (windows-latest)
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
         with:
@@ -27,5 +27,5 @@ jobs:
       - run: pnpm build
       - name: Record the actual diagnostic environment
         run: node -p 'JSON.stringify({node:process.versions.node,sqlite:process.versions.sqlite,platform:process.platform,arch:process.arch})'
-      - name: Probe six coordinated cold opens (diagnostic only)
-        run: pnpm exec vitest run packages/backend-local/test/state_open_barrier.test.ts --reporter=verbose
+      - name: Record the complete original default workload (diagnostic only)
+        run: pnpm exec vitest run --reporter=verbose
