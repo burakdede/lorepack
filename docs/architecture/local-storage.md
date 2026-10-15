@@ -45,6 +45,12 @@ member ordering and exact binary bytes, reject missing or changed addressed obje
 and refuse an original source changed to a directory, removed or edited after its hash
 was recorded. Refused collection leaves the current source bytes untouched.
 
+Local retention contracts in
+[`activate.test.ts`](../../packages/cli/test/activate.test.ts) use real compiled builds and
+runtime references. They verify the default five-build window with tied timestamps and
+failed attempts, candidate-object protection during cleanup, and reader explanations from
+active requests through an idle cached catalog to backend shutdown.
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build
