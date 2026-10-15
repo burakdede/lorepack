@@ -461,8 +461,8 @@ in the artifact directory; owned configurations stay in the inventory.
 
 The command imports every owned Vite/Vitest configuration with source-hash and semantic
 checks. A second complete default-suite run collects direct coverage and streamed
-native counters through the generated worker registry. Both passes bound worker
-concurrency to two; test selection, assertions and deadlines stay unchanged.
+native counters through the generated worker registry. Both passes inherit the original
+root and package scheduling; test selection, assertions and deadlines stay unchanged.
 The final report combines direct, configuration and reconciled native records
 through the common pinned instrumenter, without a child V8 conversion pass.
 It invokes the actual pnpm script entrypoint through Node rather than shell command quoting.
@@ -525,13 +525,14 @@ retaining the original fourteen processes and `[0,28]` counts per seven-prefix g
 The direct-import witness and missing-registry rejection remain separate checks.
 Generated CLI-help bundles live under the existing ignored `dist` tree. The test runs the
 actual inventory command while the bundle exists, retaining the frozen ownership counts.
-The default suite uses one worker because several architecture fixtures launch their
-own compilers and Node children. Unbounded file parallelism can exceed
-unchanged per-case deadlines on hosts with many advertised CPUs. The worker limit
-changes scheduling, while retaining every test, assertion and deadline. The capture
-configuration retains the ordinary root test settings, including worker count and file
-parallelism, and the campaign does not override them. A real shared-resource worker
-regression verifies this policy; preparation and measurement follow the same scheduling.
+The default suite retains the original audit's root scheduling, with no global worker
+cap. Existing package-level policies still apply. The capture configuration inherits
+these settings without introducing a worker limit or changing file parallelism.
+The configuration regression checks the actual root settings and their capture projection;
+a separate real shared-resource fixture verifies inheritance when a package supplies an
+explicit policy. Preparation and measurement follow the same scheduling.
+Historical captures made with a global worker cap are retained diagnostic evidence and
+cannot qualify the original scheduling contract. Fresh qualification must use this policy.
 The fresh help bundle is compiled and executed in the same captured child. Its actual
 recipe receives the canonical capture plugin only while a compiled collector is active.
 Graph authentication uses a reusable bounded buffer instead of allocating each complete

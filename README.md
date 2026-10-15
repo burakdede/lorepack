@@ -499,8 +499,8 @@ Published CLI builds preserve that boundary with shared ESM chunks.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
 CLI packaging preserves dependency patches with the frozen lockfile in its temporary build
 workspace. See [release supply chain](docs/architecture/release-supply-chain.md).
-The default suite uses one worker to bound its child-process fixtures.
-Coverage preparation and measurement preserve the ordinary test scheduling settings.
+The default suite retains the original audit scheduling, including package-level policies.
+Coverage preparation and measurement inherit those settings without a global worker cap.
 Read-only verification scripts also retain exact ordinary/measured output parity.
 Temporary-script capture preserves the exact project-write profile and preload failures.
 Contract tests cover HTTP hosts, retention, activation, archives, tables and offline reports.
