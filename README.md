@@ -580,6 +580,7 @@ The default suite retains the original audit scheduling, including package-level
 Coverage preparation and measurement inherit those settings without a global worker cap.
 Read-only verification scripts retain their exact arguments and ordinary/measured output parity,
 including documentation checks and the actual README demo.
+Missing native child custody blocks qualification even when command output matches.
 Temporary-script capture preserves the exact project-write profile and preload failures.
 Contract tests cover HTTP hosts, retention with interrupted candidates and idle readers,
 activation, archives, tables and offline reports.
