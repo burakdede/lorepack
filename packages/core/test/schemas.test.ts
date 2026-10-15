@@ -575,6 +575,8 @@ describe('public registry', () => {
         'remote-retention-receipt',
         'search-request',
         'search-result',
+        'source-list-request',
+        'source-list-result',
         'source-read-request',
         'source-read-result',
         'status',

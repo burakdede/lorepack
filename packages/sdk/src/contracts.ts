@@ -1,15 +1,6 @@
 /**
- * The wire contracts, restated.
- *
- * `@lorepack/sdk` depends on nothing, including no workspace package, which is what lets a
- * custom agent install it without pulling a compiler, a database driver or a schema
- * library behind it. The cost is that these types are written here rather than imported
- * from `@lorepack/core`.
- *
- * That cost is paid for by `tools/contract`, which asserts mutual assignability between
- * every type below and the Zod-inferred type it mirrors. A contract change therefore fails
- * to compile in CI rather than surprising a consumer at runtime, which is the guarantee the
- * ticket asks for; the types are simply checked rather than generated.
+ * Dependency-free wire contracts, mirrored here so SDK consumers do not install core.
+ * tools/contract enforces mutual assignability with the shared Zod-inferred types.
  */
 
 export interface RuntimeIdentity {
@@ -331,4 +322,31 @@ export interface SourceReadOptions {
   lineStart?: number | undefined;
   lineEnd?: number | undefined;
   headingPath?: string[] | undefined;
+}
+
+export interface SourceListRequest {
+  readonly buildId?: string | undefined;
+  readonly offset?: number | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface SourceListResult extends RuntimeIdentity {
+  buildId: string;
+  sourceState: SourceState;
+  artifacts: {
+    artifactId: string;
+    relativePath: string;
+    displayPath: string;
+    title: string | null;
+    status: ArtifactStatus;
+    authority: number;
+    mediaType: string;
+    objectHash: string;
+    byteSize: number;
+    parserId: string;
+    chunkCount: number;
+    nodeCount: number;
+    locator: SourceLocator;
+  }[];
+  nextOffset: number | null;
 }

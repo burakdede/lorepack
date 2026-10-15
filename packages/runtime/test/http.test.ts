@@ -314,6 +314,31 @@ describe('the route list, architecture 14.5', () => {
     expect(body.budget).toBe(12_000);
   });
 
+  it('lists source documents on the shared runtime route', async () => {
+    const response = await appFor().request('/v1/sources?limit=1');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ...IDENTITY,
+      buildId: BUILD,
+      nextOffset: null,
+      artifacts: [{ locator: { artifactId: 'p:guides/a.md', relativePath: 'guides/a.md' } }],
+    });
+  });
+
+  it.each([
+    'limit=0',
+    'limit=101',
+    'limit=1&limit=2',
+    'offset=-1',
+    'offset=1',
+    'offset=1e3',
+    'offset=9007199254740992',
+  ])('refuses invalid source inventory pagination %s', async (query) => {
+    const response = await appFor().request(`/v1/sources?${query}`);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: 'LORE_E_INVALID_ARGUMENT' } });
+  });
+
   it('answers GET /v1/sources/:artifactId, with an optional range', async () => {
     const whole = await appFor().request('/v1/sources/p%3Aguides%2Fa.md');
     expect(whole.status).toBe(200);
@@ -611,7 +636,7 @@ describe('diagnostics, which read the machine rather than the build', () => {
   });
 
   it('answers with whatever the host reports, unmodified', async () => {
-    // Architecture 13.1 fixes the runtime at seven capabilities and a diagnostic is not one
+    // Architecture 13.1 fixes the runtime at eight capabilities and a diagnostic is not one
     // of them, so this arrives as an injected function exactly as `currentBuild` does.
     const app = appFor({ diagnostics: async () => ({ doctor: { status: 'pass' } }) });
     const response = await app.request('/v1/diagnostics');

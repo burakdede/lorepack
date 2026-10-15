@@ -7,6 +7,7 @@ import {
   type BuildDescription,
   type BuildManifest,
   hashBytes,
+  type SourceListResult,
   type SourceReadResult,
   verifyContextReceipt,
 } from '@lorepack/core';
@@ -150,18 +151,7 @@ CREATE TABLE build_warnings (
   path TEXT,
   message TEXT NOT NULL
 );
-CREATE TABLE artifacts (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL,
-  build_id TEXT NOT NULL,
-  relative_path TEXT NOT NULL,
-  display_path TEXT NOT NULL,
-  title TEXT,
-  status TEXT NOT NULL,
-  authority INTEGER NOT NULL,
-  media_type TEXT NOT NULL,
-  object_hash TEXT NOT NULL
-);
+${PROJECTION_MIGRATIONS[0]?.statements.find((statement) => statement.startsWith('CREATE TABLE IF NOT EXISTS artifacts ('))};
 CREATE TABLE nodes (
   id TEXT PRIMARY KEY,
   project_id TEXT NOT NULL,
@@ -391,6 +381,75 @@ describe('wrangler dev for the Worker runtime, issue 86', () => {
       counts: MANIFEST.counts,
       warningCount: 0,
     });
+
+    const inventoryResponse = await worker.fetch('/v1/sources?limit=1', { headers: auth });
+    expect(inventoryResponse.status).toBe(200);
+    const inventory = (await inventoryResponse.json()) as SourceListResult;
+    expect(inventory).toMatchObject({
+      corpusId: build.corpusId,
+      namespaceId: build.namespaceId,
+      buildId: BUILD,
+      artifacts: [{ locator: { artifactId: ALIAS_ID, relativePath: ARTIFACT_ID } }],
+      nextOffset: 1,
+    });
+    const continuation = await worker.fetch(
+      `/v1/sources?buildId=${inventory.buildId}&offset=1&limit=1`,
+      { headers: auth },
+    );
+    expect(continuation.status).toBe(200);
+    const second = (await continuation.json()) as SourceListResult;
+    expect(second).toMatchObject({
+      corpusId: build.corpusId,
+      namespaceId: build.namespaceId,
+      buildId: BUILD,
+      artifacts: [{ locator: { artifactId: ARTIFACT_ID, relativePath: ARTIFACT_PATH } }],
+      nextOffset: null,
+    });
+    for (const [page, body] of [
+      [inventory, ALIAS_BODY],
+      [second, OBJECT_BODY],
+    ] as const) {
+      expect(page.artifacts).toHaveLength(1);
+      const locator = page.artifacts[0]?.locator;
+      if (locator?.artifactId === undefined)
+        throw new Error('Inventory omitted its artifact locator');
+      const response = await worker.fetch(
+        `/v1/sources/${encodeURIComponent(locator.artifactId)}?buildId=${page.buildId}`,
+        { headers: auth },
+      );
+      expect(response.status).toBe(200);
+      const read = (await response.json()) as SourceReadResult;
+      expect(read).toMatchObject({
+        buildId: page.buildId,
+        corpusId: page.corpusId,
+        namespaceId: page.namespaceId,
+        locator: { artifactId: locator.artifactId, relativePath: locator.relativePath },
+      });
+      expect(read.text).toBe(body);
+    }
+    const end = await worker.fetch(`/v1/sources?buildId=${BUILD}&offset=2`, { headers: auth });
+    expect(await end.json()).toMatchObject({ buildId: BUILD, artifacts: [], nextOffset: null });
+    const inventoryTool = await worker.fetch('/mcp', {
+      method: 'POST',
+      headers: {
+        ...auth,
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'Mcp-Method': 'tools/call',
+        'Mcp-Name': 'lore_list_sources',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: {
+          name: 'lore_list_sources',
+          arguments: { buildId: BUILD, limit: 1 },
+          _meta: envelope,
+        },
+      }),
+    });
+    expect((await decodeMcp(inventoryTool)).result).toMatchObject({ structuredContent: inventory });
 
     const sourceResponse = await worker.fetch(`/v1/sources/${encodeURIComponent(ARTIFACT_ID)}`, {
       headers: auth,

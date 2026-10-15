@@ -108,3 +108,16 @@ Attached conditions inside those nodes are preserved. An unresolved or oversized
 native body is reported with omission reason `structural-unit`; budget omission
 also removes whole units. This is structural closure, without inferred links across
 paragraphs or documents. The resolved packing policy records the native body limit.
+
+## Browse documents without a search query
+
+Call `lore_list_sources` with `{ "limit": 50 }`. Every entry has a source locator.
+If `nextOffset` is non-null, repeat with that offset and the returned full `buildId`.
+Read a listed document with `lore_read_source`, its `locator.artifactId`, and the same
+`buildId`. Activation between calls does not change the selected immutable content.
+`lore://project/sources` returns the first page and documents this continuation flow.
+
+This source-inventory contract was checked on 2026-10-15 with Node 24.21.0,
+MCP client/server 2.0.0 over the actual CLI stdio transport, and Wrangler 4.149.0
+through local Worker D1/R2 emulation. This is local integration proof; it does not
+replace the credentialed release deployment checks.

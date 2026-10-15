@@ -13,8 +13,8 @@ import { lockInputs } from './versions.js';
 /**
  * The reads Studio needs that are not runtime capabilities.
  *
- * Architecture 13.1 fixes `LoreRuntime` at seven capabilities, and every one of them reads
- * the **active build**. A plan reads the **source tree**, and warnings are a property of a
+ * Architecture 13.1 fixes `LoreRuntime` at eight capabilities, and every one of them reads
+ * one selected **build**. A plan reads the **source tree**, and warnings are a property of a
  * build's manifest rather than a query against its content. Neither belongs in that
  * interface, and adding them would change what every backend has to implement, including the
  * Phase 6 Worker that has no sources to plan against.

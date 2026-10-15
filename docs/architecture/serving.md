@@ -8,11 +8,11 @@ without editing a single file per surface (invariant 10).
 
 ## One runtime, three surfaces
 
-`LoreRuntime` is seven capabilities, declared in `@lorepack/core` and implemented in
+`LoreRuntime` is eight capabilities, declared in `@lorepack/core` and implemented in
 `@lorepack/runtime`. REST, MCP and the CLI all call the same object, so a capability cannot
 exist in one interface and be missing from another.
 
-Build descriptions, search results, context bundles, source reads, table listings,
+Build descriptions, search results, context bundles, source inventories, source reads, table listings,
 table descriptions and table query results carry `corpusId`, `namespaceId`, `buildId`
 and `sourceState`. The runtime captures them from one acquired handle and checks that
 the opened scope belongs to the same corpus, namespace and build before reading its catalog.
@@ -37,6 +37,25 @@ refused with `LORE_E_INVALID_ARGUMENT` by their provider. IDs never authorize a 
 | stdio MCP | `lorepack mcp` | MCP 2026-07-28 over stdin/stdout |
 | HTTP | `lorepack serve` | REST under `/v1`, and MCP at `POST /mcp`, on one port |
 | Process | `lorepack search`, `lorepack export` | the same runtime, in-process |
+
+## Browse the source inventory
+
+`GET /v1/sources?limit=50` and `LoreClient.listSources({limit: 50})` return
+`{corpusId, namespaceId, buildId, sourceState, artifacts, nextOffset}`. Each artifact
+includes its path, status, parser and stored counts, plus a `SourceLocator` that can be
+passed to a source read with this response's `buildId`. A page holds at most 100 entries;
+the default is 50. `nextOffset: null` means the inventory ended, including an empty build.
+
+Continue with `?buildId=<first page buildId>&offset=<nextOffset>&limit=50`.
+An offset greater than zero without a build ID is a typed invalid-argument error.
+Changing the active pointer cannot change later pages. A pruned or unavailable selected
+build fails explicitly; it never falls back to the new active build. Pages use stable
+path and artifact-ID ordering and apply LIMIT/OFFSET inside each storage adapter.
+
+MCP exposes `lore_list_sources` with the same arguments and result, plus the first page
+at `lore://project/sources`. Resource descriptions say how to continue. Studio collects
+all pages pinned to the first build before showing its source tree and command palette;
+it continues to obtain exclusions separately from the warnings endpoint.
 
 ## The protocol revision, and where it is decided
 
@@ -114,6 +133,7 @@ stays well under the 50-query free-tier ceiling even on its fallback path:
 | `search` | 6 | pointer, projection-state check, precise FTS search, fallback FTS search when precise is empty, superseded ids, chunk count |
 | `contextForTask` | 5 | pointer, projection-state check, precise FTS search, fallback FTS search when precise is empty, superseded ids |
 | `readSource` | 4 | pointer, projection-state check, artifact lookup, node lookup. The body is in R2 |
+| `listSources` | 3 | pointer, projection-state check, bounded artifact listing |
 | `listTables` | 3 | pointer, projection-state check, table listing |
 | `describeTable` | 5 | pointer, projection-state check, table lookup, column lookup, sample rows |
 | `queryTable` | 5 | pointer, projection-state check, table lookup, column lookup, table query |
@@ -160,6 +180,7 @@ a surface a client has to probe.
 | `GET /v1/build` | what the active build contains |
 | `POST /v1/search` | ranked passages with locators |
 | `POST /v1/context` | a bounded, cited bundle for a task |
+| `GET /v1/sources` | bounded source inventory with read locators |
 | `GET /v1/sources/:artifactId` | one document, whole or by range |
 | `GET /v1/tables`, `GET /v1/tables/:id`, `POST /v1/tables/:id/query` | typed tables |
 | `ALL /mcp` | MCP Streamable HTTP, when a handler is mounted |
@@ -181,19 +202,17 @@ send cross-origin without a CORS preflight, so refusing them means a hostile pag
 first, and the server never approves a foreign origin (#548). The SDK, Studio and the `curl`
 equivalents Studio prints all send the header already.
 
-Five more routes exist only where the host supplied them, because each reads something a
-deployment does not have. `GET /v1/plan` walks the source tree; `GET /v1/warnings` and
-`GET /v1/sources` read the active build's catalog; `POST /v1/export` renders the Markdown
-`lorepack export` writes; `GET /v1/diagnostics` reads the machine. `lorepack serve` registers only
-the three that read the active build, because the other two read sources and a live session,
-and `lorepack serve` has neither. `lorepack dev --host` with a non-loopback address registers
-the same three, and none of the writes below (#549).
+Four more routes exist only where the host supplied them. `GET /v1/plan` walks the source
+tree; `GET /v1/warnings` reads build warnings and exclusion accounting; `POST /v1/export`
+renders the Markdown `lorepack export` writes; `GET /v1/diagnostics` reads the machine.
+`lorepack serve` registers warnings and export because they need only retained builds.
+The source inventory is a shared runtime capability on local and Worker servers.
 
 `/v1/diagnostics` returns the same report `lorepack doctor --json` prints, validated against
 `schemas/doctor-report.json`, plus the live session state a one-shot command cannot see: the
 watcher, the port, the process, and which clients are configured. It is an injected host
 function rather than a runtime capability, for the same reason `currentBuild` is: architecture
-13.1 fixes `LoreRuntime` at seven capabilities that read a *build*, and a diagnostic reads the
+13.1 fixes `LoreRuntime` at eight capabilities that read a *build*, and a diagnostic reads the
 machine.
 
 ### The write surface
@@ -425,3 +444,27 @@ check. Sources are absent locally, so the dirty annotation is expected.
 ![Captured source pane](../images/studio_source_selector.png). The real-browser regression
 is `tools/studio-e2e/test/source_selector.spec.ts`; actual workerd HTTP/MCP readback is
 covered in `packages/deploy-cloudflare/test/wrangler-dev.test.ts`.
+
+
+### Inventory locator integration verification
+
+On 2026-10-15 (Node24.21.0, macOS arm64), the real portable source-selector build
+was enumerated in three pages of two, two and one artifacts. All five returned
+locators were read back through local/projected runtime, HTTP/SDK and MCP tools;
+the MCP resource inventory and build-qualified source resources were also checked.
+Independent body markers distinguish ID/path aliases and duplicate relative paths.
+No document was deduplicated by its relative path. Actual workerd D1/R2 pagination
+checks both alias-first and primary-source pages, their returned locators, and the
+empty final offset. This extends the original selected-build/activation pinning cases.
+
+The actual Studio inventory and selector browser flows passed with Playwright1.62.1
+and Chromium151.0.7922.34. Both captures were visually inspected; the isolated inventory
+fixture has57indexed sources, while the separate CLI stdio fixture has52. These are
+functional regression corpora, not release-performance qualification.
+
+
+Browser fixtures dispose their owned browser context before draining an independently
+started server. This ends the complete test client lifetime before waiting for in-flight
+requests. The integrated
+45-case browser suite passes with this order; the original read, axe, keyboard and
+confirmation assertions remain in place.

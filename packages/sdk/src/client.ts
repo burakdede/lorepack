@@ -6,6 +6,8 @@ import type {
   HealthResult,
   SearchRequest,
   SearchResult,
+  SourceListRequest,
+  SourceListResult,
   SourceReadOptions,
   SourceReadResult,
   TableDescription,
@@ -13,8 +15,6 @@ import type {
   TableQueryResult,
   TaskContextRequest,
 } from './contracts.js';
-
-/** A read-only HTTP client using platform fetch, with zero runtime dependencies. */
 
 export interface LoreClientOptions {
   readonly buildId?: string;
@@ -145,21 +145,16 @@ export class LoreClient {
     );
   }
 
+  listSources(options: SourceListRequest = {}, signal?: AbortSignal): Promise<SourceListResult> {
+    return this.#get(sourcePath('/v1/sources', options), signal);
+  }
+
   readSource(
     artifactId: string,
     options: SourceReadOptions = {},
     signal?: AbortSignal,
   ): Promise<SourceReadResult> {
-    const query = new URLSearchParams();
-    if (options.buildId !== undefined) query.set('buildId', options.buildId);
-    if (options.page !== undefined) query.set('page', String(options.page));
-    if (options.lineStart !== undefined) query.set('lineStart', String(options.lineStart));
-    if (options.lineEnd !== undefined) query.set('lineEnd', String(options.lineEnd));
-    // One parameter per heading, so a heading containing `>` or surrounding spaces arrives
-    // exactly as written. Joining them into one string could not be split back (#611).
-    for (const heading of options.headingPath ?? []) query.append('headingPath', heading);
-    const suffix = query.size === 0 ? '' : `?${query.toString()}`;
-    return this.#get(`/v1/sources/${encodeURIComponent(artifactId)}${suffix}`, signal);
+    return this.#get(sourcePath(`/v1/sources/${encodeURIComponent(artifactId)}`, options), signal);
   }
 
   listTables(signal?: AbortSignal): Promise<TableListResult> {
@@ -298,4 +293,16 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+/** Preserve each heading verbatim as a separate query parameter. */
+function sourcePath(path: string, options: SourceListRequest | SourceReadOptions): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined) continue;
+    if (key === 'headingPath') {
+      for (const heading of (value ?? []) as readonly string[]) query.append(key, heading);
+    } else query.set(key, String(value));
+  }
+  return `${path}${query.size === 0 ? '' : `?${query}`}`;
 }

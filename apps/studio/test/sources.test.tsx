@@ -80,9 +80,12 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string) => {
       if (String(url).includes('/v1/sources')) {
-        return new Response(JSON.stringify({ buildId: 'lore_x', artifacts: ARTIFACTS }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ buildId: 'lore_x', nextOffset: null, artifacts: ARTIFACTS }),
+          {
+            status: 200,
+          },
+        );
       }
       return new Response(JSON.stringify(EXCLUDED), { status: 200 });
     }),
@@ -143,7 +146,10 @@ function serve(excluded: unknown): void {
     'fetch',
     vi.fn(async (url: string) =>
       String(url).includes('/v1/sources')
-        ? new Response(JSON.stringify({ buildId: 'lore_x', artifacts: ARTIFACTS }), { status: 200 })
+        ? new Response(
+            JSON.stringify({ buildId: 'lore_x', nextOffset: null, artifacts: ARTIFACTS }),
+            { status: 200 },
+          )
         : new Response(JSON.stringify(excluded), { status: 200 }),
     ),
   );
@@ -280,9 +286,12 @@ describe('the text a model reads', () => {
           );
         }
         if (target.includes('/v1/sources')) {
-          return new Response(JSON.stringify({ buildId: 'lore_x', artifacts: ARTIFACTS }), {
-            status: 200,
-          });
+          return new Response(
+            JSON.stringify({ buildId: 'lore_x', nextOffset: null, artifacts: ARTIFACTS }),
+            {
+              status: 200,
+            },
+          );
         }
         return new Response(JSON.stringify(EXCLUDED), { status: 200 });
       }),

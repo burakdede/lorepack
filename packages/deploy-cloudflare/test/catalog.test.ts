@@ -93,7 +93,7 @@ WHERE project_id = ? AND build_id = ?`,
          WHERE n.project_id = a.project_id AND n.build_id = a.build_id AND n.artifact_id = a.id) AS nodeCount
 FROM artifacts a
 WHERE a.project_id = ? AND a.build_id = ?
-ORDER BY a.relative_path`,
+ORDER BY a.relative_path, a.id`,
     ([projectId, buildId]) =>
       projectId === PROJECT && buildId === BUILD
         ? [

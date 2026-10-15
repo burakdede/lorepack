@@ -72,6 +72,66 @@ export function runRuntimeContract(options: ContractOptions): void {
       }
     }
 
+    describe('source inventory', () => {
+      it(
+        'pages a selected build and reads a returned locator after activation',
+        async () => {
+          await withFixture(async ({ runtime, knownArtifactId }) => {
+            const described = await runtime.describeBuild();
+            const first = await runtime.listSources({ buildId: described.buildId, limit: 1 });
+            expect(first.artifacts).toHaveLength(1);
+            expect(first.buildId).toBe(described.buildId);
+            expect(first.corpusId).toBe(described.corpusId);
+            expect(first.namespaceId).toBe(described.namespaceId);
+            await options.activateAnother();
+            const artifacts = [...first.artifacts];
+            let nextOffset = first.nextOffset;
+            while (nextOffset !== null) {
+              const page = await runtime.listSources({
+                buildId: first.buildId,
+                offset: nextOffset,
+                limit: 1,
+              });
+              expect(page.buildId).toBe(first.buildId);
+              expect(page.artifacts).toHaveLength(1);
+              expect(page.nextOffset === null || page.nextOffset > nextOffset).toBe(true);
+              artifacts.push(...page.artifacts);
+              expect(artifacts.length).toBeLessThanOrEqual(described.counts.artifacts);
+              nextOffset = page.nextOffset;
+            }
+            expect(artifacts).toHaveLength(described.counts.artifacts);
+            expect(new Set(artifacts.map((artifact) => artifact.artifactId)).size).toBe(
+              artifacts.length,
+            );
+            const known = artifacts.find(
+              (artifact) =>
+                artifact.artifactId === knownArtifactId ||
+                artifact.relativePath === knownArtifactId,
+            );
+            expect(known).toBeDefined();
+            const read = await runtime.readSource({
+              artifactId: known?.locator.artifactId ?? '',
+              buildId: first.buildId,
+            });
+            expect(read.buildId).toBe(first.buildId);
+            expect(read.locator.relativePath).toBe(known?.locator.relativePath);
+            expect(read.text.length).toBeGreaterThan(0);
+          });
+        },
+        CONTRACT_TIMEOUT_MS,
+      );
+
+      it('requires an explicit build for subsequent pages and bounds page sizes', async () => {
+        await withFixture(async ({ runtime }) => {
+          for (const request of [{ offset: 1 }, { limit: 0 }, { limit: 101 }, { offset: -1 }]) {
+            await expect(runtime.listSources(request)).rejects.toMatchObject({
+              code: 'LORE_E_INVALID_ARGUMENT',
+            });
+          }
+        });
+      });
+    });
+
     describe('the response envelope', () => {
       it(
         'stamps a full build id and a valid source state on every capability',
@@ -79,6 +139,7 @@ export function runRuntimeContract(options: ContractOptions): void {
           await withFixture(async ({ runtime, knownArtifactId, matchingQuery }) => {
             const responses = [
               await runtime.describeBuild(),
+              await runtime.listSources(),
               await runtime.listTables(),
               await runtime.search({
                 query: matchingQuery,

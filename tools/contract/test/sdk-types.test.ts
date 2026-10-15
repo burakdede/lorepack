@@ -4,6 +4,8 @@ import type {
   ContextReceipt as CoreContextReceipt,
   SearchRequest as CoreSearchRequest,
   SearchResult as CoreSearchResult,
+  SourceListRequest as CoreSourceListRequest,
+  SourceListResult as CoreSourceListResult,
   SourceLocator as CoreSourceLocator,
   SourceReadResult as CoreSourceReadResult,
   TableDescription as CoreTableDescription,
@@ -17,6 +19,8 @@ import type {
   ContextReceipt as SdkContextReceipt,
   SearchRequest as SdkSearchRequest,
   SearchResult as SdkSearchResult,
+  SourceListRequest as SdkSourceListRequest,
+  SourceListResult as SdkSourceListResult,
   SourceLocator as SdkSourceLocator,
   SourceReadResult as SdkSourceReadResult,
   TableDescription as SdkTableDescription,
@@ -53,6 +57,8 @@ describe('the SDK mirrors the server contracts exactly', () => {
     assertExact<Exact<SdkContextBundle, CoreContextBundle>>(true);
     assertExact<Exact<SdkContextReceipt, CoreContextReceipt>>(true);
     assertExact<Exact<SdkBuildDescription, CoreBuildDescription>>(true);
+    assertExact<Exact<SdkSourceListRequest, CoreSourceListRequest>>(true);
+    assertExact<Exact<SdkSourceListResult, CoreSourceListResult>>(true);
     assertExact<Exact<SdkSourceReadResult, CoreSourceReadResult>>(true);
     assertExact<Exact<SdkTableDescription, CoreTableDescription>>(true);
     assertExact<Exact<SdkTableListResult, CoreTableListResult>>(true);
