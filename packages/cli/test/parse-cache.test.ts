@@ -17,7 +17,7 @@ const ENTRY: CachedParse = {
     contentHash: 'b'.repeat(64),
     parserId: 'markdown',
     parserVersion: '0.1.0',
-    status: 'current',
+    status: 'active',
     authority: 50,
     supersedes: [],
     metadata: {},
@@ -34,6 +34,20 @@ describe('parse cache', () => {
       cache.put(KEY, ENTRY);
       expect(cache.get(KEY)).toEqual(ENTRY);
       expect(cache.hits).toBe(1);
+    });
+  });
+
+  it('retains parser warnings through a fresh on-disk cache reader', async () => {
+    await withTempProject({}, (project) => {
+      const directory = project.path('cache');
+      const warnings = [
+        { code: 'docx-unmapped-style', message: 'Unmapped Callout style', line: 7 },
+      ];
+      new ParseCache(directory).put(KEY, { ...ENTRY, warnings });
+      const reader = new ParseCache(directory);
+      expect(reader.get(KEY)).toEqual({ ...ENTRY, warnings });
+      expect(reader.hits).toBe(1);
+      expect(reader.misses).toBe(0);
     });
   });
 

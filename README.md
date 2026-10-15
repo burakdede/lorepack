@@ -161,6 +161,8 @@ lorepack status
 
 The build output includes a content-addressed id, artifact and chunk counts, tables, warnings,
 and activation status. A failed build leaves the active version untouched.
+Rebuilt/reused counts describe actual parsing and eligible cache reuse. An unchanged
+CSV/XLSX table is reparsed; a missing cached body is rebuilt from its source.
 
 Use `--json` in scripts and CI. Use `--frozen` when the checked-in lockfile must not change:
 
