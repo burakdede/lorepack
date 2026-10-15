@@ -36,6 +36,7 @@ export interface ValidatedStatement {
 const STATEMENT_KEYWORDS = new Set([
   'select',
   'with',
+  'values',
   'insert',
   'update',
   'delete',
@@ -81,7 +82,7 @@ function withinOneEdit(a: string, b: string): boolean {
     for (let index = 0; index < a.length - 1; index += 1) {
       if (a[index] === b[index]) continue;
       const swapped = `${a.slice(0, index)}${a[index + 1] ?? ''}${a[index] ?? ''}${a.slice(index + 2)}`;
-      return swapped === b;
+      return swapped === b || withinOneSimpleEdit(a, b);
     }
   }
   return withinOneSimpleEdit(a, b);
@@ -136,7 +137,7 @@ export function validateStatement(sql: string): ValidatedStatement {
     if (!STATEMENT_KEYWORDS.has(keyword)) {
       const suggestion = nearestKeyword(keyword);
       throw refuse(
-        `A statement must begin with SELECT or WITH, and this one begins with ${keyword.toUpperCase()}, which is not a SQL keyword.`,
+        `A statement must begin with SELECT, WITH, or VALUES, and this one begins with ${keyword.toUpperCase()}, which is not a SQL keyword.`,
         suggestion === null
           ? 'Check the spelling of the first word.'
           : `Did you mean ${suggestion.toUpperCase()}?`,

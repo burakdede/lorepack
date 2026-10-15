@@ -423,6 +423,27 @@ test.describe('Tables', () => {
     await checkA11y();
   });
 
+  test('suggests the intended SQL keyword without executing the malformed query', async ({
+    page,
+    session,
+  }) => {
+    await page.goto(`${session.url}/#/tables`);
+    const sql = page.getByLabel('SQL');
+    await expect(sql).toHaveValue(/FROM t_pricing_/);
+    await sql.fill((await sql.inputValue()).replace(/^SELECT/i, 'SELXCT'));
+    await page.getByRole('button', { name: 'Run query' }).click();
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('LORE_E_SQL_REJECTED');
+    await expect(alert).toContainText('Did you mean SELECT?');
+    await expect(alert).toContainText('SELECT, WITH, or VALUES');
+    await expect(page.getByRole('table', { name: 'Query result' })).toHaveCount(0);
+    const screenshot = test.info().outputPath('sql-keyword-diagnostic.png');
+    await page.locator('.console').screenshot({ path: screenshot });
+    await test
+      .info()
+      .attach('SQL keyword diagnostic', { path: screenshot, contentType: 'image/png' });
+  });
+
   test('refuses a write and says which rule was broken', async ({ page, session }) => {
     await page.goto(`${session.url}/#/tables`);
     const sql = page.getByLabel('SQL');
