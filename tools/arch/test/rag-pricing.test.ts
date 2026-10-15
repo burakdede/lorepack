@@ -109,34 +109,42 @@ describe('hosted benchmark pricing requires known rates', () => {
         rates: { [INPUT]: '2', [OUTPUT]: '5', [key]: value },
       })),
     ),
-  ])('keeps cost unavailable for $name', async ({ rates }) => {
-    const report = await reportFor(rates);
-    expect(report.costAccounting).toEqual(unavailableCost);
-    expect(report.tokenAccounting.promptTokens).toBeGreaterThan(0);
-    expect(report.tokenAccounting.completionTokens).toBeGreaterThan(0);
-    expect(report.tokenAccounting.totalTokens).toBe(
-      report.tokenAccounting.promptTokens + report.tokenAccounting.completionTokens,
-    );
-  });
+  ])(
+    'keeps cost unavailable for $name',
+    async ({ rates }) => {
+      const report = await reportFor(rates);
+      expect(report.costAccounting).toEqual(unavailableCost);
+      expect(report.tokenAccounting.promptTokens).toBeGreaterThan(0);
+      expect(report.tokenAccounting.completionTokens).toBeGreaterThan(0);
+      expect(report.tokenAccounting.totalTokens).toBe(
+        report.tokenAccounting.promptTokens + report.tokenAccounting.completionTokens,
+      );
+    },
+    30_000,
+  );
 
   it.each([
     { input: '0', output: '0' },
     { input: '0', output: '5' },
     { input: '2', output: '0' },
     { input: ' 2.5 ', output: '7.5' },
-  ])('estimates explicitly supplied rates $input/$output', async ({ input, output }) => {
-    const report = await reportFor({ [INPUT]: input, [OUTPUT]: output });
-    expect(report.costAccounting).toMatchObject({ status: 'estimated', currency: 'USD' });
-    const inputUsd = (report.tokenAccounting.promptTokens * Number(input)) / 1_000_000;
-    const outputUsd = (report.tokenAccounting.completionTokens * Number(output)) / 1_000_000;
-    expect(report.costAccounting.inputUsd).toBeCloseTo(inputUsd, 12);
-    expect(report.costAccounting.outputUsd).toBeCloseTo(outputUsd, 12);
-    expect(report.costAccounting.totalUsd).toBeCloseTo(inputUsd + outputUsd, 12);
-  });
+  ])(
+    'estimates explicitly supplied rates $input/$output',
+    async ({ input, output }) => {
+      const report = await reportFor({ [INPUT]: input, [OUTPUT]: output });
+      expect(report.costAccounting).toMatchObject({ status: 'estimated', currency: 'USD' });
+      const inputUsd = (report.tokenAccounting.promptTokens * Number(input)) / 1_000_000;
+      const outputUsd = (report.tokenAccounting.completionTokens * Number(output)) / 1_000_000;
+      expect(report.costAccounting.inputUsd).toBeCloseTo(inputUsd, 12);
+      expect(report.costAccounting.outputUsd).toBeCloseTo(outputUsd, 12);
+      expect(report.costAccounting.totalUsd).toBeCloseTo(inputUsd + outputUsd, 12);
+    },
+    30_000,
+  );
 
   it('keeps cost unavailable when usage is incomplete despite known rates', async () => {
     const report = await reportFor({ [INPUT]: '2', [OUTPUT]: '5' }, true);
     expect(report.costAccounting).toEqual(unavailableCost);
     expect(report.tokenAccounting.totalTokens).toBe(report.tokenAccounting.promptTokens);
-  });
+  }, 30_000);
 });

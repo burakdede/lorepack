@@ -69,7 +69,10 @@ benchmark does not print model responses.
 
 Pricing regressions run the actual worker against a loopback HTTP fixture and temporary SQLite
 catalog. They check unavailable rates, explicit zero, arithmetic and incomplete usage without
-external credentials. Fixture outputs are test evidence, not provider measurements.
+external credentials. Each pricing case runs the full worker workload, using the existing RAG
+command test's 30-second harness timeout rather than the five-second unit-test default. Worker
+sample counts and benchmark limits are unchanged. Fixture outputs are test evidence, not provider
+measurements.
 
 Hosted numbers are provider-, model-, tokenizer-, prompt- and date-dependent. They must remain
 separate from offline and Lorepack rows, and a hosted result without those identities is invalid.

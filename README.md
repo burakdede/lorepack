@@ -386,7 +386,8 @@ reuse counts. Read [benchmark methodology](benchmarks/README.md) before comparin
 medium and large tiers are deterministic copies of repository-owned mixed-format material, so
 they show scale trends rather than proving performance on every customer corpus.
 The optional [RAG benchmark](docs/compatibility/rag-benchmark.md) estimates hosted cost only
-with complete provider usage and two known prices; missing prices remain unavailable.
+with complete provider usage and two known, nonnegative prices. Explicit zero is valid;
+missing prices remain unavailable.
 
 ## What makes the build trustworthy
 
