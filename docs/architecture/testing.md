@@ -88,6 +88,9 @@ empty arrays; revocation must still remove access, report the removed count and
 leave an empty inventory. Header normalization is checked through the public
 authorizer, without exposing private comparison helpers.
 
+Local backend boundary cases distinguish a released handle from catalog corruption.
+A future catalog migration produces version advice without changing sealed bytes.
+
 Sealed source-read cases cover parent-heading order, open-ended line ranges and plain
 text locators after source removal. PDF line-range refusals explain how to read the
 whole artifact without inventing missing line coordinates. Single-sheet reads retain

@@ -583,6 +583,7 @@ Comparison tests check input identities, accounting and explicitly unmeasured fi
 Local lifecycle cases check damaged-catalog recovery, sealed diffs and activation refusals.
 Runtime-token tests cover malformed stored hashes and revocation with empty adapter results.
 Source-read tests check open-ended ranges, nested headings and spreadsheet locators after source removal.
+Local runtime cases distinguish released handles from damaged builds and preserve newer catalogs on refusal.
 The archived XLSX measurement command uses pinned parser dependencies and real fixture tests.
 See [testing](docs/architecture/testing.md) for failure/resume and adapter cases.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
