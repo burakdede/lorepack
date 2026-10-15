@@ -96,6 +96,12 @@ type. SQLite-backed test adapters keep the native binding and result boundaries.
 Vitest matchers use supported signatures with typed expected values. No assertion
 or compiler strictness is relaxed to include these files.
 
+Projection preflight tests use a real SQLite catalog to check the exact UTF-8 value
+limit, per-row byte totals, source coordinates, missing/unopenable databases and
+identifier refusal. Contributor advice accumulates bytes by path and sorts ties
+before selecting the largest three sources. Tables without projected columns are
+skipped. No synthetic database return types are used to reach defensive branches.
+
 Local backend boundary cases distinguish a released handle from catalog corruption.
 A future catalog migration produces version advice without changing sealed bytes.
 
