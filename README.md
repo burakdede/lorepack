@@ -413,6 +413,7 @@ It recomputes catalog roots and the build ID, checks required content-addressed 
 and refuses link or device entries. Malformed verifier inputs are refused; incompatible
 hashing versions retain their typed error. Success reports integrity only and an unsigned publisher.
 Older archives missing identity inputs are explicitly unsupported for verification.
+Archive collection tests also verify changed originals, object checksums and stable member ordering.
 See the [package format](docs/package-format/README.md#archive-structure).
 
 ### Provenance on every result

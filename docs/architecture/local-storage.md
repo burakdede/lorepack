@@ -18,6 +18,12 @@ physical: a sealed build never changes, and everything that does change lives el
   lock.reclaimed-*/         tombstones of reclaimed locks, removed after an hour
 ```
 
+Archive collection contracts use real filesystem fixtures in
+[`archive.test.ts`](../../packages/backend-local/test/archive.test.ts). They check stable
+member ordering and exact binary bytes, reject missing or changed addressed objects,
+and refuse an original source changed to a directory, removed or edited after its hash
+was recorded. Refused collection leaves the current source bytes untouched.
+
 ## Atomic directories
 
 A candidate build is created under `.lore/tmp/`, not under `builds/`. An interrupted build
