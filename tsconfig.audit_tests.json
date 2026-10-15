@@ -22,6 +22,7 @@
     "packages/cli/test/read-source.test.ts",
     "packages/cli/test/runtime-local.test.ts",
     "packages/cli/test/target_failures.test.ts",
+    "packages/compiler/test/discover.test.ts",
     "packages/core/test/sql-guard.test.ts",
     "packages/deploy-cloudflare/test/projection-preflight.test.ts",
     "packages/deploy-cloudflare/test/retention.test.ts",
