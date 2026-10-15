@@ -16,8 +16,6 @@ import type {
   TaskContextRequest,
 } from './contracts.js';
 
-/** A read-only HTTP client using platform fetch, with zero runtime dependencies. */
-
 export interface LoreClientOptions {
   readonly buildId?: string;
   /** Where the runtime is listening, for example `http://127.0.0.1:4321`. */
@@ -148,11 +146,7 @@ export class LoreClient {
   }
 
   listSources(options: SourceListRequest = {}, signal?: AbortSignal): Promise<SourceListResult> {
-    const query = new URLSearchParams();
-    if (options.buildId !== undefined) query.set('buildId', options.buildId);
-    if (options.offset !== undefined) query.set('offset', String(options.offset));
-    if (options.limit !== undefined) query.set('limit', String(options.limit));
-    return this.#get(`/v1/sources${query.size === 0 ? '' : `?${query}`}`, signal);
+    return this.#get(sourcePath('/v1/sources', options), signal);
   }
 
   readSource(
@@ -160,16 +154,7 @@ export class LoreClient {
     options: SourceReadOptions = {},
     signal?: AbortSignal,
   ): Promise<SourceReadResult> {
-    const query = new URLSearchParams();
-    if (options.buildId !== undefined) query.set('buildId', options.buildId);
-    if (options.page !== undefined) query.set('page', String(options.page));
-    if (options.lineStart !== undefined) query.set('lineStart', String(options.lineStart));
-    if (options.lineEnd !== undefined) query.set('lineEnd', String(options.lineEnd));
-    // One parameter per heading, so a heading containing `>` or surrounding spaces arrives
-    // exactly as written. Joining them into one string could not be split back (#611).
-    for (const heading of options.headingPath ?? []) query.append('headingPath', heading);
-    const suffix = query.size === 0 ? '' : `?${query.toString()}`;
-    return this.#get(`/v1/sources/${encodeURIComponent(artifactId)}${suffix}`, signal);
+    return this.#get(sourcePath(`/v1/sources/${encodeURIComponent(artifactId)}`, options), signal);
   }
 
   listTables(signal?: AbortSignal): Promise<TableListResult> {
@@ -308,4 +293,16 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+/** Preserve each heading verbatim as a separate query parameter. */
+function sourcePath(path: string, options: SourceListRequest | SourceReadOptions): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined) continue;
+    if (key === 'headingPath') {
+      for (const heading of (value ?? []) as readonly string[]) query.append(key, heading);
+    } else query.set(key, String(value));
+  }
+  return `${path}${query.size === 0 ? '' : `?${query}`}`;
 }

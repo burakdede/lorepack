@@ -32,15 +32,14 @@ for (const citation of bundle.citations) {
 }
 ```
 
-Build descriptions, search results, context bundles, source reads, table descriptions and
+Build descriptions, search results, context bundles, source inventories, source reads, table listings, table descriptions and
 table query results carry `corpusId`, `namespaceId`, `buildId` and `sourceState`. Corpus and
 namespace are persistent operational identifiers; the digest identifies immutable content
-and freshness reports whether sources have moved on. IDs are not credentials. Health reports server status. Selected table listings also carry build, corpus and namespace IDs.
-Unselected table listings retain their existing shape.
+and freshness reports whether sources have moved on. IDs are not credentials. Health reports server status. All table listings carry the same identity envelope, including empty lists.
 
 ## Selected retained builds
 
-Set `buildId` to a full build ID when creating `LoreClient` to keep all seven read capabilities
+Set `buildId` to a full build ID when creating `LoreClient` to keep all eight read capabilities
 on that version across activation changes. Search, context, source and query requests can
 override the client selection with their own `buildId`. Missing or unavailable versions fail
 with `LORE_E_BUILD_NOT_FOUND`; the client refuses a successful response with missing or
@@ -61,12 +60,33 @@ const bundle = await selected.contextForTask({ task: 'rollback procedure' });
 | `search(request)` | `POST /v1/search` |
 | `contextForTask(request)` | `POST /v1/context` |
 | `contextForTaskWithReceipt(request)` | `POST /v1/context` |
+| `listSources(options)` | `GET /v1/sources` |
 | `readSource(artifactId, options)` | `GET /v1/sources/:artifactId` |
 | `listTables()` | `GET /v1/tables` |
 | `describeTable(tableId)` | `GET /v1/tables/:tableId` |
 | `queryTable(tableId, sql)` | `POST /v1/tables/:tableId/query` |
 
 Table methods require a build with the `table-query` capability.
+
+## Source inventory
+
+`listSources({limit: 50})` returns a page of artifacts with read locators and the
+selected build identity. The default is 50 entries; the maximum is 100.
+`nextOffset: null` marks the end, including an empty build. Later pages require
+the first page's full build ID so activation cannot mix versions:
+
+```ts
+const first = await lore.listSources();
+let page = first;
+for (;;) {
+  for (const artifact of page.artifacts) console.log(artifact.locator);
+  if (page.nextOffset === null) break;
+  page = await lore.listSources({buildId: first.buildId, offset: page.nextOffset});
+}
+```
+
+Pass a returned locator's `artifactId` to `readSource` with that same `buildId`.
+A pruned or unavailable version fails rather than falling back to the active build.
 
 ## Options
 

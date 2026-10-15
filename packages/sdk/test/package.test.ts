@@ -39,10 +39,11 @@ describe('exact retained-build selection, issue432', () => {
     await client.search({ query: 'rollback' });
     await client.contextForTask({ task: 'rollback' });
     await client.readSource('guide');
+    await client.listSources();
     await client.listTables();
     await client.describeTable('pricing');
     await client.queryTable('pricing', 'SELECT price FROM prices');
-    expect(seen).toHaveLength(7);
+    expect(seen).toHaveLength(8);
   });
 
   it('rejects a server that silently answers with the active build or omits proof', async () => {
