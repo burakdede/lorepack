@@ -76,6 +76,12 @@ and missing dependency decisions. Its report/SBOM write port records output in m
 checks that committed artifacts remain unchanged. This is deterministic policy evidence;
 the verifier's live registry checks still establish current dependency health.
 
+The retrieval comparison contract also drives the actual controller with its small corpus,
+real compilation, SQLite worker and local runtime. It retains three build/index samples,
+30 warm queries, 20 context calls and the full quality workload. Output files and stdout must
+agree, both protocol reports must validate, and corpus/workload identities must match.
+This checks report generation, not reference-machine performance gates.
+
 The `privacy sandbox (ubuntu-latest)` job builds the project and runs
 `tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that
 counts every packet (`tools/security/test/sandbox/netns.sh`). It is a separate job because it
