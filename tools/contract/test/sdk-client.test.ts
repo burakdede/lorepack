@@ -94,7 +94,9 @@ const catalog: CatalogStore = {
     return new Set<string>();
   },
   async artifacts() {
-    return [];
+    const artifact = await this.artifact('p:guides/a.md');
+    if (artifact === null) throw new Error('Expected the SDK catalog fixture.');
+    return [{ ...artifact, byteSize: 64, parserId: 'fixture', chunkCount: 1, nodeCount: 1 }];
   },
   async artifact(idOrPath: string): Promise<CatalogArtifact | null> {
     if (idOrPath !== 'p:guides/a.md') return null;
@@ -185,6 +187,22 @@ function clientOverApp(options: { retries?: number; timeoutMs?: number } = {}): 
 }
 
 describe('every route has a typed method', () => {
+  it('lists sources with a locator that reads the selected build', async () => {
+    const client = clientOverApp();
+    const page = await client.listSources({ limit: 1 });
+    expect(page.buildId).toBe(BUILD);
+    expect(page.artifacts).toHaveLength(1);
+    expect(page.nextOffset).toBeNull();
+    const locator = page.artifacts[0]?.locator;
+    const read = await client.readSource(locator?.artifactId ?? '', { buildId: page.buildId });
+    expect(read.locator).toMatchObject(locator ?? {});
+    expect(read.buildId).toBe(page.buildId);
+    await expect(client.listSources({ offset: 1 })).rejects.toMatchObject({
+      code: 'LORE_E_INVALID_ARGUMENT',
+      status: 400,
+    });
+  });
+
   it('health', async () => {
     const health = await clientOverApp().health();
     expect(health.status).toBe('ok');

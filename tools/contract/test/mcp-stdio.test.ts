@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tableListResultSchema } from '@lorepack/core';
+import {
+  sourceListResultSchema,
+  sourceReadResultSchema,
+  tableListResultSchema,
+} from '@lorepack/core';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
@@ -90,6 +94,45 @@ afterEach(async () => {
 });
 
 describe('a client launching the server', () => {
+  it('pages source inventory and reads its locator through the actual binary', async () => {
+    for (let index = 0; index < 51; index += 1) {
+      writeFileSync(
+        join(project, `page-${String(index).padStart(2, '0')}.md`),
+        `# Page ${index}\n\nInventory source ${index}.\n`,
+      );
+    }
+    const connected = await connect(['--ensure-current'], 'auto');
+    const first = sourceListResultSchema.parse(
+      (await connected.callTool({ name: 'lore_list_sources', arguments: {} })).structuredContent,
+    );
+    expect(first.artifacts).toHaveLength(50);
+    expect(first.nextOffset).toBe(50);
+    const second = sourceListResultSchema.parse(
+      (
+        await connected.callTool({
+          name: 'lore_list_sources',
+          arguments: { buildId: first.buildId, offset: first.nextOffset },
+        })
+      ).structuredContent,
+    );
+    expect(second.artifacts).toHaveLength(2);
+    expect(second.nextOffset).toBeNull();
+    expect(second.buildId).toBe(first.buildId);
+    const locator = second.artifacts.at(-1)?.locator;
+    expect(locator?.relativePath).toBe('page-50.md');
+    const read = sourceReadResultSchema.parse(
+      (
+        await connected.callTool({
+          name: 'lore_read_source',
+          arguments: { artifactId: locator?.artifactId, buildId: second.buildId },
+        })
+      ).structuredContent,
+    );
+    expect(read.text).toContain('Inventory source 50.');
+    expect(read.buildId).toBe(first.buildId);
+    expect(read.locator).toMatchObject(locator ?? {});
+  }, 120_000);
+
   it.each([false, true])(
     'identifies table listings through the actual binary, with tables=%s',
     async (withTables) => {
@@ -179,7 +222,7 @@ describe('the protocol era, over the transport a connector generates a config fo
     const connected = await connect(['--ensure-current'], 'auto');
 
     const listed = await connected.listTools();
-    expect(listed.tools).toHaveLength(7);
+    expect(listed.tools).toHaveLength(8);
 
     const result = await connected.callTool({
       name: 'lore_search',
@@ -200,7 +243,7 @@ describe('the protocol era, over the transport a connector generates a config fo
     const connected = await connect(['--ensure-current'], 'legacy');
 
     const listed = await connected.listTools();
-    expect(listed.tools).toHaveLength(7);
+    expect(listed.tools).toHaveLength(8);
 
     const result = await connected.callTool({
       name: 'lore_search',

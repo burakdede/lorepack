@@ -274,6 +274,43 @@ function scopeFor(buildId: BuildId): BuildScope {
   };
 }
 
+describe('source inventory identity, issue426', () => {
+  it('refuses a provider that substitutes the active build for an unavailable selection', async () => {
+    const provider = new TrackingProvider();
+    const open = vi.fn();
+    const runtime = createRuntime({ provider, open });
+    await expect(runtime.listSources({ buildId: BUILD_B, offset: 1 })).rejects.toMatchObject({
+      code: 'LORE_E_BUILD_NOT_FOUND',
+    });
+    expect(open).not.toHaveBeenCalled();
+    expect(provider.acquired).toBe(1);
+    expect(provider.released).toBe(1);
+  });
+
+  it('returns an empty final page with one captured reader and a complete envelope', async () => {
+    const provider = new TrackingProvider();
+    const artifacts = vi.fn(async () => []);
+    const runtime = runtimeOver(provider, {
+      open: async (handle) => {
+        const scope = scopeFor(handle.buildId);
+        scope.catalog.artifacts = artifacts;
+        return scope;
+      },
+    });
+    expect(await runtime.listSources({ limit: 1 })).toEqual({
+      ...IDENTITY,
+      buildId: BUILD_A,
+      sourceState: 'unknown',
+      artifacts: [],
+      nextOffset: null,
+    });
+    expect(artifacts).toHaveBeenCalledExactlyOnceWith({ offset: 0, limit: 2 });
+    expect(provider.acquired).toBe(1);
+    expect(provider.released).toBe(1);
+    expect(provider.leaked).toBe(0);
+  });
+});
+
 describe('table listing identity, issue423', () => {
   it('keeps rows and envelope on A when B activates inside the table read', async () => {
     const provider = new TrackingProvider();

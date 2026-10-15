@@ -127,3 +127,22 @@ Cancel, review the refreshed rollback target and confirm: the new action succeed
 The refusal screen below was visually inspected; it is an actual served Studio capture.
 
 ![Stale rollback is refused while the competing build stays active](../images/studio_rollback_stale.png)
+
+## Source inventory pagination, 2026-10-15
+
+Sources and the command palette load every inventory page using the first response's
+build ID. A failed or unavailable continuation produces an error rather than a partial
+source tree. Exclusion reasons still come from the shared warnings endpoint.
+
+Verified on macOS arm64 with Node 24.21.0, Playwright 1.62.1 and
+Chromium 151.0.7922.34: an actual
+`lorepack dev` project with more than 50 documents required a second inventory page.
+The browser sent that page with the first build ID, displayed `docs/runbook.md` from
+beyond page one, opened its stored body and passed axe checks. The verified screen is shown below.
+
+![Source inventory with a document from beyond page one](../images/studio_source_inventory.png)
+
+Manual checklist: build more than 50 sources; open Sources and filter for a document
+beyond the first page; open its stored text; open the command palette and confirm the
+same document is available; inspect the indexed/excluded views and recorded reasons.
+A screen-reader check remains part of the release qualification, separately from axe.

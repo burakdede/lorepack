@@ -6,6 +6,8 @@ import type {
   HealthResult,
   SearchRequest,
   SearchResult,
+  SourceListRequest,
+  SourceListResult,
   SourceReadOptions,
   SourceReadResult,
   TableDescription,
@@ -143,6 +145,14 @@ export class LoreClient {
         }
       },
     );
+  }
+
+  listSources(options: SourceListRequest = {}, signal?: AbortSignal): Promise<SourceListResult> {
+    const query = new URLSearchParams();
+    if (options.buildId !== undefined) query.set('buildId', options.buildId);
+    if (options.offset !== undefined) query.set('offset', String(options.offset));
+    if (options.limit !== undefined) query.set('limit', String(options.limit));
+    return this.#get(`/v1/sources${query.size === 0 ? '' : `?${query}`}`, signal);
   }
 
   readSource(

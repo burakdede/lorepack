@@ -1,4 +1,9 @@
-import { LoreClient, LoreClientError } from '@lorepack/sdk';
+import {
+  LoreClient,
+  LoreClientError,
+  type SourceListRequest,
+  type SourceListResult,
+} from '@lorepack/sdk';
 
 /**
  * Studio's only route to data.
@@ -93,7 +98,26 @@ export async function fetchSources({
 }: {
   readonly signal: AbortSignal;
 }): Promise<{ buildId: string; artifacts: readonly SourceArtifact[] }> {
-  const response = await fetch('/v1/sources', { signal });
-  if (!response.ok) throw new Error('This server does not list sources.');
-  return (await response.json()) as { buildId: string; artifacts: readonly SourceArtifact[] };
+  async function page(options: SourceListRequest): Promise<SourceListResult> {
+    const query = new URLSearchParams();
+    if (options.buildId !== undefined) query.set('buildId', options.buildId);
+    if (options.offset !== undefined) query.set('offset', String(options.offset));
+    const response = await fetch(`/v1/sources${query.size === 0 ? '' : `?${query}`}`, { signal });
+    if (!response.ok) throw new Error('This server does not list sources.');
+    return (await response.json()) as SourceListResult;
+  }
+  const first = await page({});
+  const artifacts = [...first.artifacts];
+  let offset = first.nextOffset;
+  while (offset !== null) {
+    const next = await page({ buildId: first.buildId, offset });
+    if (next.buildId !== first.buildId)
+      throw new Error('The source inventory changed builds between pages.');
+    if (next.nextOffset !== null && next.nextOffset <= offset) {
+      throw new Error('The source inventory did not advance to the next page.');
+    }
+    artifacts.push(...next.artifacts);
+    offset = next.nextOffset;
+  }
+  return { buildId: first.buildId, artifacts };
 }

@@ -10,6 +10,7 @@ import {
   type SourceState,
   searchRequestSchema,
   secretsFromEnv,
+  sourceListRequestSchema,
   tableQueryRequestSchema,
   taskContextRequestSchema,
 } from '@lorepack/core/worker';
@@ -56,7 +57,7 @@ export interface ApiOptions {
   readonly assets?: (request: Request) => Promise<Response | null> | Response | null;
   /**
    * The active build, for `/health`. Separate from the runtime because architecture 13.1
-   * fixes that interface at seven capabilities and a health probe is not one of them.
+   * fixes that interface at eight capabilities and a health probe is not one of them.
    */
   readonly currentBuild: () => Promise<{ buildId: BuildId; generation: number } | null>;
   readonly freshness?: () => Promise<SourceState>;
@@ -99,7 +100,7 @@ export interface ApiOptions {
    * What a rebuild would change, computed on demand.
    *
    * An injected host function rather than a runtime capability, for the same reason
-   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at seven capabilities that
+   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at eight capabilities that
    * read the *active build*, and a plan reads the **source tree**. A deployment that holds
    * only the build it serves has no sources to plan against and supplies nothing, which is
    * exactly the distinction a separate port expresses.
@@ -110,13 +111,6 @@ export interface ApiOptions {
   readonly plan?: () => Promise<unknown>;
   /** The active build's warnings, with class and path, for the Overview summary. */
   readonly warnings?: (selection: BuildSelection) => Promise<unknown>;
-  /**
-   * Every artifact in the active build, for the Sources tree.
-   *
-   * Reads `CatalogStore.artifacts()`, which is a storage question rather than a retrieval
-   * one, so it stays off `LoreRuntime` and its seven capabilities.
-   */
-  readonly sources?: (selection: BuildSelection) => Promise<unknown>;
   /**
    * The same Markdown `lorepack export` writes, for the same inputs.
    *
@@ -130,7 +124,7 @@ export interface ApiOptions {
    * Environment checks and live session state, for Studio's Diagnostics route.
    *
    * An injected host function rather than an eighth runtime capability, for the same reason
-   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at seven capabilities that
+   * `currentBuild` is one: architecture 13.1 fixes `LoreRuntime` at eight capabilities that
    * read the active build, and a diagnostic reads the *machine*. Probing SQLite and counting
    * watched paths is not a question about a build, and a deployment answers it differently
    * or not at all.
@@ -394,10 +388,30 @@ export function createApiApp(options: ApiOptions): Hono {
     const warnings = options.warnings;
     app.get('/v1/warnings', (context) => answer(context, () => warnings(selectionOf(context))));
   }
-  if (options.sources !== undefined) {
-    const sources = options.sources;
-    app.get('/v1/sources', (context) => answer(context, () => sources(selectionOf(context))));
-  }
+  app.get('/v1/sources', (context) =>
+    answer(context, () => {
+      const request: Record<string, unknown> = { ...selectionOf(context) };
+      for (const key of ['offset', 'limit'] as const) {
+        const values = context.req.queries(key);
+        if (values === undefined) continue;
+        if (values.length !== 1 || !/^\d+$/.test(values[0] ?? '')) {
+          throw new LoreError('LORE_E_INVALID_ARGUMENT', `${key} must be one whole number.`, {
+            remediation: 'Pass offset >= 0 and limit between 1 and 100.',
+            subject: key,
+          });
+        }
+        request[key] = Number(values[0]);
+      }
+      const parsed = sourceListRequestSchema.safeParse(request);
+      if (!parsed.success) {
+        throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Invalid source inventory page.', {
+          remediation:
+            'Use limit 1 to 100, offset >= 0, and the first page buildId for subsequent pages.',
+        });
+      }
+      return options.runtime.listSources(parsed.data);
+    }),
+  );
   if (options.diagnostics !== undefined) {
     const diagnostics = options.diagnostics;
     app.get('/v1/diagnostics', (context) => answer(context, () => diagnostics()));

@@ -16,10 +16,13 @@ import {
   runtimeIdentitySchema,
   type SearchRequest,
   type SearchResult,
+  type SourceListRequest,
+  type SourceListResult,
   type SourceReadRequest,
   type SourceReadResult,
   type SourceState,
   searchRequestSchema,
+  sourceListRequestSchema,
   sourceReadRequestSchema,
   type TableDescription,
   type TableListResult,
@@ -94,6 +97,28 @@ class PortedRuntime implements LoreRuntime {
         ...(scope.createdAt === undefined ? {} : { createdAt: scope.createdAt }),
       };
     }, selection);
+  }
+
+  async listSources(unchecked: SourceListRequest = {}): Promise<SourceListResult> {
+    const request = checked(sourceListRequestSchema, unchecked);
+    return this.#withBuild(
+      async ({ scope, envelope }) => {
+        const rows = await scope.catalog.artifacts({
+          offset: request.offset,
+          limit: request.limit + 1,
+        });
+        const artifacts = rows.slice(0, request.limit).map((artifact) => ({
+          ...artifact,
+          locator: { artifactId: artifact.artifactId, relativePath: artifact.relativePath },
+        }));
+        return {
+          ...envelope,
+          artifacts,
+          nextOffset: rows.length > request.limit ? request.offset + request.limit : null,
+        };
+      },
+      { buildId: request.buildId },
+    );
   }
 
   async search(unchecked: SearchRequest): Promise<SearchResult> {

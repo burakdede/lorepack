@@ -7,6 +7,8 @@ import {
   type LoreRuntime,
   searchRequestSchema,
   searchResultSchema,
+  sourceListRequestSchema,
+  sourceListResultSchema,
   sourceReadRequestSchema,
   sourceReadResultSchema,
   tableDescriptionSchema,
@@ -20,11 +22,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 /**
- * The MCP tool surface: exactly the seven tools architecture 14.1 lists.
- *
- * Seven, and deliberately not more. A tool per document or per compiler stage would spend
- * the client's context window on a schema list before answering anything, which is the
- * cost 14.1 exists to avoid.
+ * The MCP tool surface includes the shared read-only build capabilities.
  *
  * **Every tool declares an `outputSchema` built from the same Zod contract the REST API
  * uses.** That is the significant upgrade the 2026-07-28 specification allows: provenance
@@ -42,6 +40,7 @@ export const TOOL_NAMES = [
   'lore_build_info',
   'lore_search',
   'lore_context_for_task',
+  'lore_list_sources',
   'lore_read_source',
   'lore_list_tables',
   'lore_describe_table',
@@ -100,6 +99,19 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
         });
         return { ...result, _meta: { 'lorepack.dev/context-receipt': receipt } };
       }),
+  );
+
+  server.registerTool(
+    'lore_list_sources',
+    {
+      title: 'List sources in a build',
+      description:
+        'List a bounded page of source documents with read locators. Continue with nextOffset and the returned buildId to keep all pages on the same immutable build.',
+      inputSchema: sourceListRequestSchema,
+      outputSchema: sourceListResultSchema,
+      annotations: READ_ONLY,
+    },
+    async (request) => guard(async () => reply(await runtime.listSources(request))),
   );
 
   server.registerTool(

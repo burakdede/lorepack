@@ -332,3 +332,30 @@ export interface SourceReadOptions {
   lineEnd?: number | undefined;
   headingPath?: string[] | undefined;
 }
+
+export interface SourceListRequest {
+  readonly buildId?: string | undefined;
+  readonly offset?: number | undefined;
+  readonly limit?: number | undefined;
+}
+
+export interface SourceListResult extends RuntimeIdentity {
+  buildId: string;
+  sourceState: SourceState;
+  artifacts: {
+    artifactId: string;
+    relativePath: string;
+    displayPath: string;
+    title: string | null;
+    status: ArtifactStatus;
+    authority: number;
+    mediaType: string;
+    objectHash: string;
+    byteSize: number;
+    parserId: string;
+    chunkCount: number;
+    nodeCount: number;
+    locator: SourceLocator;
+  }[];
+  nextOffset: number | null;
+}

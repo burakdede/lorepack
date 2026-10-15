@@ -230,6 +230,49 @@ export const contextBundleSchema = z
     message: 'A bundle may never exceed its budget',
   });
 
+export const sourceListRequestSchema = z
+  .object({
+    ...buildSelectionSchema.shape,
+    offset: z.int().nonnegative().default(0),
+    limit: z.int().positive().max(100).default(50),
+  })
+  .strict()
+  .refine((request) => request.offset === 0 || request.buildId !== undefined, {
+    message: 'Pass the first page buildId when requesting subsequent pages',
+    path: ['buildId'],
+  });
+
+export const sourceListResultSchema = z
+  .object({
+    ...responseEnvelope,
+    artifacts: z
+      .array(
+        z
+          .object({
+            artifactId: z.string().min(1),
+            relativePath: canonicalPathSchema,
+            displayPath: z.string(),
+            title: z.string().nullable(),
+            status: artifactStatusSchema,
+            authority: z.int().min(0).max(100),
+            mediaType: z.string(),
+            objectHash: z.string(),
+            byteSize: z.int().nonnegative(),
+            parserId: z.string(),
+            chunkCount: z.int().nonnegative(),
+            nodeCount: z.int().nonnegative(),
+            locator: sourceLocatorSchema,
+          })
+          .strict(),
+      )
+      .max(100),
+    nextOffset: z.int().nonnegative().nullable(),
+  })
+  .strict();
+
+export type SourceListRequest = Readonly<z.input<typeof sourceListRequestSchema>>;
+export type SourceListResult = Readonly<z.infer<typeof sourceListResultSchema>>;
+
 export const sourceReadRequestSchema = z
   .object({
     ...buildSelectionSchema.shape,

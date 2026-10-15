@@ -251,6 +251,24 @@ beforeEach(async () => {
 });
 
 describe('the tool surface, architecture 14.1', () => {
+  it('offers a source inventory whose locator can be read', async () => {
+    const result = await client.callTool({ name: 'lore_list_sources', arguments: { limit: 1 } });
+    const page = result.structuredContent as {
+      buildId: string;
+      artifacts: { locator: { artifactId: string; relativePath: string } }[];
+      nextOffset: number | null;
+    };
+    expect(page.buildId).toBe(BUILD);
+    expect(page.artifacts).toHaveLength(1);
+    expect(page.nextOffset).toBeNull();
+    const locator = page.artifacts[0]?.locator;
+    const read = await client.callTool({
+      name: 'lore_read_source',
+      arguments: { artifactId: locator?.artifactId, buildId: page.buildId },
+    });
+    expect(read.structuredContent).toMatchObject({ buildId: BUILD, locator });
+  });
+
   it.each([{}, { buildId: BUILD }])(
     'lists tables with one captured handle for %j',
     async (selection) => {
@@ -261,7 +279,7 @@ describe('the tool surface, architecture 14.1', () => {
     },
   );
 
-  it('is exactly the seven documented tools, in a deterministic order', async () => {
+  it('is exactly the eight documented tools, in a deterministic order', async () => {
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name);
 
@@ -277,7 +295,7 @@ describe('the tool surface, architecture 14.1', () => {
       expect(tool.annotations?.destructiveHint, tool.name).toBe(false);
     }
     // The stronger statement than word-matching a name: the registered set is exactly the
-    // seven read-only capabilities, so a mutating tool cannot exist without this failing.
+    // eight read-only capabilities, so a mutating tool cannot exist without this failing.
     expect(new Set(listed.tools.map((tool) => tool.name))).toEqual(new Set(TOOL_NAMES));
   });
 
@@ -325,6 +343,7 @@ describe('results', () => {
   it('carries the build id and freshness on every tool that reads the build', async () => {
     for (const [name, args] of [
       ['lore_build_info', {}],
+      ['lore_list_sources', {}],
       ['lore_list_tables', {}],
       ['lore_search', { query: 'rollback' }],
       ['lore_context_for_task', { task: 'how do I roll back' }],
@@ -497,30 +516,21 @@ describe('a deployment that holds only the build it serves', () => {
 });
 
 describe('what a resource promises against what it returns', () => {
-  /**
-   * #193. This resource was titled "Indexed sources" and described as "Every document in the
-   * active build, with its path and status", and returned a row of counts. No capability can
-   * enumerate artifacts, so it never could have done otherwise.
-   *
-   * A description is what a model reads to decide what to call, so a false one costs a turn
-   * and teaches the model something untrue about the corpus. The two sides are pinned to each
-   * other here: if a listing ever appears in the body, the description may promise one, and
-   * not before.
-   */
-  it('does not promise a document listing, because it does not return one', async () => {
+  it('describes the bounded document page it actually returns', async () => {
     const listed = await client.listResources();
     const sources = listed.resources.find((resource) => resource.uri === 'lore://project/sources');
-    expect(sources).toBeDefined();
-
+    expect(sources?.description).toMatch(/first page/i);
+    expect(sources?.description).toContain('lore_list_sources');
     const read = await client.readResource({ uri: 'lore://project/sources' });
     const contents = read.contents as Array<{ text: string }>;
-    const body = JSON.parse(contents[0]?.text ?? '{}') as Record<string, unknown>;
-
-    // The body carries no collection of documents, in any field.
-    expect(Object.values(body).some((value) => Array.isArray(value))).toBe(false);
-    // So the description has to say so rather than inviting the client to expect one.
-    expect(`${sources?.title} ${sources?.description}`).not.toMatch(/every document/i);
-    expect(sources?.description).toMatch(/not a document listing/i);
+    const body = JSON.parse(contents[0]?.text ?? '{}');
+    expect(body.buildId).toBe(BUILD);
+    expect(body.artifacts).toHaveLength(1);
+    expect(body.artifacts[0].locator).toEqual({
+      artifactId: 'p:guides/a.md',
+      relativePath: 'guides/a.md',
+    });
+    expect(body.nextOffset).toBeNull();
   });
 });
 

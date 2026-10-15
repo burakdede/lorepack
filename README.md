@@ -6,7 +6,8 @@ mutable search index.
 
 Every build is immutable and content-addressed. You can inspect what entered it, see what was
 excluded and why, ask for bounded context with citations, compare versions, activate a known
-version, and roll back without rebuilding. AI clients read the active build over MCP or HTTP.
+version, and roll back without rebuilding. AI clients read the active build over MCP or HTTP. Source inventory pages include
+read locators and a build ID, so browsing can stay pinned across activation.
 They cannot edit sources, build, deploy, or run shell commands through the Lorepack boundary.
 Source reads distinguish artifact IDs from source-relative paths. A short path shared by
 multiple sources requires an artifact ID from a locator.

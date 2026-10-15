@@ -6,6 +6,8 @@ import type {
   ContextBundle,
   SearchRequest,
   SearchResult,
+  SourceListRequest,
+  SourceListResult,
   SourceReadRequest,
   SourceReadResult,
   SourceState,
@@ -112,11 +114,13 @@ export interface CatalogStore {
    * database, underneath this interface, which meant the capability existed only for the
    * local backend and could not exist for the Phase 6 Worker at all (#66).
    *
-   * On `CatalogStore` rather than on `LoreRuntime`: architecture 13.1 fixes the model-facing
-   * interface at seven capabilities, and a file listing is a storage question, not a
-   * retrieval one. Studio reads it through an injected host function, like the plan.
+   * Optional paging is applied by the store before loading rows. The runtime uses it
+   * for bounded inventory pages; developer inspection can still request the full list.
    */
-  artifacts(): Promise<readonly CatalogArtifactSummary[]>;
+  artifacts(page?: {
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<readonly CatalogArtifactSummary[]>;
   /** Every node of one artifact, in document order. */
   nodes(artifactId: string): Promise<readonly CatalogNode[]>;
 }
@@ -248,6 +252,7 @@ export interface RuntimeDeps {
  */
 export interface LoreRuntime {
   describeBuild(selection?: BuildSelection): Promise<BuildDescription>;
+  listSources(request?: SourceListRequest): Promise<SourceListResult>;
   search(request: SearchRequest): Promise<SearchResult>;
   contextForTask(request: TaskContextRequest): Promise<ContextBundle>;
   readSource(request: SourceReadRequest): Promise<SourceReadResult>;
@@ -259,7 +264,7 @@ export interface LoreRuntime {
 /**
  * Comparing two builds, which is a different question from reading one.
  *
- * `LoreRuntime` is fixed at seven capabilities and every one of them reads the *active*
+ * `LoreRuntime` is fixed at eight capabilities and every one of them reads one selected
  * build through a handle. A diff reads two builds, neither of which need be active, and
  * possibly after the sources are gone. So it is a separate, optional port, supplied by a
  * host that can reach build history: the local CLI can, and a deployment that keeps only

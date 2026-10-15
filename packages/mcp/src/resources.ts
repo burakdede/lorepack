@@ -178,41 +178,21 @@ export function registerResources(
     'sources',
     'lore://project/sources',
     {
-      title: 'What this build indexed',
+      title: 'Sources in this build',
       description:
-        'How much this build contains, and whether the sources have moved on since. Not a document listing: use lore_search to find a document, and lore_read_source to read one.',
+        'The first page of source documents and read locators. Use lore_list_sources with nextOffset and buildId for subsequent pages.',
       mimeType: 'application/json',
     },
     async (uri) =>
-      read(uri, async () => {
-        // Counts, deliberately, because no capability can enumerate artifacts: `LoreRuntime`
-        // is seven capabilities (architecture 13.1) and none of them lists a build's
-        // documents. This said "every document, with its path and status" until #193, which
-        // is the product claiming something it cannot do, to the one reader that believes it.
-        //
-        // The listing is a real gap rather than a decision, and #66 (Studio's Sources route)
-        // is where it has to be built. Today the only implementation is raw SQL inside
-        // `lorepack inspect sources`, which no remote backend can reach.
-        const described = await runtime.describeBuild();
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: 'application/json',
-              text: JSON.stringify(
-                {
-                  buildId: described.buildId,
-                  sourceState: described.sourceState,
-                  counts: described.counts,
-                  note: 'This interface cannot list the documents in a build. Use lore_search to find one, then lore_read_source to read it.',
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      }),
+      read(uri, async () => ({
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: 'application/json',
+            text: JSON.stringify(await runtime.listSources(), null, 2),
+          },
+        ],
+      })),
   );
 
   server.registerResource(

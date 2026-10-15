@@ -139,6 +139,7 @@ describe('the Worker D1 query budget, issue 86', () => {
           },
         },
         { path: `/v1/sources/${encodeURIComponent(fixture.knownArtifactId)}`, maximum: 4 },
+        { path: '/v1/sources?limit=1', maximum: 3 },
         { path: '/v1/tables', maximum: 3 },
         { path: tablePath, maximum: 5 },
         { path: `${tablePath}/query`, maximum: 5, payload: { sql: fixture.sql } },

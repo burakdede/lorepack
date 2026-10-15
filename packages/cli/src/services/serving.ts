@@ -215,15 +215,6 @@ export async function startServing(
           sourceState: bundle.sourceState,
         });
       },
-      sources: async (selection) => {
-        const handle = await backend.provider.acquire(selectionFor(selection));
-        try {
-          const scope = await backend.open(handle);
-          return { buildId: handle.buildId, artifacts: await scope.catalog.artifacts() };
-        } finally {
-          handle.release();
-        }
-      },
       warnings: createWarningsEndpoint(async (selection) => {
         // Acquired and released like any other read, so a warnings request cannot pin a build
         // open after it stops being active.

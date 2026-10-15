@@ -55,7 +55,10 @@ beforeEach(() => {
     vi.fn(async (url: string) => {
       const target = String(url);
       if (target === '/v1/sources') {
-        return new Response(JSON.stringify({ buildId: 'lore_c', artifacts: [] }), { status: 200 });
+        return new Response(
+          JSON.stringify({ buildId: 'lore_c', nextOffset: null, artifacts: [] }),
+          { status: 200 },
+        );
       }
       if (target === '/v1/warnings') return new Response(JSON.stringify(WARNINGS), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });

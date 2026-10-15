@@ -77,7 +77,10 @@ class LocalCatalogStore implements CatalogStore {
     return countRows(this.#db, 'build_warnings');
   }
 
-  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
+  async artifacts(page?: {
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<readonly CatalogArtifactSummary[]> {
     // One statement for the whole listing rather than one per row: at the 2,500-file
     // envelope a per-artifact count query is 2,500 round trips to answer one question.
     const rows = this.#db
@@ -88,9 +91,11 @@ class LocalCatalogStore implements CatalogStore {
                 (SELECT count(*) FROM chunks c WHERE c.artifact_id = a.id) AS chunkCount,
                 (SELECT count(*) FROM nodes n WHERE n.artifact_id = a.id) AS nodeCount
            FROM artifacts a
-          ORDER BY a.relative_path`,
+          ORDER BY a.relative_path, a.id${page === undefined ? '' : ' LIMIT ? OFFSET ?'}`,
       )
-      .all() as Array<Record<string, string | number | null>>;
+      .all(...(page === undefined ? [] : [page.limit, page.offset])) as Array<
+      Record<string, string | number | null>
+    >;
 
     return rows.map((row) => ({
       artifactId: String(row.id),

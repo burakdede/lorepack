@@ -115,7 +115,7 @@ const ARTIFACTS_QUERY = `SELECT a.id, a.relative_path AS relativePath, a.display
          WHERE n.project_id = a.project_id AND n.build_id = a.build_id AND n.artifact_id = a.id) AS nodeCount
 FROM artifacts a
 WHERE a.project_id = ? AND a.build_id = ?
-ORDER BY a.relative_path`;
+ORDER BY a.relative_path, a.id`;
 
 const artifactQuery = (
   by: 'id' | 'path',
@@ -171,11 +171,18 @@ export class D1CatalogStore implements CatalogStore {
     return this.#count(COUNT_WARNINGS_QUERY);
   }
 
-  async artifacts(): Promise<readonly CatalogArtifactSummary[]> {
-    const rows = await this.#run<ArtifactRow>(ARTIFACTS_QUERY, [
-      this.#namespace.projectId,
-      this.#namespace.buildId,
-    ]);
+  async artifacts(page?: {
+    readonly offset: number;
+    readonly limit: number;
+  }): Promise<readonly CatalogArtifactSummary[]> {
+    const rows = await this.#run<ArtifactRow>(
+      `${ARTIFACTS_QUERY}${page === undefined ? '' : ' LIMIT ? OFFSET ?'}`,
+      [
+        this.#namespace.projectId,
+        this.#namespace.buildId,
+        ...(page === undefined ? [] : [page.limit, page.offset]),
+      ],
+    );
     return rows.map((row) => ({
       artifactId: row.id,
       relativePath: row.relativePath,

@@ -134,8 +134,8 @@ describe('one server, both surfaces', () => {
 
     const body = (await response.json()) as { result: { tools: Array<{ name: string }> } };
     const names = body.result.tools.map((tool) => tool.name);
-    // The same seven the stdio transport registers, because it is the same registration.
-    expect(names).toHaveLength(7);
+    // The same eight the stdio transport registers, because it is the same registration.
+    expect(names).toHaveLength(8);
     expect(names).toContain('lore_context_for_task');
   });
 
