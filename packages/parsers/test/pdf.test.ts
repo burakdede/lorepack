@@ -104,6 +104,22 @@ describe('what is out of scope, and says so', () => {
     expect(warning?.message).toContain('1 of 2 pages');
   });
 
+  it('names every unread page in document order, including the first and last', async () => {
+    const parsed = await parse([
+      { lines: [], image: true },
+      { lines: ['Text on page two.'] },
+      { lines: [], image: true },
+      { lines: ['Text on page four.'] },
+      { lines: [], image: true },
+    ]);
+    const warning = parsed.warnings.find((one) => one.code === 'pdf-pages-without-text');
+    expect(warning?.message).toContain('3 of 5 pages');
+    expect(warning?.message).toContain('Pages: 1, 3, 5.');
+    expect(
+      parsed.nodes.filter((node) => node.kind === 'paragraph').map((node) => node.locator.page),
+    ).toEqual([2, 4]);
+  });
+
   it('fails a password-protected document with an actionable message', async () => {
     const failure = await parseBytes(makeEncryptedPdf()).catch((error: unknown) => error);
 

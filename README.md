@@ -458,7 +458,8 @@ actions remain explicit CLI or Studio operations performed by the developer.
 
 The alpha supports the document, text, PDF, CSV, and XLSX paths described in the parser guide.
 It preserves the structure those parsers expose and records unsupported or excluded files as
-warnings. The default install has no Python, Docker, native add-on, model download, API key,
+warnings. Partly scanned PDFs name the unread pages in `lorepack inspect warnings`.
+The default install has no Python, Docker, native add-on, model download, API key,
 account, or hosted service requirement.
 
 The first public alpha deliberately does not include OCR, images or screenshots, PPTX, SaaS
