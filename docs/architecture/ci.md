@@ -53,9 +53,13 @@ clean at Moderate and above, and the full contributor dependency audit must pass
 and above. Both run against the registry; an audit request failure fails verification.
 The dated dependency-health report and CycloneDX SBOM must match the resolved dependencies.
 
-Package builds type-check `src`. `pnpm typecheck:audit` applies the same strict settings to
+Package builds type-check `src`. `pnpm typecheck:audit` applies the Node settings to
 the audit regression files listed in [`tsconfig.audit_tests.json`](../../tsconfig.audit_tests.json).
 Add new audit regression files to that list. Both `pnpm verify` and native CI run the check.
+The same command then checks the existing Studio browser-test project with DOM libraries.
+Its strict flags are unchanged. New SQL suggestion tests belong to their actual Node
+and browser programs, so native CI checks both contexts rather than relying on
+Playwright's transpilation alone.
 
 Target failure regressions drive the command framework with local receipt files and declared
 adapter ports. They check rejected setup, login/account prerequisites, resource drift and

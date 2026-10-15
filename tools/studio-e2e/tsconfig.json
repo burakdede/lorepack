@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["es2024", "dom", "dom.iterable"]
   },
   "include": ["test/**/*", "playwright.config.ts"]
 }
