@@ -389,6 +389,8 @@ they show scale trends rather than proving performance on every customer corpus.
 The optional [RAG benchmark](docs/compatibility/rag-benchmark.md) estimates hosted cost only
 with complete provider usage and two known, nonnegative prices. Explicit zero is valid;
 missing prices remain unavailable.
+Benchmark error paths close SQLite before temporary cleanup, preserving the original
+provider or configuration diagnostic on Windows as well as POSIX systems.
 
 ## What makes the build trustworthy
 

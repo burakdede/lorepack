@@ -45,39 +45,44 @@ function estimateTokens(value) {
 
 function readChunks() {
   const db = new DatabaseSync(buildDatabasePath, { readOnly: true });
-  const rows = db
-    .prepare(
-      'SELECT id, relative_path AS path, heading_path AS heading, text AS body, line_start AS lineStart, line_end AS lineEnd, page FROM chunks ORDER BY id',
-    )
-    .all();
-  db.close();
-  return rows;
+  try {
+    return db
+      .prepare(
+        'SELECT id, relative_path AS path, heading_path AS heading, text AS body, line_start AS lineStart, line_end AS lineEnd, page FROM chunks ORDER BY id',
+      )
+      .all();
+  } finally {
+    db.close();
+  }
 }
 
 function createIndex(rows, path) {
   const started = performance.now();
   const db = new DatabaseSync(path);
-  db.exec(
-    'CREATE VIRTUAL TABLE chunks_fts USING fts5(id UNINDEXED, path, heading, body, lineStart UNINDEXED, lineEnd UNINDEXED, page UNINDEXED)',
-  );
-  db.exec('BEGIN');
-  const insert = db.prepare(
-    'INSERT INTO chunks_fts (id, path, heading, body, lineStart, lineEnd, page) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  );
-  for (const row of rows) {
-    insert.run(
-      row.id,
-      row.path,
-      row.heading,
-      row.body,
-      row.lineStart ?? null,
-      row.lineEnd ?? null,
-      row.page ?? null,
+  try {
+    db.exec(
+      'CREATE VIRTUAL TABLE chunks_fts USING fts5(id UNINDEXED, path, heading, body, lineStart UNINDEXED, lineEnd UNINDEXED, page UNINDEXED)',
     );
+    db.exec('BEGIN');
+    const insert = db.prepare(
+      'INSERT INTO chunks_fts (id, path, heading, body, lineStart, lineEnd, page) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    );
+    for (const row of rows) {
+      insert.run(
+        row.id,
+        row.path,
+        row.heading,
+        row.body,
+        row.lineStart ?? null,
+        row.lineEnd ?? null,
+        row.page ?? null,
+      );
+    }
+    db.exec('COMMIT');
+    db.exec('PRAGMA optimize');
+  } finally {
+    db.close();
   }
-  db.exec('COMMIT');
-  db.exec('PRAGMA optimize');
-  db.close();
   return performance.now() - started;
 }
 
@@ -231,66 +236,72 @@ try {
   createIndex(rows, path);
   const coldStarted = performance.now();
   const coldDb = new DatabaseSync(path, { readOnly: true });
-  query(coldDb, WORKLOAD.searchQueries[0]);
-  coldDb.close();
+  try {
+    query(coldDb, WORKLOAD.searchQueries[0]);
+  } finally {
+    coldDb.close();
+  }
   const coldSearchMs = Math.round((performance.now() - coldStarted) * 100) / 100;
 
   const db = new DatabaseSync(path, { readOnly: true });
   const warm = [];
   const topK = [];
-  for (let index = 0; index < QUERY_ITERATIONS; index += 1) {
-    const started = performance.now();
-    const result = query(db, WORKLOAD.searchQueries[index % WORKLOAD.searchQueries.length]);
-    warm.push(performance.now() - started);
-    topK.push(result.length);
-  }
-
   const contextSamples = [];
   const promptSamples = [];
   const modelSamples = [];
-  for (let index = 0; index < CONTEXT_ITERATIONS; index += 1) {
-    const task = WORKLOAD.contextTasks[index % WORKLOAD.contextTasks.length];
-    const retrievalStarted = performance.now();
-    const candidates = query(db, task);
-    const context = assembleContext(candidates);
-    contextSamples.push(performance.now() - retrievalStarted);
-    const promptStarted = performance.now();
-    const prompt = buildPrompt(task, context);
-    promptSamples.push(performance.now() - promptStarted);
-    const inputTokens = estimateTokens(task);
-    const promptTokens = estimateTokens(prompt);
-    totalInputTokens += inputTokens;
-    totalRetrievedContextTokens += context.tokens;
-    totalPromptTokens += promptTokens;
-    if (MODE === 'hosted') {
-      const result = await requestHosted(prompt);
-      modelSamples.push(result.elapsed);
-      recordHostedUsage(result.usage);
+  try {
+    for (let index = 0; index < QUERY_ITERATIONS; index += 1) {
+      const started = performance.now();
+      const result = query(db, WORKLOAD.searchQueries[index % WORKLOAD.searchQueries.length]);
+      warm.push(performance.now() - started);
+      topK.push(result.length);
     }
-  }
 
-  for (const entry of WORKLOAD.qualityQueries) {
-    const candidates = query(db, entry.query);
-    if (entry.kind === 'search') {
-      answerCases.push({ ...entry, hits: candidates.map((row) => ({ locator: locator(row) })) });
-      continue;
+    for (let index = 0; index < CONTEXT_ITERATIONS; index += 1) {
+      const task = WORKLOAD.contextTasks[index % WORKLOAD.contextTasks.length];
+      const retrievalStarted = performance.now();
+      const candidates = query(db, task);
+      const context = assembleContext(candidates);
+      contextSamples.push(performance.now() - retrievalStarted);
+      const promptStarted = performance.now();
+      const prompt = buildPrompt(task, context);
+      promptSamples.push(performance.now() - promptStarted);
+      const inputTokens = estimateTokens(task);
+      const promptTokens = estimateTokens(prompt);
+      totalInputTokens += inputTokens;
+      totalRetrievedContextTokens += context.tokens;
+      totalPromptTokens += promptTokens;
+      if (MODE === 'hosted') {
+        const result = await requestHosted(prompt);
+        modelSamples.push(result.elapsed);
+        recordHostedUsage(result.usage);
+      }
     }
-    const context = assembleContext(candidates);
-    const prompt = buildPrompt(entry.query, context);
-    let answer = null;
-    if (MODE === 'hosted') {
-      const result = await requestHosted(prompt);
-      modelSamples.push(result.elapsed);
-      recordHostedUsage(result.usage);
-      answer = result.answer;
+
+    for (const entry of WORKLOAD.qualityQueries) {
+      const candidates = query(db, entry.query);
+      if (entry.kind === 'search') {
+        answerCases.push({ ...entry, hits: candidates.map((row) => ({ locator: locator(row) })) });
+        continue;
+      }
+      const context = assembleContext(candidates);
+      const prompt = buildPrompt(entry.query, context);
+      let answer = null;
+      if (MODE === 'hosted') {
+        const result = await requestHosted(prompt);
+        modelSamples.push(result.elapsed);
+        recordHostedUsage(result.usage);
+        answer = result.answer;
+      }
+      answerCases.push({
+        ...entry,
+        citations: context.selected.map((item) => item.locator),
+        answer,
+      });
     }
-    answerCases.push({
-      ...entry,
-      citations: context.selected.map((item) => item.locator),
-      answer,
-    });
+  } finally {
+    db.close();
   }
-  db.close();
   const peak = peakRssMiB();
   rmSync(path, { force: true });
 
