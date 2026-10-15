@@ -1676,9 +1676,207 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     });
 
     it.each(['spawnSync', 'execFileSync', 'spawn', 'fork'] as const)(
+      'captures three generations of verification scripts launched with %s',
+      async (api) => {
+        const { project, captured, built } = scenario;
+        const shared = pathToFileURL(join(project, 'packages/core/dist/shared.js')).href;
+        const leaf = join(project, `nested-leaf-${api}.mjs`);
+        const middle = join(project, `nested-middle-${api}.mjs`);
+        const parent = join(project, `nested-parent-${api}.mjs`);
+        const launch = (filename: string) => {
+          const target = JSON.stringify(filename);
+          const options = "{encoding:'utf8',env:{NESTED_WITNESS:'original'}}";
+          if (api === 'spawnSync')
+            return `const result=childProcess.spawnSync(process.execPath,[${target}],${options});if(result.status!==0)throw new Error(result.stderr);process.stdout.write(result.stdout);`;
+          if (api === 'execFileSync')
+            return `process.stdout.write(childProcess.execFileSync(process.execPath,[${target}],${options}));`;
+          return `const child=${
+            api === 'fork'
+              ? `childProcess.fork(${target},[],{env:{NESTED_WITNESS:'original'},stdio:['ignore','pipe','pipe','ipc']})`
+              : `childProcess.spawn(process.execPath,[${target}],{env:{NESTED_WITNESS:'original'},stdio:['ignore','pipe','pipe']})`
+          };let stderr='';child.stdout.on('data',bytes=>process.stdout.write(bytes));child.stderr.on('data',bytes=>{stderr+=bytes;});await new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>code===0?resolve():reject(new Error(stderr)));});`;
+        };
+        const observe = `import {marker} from ${JSON.stringify(shared)};console.log(JSON.stringify({marker:marker(),execArgv:process.execArgv,args:process.argv.slice(2),witness:process.env.NESTED_WITNESS??null}));`;
+        writeFileSync(leaf, observe);
+        writeFileSync(
+          middle,
+          `import * as childProcess from 'node:child_process';${observe}${launch(leaf)}`,
+        );
+        writeFileSync(
+          parent,
+          `import * as childProcess from 'node:child_process';${observe}${launch(middle)}`,
+        );
+        const report = await captureVerificationCommands(captured, built.launch, [
+          { script: `nested-parent-${api}.mjs`, args: ['--check', 'δ with spaces'] },
+        ]);
+        expect(report.status).toBe('Pass');
+        const output = report.commands[0]?.stdout
+          .trim()
+          .split('\n')
+          .map((line: string) => JSON.parse(line));
+        expect(output).toHaveLength(3);
+        expect(output?.[0]).toMatchObject({
+          marker: 'measured',
+          execArgv: [],
+          args: ['--check', 'δ with spaces'],
+        });
+        expect(output?.slice(1)).toEqual(
+          Array(2).fill({ marker: 'measured', execArgv: [], args: [], witness: 'original' }),
+        );
+        const registry = createCampaignRegistry(captured, built.launch);
+        const evidence = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+          ...registry.forkEntries,
+          ...registry.commandEntries,
+        ]);
+        expect(evidence.status).toBe('Pass');
+        expect(evidence.processes).toBe(3);
+        expect(new Set(evidence.executions.map((execution) => execution.pid)).size).toBe(3);
+        const launches = readdirSync(built.launch.captureDirectory)
+          .filter((file) => file.endsWith('.launch.json'))
+          .map((file) =>
+            JSON.parse(readFileSync(join(built.launch.captureDirectory, file), 'utf8')),
+          );
+        const parents = launches.filter((launch) => launch.parentPid === process.pid);
+        expect(parents).toHaveLength(1);
+        const children = launches.filter((launch) => launch.parentPid === parents[0].pid);
+        expect(children).toHaveLength(1);
+        expect(launches.filter((launch) => launch.parentPid === children[0].pid)).toHaveLength(1);
+        expect(
+          evidence.executions.every(
+            (execution) => execution.state === 'completed' && execution.exitCode === 0,
+          ),
+        ).toBe(true);
+        const map = (evidence.maps as Record<string, Coverage>)[
+          join(project, 'packages/core/src/shared.ts')
+        ];
+        expect(map).toBeDefined();
+        expect(Object.values(map?.f ?? {})).toEqual([3]);
+      },
+    );
+
+    it.each(['sync', 'async'] as const)(
+      'retains nested script custody under the original project-only grant (%s)',
+      async (mode) => {
+        const { project, captured, built } = scenario;
+        const cwd = join(project, `restricted-nested-${mode}`);
+        mkdirSync(cwd);
+        const leaf = join(cwd, 'leaf.mjs');
+        const parent = join(cwd, 'parent.mjs');
+        const preload = join(cwd, 'user-preload.mjs');
+        writeFileSync(preload, 'globalThis.nestedPreloadRan = true;');
+        const prefix = [
+          '--permission',
+          '--allow-fs-read=*',
+          `--allow-fs-write=${cwd}`,
+          '--allow-child-process',
+          '--import',
+          pathToFileURL(preload).href,
+        ];
+        const shared = pathToFileURL(join(project, 'packages/core/dist/shared.js')).href;
+        const observation = `import {marker} from ${JSON.stringify(shared)};console.log(JSON.stringify({marker:marker(),preloaded:globalThis.nestedPreloadRan,execArgv:process.execArgv,writeLocal:process.permission.has('fs.write',${JSON.stringify(cwd)}),writeOutside:process.permission.has('fs.write',${JSON.stringify(built.launch.captureDirectory)})}));`;
+        writeFileSync(leaf, observation);
+        writeFileSync(
+          parent,
+          `import {spawnSync} from 'node:child_process';${observation}const result=spawnSync(process.execPath,${JSON.stringify([...prefix, leaf])},{cwd:${JSON.stringify(cwd)},env:{},encoding:'utf8'});if(result.status!==0)throw new Error(result.stderr);process.stdout.write(result.stdout);`,
+        );
+        const args = [...prefix, parent];
+        const expected = spawnSync(process.execPath, args, { cwd, env: {}, encoding: 'utf8' });
+        expect(expected.status).toBe(0);
+        expect(expected.stderr).toContain('[PERM0002]');
+        const warnings = (text: string) => text.replace(/\(node:\d+\)/g, '(node:PID)');
+        const registry = createCampaignRegistry(captured, built.launch);
+        const { default: processes } = await import('node:child_process');
+        const sync = registerSyncCommandCapture(
+          registry.commandEntries,
+          built.launch.captureDirectory,
+        );
+        const async = registerCommandCapture(
+          registry.commandEntries,
+          built.launch.captureDirectory,
+        );
+        try {
+          if (mode === 'sync') {
+            const result = processes.spawnSync(process.execPath, args, {
+              cwd,
+              env: {},
+              encoding: 'utf8',
+            });
+            expect(result.status).toBe(0);
+            expect(warnings(result.stderr)).toBe(warnings(expected.stderr));
+            expect(result.stdout).toBe(expected.stdout);
+          } else {
+            const { promisify } = await import('node:util');
+            const result = await promisify(processes.execFile)(process.execPath, args, {
+              cwd,
+              env: {},
+              encoding: 'utf8',
+            });
+            expect(warnings(result.stderr)).toBe(warnings(expected.stderr));
+            expect(result.stdout).toBe(expected.stdout);
+            await async.settled();
+          }
+        } finally {
+          async.restore();
+          sync.restore();
+        }
+        const result = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+          ...registry.forkEntries,
+          ...registry.commandEntries,
+        ]);
+        expect(result.processes).toBe(2);
+        expect(result.status).toBe('Pass');
+        expect(readdirSync(join(cwd, '.lorepack'))).toEqual([]);
+        const observations = expected.stdout
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line));
+        expect(observations).toEqual(
+          Array(2).fill({
+            marker: 'measured',
+            preloaded: true,
+            execArgv: prefix,
+            writeLocal: true,
+            writeOutside: false,
+          }),
+        );
+      },
+    );
+
+    it('rejects a changed nested registry before launch and during reconciliation', async () => {
+      const { project, captured, built } = scenario;
+      const registry = createCampaignRegistry(captured, built.launch);
+      const preload = built.launch.registryPreload;
+      expect(preload).toBeDefined();
+      await captureVerificationCommands(captured, built.launch, ['packages/core/dist/shared.js']);
+      const before = readFileSync(preload.path);
+      try {
+        appendFileSync(preload.path, '\nprocess.stdout.write("changed registry ran");');
+        expect(() => createCampaignRegistry(captured, built.launch)).toThrow(
+          'Nested registry initializer differs',
+        );
+        await expect(
+          reconcileForkCapture(captured, built.launch.captureDirectory, [
+            ...registry.forkEntries,
+            ...registry.commandEntries,
+          ]),
+        ).rejects.toThrow('Nested registry initializer differs');
+      } finally {
+        writeFileSync(preload.path, before);
+      }
+      const result = await reconcileForkCapture(captured, built.launch.captureDirectory, [
+        ...registry.forkEntries,
+        ...registry.commandEntries,
+      ]);
+      expect(result.status).toBe('Pass');
+      expect(result.processes).toBe(1);
+      expect(Object.keys(result.maps)).toEqual([join(project, 'packages/core/src/shared.ts')]);
+    });
+
+    it.each(['spawnSync', 'execFileSync', 'spawn', 'fork'] as const)(
       'rejects missing custody for an owned grandchild launched with %s',
       async (api) => {
         const { project, captured, built } = scenario;
+        const observerOnly = { ...built.launch, registryPreload: undefined };
         const parent = join(project, 'nested-verification.mjs');
         const child = JSON.stringify(join(project, 'packages/core/dist/shared.js'));
         const body =
@@ -1693,11 +1891,11 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
                 };
 await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(new Error('Owned child failed')));});`;
         writeFileSync(parent, `import * as childProcess from 'node:child_process';\n${body}`);
-        const parity = await captureVerificationCommands(captured, built.launch, [
+        const parity = await captureVerificationCommands(captured, observerOnly, [
           'nested-verification.mjs',
         ]);
         expect(parity.status).toBe('Pass');
-        const registry = createCampaignRegistry(captured, built.launch);
+        const registry = createCampaignRegistry(captured, observerOnly);
         await expect(
           reconcileForkCapture(captured, built.launch.captureDirectory, [
             ...registry.forkEntries,
