@@ -593,6 +593,7 @@ retained catalog bytes. Isolated test layouts preserve the compiler map's origin
 Target failure tests check actionable errors, resource drift and unchanged receipts through
 the command framework and declared adapter ports; credentialed Cloudflare acceptance remains separate.
 Discovery tests cover sources disappearing after configuration resolves and retain explicit warnings.
+Filesystem race tests also remove entries and symlink targets between real discovery calls.
 Supply-chain policy tests use explicit registry fixtures and capture report writes without
 changing committed artifacts. Live dependency-health checks remain part of verification.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
