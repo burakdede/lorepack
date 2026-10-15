@@ -41,6 +41,8 @@ export async function verifyCatalogFiles(
 ): Promise<LogicalCatalogProof> {
   let reply: ChildReply;
   try {
+    // execFile can create a process before applying a pre-aborted signal.
+    signal?.throwIfAborted();
     const { stdout } = await execute(
       process.execPath,
       [
@@ -61,13 +63,13 @@ export async function verifyCatalogFiles(
     );
     reply = JSON.parse(stdout) as ChildReply;
   } catch (cause) {
-    if (cause instanceof LoreError) throw cause;
     if (signal?.aborted) {
       throw new LoreError('LORE_E_CANCELLED', 'Catalog verification was cancelled.', {
         remediation: 'Retained build data and the active pointer were not changed.',
         cause,
       });
     }
+    if (cause instanceof LoreError) throw cause;
     throw new LoreError(
       'LORE_E_LIMIT_EXCEEDED',
       'The archive verifier exceeded its execution limits or could not finish.',
