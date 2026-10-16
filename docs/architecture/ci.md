@@ -159,3 +159,9 @@ Run the complete fixture suite with:
 pnpm build
 pnpm exec vitest run packages/deploy-cloudflare/test/project-table-data.test.ts
 ```
+
+The 70-commit marker/pruning fixtures retain all four combinations and derive actual fetch
+commands and depth from CI. Their import creates the PR ref directly; cloning persists
+`fetch.prune` through [git clone --config](https://git-scm.com/docs/git-clone), and the test
+checks that stored configuration before using it. This removes three redundant Git launches
+per case without reducing history, skipping the real clone/fetch or changing the 5000ms deadline.

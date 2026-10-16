@@ -174,7 +174,7 @@ describe('changeset policy', () => {
     [true, true],
     [false, true],
   ])('evaluates a long PR graph with marker %s and pruning %s', (hasMarker, prune) => {
-    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const base = 'refs/heads/main';
     let history = '';
     for (let index = 1; index <= 70; index++) {
       const subject =
@@ -182,8 +182,8 @@ describe('changeset policy', () => {
       const content = `${index}\n`;
       history += `commit refs/heads/feature\nmark :${index}\ncommitter Test User <test@example.com> ${1700000000 + index} +0000\ndata ${Buffer.byteLength(subject)}\n${subject}\nfrom ${index === 1 ? base : `:${index - 1}`}\nM 100644 inline docs.md\ndata ${Buffer.byteLength(content)}\n${content}\n`;
     }
+    history += 'reset refs/pull/718/head\nfrom :70\n';
     execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: history });
-    execFileSync('git', ['update-ref', 'refs/pull/718/head', 'refs/heads/feature'], { cwd: root });
     const workflow = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
     const verify = workflow.slice(
       workflow.indexOf('\n  verify:'),
@@ -196,6 +196,8 @@ describe('changeset policy', () => {
       'git',
       [
         'clone',
+        '--config',
+        `fetch.prune=${String(prune)}`,
         '--no-local',
         '--branch',
         'feature',
@@ -205,7 +207,9 @@ describe('changeset policy', () => {
       ],
       { stdio: 'pipe' },
     );
-    execFileSync('git', ['config', 'fetch.prune', String(prune)], { cwd: checkout });
+    expect(readFileSync(join(checkout, '.git', 'config'), 'utf8')).toMatch(
+      new RegExp(`\\[fetch\\]\\s+prune = ${String(prune)}`),
+    );
     const expand = (value: string) =>
       value
         .replaceAll(/\$\{\{\s*github\.base_ref\s*\}\}/g, 'main')
