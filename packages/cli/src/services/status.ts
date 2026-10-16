@@ -186,7 +186,7 @@ export async function readFreshnessObservation(
  *
  * An allowlist rather than a bare `catch`. Swallowing everything would turn a corrupt
  * state database into the cheerful and false statement "freshness unknown", which is the
- * kind of helpfulness that hides a real defect for a phase or two. These three all mean
+ * kind of helpfulness that hides a real defect for a phase or two. These failures all mean
  * "something about the source tree stopped us looking", and none of them says anything
  * about whether the build being read is sound.
  */
@@ -196,6 +196,7 @@ export function degradedFreshness(error: unknown): Freshness | null {
     'LORE_E_ENVELOPE_EXCEEDED',
     'LORE_E_PATH_ESCAPE',
     'LORE_E_CASE_COLLISION',
+    'LORE_E_SOURCE_UNREADABLE',
   ]);
   if (!degradable.has(error.code)) return null;
   return { sourceState: 'unknown', reason: error.message };

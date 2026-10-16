@@ -54,6 +54,17 @@ still answers. This was learned the hard way: establishing freshness first once 
 `lorepack search` refuse to answer on a project above the file envelope, from a build sitting
 ready on disk (#147).
 
+## Temporary source read failures
+
+If a file disappears during a source scan, read-only freshness becomes `unknown` with the
+source-read reason. The immutable build still answers. `lorepack dev` warns and continues
+watching; its reconciliation queue can recover when the source becomes readable again,
+even if metadata did not change. A strict `status` or build can still report the source
+error, and unrelated corrupt-build errors remain errors.
+
+[Verification](../testing/source_freshness_recovery.md) separates real read-open races,
+serialized watcher recovery and the full sixty-second churn check.
+
 ## What a client should do with this
 
 Read `buildId` and `sourceState` off any result.
@@ -66,3 +77,13 @@ Read `buildId` and `sourceState` off any result.
 A changing `buildId` between results means activation changed, possibly through rollback.
 `--ensure-current` builds only at startup. Later source changes are annotated without automatic
 activation; `lorepack dev` separately watches source changes and builds them.
+
+
+For `lorepack dev`, the periodic reconciliation floor covers configured subdirectories and
+individual file sources even when no filesystem event arrives. Event filtering uses the
+same project-relative ignore rules and directory pruning as discovery. With `sources: [docs]`,
+`/docs/private/` excludes that directory; file identities remain source-relative. Changed context appears
+only after a complete candidate is validated and activated; HTTP, MCP and Studio read that
+immutable build. [Verification](../testing/source_watch.md) records the event-disabled tests
+and the actual local CLI/HTTP check. A persistent MCP HTTP client was verified on2026-10-16
+with protocol SDK2.2.0 and MCP2026-07-28; this does not claim new desktop-client trust verification.

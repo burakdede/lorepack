@@ -87,10 +87,49 @@ function discovery uses to decide which files are sources. Two matchers built fr
 ingredients in two places is exactly how they come to disagree about one file, and the
 symptom would be a file that is indexed but never triggers a rebuild, or the reverse.
 
+Ignore rules see canonical project-relative logical paths, matching the location of
+`.loreignore`. A source under `docs` applies `/docs/private/` to its private directory;
+a configured file uses its full declared project path. Both declared and resolved event
+paths map back to that logical name, so directory links and Windows aliases cannot change
+which rule applies. Discovery and the watcher share `sourceRootExclusion`: an excluded
+configured source or ancestor is pruned, while ancestors needed by an included source stay
+traversable. Artifact IDs and locators remain source-relative. See
+[ADR0038](../adr/0038-project-root-ignore-anchoring.md).
+
+Chokidar asks about paths before it has stat information too. That first call cannot decide
+whether directory pruning applies. Once stat is available, directories use the same
+`decideDirectory` as discovery; files use the ordinary matcher. Pruning on a contents pattern
+such as `/docs/drafts/**` would hide a later `!/docs/drafts/keep.md` inclusion.
+
+The periodic sweep stats each discovered artifact's absolute path and keys metadata by its
+artifact ID. An empty signature is a valid source snapshot, distinct from the uninitialized
+baseline. Otherwise, the first file added after an empty scan would be consumed as startup
+and never trigger a later reconciliation. A discovery-relative path is relative to its source, so joining it directly to
+the project root would miss a source under `docs/` or an explicitly configured file.
+See [source-watch verification](../testing/source_watch.md) for event-disabled reconciliation
+and actual CLI/HTTP evidence. The separate `.loreignore` anchoring decision remains #588.
+
 Chokidar is given a **directory**, never a glob: v4 removed glob support and v5 has not
 brought it back. Patterns are ours to apply.
 
 ## Failure is survivable
+
+A file can disappear between discovery and the read that hashes it. Read-only freshness
+reports this typed source-read failure as `unknown`; strict status and build checks still
+report their original errors. A failed source annotation never implies that the selected
+immutable build is unreadable.
+
+Every serialized watcher step has a supervisor recovery boundary. A failure prints its
+actual reason, records unknown freshness and leaves the queue able to process later work.
+Startup readiness settles after that failure instead of hanging the entire session. Errors
+outside the source-freshness allowlist still propagate from direct read-only annotation;
+the supervisor boundary reports them without treating them as successful reconciliation.
+
+An unknown scan is retried by the existing periodic floor even if paths, sizes and mtimes
+are unchanged. Atomic replacement or restored permissions can recover without changing
+those metadata fields. Keep the last successful input fingerprint so recovery does not
+undo a deliberate rollback when source bytes stayed unchanged.
+See [source-failure verification](../testing/source_freshness_recovery.md).
 
 A rebuild that fails leaves the previous build active and prints why (architecture 6.9).
 Serving the last good build is recoverable; exiting the supervisor in the middle of

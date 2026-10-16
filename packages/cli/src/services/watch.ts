@@ -1,12 +1,13 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { createSourceMatcher, discover } from '@lorepack/compiler';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { createSourceMatcher, discover, sourceRootExclusion } from '@lorepack/compiler';
 import {
   type BuildId,
   buildManifestSchema,
   LORE_DIRECTORY,
   type LoadedConfig,
   type SourceState,
+  toCanonical,
 } from '@lorepack/core';
 import { watch as chokidarWatch } from 'chokidar';
 import { openStateStore } from './builds.js';
@@ -140,6 +141,17 @@ export function startWatching(options: WatchOptions): Watching {
    * about the same string. Symlinked roots have the same shape of problem on every platform.
    */
   const watchRoot = resolveRealPath(options.config.projectRoot);
+  const sources: WatchSource[] = options.config.sources.map((source) => ({
+    roots: [...new Set([resolve(watchRoot, source.relativeRoot), resolveRealPath(source.root)])],
+    filePath: source.kind === 'file' ? toCanonical(dirname(source.root), source.root) : null,
+    projectPrefix:
+      source.kind === 'file'
+        ? source.relativeRoot.split('/').slice(0, -1).join('/')
+        : source.relativeRoot === '.'
+          ? ''
+          : source.relativeRoot,
+    excluded: sourceRootExclusion(source, matcher) !== null,
+  }));
   const loreDirectory = join(options.config.projectRoot, LORE_DIRECTORY);
   let state: SourceState = 'clean';
   /**
@@ -171,7 +183,8 @@ export function startWatching(options: WatchOptions): Watching {
     // Chokidar v4 removed glob support and v5 has not brought it back, so it is given a
     // directory and our own matcher decides. Handing it patterns would be two matchers
     // disagreeing about which files are sources.
-    ignored: (path: string) => excluded(path, watchRoot, matcher),
+    ignored: (path: string, stats) =>
+      excluded(path, watchRoot, matcher, sources, stats?.isDirectory()),
     // The initial scan already happened: it was the build. Replaying it as events would
     // rebuild an identical build on every startup.
     ignoreInitial: true,
@@ -185,10 +198,7 @@ export function startWatching(options: WatchOptions): Watching {
     watcher.on('ready', () => {
       // Step 3. The scan/watch race: anything written between the build and this moment was
       // seen by neither, so the only safe assumption is that something was.
-      chain = chain.then(async () => {
-        await settle('startup reconciliation');
-        resolve();
-      });
+      void enqueue(() => settle('startup reconciliation')).then(resolve);
     });
   });
 
@@ -208,7 +218,7 @@ export function startWatching(options: WatchOptions): Watching {
     options.warn(
       `Watcher error: ${error instanceof Error ? error.message : String(error)}. Reconciling from disk.\n`,
     );
-    chain = chain.then(() => settle('watcher recovery'));
+    void enqueue(() => settle('watcher recovery'));
   });
 
   /**
@@ -219,17 +229,17 @@ export function startWatching(options: WatchOptions): Watching {
    * interval, and a platform that delivers them promptly pays a directory scan every couple
    * of seconds and finds nothing.
    */
-  let signature = '';
+  let signature: string | null = null;
   const sweep = setInterval(() => {
     if (closed) return;
     const current = metadataSignature(options.config);
-    if (current === signature) return;
-    const first = signature === '';
+    if (current === signature && state !== 'unknown') return;
+    const first = signature === null;
     signature = current;
     // The first sweep only establishes a baseline: the build that just happened is what it
     // would otherwise mistake for a change.
-    if (first) return;
-    chain = chain.then(() => settle('sources changed'));
+    if (first && state !== 'unknown') return;
+    void enqueue(() => settle('sources changed'));
   }, reconcileIntervalMs);
   // Never hold the process open on its own account: the supervisor decides when to exit.
   sweep.unref?.();
@@ -262,13 +272,24 @@ export function startWatching(options: WatchOptions): Watching {
     describedBuild = activeBuildId();
   }
 
+  function enqueue(action: () => Promise<void>): Promise<void> {
+    chain = chain.then(action).catch((error: unknown) => {
+      if (closed) return;
+      record('unknown');
+      options.warn(
+        `Reconciliation failed; freshness is unknown: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    });
+    return chain;
+  }
+
   function schedule(): void {
     if (timer !== null) clearTimeout(timer);
     // Step 4. One save is many events, and a rename is a delete plus an add. Coalescing is
     // what turns an editor's write pattern into one rebuild.
     timer = setTimeout(() => {
       timer = null;
-      chain = chain.then(() => settle('sources changed'));
+      void enqueue(() => settle('sources changed'));
     }, debounceMs);
   }
 
@@ -288,6 +309,13 @@ export function startWatching(options: WatchOptions): Watching {
     // Step 6 and 7. The deciding evidence. A touch, an atomic rename of identical bytes, or
     // a save that changed nothing all land here and stop.
     const freshness = await readFreshnessObservation({ config: options.config });
+    if (freshness.sourceState === 'unknown' && freshness.inputFingerprint === null) {
+      record('unknown');
+      options.warn(
+        `Source freshness is unknown: ${freshness.reason ?? 'Sources could not be checked.'}\n`,
+      );
+      return;
+    }
     if (
       freshness.sourceState === 'clean' ||
       (inputFingerprint !== null && freshness.inputFingerprint === inputFingerprint)
@@ -315,12 +343,10 @@ export function startWatching(options: WatchOptions): Watching {
    */
   async function reestablish(): Promise<void> {
     if (closed) return;
-    try {
-      const freshness = await readFreshness({ config: options.config });
-      record(freshness.sourceState);
-    } catch {
-      // Leave it unknown. A failure to establish freshness is not evidence of freshness,
-      // and invariant 6 makes `unknown` the only honest answer available here.
+    const freshness = await readFreshness({ config: options.config });
+    record(freshness.sourceState);
+    if (freshness.sourceState === 'unknown' && freshness.reason !== null) {
+      options.warn(`Source freshness is unknown: ${freshness.reason}\n`);
     }
   }
 
@@ -410,7 +436,7 @@ export function startWatching(options: WatchOptions): Watching {
       // this one is honest. Invariant 6: `unknown` means unknown, never clean.
       state = 'unknown';
       describedBuild = active;
-      chain = chain.then(reestablish);
+      void enqueue(reestablish);
       return state;
     },
     status(): WatchStatus {
@@ -472,12 +498,11 @@ function metadataSignature(config: LoadedConfig): string {
     const discovered = discover({ config, allowLargeProject: true });
     return discovered.artifacts
       .map((artifact) => {
-        const path = join(config.projectRoot, artifact.relativePath);
         try {
-          const stats = statSync(path);
-          return `${artifact.relativePath}:${stats.size}:${stats.mtimeMs}`;
+          const stats = statSync(artifact.absolutePath);
+          return `${artifact.artifactId}:${stats.size}:${stats.mtimeMs}`;
         } catch {
-          return `${artifact.relativePath}:gone`;
+          return `${artifact.artifactId}:gone`;
         }
       })
       .join('\n');
@@ -502,6 +527,18 @@ function signature(paths: readonly string[]): string {
     .join('\n');
 }
 
+interface WatchSource {
+  readonly roots: readonly string[];
+  readonly filePath: string | null;
+  readonly projectPrefix: string;
+  readonly excluded: boolean;
+}
+
+function isWithin(root: string, path: string): boolean {
+  const value = relative(root, path);
+  return value !== '..' && !value.startsWith(`..${sep}`) && !isAbsolute(value);
+}
+
 /**
  * Whether a path is outside what this project indexes.
  *
@@ -512,18 +549,41 @@ function signature(paths: readonly string[]): string {
 function excluded(
   path: string,
   watchRoot: string,
-  matcher: { excludes: (canonicalPath: string, isDirectory?: boolean) => boolean },
+  matcher: ReturnType<typeof createSourceMatcher>,
+  sources: readonly WatchSource[],
+  isDirectory: boolean | undefined,
 ): boolean {
   const relativePath = relative(watchRoot, path);
   if (relativePath === '') return false;
-  // Outside the project entirely, which chokidar can ask about for a symlinked parent.
-  if (relativePath.startsWith('..')) return true;
+  if (!isWithin(watchRoot, path)) return true;
 
   const canonical = relativePath.split(sep).join('/');
-  // Never watch our own output: a build writes into `.lore`, which would trigger a rebuild,
-  // which would write into `.lore`.
   if (canonical === '.lore' || canonical.startsWith('.lore/')) return true;
-  return matcher.excludes(canonical);
+
+  for (const source of sources) {
+    if (source.excluded) continue;
+    for (const root of source.roots) {
+      const samePath = relative(root, path) === '';
+      if (source.filePath === null && samePath) return false;
+      if (isWithin(root, path) && (source.filePath === null || samePath)) {
+        // Chokidar asks before stat too; let it learn whether directory pruning applies.
+        if (isDirectory === undefined) return false;
+        let sourcePath: string;
+        try {
+          sourcePath = source.filePath ?? toCanonical(root, path);
+        } catch {
+          return true;
+        }
+        const projectPath =
+          source.projectPrefix === '' ? sourcePath : `${source.projectPrefix}/${sourcePath}`;
+        return isDirectory
+          ? matcher.decideDirectory(projectPath) !== null
+          : matcher.excludes(projectPath);
+      }
+      if (isWithin(path, root)) return false;
+    }
+  }
+  return true;
 }
 
 /**

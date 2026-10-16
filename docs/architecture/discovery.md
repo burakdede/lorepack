@@ -11,17 +11,32 @@ scan and watch-event filtering must all call the same matcher.** If they disagre
 would appear or disappear depending on how it was noticed, and the resulting bug would
 reproduce only under timing.
 
+Watch-event paths are mapped to their owning source before matching, including configured
+file roots and linked source aliases. Directory events use discovery's directory-pruning
+rule rather than the file matcher, keeping negated descendants reachable. The periodic
+watch sweep stats discovery's absolute paths, with artifact IDs distinguishing equal relative
+names in different sources. See [watch mode](watch.md#one-matcher-not-two).
+
 Patterns are gitignore-style, evaluated with picomatch:
 
 - a pattern without a slash matches at any depth;
-- a leading slash anchors it to the source root;
+- a leading slash anchors it to the project root containing `.loreignore`;
 - a slash in the middle anchors it too, so `docs/*.md` is about one directory;
 - a trailing slash restricts it to directories and everything beneath, and **does not**
   anchor it, so `build/` means "a directory called build, wherever it is";
 - `!pattern` re-includes, and the last matching rule wins.
 
 The always-on exclusions from architecture section 19.2 are applied first, then
-`.loreignore`.
+`.loreignore`. Match paths are project-relative; artifact IDs and locators remain source-relative.
+With `sources: [docs]`, `/docs/private/` excludes `docs/private/`, while `/private/` names
+only a project-root directory. Slash-free `private/` still excludes that name at every depth.
+A configured source inside an excluded directory cannot bypass the directory rule with a
+file negation. Exclusion samples name project-relative paths.
+
+This corrects pre-release source-root anchoring. Update old rules such as `/private/` to
+`/docs/private/` when their intent is specific to the `docs` source. Existing immutable builds
+remain readable; compile and activate a new build to apply changed selection. See
+[ADR0038](../adr/0038-project-root-ignore-anchoring.md).
 
 ## Default credential and client configuration exclusions
 
