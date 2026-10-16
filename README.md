@@ -474,6 +474,9 @@ requiring Lorepack to claim that one document is more truthful than another.
 Markdown headings, code boundaries, directories, spreadsheet sheets, columns, and cell ranges
 remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
 through a bounded read-only SQL surface.
+Task context discovers matching table names, columns and descriptions as cited, build-pinned
+schema references. HTTP, MCP, Studio and both exports carry those references; row data stays
+in separate schema and query reads. See [table context](docs/architecture/table_context.md).
 
 Misspelled leading SQL keywords remain rejected. A single insertion, deletion, substitution
 or adjacent-letter swap can suggest the intended keyword, including `VALUES`. Lorepack

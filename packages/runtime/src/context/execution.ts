@@ -40,7 +40,7 @@ export function resolveExecutionPolicy(input: {
       weights: RANKING_WEIGHTS,
     },
     packing: {
-      version: 3,
+      version: 4,
       profile: input.profile,
       budget: input.budget,
       orientationShare: ORIENTATION_SHARE,
@@ -64,7 +64,7 @@ export function resolveExecutionPolicy(input: {
       drafts: 'eligible-labeled-downranked',
     },
     serialization: {
-      version: input.receipt !== undefined && input.receipt !== false ? 3 : 2,
+      version: input.receipt !== undefined && input.receipt !== false ? 5 : 4,
       format: 'bounded-supported-formats',
       maximumBytes: MAXIMUM_CONTEXT_BYTES,
       maximumProjectNameLength: MAXIMUM_PROJECT_NAME_LENGTH,

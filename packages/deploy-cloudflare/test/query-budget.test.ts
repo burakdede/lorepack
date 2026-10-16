@@ -118,6 +118,26 @@ async function measuredFixture() {
  * admission have their own suites. The producer is removed before any serving measurement.
  */
 describe('the Worker D1 query budget, issue 86', () => {
+  it('discovers a cited table within the original context query maximum, issue429', async () => {
+    const fixture = await measuredFixture();
+    try {
+      fixture.db.resetCalls();
+      const response = await fixture.request('/v1/context', { task: 'sku nonexistent-table-term' });
+      expect(response.status).toBe(200);
+      const bundle = (await response.json()) as ContextBundle;
+      expect(bundle.tables).toHaveLength(1);
+      expect(bundle.tables[0]?.locator.relativePath).toBe('products.csv');
+      expect(bundle.tables[0]?.schemaReference.buildId).toBe(bundle.buildId);
+      expect([...bundle.overview, ...bundle.selected]).toEqual([]);
+      expect(fixture.db.calls.length).toBeLessThanOrEqual(5);
+      expect(
+        fixture.db.calls.filter((call) => call.query.includes('FROM chunks_fts')),
+      ).toHaveLength(2);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it('keeps each runtime capability within its documented query maximum', async () => {
     const fixture = await measuredFixture();
     try {

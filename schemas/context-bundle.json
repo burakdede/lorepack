@@ -738,6 +738,10 @@
               "structural-unit"
             ],
             "type": "string"
+          },
+          "tableId": {
+            "minLength": 1,
+            "type": "string"
           }
         },
         "required": [
@@ -1006,16 +1010,103 @@
       "items": {
         "additionalProperties": false,
         "properties": {
-          "name": {
+          "descriptionChunkId": {
+            "minLength": 1,
             "type": "string"
           },
+          "labels": {
+            "items": {
+              "enum": [
+                "draft",
+                "archived",
+                "superseded"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "locator": {
+            "additionalProperties": false,
+            "description": "Exact location of content within a source artifact",
+            "properties": {
+              "artifactId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "cellRange": {
+                "type": "string"
+              },
+              "headingPath": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "lineEnd": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "lineStart": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "page": {
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "type": "integer"
+              },
+              "relativePath": {
+                "description": "POSIX-style path relative to a source root",
+                "minLength": 1,
+                "type": "string"
+              },
+              "sheet": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "artifactId",
+              "relativePath"
+            ],
+            "type": "object"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "schemaReference": {
+            "additionalProperties": false,
+            "properties": {
+              "buildId": {
+                "description": "Content-derived build identifier",
+                "pattern": "^lore_[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "tableId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "buildId",
+              "tableId"
+            ],
+            "type": "object"
+          },
           "tableId": {
+            "minLength": 1,
             "type": "string"
           }
         },
         "required": [
           "tableId",
-          "name"
+          "name",
+          "descriptionChunkId",
+          "labels",
+          "locator",
+          "schemaReference"
         ],
         "type": "object"
       },
