@@ -93,7 +93,28 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
 
   if (bundle.tables.length > 0) {
     lines.push('## Tables', '');
-    for (const table of bundle.tables) lines.push(`- ${table.name} (\`${table.tableId}\`)`);
+    lines.push(
+      'Schema references only. Read the schema with `lore_describe_table` or `describeTable`, using the exact build and table IDs below. Query rows separately with `lore_query_table` or `queryTable`.',
+      '',
+    );
+    for (const table of bundle.tables) {
+      lines.push(
+        ...fenced(
+          JSON.stringify(
+            {
+              name: table.name,
+              ...table.schemaReference,
+              labels: table.labels,
+              locator: table.locator,
+            },
+            null,
+            2,
+          ),
+          'json',
+        ),
+        '',
+      );
+    }
     lines.push('');
   }
 
@@ -108,7 +129,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
     lines.push('Nothing from the candidates considered was omitted.', '');
   } else {
     lines.push(
-      `${count(bundle.omissionSummary.total, 'passage')} from the considered candidates were omitted. This bounded report lists ${count(bundle.omissionSummary.reported, 'passage')}${bundle.omissionSummary.truncated ? '; diagnostic detail was truncated to fit' : ''}.`,
+      `${count(bundle.omissionSummary.total, 'item')} from the considered candidates were omitted. This bounded report lists ${count(bundle.omissionSummary.reported, 'item')}${bundle.omissionSummary.truncated ? '; diagnostic detail was truncated to fit' : ''}.`,
       '',
     );
     lines.push(

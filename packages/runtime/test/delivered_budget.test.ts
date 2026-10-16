@@ -131,3 +131,55 @@ it('refuses when mandatory framing cannot fit', async () => {
     expect.objectContaining({ code: 'LORE_E_LIMIT_EXCEEDED' }),
   );
 });
+
+it('counts complete table references and removes them honestly below exact fit, issue429', async () => {
+  const input = await fixture();
+  input.selected = [];
+  const locator = {
+    artifactId: 'p:rates.csv',
+    relativePath: 'rates.csv',
+    lineStart: 1,
+    lineEnd: 2,
+  };
+  const table = {
+    tableId: 'p:rates.csv#table',
+    name: 'rates',
+    descriptionChunkId: 'p:rates.csv@0',
+    labels: [],
+    locator,
+    schemaReference: { buildId: input.buildId, tableId: 'p:rates.csv#table' },
+  };
+  input.tables = [table];
+  const fitted = fitDeliveredContext(input);
+  expect(fitted.tables).toEqual([table]);
+  expect(fitted.citations).toEqual([locator]);
+  expect(contextBundleSchema.safeParse(fitted).success).toBe(true);
+  const exact = fitDeliveredContext({ ...input, budget: fitted.estimatedTokens });
+  expect(exact.tables).toEqual([table]);
+  const below = fitDeliveredContext({ ...input, budget: fitted.estimatedTokens - 1 });
+  expect(below.tables).toEqual([]);
+  expect(below.citations).toEqual([]);
+  expect(below.omissionSummary.reasons.budget).toBe(1);
+  expect(below.omissionSummary.total).toBe(1);
+  expect(measureContextRepresentations(below).estimatedTokens).toBeLessThanOrEqual(below.budget);
+});
+
+it('bounds oversized table metadata without splitting or leaking its locator, issue429', async () => {
+  const input = await fixture();
+  input.selected = [];
+  input.tables = [
+    {
+      tableId: 'p:rates.csv#table',
+      name: 'rate '.repeat(20_000),
+      descriptionChunkId: 'p:rates.csv@0',
+      labels: [],
+      locator: { artifactId: 'p:rates.csv', relativePath: 'rates.csv' },
+      schemaReference: { buildId: input.buildId, tableId: 'p:rates.csv#table' },
+    },
+  ];
+  const fitted = fitDeliveredContext(input);
+  expect(fitted.tables).toEqual([]);
+  expect(fitted.citations).toEqual([]);
+  expect(fitted.omissionSummary.reasons.budget).toBe(1);
+  expect(fitted.estimatedTokens).toBeLessThanOrEqual(fitted.budget);
+});

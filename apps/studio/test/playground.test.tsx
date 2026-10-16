@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Playground } from '../src/routes/Playground.js';
@@ -106,7 +106,24 @@ const BUNDLE = {
       lineEnd: 11,
     },
   ],
-  tables: [{ tableId: 'p:data/releases.csv#releases', name: 'releases' }],
+  tables: [
+    {
+      tableId: 'p:data/releases.csv#releases',
+      name: 'releases',
+      descriptionChunkId: 'p:data/releases.csv@0',
+      labels: ['draft'],
+      locator: {
+        artifactId: 'p:data/releases.csv',
+        relativePath: 'data/releases.csv',
+        lineStart: 1,
+        lineEnd: 3,
+      },
+      schemaReference: {
+        buildId: `lore_${'a'.repeat(64)}`,
+        tableId: 'p:data/releases.csv#releases',
+      },
+    },
+  ],
 };
 
 const SEARCH = {
@@ -240,7 +257,7 @@ describe('assembling a bundle', () => {
     await waitFor(() => expect(screen.getByText('Orientation')).toBeInTheDocument());
     expect(screen.getByText('1, using 30 stored passage estimates')).toBeInTheDocument();
     // The count a reader can check against the page, and the reason the two cannot drift.
-    expect(screen.getByText('Cited passages')).toBeInTheDocument();
+    expect(screen.getByText('Cited locations')).toBeInTheDocument();
     expect(screen.getByText(String(BUNDLE.citations.length))).toBeInTheDocument();
   });
 
@@ -249,7 +266,12 @@ describe('assembling a bundle', () => {
     await assemble();
 
     await waitFor(() => expect(screen.getByText('tables')).toBeInTheDocument());
-    expect(screen.getByText('releases')).toBeInTheDocument();
+    const table = screen.getByText('releases').closest('li');
+    expect(table).not.toBeNull();
+    if (table === null) throw new Error('Expected a table reference item.');
+    expect(within(table).getByText('data/releases.csv')).toBeInTheDocument();
+    expect(within(table).getByText(BUNDLE.buildId)).toBeInTheDocument();
+    expect(within(table).getByText('draft')).toBeInTheDocument();
   });
 });
 
@@ -275,9 +297,7 @@ describe('omissions, which are why this route is a debugger', () => {
     });
     renderRoute();
     await assemble();
-    expect(
-      await screen.findByText('9 omitted passages; showing 0 diagnostics.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('9 omitted items; showing 0 diagnostics.')).toBeInTheDocument();
     expect(document.querySelector('.omissions')).toBeNull();
   });
   it('shows complete totals when diagnostic detail is bounded', async () => {
@@ -300,9 +320,7 @@ describe('omissions, which are why this route is a debugger', () => {
     });
     renderRoute();
     await assemble();
-    expect(
-      await screen.findByText('9 omitted passages; showing 1 diagnostic.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('9 omitted items; showing 1 diagnostic.')).toBeInTheDocument();
     expect(
       screen.getByText('Diagnostic detail was truncated to fit the delivery limits.'),
     ).toBeInTheDocument();
@@ -483,4 +501,16 @@ describe('detached receipts, issue434', () => {
     );
     expect(screen.queryByRole('button', { name: 'Save receipt' })).not.toBeInTheDocument();
   });
+});
+
+it('does not call a table-only context an empty failed selection, issue429', async () => {
+  contextForTask.mockResolvedValue({ ...BUNDLE, overview: [], selected: [] });
+  renderRoute();
+  await assemble();
+  await waitFor(() =>
+    expect(screen.getByText('Matching table references are listed below.')).toBeInTheDocument(),
+  );
+  expect(
+    screen.queryByText('Nothing fit. Every candidate is in the omissions below.'),
+  ).not.toBeInTheDocument();
 });

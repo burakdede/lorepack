@@ -6,7 +6,7 @@ Every scenario is one thing a person does with the `lorepack` binary. The automa
 executed by `pnpm acceptance` on macOS, Windows and Linux; the manual ones are a checklist,
 because a terminal, a person or a clean machine cannot be simulated honestly.
 
-58 automated, 4 checked by hand.
+59 automated, 4 checked by hand.
 
 ```bash
 pnpm build && pnpm acceptance         # the whole suite
@@ -878,6 +878,22 @@ Starting point: a generated corpus of 500 documents with 60 sections each, alrea
 ## What an AI client sees
 
 The surface a coding agent connects to, over the protocol rather than a terminal.
+
+### `mcp/a-table-task-returns-a-cited-schema-reference`
+
+**A rate matrix is discoverable through MCP and both exports without flattened rows**
+
+Proves: Issue #429: table context carries a located, build-pinned schema reference.
+
+Locks down the defect in #429.
+
+Starting point: 1 source file, already set up with `lorepack init` and `lorepack build`.
+
+1. Discover the matrix through the actual stdio MCP server
+2. Export the same table reference as bounded JSON
+   Expect: it succeeds, stdout never mentions "private-row-sentinel", `tables[0].schemaReference.buildId` matches `/^lore_[0-9a-f]{64}$/`, `tables[0].locator.relativePath` is "rate_matrix.csv".
+3. Export a cited schema reference as Markdown without row prose
+   Expect: it succeeds, stdout mentions "## Tables", "rate_matrix.csv#table", "lore_describe_table", stdout never mentions "private-row-sentinel".
 
 ### `mcp/a-client-connects-and-lists-tools`
 
