@@ -374,7 +374,7 @@ ORDER BY name, id`,
 
   db.handlers.set(
     `SELECT t.id, t.artifact_id, t.name, t.sheet, t.sql_name, t.row_count,
-       t.relative_path, t.line_start, t.line_end, t.cell_range,
+       t.relative_path, t.line_start, t.line_end, t.cell_range, t.metadata_json,
        (SELECT json_group_array(json_object(
          'name', name, 'sql_name', sql_name, 'type', type, 'nullable', nullable,
          'null_count', null_count, 'distinct_estimate', distinct_estimate,
@@ -391,6 +391,7 @@ LIMIT 1`,
     (bindings) =>
       tableRows(bindings).map((table) => ({
         ...table,
+        metadata_json: '{}',
         columns_json: JSON.stringify(columnRows(bindings)),
       })),
   );

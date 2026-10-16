@@ -145,7 +145,7 @@ export function registerTools(server: McpServer, runtime: LoreRuntime): void {
     {
       title: 'Describe a table',
       description:
-        'Report a table its columns, types, per-column statistics, row count and a small sample, with the sheet and cell range it came from. Call this before writing SQL: it reports the `sqlName` of the table and of every column, which are the only names a query may use.',
+        'Report a table its columns, types, per-column statistics and formula markers (present, absent or unknown), conversion warnings, row count and a small sample, with the sheet and cell range it came from. Workbook formulas are never evaluated; the sample preserves cached values. Unknown markers or null warnings mean the build did not record that evidence. Call this before writing SQL: it reports the `sqlName` of the table and of every column, which are the only names a query may use.',
       inputSchema: z.object({ ...buildSelectionSchema.shape, tableId: z.string().min(1) }).strict(),
       outputSchema: tableDescriptionSchema,
       annotations: READ_ONLY,

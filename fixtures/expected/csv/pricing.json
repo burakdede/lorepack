@@ -11,7 +11,7 @@
       "normalizationVersion": 1
     },
     "parserId": "csv",
-    "parserVersion": "0.1.0",
+    "parserVersion": "0.1.1",
     "relativePath": "documents/csv/pricing.csv",
     "sourceId": "fixtures",
     "status": "active",
@@ -112,7 +112,12 @@
         "hasHeader": true,
         "headerReason": "row 1 is all non-empty text",
         "inferenceSampleRows": 2,
-        "normalizationVersion": 1
+        "normalizationVersion": 1,
+        "tableEvidence": {
+          "conversionWarnings": [],
+          "formulaColumns": [],
+          "version": 1
+        }
       },
       "name": "pricing",
       "rows": [
