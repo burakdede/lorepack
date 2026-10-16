@@ -66,3 +66,12 @@ Read `buildId` and `sourceState` off any result.
 A changing `buildId` between results means activation changed, possibly through rollback.
 `--ensure-current` builds only at startup. Later source changes are annotated without automatic
 activation; `lorepack dev` separately watches source changes and builds them.
+
+
+For `lorepack dev`, the periodic reconciliation floor covers configured subdirectories and
+individual file sources even when no filesystem event arrives. Event filtering uses the
+same source-relative exclusions and directory pruning as discovery. Changed context appears
+only after a complete candidate is validated and activated; HTTP, MCP and Studio read that
+immutable build. [Verification](../testing/source_watch.md) records the event-disabled tests
+and the actual local CLI/HTTP check. A persistent MCP HTTP client was verified on2026-10-16
+with protocol SDK2.2.0 and MCP2026-07-28; this does not claim new desktop-client trust verification.
