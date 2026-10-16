@@ -677,3 +677,40 @@ describe('the 500,000-row envelope', () => {
     );
   }, 180_000);
 });
+
+it('records complete sheet-scoped formula evidence independently of retained expressions, issue430', async () => {
+  let rows = row(1, [
+    inlineString('A1', 'early'),
+    inlineString('B1', 'late'),
+    inlineString('C1', 'literal'),
+  ]);
+  for (let index = 2; index <= 1001; index++) {
+    rows += row(index, [
+      formula(`A${index}`, '1+1', 2),
+      number(`B${index}`, index),
+      number(`C${index}`, 7),
+    ]);
+  }
+  rows += row(1002, [formula('A1002', '1+1', 2), formula('B1002', '3+4', 123), number('C1002', 7)]);
+  const parsed = await parse({
+    sheets: [
+      { name: 'Formulas', rows, merges: ['B2:C2'] },
+      { name: 'Plain', rows: row(1, [inlineString('A1', 'literal')]) + row(2, [number('A2', 7)]) },
+    ],
+  });
+  const table = tableOf(parsed, 'Formulas');
+  expect(table.metadata.formulas).toHaveLength(1000);
+  expect(table.metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [0, 1],
+    conversionWarnings: expect.arrayContaining([
+      expect.objectContaining({ code: 'xlsx-merged-cells' }),
+    ]),
+  });
+  expect(tableOf(parsed, 'Plain').metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [],
+    conversionWarnings: [],
+  });
+  expect(table.rows.at(-1)).toEqual([2, 123, 7]);
+});

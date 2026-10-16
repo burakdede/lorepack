@@ -24,7 +24,7 @@ import {
 import { DELIMITERS, decideHeader, detectDelimiter } from './dialect.js';
 
 export const CSV_PARSER_ID = 'csv' as const;
-export const CSV_PARSER_VERSION = '0.1.0' as const;
+export const CSV_PARSER_VERSION = '0.1.1' as const;
 
 /**
  * Hard limits, mirroring `limits.maxTableRows` and `limits.maxTableColumns` in the config.
@@ -143,6 +143,11 @@ export const csvParser: ArtifactParser = {
         {
           title,
           metadata: {
+            tableEvidence: {
+              version: 1,
+              formulaColumns: [],
+              conversionWarnings: warnings.map(({ code, message }) => ({ code, message })),
+            },
             delimiter: dialect.delimiter,
             normalizationVersion: CSV_LIMITS.normalizationVersion,
           },
@@ -285,6 +290,11 @@ function buildTable(
       lineEnd: rows.length,
     },
     metadata: {
+      tableEvidence: {
+        version: 1,
+        formulaColumns: [],
+        conversionWarnings: warnings.map(({ code, message }) => ({ code, message })),
+      },
       delimiter: dialect.delimiter,
       delimiterReason: dialect.reason,
       hasHeader: header.hasHeader,
