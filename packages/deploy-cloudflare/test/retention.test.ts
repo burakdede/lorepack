@@ -1145,7 +1145,9 @@ describe('retention adapters that omit empty result arrays', () => {
     const tablesPort = omitEmptyQueryResults(tables);
     const preview = await planRemoteRetention(catalogPort, tablesPort, 'demo', 1);
     expect(preview.remove).toEqual([PRUNED_BUILD]);
-    catalog.raw.prepare('UPDATE active_build SET build_id = ? WHERE id = 1').run(PRUNED_BUILD);
+    catalog.raw
+      .prepare('UPDATE active_build SET build_id = ?, generation = generation + 1 WHERE id = 1')
+      .run(PRUNED_BUILD);
     const result = await applyRemoteRetentionPlan(catalogPort, tablesPort, bucket, preview);
     expect(result.activeBuildId).toBe(PRUNED_BUILD);
     expect(result.keep).toContain(PRUNED_BUILD);

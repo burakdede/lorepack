@@ -94,7 +94,13 @@ list. Fixtures implement complete current ports: absent coordinates use `null`,
 authorization requests carry headers, and byte fixtures retain their binary input
 type. SQLite-backed test adapters keep the native binding and result boundaries.
 Vitest matchers use supported signatures with typed expected values. No assertion
-or compiler strictness is relaxed to include these files.
+or compiler strictness is relaxed to include these files. The browser program explicitly
+includes the shared PDF writer under its tools root. HTTP inventory regressions use the
+actual runtime/provider and assert the sealed build, canonical locators, freshness,
+invalid-selection rejection and typed missing-build response. Retained table listings
+assert freshness in the shared envelope. Discovery checks retain exact project-relative
+unreadable diagnostics. A fixture that changes the active remote build advances its
+generation so the real activation-ledger uniqueness guard remains enforced.
 
 Projection preflight tests use a real SQLite catalog to check the exact UTF-8 value
 limit, per-row byte totals, source coordinates, missing/unopenable databases and
