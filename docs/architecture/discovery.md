@@ -11,6 +11,12 @@ scan and watch-event filtering must all call the same matcher.** If they disagre
 would appear or disappear depending on how it was noticed, and the resulting bug would
 reproduce only under timing.
 
+Watch-event paths are mapped to their owning source before matching, including configured
+file roots and linked source aliases. Directory events use discovery's directory-pruning
+rule rather than the file matcher, keeping negated descendants reachable. The periodic
+watch sweep stats discovery's absolute paths, with artifact IDs distinguishing equal relative
+names in different sources. See [watch mode](watch.md#one-matcher-not-two).
+
 Patterns are gitignore-style, evaluated with picomatch:
 
 - a pattern without a slash matches at any depth;

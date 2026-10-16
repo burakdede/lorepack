@@ -87,6 +87,23 @@ function discovery uses to decide which files are sources. Two matchers built fr
 ingredients in two places is exactly how they come to disagree about one file, and the
 symptom would be a file that is indexed but never triggers a rebuild, or the reverse.
 
+Ignore rules see paths relative to each owning source, just as discovery does. A file
+source uses its declared filename relative to its parent. Both the declared path and its
+resolved target map back to that same source, so linked roots and Windows path aliases do
+not change the matching input. Ancestors of a configured source stay traversable even when
+a source-relative pattern would exclude that ancestor's project-relative spelling.
+
+Chokidar asks about paths before it has stat information too. That first call cannot decide
+whether directory pruning applies. Once stat is available, directories use the same
+`decideDirectory` as discovery; files use the ordinary matcher. Pruning on a contents pattern
+such as `/drafts/**` would hide a later `!/drafts/keep.md` inclusion.
+
+The periodic sweep stats each discovered artifact's absolute path and keys metadata by its
+artifact ID. A discovery-relative path is relative to its source, so joining it directly to
+the project root would miss a source under `docs/` or an explicitly configured file.
+See [source-watch verification](../testing/source_watch.md) for event-disabled reconciliation
+and actual CLI/HTTP evidence. The separate `.loreignore` anchoring decision remains #588.
+
 Chokidar is given a **directory**, never a glob: v4 removed glob support and v5 has not
 brought it back. Patterns are ours to apply.
 
