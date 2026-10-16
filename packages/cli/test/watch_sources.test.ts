@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { statSync, symlinkSync } from 'node:fs';
+import { rmSync, statSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { discover } from '@lorepack/compiler';
 import { type LoadedConfig, loadConfig, ProgressBus } from '@lorepack/core';
@@ -88,6 +88,53 @@ describe('source-relative reconciliation without filesystem events, issue587', (
             project.write(edited, '# Updated\n\nA newly changed narwhal document.\n');
             await settled(() => watching.rebuilds > 0);
             expect(watching.rebuilds, warnings.join('')).toBe(1);
+            expect(watching.status().lastEventAt).toBeNull();
+            expect(readActiveBuild(project.path('.lore'))?.buildId).not.toBe(first.buildId);
+            expect(await watching.freshness()).toBe('clean');
+          } finally {
+            await watching.close();
+          }
+        },
+      );
+    },
+    60_000,
+  );
+});
+
+describe('an empty source baseline, issue587', () => {
+  it.each([
+    { sources: ['docs'], original: 'docs/old.md', next: 'docs/new.md' },
+    { sources: ['docs/old.md'], original: 'docs/old.md', next: 'docs/old.md' },
+  ])(
+    'notices the first restored artifact through the floor for $sources',
+    async ({ sources, original, next }) => {
+      await withTempProject(
+        {
+          files: {
+            'lore.yaml': configuration(sources),
+            [original]: '# Original\n\nThe original artifact.\n',
+          },
+        },
+        async (project) => {
+          const config = loadConfig({ cwd: project.root });
+          const first = await runBuild({ config, progress: new ProgressBus() });
+          rmSync(project.path(original));
+          const watching = startWatching({
+            config,
+            warn: () => {},
+            debounceMs: 40,
+            stabilityMs: 40,
+            pollMs: 10,
+            reconcileIntervalMs: 120,
+            rebuild: () => runBuild({ config, progress: new ProgressBus() }),
+          });
+          try {
+            await watching.ready;
+            const baseline = watching.rebuilds;
+            expect(watching.status().lastEventAt).toBeNull();
+            project.write(next, '# Restored\n\nThe restored walrus artifact.\n');
+            await settled(() => watching.rebuilds > baseline);
+            expect(watching.rebuilds).toBe(baseline + 1);
             expect(watching.status().lastEventAt).toBeNull();
             expect(readActiveBuild(project.path('.lore'))?.buildId).not.toBe(first.buildId);
             expect(await watching.freshness()).toBe('clean');
