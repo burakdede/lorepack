@@ -11,6 +11,8 @@ import {
 import { request } from 'node:http';
 import { networkInterfaces, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { searchResultSchema } from '@lorepack/core';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -267,6 +269,134 @@ describe('watching while it serves', () => {
     // Freshness comes from the watcher now, and the watcher has just rebuilt.
     expect(found.sourceState).toBe('clean');
   }, 120_000);
+  it('keeps serving through sixty seconds of source churn and converges afterward', async () => {
+    for (let index = 0; index < 299; index += 1) {
+      writeFileSync(
+        join(project, 'docs', `stable-${index}.md`),
+        `# Stable ${index}\n\n${'content '.repeat(80)}\n`,
+      );
+    }
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const first = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`));
+    const client = new Client(
+      { name: 'lorepack-source-churn-test', version: '0.1.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    );
+    await client.connect(transport);
+    try {
+      const initial = searchResultSchema.parse(
+        (
+          await client.callTool({
+            name: 'lore_search',
+            arguments: { query: 'rollback' },
+          })
+        ).structuredContent,
+      );
+      expect(initial.buildId).toBe(first);
+      expect(initial.hits.length).toBeGreaterThan(0);
+      const began = performance.now();
+      let rounds = 0;
+      let liveReads = 0;
+      let stopped = false;
+      let readFailure: unknown;
+      const reads = (async () => {
+        while (!stopped) {
+          const response = await fetch(`${base}/v1/build`);
+          expect(response.status, started.log()).toBe(200);
+          const model = searchResultSchema.parse(
+            (
+              await client.callTool({
+                name: 'lore_search',
+                arguments: { query: 'rollback' },
+              })
+            ).structuredContent,
+          );
+          expect(model.hits.length).toBeGreaterThan(0);
+          liveReads += 1;
+          if (!stopped) await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      })().catch((error: unknown) => {
+        readFailure = error;
+      });
+      try {
+        while (performance.now() - began < 60_000) {
+          for (let index = 0; index < 20; index += 1) {
+            writeFileSync(
+              join(project, 'docs', `tmp${index}.md`),
+              `# Temporary ${index}\n\nRound ${rounds}.\n`,
+            );
+          }
+          for (let index = 0; index < 20; index += 1)
+            rmSync(join(project, 'docs', `tmp${index}.md`));
+          rounds += 1;
+          await new Promise<void>((resolve) => setImmediate(resolve));
+          expect(started.child.exitCode, started.log()).toBeNull();
+          if (readFailure !== undefined) throw readFailure;
+        }
+      } finally {
+        stopped = true;
+        await reads;
+      }
+      if (readFailure !== undefined) throw readFailure;
+      expect(performance.now() - began).toBeGreaterThanOrEqual(60_000);
+      expect(rounds).toBeGreaterThan(0);
+      expect(liveReads).toBeGreaterThan(0);
+      writeFileSync(
+        join(project, 'docs', 'steady.md'),
+        '# Steady\n\nSteadywalrus is the final stable source.\n',
+      );
+      const deadline = Date.now() + 60_000;
+      let found: ReturnType<typeof searchResultSchema.parse> | undefined;
+      while (Date.now() < deadline) {
+        expect(started.child.exitCode, started.log()).toBeNull();
+        const response = await fetch(`${base}/v1/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: 'steadywalrus' }),
+        });
+        expect(response.status, started.log()).toBe(200);
+        found = searchResultSchema.parse(await response.json());
+        if (found.sourceState === 'clean' && found.hits.length > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      expect(found?.sourceState, started.log()).toBe('clean');
+      expect(found?.buildId).not.toBe(first);
+      expect(found?.hits).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            locator: expect.objectContaining({ relativePath: 'docs/steady.md' }),
+          }),
+        ]),
+      );
+      const model = searchResultSchema.parse(
+        (
+          await client.callTool({
+            name: 'lore_search',
+            arguments: { query: 'steadywalrus' },
+          })
+        ).structuredContent,
+      );
+      expect(model.buildId).toBe(found?.buildId);
+      expect(model.sourceState).toBe('clean');
+      expect(model.hits).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            locator: expect.objectContaining({ relativePath: 'docs/steady.md' }),
+          }),
+        ]),
+      );
+      const receipt = JSON.parse(readFileSync(join(project, '.lore', 'dev.json'), 'utf8')) as {
+        pid: number;
+      };
+      expect(receipt.pid).toBe(started.child.pid);
+      expect(started.child.exitCode, started.log()).toBeNull();
+    } finally {
+      await client.close();
+      await transport.close();
+    }
+  }, 180_000);
 });
 
 /**

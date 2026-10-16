@@ -54,6 +54,17 @@ still answers. This was learned the hard way: establishing freshness first once 
 `lorepack search` refuse to answer on a project above the file envelope, from a build sitting
 ready on disk (#147).
 
+## Temporary source read failures
+
+If a file disappears during a source scan, read-only freshness becomes `unknown` with the
+source-read reason. The immutable build still answers. `lorepack dev` warns and continues
+watching; its reconciliation queue can recover when the source becomes readable again,
+even if metadata did not change. A strict `status` or build can still report the source
+error, and unrelated corrupt-build errors remain errors.
+
+[Verification](../testing/source_freshness_recovery.md) separates real read-open races,
+serialized watcher recovery and the full sixty-second churn check.
+
 ## What a client should do with this
 
 Read `buildId` and `sourceState` off any result.
