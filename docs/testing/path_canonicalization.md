@@ -111,3 +111,16 @@ The corrected hash/public CLI cohort passed 49 cases on macOS, with its real col
 case skipped on APFS. Strict types for all seven changed test files passed. Failed
 full/native receipts are retained; complete current qualification and native active
 build preservation remain required before closure.
+
+## Native platform-condition inventory
+
+The corrected 21bc4a4f Linux candidate passed all 236 default test files
+(3662 tests passed, one platform skip), including real duplicate-name refusal
+and preservation of the active build. Its separate test-condition inventory
+gate then rejected seven undocumented conditional sites. Five exact file/condition
+entries now record their reasons in `tools/security/test/test-skips.test.ts`:
+APFS cannot retain both normalization spellings, and Windows named pipes are not
+POSIX filesystem socket entries. The compiler socket condition covers three
+separate cases. No condition, assertion, deadline or workload was changed.
+The corrected inventory passed all four gate tests locally. Lint, formatting and
+product types passed. Current native qualification remains required.
