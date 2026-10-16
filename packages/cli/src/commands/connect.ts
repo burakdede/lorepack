@@ -19,6 +19,7 @@ import {
 import { EXIT_CODES, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
+import { readConnectionExpectation } from '../services/connect_verification.js';
 
 /**
  * `lorepack connect [client]` and `lorepack disconnect [client]`, the second of the two commands.
@@ -114,8 +115,14 @@ export function connectCommand(options: ConnectCommandOptions = {}): CommandDefi
       // error helps nobody who simply uses a different editor.
       const unknown = args[0] !== undefined && args[0] !== 'all' && chosen.length === 0;
       if (flags.snippet === true || unknown) {
-        const snippet = await renderVerifiedSnippet(input);
-        return { human: renderSnippet(snippet, args[0]), json: snippet };
+        const snippet = await renderVerifiedSnippet(input, () => readConnectionExpectation(config));
+        return {
+          human: renderSnippet(snippet, args[0]),
+          json: snippet,
+          ...(snippet.verification?.ok === false && snippet.verification.pendingTrust !== true
+            ? { exitCode: EXIT_CODES.ENVIRONMENT }
+            : {}),
+        };
       }
 
       // Plan every client before touching any of them, so the whole change is shown, and
@@ -184,7 +191,7 @@ export function connectCommand(options: ConnectCommandOptions = {}): CommandDefi
         receipts.push(receipt);
         if (receipt.backupPath !== undefined) lines.push(`  Backed up to ${receipt.backupPath}`);
 
-        const check = await connector.verify(receipt);
+        const check = await connector.verify(receipt, () => readConnectionExpectation(config));
         checks.push(check);
         lines.push(check.ok ? `  Verified: ${check.detail}` : `  Not working yet: ${check.detail}`);
       }

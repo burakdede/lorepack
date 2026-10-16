@@ -11,6 +11,10 @@ import {
   runConnectorContract,
 } from './contract.js';
 
+const unusedExpectation = async (): Promise<never> => {
+  throw new Error('The injected probe must not read project state.');
+};
+
 /**
  * The Codex adapter, against recorded `config.toml` shapes.
  *
@@ -79,7 +83,18 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   };
 }
 
-const document = (text: string): Record<string, never> => parse(text) as Record<string, never>;
+interface TestServer {
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly type?: string;
+}
+
+interface TestConfig {
+  readonly mcp_servers?: Record<string, TestServer>;
+  readonly [key: string]: unknown;
+}
+
+const document = (text: string): TestConfig => parse(text) as TestConfig;
 
 const fixture: ConnectorFixture = {
   id: 'codex',
@@ -240,7 +255,7 @@ describe('project trust', () => {
   it('is its own verification outcome, with the command that fixes it', async () => {
     const connector = createCodexConnector({ runClient: installed, home, probe: answers });
     const receipt = await connector.apply(await connector.plan(input()));
-    const check = await connector.verify(receipt);
+    const check = await connector.verify(receipt, unusedExpectation);
 
     // A working server in a project Codex will not read. Nothing is broken, so this is not a
     // failure of the server, and reporting it as one would send the user to the wrong side.
@@ -261,7 +276,10 @@ describe('project trust', () => {
           : { stdout: 'codex-cli 0.146.1\n', stderr: '' },
     });
 
-    const check = await connector.verify(await connector.apply(await connector.plan(input())));
+    const check = await connector.verify(
+      await connector.apply(await connector.plan(input())),
+      unusedExpectation,
+    );
     expect(check.ok).toBe(true);
   });
 
@@ -278,7 +296,10 @@ describe('project trust', () => {
           : { stdout: 'codex-cli 0.146.1\n', stderr: '' },
     });
 
-    const check = await connector.verify(await connector.apply(await connector.plan(input())));
+    const check = await connector.verify(
+      await connector.apply(await connector.plan(input())),
+      unusedExpectation,
+    );
     expect(check.ok).toBe(false);
     expect(check.step).toBe('trust');
     expect(check.pendingTrust).toBe(true);
@@ -298,7 +319,10 @@ describe('project trust', () => {
     // Codex cannot be asked, which says nothing about whether the server works. The protocol
     // check is the evidence that matters, and inventing a failure from a missing binary would
     // send someone debugging a server that answers.
-    const check = await connector.verify(await connector.apply(await connector.plan(input())));
+    const check = await connector.verify(
+      await connector.apply(await connector.plan(input())),
+      unusedExpectation,
+    );
     expect(check.ok).toBe(true);
   });
 
@@ -316,7 +340,7 @@ describe('the fallback for a Codex this adapter will not edit', () => {
     const snippet = codexSnippet(input());
 
     expect(() => parse(snippet)).not.toThrow();
-    const table = document(snippet).mcp_servers.lorepack as {
+    const table = document(snippet).mcp_servers?.lorepack as {
       command: string;
       args: string[];
       cwd: string;

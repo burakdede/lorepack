@@ -11,6 +11,10 @@ import {
   runConnectorContract,
 } from './contract.js';
 
+const unusedExpectation = async (): Promise<never> => {
+  throw new Error('The injected probe must not read project state.');
+};
+
 /**
  * The VS Code adapter, against recorded `.vscode/mcp.json` shapes.
  *
@@ -81,8 +85,19 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   };
 }
 
-const document = (text: string): Record<string, never> =>
-  parse(text, [], { allowTrailingComma: true }) as Record<string, never>;
+interface TestServer {
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly type?: string;
+}
+
+interface TestConfig {
+  readonly servers?: Record<string, TestServer>;
+  readonly [key: string]: unknown;
+}
+
+const document = (text: string): TestConfig =>
+  parse(text, [], { allowTrailingComma: true }) as TestConfig;
 
 const fixture: ConnectorFixture = {
   id: 'vscode',
@@ -128,7 +143,7 @@ describe('the key VS Code actually reads', () => {
     // a connect that worked until somebody asks their agent a question.
     expect(text).toContain('"servers"');
     expect(text).not.toContain('mcpServers');
-    expect(document(text).servers.lorepack).toBeDefined();
+    expect(document(text).servers?.lorepack).toBeDefined();
   });
 
   it('declares the stdio type explicitly', async () => {
@@ -273,7 +288,10 @@ describe('verification', () => {
       userConfigDirectory: userDirectory,
       probe: answers,
     });
-    const check = await connector.verify(await connector.apply(await connector.plan(input())));
+    const check = await connector.verify(
+      await connector.apply(await connector.plan(input())),
+      unusedExpectation,
+    );
 
     // Not a failure: the file is right and one confirmation remains. VS Code cannot be asked
     // from outside the editor what it has loaded, so the honest answer names the step.
@@ -288,7 +306,10 @@ describe('verification', () => {
       userConfigDirectory: userDirectory,
       probe: async () => ({ ok: false, step: 'spawn' as const, detail: 'spawn lorepack ENOENT' }),
     });
-    const check = await connector.verify(await connector.apply(await connector.plan(input())));
+    const check = await connector.verify(
+      await connector.apply(await connector.plan(input())),
+      unusedExpectation,
+    );
 
     expect(check.ok).toBe(false);
     expect(check.step).toBe('spawn');
@@ -300,9 +321,9 @@ describe('the fallback for a version this adapter will not edit', () => {
     const snippet = vsCodeSnippet(input());
 
     expect(() => JSON.parse(snippet)).not.toThrow();
-    const parsed = JSON.parse(snippet) as Record<string, never>;
-    expect(parsed.servers.lorepack.type).toBe('stdio');
-    expect(parsed.servers.lorepack.args).toContain('--ensure-current');
+    const parsed = JSON.parse(snippet) as TestConfig;
+    expect(parsed.servers?.lorepack?.type).toBe('stdio');
+    expect(parsed.servers?.lorepack?.args).toContain('--ensure-current');
     expect(snippet).not.toContain('x-lorepack');
   });
 });

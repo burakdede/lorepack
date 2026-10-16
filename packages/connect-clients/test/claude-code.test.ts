@@ -26,6 +26,10 @@ import {
   runConnectorContract,
 } from './contract.js';
 
+const unusedExpectation = async (): Promise<never> => {
+  throw new Error('The injected probe must not read project state.');
+};
+
 /**
  * The Claude Code adapter.
  *
@@ -60,10 +64,27 @@ function input(overrides: Partial<ConnectInput> = {}): ConnectInput {
   };
 }
 
-const parsed = (text: string): Record<string, never> => JSON.parse(text) as Record<string, never>;
+interface TestServer {
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly [key: string]: unknown;
+}
+
+interface TestProject {
+  readonly mcpServers?: Record<string, TestServer>;
+  readonly allowedTools?: readonly string[];
+}
+
+interface TestClaudeConfig {
+  readonly projects?: Record<string, TestProject>;
+  readonly mcpServers?: Record<string, TestServer>;
+  readonly [key: string]: unknown;
+}
+
+const parsed = (text: string): TestClaudeConfig => JSON.parse(text) as TestClaudeConfig;
 
 /** The servers Claude Code would load for `root` from a `.claude.json`. */
-const localServers = (text: string, root: string): Record<string, never> =>
+const localServers = (text: string, root: string): Record<string, TestServer> =>
   parsed(text).projects?.[claudeProjectKey(root)]?.mcpServers ?? {};
 
 function writeJson(path: string, document: unknown): string {
@@ -192,8 +213,11 @@ describe('the local scope, where Claude Code actually reads it', () => {
     expect(document.mcpServers).toEqual({
       'a-user-server': { type: 'stdio', command: 'their-global' },
     });
-    expect(document.projects['/some/other/project']).toEqual({ allowedTools: [], mcpServers: {} });
-    expect(document.projects[claudeProjectKey(project)].allowedTools).toEqual(['Bash']);
+    expect(document.projects?.['/some/other/project']).toEqual({
+      allowedTools: [],
+      mcpServers: {},
+    });
+    expect(document.projects?.[claudeProjectKey(project)]?.allowedTools).toEqual(['Bash']);
   });
 
   it.skipIf(process.platform === 'win32')(
@@ -204,7 +228,7 @@ describe('the local scope, where Claude Code actually reads it', () => {
       symlinkSync(project, link, 'dir');
       await connector().apply(await connector().plan(input({ projectRoot: link })));
 
-      const projects = parsed(readFileSync(claudeJson(), 'utf8')).projects as Record<string, never>;
+      const projects = parsed(readFileSync(claudeJson(), 'utf8')).projects ?? {};
       expect(Object.keys(projects)).toEqual([realpathSync(project)]);
     },
   );
@@ -240,9 +264,9 @@ describe('the local scope, where Claude Code actually reads it', () => {
     await connector().remove(receipt);
 
     const document = parsed(readFileSync(claudeJson(), 'utf8'));
-    expect(document.projects[other].mcpServers.lorepack).toBeDefined();
-    expect(document.mcpServers.lorepack).toBeDefined();
-    expect(document.projects[claudeProjectKey(project)].mcpServers).toEqual({});
+    expect(document.projects?.[other]?.mcpServers?.lorepack).toBeDefined();
+    expect(document.mcpServers?.lorepack).toBeDefined();
+    expect(document.projects?.[claudeProjectKey(project)]?.mcpServers).toEqual({});
   });
 
   it('asks the client from the project directory, where a local server is listed', async () => {
@@ -257,10 +281,13 @@ describe('the local scope, where Claude Code actually reads it', () => {
 
     const listed = listing('lorepack: lorepack mcp - ✓ Connected\n');
     const receipt = await listed.apply(await listed.plan(input()));
-    expect((await listed.verify(receipt)).ok).toBe(true);
+    expect((await listed.verify(receipt, unusedExpectation)).ok).toBe(true);
     expect(asked).toEqual([project]);
 
-    const missing = await listing('No MCP servers configured.\n').verify(receipt);
+    const missing = await listing('No MCP servers configured.\n').verify(
+      receipt,
+      unusedExpectation,
+    );
     expect(missing.ok).toBe(false);
     expect(missing.step).toBe('trust');
     // Nothing to approve in the local scope, so the message must not send anyone looking for
@@ -293,7 +320,7 @@ describe('where .claude.json lives', () => {
   it('puts the user scope in the top-level mcpServers', async () => {
     await connector().apply(await connector().plan(input({ scope: 'user' })));
     const document = parsed(readFileSync(claudeJson(), 'utf8'));
-    expect(document.mcpServers.lorepack.command).toBe('lorepack');
+    expect(document.mcpServers?.lorepack?.command).toBe('lorepack');
     expect(document.projects).toBeUndefined();
   });
 });
@@ -392,7 +419,7 @@ describe('the fallback for a version this adapter will not edit', () => {
 
     expect(() => JSON.parse(snippet)).not.toThrow();
     const document = parsed(snippet);
-    expect(document.mcpServers.lorepack.command).toBe('lorepack');
-    expect(document.mcpServers.lorepack.args).toContain('--ensure-current');
+    expect(document.mcpServers?.lorepack?.command).toBe('lorepack');
+    expect(document.mcpServers?.lorepack?.args).toContain('--ensure-current');
   });
 });

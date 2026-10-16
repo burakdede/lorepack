@@ -1,3 +1,5 @@
+import type { SourceLocator, SourceReadRequest, SourceReadResult } from '@lorepack/core';
+
 /**
  * The `ClientConnector` port, architecture 14.8.
  *
@@ -106,15 +108,24 @@ export interface ConnectReceipt {
   readonly connectedAt: string;
 }
 
+export interface ConnectionExpectation {
+  readonly buildId: string;
+  readonly request: SourceReadRequest;
+  readonly source: SourceReadResult;
+}
+
+export type ReadConnectionExpectation = () => Promise<ConnectionExpectation>;
+
 export interface ConnectionCheck {
   readonly ok: boolean;
   /** Which step failed, so a user is not sent looking at the wrong side. */
-  readonly step: 'spawn' | 'discover' | 'tools' | 'trust' | 'none';
+  readonly step: 'spawn' | 'discover' | 'tools' | 'build' | 'source' | 'trust' | 'none';
   readonly detail: string;
   /** The protocol revision the server answered with, when it got that far. */
   readonly protocolVersion?: string;
   /** The client has the entry but has not been trusted yet, which is not a failure. */
   readonly pendingTrust?: boolean;
+  readonly proof?: { readonly buildId: string; readonly locator: SourceLocator };
 }
 
 /**
@@ -138,6 +149,6 @@ export interface ClientConnector {
   status(input: ConnectInput): Promise<ClientStatus>;
   plan(input: ConnectInput): Promise<ConnectPlan>;
   apply(plan: ConnectPlan): Promise<ConnectReceipt>;
-  verify(receipt: ConnectReceipt): Promise<ConnectionCheck>;
+  verify(receipt: ConnectReceipt, expected: ReadConnectionExpectation): Promise<ConnectionCheck>;
   remove(receipt: ConnectReceipt): Promise<RemoveOutcome>;
 }

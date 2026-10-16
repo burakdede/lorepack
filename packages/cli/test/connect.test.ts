@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   existsSync,
   lstatSync,
@@ -10,11 +11,13 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import type { ClientConnector, ConnectionCheck } from '@lorepack/connect-clients';
+import { delimiter, join } from 'node:path';
+import type { ClientConnector, ConnectionCheck, Snippet } from '@lorepack/connect-clients';
+import { EXIT_CODES } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { connectCommand } from '../src/commands/connect.js';
+import { readActiveBuild } from '../src/services/project.js';
 import { run } from './helpers.js';
 
 /**
@@ -38,14 +41,32 @@ import { run } from './helpers.js';
  */
 let claudeConfig: string;
 let previousClaudeConfig: string | undefined;
+let previousPath: string | undefined;
 
 beforeEach(() => {
   previousClaudeConfig = process.env.CLAUDE_CONFIG_DIR;
   claudeConfig = mkdtempSync(join(tmpdir(), 'lore-claude-config-'));
   process.env.CLAUDE_CONFIG_DIR = claudeConfig;
+  previousPath = process.env.PATH;
+  const commands = join(claudeConfig, 'commands');
+  mkdirSync(commands);
+  const binary = join(import.meta.dirname, '../dist/public-entry.js');
+  if (process.platform === 'win32') {
+    const node = process.execPath.replaceAll('%', '%%');
+    const entry = binary.replaceAll('%', '%%');
+    writeFileSync(
+      join(commands, 'lorepack.cmd'),
+      ['@echo off', 'setlocal DisableDelayedExpansion', `"${node}" "${entry}" %*`, ''].join('\r\n'),
+    );
+  } else {
+    symlinkSync(binary, join(commands, 'lorepack'));
+  }
+  process.env.PATH = `${commands}${delimiter}${previousPath ?? ''}`;
 });
 
 afterEach(() => {
+  if (previousPath === undefined) delete process.env.PATH;
+  else process.env.PATH = previousPath;
   if (previousClaudeConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfig;
   rmSync(claudeConfig, { recursive: true, force: true });
@@ -83,6 +104,50 @@ describe('which clients exist', () => {
       expect(existsSync(join(temp.root, '.codex'))).toBe(false);
       expect(existsSync(join(temp.root, '.claude'))).toBe(false);
       expect(existsSync(join(temp.root, '.mcp.json'))).toBe(false);
+    });
+  });
+});
+
+describe('the cited snippet outcome', () => {
+  it('reports the actual active build and citation without source text', async () => {
+    await withTempProject({ files: FILES }, async (temp) => {
+      const result = spawnSync(
+        process.execPath,
+        [
+          join(import.meta.dirname, '../dist/public-entry.js'),
+          '--cwd',
+          temp.root,
+          'connect',
+          '--snippet',
+          '--json',
+        ],
+        { encoding: 'utf8', timeout: 120_000 },
+      );
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      const snippet = JSON.parse(result.stdout) as Snippet;
+      const active = readActiveBuild(join(temp.root, '.lore'));
+      expect(active).not.toBeNull();
+      expect(snippet.verification).toMatchObject({
+        ok: true,
+        proof: {
+          buildId: active?.buildId,
+          locator: { relativePath: 'a.md' },
+        },
+      });
+      expect(result.stdout).not.toContain('# A');
+    });
+  });
+
+  it('returns a failure exit code when a snippet server cannot start', async () => {
+    const missing = join(claudeConfig, 'missing-commands');
+    mkdirSync(missing);
+    process.env.PATH = missing;
+    await withTempProject({ files: FILES }, async (temp) => {
+      const result = await run(['--cwd', temp.root, 'connect', '--snippet', '--json']);
+      expect(result.code).toBe(EXIT_CODES.ENVIRONMENT);
+      const snippet = JSON.parse(result.stdout) as Snippet;
+      expect(snippet.verification).toMatchObject({ ok: false, step: 'spawn' });
+      expect(snippet.verification?.detail).toContain('on the path');
     });
   });
 });
@@ -230,7 +295,7 @@ function recording(check: ConnectionCheck): { connector: ClientConnector; applie
       };
     },
     verify: async () => check,
-    remove: async () => undefined,
+    remove: async () => ({ removed: false }),
   };
   return { connector, applied };
 }

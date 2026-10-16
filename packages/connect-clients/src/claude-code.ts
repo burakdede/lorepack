@@ -23,6 +23,7 @@ import type {
   ConnectionCheck,
   ConnectPlan,
   ConnectReceipt,
+  ReadConnectionExpectation,
   RemoveOutcome,
 } from './port.js';
 import { type VerifyOptions, verifyStdioServer } from './verify.js';
@@ -332,7 +333,10 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       };
     },
 
-    async verify(receipt: ConnectReceipt): Promise<ConnectionCheck> {
+    async verify(
+      receipt: ConnectReceipt,
+      expected: ReadConnectionExpectation,
+    ): Promise<ConnectionCheck> {
       const path = receipt.configPath;
       if (path === null || !existsSync(path)) {
         return { ok: false, step: 'spawn', detail: `${path} was not written.` };
@@ -353,6 +357,7 @@ export function createClaudeCodeConnector(options: ClaudeCodeOptions = {}): Clie
       const check = await probe({
         executable: entry.command,
         args: entry.args ?? [],
+        expected,
       });
       if (!check.ok) return check;
 

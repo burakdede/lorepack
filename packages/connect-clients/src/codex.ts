@@ -12,6 +12,7 @@ import type {
   ConnectionCheck,
   ConnectPlan,
   ConnectReceipt,
+  ReadConnectionExpectation,
   RemoveOutcome,
 } from './port.js';
 import {
@@ -256,7 +257,10 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
       };
     },
 
-    async verify(receipt: ConnectReceipt): Promise<ConnectionCheck> {
+    async verify(
+      receipt: ConnectReceipt,
+      expected: ReadConnectionExpectation,
+    ): Promise<ConnectionCheck> {
       const path = receipt.configPath;
       if (path === null || !existsSync(path)) {
         return { ok: false, step: 'spawn', detail: `${path} was not written.` };
@@ -270,7 +274,7 @@ export function createCodexConnector(options: CodexOptions = {}): ClientConnecto
 
       // Spawned exactly as Codex will spawn it, which is the only way to learn that the
       // command in the file does not actually start.
-      const check = await probe({ executable: entry.command, args: entry.args ?? [] });
+      const check = await probe({ executable: entry.command, args: entry.args ?? [], expected });
       if (!check.ok) return check;
 
       if (receipt.scope === 'project' && projectTrust(home, receipt.projectRoot) !== 'trusted') {

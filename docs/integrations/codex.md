@@ -11,6 +11,14 @@ lorepack connect codex
 The first command builds and serves; the second configures the client and then proves the
 server answers.
 
+## Connection proof
+
+`lorepack connect` verifies the intended active build and reads a known cited source before
+reporting success. Wrong builds and unreadable context fail verification; JSON output carries
+the build ID and citation without source text. Client trust remains a separate step.
+See the [shared verification contract](mcp.md#connection-proof) for bounded reads, startup
+ordering and the automated verification date. External-client version records here are unchanged.
+
 ## Trust the project, or nothing happens
 
 Codex reads a project's `.codex/config.toml` **only in a project you have trusted.** In an

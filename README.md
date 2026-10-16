@@ -255,6 +255,10 @@ to the client configuration and asks before writing it. `--dry-run` only shows i
 applies it without asking, which a script or CI job has to pass because there is no terminal
 to ask on.
 
+Connection verification checks the intended active build and reads a known source with its
+citation. Wrong builds and missing readable context fail with a concrete next action. This
+server check does not replace the client's trust prompt.
+
 ### 5. Update safely
 
 Edit a source, then see the candidate changes before activation:
