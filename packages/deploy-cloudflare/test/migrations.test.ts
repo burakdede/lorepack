@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   PROJECTION_MIGRATIONS,
@@ -27,9 +27,11 @@ class SqliteProjectionStatement implements ProjectionMigrationStatementLike {
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return {
+        results: statement.all(...(this.#bindings as SQLInputValue[])) as unknown as readonly T[],
+      };
     }
-    statement.run(...this.#bindings);
+    statement.run(...(this.#bindings as SQLInputValue[]));
     return {};
   }
 }
@@ -67,7 +69,7 @@ describe('projection migrations, issue 87', () => {
 
     const result = await runProjectionMigrations(projection, () => '2026-08-08T12:00:00.000Z');
     expect(result).toEqual({
-      applied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
+      applied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008'],
       alreadyApplied: [],
     });
 
@@ -81,6 +83,7 @@ describe('projection migrations, issue 87', () => {
     expect(names).toEqual(
       expect.arrayContaining([
         'active_build',
+        'activation_events',
         'artifacts',
         'build_manifests',
         'build_warnings',
@@ -139,7 +142,7 @@ describe('projection migrations, issue 87', () => {
     const second = await runProjectionMigrations(projection, () => '2026-08-08T12:05:00.000Z');
     expect(second).toEqual({
       applied: [],
-      alreadyApplied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007'],
+      alreadyApplied: ['0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008'],
     });
 
     const rows = db
@@ -174,6 +177,7 @@ describe('projection migrations, issue 87', () => {
         checksum: PROJECTION_MIGRATIONS[5]?.checksum ?? '',
       },
       { id: '0007', checksum: PROJECTION_MIGRATIONS[6]?.checksum ?? '' },
+      { id: '0008', checksum: PROJECTION_MIGRATIONS[7]?.checksum ?? '' },
     ]);
     expect(PROJECTION_SCHEMA_VERSION).toBe(4);
   });

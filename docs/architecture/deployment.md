@@ -287,3 +287,26 @@ Worker deployed without the binding refuses table queries with `LORE_E_TARGET_NO
 Counters are per Cloudflare location and eventually consistent (Cloudflare's own description),
 so the limit bounds sustained use by one token; it does not shorten a single query, which D1
 can still run for up to 30 seconds. [`security.md`](security.md) states what remains open.
+
+## Previous activation and operational history
+
+Bare `lorepack rollback --target cloudflare` asks the deployment backend for the actual
+previous activation. Projection/verification timestamps are not activation order. The
+backend captures the pointer and latest event together, then uses that captured pointer
+and generation in the final conditional update. A competing activation causes refusal;
+selection is not silently refreshed against a different pointer. Explicit retained build
+IDs remain supported, including readable legacy projections without `verified_at`.
+
+Operational migration `0008` adds activation events without changing immutable build
+identity or the projection's content schema. Activation and rollback ensure operational
+migrations before changing the pointer. The event trigger runs inside that pointer
+statement. A later metadata-write failure preserves the transition because the pointer
+really changed; an event-write failure prevents the pointer change.
+
+Remote migration statements execute separately. The idempotent migration creates the
+event table, installs the trigger, then records a baseline only if no event exists. A
+concurrent activation after trigger installation is a real event, so baseline insertion
+skips it. Legacy history before this observation remains unknown. Retrying a partial
+migration cannot overwrite recorded transitions. A pruned actual predecessor causes a
+typed refusal rather than selecting another retained build. Final credentialed candidate
+qualification remains a separate release requirement.

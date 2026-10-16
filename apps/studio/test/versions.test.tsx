@@ -18,6 +18,25 @@ const OLD = `lore_${'b'.repeat(60)}0002`;
 
 const HISTORY = {
   activeBuildId: NEW,
+  rollbackBuildId: OLD as string | null,
+  rollbackUnavailable: null as string | null,
+  historyTruncated: false,
+  activationHistory: [
+    {
+      generation: 2,
+      previousBuildId: OLD as string | null,
+      buildId: NEW,
+      kind: 'transition',
+      recordedAt: '2026-08-03T10:00:00.000Z',
+    },
+    {
+      generation: 1,
+      previousBuildId: null,
+      buildId: OLD,
+      kind: 'transition',
+      recordedAt: '2026-08-02T09:00:00.000Z',
+    },
+  ],
   builds: [
     {
       buildId: NEW,
@@ -218,7 +237,19 @@ describe('a confirmation that went stale, #610', () => {
 
     // Meanwhile the CLI activated a third build, and the server says so.
     history = {
+      ...HISTORY,
       activeBuildId: THIRD,
+      rollbackBuildId: NEW,
+      activationHistory: [
+        {
+          generation: 3,
+          previousBuildId: NEW,
+          buildId: THIRD,
+          kind: 'transition',
+          recordedAt: '2026-08-03T11:00:00.000Z',
+        },
+        ...HISTORY.activationHistory,
+      ],
       builds: [
         { ...HISTORY.builds[0], buildId: THIRD } as (typeof HISTORY.builds)[number],
         {
@@ -354,5 +385,81 @@ describe('the diff, which has to read the way lorepack diff reads', () => {
       'Tables',
       'Capabilities',
     ]);
+  });
+});
+
+describe('recorded activation history', () => {
+  it('uses the server target even when a newer never-active candidate is listed first', async () => {
+    const candidate = `lore_${'c'.repeat(60)}0003`;
+    history = {
+      ...HISTORY,
+      builds: [
+        HISTORY.builds[0] as (typeof HISTORY.builds)[number],
+        {
+          ...HISTORY.builds[1],
+          buildId: candidate,
+          createdAt: '2026-08-03T09:59:00.000Z',
+        } as (typeof HISTORY.builds)[number],
+        HISTORY.builds[1] as (typeof HISTORY.builds)[number],
+      ],
+    };
+    renderRoute();
+    await userEvent.click(await screen.findByRole('button', { name: 'Roll back' }));
+    expect(
+      await screen.findByRole('region', { name: `Roll back to ${OLD.slice(0, 17)}` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: `Roll back to ${candidate.slice(0, 17)}` }),
+    ).not.toBeInTheDocument();
+    expect(posted).toEqual([]);
+  });
+  it('labels a legacy baseline and keeps explicit activation available without guessing a rollback', async () => {
+    history = {
+      ...HISTORY,
+      rollbackBuildId: null,
+      rollbackUnavailable: 'No previous activation is recorded.',
+      activationHistory: [
+        {
+          generation: 2,
+          previousBuildId: null,
+          buildId: NEW,
+          kind: 'baseline',
+          recordedAt: '2026-08-03T10:00:00.000Z',
+        },
+      ],
+    };
+    renderRoute();
+    expect(await screen.findByText(/No previous activation is recorded/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Roll back' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Activate ${OLD.slice(0, 17)}` }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Activation history', { exact: true }));
+    const region = screen.getByRole('region', { name: 'Recorded activations' });
+    expect(within(region).getByText('Baseline observation')).toBeInTheDocument();
+    expect(within(region).getByText('Unknown')).toBeInTheDocument();
+    expect(posted).toEqual([]);
+  });
+  it('labels truncation and renders the bounded recorded events by generation', async () => {
+    history = {
+      ...HISTORY,
+      historyTruncated: true,
+      activationHistory: Array.from({ length: 50 }, (_, index) => ({
+        generation: 51 - index,
+        previousBuildId: index % 2 === 0 ? OLD : NEW,
+        buildId: index % 2 === 0 ? NEW : OLD,
+        kind: 'transition',
+        recordedAt: '2026-08-03T10:00:00.000Z',
+      })),
+    };
+    renderRoute();
+    await userEvent.click(await screen.findByText('Activation history', { exact: true }));
+    expect(screen.getByText(/Most recent 50 recorded events/)).toBeInTheDocument();
+    const rows = within(screen.getByRole('region', { name: 'Recorded activations' })).getAllByRole(
+      'row',
+    );
+    expect(rows).toHaveLength(51);
+    expect(within(rows[1] as HTMLElement).getAllByRole('cell')[0]).toHaveTextContent('51');
+    expect(within(rows[50] as HTMLElement).getAllByRole('cell')[0]).toHaveTextContent('2');
   });
 });

@@ -135,3 +135,19 @@ build. Counterexamples must transmit packets, then leave a clean build at zero.
 The repository architecture scan opens one TypeScript snapshot for all package
 and Studio source files. Package rules still apply separately to every import;
 sharing the snapshot avoids starting a compiler process per package.
+
+## D1 projection fixture setup
+
+The file-backed SQLite fixture in `project-table-data.test.ts` is complete before the
+projection reads it. Seed its schema, metadata and rows in one transaction so individual
+setup inserts do not each pay for a durable filesystem commit. The same rows, values,
+column-width refusal, D1 SQL LIMIT assertions and original test deadlines remain enforced.
+The measured Windows failure and local write-count evidence are tracked in
+[issue #757](https://github.com/burakdede/lorepack/issues/757).
+
+Run the complete fixture suite with:
+
+```bash
+pnpm build
+pnpm exec vitest run packages/deploy-cloudflare/test/project-table-data.test.ts
+```

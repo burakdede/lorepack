@@ -234,7 +234,9 @@ None.
 
 ### Flags
 
-None.
+| Name | Description |
+|---|---|
+| `--activations` | show recorded activation events instead of build creation order |
 
 ## `lorepack activate`
 
@@ -256,7 +258,7 @@ None.
 
 ## `lorepack rollback`
 
-Return to the previous verified build. Never recompiles.
+Return to the previously active build. Never recompiles.
 
 ```text
 lorepack rollback [build]

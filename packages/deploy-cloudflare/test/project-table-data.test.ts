@@ -122,6 +122,8 @@ function makeBuildDirectory(
     enableDoubleQuotedStringLiterals: false,
   });
   databases.push(db);
+  // Publish the complete fixture once instead of syncing every seed row to disk.
+  db.exec('BEGIN');
   db.exec(`CREATE TABLE tables (
     id TEXT PRIMARY KEY,
     artifact_id TEXT NOT NULL,
@@ -256,6 +258,7 @@ function makeBuildDirectory(
     );
   }
 
+  db.exec('COMMIT');
   db.close();
   databases.pop();
   return directory;

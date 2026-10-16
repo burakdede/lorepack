@@ -1,3 +1,4 @@
+export { previousActivation } from './activation_history.js';
 /**
  * The Worker-safe subset of `@lorepack/core`.
  *

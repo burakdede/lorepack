@@ -33,9 +33,21 @@ interface Build {
   readonly capabilities: readonly string[] | null;
 }
 
+interface ActivationEvent {
+  readonly generation: number;
+  readonly previousBuildId: string | null;
+  readonly buildId: string;
+  readonly kind: 'transition' | 'baseline';
+  readonly recordedAt: string;
+}
+
 interface History {
   readonly activeBuildId: string | null;
   readonly builds: readonly Build[];
+  readonly activationHistory: readonly ActivationEvent[];
+  readonly historyTruncated: boolean;
+  readonly rollbackBuildId: string | null;
+  readonly rollbackUnavailable: string | null;
 }
 
 interface Diff {
@@ -150,7 +162,7 @@ export function Versions(): React.JSX.Element {
 
   const builds = history.data?.builds ?? [];
   const active = history.data?.activeBuildId ?? null;
-  const rollbackTarget = previousBuild(builds, active);
+  const rollbackTarget = history.data.rollbackBuildId;
 
   const start = (action: Pending): void => {
     setOutcome(null);
@@ -201,13 +213,24 @@ export function Versions(): React.JSX.Element {
             }}
           />
 
+          {rollbackTarget === null && history.data.rollbackUnavailable !== null && (
+            <p className="rollback-line prose">
+              {history.data.rollbackUnavailable} Select a retained verified build explicitly to
+              activate it.
+            </p>
+          )}
           {rollbackTarget !== null && (
             <p className="rollback-line prose">
-              {`Roll back returns to the previous verified build, ${shorten(rollbackTarget)}. It is a pointer change, so nothing is recompiled and the current build stays exactly where it is.`}
+              {`Roll back returns to the previously active build, ${shorten(rollbackTarget)}. It is a pointer change, so nothing is recompiled and the current build stays exactly where it is.`}
             </p>
           )}
         </>
       )}
+
+      <ActivationHistory
+        events={history.data.activationHistory}
+        truncated={history.data.historyTruncated}
+      />
 
       {pending !== null && (
         <Confirmation
@@ -225,6 +248,80 @@ export function Versions(): React.JSX.Element {
         <Compare builds={builds} selection={compare} onSelect={setCompare} active={active} />
       )}
     </section>
+  );
+}
+
+function ActivationHistory({
+  events,
+  truncated,
+}: {
+  readonly events: readonly ActivationEvent[];
+  readonly truncated: boolean;
+}): React.JSX.Element {
+  return (
+    <details className="activation-history">
+      <summary>Activation history</summary>
+      <p className="activation-history-note prose">
+        {truncated
+          ? 'Most recent 50 recorded events. Earlier events are not shown.'
+          : 'Recorded events, newest first.'}{' '}
+        A baseline observes an existing active build; earlier activation history is unknown.
+      </p>
+      {events.length === 0 ? (
+        <p className="activation-history-note">No activation events are recorded yet.</p>
+      ) : (
+        <section
+          className="table-frame table-scroll"
+          aria-label="Recorded activations"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: the horizontal scroll region needs keyboard focus
+          tabIndex={0}
+        >
+          <table className="data-table activation-events">
+            <caption className="visually-hidden">
+              Recorded activation events, newest generation first
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col" className="numeric">
+                  generation
+                </th>
+                <th scope="col">event</th>
+                <th scope="col">from</th>
+                <th scope="col">to</th>
+                <th scope="col">recorded</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((event) => (
+                <tr key={event.generation}>
+                  <td className="numeric">{event.generation}</td>
+                  <td>{event.kind === 'baseline' ? 'Baseline observation' : 'Activation'}</td>
+                  <td>
+                    {event.previousBuildId === null ? (
+                      event.kind === 'baseline' ? (
+                        'Unknown'
+                      ) : (
+                        'No active build'
+                      )
+                    ) : (
+                      <code title={event.previousBuildId}>{shorten(event.previousBuildId)}</code>
+                    )}
+                  </td>
+                  <td>
+                    <code title={event.buildId}>{shorten(event.buildId)}</code>
+                  </td>
+                  <td>
+                    <time dateTime={event.recordedAt} title={event.recordedAt}>
+                      {formatTime(event.recordedAt)}
+                    </time>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </details>
   );
 }
 
@@ -675,13 +772,6 @@ const MARKERS: Record<string, string> = {
 };
 
 /**
- * The build a rollback would return to, chosen exactly the way the server chooses it.
- *
- * Duplicated deliberately, because the confirmation has to name a build before the request
- * is made. The two cannot drift silently: the confirmed id is sent back as `expect`, and the
- * server refuses to act if its own answer differs.
- */
-/**
  * The two states a build can be activated or packed from.
  *
  * `active` is one of them: activation marks the live build `active` and returns the one it
@@ -696,13 +786,6 @@ function toneForBuildState(state: string): 'ok' | 'warn' | 'bad' | 'idle' {
   if (isActivatable(state)) return 'ok';
   if (state === 'failed') return 'bad';
   return 'warn';
-}
-
-function previousBuild(builds: readonly Build[], active: string | null): string | null {
-  const candidates = builds.filter(
-    (build) => build.buildId !== active && (build.state === 'verified' || build.state === 'active'),
-  );
-  return candidates[0]?.buildId ?? null;
 }
 
 function endpointFor(action: Confirmed): string {

@@ -33,8 +33,10 @@ export type {
   TableStore,
 } from './runtime.js';
 export type {
+  ActivationEvent,
   ActiveBuildProvider,
   BuildHandle,
+  BuildHistorySnapshot,
   BuildStore,
   BuildSummary,
   CandidateBuild,

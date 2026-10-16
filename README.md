@@ -62,7 +62,8 @@ The Terraform analogy describes the context lifecycle. `lore.yaml` is
 the desired context configuration. `lorepack plan` previews the candidate, `lorepack build`
 compiles an immutable artifact, `lorepack validate` compiles and checks a candidate without moving the active pointer,
 and `lorepack activate` changes that pointer. `lorepack diff` reviews versions and
-`lorepack rollback` selects a previous immutable build. This separates desired inputs, review,
+`lorepack rollback` returns to the build that was active immediately before the current one.
+A newer candidate that never served is not a rollback target. This separates desired inputs, review,
 and activation. Local compilation uses no cloud resources and never mutates source files.
 Optional Cloudflare target setup provisions D1 and R2 resources for a completed build's deployment.
 
@@ -512,6 +513,7 @@ Published CLI builds preserve that boundary with shared ESM chunks.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before changing the project.
 The project uses Apache-2.0 licensing. Security reports belong in [SECURITY.md](SECURITY.md).
 Contributor tests use Vitest 4.1.11, including the redirect-mock file-serving security fix.
+SQLite projection fixtures seed atomically while retaining their original query assertions and deadlines.
 Its integration fixtures keep startup diagnostics separate from machine-readable results.
 The test toolchain is outside the published runtime dependencies; see the
 [CI guide](docs/architecture/ci.md) for its regression checks.

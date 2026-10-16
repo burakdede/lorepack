@@ -1,3 +1,4 @@
+export { previousActivation } from './activation_history.js';
 export * from './config/index.js';
 export { createContextReceipt, verifyContextReceipt } from './context_receipt.js';
 export {

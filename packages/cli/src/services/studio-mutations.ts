@@ -8,6 +8,7 @@ import {
   openStateStore,
   previousBuild,
   resolveBuildId,
+  rollbackStatus,
 } from './builds.js';
 
 /**
@@ -30,10 +31,14 @@ export function createBuildsEndpoint(config: ProjectConfig): () => Promise<unkno
   return async () => {
     const state = openStateStore(loreDirectory);
     try {
-      const active = state.current();
+      const history = state.history();
+      const active = history.active;
       return {
         activeBuildId: active?.buildId ?? null,
-        builds: state.listBuilds().map((build) => ({
+        activationHistory: history.activationHistory,
+        historyTruncated: history.historyTruncated,
+        ...rollbackStatus(history),
+        builds: history.builds.map((build) => ({
           buildId: build.buildId,
           createdAt: build.createdAt,
           state: build.state,
@@ -117,7 +122,7 @@ export function createActivateEndpoint(
 }
 
 /**
- * The previous verified build, chosen the same way `lorepack rollback` chooses it.
+ * The previously active build, chosen from the same snapshot as `lorepack rollback`.
  *
  * Rollback is a pointer change that never recompiles, which is what makes it cheap and safe,
  * and is why Studio does not style it as destructive.
@@ -132,9 +137,9 @@ export function createRollbackEndpoint(
 
     try {
       return await lock.withLock(() => {
-        const builds = state.listBuilds();
-        const active = state.current();
-        const target = previousBuild(builds, active?.buildId ?? null);
+        const history = state.history();
+        const builds = history.builds;
+        const target = previousBuild(history);
 
         // Studio names the build it is about to return to, and the history can move between
         // rendering that name and confirming it: a rebuild finishing in the next terminal is

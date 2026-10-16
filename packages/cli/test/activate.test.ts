@@ -1,10 +1,15 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { PROJECTION_MIGRATIONS } from '../../deploy-cloudflare/src/projection-migrations.js';
+import {
+  ACTIVE_BUILD,
+  CANDIDATE_BUILD,
+  createProjectedWorkerRuntimeFixture,
+} from '../../deploy-cloudflare/test/projected-runtime-fixture.js';
 import { rollbackCommand } from '../src/commands/activate.js';
 import { pruneCommand } from '../src/commands/prune.js';
 import { runBuild } from '../src/services/build.js';
@@ -94,6 +99,8 @@ function fakeRemoteRollbackTarget(
       throw new Error('rollback tests do not call activate');
     },
     rollback: async (requestedBuildId) => {
+      if (requestedBuildId === undefined)
+        throw new Error('This named-target fixture requires an explicit build ID.');
       calls.push(`rollback:${requestedBuildId}`);
       return {
         buildId: requestedBuildId,
@@ -128,9 +135,11 @@ class SqliteStatement {
       trimmed.startsWith('pragma') ||
       /\bRETURNING\b/i.test(this.#query)
     ) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return {
+        results: statement.all(...(this.#bindings as SQLInputValue[])) as unknown as readonly T[],
+      };
     }
-    statement.run(...this.#bindings);
+    statement.run(...(this.#bindings as SQLInputValue[]));
     return {};
   }
 
@@ -257,7 +266,7 @@ function seedRemoteCleanupFixture(
 ): {
   readonly db: DatabaseSync;
   readonly tables: DatabaseSync;
-  readonly objects: FakeCloudflareObjectsBucket;
+  readonly objects: ReturnType<typeof createFakeCloudflareObjectsBucket>;
   readonly archiveKey: string;
   readonly objectKey: string;
 } {
@@ -645,7 +654,9 @@ describe('lorepack rollback', () => {
       await build(root);
       const result = await lore(['rollback']);
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain('no earlier verified build');
+      expect(result.stderr).toContain('No previous activation is recorded.');
+      expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
+      expect(result.stderr).toContain('Select a retained build ID explicitly');
     });
   });
 
@@ -675,116 +686,71 @@ describe('lorepack rollback', () => {
   it('fails clearly when a remote rollback has no target receipt yet', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
       const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
-        commands: [
-          rollbackCommand({
-            resolveTarget: async () => fakeRemoteRollbackTarget(),
-          }),
-        ],
+        commands: [rollbackCommand()],
       });
-
       expect(result.code).toBe(5);
       expect(result.stderr).toContain('LORE_E_TARGET_NOT_CONFIGURED');
       expect(result.stderr).toContain('Run `lorepack target add cloudflare` first.');
     });
   });
 
-  it('rolls back a remote target to the previous verified build when no id is given', async () => {
+  it('rolls back a remote target to the previously active build when no id is given', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
-      const db = new DatabaseSync(':memory:');
-      writeCloudflareReceipt(temp.root);
-
-      db.exec(`
-        CREATE TABLE active_build (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          build_id TEXT,
-          generation INTEGER NOT NULL
-        );
-        INSERT INTO active_build (id, build_id, generation)
-        VALUES (1, 'lore_${'b'.repeat(64)}', 4);
-        CREATE TABLE projected_builds (
-          project_id TEXT NOT NULL,
-          build_id TEXT NOT NULL,
-          build_schema_version INTEGER NOT NULL,
-          compiler_version TEXT NOT NULL,
-          projection_schema_version INTEGER NOT NULL,
-          projected_at TEXT NOT NULL,
-          verified_at TEXT,
-          activated_at TEXT,
-          PRIMARY KEY (project_id, build_id)
-        );
-        INSERT INTO projected_builds
-          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
-        VALUES
-          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:58:00.000Z', NULL, NULL),
-          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z', '2026-08-09T11:59:30.000Z', '2026-08-09T11:59:45.000Z'),
-          ('demo', 'lore_${'c'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z', '2026-08-09T12:00:45.000Z');
-      `);
-      db.prepare('UPDATE active_build SET build_id = ?, generation = ? WHERE id = 1').run(
-        `lore_${'c'.repeat(64)}`,
-        4,
-      );
-
-      const calls: string[] = [];
-      const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
-        commands: [
-          rollbackCommand({
-            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
-            resolveTarget: async () => fakeRemoteRollbackTarget(calls),
-          }),
-        ],
-      });
-
-      expect(result.code).toBe(0);
-      expect(result.stdout).toContain(`Rolled back cloudflare to lore_${'b'.repeat(64)}.`);
-      expect(calls).toEqual([`rollback:lore_${'b'.repeat(64)}`]);
-      db.close();
+      const fixture = await createProjectedWorkerRuntimeFixture();
+      try {
+        await fixture.target.verify(fixture.candidateReceipt);
+        await fixture.target.activate(fixture.candidateReceipt);
+        const newest = await fixture.applySharedCandidate(`lore_${'c'.repeat(64)}` as BuildId);
+        await fixture.target.verify(newest);
+        await fixture.target.activate(newest);
+        const calls: string[] = [];
+        const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
+          commands: [
+            rollbackCommand({
+              resolveTarget: async () => ({
+                ...fixture.target,
+                rollback: async (requested) => {
+                  expect(requested).toBeUndefined();
+                  const activation = await fixture.target.rollback(requested);
+                  calls.push(`rollback:${activation.buildId}`);
+                  return activation;
+                },
+              }),
+            }),
+          ],
+        });
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain(`Rolled back cloudflare to ${CANDIDATE_BUILD}.`);
+        expect(calls).toEqual([`rollback:${CANDIDATE_BUILD}`]);
+        expect(
+          fixture.projection.raw
+            .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+            .get(),
+        ).toEqual({ build_id: CANDIDATE_BUILD, generation: 4 });
+      } finally {
+        await fixture.close();
+      }
     });
   });
 
-  it('fails clearly when a remote target has no earlier verified build', async () => {
+  it('fails clearly when a remote target has no previous activation', async () => {
     await withTempProject({ files: { 'lore.yaml': CONFIG } }, async (temp) => {
-      const db = new DatabaseSync(':memory:');
-      writeCloudflareReceipt(temp.root);
-
-      db.exec(`
-        CREATE TABLE active_build (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          build_id TEXT,
-          generation INTEGER NOT NULL
-        );
-        INSERT INTO active_build (id, build_id, generation)
-        VALUES (1, 'lore_${'b'.repeat(64)}', 4);
-        CREATE TABLE projected_builds (
-          project_id TEXT NOT NULL,
-          build_id TEXT NOT NULL,
-          build_schema_version INTEGER NOT NULL,
-          compiler_version TEXT NOT NULL,
-          projection_schema_version INTEGER NOT NULL,
-          projected_at TEXT NOT NULL,
-          verified_at TEXT,
-          activated_at TEXT,
-          PRIMARY KEY (project_id, build_id)
-        );
-        INSERT INTO projected_builds
-          (project_id, build_id, build_schema_version, compiler_version, projection_schema_version, projected_at, verified_at, activated_at)
-        VALUES
-          ('demo', 'lore_${'a'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T11:59:00.000Z', NULL, NULL),
-          ('demo', 'lore_${'b'.repeat(64)}', 1, '0.1.0', 1, '2026-08-09T12:00:00.000Z', '2026-08-09T12:00:30.000Z', '2026-08-09T12:00:45.000Z');
-      `);
-
-      const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
-        commands: [
-          rollbackCommand({
-            cloudflareAdapter: fakeCloudflareRollbackAdapter(db),
-            resolveTarget: async () => fakeRemoteRollbackTarget(),
-          }),
-        ],
-      });
-
-      expect(result.code).toBe(1);
-      expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
-      expect(result.stderr).toContain('There is no earlier verified remote build to return to.');
-      db.close();
+      const fixture = await createProjectedWorkerRuntimeFixture();
+      try {
+        const result = await run(['--cwd', temp.root, 'rollback', '--target', 'cloudflare'], {
+          commands: [rollbackCommand({ resolveTarget: async () => fixture.target })],
+        });
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
+        expect(result.stderr).toContain('No previous activation is recorded.');
+        expect(
+          fixture.projection.raw
+            .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+            .get(),
+        ).toEqual({ build_id: ACTIVE_BUILD, generation: 1 });
+      } finally {
+        await fixture.close();
+      }
     });
   });
 

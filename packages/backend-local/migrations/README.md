@@ -5,3 +5,7 @@ Raw SQL migrations, applied by `runMigrations` in this package. No ORM: versione
 `state/` creates the mutable project database under `.lore/`. `build/` creates the catalog inside a sealed build. They are separate sets on purpose: running both into one database would put empty `builds` and `active_build` tables inside every build, which is the confusion between operational state and canonical content that invariant 1 exists to prevent.
 
 They live inside this package, and `files` in its package.json publishes them, because an asset the code reads has to travel with the code. They used to sit at the repository root, where every test found them and no install did (#164).
+
+State migration `0003` adds operational activation history. Its trigger keeps pointer and
+event atomic; its legacy baseline records an observation rather than fabricated past
+activations. These rows are never included in a sealed build or archive.
