@@ -237,6 +237,10 @@ aligned with the active build:
 lorepack dev ./my-docs
 ```
 
+Explicit activation or rollback stays selected when file events leave source inputs unchanged.
+A genuine source edit resumes automatic building and activation; freshness can remain dirty
+while an older build is selected. See [watch behavior](docs/architecture/watch.md).
+
 For a previously built project that must only serve the active build, use the read-only server:
 
 ```bash
@@ -514,6 +518,9 @@ your Node.js version in a bug report.
 ## Contributing
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
+The generated-release regression also checks real Git commit subjects and changeset deletion
+before running the policy gate; its original test deadline stays enforced. The 70-commit
+marker/pruning matrix keeps all four combinations and uses real configured clones.
 
 CLI deployment tooling uses the [deployment client boundary](docs/architecture/packages.md)
 so control operations do not initialize Worker protocol adapters.

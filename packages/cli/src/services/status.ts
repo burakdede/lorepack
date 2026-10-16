@@ -30,6 +30,13 @@ export interface StatusOptions {
 }
 
 export async function readStatus(options: StatusOptions): Promise<Status> {
+  return (await readStatusObservation(options)).status;
+}
+
+async function readStatusObservation(options: StatusOptions): Promise<{
+  readonly status: Status;
+  readonly inputFingerprint: string;
+}> {
   const { config } = options;
   const now = options.now ?? (() => new Date());
   const loreDirectory = join(config.projectRoot, LORE_DIRECTORY);
@@ -51,17 +58,20 @@ export async function readStatus(options: StatusOptions): Promise<Status> {
 
   if (active === null || previous === null) {
     return {
-      formatVersion: 1,
-      projectName: config.config.name,
-      activeBuildId: null,
-      activeBuildAt: null,
-      buildAgeSeconds: null,
-      sourceState: 'unbuilt',
-      decidedBy: 'content-hash',
-      artifacts: { total: fingerprint.artifacts.length, added: 0, changed: 0, removed: 0 },
-      changes: [],
-      warnings: discovery.warnings.length,
-      remediation: 'lorepack build',
+      inputFingerprint: fingerprint.fingerprint,
+      status: {
+        formatVersion: 1,
+        projectName: config.config.name,
+        activeBuildId: null,
+        activeBuildAt: null,
+        buildAgeSeconds: null,
+        sourceState: 'unbuilt',
+        decidedBy: 'content-hash',
+        artifacts: { total: fingerprint.artifacts.length, added: 0, changed: 0, removed: 0 },
+        changes: [],
+        warnings: discovery.warnings.length,
+        remediation: 'lorepack build',
+      },
     };
   }
 
@@ -70,29 +80,32 @@ export async function readStatus(options: StatusOptions): Promise<Status> {
   const createdAt = readBuildCreatedAt(loreDirectory, active.buildId);
 
   return {
-    formatVersion: 1,
-    projectName: config.config.name,
-    activeBuildId: active.buildId,
-    activeBuildAt: createdAt,
-    buildAgeSeconds:
-      createdAt === null
-        ? null
-        : Math.max(0, Math.floor((now().getTime() - Date.parse(createdAt)) / 1000)),
-    sourceState: dirty.clean ? 'clean' : 'dirty',
-    decidedBy: 'content-hash',
-    artifacts: {
-      total: fingerprint.artifacts.length,
-      added: dirty.added.length,
-      changed: dirty.changed.length,
-      removed: dirty.removed.length,
+    inputFingerprint: fingerprint.fingerprint,
+    status: {
+      formatVersion: 1,
+      projectName: config.config.name,
+      activeBuildId: active.buildId,
+      activeBuildAt: createdAt,
+      buildAgeSeconds:
+        createdAt === null
+          ? null
+          : Math.max(0, Math.floor((now().getTime() - Date.parse(createdAt)) / 1000)),
+      sourceState: dirty.clean ? 'clean' : 'dirty',
+      decidedBy: 'content-hash',
+      artifacts: {
+        total: fingerprint.artifacts.length,
+        added: dirty.added.length,
+        changed: dirty.changed.length,
+        removed: dirty.removed.length,
+      },
+      changes: [
+        ...dirty.added.map((id) => ({ path: pathOf(id), change: 'added' as const })),
+        ...dirty.changed.map((id) => ({ path: pathOf(id), change: 'changed' as const })),
+        ...dirty.removed.map((id) => ({ path: pathOf(id), change: 'removed' as const })),
+      ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+      warnings: countBuildWarnings(loreDirectory, active.buildId) ?? discovery.warnings.length,
+      remediation: dirty.clean ? null : 'lorepack build',
     },
-    changes: [
-      ...dirty.added.map((id) => ({ path: pathOf(id), change: 'added' as const })),
-      ...dirty.changed.map((id) => ({ path: pathOf(id), change: 'changed' as const })),
-      ...dirty.removed.map((id) => ({ path: pathOf(id), change: 'removed' as const })),
-    ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
-    warnings: countBuildWarnings(loreDirectory, active.buildId) ?? discovery.warnings.length,
-    remediation: dirty.clean ? null : 'lorepack build',
   };
 }
 
@@ -126,6 +139,13 @@ export interface Freshness {
 export async function readFreshness(
   options: Omit<StatusOptions, 'config'> & { readonly config: ProjectConfig },
 ): Promise<Freshness> {
+  const { sourceState, reason } = await readFreshnessObservation(options);
+  return { sourceState, reason };
+}
+
+export async function readFreshnessObservation(
+  options: Omit<StatusOptions, 'config'> & { readonly config: ProjectConfig },
+): Promise<Freshness & { readonly inputFingerprint: string | null }> {
   let config: LoadedConfig;
   try {
     config = loadSourceConfig(options.config);
@@ -138,20 +158,26 @@ export async function readFreshness(
       throw error;
     }
     return {
+      inputFingerprint: null,
       sourceState: 'unknown',
       reason: error instanceof Error ? error.message : 'Sources cannot be validated.',
     };
   }
   try {
-    const status = await readStatus({ ...options, config, allowLargeProject: true });
+    const { status, inputFingerprint } = await readStatusObservation({
+      ...options,
+      config,
+      allowLargeProject: true,
+    });
     return {
+      inputFingerprint,
       sourceState: status.sourceState === 'unbuilt' ? 'unknown' : status.sourceState,
       reason: null,
     };
   } catch (error) {
     const degraded = degradedFreshness(error);
     if (degraded === null) throw error;
-    return degraded;
+    return { ...degraded, inputFingerprint: null };
   }
 }
 

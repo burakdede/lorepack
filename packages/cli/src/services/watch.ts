@@ -1,10 +1,16 @@
-import { realpathSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createSourceMatcher, discover } from '@lorepack/compiler';
-import { type BuildId, LORE_DIRECTORY, type LoadedConfig, type SourceState } from '@lorepack/core';
+import {
+  type BuildId,
+  buildManifestSchema,
+  LORE_DIRECTORY,
+  type LoadedConfig,
+  type SourceState,
+} from '@lorepack/core';
 import { watch as chokidarWatch } from 'chokidar';
 import { openStateStore } from './builds.js';
-import { readFreshness } from './status.js';
+import { readFreshness, readFreshnessObservation } from './status.js';
 
 /**
  * Watching the sources, where the watcher is an accelerator and never the truth.
@@ -38,7 +44,9 @@ export interface WatchOptions {
    * Builds and activates. Given a signal that aborts when a newer change arrives, so a
    * superseded candidate is cancelled rather than finished and thrown away.
    */
-  readonly rebuild: (signal: AbortSignal) => Promise<{ readonly created: boolean }>;
+  readonly rebuild: (
+    signal: AbortSignal,
+  ) => Promise<{ readonly created: boolean; readonly buildId: BuildId }>;
   readonly warn: (text: string) => void;
   /** How long to coalesce events before acting. */
   readonly debounceMs?: number;
@@ -144,6 +152,7 @@ export function startWatching(options: WatchOptions): Watching {
    * header say "the sources match this build" about a build the sources had moved past.
    */
   let describedBuild: BuildId | null = activeBuildId();
+  let inputFingerprint: string | null = null;
   let rebuilds = 0;
   let noOps = 0;
   let closed = false;
@@ -278,12 +287,16 @@ export function startWatching(options: WatchOptions): Watching {
 
     // Step 6 and 7. The deciding evidence. A touch, an atomic rename of identical bytes, or
     // a save that changed nothing all land here and stop.
-    const freshness = await readFreshness({ config: options.config });
-    if (freshness.sourceState === 'clean') {
-      record('clean');
+    const freshness = await readFreshnessObservation({ config: options.config });
+    if (
+      freshness.sourceState === 'clean' ||
+      (inputFingerprint !== null && freshness.inputFingerprint === inputFingerprint)
+    ) {
+      inputFingerprint = freshness.inputFingerprint;
+      record(freshness.sourceState);
       if (reason !== 'startup reconciliation') {
         noOps += 1;
-        options.warn('No changes: the sources still match the active build.\n');
+        options.warn('No changes: the source inputs are unchanged.\n');
       }
       return;
     }
@@ -326,6 +339,12 @@ export function startWatching(options: WatchOptions): Watching {
     try {
       options.warn(`${reason}: rebuilding.\n`);
       const result = await options.rebuild(controller.signal);
+      const manifest = buildManifestSchema.parse(
+        JSON.parse(
+          readFileSync(join(loreDirectory, 'builds', result.buildId, 'manifest.json'), 'utf8'),
+        ),
+      );
+      inputFingerprint = manifest.sourceFingerprint;
       if (result.created) rebuilds += 1;
       // After the pointer moved, so `clean` is recorded against the build that is now active.
       record('clean');

@@ -341,9 +341,8 @@ describe('changing which build is live, from Studio', () => {
     //
     // One read, taken immediately, which is what makes this deterministic. The edit is still
     // on disk and the build now active predates it, so `clean` is the one impossible answer.
-    // Polling for `dirty` instead would race the watcher's own reconcile sweep, which can
-    // legitimately rebuild and move the pointer forward again; the exact transition is
-    // asserted in `watch.test.ts`, where no server is competing for the same project.
+    // The exact transition is asserted in `watch.test.ts`. An unchanged source event must
+    // preserve this explicit selection even though freshness remains dirty.
     const annotated = (await (await fetch(`${base}/v1/build`)).json()) as {
       buildId: string;
       sourceState: string;
@@ -353,6 +352,27 @@ describe('changing which build is live, from Studio', () => {
       annotated.sourceState,
       `after rolling back past an edit, the sources cannot be reported clean.\n${started.log()}`,
     ).not.toBe('clean');
+
+    const noChangesBefore = started.log().split('No changes:').length;
+    const source = join(project, 'docs', 'runbook.md');
+    writeFileSync(source, readFileSync(source));
+    writeFileSync(join(project, 'docs', 'unindexed.bin'), 'Not a supported source.');
+    const noOpDeadline = Date.now() + 60_000;
+    while (
+      started.log().split('No changes:').length === noChangesBefore &&
+      Date.now() < noOpDeadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    expect(started.log().split('No changes:').length, started.log()).toBeGreaterThan(
+      noChangesBefore,
+    );
+    const afterNoOp = (await (await fetch(`${base}/v1/build`)).json()) as {
+      buildId: string;
+      sourceState: string;
+    };
+    expect(afterNoOp.buildId).toBe(first);
+    expect(afterNoOp.sourceState).toBe('dirty');
 
     // And through MCP, which is the surface a model asks on. A tool call landing on the old
     // build after a person rolled back in Studio is the failure this asserts against.

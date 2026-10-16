@@ -44,8 +44,22 @@ guarantees. A platform that delivers events promptly pays a directory scan every
 seconds and finds nothing.
 
 Step 7 is visible rather than silent. A save that changes nothing prints `No changes: the
-sources still match the active build`, because a user who saved and saw nothing happen is
+source inputs are unchanged`, because a user who saved and saw nothing happen is
 owed the reason.
+
+## Explicit activation and unchanged inputs
+
+Freshness compares sources with the selected build. The rebuild decision compares sources
+with the last successfully observed or compiled input fingerprint. These are different after
+an explicit activation or rollback: sources can remain dirty without changing again.
+Identical rewrites and unsupported-file events preserve the selected build; a genuine source
+edit still builds and activates a new version. Studio, HTTP and MCP continue to read the
+selected build and report its actual freshness.
+
+The status scan supplies its existing fingerprint without a second hashing pass. After a
+successful rebuild, the watcher records the immutable manifest's fingerprint, since inputs
+can change between the scan and compilation. A failed build never advances that baseline,
+so another event can retry the same changed inputs.
 
 ## The path handed to the operating system is resolved first
 

@@ -115,18 +115,46 @@ describe('changeset policy', () => {
   });
 
   it('ignores a Changeset deleted by a generated release commit', () => {
-    execFileSync('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: root });
-    execFileSync('git', ['checkout', '-b', 'release'], { cwd: root });
-    writeFileSync(
-      join(root, '.changeset', 'release.md'),
-      "---\n'@lorepack/cli': patch\n---\n\nRelease automation.\n",
+    const changeset = "---\n'@lorepack/cli': patch\n---\n\nRelease automation.\n";
+    const addSubject = 'Add release changeset';
+    const releaseSubject = 'Release v0.1.0-alpha.0 [no release]';
+    const history = [
+      'reset refs/remotes/origin/main',
+      'from refs/heads/main',
+      '',
+      'commit refs/heads/release',
+      'mark :1',
+      'committer Test User <test@example.com> 1700000000 +0000',
+      `data ${Buffer.byteLength(addSubject)}`,
+      addSubject,
+      'from refs/heads/main',
+      'M 100644 inline .changeset/release.md',
+      `data ${Buffer.byteLength(changeset)}`,
+      changeset,
+      'commit refs/heads/release',
+      'mark :2',
+      'committer Test User <test@example.com> 1700000001 +0000',
+      `data ${Buffer.byteLength(releaseSubject)}`,
+      releaseSubject,
+      'from :1',
+      'D .changeset/release.md',
+      '',
+      'reset refs/remotes/origin/pr-100',
+      'from :2',
+      '',
+    ].join('\n');
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: history });
+    const imported = execFileSync(
+      'git',
+      ['log', '--reverse', '--format=%s', '--name-status', 'origin/main..origin/pr-100'],
+      { cwd: root, encoding: 'utf8' },
     );
-    execFileSync('git', ['add', '.'], { cwd: root });
-    execFileSync('git', ['commit', '-m', 'Add release changeset'], { cwd: root });
-    execFileSync('git', ['rm', '.changeset/release.md'], { cwd: root });
-    execFileSync('git', ['commit', '-m', 'Release v0.1.0-alpha.0 [no release]'], { cwd: root });
-    execFileSync('git', ['update-ref', 'refs/remotes/origin/pr-100', 'HEAD'], { cwd: root });
-    execFileSync('git', ['checkout', 'main'], { cwd: root });
+    expect(imported.split(/\r?\n/).filter(Boolean)).toEqual([
+      addSubject,
+      'A\t.changeset/release.md',
+      releaseSubject,
+      'D\t.changeset/release.md',
+    ]);
 
     const result = run(CHANGESET_CHECK, root, { CHANGESET_HEAD_REF: 'origin/pr-100' });
     expect(result.status, result.stderr || result.stdout).toBe(0);
@@ -146,7 +174,7 @@ describe('changeset policy', () => {
     [true, true],
     [false, true],
   ])('evaluates a long PR graph with marker %s and pruning %s', (hasMarker, prune) => {
-    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const base = 'refs/heads/main';
     let history = '';
     for (let index = 1; index <= 70; index++) {
       const subject =
@@ -154,8 +182,8 @@ describe('changeset policy', () => {
       const content = `${index}\n`;
       history += `commit refs/heads/feature\nmark :${index}\ncommitter Test User <test@example.com> ${1700000000 + index} +0000\ndata ${Buffer.byteLength(subject)}\n${subject}\nfrom ${index === 1 ? base : `:${index - 1}`}\nM 100644 inline docs.md\ndata ${Buffer.byteLength(content)}\n${content}\n`;
     }
+    history += 'reset refs/pull/718/head\nfrom :70\n';
     execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: history });
-    execFileSync('git', ['update-ref', 'refs/pull/718/head', 'refs/heads/feature'], { cwd: root });
     const workflow = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
     const verify = workflow.slice(
       workflow.indexOf('\n  verify:'),
@@ -168,6 +196,8 @@ describe('changeset policy', () => {
       'git',
       [
         'clone',
+        '--config',
+        `fetch.prune=${String(prune)}`,
         '--no-local',
         '--branch',
         'feature',
@@ -177,7 +207,9 @@ describe('changeset policy', () => {
       ],
       { stdio: 'pipe' },
     );
-    execFileSync('git', ['config', 'fetch.prune', String(prune)], { cwd: checkout });
+    expect(readFileSync(join(checkout, '.git', 'config'), 'utf8')).toMatch(
+      new RegExp(`\\[fetch\\]\\s+prune = ${String(prune)}`),
+    );
     const expand = (value: string) =>
       value
         .replaceAll(/\$\{\{\s*github\.base_ref\s*\}\}/g, 'main')
