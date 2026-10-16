@@ -40,3 +40,7 @@ active build, HTTP status and actual response body on refusal. The successful pa
 await, retry or delay, and the assertion remains HTTP200. This is diagnostic context for
 [#758](https://github.com/burakdede/lorepack/issues/758), not a claimed correction of its
 unproven cause. Preserve failed browser artifacts before another run.
+
+The README demo recorder normalizes the 12 or 13 hexadecimal digits in displayed build
+prefixes as well as full build IDs. Canonical policy changes can change those volatile IDs. The demo still compares
+actual build IDs before normalization and checks source changes, rollback and archive integrity.

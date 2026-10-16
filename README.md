@@ -462,7 +462,8 @@ warnings. [Partly scanned PDFs](docs/architecture/parsers.md#pdf) name the unrea
 in `lorepack inspect warnings`.
 [Required-source coverage](docs/architecture/build-orchestration.md#required-source-coverage)
 lets strict builds reject missing or incomplete declared files and sheets before activation.
-The [verification checklist](docs/testing/required-source-coverage.md) records cold and cached failure behavior.
+The [verification checklist](docs/testing/required-source-coverage.md) records cold and cached
+failure behavior and the executable README demo.
 The default install has no Python, Docker, native add-on, model download, API key,
 account, or hosted service requirement.
 

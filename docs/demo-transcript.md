@@ -86,7 +86,7 @@ Discovering     0 <elapsed>ms
 Discovering     4                               done
 Fingerprinting  0/4 <elapsed>ms
 Fingerprinting  4/4 files                       done
-Plan for lore_8ffbe0b2236b -> candidate
+Plan for lore_<build-prefix> -> candidate
 
 Artifacts
   + 0 added
@@ -147,7 +147,7 @@ lorepack diff "lore_<build-id>" "lore_<build-id>"
 ```
 
 ```text
-Build lore_8ffbe0b2236b -> lore_f0bece7de18d
+Build lore_<build-prefix> -> lore_<build-prefix>
 
 Artifacts
   ~ research/current/positioning.md
