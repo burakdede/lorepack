@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { ProjectLock } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
@@ -23,10 +24,23 @@ it('returns the typed stale activation refusal after a real competing lock holde
       writeFileSync(join(project.root, 'a.md'), '# Second\n');
       const second = await runBuild({ config, progress: new ProgressBus() });
       await createActivateEndpoint(config)({ build: first.buildId });
+      const port = await new Promise<number>((resolve, reject) => {
+        const socket = createServer();
+        socket.on('error', reject);
+        socket.listen(0, '127.0.0.1', () => {
+          const address = socket.address();
+          if (address === null || typeof address === 'string') {
+            socket.close();
+            reject(new Error('Expected a TCP address.'));
+            return;
+          }
+          socket.close(() => resolve(address.port));
+        });
+      });
       const server = await startServing({
         config,
         host: '127.0.0.1',
-        port: 49_758,
+        port,
         studio: true,
         warn: () => {},
       });

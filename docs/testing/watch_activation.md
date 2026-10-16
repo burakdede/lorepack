@@ -30,6 +30,16 @@ another run. A focused passing rerun cannot qualify this correction.
 
 ![Older build remains selected after unchanged events](../images/studio_watched_activation.png)
 
+## Native bind failure and fixture correction
+
+Windows verification of `d81b71d5` failed the guarded HTTP test before its request because
+binding the fixed port 49758 returned `EACCES`. The same job passed all 18 watcher cases;
+this does not qualify the failed full run. The fixture now obtains an available positive
+TCP port from the operating system before starting the actual server. It preserves the
+real held lock, HTTP400 response, competing pointer/generation, assertions and deadlines.
+The application still receives a normal positive port; its public port validation is unchanged.
+Native verification of this correction remains required.
+
 ## Manual developer session
 
 1. Run `lorepack dev` on a project with two retained builds and the newer source contents.
