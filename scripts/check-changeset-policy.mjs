@@ -6,18 +6,27 @@ import { basename, join } from 'node:path';
 const ROOT = process.env.LOREPACK_ROOT ?? join(import.meta.dirname, '..');
 const NO_RELEASE_MARKER = '[no release]';
 const VERSION_CHANGE = /^---\r?\n[\s\S]*?\r?\n---\r?\n\r?\n\S/;
+const comparison = {
+  base: process.env.GITHUB_BASE_REF
+    ? `origin/${process.env.GITHUB_BASE_REF}`
+    : (process.env.CHANGESET_BASE_REF ?? 'origin/main'),
+  head: process.env.CHANGESET_HEAD_REF ?? 'HEAD',
+};
+let resolvedMergeBase;
+
+function resolveMergeBase() {
+  resolvedMergeBase ??= git(['merge-base', comparison.base, comparison.head]);
+  return resolvedMergeBase;
+}
 
 function git(args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
 function changedFiles() {
-  const base = process.env.GITHUB_BASE_REF
-    ? `origin/${process.env.GITHUB_BASE_REF}`
-    : (process.env.CHANGESET_BASE_REF ?? 'origin/main');
-  const head = process.env.CHANGESET_HEAD_REF ?? 'HEAD';
+  const head = comparison.head;
   try {
-    const mergeBase = git(['merge-base', base, head]);
+    const mergeBase = resolveMergeBase();
     const comparisonHeads = head === 'HEAD' ? mergeParentHeads() : [];
     return unique([
       ...lines(git(['diff', '--name-only', `${mergeBase}...${head}`])),
@@ -39,11 +48,8 @@ function changedFiles() {
 
 function commitMessages() {
   try {
-    const base = process.env.GITHUB_BASE_REF
-      ? `origin/${process.env.GITHUB_BASE_REF}`
-      : (process.env.CHANGESET_BASE_REF ?? 'origin/main');
-    const head = process.env.CHANGESET_HEAD_REF ?? 'HEAD';
-    const mergeBase = git(['merge-base', base, head]);
+    const head = comparison.head;
+    const mergeBase = resolveMergeBase();
     const comparisonHeads = head === 'HEAD' ? mergeParentHeads() : [];
     return [
       git(['log', '--no-merges', '--format=%s%x1f', `${mergeBase}..${head}`]),

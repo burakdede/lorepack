@@ -21,6 +21,25 @@ Update the committed reports with:
 pnpm supply-chain:report
 ```
 
+## Changeset comparison
+
+The changeset gate selects its base/head once and shares a successfully resolved merge-base
+between its changed-file and commit-message checks. A failed lookup is not cached: each
+existing fallback still gets its original chance to resolve the comparison. Dirty, staged
+and untracked scans, changeset contents and no-release marker decisions remain unchanged.
+
+The [real-Git regression](../../tools/arch/test/release-policy.test.ts) uses Git's event trace
+to require one merge-base query in each original 70-commit marker/pruning case. It retains
+all four combinations, real configured clones, workflow-derived fetch refs and the original
+5000ms deadline. Run the complete policy tests with:
+
+```sh
+pnpm exec vitest run tools/arch/test/release-policy.test.ts
+```
+
+A local pass does not prove the recurring Windows deadline resolved. Issue #762 retains
+native qualification; #618 separately owns structural workflow parsing.
+
 ## What npm users install
 
 `@lorepack/cli` is published with its production dependency tree **bundled in the tarball**
