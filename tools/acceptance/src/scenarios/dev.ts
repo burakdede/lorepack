@@ -150,7 +150,14 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
         expect: {
           exitCode: 0,
           stdout: {
-            contains: ['lorepack', '--project', '--ensure-current', 'Nothing was changed'],
+            contains: [
+              'lorepack',
+              '--project',
+              '--ensure-current',
+              'Nothing was changed',
+              'Checked: the server started and answered.',
+              'with a cited read of',
+            ],
           },
         },
       },
@@ -173,7 +180,13 @@ export const DEV_SCENARIOS: readonly Scenario[] = [
           exitCode: 0,
           stdout: {
             // Architecture 14.7: never imply that every client can reach a local server.
-            contains: ['mcpServers', 'unverified', 'lorepack export'],
+            contains: [
+              'mcpServers',
+              'unverified',
+              'lorepack export',
+              'Checked: the server started and answered.',
+              'with a cited read of',
+            ],
           },
         },
       },

@@ -1,5 +1,14 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Builds the package layout a user actually receives, so a scenario can run against it.
@@ -107,4 +116,28 @@ function readPackageNames(packagesDirectory: string): readonly string[] {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
+}
+
+export function stageCommand(binary: string, directory: string): string {
+  mkdirSync(directory, { recursive: true });
+  if (process.platform === 'win32') {
+    const node = process.execPath.replaceAll('%', '%%');
+    const entry = binary.replaceAll('%', '%%');
+    writeFileSync(
+      join(directory, 'lorepack.cmd'),
+      ['@echo off', 'setlocal DisableDelayedExpansion', `"${node}" "${entry}" %*`, ''].join('\r\n'),
+    );
+  } else {
+    writeFileSync(
+      join(directory, 'lorepack'),
+      [
+        '#!/usr/bin/env node',
+        `process.argv[1] = ${JSON.stringify(binary)};`,
+        `import(${JSON.stringify(pathToFileURL(binary).href)});`,
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+  }
+  return directory;
 }
