@@ -202,10 +202,16 @@ it.skipIf(process.platform === 'darwin')(
         expect(JSON.stringify(error)).toContain('cafe\u0301.md');
       }
       expect(rejected).toBe(true);
-      const after = JSON.parse((await cli(project.root, ['status'])).stdout) as {
-        activeBuildId: string;
+      const strictStatus = await cli(project.root, ['status']).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(strictStatus).toBeInstanceOf(Error);
+      expect(JSON.stringify(strictStatus)).toContain('LORE_E_CASE_COLLISION');
+      const after = JSON.parse((await cli(project.root, ['inspect', 'build'])).stdout) as {
+        buildId: string;
       };
-      expect(after.activeBuildId).toBe(before.buildId);
+      expect(after.buildId).toBe(before.buildId);
     });
   },
   180_000,

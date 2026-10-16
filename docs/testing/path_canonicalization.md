@@ -90,3 +90,24 @@ after was identical. Recorded inputs were inspected to confirm version 1; this i
 not a newly built version-2 fixture relabeled as legacy. No recompilation occurred
 during the new reader's search or verification. Full current native qualification
 and the real Linux duplicate-name refusal remain outstanding.
+
+## First full and native regression corrections
+
+The first complete local campaign on bb8d8bcb failed one hash-test assertion with
+3658 other tests passing and four platform skips. Native macOS showed the same
+failure. Native Linux passed the real nine-case discovery file, including distinct
+NFC/NFD filenames and typed collision refusal, then failed that hash assertion and
+the new CLI preservation test's strict `status` call. The original unguarded Linux
+internal error was not newly reproduced; the corrected discovery behavior was.
+
+The hash test's hardcoded mutation to version 2 now equals the base policy. It must
+mutate `BASE.normalizationVersion + 1` while retaining the inequality assertion.
+The CLI test must retain strict status rejection of invalid source names and inspect
+the active sealed manifest with `inspect build` to prove that failed compilation
+left the selected build unchanged. Revalidating the invalid source set with status
+cannot establish that read-only pointer property. No product guard is relaxed.
+
+The corrected hash/public CLI cohort passed 49 cases on macOS, with its real collision
+case skipped on APFS. Strict types for all seven changed test files passed. Failed
+full/native receipts are retained; complete current qualification and native active
+build preservation remain required before closure.

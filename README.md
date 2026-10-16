@@ -392,6 +392,9 @@ Paths and ignore/rule patterns use NFC Unicode normalization. Names such as
 `..notes.md` remain valid; two filenames with one canonical identity are refused
 with both paths named. See [path policy](docs/architecture/discovery.md#path-and-pattern-normalization).
 
+After a filename collision, `lorepack inspect build` reads the selected sealed manifest.
+`status` continues to validate the source set and refuses invalid paths.
+
 ### Review context in Studio
 
 ```bash
