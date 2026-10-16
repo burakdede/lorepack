@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { buildDescriptionSchema, sourceReadResultSchema } from '@lorepack/core';
+import { buildDescriptionSchema, LoreError, sourceReadResultSchema } from '@lorepack/core';
 import type { Client } from '@modelcontextprotocol/client';
 import { resolveExecutable } from './executable.js';
 import type { ConnectionCheck, ConnectionExpectation, ReadConnectionExpectation } from './port.js';
@@ -158,9 +158,13 @@ async function proveRead(
   try {
     expected = await withTimeout(options.expected(), timeout, 'expected build');
   } catch (error) {
+    const remediation =
+      error instanceof LoreError && error.remediation !== undefined
+        ? error.remediation
+        : 'Run lorepack build in that project and reconnect.';
     return fail(
       'build',
-      `The intended project could not be verified: ${message(error)} Run lorepack build in that project and reconnect.`,
+      `The intended project could not be verified: ${message(error)} ${remediation}`,
     );
   }
 

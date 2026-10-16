@@ -138,6 +138,16 @@ describe('the cited snippet outcome', () => {
     });
   });
 
+  it('explains how to repair an empty project when verifying a snippet', async () => {
+    await withTempProject({ files: { ...FILES, 'a.md': '' } }, async (temp) => {
+      const result = await run(['--cwd', temp.root, 'connect', '--snippet', '--json']);
+      expect(result.code).toBe(EXIT_CODES.ENVIRONMENT);
+      const snippet = JSON.parse(result.stdout) as Snippet;
+      expect(snippet.verification?.ok).toBe(false);
+      expect(snippet.verification?.detail).toContain('Add a supported document');
+    });
+  });
+
   it('returns a failure exit code when a snippet server cannot start', async () => {
     const missing = join(claudeConfig, 'missing-commands');
     mkdirSync(missing);
