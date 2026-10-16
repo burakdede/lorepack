@@ -125,6 +125,8 @@ screenshots and detailed workflows.
 Markdown, plain text, source code, HTML, DOCX, text-layer PDF, CSV and XLSX are supported.
 Lorepack preserves the structure each parser exposes and reports unsupported or excluded
 content. Spreadsheet formulas are retained as text and never executed.
+[Formula and conversion evidence](docs/architecture/table_evidence.md) distinguishes saved
+values from unevaluated formulas.
 
 v0.1 does not include OCR, image understanding, PPTX, SaaS connectors, multi-user tenancy
 or embeddings in the default install. Retrieval is lexical; authority and precedence are

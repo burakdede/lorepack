@@ -172,6 +172,7 @@ async function readSheetTable(
   input: ParseInput,
   warnings: ParserWarning[],
 ): Promise<SheetResult> {
+  const warningStart = warnings.length;
   const context = {
     sharedStrings: parts.sharedStrings,
     dateStyles: parts.dateStyles,
@@ -195,6 +196,7 @@ async function readSheetTable(
    * the same thing: a column containing `#REF!` anywhere cannot be typed numerically.
    */
   const errorColumns = new Set<number>();
+  const formulaColumns = new Set<number>();
   const formulas: string[] = [];
 
   let lastDataRow = 0;
@@ -214,14 +216,18 @@ async function readSheetTable(
       reason = detection.reason;
       if (region !== null) {
         for (const buffered of preamble) {
-          if (buffered.row > region.headerRow && collect(buffered, region, values, errorColumns)) {
+          if (
+            buffered.row > region.headerRow &&
+            collect(buffered, region, values, errorColumns, formulaColumns)
+          ) {
             lastDataRow = buffered.row;
           }
         }
       }
       return;
     }
-    if (region !== null && collect(row, region, values, errorColumns)) lastDataRow = row.row;
+    if (region !== null && collect(row, region, values, errorColumns, formulaColumns))
+      lastDataRow = row.row;
   };
 
   /**
@@ -266,7 +272,10 @@ async function readSheetTable(
     reason = detection.reason;
     if (region !== null) {
       for (const buffered of preamble) {
-        if (buffered.row > region.headerRow && collect(buffered, region, values, errorColumns)) {
+        if (
+          buffered.row > region.headerRow &&
+          collect(buffered, region, values, errorColumns, formulaColumns)
+        ) {
           lastDataRow = buffered.row;
         }
       }
@@ -336,6 +345,13 @@ async function readSheetTable(
         mergedRanges: content.merges,
         // Text only, and never evaluated. Section 12.6 step 5.
         formulas,
+        tableEvidence: {
+          version: 1,
+          formulaColumns: [...formulaColumns].sort((left, right) => left - right),
+          conversionWarnings: warnings
+            .slice(warningStart)
+            .map(({ code, message }) => ({ code, message })),
+        },
         date1904: parts.date1904,
         normalizationVersion: XLSX_LIMITS.normalizationVersion,
       },
@@ -351,11 +367,19 @@ function collect(
   region: { firstColumn: number; lastColumn: number },
   values: TableValue[][],
   errorColumns: Set<number>,
+  formulaColumns: Set<number>,
 ): boolean {
   const laid = rowValues(row, region.firstColumn, region.lastColumn);
   // A row that is entirely empty inside the region is a spacer, not a row of nulls.
   if (laid.every((value) => value === null)) return false;
   for (const cell of row.cells) {
+    if (
+      cell.formula !== undefined &&
+      cell.column >= region.firstColumn &&
+      cell.column <= region.lastColumn
+    ) {
+      formulaColumns.add(cell.column - region.firstColumn);
+    }
     if (cell.isError && cell.column >= region.firstColumn && cell.column <= region.lastColumn) {
       errorColumns.add(cell.column - region.firstColumn);
     }
