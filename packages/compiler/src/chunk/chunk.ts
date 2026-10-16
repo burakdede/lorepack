@@ -171,14 +171,34 @@ function makeChunk(
 }
 
 /**
+ * The version of the splitting algorithm, which is part of the parse cache key.
+ *
+ * Chunk text feeds the chunks hash root, so a change to where pieces start or end already
+ * changes the build id. It does not change the cache key on its own, though: an unchanged
+ * file with unchanged configuration would be served the pieces the previous algorithm cut.
+ * Bump this whenever the same nodes and configuration would chunk differently.
+ *
+ * 2: boundaries never fall inside a surrogate pair, and overlap is applied (#591).
+ */
+export const CHUNKER_VERSION = 2 as const;
+
+/**
  * Splits one oversized node. Overlap exists only here, and is capped, because it is a
  * concession to a boundary the author did not provide rather than a retrieval technique.
+ *
+ * Offsets are UTF-16 code units, so every cut is moved off the middle of a surrogate pair:
+ * a piece ending on a high surrogate stores a lone surrogate, which is not well-formed
+ * Unicode and is what a model would be served (#591). Code points rather than grapheme
+ * clusters, on purpose: `Intl.Segmenter` follows the ICU data of the running Node, so a
+ * grapheme rule could cut the same text differently on two machines and give one corpus two
+ * build ids. A cut inside a combining sequence keeps every character intact; a cut inside a
+ * pair does not.
  */
 function splitNode(node: LoreNode, chunking: ChunkingDefaults, prefix: string): Pending[] {
   const text = node.text ?? '';
   const headingPath = node.locator.headingPath ?? [];
   const budget = Math.max(1, chunking.maximumTokens - estimateTokens(prefix));
-  const maxCharacters = Math.floor(budget * CHARACTERS_PER_TOKEN);
+  const maxCharacters = Math.max(2, Math.floor(budget * CHARACTERS_PER_TOKEN));
   const overlapCharacters = Math.floor(
     Math.min(chunking.overlapTokens, budget / 2) * CHARACTERS_PER_TOKEN,
   );
@@ -201,9 +221,34 @@ function splitNode(node: LoreNode, chunking: ChunkingDefaults, prefix: string): 
     });
 
     if (boundary >= text.length) break;
-    start = Math.max(boundary - overlapCharacters, boundary === start ? start + 1 : boundary);
+    start = overlapStart(text, start, boundary, overlapCharacters);
   }
   return pieces;
+}
+
+/**
+ * Where the next piece starts: up to `overlap` code units before the previous piece ended,
+ * on a word where there is one.
+ *
+ * Never earlier than halfway through the previous piece. Overlap is capped at half the budget
+ * and a soft boundary can fall just past half the window, so without this floor a large
+ * configured overlap could advance one character per piece and turn one paragraph into
+ * thousands of nearly identical chunks.
+ */
+function overlapStart(text: string, start: number, boundary: number, overlap: number): number {
+  if (overlap <= 0) return boundary;
+  const earliest = Math.max(boundary - overlap, start + Math.ceil((boundary - start) / 2));
+  if (earliest >= boundary) return boundary;
+  // A shared region that begins mid-word repeats a fragment no reader wrote, so it starts
+  // after the first whitespace inside the window when there is one.
+  const window = text.slice(earliest - 1, boundary);
+  const space = window.search(/\s/);
+  if (space !== -1) {
+    const afterSpace = earliest - 1 + space + 1;
+    if (afterSpace < boundary) return afterSpace;
+    return boundary;
+  }
+  return codePointBoundary(text, earliest, 'forward');
 }
 
 /** Prefers a paragraph break, then a line break, then a space, then a hard cut. */
@@ -214,5 +259,17 @@ function findBoundary(text: string, start: number, end: number): number {
     const index = window.lastIndexOf(separator);
     if (index > floor) return start + index + separator.length;
   }
-  return end;
+  const cut = codePointBoundary(text, end, 'back');
+  // A budget of one pair can only advance by moving forward over it.
+  return cut > start ? cut : codePointBoundary(text, end, 'forward');
+}
+
+/** `index`, or the nearest offset that does not fall between a high and a low surrogate. */
+function codePointBoundary(text: string, index: number, direction: 'back' | 'forward'): number {
+  if (index <= 0 || index >= text.length) return index;
+  const before = text.charCodeAt(index - 1);
+  const after = text.charCodeAt(index);
+  const splitsPair = before >= 0xd800 && before <= 0xdbff && after >= 0xdc00 && after <= 0xdfff;
+  if (!splitsPair) return index;
+  return direction === 'back' ? index - 1 : index + 1;
 }

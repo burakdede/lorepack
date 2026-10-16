@@ -203,6 +203,7 @@ describe('cache key', () => {
     parserVersion: '0.1.0',
     normalizationVersion: 1,
     chunking: { targetTokens: 700, maximumTokens: 1200, overlapTokens: 100 },
+    chunkerVersion: 2,
     rules: [],
   };
 
@@ -217,6 +218,7 @@ describe('cache key', () => {
     ['parserVersion', { parserVersion: '0.2.0' }],
     ['normalizationVersion', { normalizationVersion: 2 }],
     ['chunking', { chunking: { targetTokens: 500, maximumTokens: 1200, overlapTokens: 100 } }],
+    ['chunkerVersion', { chunkerVersion: 3 }],
     ['rules', { rules: [{ match: '**', status: 'archived' }] }],
   ])('changes when %s changes, so a stale parse cannot be reused', (_name, patch) => {
     expect(cacheKey({ ...inputs, ...patch })).not.toBe(cacheKey(inputs));

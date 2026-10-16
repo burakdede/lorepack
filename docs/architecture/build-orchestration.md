@@ -16,7 +16,7 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 2. **Plan.** The orchestrator calls the same `createPlan` that `lorepack plan` prints, so the
    preview and the executed work cannot diverge.
 3. **Parse.** Cached parses are reused by `cacheKey`, which covers content, parser
-   identity, normalization version and the configuration that affects output. A supported,
+   identity, normalization version, chunker version and the configuration that affects output. A supported,
    included file that fails to parse fails the whole candidate (section 6.9).
    A parser [may be asynchronous](#a-parser-may-return-a-promise).
 4. **Index.** Everything goes into a candidate database under `.lore/tmp/`, in one

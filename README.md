@@ -175,6 +175,9 @@ The build output includes a content-addressed id, artifact and chunk counts, tab
 and activation status. A failed build leaves the active version untouched.
 Rebuilt/reused counts describe actual parsing and eligible cache reuse. An unchanged
 CSV/XLSX table is reparsed; a missing cached body is rebuilt from its source.
+Oversized text nodes split on Unicode code-point boundaries, with bounded configured
+overlap. Chunker changes invalidate parse-cache entries without rewriting retained builds.
+See the [Unicode verification checklist](docs/testing/unicode_chunks.md).
 
 Use `--json` in scripts and CI. Use `--frozen` when the checked-in lockfile must not change:
 

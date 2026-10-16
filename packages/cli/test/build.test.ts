@@ -79,6 +79,38 @@ describe('lorepack build', () => {
     });
   });
 
+  it('stores well-formed, overlapping chunks for astral text split across pieces (#591)', async () => {
+    // An odd prefix puts every emoji pair across an even offset, so a hard cut at the budget
+    // lands inside one unless the chunker steps off it.
+    const body = `x${'\u{1F600}'.repeat(6000)}`;
+    await project({ 'emoji.md': `# Emoji\n\n${body}\n` }, async (root) => {
+      const result = await build(root);
+      const { openReadOnly } = await import('@lorepack/backend-local');
+      const db = openReadOnly(join(root, '.lore', 'builds', result.buildId, 'context.sqlite'));
+      try {
+        const rows = db.prepare('SELECT id, text FROM chunks').all() as {
+          id: string;
+          text: string;
+        }[];
+        const pieces = rows
+          .map((row) => ({ index: Number(row.id.split('@').at(-1)), text: row.text }))
+          .sort((a, b) => a.index - b.index)
+          .map((row) => row.text.replace(/^Emoji\n\n/, ''));
+        expect(pieces.length).toBeGreaterThan(2);
+        for (const piece of pieces) {
+          expect(piece.isWellFormed()).toBe(true);
+          expect(piece).not.toContain('\uFFFD');
+        }
+        for (let index = 1; index < pieces.length; index += 1) {
+          const head = [...(pieces[index] as string)].slice(0, 10).join('');
+          expect(pieces[index - 1]?.endsWith(head) || pieces[index - 1]?.includes(head)).toBe(true);
+        }
+      } finally {
+        db.close();
+      }
+    });
+  });
+
   it('turns a directory into a verified, active build', async () => {
     await project(
       { 'docs/a.md': '# A\n\nAlpha text.', 'docs/b.md': '# B\n\nBeta text.' },

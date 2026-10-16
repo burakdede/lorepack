@@ -270,6 +270,10 @@ Architecture section 12.3 names exactly what invalidates a parse:
 content hash + parser id and version + relevant configuration + rule inputs
 ```
 
+The chunker's algorithm version (`CHUNKER_VERSION`) is part of "relevant configuration".
+The same nodes and the same `chunking` values cut differently when the algorithm changes,
+and without it an unchanged file would keep the pieces the old algorithm cut (#591).
+
 Under-including means reusing a stale parse, which produces a wrong build. Over-including
 means rebuilding for no reason, which produces a slow one. Both are defects, so the inputs
 are an explicit type rather than a whole config object hashed for convenience: a field
