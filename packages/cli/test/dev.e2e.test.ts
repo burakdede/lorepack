@@ -12,7 +12,7 @@ import { request } from 'node:http';
 import { networkInterfaces, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { searchResultSchema } from '@lorepack/core';
+import { buildDescriptionSchema, searchResultSchema } from '@lorepack/core';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -434,10 +434,17 @@ describe('watching while it serves', () => {
       let liveReads = 0;
       let stopped = false;
       let readFailure: unknown;
+      let readPhase = 'build headers';
+      let lastBuildId: string | null = null;
       const reads = (async () => {
         while (!stopped) {
+          readPhase = 'build headers';
           const response = await fetch(`${base}/v1/build`);
           expect(response.status, started.log()).toBe(200);
+          readPhase = 'build body';
+          const liveBuild = buildDescriptionSchema.parse(await response.json());
+          lastBuildId = liveBuild.buildId;
+          readPhase = 'MCP search';
           const model = searchResultSchema.parse(
             (
               await client.callTool({
@@ -451,7 +458,18 @@ describe('watching while it serves', () => {
           if (!stopped) await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       })().catch((error: unknown) => {
-        readFailure = error;
+        readFailure = new Error(
+          `Source churn read failed during ${readPhase}. ${JSON.stringify({
+            elapsedMs: Math.round(performance.now() - began),
+            rounds,
+            liveReads,
+            lastBuildId,
+            childPid: started.child.pid,
+            childExitCode: started.child.exitCode,
+            childSignal: started.child.signalCode,
+          })}\nSupervisor output:\n${started.log().slice(-16_384)}`,
+          { cause: error },
+        );
       });
       try {
         while (performance.now() - began < 60_000) {

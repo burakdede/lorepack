@@ -1,0 +1,5 @@
+language js
+
+`$subject.localeCompare($...)` where {
+  register_diagnostic(span=$subject, message="Use compareCanonical for deterministic compiler and core ordering (#592).", severity="error")
+}

@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { closeSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildMigrationsDirectory,
@@ -23,16 +23,21 @@ import {
 import {
   assertNoDrift,
   buildLockfile,
+  CHUNKER_VERSION,
   type Chunk,
   cacheKey,
   checkRequiredCoverage,
   chunkArtifact,
   compareLockfiles,
   createPlan,
+  type FingerprintedArtifact,
   normalizeArtifact,
+  openSourceRead,
   type ResolvedArtifactRule,
   readLockfile,
   resolveRules,
+  SourceReadIssue,
+  sourceBytes,
   validateCandidate,
   writeLockfile,
 } from '@lorepack/compiler';
@@ -263,6 +268,10 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           ? {}
           : { allowLargeProject: options.allowLargeProject }),
       });
+      const changedSource = [...discovery.warnings, ...fingerprint.warnings].find(
+        (warning) => warning.code === 'source-changed',
+      );
+      if (changedSource !== undefined) throw staleSource(changedSource.path ?? 'Source');
       await checkpoint(options.signal, { hasActiveBuild: active !== null });
 
       // Rules resolve here, before parsing, because the cache key depends on them: an
@@ -305,14 +314,11 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             parserVersion: parser.version,
             normalizationVersion: NORMALIZATION_VERSION,
             chunking: config.effective.chunking as unknown as Canonical,
+            chunkerVersion: CHUNKER_VERSION,
             rules: ruleResolution.canonical as unknown as Canonical,
           });
 
-          const bytes = readStableSourceBytes(
-            discovered.absolutePath,
-            discovered.contentHash,
-            discovered.displayPath,
-          );
+          const bytes = readStableSourceBytes(discovered);
 
           // A hit still has to have its normalized body present: the object store and the
           // cache can be pruned independently, and reusing a parse whose body is gone would
@@ -707,31 +713,45 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
  * first hash would record one set of bytes under another set's identity and poison the parse
  * cache. One retry handles an in-flight save; a second mismatch fails the candidate.
  */
-export function readStableSourceBytes(
-  absolutePath: string,
-  expectedHash: string,
-  displayPath: string,
-): Uint8Array {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    let bytes: Uint8Array;
-    try {
-      bytes = new Uint8Array(readFileSync(absolutePath));
-    } catch (cause) {
-      throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${displayPath} could not be read.`, {
-        remediation: 'Check the file permissions, or exclude it in .loreignore.',
-        path: displayPath,
-        cause,
-      });
-    }
-    if (sha256Hex(bytes) === expectedHash) return bytes;
+export function readStableSourceBytes(artifact: FingerprintedArtifact): Uint8Array {
+  const { displayPath, contentHash, sourceRead } = artifact;
+  let fd: number;
+  try {
+    fd = openSourceRead(sourceRead, displayPath);
+  } catch (cause) {
+    if (cause instanceof SourceReadIssue) throw staleSource(displayPath, cause);
+    throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${displayPath} could not be read.`, {
+      remediation: 'Check the file permissions, or exclude it in .loreignore.',
+      path: displayPath,
+      cause,
+    });
   }
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const bytes = sourceBytes(fd, sourceRead, displayPath);
+      if (sha256Hex(bytes) === contentHash) return bytes;
+    }
+  } catch (cause) {
+    if (cause instanceof SourceReadIssue) throw staleSource(displayPath, cause);
+    throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${displayPath} could not be read.`, {
+      remediation: 'Check the file permissions, or exclude it in .loreignore.',
+      path: displayPath,
+      cause,
+    });
+  } finally {
+    closeSync(fd);
+  }
+  throw staleSource(displayPath);
+}
 
-  throw new LoreError(
+function staleSource(displayPath: string, cause?: unknown): LoreError {
+  return new LoreError(
     'LORE_E_STALE_SOURCES',
     `${displayPath} changed while the build was reading it.`,
     {
       remediation: 'Save the source completely, then run `lorepack build` again.',
       path: displayPath,
+      cause,
     },
   );
 }

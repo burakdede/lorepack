@@ -63,6 +63,27 @@ Removing a temporary directory immediately after a child exits fails with `EPERM
 and passes everywhere else. Tests wait for `exit` and treat a leaked temp directory as
 acceptable rather than as a failure.
 
+## Line endings change the build id
+
+Raw source bytes contribute to identity. If `core.autocrlf` or other checkout
+settings convert LF sources to CRLF, the same commit can produce different build
+IDs on different machines, even when normalized text agrees. See
+[build identity](../architecture/build-identity.md#line-endings-are-part-of-identity).
+
+Commit corpus-specific `.gitattributes` to keep source text consistent:
+
+```gitattributes
+* text=auto eol=lf
+*.docx binary
+*.xlsx binary
+*.pdf binary
+```
+
+Git's [attribute documentation](https://git-scm.com/docs/gitattributes) explains
+checkout conversion and the `binary` macro. Existing files already stored with
+CRLF may need a deliberate normalization commit. Review the diff and binary
+exclusions before changing an existing corpus; Lorepack does not rewrite it.
+
 ## Case-only collisions
 
 Two files differing only in case are one file on Windows and on a default macOS volume, and

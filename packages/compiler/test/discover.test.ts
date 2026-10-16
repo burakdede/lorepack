@@ -391,6 +391,17 @@ describe('symlinks', () => {
     });
   });
 
+  it('names a remedy lore.yaml accepts, not the internal followSymlinks setting (#592)', async () => {
+    await withProject({ 'a.md': '# A' }, (root) => {
+      symlinkSync(join(root, 'a.md'), join(root, 'link.md'));
+      const warning = discoverIn(root).warnings.find((w) => w.path === 'link.md');
+      expect(warning?.message).not.toContain('followSymlinks');
+      expect(warning?.message).toContain('was skipped');
+      expect(warning?.message).toContain('copy the target into a source directory');
+      expect(warning?.message).toContain('`sources` in lore.yaml');
+    });
+  });
+
   it('refuses one that escapes the root, even when following is enabled', async () => {
     await withTempProject({ files: { 'outside/secret.md': '# secret' } }, (project) => {
       const root = join(project.root, 'project');

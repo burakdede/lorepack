@@ -112,7 +112,15 @@ export async function createPlan(options: PlanOptions): Promise<PlanResult> {
     projectName: config.config.name,
     activeBuildId: previous?.buildId ?? null,
     generatedAt: now().toISOString(),
-    sourceState: previous === null ? 'unknown' : dirty.clean ? 'clean' : 'dirty',
+    sourceState:
+      previous === null ||
+      [...discovery.warnings, ...fingerprint.warnings].some(
+        (warning) => warning.code === 'source-changed',
+      )
+        ? 'unknown'
+        : dirty.clean
+          ? 'clean'
+          : 'dirty',
     artifacts: {
       added: dirty.added.length,
       changed: dirty.changed.length,

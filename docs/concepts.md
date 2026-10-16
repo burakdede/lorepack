@@ -88,7 +88,9 @@ Those deferrals are deliberate. v0.1 protects the build model first.
 ## Design commitments
 
 - **The build is the source of truth.** Every runtime is a projection of an immutable build.
-- **Deterministic.** Identical inputs produce an identical build ID on every OS.
+- **Deterministic.** Identical inputs produce an identical build ID on every OS. Inputs include
+  raw source bytes: LF and CRLF are different inputs. See
+  [line endings](architecture/build-identity.md#line-endings-are-part-of-identity).
 - **Provenance always.** Every result traces to a file, section, page, sheet or cell range.
 - **No surprises on first run.** No Python, Docker, compiler toolchain, native add-on,
   model download, API key or account.

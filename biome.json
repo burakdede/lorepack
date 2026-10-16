@@ -49,5 +49,11 @@
       "semicolons": "always",
       "trailingCommas": "all"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/compiler/src/**", "packages/core/src/**"],
+      "plugins": ["./tools/lint/no_locale_compare.grit"]
+    }
+  ]
 }

@@ -1,5 +1,6 @@
 export {
   CHARACTERS_PER_TOKEN,
+  CHUNKER_VERSION,
   type Chunk,
   type ChunkOptions,
   chunkArtifact,
@@ -43,6 +44,12 @@ export {
   fingerprintSources,
   type SourceFingerprint,
 } from './fingerprint/fingerprint.js';
+export {
+  openSourceRead,
+  type SourceReadBoundary,
+  SourceReadIssue,
+  sourceBytes,
+} from './fingerprint/source_reader.js';
 export {
   assertNoDrift,
   buildLockfile,

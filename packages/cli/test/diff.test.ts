@@ -184,6 +184,27 @@ describe('diff engine', () => {
     expect(renderDiff(diff)).toContain('cell 0,rate 1 -> 2');
   });
 
+  it('orders cell changes by code unit, not by the machine locale (#592)', () => {
+    // `a`, `z`, `ä` is code-unit order. English collation gives `a`, `ä`, `z` and Swedish gives
+    // `a`, `z`, `ä`, so a locale-aware sort made the same diff differ between two machines.
+    const columns = ['ä', 'z', 'a'];
+    const locator = { artifactId: 'p:t.csv', relativePath: 't.csv', lineStart: 1, lineEnd: 2 };
+    const table = (value: number) => ({
+      tableId: 'p:t.csv#table',
+      name: 't.csv',
+      rows: 1,
+      columns,
+      locator,
+      cells: columns.map((column) => ({ row: 0, column, value })),
+    });
+
+    const diff = diffBuilds(snapshot({ tables: [table(1)] }), {
+      ...snapshot({ tables: [table(2)] }),
+      buildId: `lore_${'3'.repeat(64)}` as BuildId,
+    });
+    expect(diff.tables[0]?.cellChanges.map((change) => change.column)).toEqual(['a', 'z', 'ä']);
+  });
+
   it('never calls different build ids identical when records happen to match', () => {
     expect(diffBuilds(BASE, snapshot({})).identical).toBe(false);
   });

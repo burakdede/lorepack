@@ -175,6 +175,9 @@ The build output includes a content-addressed id, artifact and chunk counts, tab
 and activation status. A failed build leaves the active version untouched.
 Rebuilt/reused counts describe actual parsing and eligible cache reuse. An unchanged
 CSV/XLSX table is reparsed; a missing cached body is rebuilt from its source.
+Oversized text nodes split on Unicode code-point boundaries, with bounded configured
+overlap. Chunker changes invalidate parse-cache entries without rewriting retained builds.
+See the [Unicode verification checklist](docs/testing/unicode_chunks.md).
 
 Use `--json` in scripts and CI. Use `--frozen` when the checked-in lockfile must not change:
 
@@ -440,6 +443,8 @@ parsers), compiler version, configuration, and structure. The
 [package-format contract and frozen vectors](docs/package-format/README.md#build-id-derivation)
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
+Source bytes include line endings. Pin corpus checkout line endings when sharing builds
+across operating systems ([why](docs/architecture/build-identity.md#line-endings-are-part-of-identity)).
 Newly compiled builds retain the exact identity inputs in `reports/build-id-inputs.json`.
 These support independent verification without returning to live sources. Canonical hashing
 uses the same byte serialization in local Node and the portable Worker-safe core.
@@ -533,11 +538,15 @@ your Node.js version in a bug report.
 Ignore rules in `.loreignore` are anchored to the project root: with `sources: [docs]`,
 use `/docs/private/` to exclude that directory. [Discovery](docs/architecture/discovery.md)
 explains source selection and migration from pre-release source-root rules.
+[Validated source reads](docs/architecture/discovery.md#source-reads-after-discovery)
+refuse changed source identities before a candidate can replace the active build.
 
 ## Contributing
 
 [Windows cancellation qualification](docs/testing/windows_build_cancellation.md) records the
 real CLI fixture and failure diagnostics used to investigate native timeouts.
+[Watch read stability](docs/testing/watch_read_stability.md) records the source-churn
+HTTP/MCP check and its response-body lifecycle.
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
 The comparison uses the PR event's head commit without depending on an advertised pull ref.

@@ -62,6 +62,32 @@ Operational facts live in the build receipt in `state.sqlite`, outside the build
 outside `.lorepack`, so two machines can agree on identity while disagreeing about how
 long the build took.
 
+## Line endings are part of identity
+
+The `artifacts` root includes raw source content hashes (architecture section11.4).
+LF and CRLF versions of a source are different inputs, even when their normalized
+nodes, chunks and stored bodies agree. This preserves evidence of the exact bytes
+used to build the package. It deliberately does not hash only normalized text.
+
+A checkout that converts LF to CRLF can therefore change the build ID without a
+commit change. Keep corpus line endings consistent across operating systems with
+versioned attributes, rather than changing Lorepack's raw-byte identity contract.
+See [Windows checkout attributes](../compatibility/windows.md#line-endings-change-the-build-id).
+
+Measured on 2026-10-16, macOS arm64 / Node 24.21.0: `docs/guide.md` contained
+`# Guide\n\nRetain source bytes.\n` (30 UTF-8 bytes). Replacing each LF with CRLF
+made 33 bytes. The actual CLI produced different build IDs; only `artifacts`
+differed. The `nodes`, `chunks`, `tables` and `objects` roots matched.
+
+## Ordering never depends on the locale
+
+Cell changes use the existing `compareCanonical` code-unit order: `a`, `z`, `ä`.
+Locale-aware collation previously changed the same diff between Swedish and English
+processes (#592). The scoped Biome [guard](../../tools/lint/no_locale_compare.grit)
+rejects localeCompare calls in compiler/core production sources, including calls
+with explicit locale arguments. It uses the existing linter and adds no dependency.
+See the [repeatable checks](../testing/deterministic_diff.md).
+
 ## Canonical serialization
 
 Two properties do the work:
@@ -74,6 +100,29 @@ Two properties do the work:
   exactly that.
 
 Types are tagged, so the string `"1"` and the number `1` never collide.
+
+## Chunk boundaries
+
+Chunk text feeds the `chunks` root, so where the chunker cuts is part of identity. A node
+larger than `chunking.maximumTokens` is split at a paragraph break, line break or space
+when one falls in the second half of the window, and otherwise at a hard cut. Two rules
+keep that deterministic and faithful (#591):
+
+- **No cut inside a surrogate pair.** Offsets are UTF-16 code units, so a hard cut is moved
+  back one unit when it would separate a high surrogate from its low half. Before this, a
+  run of emoji or astral CJK was stored with a lone surrogate, which SQLite writes as
+  U+FFFD. Native context delivery preserves full bodies and is checked separately from
+  stored chunks. Cuts are on code points rather than grapheme clusters on purpose: `Intl.Segmenter` follows the ICU data of
+  the running Node, so a grapheme rule could split the same text differently on two
+  machines and give one corpus two build IDs.
+- **Overlap is real.** Each piece after the first starts up to `chunking.overlapTokens`
+  before the previous one ended (capped at half the budget), on the first word boundary in
+  that window, or on a code point where the text has no spaces. It never starts before the
+  middle of the previous piece, so a large overlap cannot multiply the chunk count. Until
+  #591 the setting was accepted and had no effect.
+
+Changing either rule changes chunk text and so the build ID, and requires bumping
+`CHUNKER_VERSION` so the parse cache does not serve the old pieces.
 
 ## Roots
 

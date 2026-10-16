@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { closeSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import {
   type Canonical,
@@ -14,6 +14,7 @@ import {
 } from '@lorepack/core';
 import { readsBytes } from '@lorepack/parsers';
 import type { DiscoveredArtifact, DiscoveryWarning } from '../discover/discover.js';
+import { openSourceRead, SourceReadIssue, sourceChunks } from './source_reader.js';
 
 export interface FingerprintedArtifact extends DiscoveredArtifact {
   readonly contentHash: string;
@@ -71,9 +72,19 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
       next += 1;
       if (index >= artifacts.length) return;
       const artifact = artifacts[index] as DiscoveredArtifact;
-      const read = await hashAndClassify(artifact);
+      let read: Awaited<ReturnType<typeof hashAndClassify>>;
+      try {
+        read = await hashAndClassify(artifact);
+      } catch (cause) {
+        if (!(cause instanceof SourceReadIssue)) throw cause;
+        hashed[index] = null;
+        excluded[index] = { code: cause.code, path: artifact.displayPath, message: cause.message };
+        done += 1;
+        progress?.progress('fingerprinting', done, { total: artifacts.length, unit: 'files' });
+        continue;
+      }
       if (read.undecodable === null) {
-        hashed[index] = { ...artifact, contentHash: read.contentHash };
+        hashed[index] = { ...artifact, contentHash: read.contentHash, byteSize: read.byteSize };
         excluded[index] = null;
       } else {
         // Dropped from the artifact list, so every stage after this one agrees the build
@@ -125,7 +136,7 @@ export async function fingerprintSources(options: FingerprintOptions): Promise<S
  */
 async function hashAndClassify(
   artifact: DiscoveredArtifact,
-): Promise<{ contentHash: string; undecodable: UndecodableReason | null }> {
+): Promise<{ contentHash: string; undecodable: UndecodableReason | null; byteSize: number }> {
   const hash = createHash(HASH_ALGORITHM);
   // A container is not decodable text and is not supposed to be. Classifying a `.docx`,
   // `.xlsx` or `.pdf` here dropped it from the build before its parser ever ran, and told
@@ -133,14 +144,20 @@ async function hashAndClassify(
   // hashed, exactly as for a text file. What is skipped is only the decodability verdict,
   // which for these formats is the parser's question and not this stage's.
   const classifier = readsBytes(artifact.relativePath) ? null : new TextClassifier();
+  let byteSize = 0;
   try {
-    const stream = createReadStream(artifact.absolutePath);
-    for await (const chunk of stream) {
-      const bytes = chunk as Uint8Array;
-      hash.update(bytes);
-      classifier?.update(bytes);
+    const fd = openSourceRead(artifact.sourceRead, artifact.displayPath);
+    try {
+      for await (const bytes of sourceChunks(fd, artifact.sourceRead, artifact.displayPath)) {
+        byteSize += bytes.byteLength;
+        hash.update(bytes);
+        classifier?.update(bytes);
+      }
+    } finally {
+      closeSync(fd);
     }
   } catch (cause) {
+    if (cause instanceof SourceReadIssue) throw cause;
     throw new LoreError('LORE_E_SOURCE_UNREADABLE', `${artifact.displayPath} could not be read.`, {
       remediation:
         'Check the file permissions, or exclude it in .loreignore. The active build is unchanged.',
@@ -148,7 +165,7 @@ async function hashAndClassify(
       cause,
     });
   }
-  return { contentHash: hash.digest('hex'), undecodable: classifier?.finish() ?? null };
+  return { contentHash: hash.digest('hex'), undecodable: classifier?.finish() ?? null, byteSize };
 }
 
 /** One value summarising every artifact identity and its content. */
@@ -216,6 +233,12 @@ export interface CacheKeyInputs {
   readonly parserVersion: string;
   readonly normalizationVersion: number;
   readonly chunking: Canonical;
+  /**
+   * The splitting algorithm, separately from its configuration: the same nodes and the same
+   * `chunking` values cut differently when the algorithm changes (#591), and a key without it
+   * would hand an unchanged file the pieces the old algorithm produced.
+   */
+  readonly chunkerVersion: number;
   readonly rules: Canonical;
 }
 
@@ -228,6 +251,7 @@ export function cacheKey(inputs: CacheKeyInputs): string {
       parserVersion: inputs.parserVersion,
       normalizationVersion: inputs.normalizationVersion,
       chunking: inputs.chunking,
+      chunkerVersion: inputs.chunkerVersion,
       rules: inputs.rules,
     }),
   );
