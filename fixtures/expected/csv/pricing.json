@@ -112,7 +112,12 @@
         "hasHeader": true,
         "headerReason": "row 1 is all non-empty text",
         "inferenceSampleRows": 2,
-        "normalizationVersion": 1
+        "normalizationVersion": 1,
+        "tableEvidence": {
+          "conversionWarnings": [],
+          "formulaColumns": [],
+          "version": 1
+        }
       },
       "name": "pricing",
       "rows": [

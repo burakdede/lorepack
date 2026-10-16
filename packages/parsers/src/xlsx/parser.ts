@@ -90,8 +90,9 @@ export const xlsxParser: ArtifactParser = {
         });
       }
 
+      const workbookWarnings = [...warnings];
       for (const sheet of parts.sheets) {
-        const built = await readSheetTable(pkg, sheet, parts, input, warnings);
+        const built = await readSheetTable(pkg, sheet, parts, input, warnings, workbookWarnings);
         sheetSummaries.push({ name: sheet.name, rows: built.rows, note: built.note });
         if (built.table !== null) tables.push(built.table);
       }
@@ -171,6 +172,7 @@ async function readSheetTable(
   parts: Awaited<ReturnType<typeof readWorkbookParts>>,
   input: ParseInput,
   warnings: ParserWarning[],
+  workbookWarnings: readonly ParserWarning[],
 ): Promise<SheetResult> {
   const warningStart = warnings.length;
   const context = {
@@ -348,9 +350,9 @@ async function readSheetTable(
         tableEvidence: {
           version: 1,
           formulaColumns: [...formulaColumns].sort((left, right) => left - right),
-          conversionWarnings: warnings
-            .slice(warningStart)
-            .map(({ code, message }) => ({ code, message })),
+          conversionWarnings: [...workbookWarnings, ...warnings.slice(warningStart)].map(
+            ({ code, message }) => ({ code, message }),
+          ),
         },
         date1904: parts.date1904,
         normalizationVersion: XLSX_LIMITS.normalizationVersion,
@@ -370,20 +372,17 @@ function collect(
   formulaColumns: Set<number>,
 ): boolean {
   const laid = rowValues(row, region.firstColumn, region.lastColumn);
-  // A row that is entirely empty inside the region is a spacer, not a row of nulls.
-  if (laid.every((value) => value === null)) return false;
+  let hasFormula = false;
   for (const cell of row.cells) {
-    if (
-      cell.formula !== undefined &&
-      cell.column >= region.firstColumn &&
-      cell.column <= region.lastColumn
-    ) {
+    if (cell.column < region.firstColumn || cell.column > region.lastColumn) continue;
+    if (cell.isFormula === true) {
+      hasFormula = true;
       formulaColumns.add(cell.column - region.firstColumn);
     }
-    if (cell.isError && cell.column >= region.firstColumn && cell.column <= region.lastColumn) {
-      errorColumns.add(cell.column - region.firstColumn);
-    }
+    if (cell.isError) errorColumns.add(cell.column - region.firstColumn);
   }
+  // An uncached formula is data with an unavailable value, not an empty spacer row.
+  if (!hasFormula && laid.every((value) => value === null)) return false;
   values.push(laid as TableValue[]);
   return true;
 }

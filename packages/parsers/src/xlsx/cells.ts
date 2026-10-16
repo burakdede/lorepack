@@ -14,6 +14,8 @@ export interface Cell {
   readonly value: TableValue;
   /** The formula as written, never evaluated. Absent on an ordinary cell. */
   readonly formula?: string;
+  /** Shared-formula followers may omit the expression text. */
+  readonly isFormula?: boolean;
   /** True for `t="e"`: the value is an error token such as `#REF!`, kept as itself. */
   readonly isError: boolean;
 }

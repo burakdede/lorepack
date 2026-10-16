@@ -146,7 +146,14 @@
         "headerRow": 1,
         "mergedRanges": [],
         "normalizationVersion": 1,
-        "sheet": "Products"
+        "sheet": "Products",
+        "tableEvidence": {
+          "conversionWarnings": [],
+          "formulaColumns": [
+            1
+          ],
+          "version": 1
+        }
       },
       "name": "Products",
       "rows": [
@@ -205,7 +212,12 @@
         "headerRow": 1,
         "mergedRanges": [],
         "normalizationVersion": 1,
-        "sheet": "Owners"
+        "sheet": "Owners",
+        "tableEvidence": {
+          "conversionWarnings": [],
+          "formulaColumns": [],
+          "version": 1
+        }
       },
       "name": "Owners",
       "rows": [

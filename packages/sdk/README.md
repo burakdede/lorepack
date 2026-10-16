@@ -179,3 +179,10 @@ Request text is redacted from the receipt by default. Set `receipt: { captureReq
 to retain the normalized request explicitly. The server stores neither the receipt nor its
 payload. Integrity hashes are not authentication or proof that a downstream model consumed
 these bytes. See [the receipt contract](../../docs/architecture/context_receipts.md).
+
+## Table formula evidence
+
+`describeTable(id)` returns `columns[].formula` (`present`, `absent`, `unknown`) and
+`conversionWarnings` (`{code, message}[]` or `null`). Unknown/null means that historical
+build did not record evidence; it is not a formula-free or warning-free assertion.
+Workbook formulas are never evaluated. Query and sample values retain the workbook cache.
