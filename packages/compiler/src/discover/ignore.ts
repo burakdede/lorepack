@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { normalizeUnicode } from '@lorepack/core';
+import { assertGlobPattern, normalizeUnicode } from '@lorepack/core';
 import picomatch from 'picomatch';
 
 /**
@@ -44,12 +44,16 @@ export interface Matcher {
 
 export function parseIgnoreFile(contents: string, source: string): IgnoreRule[] {
   const rules: IgnoreRule[] = [];
-  for (const raw of contents.split(/\r?\n/)) {
+  for (const [index, raw] of contents.split(/\r?\n/).entries()) {
     const line = raw.trim();
     if (line === '' || line.startsWith('#')) continue;
     const negated = line.startsWith('!');
     const pattern = normalizeUnicode(negated ? line.slice(1).trim() : line);
     if (pattern === '') continue;
+    assertGlobPattern(pattern.replace(/\\/g, '/'), {
+      path: source,
+      location: `${source} line ${String(index + 1)}`,
+    });
     rules.push({ pattern, negated, source });
   }
   return rules;
@@ -98,6 +102,12 @@ function expand(pattern: string): string[] {
 }
 
 export function createMatcher(rules: readonly IgnoreRule[]): Matcher {
+  for (const rule of rules) {
+    assertGlobPattern(rule.pattern.replace(/\\/g, '/'), {
+      path: rule.source,
+      location: rule.source,
+    });
+  }
   const compiled = rules.map((rule) => ({
     rule,
     isMatch: picomatch(expand(rule.pattern), { dot: true, nocase: rule.nocase ?? false }),

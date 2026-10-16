@@ -82,7 +82,8 @@
             "type": "integer"
           },
           "match": {
-            "description": "Glob matched against canonical artifact paths",
+            "description": "Glob matched against canonical artifact paths; at most 512 code units and four stars per segment",
+            "maxLength": 512,
             "minLength": 1,
             "type": "string"
           },
@@ -100,6 +101,8 @@
           },
           "supersedes": {
             "items": {
+              "description": "Glob with at most 512 code units and four star characters per forward-slash path segment",
+              "maxLength": 512,
               "minLength": 1,
               "type": "string"
             },

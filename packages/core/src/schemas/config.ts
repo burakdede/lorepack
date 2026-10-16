@@ -1,14 +1,60 @@
 import { z } from 'zod';
+import { LoreError } from '../errors/lore-error.js';
 import { artifactStatusSchema, authoritySchema } from './common.js';
 
 /** The generated lore.yaml is intentionally small. Everything else has a versioned default. */
 
+const MAX_GLOB_LENGTH = 512;
+const MAX_SEGMENT_STARS = 4;
+
+function globPatternProblem(pattern: string): string | null {
+  if (pattern.length > MAX_GLOB_LENGTH) {
+    return `Glob patterns support at most ${String(MAX_GLOB_LENGTH)} code units.`;
+  }
+  let stars = 0;
+  for (const character of pattern) {
+    if (character === '/') stars = 0;
+    else if (character === '*' && ++stars > MAX_SEGMENT_STARS) {
+      return `Each glob path segment supports at most ${String(MAX_SEGMENT_STARS)} star characters.`;
+    }
+  }
+  return null;
+}
+
+export function assertGlobPattern(
+  pattern: string,
+  source: { readonly path: string; readonly location: string },
+): void {
+  const problem = globPatternProblem(pattern);
+  if (problem === null) return;
+  throw new LoreError('LORE_E_CONFIG_INVALID', `${source.location}: ${problem}`, {
+    path: source.path,
+    subject: pattern,
+    remediation:
+      'Shorten the pattern or split it into simpler rules. Limits count literal star characters, including escaped stars and stars in brackets.',
+  });
+}
+
+const globPatternSchema = z
+  .string()
+  .min(1)
+  .max(MAX_GLOB_LENGTH)
+  .superRefine((pattern, context) => {
+    const problem = globPatternProblem(pattern);
+    if (problem !== null) context.addIssue({ code: 'custom', message: problem });
+  })
+  .describe(
+    'Glob with at most 512 code units and four star characters per forward-slash path segment',
+  );
+
 export const ruleSchema = z
   .object({
-    match: z.string().min(1).describe('Glob matched against canonical artifact paths'),
+    match: globPatternSchema.describe(
+      'Glob matched against canonical artifact paths; at most 512 code units and four stars per segment',
+    ),
     status: artifactStatusSchema.optional(),
     authority: authoritySchema.optional(),
-    supersedes: z.array(z.string().min(1)).optional(),
+    supersedes: z.array(globPatternSchema).optional(),
     replace: z
       .boolean()
       .optional()
