@@ -243,3 +243,175 @@ describe('what a Windows editor writes, and paths a comment cannot hold raw (#58
     },
   );
 });
+
+describe('exact config bytes, issue581', () => {
+  const originals = [
+    ['inline neighbour', '{"servers":{"a":{"command":"a"}},"inputs":[]}'],
+    [
+      'trailing comment',
+      '{\n  "servers": {\n    "a": { "command": "a" }, // trailing\n  },\n  "inputs": []\n}\n',
+    ],
+    ['empty servers', '{"servers": {}}'],
+    ['empty servers with whitespace', '{\n  "servers": { \t }\n}\n'],
+  ] as const;
+  const cases = originals
+    .flatMap(([name, original]) => [
+      { name: `${name}, original`, text: original },
+      {
+        name: `${name}, CRLF`,
+        text: original.includes('\n') ? original.replaceAll('\n', '\r\n') : `${original}\r\n`,
+      },
+    ])
+    .flatMap((fixture) => [
+      fixture,
+      { name: `${fixture.name}, BOM`, text: `\ufeff${fixture.text}` },
+    ]);
+
+  it.each(cases)('restores exact bytes and values for $name', ({ text: before }) => {
+    const file = join(directory, 'mcp.json');
+    writeFileSync(file, before);
+    const initial = readJsoncConfig(file);
+    const connected = withOwnedEntry(initial, {
+      path: PATH,
+      projectRoot: '/p',
+      value: { type: 'stdio', command: 'lorepack', args: ['mcp'] },
+      createdAt: '2026-08-05T00:00:00.000Z',
+      removeWith: 'lorepack disconnect vscode',
+    });
+    const errors: import('jsonc-parser').ParseError[] = [];
+    const added = parse(connected, errors, { allowTrailingComma: true });
+    expect(errors).toEqual([]);
+    expect(added).toEqual({
+      ...initial.document,
+      servers: {
+        ...(initial.document.servers as Record<string, unknown>),
+        lorepack: { type: 'stdio', command: 'lorepack', args: ['mcp'] },
+      },
+    });
+    expect(ownerOfEntry(connected, ['servers', 'a'])).toBeUndefined();
+    writeFileSync(file, `${initial.bom ? '\ufeff' : ''}${connected}`);
+    const during = readJsoncConfig(file);
+    const removed = withoutOwnedEntry(during, PATH, '/p');
+    expect(removed.removed).toBe(true);
+    const parsedAfter = parse(removed.text, [], { allowTrailingComma: true });
+    expect(parsedAfter).toEqual(initial.document);
+    const after = Buffer.from(`${during.bom ? '\ufeff' : ''}${removed.text}`, 'utf8');
+    expect(after).toEqual(Buffer.from(before, 'utf8'));
+  });
+});
+
+it('keeps multiple raw entry owners independent during updates and removals, issue581', () => {
+  const before = '{"servers":{"a":{"command":"a"}},"inputs":[]}';
+  const otherPath = ['servers', 'another'];
+  const both = withOwnedEntry(config(owned(before)), {
+    path: otherPath,
+    projectRoot: '/other',
+    value: { command: 'other' },
+    createdAt: '2026-08-05T00:00:00.000Z',
+    removeWith: 'lorepack disconnect vscode',
+  });
+  const updated = owned(both);
+  expect(ownerOfEntry(updated, PATH)?.projectRoot).toBe('/p');
+  expect(ownerOfEntry(updated, otherPath)?.projectRoot).toBe('/other');
+  expect(ownerOfEntry(updated, ['servers', 'a'])).toBeUndefined();
+  expect(ownerOfEntry(updated, ['inputs'])).toBeUndefined();
+  expect(owned(updated)).toBe(updated);
+  const first = withoutOwnedEntry(config(updated), PATH, '/p');
+  expect(first.removed).toBe(true);
+  expect(ownerOfEntry(first.text, otherPath)?.projectRoot).toBe('/other');
+  const last = withoutOwnedEntry(config(first.text), otherPath, '/other');
+  expect(last.removed).toBe(true);
+  expect(last.text).toBe(before);
+});
+it('retains support for existing property-local ownership markers, issue581', () => {
+  const text =
+    '{"servers":{"a":{"command":"a"},\n// Managed by Lorepack.\n// x-lorepack {"projectRoot":"/p","createdAt":"2026-08-05T00:00:00.000Z"}\n"lorepack":{"command":"lorepack"}},"inputs":[]}';
+  expect(ownerOfEntry(text, PATH)).toEqual({
+    projectRoot: '/p',
+    createdAt: '2026-08-05T00:00:00.000Z',
+  });
+  const removed = withoutOwnedEntry(config(text), PATH, '/p');
+  expect(removed.removed).toBe(true);
+  expect(parse(removed.text)).toEqual({ servers: { a: { command: 'a' } }, inputs: [] });
+  expect(removed.text).toContain('"a":{"command":"a"}');
+});
+
+it('keeps unrelated edits made after connecting byte-for-byte, issue581', () => {
+  const before = '{"servers":{"a":{"command":"a"}},"inputs":[]}';
+  const changed = owned(before).replace('"command":"a"', '"command":"updated"');
+  const removed = withoutOwnedEntry(config(changed), PATH, '/p');
+  expect(removed.removed).toBe(true);
+  expect(removed.text).toBe(before.replace('"command":"a"', '"command":"updated"'));
+});
+it.each([null, 'servers.lorepack', ['servers', 'other'], { path: ['servers', 'lorepack'] }])(
+  'leaves an entry with invalid or differently bound ownership untouched, issue581: %j',
+  (entryPath) => {
+    const connected = owned(FOREIGN);
+    expect(connected).toContain('"entryPath":["servers","lorepack"]');
+    const text = connected.replace(
+      '"entryPath":["servers","lorepack"]',
+      `"entryPath":${JSON.stringify(entryPath)}`,
+    );
+    expect(ownerOfEntry(text, PATH)).toBeUndefined();
+    expect(withoutOwnedEntry(config(text), PATH, '/p')).toEqual({ text, removed: false });
+  },
+);
+it.each(['', ' \r\n\t', '{}', '{"inputs":[]}'])(
+  'retains the existing empty-container lifecycle for a file without servers, issue581: %j',
+  (before) => {
+    const file = join(directory, 'mcp.json');
+    writeFileSync(file, before);
+    const initial = readJsoncConfig(file);
+    const added = withOwnedEntry(initial, {
+      path: PATH,
+      projectRoot: '/p',
+      value: { command: 'lorepack' },
+      removeWith: 'lorepack disconnect vscode',
+    });
+    const removed = withoutOwnedEntry(config(added), PATH, '/p');
+    expect(removed.removed).toBe(true);
+    expect(parse(removed.text)).toEqual({ ...initial.document, servers: {} });
+    if (before.trim() === '') expect(removed.text.endsWith(before)).toBe(true);
+    if ('inputs' in initial.document) expect(removed.text).toContain('"inputs":[]');
+  },
+);
+
+it('keeps a foreign server subtree intact while connected, issue581', () => {
+  const subtree =
+    '\t\t"theirs": {\n\t\t\t"command": "their-binary",\n\t\t\t"args": ["--serve"] // do not change\n\t\t}';
+  expect(FOREIGN).toContain(subtree);
+  expect(owned(FOREIGN)).toContain(subtree);
+});
+it('keeps a trailing comment beside its original inline neighbour while connected, issue581', () => {
+  const line = '    "a": { "command": "a" }, // trailing';
+  const before = `{\n  "servers": {\n${line}\n  },\n  "inputs": []\n}\n`;
+  expect(owned(before)).toContain(line);
+});
+
+it.each([false, true])(
+  'restores an empty parent after either owned removal order, issue581: %s',
+  (reverse) => {
+    const before = '{"servers": { \t },"inputs":[]}';
+    const otherPath = ['servers', 'another'];
+    const both = withOwnedEntry(config(owned(before)), {
+      path: otherPath,
+      projectRoot: '/other',
+      value: { command: 'other' },
+      createdAt: '2026-08-05T00:00:00.000Z',
+      removeWith: 'lorepack disconnect vscode',
+    });
+    const paths = reverse ? [otherPath, PATH] : [PATH, otherPath];
+    const first = withoutOwnedEntry(config(both), paths[0] as string[]);
+    const last = withoutOwnedEntry(config(first.text), paths[1] as string[]);
+    expect(first.removed).toBe(true);
+    expect(last.removed).toBe(true);
+    expect(last.text).toBe(before);
+  },
+);
+
+it('preserves Unicode neighbours at parser offsets, issue581', () => {
+  const before = '{"note":"資料🌍","servers":{"a":{"command":"é"}},"inputs":[]}';
+  const connected = owned(before);
+  expect(connected).toContain('"a":{"command":"é"}');
+  expect(withoutOwnedEntry(config(connected), PATH, '/p').text).toBe(before);
+});

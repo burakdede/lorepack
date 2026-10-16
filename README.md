@@ -112,6 +112,8 @@ lorepack connect claude-code
 ```
 
 The command changes only that client's Lorepack configuration. It does not upload your sources.
+VS Code JSONC connect/disconnect preserves existing entries and comments byte for byte, including
+inline neighbours, empty `servers` objects, BOM and CRLF.
 See the [client integration guides](docs/integrations/) for Claude Code, Codex, VS Code, and
 generic MCP clients.
 The stdio server closes on stdin EOF or POSIX termination signals; see [shutdown behavior](docs/integrations/mcp.md#shutdown).

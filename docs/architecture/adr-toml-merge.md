@@ -4,6 +4,10 @@
 comments by #81 (VS Code), and binding on any adapter whose client configuration can carry a
 comment.
 
+The JSONC edit mechanics are superseded by [ADR0037](../adr/0037-jsonc-entry-byte-fidelity.md)
+(2026-10-16), after inline/empty-object counterexamples exposed formatter changes. The original
+measurement and TOML decision remain recorded below.
+
 ## The decision
 
 Use **`smol-toml` to parse, and a textual splice to write.** The parser decides whether the
