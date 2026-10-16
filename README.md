@@ -519,6 +519,9 @@ your Node.js version in a bug report.
 
 ## Contributing
 
+[Windows cancellation qualification](docs/testing/windows_build_cancellation.md) records the
+real CLI fixture and failure diagnostics used to investigate native timeouts.
+
 CI retains complete Git history for the changeset gate, including long pull request branches.
 The comparison uses the PR event's head commit without depending on an advertised pull ref.
 The generated-release regression also checks real Git commit subjects and changeset deletion

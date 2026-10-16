@@ -150,8 +150,10 @@ The bound exists because a wedged request must not hold the process open forever
 ends the session; it does not promise to wait indefinitely for a socket that will never
 close.
 
-**Windows has no POSIX signals.** A parent's `kill('SIGINT')` is emulated with
-`TerminateProcess`, so the handler never runs and the supervisor dies non-zero having done
-nothing wrong. Ctrl-C typed into a console still works, because that path uses a console
-control handler. Tests that stop a supervisor from a parent process use SIGTERM, which
-reaches the handler everywhere this ships.
+[Node's signal documentation](https://nodejs.org/docs/latest-v24.x/api/process.html#signal-events)
+describes the Windows distinction. **Windows has no POSIX signals.** A parent's
+`kill('SIGINT')` or `kill('SIGTERM')` uses `TerminateProcess`, so the handler never runs and graceful cleanup cannot be assumed.
+Ctrl-C typed into a console uses a console control handler. On POSIX, tests use SIGTERM to
+exercise the ordered shutdown above. Windows parent-process tests use hard termination and
+verify recovery from the surviving receipt or lock on the next command; they do not claim
+that the graceful-shutdown handler ran.
