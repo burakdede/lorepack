@@ -128,6 +128,9 @@ resident memory in its 30 s. Issue #599 covers extracted-text amplification, whi
 bound those buffers. A total resident-memory budget is tracked separately in
 [issue #677](https://github.com/burakdede/lorepack/issues/677), following the isolation work
 completed in #594.
+[ADR 0043](../adr/0043-parser-resident-memory.md) proposes external RSS observation;
+it records the measured baseline and unqualified platform/overshoot requirements.
+That watchdog is not implemented yet.
 Peak memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever
 buffers the parse allocates before its deadline.
 
