@@ -20,14 +20,23 @@ names in different sources. See [watch mode](watch.md#one-matcher-not-two).
 Patterns are gitignore-style, evaluated with picomatch:
 
 - a pattern without a slash matches at any depth;
-- a leading slash anchors it to the source root;
+- a leading slash anchors it to the project root containing `.loreignore`;
 - a slash in the middle anchors it too, so `docs/*.md` is about one directory;
 - a trailing slash restricts it to directories and everything beneath, and **does not**
   anchor it, so `build/` means "a directory called build, wherever it is";
 - `!pattern` re-includes, and the last matching rule wins.
 
 The always-on exclusions from architecture section 19.2 are applied first, then
-`.loreignore`.
+`.loreignore`. Match paths are project-relative; artifact IDs and locators remain source-relative.
+With `sources: [docs]`, `/docs/private/` excludes `docs/private/`, while `/private/` names
+only a project-root directory. Slash-free `private/` still excludes that name at every depth.
+A configured source inside an excluded directory cannot bypass the directory rule with a
+file negation. Exclusion samples name project-relative paths.
+
+This corrects pre-release source-root anchoring. Update old rules such as `/private/` to
+`/docs/private/` when their intent is specific to the `docs` source. Existing immutable builds
+remain readable; compile and activate a new build to apply changed selection. See
+[ADR0038](../adr/0038-project-root-ignore-anchoring.md).
 
 ## Default credential and client configuration exclusions
 

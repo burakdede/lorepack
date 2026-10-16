@@ -518,6 +518,10 @@ alias lorepack="node $PWD/packages/cli/dist/public-entry.js"
 Run `lorepack doctor --json` when diagnosing an environment. Include that output, your OS, and
 your Node.js version in a bug report.
 
+Ignore rules in `.loreignore` are anchored to the project root: with `sources: [docs]`,
+use `/docs/private/` to exclude that directory. [Discovery](docs/architecture/discovery.md)
+explains source selection and migration from pre-release source-root rules.
+
 ## Contributing
 
 [Windows cancellation qualification](docs/testing/windows_build_cancellation.md) records the

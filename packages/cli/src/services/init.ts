@@ -70,6 +70,7 @@ export function renderConfig(name: string, sources: readonly string[]): string {
 export function renderIgnore(): string {
   return [
     '# Default exclusions. Use !pattern to explicitly re-include a path.',
+    '# Anchored patterns are relative to this project root, not each source root.',
     '# Everything here is excluded before this file is consulted; it is listed so the',
     '# defaults are visible and can be extended.',
     '',
