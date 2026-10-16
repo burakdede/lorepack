@@ -11,6 +11,7 @@ import {
 import { request } from 'node:http';
 import { networkInterfaces, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -28,6 +29,7 @@ const DOCUMENT =
 
 let project: string;
 const running: ChildProcess[] = [];
+let cancellationDiagnostics: (() => void) | undefined;
 
 /**
  * Whether a parent process can ask this child to stop *gracefully*.
@@ -97,7 +99,9 @@ beforeEach(() => {
   writeFileSync(join(project, 'docs', 'runbook.md'), DOCUMENT, 'utf8');
 });
 
-afterEach(async () => {
+afterEach(async ({ task }) => {
+  if (task.result?.state === 'fail') cancellationDiagnostics?.();
+  cancellationDiagnostics = undefined;
   for (const child of running.splice(0)) {
     if (child.exitCode === null) {
       child.kill('SIGTERM');
@@ -685,16 +689,85 @@ describe('shutting down', () => {
 
 describe('cancelling a real build process', () => {
   it('leaves the active build intact and releases the build lock', async () => {
+    const began = Date.now();
+    let originalBuildId: string | null = null;
+    const stages: { stage: string; elapsedMs: number }[] = [];
+    const checkpoint = (stage: string) => stages.push({ stage, elapsedMs: Date.now() - began });
+    const children: { label: string; child: ChildProcess; stdout: string; stderr: string }[] = [];
+    const observe = (label: string, child: ChildProcess) => {
+      const record = { label, child, stdout: '', stderr: '' };
+      children.push(record);
+      child.stdout?.on('data', (chunk: Buffer) => {
+        record.stdout += chunk.toString('utf8');
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        record.stderr += chunk.toString('utf8');
+      });
+    };
+    cancellationDiagnostics = () => {
+      const ownerPath = join(project, '.lore', 'lock', 'owner.json');
+      let lockOwner: string | null = null;
+      try {
+        lockOwner = readFileSync(ownerPath, 'utf8');
+      } catch (error) {
+        lockOwner = String(error);
+      }
+      let activeBuild: unknown = null;
+      try {
+        const database = new DatabaseSync(join(project, '.lore', 'state.sqlite'), {
+          readOnly: true,
+        });
+        try {
+          activeBuild = database
+            .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
+            .get();
+        } finally {
+          database.close();
+        }
+      } catch (error) {
+        activeBuild = String(error);
+      }
+      console.error(
+        'Build cancellation diagnostics',
+        JSON.stringify({
+          platform: platform(),
+          elapsedMs: Date.now() - began,
+          stages,
+          originalBuildId,
+          activeBuild,
+          lockOwner,
+          running: running.map((child) => ({
+            pid: child.pid,
+            exitCode: child.exitCode,
+            signalCode: child.signalCode,
+          })),
+          children: children.map(({ label, child, stdout, stderr }) => ({
+            label,
+            pid: child.pid,
+            exitCode: child.exitCode,
+            signalCode: child.signalCode,
+            stdout: stdout.slice(-16000),
+            stderr: stderr.slice(-16000),
+          })),
+        }),
+      );
+    };
+    checkpoint('starting dev');
     const started = await dev();
+    observe('dev', started.child);
+    checkpoint('reading original active build');
     const before = (
       (await (await fetch(`http://127.0.0.1:${started.port}/v1/build`)).json()) as {
         buildId: string;
       }
     ).buildId;
 
+    originalBuildId = before;
+    checkpoint('stopping dev');
     started.child.kill('SIGTERM');
     await new Promise<void>((resolve) => started.child.once('exit', () => resolve()));
 
+    checkpoint('writing original 2400-file fixture');
     for (let index = 0; index < 2_400; index += 1) {
       writeFileSync(
         join(project, 'docs', `cancel-${index}.md`),
@@ -703,10 +776,13 @@ describe('cancelling a real build process', () => {
       );
     }
 
+    checkpoint('starting cancellable build');
     const child = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'build'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     running.push(child);
+    observe('cancelled build', child);
+    checkpoint('waiting for parsing');
     let stdout = '';
     let stderr = '';
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -725,6 +801,7 @@ describe('cancelling a real build process', () => {
       `the build exited before its parsing stage. stdout:\n${stdout}\nstderr:\n${stderr}`,
     ).toBeNull();
 
+    checkpoint('stopping cancellable build');
     child.kill(CAN_SIGNAL_GRACEFULLY ? 'SIGINT' : 'SIGTERM');
     const code = await new Promise<number>((resolve) => {
       const give = setTimeout(() => resolve(-1), 60_000);
@@ -741,9 +818,11 @@ describe('cancelling a real build process', () => {
       });
     }
 
+    checkpoint('checking active build after cancellation');
     const status = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'status'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    observe('status', status);
     let statusOutput = '';
     status.stdout?.on('data', (chunk: Buffer) => {
       statusOutput += chunk.toString('utf8');
@@ -754,9 +833,11 @@ describe('cancelling a real build process', () => {
     expect(statusCode).toBe(0);
     expect((JSON.parse(statusOutput) as { activeBuildId: string }).activeBuildId).toBe(before);
 
+    checkpoint('rebuilding after cancellation');
     const next = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'build'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    observe('subsequent build', next);
     let nextOutput = '';
     next.stdout?.on('data', (chunk: Buffer) => {
       nextOutput += chunk.toString('utf8');
@@ -767,6 +848,7 @@ describe('cancelling a real build process', () => {
     expect(nextCode).toBe(0);
     expect((JSON.parse(nextOutput) as { buildId: string }).buildId).not.toBe(before);
     expect(readdirSync(join(project, '.lore', 'tmp'), { withFileTypes: true })).toHaveLength(0);
+    checkpoint('verified active build and released lock');
   }, 180_000);
 });
 
