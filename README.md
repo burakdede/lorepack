@@ -520,6 +520,7 @@ your Node.js version in a bug report.
 ## Contributing
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
+The comparison uses the PR event's head commit without depending on an advertised pull ref.
 The generated-release regression also checks real Git commit subjects and changeset deletion
 before running the policy gate; its original test deadline stays enforced. The 70-commit
 marker/pruning matrix keeps all four combinations and uses real configured clones.

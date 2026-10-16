@@ -114,7 +114,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
-          git fetch --no-tags --no-prune origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" "refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr-${{ github.event.pull_request.number }}"
+          git fetch --no-tags --no-prune origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}:refs/remotes/origin/pr-${{ github.event.pull_request.number }}"
           export CHANGESET_HEAD_REF="origin/pr-${{ github.event.pull_request.number }}"
           pnpm check:changeset-policy
 
