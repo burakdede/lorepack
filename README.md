@@ -518,6 +518,8 @@ your Node.js version in a bug report.
 ## Contributing
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
+The generated-release regression also checks real Git commit subjects and changeset deletion
+before running the policy gate; its original test deadline stays enforced.
 
 CLI deployment tooling uses the [deployment client boundary](docs/architecture/packages.md)
 so control operations do not initialize Worker protocol adapters.

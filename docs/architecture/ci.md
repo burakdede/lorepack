@@ -18,6 +18,14 @@ release declaration; pruning can remove the base ref during a targeted fetch. Re
 70-commit fixtures verify both valid and missing declarations with pruning on and off.
 See [checkout's history setting](https://github.com/actions/checkout#usage).
 
+The generated-release fixture imports its original two-commit history with
+[Git fast-import](https://git-scm.com/docs/git-fast-import), then checks the real commit
+subjects and added/deleted changeset paths before running the unchanged policy subprocess.
+This replaces eight fixture Git launches with one import and one history read. Its existing
+five-second deadline, data, refs, scheduling, retries and success assertion remain unchanged;
+macOS timings do not qualify Windows. The original native Windows timeout is tracked in #762.
+
+
 Steps, in order:
 
 1. Assert the resolved Node stays inside `>=24.19.0 <25`. A silent drift below the floor
