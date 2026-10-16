@@ -1,5 +1,6 @@
 export {
   CHARACTERS_PER_TOKEN,
+  CHUNKER_VERSION,
   type Chunk,
   type ChunkOptions,
   chunkArtifact,

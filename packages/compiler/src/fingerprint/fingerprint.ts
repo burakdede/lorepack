@@ -216,6 +216,12 @@ export interface CacheKeyInputs {
   readonly parserVersion: string;
   readonly normalizationVersion: number;
   readonly chunking: Canonical;
+  /**
+   * The splitting algorithm, separately from its configuration: the same nodes and the same
+   * `chunking` values cut differently when the algorithm changes (#591), and a key without it
+   * would hand an unchanged file the pieces the old algorithm produced.
+   */
+  readonly chunkerVersion: number;
   readonly rules: Canonical;
 }
 
@@ -228,6 +234,7 @@ export function cacheKey(inputs: CacheKeyInputs): string {
       parserVersion: inputs.parserVersion,
       normalizationVersion: inputs.normalizationVersion,
       chunking: inputs.chunking,
+      chunkerVersion: inputs.chunkerVersion,
       rules: inputs.rules,
     }),
   );

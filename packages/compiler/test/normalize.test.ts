@@ -10,7 +10,7 @@ import {
 } from '../src/normalize/normalize.js';
 import { FakeObjectStore } from './fake-object-store.js';
 
-function parseMarkdown(markdown: string, relativePath = 'a.md') {
+async function parseMarkdown(markdown: string, relativePath = 'a.md') {
   const bytes = new TextEncoder().encode(markdown);
   const input: ParseInput = {
     artifactId: `src:${relativePath}`,
@@ -25,7 +25,7 @@ function parseMarkdown(markdown: string, relativePath = 'a.md') {
   return markdownParser.parse(input);
 }
 
-function parseCode(source: string, relativePath = 'a.ts') {
+async function parseCode(source: string, relativePath = 'a.ts') {
   const bytes = new TextEncoder().encode(source);
   return textParser.parse({
     artifactId: `src:${relativePath}`,
@@ -84,7 +84,7 @@ describe('whitespace policy', () => {
 describe('normalized bodies', () => {
   it('stores a body that can answer a source read without the original file', async () => {
     const objects = new FakeObjectStore();
-    const parsed = parseMarkdown('# Title\n\nFirst paragraph.\n\n## Section\n\nSecond.\n');
+    const parsed = await parseMarkdown('# Title\n\nFirst paragraph.\n\n## Section\n\nSecond.\n');
     const result = await normalizeArtifact({ parsed, objects });
 
     const body = objects.text(result.objectHash);
@@ -96,28 +96,34 @@ describe('normalized bodies', () => {
 
   it('deduplicates identical bodies across artifacts', async () => {
     const objects = new FakeObjectStore();
-    await normalizeArtifact({ parsed: parseMarkdown('# A\n\nbody\n', 'one.md'), objects });
-    await normalizeArtifact({ parsed: parseMarkdown('# A\n\nbody\n', 'two.md'), objects });
+    await normalizeArtifact({ parsed: await parseMarkdown('# A\n\nbody\n', 'one.md'), objects });
+    await normalizeArtifact({ parsed: await parseMarkdown('# A\n\nbody\n', 'two.md'), objects });
     expect(objects.writes).toBe(1);
   });
 
   it('produces the same object hash for the same content on every run', async () => {
     const objects = new FakeObjectStore();
-    const first = await normalizeArtifact({ parsed: parseMarkdown('# A\n\nbody\n'), objects });
-    const second = await normalizeArtifact({ parsed: parseMarkdown('# A\n\nbody\n'), objects });
+    const first = await normalizeArtifact({
+      parsed: await parseMarkdown('# A\n\nbody\n'),
+      objects,
+    });
+    const second = await normalizeArtifact({
+      parsed: await parseMarkdown('# A\n\nbody\n'),
+      objects,
+    });
     expect(second.objectHash).toBe(first.objectHash);
   });
 
   it('leaves code text untouched in the stored body', async () => {
     const objects = new FakeObjectStore();
     const source = 'function a() {\n    return 1;\n}';
-    const result = await normalizeArtifact({ parsed: parseCode(source), objects });
+    const result = await normalizeArtifact({ parsed: await parseCode(source), objects });
     expect(objects.text(result.objectHash)).toContain('    return 1;');
   });
 
   it('updates the revision hash only for nodes whose text changed', async () => {
     const objects = new FakeObjectStore();
-    const parsed = parseMarkdown('# A\n\nspaced    out\n');
+    const parsed = await parseMarkdown('# A\n\nspaced    out\n');
     const result = await normalizeArtifact({ parsed, objects });
 
     const before = new Map(parsed.nodes.map((node) => [node.id, node.revisionHash]));
@@ -126,8 +132,8 @@ describe('normalized bodies', () => {
     expect(changed[0]?.text).toBe('spaced out');
   });
 
-  it('renders headings into the body so a range stays readable alone', () => {
-    const parsed = parseMarkdown('# Top\n\ntext\n\n## Sub\n\nmore\n');
+  it('renders headings into the body so a range stays readable alone', async () => {
+    const parsed = await parseMarkdown('# Top\n\ntext\n\n## Sub\n\nmore\n');
     const body = renderBody(parsed.nodes);
     expect(body.indexOf('# Top')).toBeLessThan(body.indexOf('text'));
     expect(body).toContain('## Sub');
@@ -159,8 +165,8 @@ describe('token estimation', () => {
 describe('chunking', () => {
   const chunking = PRODUCT_DEFAULTS.chunking;
 
-  it('prefers whole nodes and prefixes the heading path', () => {
-    const parsed = parseMarkdown('# Top\n\n## Section\n\nSome body text here.\n');
+  it('prefers whole nodes and prefixes the heading path', async () => {
+    const parsed = await parseMarkdown('# Top\n\n## Section\n\nSome body text here.\n');
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
 
     expect(chunks.length).toBeGreaterThan(0);
@@ -169,19 +175,19 @@ describe('chunking', () => {
     expect(chunk?.text.startsWith('Top > Section')).toBe(true);
   });
 
-  it('never joins content from two different sections', () => {
-    const parsed = parseMarkdown('## A\n\nalpha\n\n## B\n\nbeta\n');
+  it('never joins content from two different sections', async () => {
+    const parsed = await parseMarkdown('## A\n\nalpha\n\n## B\n\nbeta\n');
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
     for (const chunk of chunks) {
       expect(chunk.text.includes('alpha') && chunk.text.includes('beta')).toBe(false);
     }
   });
 
-  it('never exceeds the hard maximum', () => {
+  it('never exceeds the hard maximum', async () => {
     const long = Array.from({ length: 400 }, (_, i) => `Sentence number ${i} with words.`).join(
       ' ',
     );
-    const parsed = parseMarkdown(`# Big\n\n${long}\n`);
+    const parsed = await parseMarkdown(`# Big\n\n${long}\n`);
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
 
     expect(chunks.length).toBeGreaterThan(1);
@@ -190,16 +196,16 @@ describe('chunking', () => {
     }
   });
 
-  it('applies overlap only where a split happened', () => {
-    const parsed = parseMarkdown('# A\n\nshort body\n');
+  it('applies overlap only where a split happened', async () => {
+    const parsed = await parseMarkdown('# A\n\nshort body\n');
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
     expect(chunks).toHaveLength(1);
     // With no split there is nothing to overlap, so the text appears exactly once.
     expect(chunks[0]?.text.split('short body')).toHaveLength(2);
   });
 
-  it('keeps every chunk inside one artifact with valid node references', () => {
-    const parsed = parseMarkdown('# A\n\none\n\n## B\n\ntwo\n\n### C\n\nthree\n');
+  it('keeps every chunk inside one artifact with valid node references', async () => {
+    const parsed = await parseMarkdown('# A\n\none\n\n## B\n\ntwo\n\n### C\n\nthree\n');
     const ids = new Set(parsed.nodes.map((node) => node.id));
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
 
@@ -211,16 +217,16 @@ describe('chunking', () => {
     }
   });
 
-  it('produces identical chunks on a repeated run', () => {
-    const parsed = parseMarkdown('# A\n\none\n\n## B\n\ntwo\n');
+  it('produces identical chunks on a repeated run', async () => {
+    const parsed = await parseMarkdown('# A\n\none\n\n## B\n\ntwo\n');
     const first = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
     const second = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
   });
 
-  it('keeps chunk ids stable for sections before an edit', () => {
-    const before = parseMarkdown('# A\n\none\n\n## B\n\ntwo\n\n## C\n\nthree\n');
-    const after = parseMarkdown('# A\n\none\n\n## B\n\nEDITED\n\n## C\n\nthree\n');
+  it('keeps chunk ids stable for sections before an edit', async () => {
+    const before = await parseMarkdown('# A\n\none\n\n## B\n\ntwo\n\n## C\n\nthree\n');
+    const after = await parseMarkdown('# A\n\none\n\n## B\n\nEDITED\n\n## C\n\nthree\n');
 
     const chunksBefore = chunkArtifact({ artifactId: 'src:a.md', nodes: before.nodes, chunking });
     const chunksAfter = chunkArtifact({ artifactId: 'src:a.md', nodes: after.nodes, chunking });
@@ -232,14 +238,14 @@ describe('chunking', () => {
     expect(changed).toHaveLength(1);
   });
 
-  it('produces nothing for an empty document rather than an empty chunk', () => {
-    const parsed = parseMarkdown('');
+  it('produces nothing for an empty document rather than an empty chunk', async () => {
+    const parsed = await parseMarkdown('');
     expect(chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking })).toEqual([]);
   });
 
-  it('splits a single oversized node with bounded overlap', () => {
+  it('splits a single oversized node with bounded overlap', async () => {
     const huge = Array.from({ length: 3000 }, (_, i) => `word${i}`).join(' ');
-    const parsed = parseMarkdown(`# Big\n\n${huge}\n`);
+    const parsed = await parseMarkdown(`# Big\n\n${huge}\n`);
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
 
     expect(chunks.length).toBeGreaterThan(2);
@@ -250,8 +256,119 @@ describe('chunking', () => {
     }
   });
 
-  it('respects a custom chunking configuration', () => {
-    const parsed = parseMarkdown(`# A\n\n${'word '.repeat(300)}\n`);
+  it('never splits a surrogate pair, whatever the text and the budget (#591)', async () => {
+    // Emoji and astral CJK are two UTF-16 code units each. A cut between them stores a lone
+    // surrogate, which is not well-formed Unicode and is what a model would then be served.
+    const alphabet = [
+      'a',
+      'bc',
+      '\u00e9',
+      '\u4e2d',
+      '\u{1F600}',
+      '\u{20000}',
+      '\u{1F469}\u200D\u{1F4BB}',
+    ];
+    let seed = 591;
+    const random = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    for (let run = 0; run < 200; run += 1) {
+      const length = 200 + Math.floor(random() * 4000);
+      // Some runs have no spaces at all, so every boundary is a hard cut.
+      const spacing = run % 4 === 0 ? 0 : random() * 0.2;
+      let body = '';
+      while (body.length < length) {
+        body += random() < spacing ? ' ' : alphabet[Math.floor(random() * alphabet.length)];
+      }
+      const maximumTokens = 20 + Math.floor(random() * 200);
+      const tight = {
+        targetTokens: Math.floor(maximumTokens / 2),
+        maximumTokens,
+        overlapTokens: Math.floor(random() * maximumTokens),
+      };
+      const parsed = await parseMarkdown(`# Big\n\n${body}\n`);
+      const chunks = chunkArtifact({
+        artifactId: 'src:a.md',
+        nodes: parsed.nodes,
+        chunking: tight,
+      });
+      expect(chunks.length).toBeGreaterThan(0);
+      for (const chunk of chunks) expect(chunk.text.isWellFormed(), chunk.text).toBe(true);
+      // Overlap never stalls the split: each piece advances by at least a quarter of the
+      // budget, so a large overlap cannot multiply the chunk count.
+      const window = (maximumTokens - estimateTokens('Big\n\n')) * 3.6;
+      expect(chunks.length).toBeLessThanOrEqual(Math.ceil((4 * body.length) / window) + 2);
+    }
+  });
+
+  it('keeps a run of emoji with no spaces well formed across hard cuts (#591)', async () => {
+    const parsed = await parseMarkdown(`# Big\n\n${'\u{1F600}'.repeat(6001)}\n`);
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
+    expect(chunks.length).toBeGreaterThan(2);
+    for (const chunk of chunks) expect(chunk.text.isWellFormed()).toBe(true);
+  });
+
+  it('shares the configured overlap between adjacent split pieces (#591)', async () => {
+    const huge = Array.from({ length: 3000 }, (_, i) => `w${i}`).join(' ');
+    const parsed = await parseMarkdown(`# Big\n\n${huge}\n`);
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
+    // A piece cut after a space ends with one, so empty strings are not words.
+    const bodies = chunks.map((chunk) =>
+      chunk.text
+        .replace(/^Big\n\n/, '')
+        .split(' ')
+        .filter(Boolean),
+    );
+    expect(bodies.length).toBeGreaterThan(2);
+
+    for (let index = 1; index < bodies.length; index += 1) {
+      const previous = bodies[index - 1] as string[];
+      const current = bodies[index] as string[];
+      // The piece starts on a whole word the previous piece already carried.
+      const first = current[0] as string;
+      const at = previous.indexOf(first);
+      expect(at, `piece ${index} starts with ${first}`).toBeGreaterThan(-1);
+      const shared = previous.slice(at);
+      expect(current.slice(0, shared.length)).toEqual(shared);
+      const sharedTokens = estimateTokens(shared.join(' '));
+      expect(sharedTokens).toBeLessThanOrEqual(chunking.overlapTokens);
+      expect(sharedTokens).toBeGreaterThanOrEqual(chunking.overlapTokens * 0.8);
+    }
+
+    // Nothing is lost: every word appears, in order.
+    const seen = new Set(bodies.flat());
+    for (let i = 0; i < 3000; i += 1) expect(seen.has(`w${i}`), `w${i}`).toBe(true);
+  });
+
+  it('shares nothing when overlap is configured off (#591)', async () => {
+    const huge = Array.from({ length: 3000 }, (_, i) => `w${i}`).join(' ');
+    const parsed = await parseMarkdown(`# Big\n\n${huge}\n`);
+    const none = { ...chunking, overlapTokens: 0 };
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking: none });
+    const words = chunks.flatMap((chunk) =>
+      chunk.text
+        .replace(/^Big\n\n/, '')
+        .split(' ')
+        .filter(Boolean),
+    );
+    expect(words).toHaveLength(3000);
+  });
+
+  it('overlaps text with no spaces too, without breaking a character (#591)', async () => {
+    const body = Array.from({ length: 6000 }, (_, i) => String.fromCodePoint(0x20000 + i)).join('');
+    const parsed = await parseMarkdown(`# Big\n\n${body}\n`);
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
+    const pieces = chunks.map((chunk) => chunk.text.replace(/^Big\n\n/, ''));
+    expect(pieces.length).toBeGreaterThan(2);
+    for (let index = 1; index < pieces.length; index += 1) {
+      const head = [...(pieces[index] as string)].slice(0, 5).join('');
+      expect(pieces[index - 1]).toContain(head);
+    }
+  });
+
+  it('respects a custom chunking configuration', async () => {
+    const parsed = await parseMarkdown(`# A\n\n${'word '.repeat(300)}\n`);
     const tight = { targetTokens: 50, maximumTokens: 80, overlapTokens: 10 };
     const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking: tight });
     for (const chunk of chunks) expect(chunk.estimatedTokens).toBeLessThanOrEqual(80);

@@ -75,6 +75,29 @@ Two properties do the work:
 
 Types are tagged, so the string `"1"` and the number `1` never collide.
 
+## Chunk boundaries
+
+Chunk text feeds the `chunks` root, so where the chunker cuts is part of identity. A node
+larger than `chunking.maximumTokens` is split at a paragraph break, line break or space
+when one falls in the second half of the window, and otherwise at a hard cut. Two rules
+keep that deterministic and faithful (#591):
+
+- **No cut inside a surrogate pair.** Offsets are UTF-16 code units, so a hard cut is moved
+  back one unit when it would separate a high surrogate from its low half. Before this, a
+  run of emoji or astral CJK was stored with a lone surrogate, which SQLite writes as
+  U+FFFD. Native context delivery preserves full bodies and is checked separately from
+  stored chunks. Cuts are on code points rather than grapheme clusters on purpose: `Intl.Segmenter` follows the ICU data of
+  the running Node, so a grapheme rule could split the same text differently on two
+  machines and give one corpus two build IDs.
+- **Overlap is real.** Each piece after the first starts up to `chunking.overlapTokens`
+  before the previous one ended (capped at half the budget), on the first word boundary in
+  that window, or on a code point where the text has no spaces. It never starts before the
+  middle of the previous piece, so a large overlap cannot multiply the chunk count. Until
+  #591 the setting was accepted and had no effect.
+
+Changing either rule changes chunk text and so the build ID, and requires bumping
+`CHUNKER_VERSION` so the parse cache does not serve the old pieces.
+
 ## Roots
 
 `hashRoot` sorts member hashes and includes the count. Sorting means the root does not

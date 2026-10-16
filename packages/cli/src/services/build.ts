@@ -23,6 +23,7 @@ import {
 import {
   assertNoDrift,
   buildLockfile,
+  CHUNKER_VERSION,
   type Chunk,
   cacheKey,
   checkRequiredCoverage,
@@ -304,6 +305,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             parserVersion: parser.version,
             normalizationVersion: NORMALIZATION_VERSION,
             chunking: config.effective.chunking as unknown as Canonical,
+            chunkerVersion: CHUNKER_VERSION,
             rules: ruleResolution.canonical as unknown as Canonical,
           });
 
