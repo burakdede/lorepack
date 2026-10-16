@@ -56,3 +56,34 @@ POSIX user; root may still read mode000files. Windows ACL behavior needs native 
 
 These results are not external desktop-client trust verification or Windows `.cmd`
 descendant-cleanup proof. Record full current-source and native results before closure.
+
+## Combined source-policy recovery verification
+
+The combined source-root, project-root rule and read-recovery branch adds a real
+`docs` directory-source case with no filesystem events. It establishes the floor
+baseline, induces a fingerprint-read failure while retaining the file's bytes,
+size and modification time, then requires unknown state, preservation of the
+previous build and a clean rebuilt version after recovery. Excluded edits remain
+excluded and the event timestamp remains absent.
+
+On macOS with Node 24.21.0, the first combined cohort passed 363 cases and failed
+the existing unsupported-file event/no-op case. Chokidar recorded no raw directory
+event, while the existing-file control received one. A separate bare Node
+`fs.watch` comparison likewise observed an existing-file event but no directory
+event in the default scratch location during its observation window. Under
+`/tmp`, directory events arrived and all 18 unchanged watcher cases passed.
+This establishes an environment-dependent observation, not a proven OS cause.
+
+Further local integration uses `TMPDIR=/tmp` explicitly. No event, no-op or
+recovery assertion, timeout, reconciliation interval, workload or test scheduling
+is changed. The default-scratch failure remains recorded and native CI must
+qualify the combined branch before closure.
+
+The combined scoped campaign passed all 364 integration cases across 16 files,
+all 178 architecture cases, build, strict changed-test types, lint, formatting and
+product types on 16 October 2026 (macOS arm64, Node 24.21.0, TMPDIR=/tmp).
+The actual combined CLI check also passed: excluded-only edits kept the same clean
+build, public and negated-source edits activated a new clean build, and HTTP plus
+the same connected MCP client returned matching line-3 locators. Excluded markers
+stayed absent and no watcher error was emitted. This is scoped local evidence;
+full and current native qualification remain required.

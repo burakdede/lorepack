@@ -128,6 +128,57 @@ describe('source read-open races, issue586', () => {
     });
   });
 
+  it('recovers a directory-source floor read failure without filesystem events', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: directory-recovery\nsources: [docs]\n',
+          '.loreignore': '/docs/ignored/\n',
+          'docs/b.md': '# B\n\nOriginal source.\n',
+          'docs/ignored/private.md': '# Hidden\n\nExcluded source.\n',
+        },
+      },
+      async (project) => {
+        const config = loadConfig({ cwd: project.root });
+        const first = await runBuild({ config, progress: new ProgressBus() });
+        const warnings: { message: string; state: string; buildId: string | undefined }[] = [];
+        const watching = startWatching({
+          config,
+          ...FAST,
+          warn: (message) =>
+            warnings.push({
+              message,
+              state: watching.status().state,
+              buildId: readActiveBuild(project.path('.lore'))?.buildId,
+            }),
+          rebuild: () => runBuild({ config, progress: new ProgressBus() }),
+        });
+        try {
+          await watching.ready;
+          await new Promise((resolve) => setTimeout(resolve, FAST.reconcileIntervalMs * 2));
+          project.write('docs/b.md', '# B\n\nChanged directory-source walrus content.\n');
+          project.write('docs/ignored/private.md', '# Hidden\n\nChanged excluded bytes.\n');
+          const before = statSync(project.path('docs/b.md'));
+          race.armed = true;
+          await settled(() => warnings.some((entry) => entry.message.includes('b.md')));
+          expect(race.failures).toBe(1);
+          expect(warnings).toContainEqual(
+            expect.objectContaining({ state: 'unknown', buildId: first.buildId }),
+          );
+          const after = statSync(project.path('docs/b.md'));
+          expect([after.size, after.mtimeMs]).toEqual([before.size, before.mtimeMs]);
+          await settled(() => watching.rebuilds === 1);
+          expect(watching.rebuilds, JSON.stringify(warnings)).toBe(1);
+          expect(watching.status().lastEventAt).toBeNull();
+          expect(await watching.freshness()).toBe('clean');
+          expect(readActiveBuild(project.path('.lore'))?.buildId).not.toBe(first.buildId);
+        } finally {
+          await watching.close();
+        }
+      },
+    );
+  }, 60_000);
+
   it('settles startup readiness after a failed source scan and recovers unchanged metadata', async () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       const config = loadConfig({ cwd: project.root });
