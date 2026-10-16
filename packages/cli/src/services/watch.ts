@@ -198,10 +198,7 @@ export function startWatching(options: WatchOptions): Watching {
     watcher.on('ready', () => {
       // Step 3. The scan/watch race: anything written between the build and this moment was
       // seen by neither, so the only safe assumption is that something was.
-      chain = chain.then(async () => {
-        await settle('startup reconciliation');
-        resolve();
-      });
+      void enqueue(() => settle('startup reconciliation')).then(resolve);
     });
   });
 
@@ -221,7 +218,7 @@ export function startWatching(options: WatchOptions): Watching {
     options.warn(
       `Watcher error: ${error instanceof Error ? error.message : String(error)}. Reconciling from disk.\n`,
     );
-    chain = chain.then(() => settle('watcher recovery'));
+    void enqueue(() => settle('watcher recovery'));
   });
 
   /**
@@ -236,13 +233,13 @@ export function startWatching(options: WatchOptions): Watching {
   const sweep = setInterval(() => {
     if (closed) return;
     const current = metadataSignature(options.config);
-    if (current === signature) return;
+    if (current === signature && state !== 'unknown') return;
     const first = signature === null;
     signature = current;
     // The first sweep only establishes a baseline: the build that just happened is what it
     // would otherwise mistake for a change.
-    if (first) return;
-    chain = chain.then(() => settle('sources changed'));
+    if (first && state !== 'unknown') return;
+    void enqueue(() => settle('sources changed'));
   }, reconcileIntervalMs);
   // Never hold the process open on its own account: the supervisor decides when to exit.
   sweep.unref?.();
@@ -275,13 +272,24 @@ export function startWatching(options: WatchOptions): Watching {
     describedBuild = activeBuildId();
   }
 
+  function enqueue(action: () => Promise<void>): Promise<void> {
+    chain = chain.then(action).catch((error: unknown) => {
+      if (closed) return;
+      record('unknown');
+      options.warn(
+        `Reconciliation failed; freshness is unknown: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    });
+    return chain;
+  }
+
   function schedule(): void {
     if (timer !== null) clearTimeout(timer);
     // Step 4. One save is many events, and a rename is a delete plus an add. Coalescing is
     // what turns an editor's write pattern into one rebuild.
     timer = setTimeout(() => {
       timer = null;
-      chain = chain.then(() => settle('sources changed'));
+      void enqueue(() => settle('sources changed'));
     }, debounceMs);
   }
 
@@ -301,6 +309,13 @@ export function startWatching(options: WatchOptions): Watching {
     // Step 6 and 7. The deciding evidence. A touch, an atomic rename of identical bytes, or
     // a save that changed nothing all land here and stop.
     const freshness = await readFreshnessObservation({ config: options.config });
+    if (freshness.sourceState === 'unknown' && freshness.inputFingerprint === null) {
+      record('unknown');
+      options.warn(
+        `Source freshness is unknown: ${freshness.reason ?? 'Sources could not be checked.'}\n`,
+      );
+      return;
+    }
     if (
       freshness.sourceState === 'clean' ||
       (inputFingerprint !== null && freshness.inputFingerprint === inputFingerprint)
@@ -328,12 +343,10 @@ export function startWatching(options: WatchOptions): Watching {
    */
   async function reestablish(): Promise<void> {
     if (closed) return;
-    try {
-      const freshness = await readFreshness({ config: options.config });
-      record(freshness.sourceState);
-    } catch {
-      // Leave it unknown. A failure to establish freshness is not evidence of freshness,
-      // and invariant 6 makes `unknown` the only honest answer available here.
+    const freshness = await readFreshness({ config: options.config });
+    record(freshness.sourceState);
+    if (freshness.sourceState === 'unknown' && freshness.reason !== null) {
+      options.warn(`Source freshness is unknown: ${freshness.reason}\n`);
     }
   }
 
@@ -423,7 +436,7 @@ export function startWatching(options: WatchOptions): Watching {
       // this one is honest. Invariant 6: `unknown` means unknown, never clean.
       state = 'unknown';
       describedBuild = active;
-      chain = chain.then(reestablish);
+      void enqueue(reestablish);
       return state;
     },
     status(): WatchStatus {

@@ -114,6 +114,23 @@ brought it back. Patterns are ours to apply.
 
 ## Failure is survivable
 
+A file can disappear between discovery and the read that hashes it. Read-only freshness
+reports this typed source-read failure as `unknown`; strict status and build checks still
+report their original errors. A failed source annotation never implies that the selected
+immutable build is unreadable.
+
+Every serialized watcher step has a supervisor recovery boundary. A failure prints its
+actual reason, records unknown freshness and leaves the queue able to process later work.
+Startup readiness settles after that failure instead of hanging the entire session. Errors
+outside the source-freshness allowlist still propagate from direct read-only annotation;
+the supervisor boundary reports them without treating them as successful reconciliation.
+
+An unknown scan is retried by the existing periodic floor even if paths, sizes and mtimes
+are unchanged. Atomic replacement or restored permissions can recover without changing
+those metadata fields. Keep the last successful input fingerprint so recovery does not
+undo a deliberate rollback when source bytes stayed unchanged.
+See [source-failure verification](../testing/source_freshness_recovery.md).
+
 A rebuild that fails leaves the previous build active and prints why (architecture 6.9).
 Serving the last good build is recoverable; exiting the supervisor in the middle of
 someone's session is not.
