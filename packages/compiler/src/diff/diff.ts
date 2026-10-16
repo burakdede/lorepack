@@ -1,6 +1,7 @@
 import {
   type BuildDiff,
   type BuildId,
+  compareCanonical,
   count,
   type DiffArtifactChange,
   type DiffRuleChange,
@@ -296,7 +297,9 @@ function diffTableCells(
       locator: to.locator,
     });
   }
-  return changes.sort((a, b) => a.row - b.row || a.column.localeCompare(b.column));
+  // Code-unit order, never `localeCompare`: collation follows the machine's locale, and the
+  // same two builds would then diff differently on two machines (#592).
+  return changes.sort((a, b) => a.row - b.row || compareCanonical(a.column, b.column));
 }
 
 function diffCapabilities(from: BuildSnapshot, to: BuildSnapshot): BuildDiff['capabilities'] {

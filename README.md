@@ -443,6 +443,8 @@ parsers), compiler version, configuration, and structure. The
 [package-format contract and frozen vectors](docs/package-format/README.md#build-id-derivation)
 define the exact inputs. It does not depend on timestamps, hostnames, absolute paths, or
 physical SQLite bytes. The same canonical inputs produce the same id across supported operating systems.
+Source bytes include line endings. Pin corpus checkout line endings when sharing builds
+across operating systems ([why](docs/architecture/build-identity.md#line-endings-are-part-of-identity)).
 Newly compiled builds retain the exact identity inputs in `reports/build-id-inputs.json`.
 These support independent verification without returning to live sources. Canonical hashing
 uses the same byte serialization in local Node and the portable Worker-safe core.

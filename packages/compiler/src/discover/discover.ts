@@ -357,7 +357,7 @@ function walkSource(
           warnings.push({
             code: 'symlink-skipped',
             path: toPosix(relative(config.projectRoot, full).split(sep).join('/')),
-            message: `${entry} is a symbolic link and was skipped. Set followSymlinks to include them.`,
+            message: `${entry} is a symbolic link and was skipped. To index its content, copy the target into a source directory, or add the target's directory to \`sources\` in lore.yaml (the directory must stay inside the project).`,
           });
           continue;
         }

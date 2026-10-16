@@ -62,6 +62,32 @@ Operational facts live in the build receipt in `state.sqlite`, outside the build
 outside `.lorepack`, so two machines can agree on identity while disagreeing about how
 long the build took.
 
+## Line endings are part of identity
+
+The `artifacts` root includes raw source content hashes (architecture section11.4).
+LF and CRLF versions of a source are different inputs, even when their normalized
+nodes, chunks and stored bodies agree. This preserves evidence of the exact bytes
+used to build the package. It deliberately does not hash only normalized text.
+
+A checkout that converts LF to CRLF can therefore change the build ID without a
+commit change. Keep corpus line endings consistent across operating systems with
+versioned attributes, rather than changing Lorepack's raw-byte identity contract.
+See [Windows checkout attributes](../compatibility/windows.md#line-endings-change-the-build-id).
+
+Measured on 2026-10-16, macOS arm64 / Node 24.21.0: `docs/guide.md` contained
+`# Guide\n\nRetain source bytes.\n` (30 UTF-8 bytes). Replacing each LF with CRLF
+made 33 bytes. The actual CLI produced different build IDs; only `artifacts`
+differed. The `nodes`, `chunks`, `tables` and `objects` roots matched.
+
+## Ordering never depends on the locale
+
+Cell changes use the existing `compareCanonical` code-unit order: `a`, `z`, `ä`.
+Locale-aware collation previously changed the same diff between Swedish and English
+processes (#592). The scoped Biome [guard](../../tools/lint/no_locale_compare.grit)
+rejects localeCompare calls in compiler/core production sources, including calls
+with explicit locale arguments. It uses the existing linter and adds no dependency.
+See the [repeatable checks](../testing/deterministic_diff.md).
+
 ## Canonical serialization
 
 Two properties do the work:
