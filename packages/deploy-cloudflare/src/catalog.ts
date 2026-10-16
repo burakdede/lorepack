@@ -61,6 +61,7 @@ interface NodeRow {
 
 interface SearchRow {
   readonly unitNodeIds?: string;
+  readonly unitTables?: string;
   readonly unitText?: string | null;
   readonly chunkId: string;
   readonly artifactId: string;
@@ -316,6 +317,21 @@ export class D1CatalogStore implements CatalogStore {
               ${
                 criteria.nativeUnits === true
                   ? `c.node_ids AS unitNodeIds,
+              (SELECT json_group_array(json_object(
+                'tableId', table_ref.id, 'name', table_ref.name,
+                'locator', json_patch(json_object('artifactId', table_ref.artifact_id,
+                  'relativePath', table_ref.relative_path), json_object(
+                  'sheet', table_ref.sheet, 'cellRange', table_ref.cell_range,
+                  'lineStart', table_ref.line_start, 'lineEnd', table_ref.line_end))))
+                FROM (SELECT table_ref.id, table_ref.name, table_ref.artifact_id,
+                  table_ref.relative_path, table_ref.sheet, table_ref.cell_range,
+                  table_ref.line_start, table_ref.line_end FROM tables table_ref
+                  WHERE table_ref.artifact_id=c.artifact_id AND table_ref.project_id=c.project_id AND table_ref.build_id=c.build_id
+                  AND table_ref.id IN (
+                    SELECT json_extract(unit_node.metadata_json, '$.tableId')
+                    FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                      ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                      AND unit_node.project_id=c.project_id AND unit_node.build_id=c.build_id) ORDER BY table_ref.id) table_ref) AS unitTables,
               CASE WHEN json_array_length(c.node_ids) > 0
                 AND (SELECT count(*) FROM json_each(c.node_ids) ref CROSS JOIN nodes unit_node
                   ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
@@ -366,6 +382,9 @@ export class D1CatalogStore implements CatalogStore {
       text: row.text,
       ...(criteria.nativeUnits === true
         ? {
+            tableReferences: JSON.parse(String(row.unitTables)) as NonNullable<
+              CatalogSearchHit['tableReferences']
+            >,
             nativeUnit: {
               nodeIds: JSON.parse(String(row.unitNodeIds)) as string[],
               text: typeof row.unitText === 'string' ? row.unitText : null,

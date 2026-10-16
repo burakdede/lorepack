@@ -55,6 +55,27 @@ await selected.listTables(undefined, bundle.buildId);
 await selected.describeTable('pricing', undefined, bundle.buildId);
 ```
 
+## Tables in task context
+
+Matching table names, columns and descriptions produce entries in `bundle.tables`.
+Each has a source `locator`, declared `labels` and a `schemaReference` containing the exact
+build and table IDs. Context does not flatten table samples into prose. Read the schema on
+a client pinned to the reference, then query typed rows separately:
+
+```ts
+for (const table of bundle.tables) {
+  const pinned = new LoreClient({
+    baseUrl: 'http://127.0.0.1:4321',
+    buildId: table.schemaReference.buildId,
+  });
+  const schema = await pinned.describeTable(table.schemaReference.tableId);
+  console.log(schema.columns);
+}
+```
+
+References count toward the complete delivery budget. Budget omissions identify the source
+chunk and, when diagnostic detail is retained, the table ID. Reason totals remain complete.
+
 ## Methods
 
 | Method | Route |

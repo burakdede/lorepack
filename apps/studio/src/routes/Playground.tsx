@@ -321,7 +321,13 @@ function ContextTab(): React.JSX.Element {
             </div>
             {copyExport.isError && <Failure {...toDisplayable(copyExport.error)} />}
             {run.data.bundle.selected.length === 0 ? (
-              <Empty title="Nothing fit. Every candidate is in the omissions below." />
+              <Empty
+                title={
+                  run.data.bundle.tables.length > 0
+                    ? 'Matching table references are listed below.'
+                    : 'Nothing fit. Every candidate is in the omissions below.'
+                }
+              />
             ) : (
               <ItemList items={run.data.bundle.selected} />
             )}
@@ -334,6 +340,10 @@ function ContextTab(): React.JSX.Element {
           {run.data.bundle.tables.length > 0 && (
             <div className="section">
               <h2 className="section-heading">tables</h2>
+              <p className="section-note prose">
+                Located schema references from this build. Read table schemas and query rows
+                separately.
+              </p>
               <TableList tables={run.data.bundle.tables} />
             </div>
           )}
@@ -381,12 +391,10 @@ function Accounting({ bundle }: { readonly bundle: ContextBundle }): React.JSX.E
         {bundle.tables.length > 0 && <Fact label="Tables">{String(bundle.tables.length)}</Fact>}
         {/* The total a reader can check against the page: every passage the model receives
             carries a citation, so this is the number of items rendered above. */}
-        <Fact label="Cited passages">{String(bundle.citations.length)}</Fact>
+        <Fact label="Cited locations">{String(bundle.citations.length)}</Fact>
         <Fact label="Omitted">{String(bundle.omissionSummary.total)}</Fact>
         {bundle.omissionSummary.reasons.budget > 0 && (
-          <Fact label="Passages cut for budget">
-            {String(bundle.omissionSummary.reasons.budget)}
-          </Fact>
+          <Fact label="Items cut for budget">{String(bundle.omissionSummary.reasons.budget)}</Fact>
         )}
       </Facts>
     </div>
@@ -440,7 +448,20 @@ function TableList({ tables }: { readonly tables: ContextBundle['tables'] }): Re
           <div className="item-head">
             <span className="table-name">{table.name}</span>
             <span className="table-id">{table.tableId}</span>
+            {table.labels.map((label) => (
+              <Badge key={label} tone="idle">
+                {label}
+              </Badge>
+            ))}
           </div>
+          <p className="item-text">
+            <Citation locator={table.locator} link={false} />
+          </p>
+          <Facts>
+            <Fact label="Schema build">
+              <code className="receipt-identifier">{table.schemaReference.buildId}</code>
+            </Fact>
+          </Facts>
         </li>
       ))}
     </ul>
@@ -492,7 +513,7 @@ function Omissions({
     <div className="section">
       <h2 className="section-heading">omitted</h2>
       <p className="section-note prose">
-        {`${summary.total} omitted ${summary.total === 1 ? 'passage' : 'passages'}; showing ${summary.reported} ${summary.reported === 1 ? 'diagnostic' : 'diagnostics'}.`}
+        {`${summary.total} omitted ${summary.total === 1 ? 'item' : 'items'}; showing ${summary.reported} ${summary.reported === 1 ? 'diagnostic' : 'diagnostics'}.`}
       </p>
       {summary.truncated && (
         <p className="section-note prose">
