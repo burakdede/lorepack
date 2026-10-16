@@ -230,7 +230,9 @@ describe('reading', () => {
     expect(listTableRows(db)).toEqual([{ tableId: 'a1#table', name: 'data' }]);
     const described = describeStoredTable(db, 'a1#table', 5);
     expect(described?.rowCount).toBe(2);
+    expect(described?.conversionWarnings).toBeNull();
     expect(described?.columns[1]).toEqual({
+      formula: 'unknown',
       name: 'amount',
       sqlName: 'c_1_amount',
       type: 'integer',
