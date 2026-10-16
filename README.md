@@ -388,6 +388,10 @@ Credential-shaped names such as `Prod-Credentials.json`, `ID_RSA` and `Server.PE
 excluded by default regardless of case. `.loreignore` stays case-sensitive; an exact
 `!Prod-Credentials.json` explicitly opts that file in.
 
+Paths and ignore/rule patterns use NFC Unicode normalization. Names such as
+`..notes.md` remain valid; two filenames with one canonical identity are refused
+with both paths named. See [path policy](docs/architecture/discovery.md#path-and-pattern-normalization).
+
 ### Review context in Studio
 
 ```bash

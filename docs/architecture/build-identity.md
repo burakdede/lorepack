@@ -96,6 +96,20 @@ Adding an input, changing the canonicalization, or changing the normalization po
 changes every build ID in existence. Each is therefore a versioned constant, and the
 change is a reviewed, format-affecting act that needs a changeset.
 
+## Normalization policy 2
+
+Policy 2 applies NFC to paths and ignore/declared rule patterns, including effective
+`match` and `supersedes` strings before hashing. It also distinguishes parent
+components from ordinary dot-dot names and refuses raw-name normalization
+collisions. The canonical serializer and arbitrary document text are unchanged.
+
+The normalization version moves to 2, changing new build IDs and parse cache keys.
+Readers explicitly support recorded versions 1 and 2, binding the recorded version
+into verification without rewriting old packages. Unknown versions are refused by
+logical verification and verified extraction. Raw ZIP byte reading is not identity
+validation; callers use the verified-admission API before trusting those bytes.
+[ADR0039](../adr/0039-path-pattern-normalization.md) records the migration.
+
 ## The default exclusions are part of identity
 
 `effectiveConfig` carries `exclude`, which is the always-on list `ALWAYS_EXCLUDE` from

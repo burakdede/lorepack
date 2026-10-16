@@ -14,7 +14,6 @@ import {
   type LoreNode,
   locatorBounds,
   locatorProblem,
-  NORMALIZATION_VERSION,
   type ParsedArtifact,
   SCHEMA_VERSION,
   type SourceLocator,
@@ -24,6 +23,8 @@ import { assertMigrationsKnown, loadMigrations, runMigrations } from '../migrati
 import { buildMigrationsDirectory } from '../migrations-path.js';
 import { openWritable } from '../sqlite.js';
 import { assertIdentifier } from './tables.js';
+
+const SUPPORTED_NORMALIZATION_VERSIONS = new Set([1, 2]);
 
 export interface LogicalCatalogProof {
   readonly buildId: string;
@@ -170,7 +171,7 @@ export function verifyLogicalCatalog(
     manifest.schemaVersion !== SCHEMA_VERSION ||
     inputs.schemaVersion !== SCHEMA_VERSION ||
     inputs.canonicalizationVersion !== CANONICALIZATION_VERSION ||
-    inputs.normalizationVersion !== NORMALIZATION_VERSION
+    !SUPPORTED_NORMALIZATION_VERSIONS.has(inputs.normalizationVersion)
   ) {
     throw new LoreError(
       'LORE_E_SCHEMA_MISMATCH',

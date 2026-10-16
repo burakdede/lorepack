@@ -3,6 +3,7 @@ import {
   type Canonical,
   type EffectiveConfig,
   LoreError,
+  normalizeUnicode,
 } from '@lorepack/core';
 import picomatch from 'picomatch';
 
@@ -83,7 +84,7 @@ export function resolveRules(options: {
 
   // Compiled once and reused across every artifact: at the 2,500-file envelope with a dozen
   // rules this is 30,000 match calls, and compiling the glob inside the loop dominates.
-  const matchers = rules.map((rule) => picomatch(rule.match, { dot: true }));
+  const matchers = rules.map((rule) => picomatch(normalizeUnicode(rule.match), { dot: true }));
 
   const unmatched: number[] = [];
   const resolved: ResolvedArtifactRule[] = [];
@@ -165,7 +166,7 @@ function resolveTargets(
 ): string[] {
   const targets: string[] = [];
   for (const glob of globs) {
-    const isMatch = picomatch(glob, { dot: true });
+    const isMatch = picomatch(normalizeUnicode(glob), { dot: true });
     let matched = 0;
     for (const artifact of artifacts) {
       if (artifact.artifactId === selfId) continue;

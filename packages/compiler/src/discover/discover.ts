@@ -7,6 +7,7 @@ import {
   compareCanonical,
   count,
   IGNORE_FILENAME,
+  isInsideRoot,
   LORE_DIRECTORY,
   type LoadedConfig,
   LoreError,
@@ -39,6 +40,7 @@ export type DiscoveryWarningCode =
   | 'artifact-too-large'
   | 'envelope-bytes'
   | 'unreadable'
+  | 'special-file'
   /**
    * A supported extension whose bytes are not readable text. Decided while fingerprinting,
    * because it is the only stage that reads the content, but it is the same kind of verdict
@@ -155,6 +157,7 @@ export function discover(options: DiscoverOptions): DiscoveryResult {
 
   // Deterministic order, independent of how the filesystem enumerated anything.
   artifacts.sort((a, b) => compareCanonical(a.artifactId, b.artifactId));
+  assertNoNormalizationCollisions(artifacts);
   assertNoCaseCollisions(artifacts.map((artifact) => artifact.artifactId));
 
   enforceEnvelope(artifacts, totalBytes, config, warnings, options);
@@ -232,7 +235,7 @@ function walkSource(
   // empty path, which is not an identity.
   const canonicalRoot = source.kind === 'file' ? dirname(source.root) : source.root;
 
-  const consider = (absolute: string): void => {
+  const consider = (absolute: string, kind: 'file' | 'special' = 'file'): void => {
     let canonical: string;
     try {
       canonical = toCanonical(canonicalRoot, absolute);
@@ -245,6 +248,11 @@ function walkSource(
     const rule = matcher.decide(projectPath);
     if (rule !== null) {
       excluded.record(rule, projectPath);
+      return;
+    }
+
+    if (kind === 'special') {
+      warnings.push(specialFileWarning(config, absolute));
       return;
     }
 
@@ -378,14 +386,17 @@ function walkSource(
           warnings.push(unreadableWarning(config, full));
           continue;
         }
-        if (realStat.isDirectory() && !prune(full)) walk(full);
-        else consider(full);
+        if (realStat.isDirectory()) {
+          if (!prune(full)) walk(full);
+        } else if (realStat.isFile()) consider(full);
+        else consider(full, 'special');
         continue;
       }
 
       if (link.isDirectory()) {
         if (!prune(full)) walk(full);
       } else if (link.isFile()) consider(full);
+      else consider(full, 'special');
     }
   };
 
@@ -399,12 +410,40 @@ function walkSource(
   else walk(source.root);
 }
 
+function assertNoNormalizationCollisions(artifacts: readonly DiscoveredArtifact[]): void {
+  const seen = new Map<string, DiscoveredArtifact>();
+  for (const artifact of artifacts) {
+    const previous = seen.get(artifact.artifactId);
+    if (previous !== undefined && previous.absolutePath !== artifact.absolutePath) {
+      const paths = [previous.displayPath, artifact.displayPath].sort();
+      throw new LoreError(
+        'LORE_E_CASE_COLLISION',
+        `Source paths have the same Unicode normalization: ${paths.join(' and ')}`,
+        {
+          remediation: 'Rename one of the files so their names differ after NFC normalization.',
+          path: artifact.displayPath,
+          details: { canonicalPath: artifact.artifactId, paths },
+        },
+      );
+    }
+    seen.set(artifact.artifactId, artifact);
+  }
+}
+
+function specialFileWarning(config: LoadedConfig, absolute: string): DiscoveryWarning {
+  const path = toPosix(relative(config.projectRoot, absolute));
+  return {
+    code: 'special-file',
+    path,
+    message: `${path} is not a regular file or directory and was not indexed.`,
+  };
+}
+
 function isInside(root: string, candidate: string): boolean {
   // Compare real paths on both sides: the root itself may sit behind a symlink, which is
   // common on macOS where /tmp resolves to /private/tmp.
   const resolvedRoot = safeRealpath(root) ?? root;
-  const rel = relative(resolvedRoot, candidate);
-  return rel !== '' && !rel.startsWith('..') && !/^[A-Za-z]:/.test(rel);
+  return isInsideRoot(resolvedRoot, candidate);
 }
 
 function safeLstat(path: string): Stats | null {

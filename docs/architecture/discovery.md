@@ -38,6 +38,27 @@ This corrects pre-release source-root anchoring. Update old rules such as `/priv
 remain readable; compile and activate a new build to apply changed selection. See
 [ADR0038](../adr/0038-project-root-ignore-anchoring.md).
 
+## Path and pattern normalization
+
+Paths, `.loreignore` patterns and declared `match`/`supersedes` globs use NFC.
+A decomposed pattern copied from a filename matches its composed canonical path;
+normalization preserves case, negation and glob grammar. Effective rule strings
+are normalized before hashing. Artifact identities remain source-relative.
+
+Containment checks distinguish the parent component `..` from ordinary names such
+as `..notes.md` and `..archive/old.md`. Distinct raw filenames with the same canonical
+artifact ID fail before indexing with `LORE_E_CASE_COLLISION`, naming both paths.
+No filesystem enumeration order selects a winner.
+
+Special entries such as sockets and FIFOs are never opened as source content. A
+matching ignore rule is recorded as an exclusion; otherwise `special-file` reports
+the exact path under the `unsupported-file` warning class. Followed links to special
+entries receive the same classification. CLI inspection and Studio read the stored
+warning rather than inventing a separate explanation.
+
+[ADR0039](../adr/0039-path-pattern-normalization.md) records normalization policy 2
+and retained version-1 validation. See the [verification checklist](../testing/path_canonicalization.md).
+
 ## Default credential and client configuration exclusions
 
 `ALWAYS_EXCLUDE` in `packages/core/src/config/defaults.ts` is built from two named lists, so
@@ -135,7 +156,7 @@ recorded:
 | | Decided | Recorded as | Read with |
 |---|---|---|---|
 | A rule removed it | before anything is read | an entry in `manifest.exclusions` | `lorepack inspect exclusions` |
-| Nothing could read it | after the bytes are read | an entry in `manifest.warnings` | `lorepack inspect warnings` |
+| It is unsupported or unreadable | during discovery or parsing | an entry in `manifest.warnings` | `lorepack inspect warnings` |
 
 Only the second existed until #202. The first is the more common reason a document is
 missing: a rule written a shade too broadly takes a folder out of every answer, and the

@@ -114,7 +114,8 @@ interface BuildWarning {
  * ("this file is not in the build"), so they share a class and differ in code.
  */
 function warningClass(code: string): BuildWarning['class'] {
-  if (code === 'unsupported-format' || code === 'undecodable-content') return 'unsupported-file';
+  if (code === 'unsupported-format' || code === 'undecodable-content' || code === 'special-file')
+    return 'unsupported-file';
   // A file left out because parsing it exceeded the time or memory a build allows one file.
   // The bytes may be perfectly valid, which is why it is a limit and not a parse failure.
   if (code === 'parse-timeout' || code === 'parse-memory' || code === 'nesting-too-deep')

@@ -6,6 +6,7 @@ import {
   buildManifestSchema,
   LORE_DIRECTORY,
   type LoadedConfig,
+  normalizeUnicode,
   type SourceState,
   toCanonical,
 } from '@lorepack/core';
@@ -184,6 +185,7 @@ export function startWatching(options: WatchOptions): Watching {
     // directory and our own matcher decides. Handing it patterns would be two matchers
     // disagreeing about which files are sources.
     ignored: (path: string, stats) =>
+      (stats !== undefined && !stats.isDirectory() && !stats.isFile() && !stats.isSymbolicLink()) ||
       excluded(path, watchRoot, matcher, sources, stats?.isDirectory()),
     // The initial scan already happened: it was the build. Replaying it as events would
     // rebuild an identical build on every startup.
@@ -557,7 +559,7 @@ function excluded(
   if (relativePath === '') return false;
   if (!isWithin(watchRoot, path)) return true;
 
-  const canonical = relativePath.split(sep).join('/');
+  const canonical = normalizeUnicode(relativePath.split(sep).join('/'));
   if (canonical === '.lore' || canonical.startsWith('.lore/')) return true;
 
   for (const source of sources) {
