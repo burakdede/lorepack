@@ -26,11 +26,13 @@ const ORDERS = {
   sqlName: 't_orders_80032d995f73',
   sheet: 'Orders',
   rowCount: 3,
+  conversionWarnings: [],
   columns: [
     {
       name: 'sku',
       sqlName: 'c_0_sku',
       type: 'text',
+      formula: 'absent',
       nullable: false,
       statistics: {
         nullCount: 0,
@@ -44,6 +46,7 @@ const ORDERS = {
       name: 'qty',
       sqlName: 'c_1_qty',
       type: 'integer',
+      formula: 'present',
       nullable: false,
       statistics: { nullCount: 0, distinctEstimate: 3, distinctIsExact: true, min: 2, max: 9 },
     },
@@ -51,6 +54,7 @@ const ORDERS = {
       name: 'active',
       sqlName: 'c_2_active',
       type: 'boolean',
+      formula: 'unknown',
       nullable: true,
       // Not exact, so the interface has to say so rather than print a count.
       statistics: {
@@ -337,4 +341,32 @@ describe('a build with no tables', () => {
     );
     expect(screen.getByText('lorepack build')).toBeInTheDocument();
   });
+});
+
+it('renders formula presence and conversion diagnostics without recomputing cached values, issue430', async () => {
+  describeTable.mockResolvedValue({
+    ...ORDERS,
+    conversionWarnings: [
+      { code: 'xlsx-merged-cells', message: 'Only the top-left value was imported.' },
+    ],
+  });
+  renderRoute();
+  const schema = within(await screen.findByRole('table', { name: 'Orders schema' }));
+  expect(schema.getByRole('row', { name: /qty/ })).toHaveTextContent('present');
+  expect(schema.getByRole('row', { name: /sku/ })).toHaveTextContent('absent');
+  expect(schema.getByRole('row', { name: /active/ })).toHaveTextContent('unknown');
+  expect(screen.getByText('xlsx-merged-cells')).toBeVisible();
+  expect(screen.getByText(/Workbook formulas are never evaluated/)).toBeVisible();
+});
+it('does not call unrecorded historical diagnostics an empty warning list, issue430', async () => {
+  describeTable.mockResolvedValue({
+    ...ORDERS,
+    conversionWarnings: null,
+    columns: ORDERS.columns.map((column) => ({ ...column, formula: 'unknown' })),
+  });
+  renderRoute();
+  expect(
+    await screen.findByText('Conversion warnings were not recorded in this build.'),
+  ).toBeVisible();
+  expect(screen.queryByText('No conversion warnings were recorded.')).not.toBeInTheDocument();
 });
