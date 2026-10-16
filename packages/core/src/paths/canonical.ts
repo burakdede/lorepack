@@ -7,9 +7,9 @@ import { LoreError } from '../errors/lore-error.js';
  * depend on the operating system or on where the project happens to live.
  *
  * The normalization policy is versioned because it feeds build identity: changing it
- * changes every artifact ID, which must be a deliberate, reviewed act.
+ * changes build and cache identity, which must be a deliberate, reviewed act.
  */
-export const NORMALIZATION_VERSION = 1 as const;
+export const NORMALIZATION_VERSION = 2 as const;
 export const UNICODE_NORMALIZATION_FORM = 'NFC' as const;
 
 const WINDOWS_DEVICE_PATH = /^\\\\[.?]\\/;
@@ -62,7 +62,8 @@ export function toCanonical(root: string, absolutePath: string): string {
       path: toPosix(absolutePath),
     });
   }
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  const canonical = toPosix(rel);
+  if (canonical === '..' || canonical.startsWith('../') || isAbsolute(rel)) {
     throw new LoreError(
       'LORE_E_PATH_ESCAPE',
       `${toPosix(absolutePath)} resolves outside the configured source root.`,
@@ -73,7 +74,7 @@ export function toCanonical(root: string, absolutePath: string): string {
       },
     );
   }
-  return normalizeUnicode(toPosix(rel));
+  return normalizeUnicode(canonical);
 }
 
 /** True when the path stays inside the root. Non-throwing companion to toCanonical. */

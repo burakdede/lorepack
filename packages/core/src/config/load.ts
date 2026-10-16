@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSy
 import { dirname, isAbsolute, join, parse as parsePath, relative, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { LoreError } from '../errors/lore-error.js';
-import { toCanonical, toPosix } from '../paths/canonical.js';
+import { normalizeUnicode, toCanonical, toPosix } from '../paths/canonical.js';
 import { normalizeSourceId } from '../paths/identifiers.js';
 import { configSchema, type LoreConfig } from '../schemas/config.js';
 import { closestMatch } from '../text/closest.js';
@@ -342,10 +342,12 @@ function buildEffective(
     limits: defaults.limits,
     contextProfile: config.context?.defaultProfile ?? defaults.contextProfile,
     rules: (config.rules ?? []).map((rule) => ({
-      match: rule.match,
+      match: normalizeUnicode(rule.match),
       ...(rule.status === undefined ? {} : { status: rule.status }),
       ...(rule.authority === undefined ? {} : { authority: rule.authority }),
-      ...(rule.supersedes === undefined ? {} : { supersedes: [...rule.supersedes] }),
+      ...(rule.supersedes === undefined
+        ? {}
+        : { supersedes: rule.supersedes.map(normalizeUnicode) }),
       ...(rule.replace === undefined ? {} : { replace: rule.replace }),
     })),
   });

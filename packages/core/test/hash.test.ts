@@ -134,7 +134,7 @@ describe('deriveBuildId', () => {
     ['schemaVersion', { schemaVersion: 2 }],
     ['compilerVersion', { compilerVersion: '0.2.0' }],
     ['canonicalizationVersion', { canonicalizationVersion: 2 }],
-    ['normalizationVersion', { normalizationVersion: 2 }],
+    ['normalizationVersion', { normalizationVersion: BASE.normalizationVersion + 1 }],
     ['effectiveConfig', { effectiveConfig: { name: 'other', sources: ['./x'] } }],
     ['parserVersions', { parserVersions: { markdown: '0.2.0', text: '0.1.0' } }],
     ['ruleResolution', { ruleResolution: [{ artifactId: 'src:a.md', status: 'archived' }] }],

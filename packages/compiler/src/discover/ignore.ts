@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { normalizeUnicode } from '@lorepack/core';
 import picomatch from 'picomatch';
 
 /**
@@ -47,7 +48,7 @@ export function parseIgnoreFile(contents: string, source: string): IgnoreRule[] 
     const line = raw.trim();
     if (line === '' || line.startsWith('#')) continue;
     const negated = line.startsWith('!');
-    const pattern = negated ? line.slice(1).trim() : line;
+    const pattern = normalizeUnicode(negated ? line.slice(1).trim() : line);
     if (pattern === '') continue;
     rules.push({ pattern, negated, source });
   }

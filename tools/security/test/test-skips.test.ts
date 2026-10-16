@@ -19,6 +19,31 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'packages/cli/test/path_canonicalization.e2e.test.ts',
+    line: "it.skipIf(process.platform === 'darwin')(",
+    why: 'Normalization-insensitive APFS cannot retain distinct NFC/NFD filenames; Linux and Windows exercise real collision refusal and active-build preservation (#589)',
+  },
+  {
+    file: 'packages/cli/test/path_canonicalization.e2e.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'Windows named pipes are not POSIX filesystem socket entries; the actual socket warning runs on Linux and macOS (#589)',
+  },
+  {
+    file: 'packages/cli/test/watch_special_files.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'Windows named pipes are not POSIX filesystem socket entries; regular file, directory and symlink classification still run on Windows (#589)',
+  },
+  {
+    file: 'packages/compiler/test/path_canonicalization.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'The three special-entry cases require POSIX filesystem sockets, including a followed socket link; Windows named pipes are not equivalent (#589)',
+  },
+  {
+    file: 'packages/compiler/test/path_canonicalization.test.ts',
+    line: "it.skipIf(process.platform === 'darwin')(",
+    why: 'Normalization-insensitive APFS cannot retain distinct NFC/NFD filenames; Linux and Windows exercise the real discovery collision (#589)',
+  },
+  {
     file: 'packages/backend-local/test/storage-faults.test.ts',
     line: "it.skipIf(process.platform === 'win32')(",
     why: 'POSIX archive modes have no Windows equivalent; interrupted replacement still runs there (#686)',
