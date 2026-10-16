@@ -157,6 +157,16 @@ describe('watch filtering agrees with discovery, issue587', () => {
     { sources: ['docs/a.md'], pattern: '/docs/a.md', path: 'docs/a.md' },
     { sources: ['docs'], pattern: '/drafts/**\n!/drafts/keep.md', path: 'docs/drafts/drop.md' },
     { sources: ['docs'], pattern: '/drafts/**\n!/drafts/keep.md', path: 'docs/drafts/keep.md' },
+    {
+      sources: ['docs'],
+      pattern: '/docs/drafts/**\n!/docs/drafts/keep.md',
+      path: 'docs/drafts/drop.md',
+    },
+    {
+      sources: ['docs'],
+      pattern: '/docs/drafts/**\n!/docs/drafts/keep.md',
+      path: 'docs/drafts/keep.md',
+    },
   ])('$pattern for $path in $sources', async ({ sources, pattern, path }) => {
     await withTempProject(
       {
@@ -193,7 +203,8 @@ describe('watch filtering agrees with discovery, issue587', () => {
       {
         files: {
           'lore.yaml': configuration(['docs/context']),
-          '.loreignore': '/docs/\n/drafts/**\n!/drafts/keep.md\n/private/\n',
+          '.loreignore':
+            '/unrelated/\n/docs/context/drafts/**\n!/docs/context/drafts/keep.md\n/docs/context/private/\n',
           'docs/context/drafts/keep.md': '# Keep\n',
           'docs/context/private/a.md': '# Private\n',
           '.lore/output.md': '# Build output\n',
@@ -229,12 +240,42 @@ describe('watch filtering agrees with discovery, issue587', () => {
     );
   });
 
+  it.each(['docs', 'docs/nested', 'docs/nested/keep.md'])(
+    'prunes an excluded configured source or ancestor for %s',
+    async (source) => {
+      await withTempProject(
+        {
+          files: {
+            'lore.yaml': configuration([source]),
+            '.loreignore': '/docs/\n!/docs/nested/keep.md\n',
+            'docs/nested/keep.md': '# Excluded by its ancestor\n',
+          },
+        },
+        async (project) => {
+          const config = loadConfig({ cwd: project.root });
+          expect(discover({ config }).artifacts).toEqual([]);
+          const { watching, ignored } = classification(config);
+          try {
+            for (const path of ['docs', 'docs/nested', 'docs/nested/keep.md']) {
+              expect(
+                ignored(eventPath(project.root, path), statSync(project.path(path))),
+                path,
+              ).toBe(true);
+            }
+          } finally {
+            await watching.close();
+          }
+        },
+      );
+    },
+  );
+
   it('maps both declared and real directory-source aliases to the same ignore rules', async () => {
     await withTempProject(
       {
         files: {
           'lore.yaml': configuration(['alias']),
-          '.loreignore': '/private/\n',
+          '.loreignore': '/alias/private/\n',
           'actual/private/a.md': '# Private\n',
           'actual/public.md': '# Public\n',
         },
@@ -259,12 +300,59 @@ describe('watch filtering agrees with discovery, issue587', () => {
       },
     );
   });
+  it('keeps a declared alias independent of an ignore rule naming only its physical target', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': configuration(['alias']),
+          '.loreignore': '/actual/\n',
+          'actual/a.md': '# Logical source\n',
+        },
+      },
+      async (project) => {
+        symlinkSync(project.path('actual'), project.path('alias'), 'junction');
+        const config = loadConfig({ cwd: project.root });
+        expect(discover({ config }).artifacts.map((artifact) => artifact.artifactId)).toEqual([
+          'alias:a.md',
+        ]);
+        const { watching, ignored } = classification(config);
+        try {
+          for (const root of [
+            eventPath(project.root, 'alias'),
+            resolveRealPath(project.path('alias')),
+          ]) {
+            expect(ignored(root, statSync(root))).toBe(false);
+            expect(ignored(join(root, 'a.md'), statSync(join(root, 'a.md')))).toBe(false);
+          }
+        } finally {
+          await watching.close();
+        }
+      },
+    );
+  });
+
+  it('keeps unsupported root files eligible for no-op reconciliation events', async () => {
+    await withTempProject(
+      { files: { 'lore.yaml': configuration(['.']), 'notes.bin': 'Not canonical input.' } },
+      async (project) => {
+        const { watching, ignored } = classification(loadConfig({ cwd: project.root }));
+        try {
+          const path = eventPath(project.root, 'notes.bin');
+          expect(ignored(path)).toBe(false);
+          expect(ignored(path, statSync(path))).toBe(false);
+        } finally {
+          await watching.close();
+        }
+      },
+    );
+  });
+
   it('waits for stat before applying a directory rule and ignores unrelated files', async () => {
     await withTempProject(
       {
         files: {
           'lore.yaml': configuration(['docs']),
-          '.loreignore': '/private/\n',
+          '.loreignore': '/docs/private/\n',
           'docs/private/a.md': '# Private\n',
           'other.md': '# Unconfigured\n',
         },
@@ -288,7 +376,7 @@ describe('watch filtering agrees with discovery, issue587', () => {
       {
         files: {
           'lore.yaml': configuration(['alias/a.md']),
-          '.loreignore': '/a.md\n',
+          '.loreignore': '/alias/a.md\n',
           'actual/a.md': '# Private\n',
           'actual/b.md': '# Unconfigured\n',
         },

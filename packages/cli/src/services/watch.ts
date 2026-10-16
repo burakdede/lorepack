@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { createSourceMatcher, discover } from '@lorepack/compiler';
+import { createSourceMatcher, discover, sourceRootExclusion } from '@lorepack/compiler';
 import {
   type BuildId,
   buildManifestSchema,
@@ -144,6 +144,13 @@ export function startWatching(options: WatchOptions): Watching {
   const sources: WatchSource[] = options.config.sources.map((source) => ({
     roots: [...new Set([resolve(watchRoot, source.relativeRoot), resolveRealPath(source.root)])],
     filePath: source.kind === 'file' ? toCanonical(dirname(source.root), source.root) : null,
+    projectPrefix:
+      source.kind === 'file'
+        ? source.relativeRoot.split('/').slice(0, -1).join('/')
+        : source.relativeRoot === '.'
+          ? ''
+          : source.relativeRoot,
+    excluded: sourceRootExclusion(source, matcher) !== null,
   }));
   const loreDirectory = join(options.config.projectRoot, LORE_DIRECTORY);
   let state: SourceState = 'clean';
@@ -510,6 +517,8 @@ function signature(paths: readonly string[]): string {
 interface WatchSource {
   readonly roots: readonly string[];
   readonly filePath: string | null;
+  readonly projectPrefix: string;
+  readonly excluded: boolean;
 }
 
 function isWithin(root: string, path: string): boolean {
@@ -539,6 +548,7 @@ function excluded(
   if (canonical === '.lore' || canonical.startsWith('.lore/')) return true;
 
   for (const source of sources) {
+    if (source.excluded) continue;
     for (const root of source.roots) {
       const samePath = relative(root, path) === '';
       if (source.filePath === null && samePath) return false;
@@ -551,9 +561,11 @@ function excluded(
         } catch {
           return true;
         }
+        const projectPath =
+          source.projectPrefix === '' ? sourcePath : `${source.projectPrefix}/${sourcePath}`;
         return isDirectory
-          ? matcher.decideDirectory(sourcePath) !== null
-          : matcher.excludes(sourcePath);
+          ? matcher.decideDirectory(projectPath) !== null
+          : matcher.excludes(projectPath);
       }
       if (isWithin(path, root)) return false;
     }

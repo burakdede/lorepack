@@ -280,10 +280,12 @@ describe('watching while it serves', () => {
     );
     writeFileSync(
       join(project, '.loreignore'),
-      '/docs/private/\n/ignored/\n/drafts/**\n!/drafts/keep.md\n',
+      '/docs/private/\n/docs/ignored/\n/docs/drafts/**\n!/docs/drafts/keep.md\n',
     );
-    for (const name of ['private', 'ignored', 'drafts']) mkdirSync(join(project, 'docs', name));
-    writeFileSync(join(project, 'docs/private/p.md'), '# Private\n\nOriginal private note.\n');
+    for (const name of ['public', 'private', 'ignored', 'drafts'])
+      mkdirSync(join(project, 'docs', name));
+    writeFileSync(join(project, 'docs/public/p.md'), '# Public\n\nOriginal public note.\n');
+    writeFileSync(join(project, 'docs/private/p.md'), '# Private\n\nOriginal excluded note.\n');
     writeFileSync(join(project, 'docs/ignored/n.md'), '# Ignored\n\nOriginal ignored note.\n');
     writeFileSync(join(project, 'docs/drafts/keep.md'), '# Keep\n\nOriginal kept draft.\n');
     const started = await dev();
@@ -308,8 +310,12 @@ describe('watching while it serves', () => {
       expect(initial.buildId).toBe(before);
       expect(initial.hits).toEqual([]);
       writeFileSync(
+        join(project, 'docs/public/p.md'),
+        '# Public\n\nNarwhal calibration is reviewed.\n',
+      );
+      writeFileSync(
         join(project, 'docs/private/p.md'),
-        '# Private\n\nNarwhal calibration is reviewed.\n',
+        '# Private\n\nHiddenwalrus stays excluded.\n',
       );
       writeFileSync(
         join(project, 'docs/ignored/n.md'),
@@ -329,7 +335,7 @@ describe('watching while it serves', () => {
       }
       expect(after, started.log()).not.toBe(before);
       for (const [query, path] of [
-        ['narwhal', 'private/p.md'],
+        ['narwhal', 'public/p.md'],
         ['quokka', 'drafts/keep.md'],
       ]) {
         const response = await fetch(`${base}/v1/search`, {
@@ -357,6 +363,19 @@ describe('watching while it serves', () => {
       });
       expect(response.status).toBe(200);
       expect(searchResultSchema.parse(await response.json()).hits).toEqual([]);
+      const privateResponse = await fetch(`${base}/v1/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'hiddenwalrus' }),
+      });
+      expect(privateResponse.status).toBe(200);
+      expect(searchResultSchema.parse(await privateResponse.json()).hits).toEqual([]);
+      const privateModel = searchResultSchema.parse(
+        (await client.callTool({ name: 'lore_search', arguments: { query: 'hiddenwalrus' } }))
+          .structuredContent,
+      );
+      expect(privateModel.hits).toEqual([]);
+
       const model = searchResultSchema.parse(
         (
           await client.callTool({
@@ -371,8 +390,8 @@ describe('watching while it serves', () => {
         expect.arrayContaining([
           expect.objectContaining({
             locator: expect.objectContaining({
-              artifactId: 'docs:private/p.md',
-              relativePath: 'private/p.md',
+              artifactId: 'docs:public/p.md',
+              relativePath: 'public/p.md',
             }),
           }),
         ]),
