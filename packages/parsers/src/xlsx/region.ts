@@ -81,6 +81,7 @@ export function detectRegion(
     if (index > 0) {
       warnings.push({
         code: 'xlsx-preamble-skipped',
+        loss: { sheet: sheetName },
         message: `Sheet ${sheetName}: the table was read from row ${String(row.row + 1)}. The ${count(index, 'row')} above it did not look like a header and were not imported.`,
         line: 1,
       });

@@ -18,6 +18,49 @@ const MINIMAL = {
 };
 
 describe('where a value came from', () => {
+  it.each([
+    'build:\n  profile: strict\n  required: [{path: docs/report.pdf}]\n',
+    'build: {profile: strict, required: [{path: docs/report.pdf}]}\n',
+  ])('attributes coverage settings to the validated project file: %s', async (setting) => {
+    await withTempProject(
+      {
+        files: {
+          ...MINIMAL,
+          'lore.yaml': `${MINIMAL['lore.yaml']}${setting}`,
+        },
+      },
+      (project) => {
+        const config = loadConfig({ cwd: project.root });
+        const resolved = resolveConfiguration(config, {});
+        for (const key of ['profile', 'required']) {
+          expect(resolved.values.find((entry) => entry.path === `build.${key}`)).toMatchObject({
+            layer: 'project',
+            source: config.configPath,
+            buildId: true,
+          });
+        }
+      },
+    );
+  });
+
+  it('attributes undeclared coverage settings to defaults', async () => {
+    await withTempProject({ files: MINIMAL }, (project) => {
+      const resolved = resolveConfiguration(loadConfig({ cwd: project.root }), {});
+      expect(resolved.values.find((entry) => entry.path === 'build.profile')).toMatchObject({
+        value: 'permissive',
+        layer: 'defaults',
+        source: 'built-in',
+        buildId: true,
+      });
+      expect(resolved.values.find((entry) => entry.path === 'build.required')).toMatchObject({
+        value: [],
+        layer: 'defaults',
+        source: 'built-in',
+        buildId: true,
+      });
+    });
+  });
+
   it('attributes an untouched value to the built-in defaults', async () => {
     await withTempProject({ files: MINIMAL }, async (project) => {
       const resolved = resolveConfiguration(loadConfig({ cwd: project.root }), {});
@@ -132,11 +175,25 @@ describe('what the build id is computed from', () => {
   });
 });
 
+it('renders structured required declarations as readable configuration values', () => {
+  expect(
+    displayValue({
+      path: 'build.required',
+      value: [{ path: 'docs/budget.xlsx', sheets: ['Revenue'] }],
+      layer: 'project',
+      source: 'lore.yaml',
+      buildId: true,
+    }),
+  ).toBe('{"path":"docs/budget.xlsx","sheets":["Revenue"]}');
+});
+
 describe('secrets', () => {
   it('never prints a value whose name looks like a credential', async () => {
     await withTempProject({ files: MINIMAL }, async (project) => {
       const resolved = resolveConfiguration(loadConfig({ cwd: project.root }), {});
-      const secret = { ...resolved.values[0], secret: true, value: 'hunter2' } as const;
+      const first = resolved.values[0];
+      if (first === undefined) throw new Error('Expected a resolved configuration value');
+      const secret = { ...first, secret: true, value: 'hunter2' } as const;
 
       // A guardrail on the rendering, so a secret cannot reach output by being added to a
       // layer later without anyone revisiting the renderer.

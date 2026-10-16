@@ -70,13 +70,13 @@ describe('parse cache', () => {
     });
   });
 
-  it('ignores an entry written by an older cache format', async () => {
+  it.each([0, 2])('ignores an entry written by an older cache format', async (version) => {
     await withTempProject({}, (project) => {
       const directory = project.path('cache');
       mkdirSync(join(directory, KEY.slice(0, 2)), { recursive: true });
       writeFileSync(
         join(directory, KEY.slice(0, 2), `${KEY}.json`),
-        JSON.stringify({ version: 0, ...ENTRY }),
+        JSON.stringify({ version, ...ENTRY }),
         'utf8',
       );
       expect(new ParseCache(directory).get(KEY)).toBeNull();

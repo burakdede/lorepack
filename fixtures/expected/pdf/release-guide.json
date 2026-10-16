@@ -10,7 +10,7 @@
       "pages": 3
     },
     "parserId": "pdf-text",
-    "parserVersion": "0.1.0",
+    "parserVersion": "0.1.1",
     "relativePath": "documents/pdf/release-guide.pdf",
     "sourceId": "fixtures",
     "status": "active",
@@ -112,7 +112,8 @@
   "warnings": [
     {
       "code": "pdf-pages-without-text",
-      "message": "1 of 3 pages have no text layer and contributed nothing. Optical character recognition is out of scope for v0.1."
+      "loss": {},
+      "message": "1 of 3 pages have no text layer and contributed nothing. Pages: 2. Optical character recognition is out of scope for v0.1."
     }
   ]
 }

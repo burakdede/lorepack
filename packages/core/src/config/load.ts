@@ -48,6 +48,7 @@ export interface EffectiveConfig {
   readonly exclude: readonly string[];
   readonly followSymlinks: boolean;
   readonly strictRules: boolean;
+  readonly build: ProductDefaults['build'];
   readonly includeOriginals: boolean;
   readonly chunking: ProductDefaults['chunking'];
   readonly limits: ProductDefaults['limits'];
@@ -157,7 +158,16 @@ export function readConfigFile(configPath: string): {
   return { config: parsed.data, raw };
 }
 
-const KNOWN_KEYS = ['version', 'name', 'sources', 'rules', 'context', 'package', 'strictRules'];
+const KNOWN_KEYS = [
+  'version',
+  'name',
+  'sources',
+  'rules',
+  'context',
+  'package',
+  'strictRules',
+  'build',
+];
 
 function suggestionFor(code: string | undefined, keyPath: string): string {
   if (code === 'unrecognized_keys') {
@@ -318,6 +328,15 @@ function buildEffective(
     exclude: [...defaults.exclude],
     followSymlinks: defaults.followSymlinks,
     strictRules: config.strictRules ?? defaults.strictRules,
+    build: {
+      profile: config.build?.profile ?? defaults.build.profile,
+      required: [...(config.build?.required ?? defaults.build.required)]
+        .map((source) => ({
+          path: source.path,
+          ...(source.sheets === undefined ? {} : { sheets: [...source.sheets].sort() }),
+        }))
+        .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0)),
+    },
     includeOriginals: config.package?.includeOriginals ?? defaults.includeOriginals,
     chunking: defaults.chunking,
     limits: defaults.limits,

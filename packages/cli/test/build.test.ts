@@ -693,6 +693,9 @@ function assertCacheLandmarks(snapshot: ReturnType<typeof logicalCacheSnapshot>)
   expect(snapshot.warnings.map((warning) => warning.code)).toEqual(
     expect.arrayContaining(['docx-unmapped-style', 'pdf-pages-without-text']),
   );
+  expect(
+    snapshot.warnings.find((warning) => warning.code === 'pdf-pages-without-text'),
+  ).toMatchObject({ message: expect.stringContaining('Pages: 2.') });
   expect(snapshot.tables).toHaveLength(2);
   for (const table of snapshot.rows) {
     expect(table.rows.map((record) => Object.values(record))).toEqual([

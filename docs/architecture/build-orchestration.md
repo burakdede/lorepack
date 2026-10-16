@@ -26,6 +26,40 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 6. **Seal.** A single atomic rename moves the candidate into `.lore/builds/<build id>`.
 7. **Record and activate.** Activation is a pointer change in one transaction. With
    `--no-activate` it is skipped, leaving a verified build for CI to inspect or pack.
+## Required-source coverage
+
+Declare required files using canonical project-relative paths in `lore.yaml`:
+
+```yaml
+build:
+  profile: strict
+  required:
+    - path: docs/contract.pdf
+    - path: docs/budget.xlsx
+      sheets: [Revenue, Costs]
+```
+
+The default profile is `permissive`. Missing, excluded or unimported declared files and sheets
+produce persisted coverage warnings. `strict` rejects them with `LORE_E_REQUIRED_COVERAGE`
+(exit 2) after parsing and cache reuse, before sealing, registration or activation. The active
+build remains unchanged. A PDF with unread pages, a worksheet not imported as a table, or
+known skipped worksheet preamble content cannot satisfy a matching required declaration.
+Informational conversion warnings do not fail this gate. Existing fatal parse errors remain
+fatal in either profile.
+
+A file requirement covers the complete artifact; `sheets` restricts a workbook requirement
+to exact sheet names. Paths are exact, relative to the project root, including the declared
+source directory. Globs, absolute paths and traversal components are rejected. Declaration
+and sheet order do not change identity. Both settings appear in `config show --effective`
+and `config explain`, including their provenance, and participate in canonical build identity.
+The plan estimates work without parsing; the coverage verdict is established during build.
+
+Inspect a successful permissive build with `lorepack inspect warnings`. The warning list is
+stored in the immutable manifest, catalog and report, so existing HTTP/Studio warning views
+can read it without the original sources. This gate detects known omissions in declared inputs;
+it does not add OCR or infer that a document is correct. See [the decision](../adr/0033-required-source-coverage.md)
+and [verification checklist](../testing/required-source-coverage.md).
+
 ## Recovering a damaged build
 
 `state.sqlite` records that a build exists. It says nothing about the directory that record

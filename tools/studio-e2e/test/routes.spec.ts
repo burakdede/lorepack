@@ -557,7 +557,15 @@ test('shows a stale rollback refusal and preserves the competing activation', as
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ build: newest, expectActive: history.activeBuildId }),
   });
-  expect(activate.status).toBe(200);
+  const refusal =
+    activate.status === 200
+      ? undefined
+      : {
+          request: { build: newest, expectActive: history.activeBuildId },
+          status: activate.status,
+          response: await activate.text(),
+        };
+  expect(activate.status, JSON.stringify(refusal)).toBe(200);
   const live = async (): Promise<string> =>
     ((await (await fetch(`${session.url}/v1/builds`)).json()) as { activeBuildId: string })
       .activeBuildId;

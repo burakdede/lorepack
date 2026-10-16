@@ -220,6 +220,7 @@ function buildTable(
   if (columnCount > CSV_LIMITS.maxColumns) {
     warnings.push({
       code: 'csv-too-many-columns',
+      loss: {},
       message: `${input.displayPath} has ${count(columnCount, 'column')}, above the supported limit of ${String(CSV_LIMITS.maxColumns)}, so it was not imported as a table. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`,
       line: 1,
     });
@@ -233,6 +234,7 @@ function buildTable(
   if (body.length > CSV_LIMITS.maxRows) {
     warnings.push({
       code: 'csv-too-many-rows',
+      loss: {},
       message: `${input.displayPath} has ${count(body.length, 'row')}, above the supported limit of ${CSV_LIMITS.maxRows.toLocaleString('en-US')}, so it was not imported as a table. Split it, or filter it to the rows the project needs. The limit exists because every row is imported into the build and served from it.`,
       line: 1,
     });

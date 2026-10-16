@@ -54,6 +54,8 @@ export interface ParserWarning {
   readonly code: string;
   readonly message: string;
   readonly line?: number;
+  /** Known source content was not imported. No sheet means artifact-wide loss. */
+  readonly loss?: { readonly sheet?: string };
 }
 
 export interface ParsedArtifact {

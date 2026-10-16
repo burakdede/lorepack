@@ -293,7 +293,11 @@ document actually has.
 A document whose pages carry no text at all is **refused**, with a message naming OCR as out of
 scope, rather than producing an empty artifact. An empty artifact is the worst outcome
 available, because it looks like a working build. A partly scanned document is kept, with a
-warning counting the pages that gave nothing.
+warning counting the pages that gave nothing and naming their exact one-based page numbers
+in document order. `lorepack inspect warnings` preserves that list after the sources are gone.
+The parser version changes with this diagnostic, so older cached parses cannot hide the list.
+The committed PDF golden records that version, the page list and known-loss metadata;
+independent fixture landmarks check the actual gap without renumbering the remaining pages.
 
 Password-protected documents fail with a message saying Lorepack never prompts for a
 credential: a build is not an interactive session, and a parser that asked would hang CI rather

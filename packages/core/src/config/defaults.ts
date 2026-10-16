@@ -6,7 +6,7 @@
  * resolved value only if there is something to enumerate.
  */
 
-export const DEFAULTS_VERSION = 2 as const;
+export const DEFAULTS_VERSION = 3 as const;
 
 export interface ChunkingDefaults {
   readonly targetTokens: number;
@@ -30,6 +30,10 @@ export interface ProductDefaults {
   readonly exclude: readonly string[];
   readonly followSymlinks: boolean;
   readonly strictRules: boolean;
+  readonly build: {
+    readonly profile: 'permissive' | 'strict';
+    readonly required: readonly { readonly path: string; readonly sheets?: readonly string[] }[];
+  };
   readonly chunking: ChunkingDefaults;
   readonly limits: LimitDefaults;
   readonly contextProfile: 'agent' | 'coding' | 'chat' | 'deep';
@@ -121,6 +125,7 @@ export const PRODUCT_DEFAULTS: ProductDefaults = Object.freeze({
   exclude: Object.freeze([...ALWAYS_EXCLUDE]) as readonly string[],
   followSymlinks: false,
   strictRules: false,
+  build: Object.freeze({ profile: 'permissive' as const, required: Object.freeze([]) }),
   chunking: Object.freeze({ targetTokens: 700, maximumTokens: 1200, overlapTokens: 100 }),
   limits: Object.freeze({
     maxSourceFiles: 2500,

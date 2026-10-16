@@ -71,6 +71,11 @@ export {
   renderPlan,
 } from './plan/plan.js';
 export {
+  type CoverageArtifact,
+  type CoverageWarning,
+  checkRequiredCoverage,
+} from './required/coverage.js';
+export {
   type ResolvedArtifactRule,
   type RuleInput,
   type RuleResolution,

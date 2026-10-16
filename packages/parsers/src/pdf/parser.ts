@@ -18,7 +18,7 @@ export const PDF_PARSER_ID = 'pdf-text' as const;
  * The text normalization policy in `text.ts` is part of what this version covers, because
  * de-hyphenating a line changes the text a build contains.
  */
-export const PDF_PARSER_VERSION = '0.1.0' as const;
+export const PDF_PARSER_VERSION = '0.1.1' as const;
 
 /**
  * Text-layer PDF to the canonical node tree.
@@ -77,9 +77,11 @@ export const pdfParser: ArtifactParser = {
       });
 
       let pagesWithText = 0;
+      const unreadPages: number[] = [];
       for (let number = 1; number <= pageCount; number += 1) {
         const emitted = await readPage(document, number, builder, root.id, warnings);
         if (emitted) pagesWithText += 1;
+        else unreadPages.push(number);
       }
 
       // Every page image and no text at all is a scanned document, which is out of scope and
@@ -98,7 +100,8 @@ export const pdfParser: ArtifactParser = {
       if (pagesWithText < pageCount) {
         warnings.push({
           code: 'pdf-pages-without-text',
-          message: `${pageCount - pagesWithText} of ${pageCount} pages have no text layer and contributed nothing. Optical character recognition is out of scope for v0.1.`,
+          loss: {},
+          message: `${pageCount - pagesWithText} of ${pageCount} pages have no text layer and contributed nothing. Pages: ${unreadPages.join(', ')}. Optical character recognition is out of scope for v0.1.`,
         });
       }
 
@@ -203,6 +206,7 @@ async function readPage(
     // quality loss, and not a build that dies on page 400 of 600.
     warnings.push({
       code: 'pdf-page-unreadable',
+      loss: {},
       message: `Page ${number} could not be read and contributed nothing: ${
         cause instanceof Error ? cause.message.split('\n')[0] : String(cause)
       }`,

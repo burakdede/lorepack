@@ -75,6 +75,10 @@ describe('source fixture landmarks', () => {
       parsed.nodes.filter((node) => node.kind === 'paragraph').map((node) => node.locator.page),
     ).toEqual([1, 3]);
     expect(parsed.warnings.map((warning) => warning.code)).toEqual(['pdf-pages-without-text']);
+    expect(parsed.warnings[0]).toMatchObject({
+      loss: {},
+      message: expect.stringContaining('Pages: 2.'),
+    });
     expect(parsed.artifact.title).toBe('Release guide');
   });
 
