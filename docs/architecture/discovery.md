@@ -298,3 +298,27 @@ would have to produce a genuine gigabyte, a genuine 500,001-row file, or a genui
 Each would dominate the suite's runtime to assert one warning. The behaviour is tested where it
 can be tested cheaply and honestly; what is untested is the wiring between the limit and the
 binary, which is shared with the two limits that *are* covered end to end.
+
+## Pattern input limits
+
+`.loreignore`, `rules[].match` and every `rules[].supersedes` entry admit at most
+512 UTF-16 code units and four literal star characters per forward-slash path
+segment. Stars count conservatively even when escaped or inside brackets. Ignore
+patterns interpret backslashes as portable separators before this check, matching
+the existing ignore expansion; declared-rule escapes retain their old semantics.
+Use several simpler rules when one pattern exceeds the budget.
+
+Admission runs before compiling a matcher. `.loreignore` failures identify the
+file and line; declared-rule failures identify the YAML field and location. Direct
+matcher/resolver calls enforce the same policy, including supersession patterns
+in rules that match no artifact. The CLI returns `LORE_E_CONFIG_INVALID` with
+exit code 1 from plan, build and dev startup. A rejected input never activates a
+build. Retained reads do not inspect an invalid ignore file; an invalid lore.yaml
+must be corrected before project configuration can be loaded.
+
+Admitted patterns keep existing matching, case, negation and precedence behavior.
+This is an input budget, not a replacement regex engine or a universal matching
+time guarantee. The generated schema publishes the length limit and describes the
+star budget; runtime validation enforces both. See
+[ADR0040](../adr/0040-bounded-pattern-inputs.md) and the
+[verification checklist](../testing/pattern_limits.md).

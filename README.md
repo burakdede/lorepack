@@ -395,6 +395,10 @@ with both paths named. See [path policy](docs/architecture/discovery.md#path-and
 After a filename collision, `lorepack inspect build` reads the selected sealed manifest.
 `status` continues to validate the source set and refuses invalid paths.
 
+Ignore and declared rule patterns are bounded to 512 code units and four stars per path
+segment. Invalid patterns name the source line or field; they do not activate a build.
+See [pattern limits](docs/architecture/discovery.md#pattern-input-limits).
+
 ### Review context in Studio
 
 ```bash

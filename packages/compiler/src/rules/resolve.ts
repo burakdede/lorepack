@@ -1,5 +1,6 @@
 import {
   type ArtifactStatus,
+  assertGlobPattern,
   type Canonical,
   type EffectiveConfig,
   LoreError,
@@ -197,6 +198,13 @@ function resolveTargets(
 
 function assertRuleValues(rules: EffectiveConfig['rules']): void {
   for (const [index, rule] of rules.entries()) {
+    assertGlobPattern(rule.match, { path: 'lore.yaml', location: `rules[${String(index)}].match` });
+    for (const [targetIndex, pattern] of (rule.supersedes ?? []).entries()) {
+      assertGlobPattern(pattern, {
+        path: 'lore.yaml',
+        location: `rules[${String(index)}].supersedes[${String(targetIndex)}]`,
+      });
+    }
     if (rule.status !== undefined && !STATUSES.has(rule.status)) {
       throw new LoreError(
         'LORE_E_CONFIG_INVALID',
