@@ -10,6 +10,9 @@ normalization work.
 double emits only `ready`; it cannot emit a content-change event. Directory, multiple-root
 and individual-file edits must therefore rebuild through the periodic sweep, while
 `lastEventAt` stays null. Each resulting active build differs and reports clean freshness.
+Two further real-build cases empty the source before watcher startup, then restore the first
+artifact in a directory or configured file. The floor must distinguish this valid empty
+snapshot from its uninitialized state; both cases failed before that boundary was corrected.
 
 The actual ignored callback is compared with discovery for source-relative anchored rules,
 file roots, directory pruning and negations. Further cases cover traversable source ancestors,
@@ -51,5 +54,6 @@ local CLI and HTTP runtime, not a new external MCP client version or trust dialo
 
 The new regression run failed 11 cases with one control passing before production edits.
 All 14 new cases and the complete existing watcher/dev files then passed together:56 tests.
-Full current-source verification and native Linux/macOS/Windows proof remain required
+The two empty-baseline cases also failed before their correction. Final current-source
+verification and native Linux/macOS/Windows proof remain required
 before issue closure. Do not treat the local check as final release qualification.

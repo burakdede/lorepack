@@ -99,7 +99,9 @@ whether directory pruning applies. Once stat is available, directories use the s
 such as `/drafts/**` would hide a later `!/drafts/keep.md` inclusion.
 
 The periodic sweep stats each discovered artifact's absolute path and keys metadata by its
-artifact ID. A discovery-relative path is relative to its source, so joining it directly to
+artifact ID. An empty signature is a valid source snapshot, distinct from the uninitialized
+baseline. Otherwise, the first file added after an empty scan would be consumed as startup
+and never trigger a later reconciliation. A discovery-relative path is relative to its source, so joining it directly to
 the project root would miss a source under `docs/` or an explicitly configured file.
 See [source-watch verification](../testing/source_watch.md) for event-disabled reconciliation
 and actual CLI/HTTP evidence. The separate `.loreignore` anchoring decision remains #588.

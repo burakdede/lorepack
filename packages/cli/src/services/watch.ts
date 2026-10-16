@@ -225,12 +225,12 @@ export function startWatching(options: WatchOptions): Watching {
    * interval, and a platform that delivers them promptly pays a directory scan every couple
    * of seconds and finds nothing.
    */
-  let signature = '';
+  let signature: string | null = null;
   const sweep = setInterval(() => {
     if (closed) return;
     const current = metadataSignature(options.config);
     if (current === signature) return;
-    const first = signature === '';
+    const first = signature === null;
     signature = current;
     // The first sweep only establishes a baseline: the build that just happened is what it
     // would otherwise mistake for a change.
