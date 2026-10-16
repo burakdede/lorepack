@@ -1,6 +1,8 @@
+import { isDeepStrictEqual } from 'node:util';
+import { buildDescriptionSchema, LoreError, sourceReadResultSchema } from '@lorepack/core';
 import type { Client } from '@modelcontextprotocol/client';
 import { resolveExecutable } from './executable.js';
-import type { ConnectionCheck } from './port.js';
+import type { ConnectionCheck, ConnectionExpectation, ReadConnectionExpectation } from './port.js';
 
 /**
  * Confirming that the thing we just configured actually answers.
@@ -26,6 +28,7 @@ import type { ConnectionCheck } from './port.js';
 export interface VerifyOptions {
   readonly executable: string;
   readonly args: readonly string[];
+  readonly expected: ReadConnectionExpectation;
   /** Bound, because a server that never answers must fail rather than hang a connect. */
   readonly timeoutMs?: number;
 }
@@ -126,16 +129,7 @@ async function check(
       };
     }
 
-    return {
-      ok: true,
-      step: 'none',
-      detail: `Answered with ${listed.tools.length} tools${
-        protocolVersion === undefined
-          ? ' over the backward-compatibility path'
-          : ` on protocol ${protocolVersion}`
-      }.`,
-      ...(protocolVersion === undefined ? {} : { protocolVersion }),
-    };
+    return await proveRead(client, options, listed.tools.length, protocolVersion);
   } catch (error) {
     return {
       ok: false,
@@ -143,6 +137,98 @@ async function check(
       detail: `The server started but did not list its tools: ${message(error)}`,
       ...(protocolVersion === undefined ? {} : { protocolVersion }),
     };
+  }
+}
+
+async function proveRead(
+  client: Client,
+  options: VerifyOptions,
+  toolCount: number,
+  protocolVersion: string | undefined,
+): Promise<ConnectionCheck> {
+  const protocol = protocolVersion === undefined ? {} : { protocolVersion };
+  const fail = (step: 'build' | 'source', detail: string): ConnectionCheck => ({
+    ok: false,
+    step,
+    detail,
+    ...protocol,
+  });
+  const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let expected: ConnectionExpectation;
+  try {
+    expected = await withTimeout(options.expected(), timeout, 'expected build');
+  } catch (error) {
+    const remediation =
+      error instanceof LoreError && error.remediation !== undefined
+        ? error.remediation
+        : 'Run lorepack build in that project and reconnect.';
+    return fail(
+      'build',
+      `The intended project could not be verified: ${message(error)} ${remediation}`,
+    );
+  }
+
+  try {
+    const reply = await withTimeout(
+      client.callTool({ name: 'lore_build_info', arguments: {} }),
+      timeout,
+      'build',
+    );
+    if (reply.isError === true) throw new Error('lore_build_info returned an error.');
+    const build = buildDescriptionSchema.parse(reply.structuredContent);
+    if (build.buildId !== expected.buildId) {
+      return fail(
+        'build',
+        `The server answered for ${build.buildId}, but this project expects ${expected.buildId}. Check the configured project path and reconnect.`,
+      );
+    }
+  } catch (error) {
+    return fail(
+      'build',
+      `The server did not identify the expected build: ${message(error)} Check the project path, run lorepack build and reconnect.`,
+    );
+  }
+
+  try {
+    const reply = await withTimeout(
+      client.callTool({
+        name: 'lore_read_source',
+        arguments: { ...expected.request, buildId: expected.buildId },
+      }),
+      timeout,
+      'source',
+    );
+    if (reply.isError === true) throw new Error('lore_read_source returned an error.');
+    const source = sourceReadResultSchema.parse(reply.structuredContent);
+    if (source.text.trim().length === 0) {
+      return fail(
+        'source',
+        'The build has no readable content at the known source. Add a supported document, run lorepack build and reconnect.',
+      );
+    }
+    if (
+      source.buildId !== expected.buildId ||
+      source.text !== expected.source.text ||
+      source.truncated !== expected.source.truncated ||
+      !isDeepStrictEqual(source.locator, expected.source.locator)
+    ) {
+      return fail(
+        'source',
+        `The cited source did not match ${expected.buildId}. Check the project path and rebuild the intended project before reconnecting.`,
+      );
+    }
+    return {
+      ok: true,
+      step: 'none',
+      ...protocol,
+      detail: `Answered with ${toolCount} tools${protocolVersion === undefined ? ' over the backward-compatibility path' : ` on protocol ${protocolVersion}`}. Verified ${source.buildId} with a cited read of ${source.locator.relativePath}.`,
+      proof: { buildId: source.buildId, locator: source.locator },
+    };
+  } catch (error) {
+    return fail(
+      'source',
+      `The server could not read the known source: ${message(error)} Check the project path, run lorepack build and reconnect.`,
+    );
   }
 }
 

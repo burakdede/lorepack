@@ -40,9 +40,11 @@ export type {
   ClientStatus,
   ConnectInput,
   ConnectionCheck,
+  ConnectionExpectation,
   ConnectPlan,
   ConnectReceipt,
   ConnectScope,
+  ReadConnectionExpectation,
   RemoveOutcome,
 } from './port.js';
 export {

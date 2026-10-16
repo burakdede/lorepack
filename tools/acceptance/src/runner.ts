@@ -16,9 +16,9 @@ import {
   writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { delimiter, dirname, isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
-import { stageInstall } from './install.js';
+import { stageCommand, stageInstall } from './install.js';
 import { writeMixedCorpus } from './mixed-corpus.js';
 import type { Expect, JsonExpect, Scenario, Step, TextExpect } from './types.js';
 
@@ -77,6 +77,14 @@ export async function runScenario(
       ? stageInstall(repoRootOf(options.binary), join(root, 'installed')).binary
       : options.binary;
 
+  const commands = stageCommand(binary, join(root, 'commands'));
+  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
+  const environment = {
+    ...process.env,
+    NO_COLOR: '1',
+    [pathKey]: `${commands}${delimiter}${process.env[pathKey] ?? ''}`,
+  };
+
   const lore = async (
     cwd: string,
     args: readonly string[],
@@ -86,7 +94,7 @@ export async function runScenario(
       const { stdout, stderr } = await execute(process.execPath, [binary, '--cwd', cwd, ...args], {
         timeout: 600_000,
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: '1', ...env },
+        env: { ...environment, ...env },
       });
       return { code: 0, stdout, stderr };
     } catch (error) {
@@ -150,6 +158,7 @@ export async function runScenario(
         snapshots,
         snapshot,
         binary,
+        environment,
         skipped,
       });
       failures.push(...problems);
@@ -175,6 +184,7 @@ interface StepContext {
   readonly project: string;
   readonly outside: string;
   readonly binary: string;
+  readonly environment: NodeJS.ProcessEnv;
   readonly lore: (
     cwd: string,
     args: readonly string[],
@@ -387,7 +397,7 @@ async function runStep(step: Step, context: StepContext): Promise<string[]> {
       const child = spawn(
         process.execPath,
         [context.binary, '--cwd', context.project, ...step.args],
-        { stdio: ['pipe', 'pipe', 'pipe'] },
+        { stdio: ['pipe', 'pipe', 'pipe'], env: context.environment },
       );
 
       let out = '';
@@ -477,7 +487,7 @@ async function interrupt(
 ): Promise<Executed> {
   return await new Promise<Executed>((resolve) => {
     const child = spawn(process.execPath, [context.binary, '--cwd', context.project, ...args], {
-      env: { ...process.env, NO_COLOR: '1' },
+      env: context.environment,
     });
     let stdout = '';
     let stderr = '';
@@ -563,7 +573,7 @@ function start(
 ): Promise<Executed> {
   return new Promise<Executed>((resolve) => {
     const child = spawn(process.execPath, [context.binary, '--cwd', context.project, ...args], {
-      env: { ...process.env, NO_COLOR: '1', ...env },
+      env: { ...context.environment, ...env },
     });
     let stdout = '';
     let stderr = '';

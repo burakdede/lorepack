@@ -1,4 +1,4 @@
-import type { ConnectInput, ConnectionCheck } from './port.js';
+import type { ConnectInput, ConnectionCheck, ReadConnectionExpectation } from './port.js';
 import { verifyStdioServer } from './verify.js';
 
 /**
@@ -44,11 +44,15 @@ export function renderSnippet(input: ConnectInput): Snippet {
 }
 
 /** Renders, then starts the server to find out whether the snippet is worth pasting. */
-export async function renderVerifiedSnippet(input: ConnectInput): Promise<Snippet> {
+export async function renderVerifiedSnippet(
+  input: ConnectInput,
+  expected: ReadConnectionExpectation,
+): Promise<Snippet> {
   const snippet = renderSnippet(input);
   const verification = await verifyStdioServer({
     executable: input.command.executable,
     args: input.command.args,
+    expected,
   });
   return { ...snippet, verification };
 }

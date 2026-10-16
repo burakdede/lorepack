@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { verifyStdioServer } from '../src/verify.js';
+import { readExpectedSource } from './expected_build.js';
 
 /**
  * Verifying the thing we just configured, against the real binary.
@@ -44,6 +45,7 @@ afterEach(() => {
 describe('a server that works', () => {
   it('confirms the protocol revision and the tool surface', async () => {
     const check = await verifyStdioServer({
+      expected: () => readExpectedSource(project),
       executable: process.execPath,
       args: [BINARY, '--cwd', project, 'mcp', '--ensure-current'],
     });
@@ -61,6 +63,7 @@ describe('a server that works', () => {
 describe('a server that is not there', () => {
   it('says the command could not be started, and names it', async () => {
     const check = await verifyStdioServer({
+      expected: () => readExpectedSource(project),
       executable: 'lorepack-command-that-does-not-exist',
       args: [],
       timeoutMs: 20_000,
@@ -80,6 +83,7 @@ describe('a command that starts and is not a server', () => {
     // A real hazard: a path that resolves to something harmless produces a process that
     // starts fine and never speaks the protocol. Without a bound this hangs a connect.
     const check = await verifyStdioServer({
+      expected: () => readExpectedSource(project),
       executable: process.execPath,
       args: ['-e', 'setTimeout(() => {}, 60000)'],
       timeoutMs: 3000,
@@ -111,6 +115,7 @@ describe('a server that never answers (#578)', () => {
     )}, String(process.pid)), ''); setInterval(() => {}, 1000);`;
 
     const check = await verifyStdioServer({
+      expected: () => readExpectedSource(project),
       executable: process.execPath,
       args: ['-e', hang],
       timeoutMs: 2000,

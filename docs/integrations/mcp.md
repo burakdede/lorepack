@@ -7,6 +7,22 @@ Verified on **2026-08-03** against `@modelcontextprotocol/server` 2.0.0 and MCP 
 **2026-07-28**. This generic page was checked on **2026-08-13** against the current Lorepack
 CLI command surface.
 
+## Connection proof
+
+`lorepack connect` checks the server's build ID against the intended project's active build,
+then reads a known source pinned to that build. The check compares the citation, bounded
+text and explicit truncation with an independent immutable-build read. A wrong build, missing
+readable context or failed read fails verification; JSON output includes build ID and citation
+on success, without source text. Verified snippets use the same check and return a nonzero
+CLI exit code on failure.
+
+The expectation is read after the server's existing `--ensure-current` startup. The same
+canonical content can have the same build ID in different directories. This verifies build
+content and provenance, rather than physical path identity. Client trust remains a separate
+step. Automated server regressions ran on macOS on 2026-10-16 with Node 24.21.0 and
+`@modelcontextprotocol/client` 2.2.0;
+this change does not update the external-client verification versions and dates recorded here.
+
 ## Minimal stdio configuration
 
 `lore_search` and `lore_context_for_task` exclude archived and declared superseded bodies
