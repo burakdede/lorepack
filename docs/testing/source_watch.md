@@ -78,3 +78,31 @@ Historical #587 proof at c91259d3 used source-root ignore semantics before ADR00
 manual run's `docs:private/p.md` result is retained on the issue as historical evidence;
 it is not expected after this migration. Final current-source full verification and
 native Linux/macOS/Windows proof are required before either issue closes.
+
+## Current integrated qualification
+
+On 16 October 2026, committed candidate 40702e58 on main d6f48350 passed unchanged
+on macOS arm64 / Node 24.21.0: build, strict changed-test types and full `pnpm verify`,
+including 178 architecture cases, 3673 default tests (two existing skips), 86 boundary
+tests (five existing skips) and every remaining gate. Acceptance passed 157 cases
+with four existing credential-dependent skips; all 50 Studio browser tests passed.
+This is local evidence; final native Linux/macOS/Windows proof remains required.
+
+A separate real Studio check used Chromium 151.0.7922.34 with Playwright 1.62.1.
+With `sources: [docs]`, Sources listed only `docs/public/p.md` and the negated
+`docs/drafts/keep.md`. Opening the public file showed its stored text. The excluded
+view showed `/docs/private/` with example `docs/private/`, and `/docs/drafts/**`
+with example `docs/drafts/drop.md`. No private marker appeared in the page.
+There were no page errors or serious/critical axe 4.11.0 violations in that view.
+Desktop 1440x1000 and mobile 390x844 captures were inspected. The narrow table uses
+horizontal scrolling; the desktop captures show the complete exclusion columns.
+
+![Included sources and stored public text](../images/studio_source_selection.png)
+
+![Project-relative ignore rules and exclusion examples](../images/studio_source_exclusions.png)
+
+To repeat: run the disposable project described above, open `/#/sources`, inspect
+the indexed inventory and stored public text, then switch to excluded and compare
+the rule/sample columns with `.loreignore`. Check the narrow viewport and scroll
+the table to inspect its remaining columns. This observation adds no desktop-client
+trust, screen-reader or native Windows process-cleanup claim.
