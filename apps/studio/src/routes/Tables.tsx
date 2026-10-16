@@ -53,6 +53,7 @@ interface Column {
   readonly type: string;
   readonly nullable: boolean;
   readonly statistics: ColumnStatistics;
+  readonly formula: 'present' | 'absent' | 'unknown';
 }
 
 export function Tables(): React.JSX.Element {
@@ -151,7 +152,12 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
       </div>
 
       <h3 className="tables-heading">Schema</h3>
-      <div className="table-frame table-scroll">
+      <section
+        className="table-frame table-scroll"
+        aria-label={`${table.name} schema scroll area`}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: Overflow must remain keyboard-scrollable.
+        tabIndex={0}
+      >
         {/* Named, because three tables appear on this page and a screen reader listing them
             as "table, table, table" is no better than none. */}
         <table className="data-table tables-schema" aria-label={`${table.name} schema`}>
@@ -160,6 +166,7 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
               <th scope="col">column</th>
               <th scope="col">sql name</th>
               <th scope="col">type</th>
+              <th scope="col">formula</th>
               <th scope="col">nulls</th>
               <th scope="col">distinct</th>
               <th scope="col">range</th>
@@ -181,6 +188,7 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
                 </th>
                 <td className="tables-sql-name">{column.sqlName}</td>
                 <td>{column.type}</td>
+                <td>{column.formula}</td>
                 <td>{column.statistics.nullCount.toLocaleString('en-US')}</td>
                 <td>
                   {/* An estimate is marked as one rather than presented as a count. It is
@@ -193,11 +201,27 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
 
+      <h3 className="tables-heading">Conversion warnings</h3>
+      {table.conversionWarnings === null ? (
+        <p className="tables-note prose">Conversion warnings were not recorded in this build.</p>
+      ) : table.conversionWarnings.length === 0 ? (
+        <p className="tables-note prose">No conversion warnings were recorded.</p>
+      ) : (
+        <ul className="prose">
+          {table.conversionWarnings.map((warning) => (
+            <li key={`${warning.code}:${warning.message}`}>
+              <code>{warning.code}</code>: {warning.message}
+            </li>
+          ))}
+        </ul>
+      )}
       <h3 className="tables-heading">First rows</h3>
       <p className="tables-note prose">
-        A sample of the stored rows, to show the shape. Use the console below to ask anything else.
+        A sample of the stored rows, to show the shape. Workbook formulas are never evaluated;
+        values come from the saved workbook cache. A formula marker describes presence in the
+        imported column, and unknown means this build did not record that evidence.
       </p>
       <Grid
         label={`${table.name} sample rows`}
@@ -366,7 +390,8 @@ function Grid({
   if (rows.length === 0) return <p className="tables-note prose">No rows.</p>;
 
   return (
-    <div className="table-frame table-scroll">
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: Overflow must remain keyboard-scrollable.
+    <section className="table-frame table-scroll" aria-label={`${label} scroll area`} tabIndex={0}>
       <table className="data-table tables-grid" aria-label={label}>
         <thead>
           <tr>
@@ -392,7 +417,7 @@ function Grid({
           ))}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }
 
