@@ -182,8 +182,17 @@ describe('changeset policy', () => {
       const content = `${index}\n`;
       history += `commit refs/heads/feature\nmark :${index}\ncommitter Test User <test@example.com> ${1700000000 + index} +0000\ndata ${Buffer.byteLength(subject)}\n${subject}\nfrom ${index === 1 ? base : `:${index - 1}`}\nM 100644 inline docs.md\ndata ${Buffer.byteLength(content)}\n${content}\n`;
     }
-    history += 'reset refs/pull/718/head\nfrom :70\n';
     execFileSync('git', ['fast-import', '--quiet'], { cwd: root, input: history });
+    const eventHead = execFileSync('git', ['rev-parse', 'refs/heads/feature'], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim();
+    expect(
+      execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/pull/'], {
+        cwd: root,
+        encoding: 'utf8',
+      }).trim(),
+    ).toBe('');
     const workflow = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
     const verify = workflow.slice(
       workflow.indexOf('\n  verify:'),
@@ -213,9 +222,10 @@ describe('changeset policy', () => {
     const expand = (value: string) =>
       value
         .replaceAll(/\$\{\{\s*github\.base_ref\s*\}\}/g, 'main')
+        .replaceAll(/\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/g, eventHead)
         .replaceAll(/\$\{\{\s*github\.event\.pull_request\.number\s*\}\}/g, '718');
     const fetches = [...verify.matchAll(/git fetch ([^\n]+)/g)];
-    expect(fetches.length).toBeGreaterThan(0);
+    expect(fetches).toHaveLength(1);
     for (const [, command] of fetches) {
       const args = expand(command).match(/"[^"]*"|\S+/g);
       if (!args) throw new Error('Missing workflow fetch arguments.');
@@ -226,12 +236,20 @@ describe('changeset policy', () => {
     }
     const head = /export CHANGESET_HEAD_REF="([^"]+)"/.exec(verify)?.[1];
     if (!head) throw new Error('Missing workflow PR head selection.');
+    const trace = join(root, 'policy-trace.jsonl');
     const result = run(CHANGESET_CHECK, checkout, {
       GITHUB_BASE_REF: 'main',
       CHANGESET_HEAD_REF: expand(head),
+      GIT_TRACE2_EVENT: trace,
     });
     expect(result.status, result.stderr || result.stdout).toBe(hasMarker ? 0 : 1);
     if (!hasMarker) expect(result.stderr).toContain('pull requests need a changeset');
+    const mergeBaseQueries = readFileSync(trace, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { event: string; argv?: string[] })
+      .filter((event) => event.event === 'start' && event.argv?.[1] === 'merge-base');
+    expect(mergeBaseQueries).toHaveLength(1);
   });
 });
 

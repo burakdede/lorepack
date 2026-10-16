@@ -21,6 +21,45 @@ Update the committed reports with:
 pnpm supply-chain:report
 ```
 
+## Changeset comparison
+
+### Pin the event head
+
+The changeset workflow fetches the base branch and the immutable
+`github.event.pull_request.head.sha` in one command. The head is stored in the existing
+`origin/pr-<number>` comparison ref and passed explicitly to the policy script. Do not
+request a moving `refs/pull/<number>/head` instead: native PR #768 passed its functional
+and boundary suites but could not fetch that remote ref, even though the branch and PR
+still existed. A missing ref must not turn into an ignored fetch error or fallback policy
+comparison.
+
+The [checkout action's documented PR-head example](https://github.com/actions/checkout#checkout-pull-request-head-commit-instead-of-merge-commit)
+uses the same event SHA. The real-Git regression preserves all 70 commits, all four
+marker/pruning combinations, real clones and the original 5000ms deadline. Its origin
+has no synthetic pull head ref; it must still fetch the event head and apply the original
+policy decisions with exactly one combined fetch. Structural workflow validation remains
+separately tracked in #618.
+
+### Reuse the resolved merge-base
+
+The changeset gate selects its base/head once and shares a successfully resolved merge-base
+between its changed-file and commit-message checks. A failed lookup is not cached: each
+existing fallback still gets its original chance to resolve the comparison. Dirty, staged
+and untracked scans, changeset contents and no-release marker decisions remain unchanged.
+
+The [real-Git regression](../../tools/arch/test/release-policy.test.ts) uses Git's event trace
+to require one merge-base query in each original 70-commit marker/pruning case. It retains
+all four combinations, real configured clones, workflow-derived fetch refs and the original
+5000ms deadline. Run the complete policy tests with:
+
+```sh
+pnpm exec vitest run tools/arch/test/release-policy.test.ts
+```
+
+A local pass does not prove the recurring Windows deadline resolved. Issue #762 retains
+native qualification; #618 separately owns structural workflow parsing.
+
+
 ## What npm users install
 
 `@lorepack/cli` is published with its production dependency tree **bundled in the tarball**
