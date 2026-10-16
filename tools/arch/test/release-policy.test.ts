@@ -236,12 +236,20 @@ describe('changeset policy', () => {
     }
     const head = /export CHANGESET_HEAD_REF="([^"]+)"/.exec(verify)?.[1];
     if (!head) throw new Error('Missing workflow PR head selection.');
+    const trace = join(root, 'policy-trace.jsonl');
     const result = run(CHANGESET_CHECK, checkout, {
       GITHUB_BASE_REF: 'main',
       CHANGESET_HEAD_REF: expand(head),
+      GIT_TRACE2_EVENT: trace,
     });
     expect(result.status, result.stderr || result.stdout).toBe(hasMarker ? 0 : 1);
     if (!hasMarker) expect(result.stderr).toContain('pull requests need a changeset');
+    const mergeBaseQueries = readFileSync(trace, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { event: string; argv?: string[] })
+      .filter((event) => event.event === 'start' && event.argv?.[1] === 'merge-base');
+    expect(mergeBaseQueries).toHaveLength(1);
   });
 });
 
