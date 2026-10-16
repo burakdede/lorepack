@@ -11,6 +11,53 @@ import { CORPUS } from './corpus.js';
  */
 export const MCP_SCENARIOS: readonly Scenario[] = [
   {
+    id: 'mcp/a-table-task-returns-a-cited-schema-reference',
+    title: 'A rate matrix is discoverable through MCP and both exports without flattened rows',
+    proves: 'Issue #429: table context carries a located, build-pinned schema reference.',
+    mode: 'auto',
+    regression: 429,
+    fixture: {
+      files: { 'rate_matrix.csv': 'region,hourly_rate\nprivate-row-sentinel,125\n' },
+      setup: ['init', 'build'],
+    },
+    steps: [
+      {
+        action: 'protocol',
+        args: ['mcp', '--active-only'],
+        method: 'tools/call',
+        params: { name: 'lore_context_for_task', arguments: { task: 'rate matrix' } },
+        describe: 'Discover the matrix through the actual stdio MCP server',
+        expectResult: ['schemaReference', 'rate_matrix.csv#table', 'descriptionChunkId'],
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rate matrix', '--format', 'json'],
+        json: true,
+        describe: 'Export the same table reference as bounded JSON',
+        expect: {
+          exitCode: 0,
+          json: [
+            { path: 'tables[0].schemaReference.buildId', matches: '^lore_[0-9a-f]{64}$' },
+            { path: 'tables[0].locator.relativePath', equals: 'rate_matrix.csv' },
+          ],
+          stdout: { excludes: ['private-row-sentinel'] },
+        },
+      },
+      {
+        action: 'run',
+        args: ['export', '--task', 'rate matrix'],
+        describe: 'Export a cited schema reference as Markdown without row prose',
+        expect: {
+          exitCode: 0,
+          stdout: {
+            contains: ['## Tables', 'rate_matrix.csv#table', 'lore_describe_table'],
+            excludes: ['private-row-sentinel'],
+          },
+        },
+      },
+    ],
+  },
+  {
     id: 'mcp/a-client-connects-and-lists-tools',
     title: 'An AI client launches `lorepack mcp` and finds the tools',
     proves: 'Section 14.1 and 14.3: the tool surface is served, and stdout carries protocol only.',

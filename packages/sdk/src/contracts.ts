@@ -9,6 +9,12 @@ export interface RuntimeIdentity {
 }
 
 export type SourceState = 'clean' | 'dirty' | 'unknown';
+
+interface ResponseEnvelope extends RuntimeIdentity {
+  buildId: string;
+  sourceState: SourceState;
+}
+
 export type ArtifactStatus = 'active' | 'draft' | 'archived';
 export type ContextProfile = 'agent' | 'coding' | 'chat' | 'deep';
 export type Capability =
@@ -40,15 +46,11 @@ export interface SearchHit {
   scoreComponents?: Record<string, number> | undefined;
 }
 
-export interface TableListResult extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface TableListResult extends ResponseEnvelope {
   tables: Array<{ tableId: string; name: string }>;
 }
 
-export interface SearchResult extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface SearchResult extends ResponseEnvelope {
   hits: SearchHit[];
   totalIndexedChunks: number;
 }
@@ -66,6 +68,7 @@ export interface ContextItem {
 export interface OmittedItem {
   nativeUnit?: { nodeIds: string[]; status: 'omitted' } | undefined;
   chunkId: string;
+  tableId?: string | undefined;
   reason:
     | 'budget'
     | 'duplicate'
@@ -162,10 +165,8 @@ export interface ContextReceipt extends RuntimeIdentity {
   payloadRetained: false;
 }
 
-export interface ContextBundle extends RuntimeIdentity {
+export interface ContextBundle extends ResponseEnvelope {
   execution: ExecutionIdentity;
-  buildId: string;
-  sourceState: SourceState;
   task: string;
   profile: ContextProfile;
   budget: number;
@@ -176,7 +177,14 @@ export interface ContextBundle extends RuntimeIdentity {
   reservedTokens: number;
   overview: ContextItem[];
   selected: ContextItem[];
-  tables: Array<{ tableId: string; name: string }>;
+  tables: Array<{
+    tableId: string;
+    name: string;
+    descriptionChunkId: string;
+    labels: Array<'draft' | 'archived' | 'superseded'>;
+    locator: SourceLocator;
+    schemaReference: { buildId: string; tableId: string };
+  }>;
   alternatives: ContextItem[];
   omitted: OmittedItem[];
   omissionSummary: {
@@ -197,9 +205,7 @@ export interface ContextBundle extends RuntimeIdentity {
   citations: SourceLocator[];
 }
 
-export interface BuildDescription extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface BuildDescription extends ResponseEnvelope {
   projectName: string;
   shortBuildId: string;
   capabilities: Capability[];
@@ -216,9 +222,7 @@ export interface BuildDescription extends RuntimeIdentity {
   createdAt?: string | undefined;
 }
 
-export interface SourceReadResult extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface SourceReadResult extends ResponseEnvelope {
   text: string;
   truncated: boolean;
   locator: SourceLocator;
@@ -240,9 +244,7 @@ export interface ColumnStatistics {
   max?: string | number | boolean | undefined;
 }
 
-export interface TableDescription extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface TableDescription extends ResponseEnvelope {
   tableId: string;
   name: string;
   /**
@@ -266,9 +268,7 @@ export interface TableDescription extends RuntimeIdentity {
   locator: SourceLocator;
 }
 
-export interface TableQueryResult extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface TableQueryResult extends ResponseEnvelope {
   queryId: string;
   tableId: string;
   provenancePrecision: 'table';
@@ -330,9 +330,7 @@ export interface SourceListRequest {
   readonly limit?: number | undefined;
 }
 
-export interface SourceListResult extends RuntimeIdentity {
-  buildId: string;
-  sourceState: SourceState;
+export interface SourceListResult extends ResponseEnvelope {
   artifacts: {
     artifactId: string;
     relativePath: string;

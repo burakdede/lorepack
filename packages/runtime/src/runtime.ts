@@ -36,6 +36,7 @@ import type { ZodType } from 'zod';
 import { assembleBundle, DEFAULT_PROFILE, resolveBudget } from './context/assemble.js';
 import { fitDeliveredContext } from './context/budget.js';
 import { identifyExecution, resolveExecutionPolicy } from './context/execution.js';
+import { selectTableReferences } from './context/tables.js';
 import { identifyTableQuery } from './query_identity.js';
 import { rankCandidates, rankWithReport } from './ranking/rank.js';
 import { readSourceFrom } from './read-source.js';
@@ -216,6 +217,7 @@ class PortedRuntime implements LoreRuntime {
           includeArchived: request.includeArchived,
           superseded,
         });
+        const { tables, descriptionChunks } = selectTableReferences(scope.buildId, report);
         // Historical text is offered only after explicit expansion. Default omissions retain locators.
         const suppressed = request.includeArchived
           ? report.dropped
@@ -254,12 +256,19 @@ class PortedRuntime implements LoreRuntime {
             candidateLimit: candidates.limit,
             candidateLimitHit: candidates.hits.length >= candidates.limit,
             candidateMatchMode: candidates.matchMode,
-            ranked: report.kept.filter((ranked) => ranked.hit.nativeUnit?.text !== null),
-            structuralOmissions: report.kept.filter(
-              (ranked) => ranked.hit.nativeUnit?.text === null,
+            tables,
+            ranked: report.kept.filter(
+              (ranked) =>
+                ranked.hit.nativeUnit?.text !== null && !descriptionChunks.has(ranked.hit.chunkId),
             ),
-            dropped: report.dropped,
-            suppressed,
+            structuralOmissions: report.kept.filter(
+              (ranked) =>
+                ranked.hit.nativeUnit?.text === null && !descriptionChunks.has(ranked.hit.chunkId),
+            ),
+            dropped: report.dropped.filter(
+              ({ ranked }) => !descriptionChunks.has(ranked.hit.chunkId),
+            ),
+            suppressed: suppressed.filter(({ hit }) => !descriptionChunks.has(hit.chunkId)),
           }),
         });
       },
