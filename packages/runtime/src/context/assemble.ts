@@ -70,6 +70,7 @@ export interface AssembleInput {
   readonly candidateMatchMode?: 'all' | 'any';
   /** Ranked candidates, best first, already filtered for visibility. */
   readonly ranked: readonly RankedHit[];
+  readonly tables?: ContextBundle['tables'];
   readonly structuralOmissions?: readonly RankedHit[];
   /**
    * What the ranking pipeline removed, with its reason.
@@ -183,9 +184,7 @@ export function assembleBundle(input: AssembleInput): Assembled {
     reservedTokens,
     overview,
     selected,
-    // Typed tables arrive in Phase 5. The field is present and empty rather than absent,
-    // so a client written now does not change shape when they land.
-    tables: [],
+    tables: input.tables ?? [],
     alternatives,
     omitted,
     omissionSummary: omissionSummary(omitted),

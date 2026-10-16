@@ -2,6 +2,7 @@ import {
   type ColumnTypeName,
   guardSingleTableQuery,
   LoreError,
+  readTableEvidence,
   type StoredTableDescription,
   type StoredTableQueryResult,
   TABLE_QUERY_LIMITS,
@@ -46,6 +47,7 @@ export interface D1TableNamespace {
 }
 
 interface TableRow {
+  readonly metadata_json: string;
   readonly id: string;
   readonly artifact_id: string;
   readonly name: string;
@@ -80,7 +82,7 @@ WHERE project_id = ? AND build_id = ?
 ORDER BY name, id`;
 
 const RESOLVE_TABLE_QUERY = `SELECT t.id, t.artifact_id, t.name, t.sheet, t.sql_name, t.row_count,
-       t.relative_path, t.line_start, t.line_end, t.cell_range,
+       t.relative_path, t.line_start, t.line_end, t.cell_range, t.metadata_json,
        (SELECT json_group_array(json_object(
          'name', name, 'sql_name', sql_name, 'type', type, 'nullable', nullable,
          'null_count', null_count, 'distinct_estimate', distinct_estimate,
@@ -125,6 +127,10 @@ export class D1TableStore implements TableStore {
     const resolved = await this.#resolve(tableId);
     if (resolved === null) return null;
 
+    const evidence = readTableEvidence(
+      JSON.parse(resolved.table.metadata_json),
+      resolved.columns.length,
+    );
     const selected = resolved.columns.map((column) => assertIdentifier(column.sql_name));
     const sample =
       selected.length === 0
@@ -140,7 +146,9 @@ export class D1TableStore implements TableStore {
       name: resolved.table.name,
       sqlName: resolved.table.sql_name,
       ...(resolved.table.sheet === null ? {} : { sheet: resolved.table.sheet }),
-      columns: resolved.columns.map((column) => ({
+      conversionWarnings: evidence.conversionWarnings,
+      columns: resolved.columns.map((column, ordinal) => ({
+        formula: evidence.formulas[ordinal] as 'present' | 'absent' | 'unknown',
         name: column.name,
         sqlName: column.sql_name,
         type: column.type as ColumnTypeName,

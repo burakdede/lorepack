@@ -51,6 +51,27 @@ const selected = new LoreClient({ baseUrl: 'http://127.0.0.1:4321', buildId: bui
 const bundle = await selected.contextForTask({ task: 'rollback procedure' });
 ```
 
+## Tables in task context
+
+Matching table names, columns and descriptions produce entries in `bundle.tables`.
+Each has a source `locator`, declared `labels` and a `schemaReference` containing the exact
+build and table IDs. Context does not flatten table samples into prose. Read the schema on
+a client pinned to the reference, then query typed rows separately:
+
+```ts
+for (const table of bundle.tables) {
+  const pinned = new LoreClient({
+    baseUrl: 'http://127.0.0.1:4321',
+    buildId: table.schemaReference.buildId,
+  });
+  const schema = await pinned.describeTable(table.schemaReference.tableId);
+  console.log(schema.columns);
+}
+```
+
+References count toward the complete delivery budget. Budget omissions identify the source
+chunk and, when diagnostic detail is retained, the table ID. Reason totals remain complete.
+
 ## Methods
 
 | Method | Route |
@@ -154,3 +175,10 @@ Request text is redacted from the receipt by default. Set `receipt: { captureReq
 to retain the normalized request explicitly. The server stores neither the receipt nor its
 payload. Integrity hashes are not authentication or proof that a downstream model consumed
 these bytes. See [the receipt contract](../../docs/architecture/context_receipts.md).
+
+## Table formula evidence
+
+`describeTable(id)` returns `columns[].formula` (`present`, `absent`, `unknown`) and
+`conversionWarnings` (`{code, message}[]` or `null`). Unknown/null means that historical
+build did not record evidence; it is not a formula-free or warning-free assertion.
+Workbook formulas are never evaluated. Query and sample values retain the workbook cache.

@@ -113,9 +113,9 @@ describe('a workbook becomes typed tables', () => {
   it('rejects duplicate XML parts instead of selecting one by archive order', async () => {
     const duplicate = await withDuplicatePart(await makeXlsx(SIMPLE), 'xl/workbook.xml');
 
-    await expect(parseBytes(duplicate)).rejects.toMatchObject<Partial<LoreError>>({
+    await expect(parseBytes(duplicate)).rejects.toMatchObject({
       code: 'LORE_E_UNSUPPORTED_FORMAT',
-    });
+    } satisfies Partial<LoreError>);
   });
 
   it('reads a sheet into a table with its columns and rows', async () => {
@@ -676,4 +676,100 @@ describe('the 500,000-row envelope', () => {
       /more than the 500,000 rows/,
     );
   }, 180_000);
+});
+
+it('records complete sheet-scoped formula evidence independently of retained expressions, issue430', async () => {
+  let rows = row(1, [
+    inlineString('A1', 'early'),
+    inlineString('B1', 'late'),
+    inlineString('C1', 'literal'),
+  ]);
+  for (let index = 2; index <= 1001; index++) {
+    rows += row(index, [
+      formula(`A${index}`, '1+1', 2),
+      number(`B${index}`, index),
+      number(`C${index}`, 7),
+    ]);
+  }
+  rows += row(1002, [formula('A1002', '1+1', 2), formula('B1002', '3+4', 123), number('C1002', 7)]);
+  const parsed = await parse({
+    sheets: [
+      { name: 'Formulas', rows, merges: ['B2:C2'] },
+      { name: 'Plain', rows: row(1, [inlineString('A1', 'literal')]) + row(2, [number('A2', 7)]) },
+    ],
+  });
+  const table = tableOf(parsed, 'Formulas');
+  expect(table.metadata.formulas).toHaveLength(1000);
+  expect(table.metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [0, 1],
+    conversionWarnings: expect.arrayContaining([
+      expect.objectContaining({ code: 'xlsx-merged-cells' }),
+    ]),
+  });
+  expect(tableOf(parsed, 'Plain').metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [],
+    conversionWarnings: [],
+  });
+  expect(table.rows.at(-1)).toEqual([2, 123, 7]);
+});
+
+it('retains workbook-wide date conversion evidence on each sheet, issue430', async () => {
+  const rows = row(1, [inlineString('A1', 'value')]) + row(2, [number('A2', 7)]);
+  const parsed = await parse({
+    date1904: true,
+    sheets: [
+      { name: 'First', rows },
+      { name: 'Second', rows },
+    ],
+  });
+  for (const table of parsed.tables ?? []) {
+    expect(table.metadata.tableEvidence).toEqual({
+      version: 1,
+      formulaColumns: [],
+      conversionWarnings: [expect.objectContaining({ code: 'xlsx-1904-dates' })],
+    });
+  }
+  expect(parsed.tables).toHaveLength(2);
+});
+
+it('preserves shared formula presence and formulas without cached values, issue430', async () => {
+  const parsed = await parse({
+    sheets: [
+      {
+        name: 'Formula variants',
+        rows:
+          row(1, [
+            inlineString('A1', 'master'),
+            inlineString('B1', 'shared'),
+            inlineString('C1', 'uncached'),
+          ]) +
+          row(2, [
+            '<c r="A2"><f t="shared" si="0" ref="A2:B3">1+1</f><v>2</v></c>',
+            '<c r="B2"><f t="shared" si="0"/><v>999</v></c>',
+            '<c r="C2"><f>A2+5</f></c>',
+          ]) +
+          row(3, [
+            '<c r="A3"><f t="shared" si="0"/><v>2</v></c>',
+            '<c r="B3"><f t="shared" si="0"/><v>123</v></c>',
+            '<c r="C3"><f>A3+5</f></c>',
+          ]) +
+          row(4, ['<c r="C4"><f>A4+5</f></c>']),
+      },
+    ],
+  });
+  const table = tableOf(parsed);
+  expect(table.metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [0, 1, 2],
+    conversionWarnings: [],
+  });
+  expect(table.rows).toEqual([
+    [2, 999, null],
+    [2, 123, null],
+    [null, null, null],
+  ]);
+  expect(table.metadata.formulas).toEqual(['A2=1+1', 'C2=A2+5', 'C3=A3+5', 'C4=A4+5']);
+  expect(table.locator.cellRange).toBe('A1:C4');
 });

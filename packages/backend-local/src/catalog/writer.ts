@@ -198,6 +198,7 @@ export function writeCatalog(options: WriteCatalogOptions): CatalogCounts {
 
 export interface CatalogSearchHit {
   readonly nativeUnit?: NonNullable<RuntimeCatalogSearchHit['nativeUnit']>;
+  readonly tableReferences?: NonNullable<RuntimeCatalogSearchHit['tableReferences']>;
   readonly chunkId: string;
   readonly artifactId: string;
   readonly relativePath: string;
@@ -316,6 +317,21 @@ export function searchCatalog(
               ${
                 settings.nativeUnits === true
                   ? `c.node_ids AS unitNodeIds,
+              (SELECT json_group_array(json_object(
+                'tableId', table_ref.id, 'name', table_ref.name,
+                'locator', json_patch(json_object('artifactId', table_ref.artifact_id,
+                  'relativePath', table_ref.relative_path), json_object(
+                  'sheet', table_ref.sheet, 'cellRange', table_ref.cell_range,
+                  'lineStart', table_ref.line_start, 'lineEnd', table_ref.line_end))))
+                FROM (SELECT table_ref.id, table_ref.name, table_ref.artifact_id,
+                  table_ref.relative_path, table_ref.sheet, table_ref.cell_range,
+                  table_ref.line_start, table_ref.line_end FROM tables table_ref
+                  WHERE table_ref.artifact_id=c.artifact_id
+                  AND table_ref.id IN (
+                    SELECT json_extract(unit_node.metadata, '$.tableId')
+                    FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                      ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
+                      ) ORDER BY table_ref.id) table_ref) AS unitTables,
               CASE WHEN json_array_length(c.node_ids) > 0
                 AND (SELECT count(*) FROM json_each(c.node_ids) ref JOIN nodes unit_node
                   ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
@@ -359,6 +375,9 @@ export function searchCatalog(
     text: String(row.text),
     ...(settings.nativeUnits === true
       ? {
+          tableReferences: JSON.parse(String(row.unitTables)) as NonNullable<
+            RuntimeCatalogSearchHit['tableReferences']
+          >,
           nativeUnit: {
             nodeIds: JSON.parse(String(row.unitNodeIds)) as string[],
             text: row.unitText === null ? null : String(row.unitText),

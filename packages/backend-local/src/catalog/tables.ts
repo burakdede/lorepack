@@ -4,6 +4,7 @@ import {
   hashBytes,
   LoreError,
   type ParsedTable,
+  readTableEvidence,
   type StoredTableDescription,
   type TableValue,
 } from '@lorepack/core';
@@ -247,6 +248,7 @@ export function physicalTableNames(db: DatabaseSync): string[] {
 export const TABLE_CATALOG_TABLES: readonly string[] = ['tables', 'table_columns'];
 
 interface TableRow {
+  readonly metadata: string;
   readonly id: string;
   readonly artifact_id: string;
   readonly name: string;
@@ -302,7 +304,12 @@ export function resolveTable(
  * about one table from one build named different places (#235). A locator is provenance, and
  * invariant 5 makes it mandatory rather than decorative, so it is worth one function.
  */
-export function tableLocator(table: TableRow): StoredTableDescription['locator'] {
+export function tableLocator(
+  table: Pick<
+    TableRow,
+    'artifact_id' | 'relative_path' | 'sheet' | 'cell_range' | 'line_start' | 'line_end'
+  >,
+): StoredTableDescription['locator'] {
   return {
     artifactId: table.artifact_id,
     relativePath: table.relative_path,
@@ -377,6 +384,7 @@ export function describeStoredTable(
   const resolved = resolveTable(db, tableId);
   if (resolved === null) return null;
   const { table, columns } = resolved;
+  const evidence = readTableEvidence(JSON.parse(table.metadata), columns.length);
 
   const selected = columns.map((column) => assertIdentifier(column.sql_name));
   const sample =
@@ -391,7 +399,9 @@ export function describeStoredTable(
     name: table.name,
     sqlName: table.sql_name,
     ...(table.sheet === null ? {} : { sheet: table.sheet }),
-    columns: columns.map((column) => ({
+    conversionWarnings: evidence.conversionWarnings,
+    columns: columns.map((column, ordinal) => ({
+      formula: evidence.formulas[ordinal] as 'present' | 'absent' | 'unknown',
       name: column.name,
       sqlName: column.sql_name,
       type: column.type as ColumnTypeName,
