@@ -262,9 +262,11 @@ export interface TableDescription extends ResponseEnvelope {
     type: 'text' | 'integer' | 'real' | 'boolean' | 'date' | 'unknown';
     nullable: boolean;
     statistics: ColumnStatistics;
+    formula: 'present' | 'absent' | 'unknown';
   }>;
   rowCount: number;
   sample: Array<Record<string, unknown>>;
+  conversionWarnings: Array<{ code: string; message: string }> | null;
   locator: SourceLocator;
 }
 

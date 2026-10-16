@@ -513,7 +513,7 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
       // The generated name, because a query has to address it and nothing else prints it.
       `  sql name       ${described.sqlName}`,
       '',
-      '  column                          sql name              type      nulls   distinct  range',
+      '  column                          sql name              type      nulls   distinct  range  formula',
     ];
     for (const column of described.columns) {
       const { statistics } = column;
@@ -523,8 +523,19 @@ function inspectTables(loreDirectory: string, buildId: BuildId, target: string):
           ? ''
           : `${String(statistics.min)} .. ${String(statistics.max)}`;
       lines.push(
-        `  ${column.name.slice(0, 30).padEnd(30)}  ${column.sqlName.slice(0, 20).padEnd(20)}  ${column.type.padEnd(8)}  ${String(statistics.nullCount).padEnd(6)}  ${distinct.padEnd(8)}  ${range.slice(0, 40)}`,
+        `  ${column.name.slice(0, 30).padEnd(30)}  ${column.sqlName.slice(0, 20).padEnd(20)}  ${column.type.padEnd(8)}  ${String(statistics.nullCount).padEnd(6)}  ${distinct.padEnd(8)}  ${range.slice(0, 40)}  ${column.formula}`,
       );
+    }
+    lines.push('', '  Workbook formulas are never evaluated; samples retain cached values.');
+    if (described.conversionWarnings === null) {
+      lines.push('  Conversion warnings were not recorded in this build.');
+    } else if (described.conversionWarnings.length === 0) {
+      lines.push('  No conversion warnings were recorded.');
+    } else {
+      lines.push('  conversion warnings');
+      for (const warning of described.conversionWarnings) {
+        lines.push(`    ${warning.code}: ${warning.message}`);
+      }
     }
     // How the file was read is a judgement the build made, and a column typed unexpectedly
     // is usually explained by it. Printing it here saves reading the manifest.

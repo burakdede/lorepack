@@ -54,6 +54,7 @@ export async function streamSheet(
   let current: { reference: string; type?: string; style?: string } | null = null;
   let inValue = false;
   let inFormula = false;
+  let isFormula = false;
   let inInline = false;
   let value = '';
   let formula = '';
@@ -89,12 +90,14 @@ export async function streamSheet(
           };
           value = '';
           formula = '';
+          isFormula = false;
           inline = '';
           return;
         case 'v':
           inValue = true;
           return;
         case 'f':
+          isFormula = true;
           inFormula = true;
           return;
         case 'is':
@@ -142,7 +145,7 @@ export async function streamSheet(
           if (current === null) return;
           const at = parseReference(current.reference);
           const decoded = decodeCell(current.type, current.style, value, inline, context);
-          if (at !== null && decoded.value !== null) {
+          if (at !== null && (decoded.value !== null || isFormula)) {
             cells.push({
               column: at.column,
               row: at.row,
@@ -150,6 +153,7 @@ export async function streamSheet(
               // Stored as text and never evaluated, which is section 12.6 step 5. Lorepack
               // has no formula engine and must never appear to have one.
               ...(formula === '' ? {} : { formula }),
+              ...(isFormula ? { isFormula: true } : {}),
               isError: decoded.isError,
             });
           }

@@ -346,6 +346,7 @@ export const tableColumnSchema = z
     type: columnTypeSchema,
     nullable: z.boolean(),
     statistics: columnStatisticsSchema,
+    formula: z.enum(['present', 'absent', 'unknown']),
   })
   .strict();
 
@@ -367,6 +368,9 @@ export const tableDescriptionSchema = z
     columns: z.array(tableColumnSchema),
     rowCount: z.int().nonnegative(),
     sample: z.array(z.record(z.string(), z.unknown())),
+    conversionWarnings: z
+      .array(z.object({ code: z.string().min(1), message: z.string() }).strict())
+      .nullable(),
     locator: sourceLocatorSchema,
   })
   .strict();

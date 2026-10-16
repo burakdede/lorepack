@@ -140,11 +140,6 @@ export const csvParser: ArtifactParser = {
         {
           title,
           metadata: {
-            tableEvidence: {
-              version: 1,
-              formulaColumns: [],
-              conversionWarnings: warnings.map(({ code, message }) => ({ code, message })),
-            },
             delimiter: dialect.delimiter,
             normalizationVersion: CSV_LIMITS.normalizationVersion,
           },

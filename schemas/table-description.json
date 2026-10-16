@@ -12,6 +12,14 @@
       "items": {
         "additionalProperties": false,
         "properties": {
+          "formula": {
+            "enum": [
+              "present",
+              "absent",
+              "unknown"
+            ],
+            "type": "string"
+          },
           "name": {
             "minLength": 1,
             "type": "string"
@@ -91,11 +99,39 @@
           "sqlName",
           "type",
           "nullable",
-          "statistics"
+          "statistics",
+          "formula"
         ],
         "type": "object"
       },
       "type": "array"
+    },
+    "conversionWarnings": {
+      "anyOf": [
+        {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "corpusId": {
       "pattern": "^corpus_[0-9a-f]{32}$",
@@ -202,6 +238,7 @@
     "columns",
     "rowCount",
     "sample",
+    "conversionWarnings",
     "locator"
   ],
   "title": "table-description",

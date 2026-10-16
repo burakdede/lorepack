@@ -1,4 +1,4 @@
-import { type LoreRuntime, QUERY_FUNCTIONS } from '@lorepack/core';
+import { type LoreRuntime, QUERY_FUNCTIONS, tableDescriptionSchema } from '@lorepack/core';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -469,6 +469,21 @@ export function runRuntimeContract(options: ContractOptions): void {
           const described = await runtime.describeTable(knownTableId);
           expect(described.tableId).toBe(knownTableId);
           expect(described.columns.length).toBeGreaterThan(0);
+        });
+      });
+
+      it('carries explicit formula and conversion evidence in every table description, issue430', async () => {
+        await withTable(async ({ runtime, knownTableId }) => {
+          const described = await runtime.describeTable(knownTableId);
+          expect(tableDescriptionSchema.parse(described)).toEqual(described);
+          for (const column of described.columns) {
+            expect(['present', 'absent', 'unknown']).toContain(column.formula);
+          }
+          if (described.conversionWarnings === null) {
+            expect(described.columns.every((column) => column.formula === 'unknown')).toBe(true);
+          } else {
+            expect(described.columns.every((column) => column.formula !== 'unknown')).toBe(true);
+          }
         });
       });
 
