@@ -63,7 +63,7 @@ describe('walking sources', () => {
         expect(result.warnings).toContainEqual({
           code: 'unreadable',
           path: 'docs',
-          message: `${project.path('docs')} could not be listed.`,
+          message: 'docs could not be read.',
         });
       },
     );

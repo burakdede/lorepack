@@ -609,8 +609,9 @@ The comparison command contract runs the real small-corpus controller and checks
 against the same corpus/workload identity, preserving its original sample and query counts.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
 tests. Node cases belong in `tsconfig.audit_tests.json`; Studio browser tests use their existing
-project with DOM types and the same strict settings. Fixtures implement the
-current ports, including nullable coordinates and binary inputs. Run `pnpm coverage:inventory`
+project with DOM types, the shared PDF fixture and the same strict settings. Fixtures
+implement current ports, including nullable coordinates, binary inputs and sealed
+source inventory with build identity and freshness. Run `pnpm coverage:inventory`
 to retain the audit ownership baseline and include new executable sources. `pnpm coverage:report`
 binds and merges coverage artifacts against that inventory, refusing stale hashes, incompatible
 maps and missing owned files. Rejected native

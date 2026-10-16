@@ -3,6 +3,7 @@ import type {
   BuildId,
   BuildManifest,
   BuildScope,
+  BuildSelection,
   CatalogArtifact,
   CatalogArtifactSummary,
   CatalogNode,
@@ -1352,7 +1353,7 @@ describe('search filters reach the store, architecture 14.5', () => {
   });
 });
 
-describe('optional host reads retain their capability boundary', () => {
+describe('host reads and sealed inventory retain their capability boundary', () => {
   it('serves a supplied plan and propagates typed host failures', async () => {
     let calls = 0;
     const app = appFor({
@@ -1371,26 +1372,68 @@ describe('optional host reads retain their capability boundary', () => {
     expect((await appFor().request('/v1/plan')).status).toBe(404);
   });
 
-  it('forwards active and retained source selections and refuses an invalid selection', async () => {
-    const selections: unknown[] = [];
-    const app = appFor({
-      sources: async (selection) => {
-        selections.push(selection);
-        return {
-          artifacts: [{ artifactId: 'p:guides/a.md', buildId: selection.buildId ?? BUILD }],
-        };
+  it('forwards active and retained inventory reads and refuses invalid or unavailable builds', async () => {
+    const missing = `lore_${'b'.repeat(64)}` as BuildId;
+    const selections: BuildSelection[] = [];
+    const runtime = createRuntime({
+      provider: {
+        current: async () => ({ buildId: BUILD, generation: 7 }),
+        acquire: async (selection = {}) => {
+          selections.push(selection);
+          if (selection.buildId === missing) {
+            throw new LoreError('LORE_E_BUILD_NOT_FOUND', 'No retained build.');
+          }
+          return { ...IDENTITY, buildId: BUILD, generation: 7, release() {} };
+        },
       },
+      open: async () => ({
+        ...IDENTITY,
+        buildId: BUILD,
+        catalog,
+        tables,
+        objects: {
+          get: async () => null,
+          put: async () => '',
+          has: async () => false,
+        },
+      }),
+      freshness: async () => 'clean',
     });
+    const app = appFor({ runtime });
     for (const path of ['/v1/sources', `/v1/sources?buildId=${BUILD}`]) {
       const response = await app.request(path);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
-        artifacts: [{ artifactId: 'p:guides/a.md', buildId: BUILD }],
+        ...IDENTITY,
+        buildId: BUILD,
+        sourceState: 'clean',
+        artifacts: [
+          {
+            artifactId: 'p:guides/a.md',
+            relativePath: 'guides/a.md',
+            displayPath: 'guides/a.md',
+            title: 'A guide',
+            status: 'active',
+            authority: 50,
+            mediaType: 'text/markdown',
+            objectHash: 'f'.repeat(64),
+            byteSize: 64,
+            parserId: 'fixture',
+            chunkCount: 1,
+            nodeCount: 2,
+            locator: { artifactId: 'p:guides/a.md', relativePath: 'guides/a.md' },
+          },
+        ],
+        nextOffset: null,
       });
     }
     expect((await app.request('/v1/sources?buildId=missing')).status).toBe(400);
-    expect(selections).toEqual([{}, { buildId: BUILD }]);
-    expect((await appFor().request('/v1/sources')).status).toBe(404);
+    expect(selections).toEqual([{ buildId: undefined }, { buildId: BUILD }]);
+    const unavailable = await app.request(`/v1/sources?buildId=${missing}`);
+    expect(unavailable.status).toBe(404);
+    expect(await unavailable.json()).toMatchObject({ error: { code: 'LORE_E_BUILD_NOT_FOUND' } });
+    expect(selections).toEqual([{ buildId: undefined }, { buildId: BUILD }, { buildId: missing }]);
+    expect((await appFor().request('/v1/sources')).status).toBe(200);
   });
 });
 
@@ -1489,7 +1532,12 @@ describe('host defaults and optional assets', () => {
   it('identifies the retained build when listing its tables', async () => {
     const response = await appFor().request(`/v1/tables?buildId=${BUILD}`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ...IDENTITY, buildId: BUILD, tables: [] });
+    expect(await response.json()).toEqual({
+      ...IDENTITY,
+      buildId: BUILD,
+      sourceState: 'clean',
+      tables: [],
+    });
   });
 });
 
