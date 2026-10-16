@@ -12,6 +12,8 @@ import { request } from 'node:http';
 import { networkInterfaces, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { searchResultSchema } from '@lorepack/core';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -270,6 +272,115 @@ describe('watching while it serves', () => {
     expect(found.hits.length).toBeGreaterThan(0);
     // Freshness comes from the watcher now, and the watcher has just rebuilt.
     expect(found.sourceState).toBe('clean');
+  }, 120_000);
+  it('serves source-relative edits, negated descendants and unchanged exclusions', async () => {
+    writeFileSync(
+      join(project, 'lore.yaml'),
+      'version: 1\nname: subdirectory-watch\nsources: [docs]\n',
+    );
+    writeFileSync(
+      join(project, '.loreignore'),
+      '/docs/private/\n/ignored/\n/drafts/**\n!/drafts/keep.md\n',
+    );
+    for (const name of ['private', 'ignored', 'drafts']) mkdirSync(join(project, 'docs', name));
+    writeFileSync(join(project, 'docs/private/p.md'), '# Private\n\nOriginal private note.\n');
+    writeFileSync(join(project, 'docs/ignored/n.md'), '# Ignored\n\nOriginal ignored note.\n');
+    writeFileSync(join(project, 'docs/drafts/keep.md'), '# Keep\n\nOriginal kept draft.\n');
+    const started = await dev();
+    const base = `http://127.0.0.1:${started.port}`;
+    const before = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string })
+      .buildId;
+    const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`));
+    const client = new Client(
+      { name: 'lorepack-source-watch-test', version: '0.1.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    );
+    await client.connect(transport);
+    try {
+      const initial = searchResultSchema.parse(
+        (
+          await client.callTool({
+            name: 'lore_search',
+            arguments: { query: 'narwhal' },
+          })
+        ).structuredContent,
+      );
+      expect(initial.buildId).toBe(before);
+      expect(initial.hits).toEqual([]);
+      writeFileSync(
+        join(project, 'docs/private/p.md'),
+        '# Private\n\nNarwhal calibration is reviewed.\n',
+      );
+      writeFileSync(
+        join(project, 'docs/ignored/n.md'),
+        '# Ignored\n\nHiddenorca must stay excluded.\n',
+      );
+      writeFileSync(
+        join(project, 'docs/drafts/keep.md'),
+        '# Keep\n\nQuokka retention is approved.\n',
+      );
+      const deadline = Date.now() + 60_000;
+      let after = before;
+      while (after === before && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        try {
+          after = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+        } catch {}
+      }
+      expect(after, started.log()).not.toBe(before);
+      for (const [query, path] of [
+        ['narwhal', 'private/p.md'],
+        ['quokka', 'drafts/keep.md'],
+      ]) {
+        const response = await fetch(`${base}/v1/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+        });
+        expect(response.status).toBe(200);
+        const result = searchResultSchema.parse(await response.json());
+        expect(result.buildId).toBe(after);
+        expect(result.sourceState).toBe('clean');
+        expect(result.hits).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              artifactId: `docs:${path}`,
+              locator: expect.objectContaining({ artifactId: `docs:${path}`, relativePath: path }),
+            }),
+          ]),
+        );
+      }
+      const response = await fetch(`${base}/v1/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'hiddenorca' }),
+      });
+      expect(response.status).toBe(200);
+      expect(searchResultSchema.parse(await response.json()).hits).toEqual([]);
+      const model = searchResultSchema.parse(
+        (
+          await client.callTool({
+            name: 'lore_search',
+            arguments: { query: 'narwhal' },
+          })
+        ).structuredContent,
+      );
+      expect(model.buildId).toBe(after);
+      expect(model.sourceState).toBe('clean');
+      expect(model.hits).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            locator: expect.objectContaining({
+              artifactId: 'docs:private/p.md',
+              relativePath: 'private/p.md',
+            }),
+          }),
+        ]),
+      );
+    } finally {
+      await client.close();
+      await transport.close();
+    }
   }, 120_000);
 });
 

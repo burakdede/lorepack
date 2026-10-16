@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createSourceMatcher, discover } from '@lorepack/compiler';
 import {
   type BuildId,
@@ -7,6 +7,7 @@ import {
   LORE_DIRECTORY,
   type LoadedConfig,
   type SourceState,
+  toCanonical,
 } from '@lorepack/core';
 import { watch as chokidarWatch } from 'chokidar';
 import { openStateStore } from './builds.js';
@@ -140,6 +141,10 @@ export function startWatching(options: WatchOptions): Watching {
    * about the same string. Symlinked roots have the same shape of problem on every platform.
    */
   const watchRoot = resolveRealPath(options.config.projectRoot);
+  const sources: WatchSource[] = options.config.sources.map((source) => ({
+    roots: [...new Set([resolve(watchRoot, source.relativeRoot), resolveRealPath(source.root)])],
+    filePath: source.kind === 'file' ? toCanonical(dirname(source.root), source.root) : null,
+  }));
   const loreDirectory = join(options.config.projectRoot, LORE_DIRECTORY);
   let state: SourceState = 'clean';
   /**
@@ -171,7 +176,8 @@ export function startWatching(options: WatchOptions): Watching {
     // Chokidar v4 removed glob support and v5 has not brought it back, so it is given a
     // directory and our own matcher decides. Handing it patterns would be two matchers
     // disagreeing about which files are sources.
-    ignored: (path: string) => excluded(path, watchRoot, matcher),
+    ignored: (path: string, stats) =>
+      excluded(path, watchRoot, matcher, sources, stats?.isDirectory()),
     // The initial scan already happened: it was the build. Replaying it as events would
     // rebuild an identical build on every startup.
     ignoreInitial: true,
@@ -472,12 +478,11 @@ function metadataSignature(config: LoadedConfig): string {
     const discovered = discover({ config, allowLargeProject: true });
     return discovered.artifacts
       .map((artifact) => {
-        const path = join(config.projectRoot, artifact.relativePath);
         try {
-          const stats = statSync(path);
-          return `${artifact.relativePath}:${stats.size}:${stats.mtimeMs}`;
+          const stats = statSync(artifact.absolutePath);
+          return `${artifact.artifactId}:${stats.size}:${stats.mtimeMs}`;
         } catch {
-          return `${artifact.relativePath}:gone`;
+          return `${artifact.artifactId}:gone`;
         }
       })
       .join('\n');
@@ -502,6 +507,16 @@ function signature(paths: readonly string[]): string {
     .join('\n');
 }
 
+interface WatchSource {
+  readonly roots: readonly string[];
+  readonly filePath: string | null;
+}
+
+function isWithin(root: string, path: string): boolean {
+  const value = relative(root, path);
+  return value !== '..' && !value.startsWith(`..${sep}`) && !isAbsolute(value);
+}
+
 /**
  * Whether a path is outside what this project indexes.
  *
@@ -512,18 +527,38 @@ function signature(paths: readonly string[]): string {
 function excluded(
   path: string,
   watchRoot: string,
-  matcher: { excludes: (canonicalPath: string, isDirectory?: boolean) => boolean },
+  matcher: ReturnType<typeof createSourceMatcher>,
+  sources: readonly WatchSource[],
+  isDirectory: boolean | undefined,
 ): boolean {
   const relativePath = relative(watchRoot, path);
   if (relativePath === '') return false;
-  // Outside the project entirely, which chokidar can ask about for a symlinked parent.
-  if (relativePath.startsWith('..')) return true;
+  if (!isWithin(watchRoot, path)) return true;
 
   const canonical = relativePath.split(sep).join('/');
-  // Never watch our own output: a build writes into `.lore`, which would trigger a rebuild,
-  // which would write into `.lore`.
   if (canonical === '.lore' || canonical.startsWith('.lore/')) return true;
-  return matcher.excludes(canonical);
+
+  for (const source of sources) {
+    for (const root of source.roots) {
+      const samePath = relative(root, path) === '';
+      if (source.filePath === null && samePath) return false;
+      if (isWithin(root, path) && (source.filePath === null || samePath)) {
+        // Chokidar asks before stat too; let it learn whether directory pruning applies.
+        if (isDirectory === undefined) return false;
+        let sourcePath: string;
+        try {
+          sourcePath = source.filePath ?? toCanonical(root, path);
+        } catch {
+          return true;
+        }
+        return isDirectory
+          ? matcher.decideDirectory(sourcePath) !== null
+          : matcher.excludes(sourcePath);
+      }
+      if (isWithin(path, root)) return false;
+    }
+  }
+  return true;
 }
 
 /**
