@@ -176,7 +176,10 @@ describe('content decides, not the event', () => {
           await settled(() => completedRebuilds > 0 || watching.noOps > 0);
           expect(readActiveBuild(join(project.root, '.lore'))?.buildId).toBe(first.buildId);
           expect(completedRebuilds).toBe(0);
-          expect(watching.noOps).toBeGreaterThan(0);
+          expect(
+            watching.noOps,
+            JSON.stringify({ path, status: watching.status() }),
+          ).toBeGreaterThan(0);
           expect(await watching.freshness()).toBe('dirty');
         } finally {
           await watching.close();

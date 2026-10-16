@@ -87,16 +87,19 @@ function discovery uses to decide which files are sources. Two matchers built fr
 ingredients in two places is exactly how they come to disagree about one file, and the
 symptom would be a file that is indexed but never triggers a rebuild, or the reverse.
 
-Ignore rules see paths relative to each owning source, just as discovery does. A file
-source uses its declared filename relative to its parent. Both the declared path and its
-resolved target map back to that same source, so linked roots and Windows path aliases do
-not change the matching input. Ancestors of a configured source stay traversable even when
-a source-relative pattern would exclude that ancestor's project-relative spelling.
+Ignore rules see canonical project-relative logical paths, matching the location of
+`.loreignore`. A source under `docs` applies `/docs/private/` to its private directory;
+a configured file uses its full declared project path. Both declared and resolved event
+paths map back to that logical name, so directory links and Windows aliases cannot change
+which rule applies. Discovery and the watcher share `sourceRootExclusion`: an excluded
+configured source or ancestor is pruned, while ancestors needed by an included source stay
+traversable. Artifact IDs and locators remain source-relative. See
+[ADR0038](../adr/0038-project-root-ignore-anchoring.md).
 
 Chokidar asks about paths before it has stat information too. That first call cannot decide
 whether directory pruning applies. Once stat is available, directories use the same
 `decideDirectory` as discovery; files use the ordinary matcher. Pruning on a contents pattern
-such as `/drafts/**` would hide a later `!/drafts/keep.md` inclusion.
+such as `/docs/drafts/**` would hide a later `!/docs/drafts/keep.md` inclusion.
 
 The periodic sweep stats each discovered artifact's absolute path and keys metadata by its
 artifact ID. An empty signature is a valid source snapshot, distinct from the uninitialized

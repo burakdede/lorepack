@@ -23,6 +23,11 @@ describe('project-root ignore anchoring, issue588', () => {
       { files: { ...DOCS, 'lore.yaml': config(['docs']), '.loreignore': '/docs/private/\n' } },
       (project) => {
         expect(ids(project.root)).toEqual(['docs:public/p.md']);
+        expect(inspect(project.root).exclusions).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ pattern: '/docs/private/', sample: ['docs/private/'] }),
+          ]),
+        );
       },
     );
   });

@@ -112,6 +112,20 @@ export function createSourceMatcher(config: LoadedConfig): ReturnType<typeof cre
   return createMatcher(rules);
 }
 
+export function sourceRootExclusion(
+  source: ResolvedSource,
+  matcher: ReturnType<typeof createSourceMatcher>,
+): { readonly rule: IgnoreRule; readonly path: string } | null {
+  const parts = source.relativeRoot === '.' ? [] : source.relativeRoot.split('/');
+  const directoryCount = source.kind === 'file' ? parts.length - 1 : parts.length;
+  for (let depth = 1; depth <= directoryCount; depth += 1) {
+    const path = parts.slice(0, depth).join('/');
+    const rule = matcher.decideDirectory(path);
+    if (rule !== null) return { rule, path };
+  }
+  return null;
+}
+
 /**
  * Walks the configured sources and decides what belongs in a build.
  *
@@ -375,10 +389,10 @@ function walkSource(
     }
   };
 
-  const parts = source.relativeRoot === '.' ? [] : source.relativeRoot.split('/');
-  const directoryCount = source.kind === 'file' ? parts.length - 1 : parts.length;
-  for (let depth = 1; depth <= directoryCount; depth += 1) {
-    if (prune(join(config.projectRoot, ...parts.slice(0, depth)))) return;
+  const rootExclusion = sourceRootExclusion(source, matcher);
+  if (rootExclusion !== null) {
+    excluded.record(rootExclusion.rule, `${rootExclusion.path}/`);
+    return;
   }
 
   if (source.kind === 'file') consider(source.root);

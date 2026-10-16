@@ -70,7 +70,8 @@ activation; `lorepack dev` separately watches source changes and builds them.
 
 For `lorepack dev`, the periodic reconciliation floor covers configured subdirectories and
 individual file sources even when no filesystem event arrives. Event filtering uses the
-same source-relative exclusions and directory pruning as discovery. Changed context appears
+same project-relative ignore rules and directory pruning as discovery. With `sources: [docs]`,
+`/docs/private/` excludes that directory; file identities remain source-relative. Changed context appears
 only after a complete candidate is validated and activated; HTTP, MCP and Studio read that
 immutable build. [Verification](../testing/source_watch.md) records the event-disabled tests
 and the actual local CLI/HTTP check. A persistent MCP HTTP client was verified on2026-10-16

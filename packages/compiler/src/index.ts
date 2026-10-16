@@ -23,6 +23,7 @@ export {
   type DiscoveryWarningCode,
   discover,
   formatBytes,
+  sourceRootExclusion,
 } from './discover/discover.js';
 export {
   createMatcher,
