@@ -94,8 +94,12 @@ list. Fixtures implement complete current ports: absent coordinates use `null`,
 authorization requests carry headers, and byte fixtures retain their binary input
 type. SQLite-backed test adapters keep the native binding and result boundaries.
 Vitest matchers use supported signatures with typed expected values. No assertion
-or compiler strictness is relaxed to include these files. The browser program explicitly
-includes the shared PDF writer under its tools root. HTTP inventory regressions use the
+or compiler strictness is relaxed to include these files. Table regressions also resolve
+the existing shared fixture package's installed `yazl` declarations in the Node program.
+The browser program explicitly includes the shared PDF and XLSX writers under its tools
+root. The formula browser test
+imports the XLSX writer, so the composite project lists it explicitly rather than relying
+on Playwright's transpilation. HTTP inventory regressions use the
 actual runtime/provider and assert the sealed build, canonical locators, freshness,
 invalid-selection rejection and typed missing-build response. Retained table listings
 assert freshness in the shared envelope. Discovery checks retain exact project-relative

@@ -6,5 +6,10 @@
     "types": ["node"],
     "lib": ["es2024", "dom", "dom.iterable"]
   },
-  "include": ["test/**/*", "playwright.config.ts", "../test-support/src/pdf-fixtures.ts"]
+  "include": [
+    "test/**/*",
+    "playwright.config.ts",
+    "../test-support/src/pdf-fixtures.ts",
+    "../test-support/src/office-fixtures.ts"
+  ]
 }
