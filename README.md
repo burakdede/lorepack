@@ -465,7 +465,9 @@ requiring Lorepack to claim that one document is more truthful than another.
 ### Structure before retrieval
 
 Markdown headings, code boundaries, directories, spreadsheet sheets, columns, and cell ranges
-remain meaningful inside the build. CSV and XLSX data is stored as typed tables and exposed
+remain meaningful inside the build. Imported CSV/XLSX tables also retain
+[formula and conversion evidence](docs/architecture/table_evidence.md) in their sealed metadata.
+CSV and XLSX data is stored as typed tables and exposed
 through a bounded read-only SQL surface.
 Task context discovers matching table names, columns and descriptions as cited, build-pinned
 schema references. HTTP, MCP, Studio and both exports carry those references; row data stays

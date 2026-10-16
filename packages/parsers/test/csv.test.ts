@@ -310,3 +310,17 @@ describe('the 500,000-row envelope', () => {
     );
   }, 60_000);
 });
+
+it('records CSV formula-like text as literal with actual conversion warnings, issue430', async () => {
+  const parsed = await parse('quantity,formula_text\n1,=1+1\n2\n');
+  const table = tableOf(parsed);
+  expect(table.metadata.tableEvidence).toEqual({
+    version: 1,
+    formulaColumns: [],
+    conversionWarnings: parsed.warnings.map(({ code, message }) => ({ code, message })),
+  });
+  expect(parsed.warnings).toEqual(
+    expect.arrayContaining([expect.objectContaining({ code: 'csv-ragged-row' })]),
+  );
+  expect(table.rows[0]).toEqual([1, '=1+1']);
+});
