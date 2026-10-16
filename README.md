@@ -488,6 +488,9 @@ The alpha supports the document, text, PDF, CSV, and XLSX paths described in the
 It preserves the structure those parsers expose and records unsupported or excluded files as
 warnings. [Partly scanned PDFs](docs/architecture/parsers.md#pdf) name the unread pages
 in `lorepack inspect warnings`.
+Parser deadlines and V8 heap limits do not yet bound total resident memory.
+The [proposed resident-memory watchdog](docs/adr/0043-parser-resident-memory.md)
+tracks the remaining release requirement and its measured baseline.
 [Required-source coverage](docs/architecture/build-orchestration.md#required-source-coverage)
 lets strict builds reject missing or incomplete declared files and sheets before activation.
 The [verification checklist](docs/testing/required-source-coverage.md) records cold and cached
