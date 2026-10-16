@@ -75,6 +75,7 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
   const overview = [...input.overview];
   const selected = [...input.selected];
   const alternatives = [...input.alternatives];
+  const tables = [...input.tables];
   const allOmitted = [...input.omitted];
   let detailCount = Math.min(MAXIMUM_OMISSION_DETAILS, allOmitted.length);
 
@@ -84,7 +85,8 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
       overview: [...overview],
       selected: [...selected],
       alternatives: [...alternatives],
-      citations: [...overview, ...selected].map((item) => item.locator),
+      tables: [...tables],
+      citations: [...overview, ...selected, ...tables].map((item) => item.locator),
       reservedTokens: overview.reduce((sum, item) => sum + item.estimatedTokens, 0),
       omitted: allOmitted.slice(0, detailCount),
       omissionSummary: omissionSummary(allOmitted, detailCount),
@@ -93,7 +95,7 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
     let measured = measureRepresentations(bundle, renderMarkdown);
     while (measured.estimatedTokens > bundle.estimatedTokens) {
       bundle.estimatedTokens = measured.estimatedTokens;
-      if (bundle.estimatedTokens > bundle.budget) break;
+      if (bundle.estimatedTokens > bundle.budget || measured.bytes > MAXIMUM_CONTEXT_BYTES) break;
       measured = measureRepresentations(bundle, renderMarkdown);
     }
     if (bundle.estimatedTokens <= bundle.budget && measured.bytes <= MAXIMUM_CONTEXT_BYTES) {
@@ -101,6 +103,17 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
     }
     if (detailCount > 0) {
       detailCount -= 1;
+      continue;
+    }
+    const removedTable = alternatives.length === 0 ? tables.pop() : undefined;
+    if (removedTable !== undefined) {
+      allOmitted.push({
+        chunkId: removedTable.descriptionChunkId,
+        tableId: removedTable.tableId,
+        reason: 'budget',
+        estimatedTokens: estimateDeliveredTokens(JSON.stringify(removedTable)),
+        locator: removedTable.locator,
+      });
       continue;
     }
     const removed = alternatives.pop() ?? selected.pop() ?? overview.pop();

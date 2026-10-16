@@ -1,5 +1,10 @@
 import type { BuildManifest } from '../schemas/build.js';
-import type { ArtifactStatus, BuildSelection, RuntimeIdentity } from '../schemas/common.js';
+import type {
+  ArtifactStatus,
+  BuildSelection,
+  RuntimeIdentity,
+  SourceLocator,
+} from '../schemas/common.js';
 import type { BuildDiff } from '../schemas/diff.js';
 import type {
   BuildDescription,
@@ -62,6 +67,11 @@ export interface CatalogChunk {
 }
 
 export interface CatalogSearchHit extends CatalogChunk {
+  readonly tableReferences?: readonly {
+    readonly tableId: string;
+    readonly name: string;
+    readonly locator: SourceLocator;
+  }[];
   readonly nativeUnit?: { readonly nodeIds: readonly string[]; readonly text: string | null };
   /** Raw BM25 from the lexical index. Negative, and lower is better. */
   readonly bm25: number;
@@ -175,11 +185,7 @@ export interface CatalogNode {
   readonly lineEnd: number | null;
 }
 
-/**
- * Typed tables. Declared now and empty until Phase 5, so the capability surface is whole
- * and a caller learns "this build has no tables" from a typed answer rather than from a
- * missing method.
- */
+/** Typed table metadata and bounded reads from the selected immutable build. */
 export interface TableStore {
   list(): Promise<readonly { readonly tableId: string; readonly name: string }[]>;
   describe(tableId: string): Promise<StoredTableDescription | null>;

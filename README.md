@@ -85,8 +85,9 @@ lorepack search "deployment rollback"
 lorepack export --task "Prepare a cited rollback checklist"
 ```
 
-Search returns source excerpts. Task exports assemble bounded context with provenance and
-explicit omissions. They do not call a model or generate summaries.
+Search returns source excerpts. Task exports assemble bounded context with provenance,
+[cited table schema references](docs/architecture/table_context.md) and explicit omissions.
+Table rows stay behind separate query reads. Exports do not call a model or generate summaries.
 
 ### Inspect, serve and share
 

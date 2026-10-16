@@ -140,6 +140,7 @@ export const omittedItemSchema = z
       .strict()
       .optional(),
     chunkId: z.string().min(1),
+    tableId: z.string().min(1).optional(),
     reason: z.enum([
       'budget',
       'duplicate',
@@ -171,7 +172,20 @@ export const contextBundleSchema = z
     reservedTokens: z.int().nonnegative(),
     overview: z.array(contextItemSchema),
     selected: z.array(contextItemSchema),
-    tables: z.array(z.object({ tableId: z.string(), name: z.string() }).strict()),
+    tables: z.array(
+      z
+        .object({
+          tableId: z.string().min(1),
+          name: z.string().min(1),
+          descriptionChunkId: z.string().min(1),
+          labels: z.array(z.enum(['draft', 'archived', 'superseded'])),
+          locator: sourceLocatorSchema,
+          schemaReference: z
+            .object({ buildId: buildIdSchema, tableId: z.string().min(1) })
+            .strict(),
+        })
+        .strict(),
+    ),
     alternatives: z.array(contextItemSchema),
     omitted: z.array(omittedItemSchema),
     omissionSummary: z
