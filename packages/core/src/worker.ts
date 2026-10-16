@@ -65,6 +65,7 @@ export {
   SEARCH_QUERY_LIMITS,
   TABLE_QUERY_LIMITS,
 } from './runtime/limits.js';
+export { readTableEvidence } from './runtime/table_evidence.js';
 export * from './schemas/index.js';
 export * from './sql/index.js';
 export { escapeFtsQuery } from './text/fts-query.js';
