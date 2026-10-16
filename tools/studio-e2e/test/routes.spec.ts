@@ -596,3 +596,48 @@ test('shows a stale rollback refusal and preserves the competing activation', as
   await expect(page.locator('.outcome')).toContainText('Rolled back to lore_');
   expect(await live()).not.toBe(competing);
 });
+
+test('preserves a selected older build after unchanged source events', async ({
+  page,
+  session,
+}, testInfo) => {
+  const live = async (): Promise<string> =>
+    ((await (await fetch(`${session.url}/v1/builds`)).json()) as { activeBuildId: string })
+      .activeBuildId;
+  const noOps = async (): Promise<number> =>
+    (
+      (await (await fetch(`${session.url}/v1/diagnostics`)).json()) as {
+        session: { watcher: { noOps: number } };
+      }
+    ).session.watcher.noOps;
+  const selected = await live();
+  const source = join(session.projectRoot, 'docs', 'watch-activation.md');
+  const contents = '# Watch selection\n\nA real source edit creates a new build.\n';
+  writeFileSync(source, contents);
+  await expect.poll(live, { timeout: 60_000 }).not.toBe(selected);
+  const built = await live();
+  await page.goto(`${session.url}/#/versions`);
+  const target = selected.slice(0, 17);
+  await page.getByRole('button', { name: `Activate ${target}`, exact: true }).click();
+  await page
+    .getByRole('region', { name: `Activate ${target}` })
+    .getByRole('button', { name: `Activate ${target}`, exact: true })
+    .click();
+  await expect.poll(live).toBe(selected);
+  const before = await noOps();
+  writeFileSync(source, contents);
+  writeFileSync(join(session.projectRoot, 'docs', 'watch-activation.bin'), 'Not indexed.');
+  await expect.poll(noOps, { timeout: 60_000 }).toBeGreaterThan(before);
+  expect(await live()).toBe(selected);
+  await page.goto(`${session.url}/#/`);
+  await expect(page.locator('.header-id')).toContainText(target);
+  await expect(page.locator('.state-banner')).toContainText(
+    'The sources have changed since this build. Your AI is reading the older text.',
+  );
+  const screenshot = testInfo.outputPath('selected-build-after-unchanged-events.png');
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await testInfo.attach('Preserved selected build', { path: screenshot, contentType: 'image/png' });
+  writeFileSync(source, `${contents}\nAnother real edit.\n`);
+  await expect.poll(live, { timeout: 60_000 }).not.toBe(selected);
+  expect(await live()).not.toBe(built);
+});

@@ -101,7 +101,7 @@ export function devCommand(): CommandDefinition {
             activate: true,
             signal,
           });
-          return { created: result.created };
+          return result;
         },
       });
 

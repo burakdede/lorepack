@@ -5,6 +5,7 @@ import { type BuildId, type LoadedConfig, loadConfig, ProgressBus } from '@lorep
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { readActiveBuild } from '../src/services/project.js';
 import { createActivateEndpoint } from '../src/services/studio-mutations.js';
 import { resolveRealPath, startWatching } from '../src/services/watch.js';
 
@@ -67,8 +68,7 @@ describe('the scan and watch race, architecture 12.11 step 3', () => {
         ...FAST,
         rebuild: async () => {
           rebuilds += 1;
-          await runBuild({ config, progress: new ProgressBus() });
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
 
@@ -93,8 +93,7 @@ describe('one save is one rebuild', () => {
         ...FAST,
         rebuild: async () => {
           rebuilds += 1;
-          await runBuild({ config, progress: new ProgressBus() });
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
@@ -125,8 +124,7 @@ describe('one save is one rebuild', () => {
         ...FAST,
         rebuild: async () => {
           rebuilds += 1;
-          await runBuild({ config, progress: new ProgressBus() });
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
@@ -145,6 +143,144 @@ describe('one save is one rebuild', () => {
 });
 
 describe('content decides, not the event', () => {
+  it.each(['a.md', 'notes.bin'])(
+    'preserves an explicit older activation when %s does not change canonical inputs',
+    async (path) => {
+      await withTempProject({ files: CORPUS }, async (project) => {
+        const config = loadConfig({ cwd: project.root });
+        const first = await runBuild({ config, progress: new ProgressBus() });
+        const secondText = '# A\n\nSecond revision.\n';
+        writeFileSync(join(project.root, 'a.md'), secondText);
+        const second = await runBuild({ config, progress: new ProgressBus() });
+        let completedRebuilds = 0;
+        const watching = startWatching({
+          config,
+          warn: () => {},
+          ...FAST,
+          rebuild: async (signal) => {
+            const result = await runBuild({ config, progress: new ProgressBus(), signal });
+            completedRebuilds += 1;
+            return result;
+          },
+        });
+        try {
+          await watching.ready;
+          expect(first.buildId).not.toBe(second.buildId);
+          await activate(config, first.buildId);
+          await settled(async () => (await watching.freshness()) === 'dirty');
+          expect(await watching.freshness()).toBe('dirty');
+          writeFileSync(
+            join(project.root, path),
+            path === 'a.md' ? secondText : 'Not an indexed format.',
+          );
+          await settled(() => completedRebuilds > 0 || watching.noOps > 0);
+          expect(readActiveBuild(join(project.root, '.lore'))?.buildId).toBe(first.buildId);
+          expect(completedRebuilds).toBe(0);
+          expect(watching.noOps).toBeGreaterThan(0);
+          expect(await watching.freshness()).toBe('dirty');
+        } finally {
+          await watching.close();
+        }
+      });
+    },
+    60_000,
+  );
+
+  it('builds a genuine edit after an explicit older activation', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      const first = await runBuild({ config, progress: new ProgressBus() });
+      writeFileSync(join(project.root, 'a.md'), '# Second\n');
+      const second = await runBuild({ config, progress: new ProgressBus() });
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        ...FAST,
+        rebuild: (signal) => runBuild({ config, progress: new ProgressBus(), signal }),
+      });
+      try {
+        await watching.ready;
+        await activate(config, first.buildId);
+        writeFileSync(join(project.root, 'a.md'), '# Third\n');
+        await settled(() => watching.rebuilds > 0);
+        const active = readActiveBuild(join(project.root, '.lore'))?.buildId;
+        expect(watching.rebuilds).toBe(1);
+        expect(active).not.toBe(first.buildId);
+        expect(active).not.toBe(second.buildId);
+        expect(await watching.freshness()).toBe('clean');
+      } finally {
+        await watching.close();
+      }
+    });
+  }, 60_000);
+
+  it('retries identical changed inputs after a failed build', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      const first = await runBuild({ config, progress: new ProgressBus() });
+      let attempts = 0;
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        ...FAST,
+        rebuild: (signal) => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('Transient build failure');
+          return runBuild({ config, progress: new ProgressBus(), signal });
+        },
+      });
+      try {
+        await watching.ready;
+        const changed = '# Changed\n';
+        writeFileSync(join(project.root, 'a.md'), changed);
+        await settled(() => watching.status().lastRebuild?.failed === true);
+        expect(watching.status().lastRebuild?.failed).toBe(true);
+        expect(readActiveBuild(join(project.root, '.lore'))?.buildId).toBe(first.buildId);
+        writeFileSync(join(project.root, 'a.md'), changed);
+        await settled(() => watching.rebuilds > 0);
+        expect(attempts).toBe(2);
+        expect(watching.rebuilds).toBe(1);
+        expect(readActiveBuild(join(project.root, '.lore'))?.buildId).not.toBe(first.buildId);
+      } finally {
+        await watching.close();
+      }
+    });
+  }, 60_000);
+
+  it('uses the built fingerprint when inputs move between observation and compilation', async () => {
+    await withTempProject({ files: CORPUS }, async (project) => {
+      const config = loadConfig({ cwd: project.root });
+      const first = await runBuild({ config, progress: new ProgressBus() });
+      let attempts = 0;
+      const builtText = '# Changed during rebuild\n';
+      const watching = startWatching({
+        config,
+        warn: () => {},
+        ...FAST,
+        rebuild: (signal) => {
+          attempts += 1;
+          writeFileSync(join(project.root, 'a.md'), builtText);
+          return runBuild({ config, progress: new ProgressBus(), signal });
+        },
+      });
+      try {
+        await watching.ready;
+        writeFileSync(join(project.root, 'a.md'), '# Observed before rebuild\n');
+        await settled(() => watching.rebuilds > 0);
+        await activate(config, first.buildId);
+        const noOps = watching.noOps;
+        writeFileSync(join(project.root, 'a.md'), builtText);
+        await settled(() => watching.noOps > noOps || attempts > 1);
+        expect(attempts).toBe(1);
+        expect(watching.noOps).toBeGreaterThan(noOps);
+        expect(readActiveBuild(join(project.root, '.lore'))?.buildId).toBe(first.buildId);
+        expect(await watching.freshness()).toBe('dirty');
+      } finally {
+        await watching.close();
+      }
+    });
+  }, 60_000);
+
   it('does nothing when a write leaves the content identical, and says so', async () => {
     await withTempProject({ files: CORPUS }, async (project) => {
       const config = loadConfig({ cwd: project.root });
@@ -158,7 +294,7 @@ describe('content decides, not the event', () => {
         ...FAST,
         rebuild: async () => {
           rebuilds += 1;
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
@@ -190,8 +326,7 @@ describe('content decides, not the event', () => {
           ...FAST,
           rebuild: async () => {
             rebuilds += 1;
-            await runBuild({ config, progress: new ProgressBus() });
-            return { created: true };
+            return runBuild({ config, progress: new ProgressBus() });
           },
         });
         await watching.ready;
@@ -218,7 +353,7 @@ describe('content decides, not the event', () => {
         ...FAST,
         rebuild: async () => {
           rebuilds += 1;
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
@@ -246,8 +381,7 @@ describe('what the server is told', () => {
         warn: () => {},
         ...FAST,
         rebuild: async () => {
-          await runBuild({ config, progress: new ProgressBus() });
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
@@ -320,7 +454,7 @@ describe('what the server is told', () => {
         config,
         warn: () => {},
         ...FAST,
-        rebuild: async () => ({ created: false }),
+        rebuild: async () => runBuild({ config, progress: new ProgressBus() }),
       });
       await watching.ready;
 
@@ -393,8 +527,7 @@ describe('the periodic reconciliation, architecture 12.3', () => {
         reconcileIntervalMs: 120,
         rebuild: async () => {
           rebuilds += 1;
-          await runBuild({ config, progress: new ProgressBus() });
-          return { created: true };
+          return runBuild({ config, progress: new ProgressBus() });
         },
       });
       await watching.ready;
