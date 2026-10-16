@@ -38,7 +38,7 @@ knowingly rather than one you discover in a diff.
 {
 	"servers": {
 		// Managed by Lorepack. `lorepack disconnect vscode` removes exactly this entry.
-		// x-lorepack {"projectRoot":"/absolute/path","createdAt":"..."}
+		// x-lorepack {"projectRoot":"/absolute/path","entryPath":["servers","lorepack"],"createdAt":"..."}
 		"lorepack": {
 			"type": "stdio",
 			"command": "lorepack",
@@ -105,9 +105,15 @@ is a legal line and `JSON.parse` would refuse the whole file over it.
   than a key because VS Code's schema for a server is `additionalProperties: false`, so an
   extra key would put a permanent error squiggle in a file we wrote.
 
-One honest caveat: if a neighbouring server in the same object is written on a single line,
-adding ours expands it onto several. Content and comments are never lost, only that entry's
-line breaks.
+Connect followed by disconnect restores the exact original bytes for existing inline neighbours,
+trailing comments and empty `servers` objects, including BOM and CRLF. New ownership comments
+include the logical `entryPath`, so an inline neighbour cannot acquire Lorepack ownership.
+Existing property-local markers remain readable. Configuration containers created for the entry
+remain empty after disconnect, as before; disconnect removes the server entry.
+
+Automated byte/semantic round trips were driven on 2026-10-16 using Node 24.21.0 on macOS arm64,
+the actual built CLI and an isolated VS Code version stand-in. This verifies file edits and the
+real MCP probe, not a new real-client trust-dialog verification. See the recorded tests below.
 
 ## Verification, and the trust dialog
 
@@ -160,3 +166,12 @@ prints the exact JSON to paste and changes nothing.
 ## Verified against
 
 VS Code 1.132.0 commit `df53daab`, MCP protocol 2026-07-28, verified 2026-08-05.
+
+## Byte-fidelity regression checks
+
+`packages/connect-clients/test/jsonc-config.test.ts` compares independent parsed values and
+exact buffers for inline neighbours, trailing comments, empty objects, BOM and CRLF. It also
+covers multiple managed paths, existing markers, unrelated edits and refused ownership.
+`packages/cli/test/connect.e2e.test.ts` drives the built CLI through actual connect and disconnect
+against temporary config files, with isolated client detection and the real built MCP server.
+The whole connection suite still covers permission, symlink, ownership and consent behavior.

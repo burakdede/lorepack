@@ -5,11 +5,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { readJsoncConfig } from '@lorepack/connect-clients';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
@@ -209,4 +211,44 @@ describe('a client executable planted in the project (#577)', () => {
     expect(result.stdout).toContain('VS Code 1.132.0');
     expect(result.code).toBe(3);
   });
+});
+
+describe('exact VS Code config round trips, issue581', () => {
+  const originals = [
+    ['inline neighbour', '{"servers":{"a":{"command":"a"}},"inputs":[]}'],
+    [
+      'trailing comment',
+      '{\n  "servers": {\n    "a": { "command": "a" }, // trailing\n  },\n  "inputs": []\n}\n',
+    ],
+    ['empty servers', '{"servers": {}}'],
+  ] as const;
+  const cases = originals.flatMap(([name, text]) => [
+    { name, text },
+    {
+      name: `${name}, BOM and CRLF`,
+      text: `\ufeff${text.includes('\n') ? text.replaceAll('\n', '\r\n') : `${text}\r\n`}`,
+    },
+  ]);
+  it.each(cases)(
+    'restores exact bytes through actual connect/disconnect for $name',
+    ({ text: before }) => {
+      realServer();
+      mkdirSync(join(project, '.vscode'));
+      const file = join(project, '.vscode', 'mcp.json');
+      writeFileSync(file, before);
+      const original = readJsoncConfig(file).document;
+      const connected = connect(['connect', 'vscode', '--yes']);
+      expect(connected.code, `${connected.stdout}\n${connected.stderr}`).toBe(0);
+      expect(connected.stdout).toContain('Verified: Answered with');
+      const during = readJsoncConfig(file).document;
+      expect(during.inputs).toEqual(original.inputs);
+      expect((during.servers as Record<string, unknown>).a).toEqual(
+        (original.servers as Record<string, unknown>).a,
+      );
+      const disconnected = connect(['disconnect', 'vscode']);
+      expect(disconnected.code, `${disconnected.stdout}\n${disconnected.stderr}`).toBe(0);
+      expect(readJsoncConfig(file).document).toEqual(original);
+      expect(readFileSync(file)).toEqual(Buffer.from(before, 'utf8'));
+    },
+  );
 });

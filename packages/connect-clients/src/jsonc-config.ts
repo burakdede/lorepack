@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import {
   applyEdits,
+  createScanner,
   type FormattingOptions,
   findNodeAtLocation,
   modify,
@@ -23,8 +24,7 @@ import { asciiJson } from './config-file.js';
  * [`json-config.ts`](./json-config.ts): **parse to understand, edit minimally to write.** The
  * difference is that JSON has a standard tool for the minimal edit, `jsonc-parser`, which is
  * the one VS Code itself is built on. The decision, and the alternatives it closes off, are in
- * [`adr-toml-merge.md`](../../../docs/architecture/adr-toml-merge.md), which #81 widened from
- * TOML to any client configuration that can carry a comment.
+ * [`0037-jsonc-entry-byte-fidelity.md`](../../../docs/adr/0037-jsonc-entry-byte-fidelity.md).
  *
  * The bar is not hypothetical. `code --add-mcp` was measured on 1.132.0 deleting every comment
  * in the file, reformatting the whole document, and adding `"type": "stdio"` to a server the
@@ -157,47 +157,69 @@ export function ownerOfEntry(
   text: string,
   path: readonly (string | number)[],
 ): JsoncOwner | undefined {
+  return ownedComment(text, path)?.owner;
+}
+
+function ownedComment(
+  text: string,
+  path: readonly (string | number)[],
+):
+  | {
+      readonly owner: JsoncOwner;
+      readonly start: number;
+      readonly end: number;
+      readonly bound: boolean;
+    }
+  | undefined {
   const offset = keyOffsetOf(text, path);
   if (offset === undefined) return undefined;
-
-  // Only the comment lines immediately above the property, and only ones we wrote. Walking
-  // further would start claiming a note the user left above their own entry.
-  const before = text.slice(0, lineStartOf(text, offset)).split('\n').reverse();
-  for (const line of before) {
-    const trimmed = line.trim();
-    if (trimmed === '') continue;
-    if (!trimmed.startsWith(JSONC_OWNERSHIP_PREFIX.trim())) {
-      if (trimmed.startsWith(OWNERSHIP_NOTE)) continue;
+  let cursor = lineStartOf(text, offset);
+  while (cursor > 0) {
+    const start = lineStartOf(text, cursor - 1);
+    const line = text.slice(start, cursor).trim();
+    if (line === '' || line.startsWith(OWNERSHIP_NOTE)) {
+      cursor = start;
+      continue;
+    }
+    if (!line.startsWith(JSONC_OWNERSHIP_PREFIX.trim())) return undefined;
+    try {
+      const parsed = JSON.parse(line.slice(JSONC_OWNERSHIP_PREFIX.trim().length)) as JsoncOwner & {
+        readonly entryPath?: unknown;
+      };
+      if (typeof parsed?.projectRoot !== 'string') return undefined;
+      if (parsed.entryPath !== undefined) {
+        if (
+          !Array.isArray(parsed.entryPath) ||
+          !parsed.entryPath.every((part) => typeof part === 'string' || typeof part === 'number')
+        )
+          return undefined;
+        // Raw edits may share a physical line; ownership belongs to one logical property.
+        if (!isDeepStrictEqual(parsed.entryPath, [...path])) {
+          cursor = start;
+          continue;
+        }
+      }
+      let noteStart = start;
+      if (start > 0) {
+        const previous = lineStartOf(text, start - 1);
+        if (text.slice(previous, start).trim().startsWith(OWNERSHIP_NOTE)) noteStart = previous;
+      }
+      return {
+        owner: { projectRoot: parsed.projectRoot, createdAt: parsed.createdAt },
+        start: noteStart,
+        end: cursor,
+        bound: parsed.entryPath !== undefined,
+      };
+    } catch {
       return undefined;
     }
-    try {
-      const parsed = JSON.parse(trimmed.slice(JSONC_OWNERSHIP_PREFIX.trim().length)) as JsoncOwner;
-      if (typeof parsed?.projectRoot === 'string') return parsed;
-    } catch {
-      // A marker we cannot read is not ours as far as removal is concerned, which is the safe
-      // direction: leave it alone.
-    }
-    return undefined;
   }
   return undefined;
 }
 
-/** Removes the ownership comment above a property, so a rewrite never stacks a second one. */
 function withoutOwnershipComment(text: string, path: readonly (string | number)[]): string {
-  const offset = keyOffsetOf(text, path);
-  if (offset === undefined) return text;
-
-  let cut = lineStartOf(text, offset);
-  for (;;) {
-    if (cut === 0) break;
-    const previous = lineStartOf(text, cut - 1);
-    const line = text.slice(previous, cut - 1).trim();
-    if (!line.startsWith(JSONC_OWNERSHIP_PREFIX.trim()) && !line.startsWith(OWNERSHIP_NOTE)) break;
-    cut = previous;
-  }
-  return cut === lineStartOf(text, offset)
-    ? text
-    : text.slice(0, cut) + text.slice(lineStartOf(text, offset));
+  const comment = ownedComment(text, path);
+  return comment === undefined ? text : text.slice(0, comment.start) + text.slice(comment.end);
 }
 
 export interface OwnedEntryInput {
@@ -219,7 +241,7 @@ export function withOwnedEntry(config: JsoncConfig, input: OwnedEntryInput): str
   const stripped = withoutOwnershipComment(config.text, input.path);
   const edited = applyEdits(
     stripped,
-    modify(stripped, [...input.path], input.value, { formattingOptions: config.formatting }),
+    modify(stripped, [...input.path], input.value, { getInsertionIndex: () => 0 }),
   );
 
   const offset = keyOffsetOf(edited, input.path);
@@ -227,17 +249,26 @@ export function withOwnedEntry(config: JsoncConfig, input: OwnedEntryInput): str
 
   const start = lineStartOf(edited, offset);
   const indent = /^[\t ]*/.exec(edited.slice(start))?.[0] ?? '';
-  const marker: JsoncOwner = {
+  const marker: JsoncOwner & { readonly entryPath: OwnedEntryInput['path'] } = {
     projectRoot: input.projectRoot,
+    entryPath: [...input.path],
     createdAt: input.createdAt ?? new Date().toISOString(),
   };
   const comment = [
-    `${indent}${OWNERSHIP_NOTE} \`${input.removeWith}\` removes exactly this entry.`,
+    `${indent}${OWNERSHIP_NOTE} \`${input.removeWith}\` removes exactly entry ${asciiJson(input.path)}.`,
     `${indent}${JSONC_OWNERSHIP_PREFIX}${asciiJson(marker)}`,
     '',
   ].join(config.newline);
 
-  const result = edited.slice(0, start) + comment + indent + edited.slice(start + indent.length);
+  const inline = edited.slice(start, offset).trim() !== '';
+  const insertion = inline ? offset : start;
+  const result =
+    edited.slice(0, insertion) +
+    (inline ? config.newline : '') +
+    comment +
+    (inline ? indent : '') +
+    edited.slice(insertion);
+
   assertOnlyEntryChanged(result, config.document, input.path, input.value);
   return result;
 }
@@ -302,11 +333,41 @@ export function withoutOwnedEntry(
     return { text: config.text, removed: false, owner };
   }
 
+  const comment = ownedComment(config.text, path);
   const stripped = withoutOwnershipComment(config.text, path);
-  const text = applyEdits(
-    stripped,
-    modify(stripped, [...path], undefined, { formattingOptions: config.formatting }),
-  );
+  let text: string;
+  if (comment?.bound) {
+    const root = parseTree(config.text, [], { allowTrailingComma: true });
+    const property = root && findNodeAtLocation(root, [...path])?.parent;
+    if (property?.type !== 'property') throw new Error('Owned JSONC entry has no property.');
+    const end = property.offset + property.length;
+    const scanner = createScanner(config.text, true);
+    scanner.setPosition(end);
+    scanner.scan();
+    const comma =
+      config.text[scanner.getTokenOffset()] === ',' ? scanner.getTokenOffset() : undefined;
+    let start = comment.start;
+    const newline = config.text.slice(0, start).endsWith('\r\n') ? '\r\n' : '\n';
+    const preceding = start - newline.length;
+    if (
+      config.text.slice(preceding, start) === newline &&
+      /[,{]/.test(config.text[preceding - 1] ?? '')
+    ) {
+      start = preceding;
+    }
+    const edits = [
+      { offset: start, length: comment.end - start, content: '' },
+      {
+        offset: comment.end,
+        length: end - comment.end,
+        content: '',
+      },
+    ];
+    if (comma !== undefined) edits.push({ offset: comma, length: 1, content: '' });
+    text = applyEdits(config.text, edits);
+  } else {
+    text = applyEdits(stripped, modify(stripped, [...path], undefined, {}));
+  }
   assertOnlyEntryChanged(text, config.document, path, undefined);
   return { text, removed: true, owner };
 }
