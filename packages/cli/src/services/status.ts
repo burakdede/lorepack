@@ -53,6 +53,16 @@ async function readStatusObservation(options: StatusOptions): Promise<{
     ...(options.progress === undefined ? {} : { progress: options.progress }),
   });
 
+  const changedSource = [...discovery.warnings, ...fingerprint.warnings].find(
+    (warning) => warning.code === 'source-changed',
+  );
+  if (changedSource !== undefined) {
+    throw new LoreError('LORE_E_SOURCE_UNREADABLE', changedSource.message, {
+      path: changedSource.path,
+      remediation: 'Save the source completely, then check status again.',
+    });
+  }
+
   const active = readActiveBuild(loreDirectory);
   const previous = active === null ? null : readBuildCatalog(loreDirectory, active.buildId);
 

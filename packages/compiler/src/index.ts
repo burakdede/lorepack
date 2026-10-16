@@ -45,6 +45,12 @@ export {
   type SourceFingerprint,
 } from './fingerprint/fingerprint.js';
 export {
+  openSourceRead,
+  type SourceReadBoundary,
+  SourceReadIssue,
+  sourceBytes,
+} from './fingerprint/source_reader.js';
+export {
   assertNoDrift,
   buildLockfile,
   compareLockfiles,

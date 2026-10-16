@@ -214,6 +214,31 @@ The consequence is that section 6.9's other row, a supported file that fails to 
 unreachable for the parsers this phase ships: markdown and text cannot fail on decodable
 input. The path stays in place for the formats in Phase 5, which can.
 
+## Source reads after discovery
+
+Discovery records a private read boundary: the resolved source and project roots,
+physical file path, device/inode identity and configured byte limit. These values
+never enter canonical build identity, serialized catalogs or cache keys.
+Fingerprinting and a cold parse each open one handle for their read pass. They
+require a regular file with the discovered identity before reading, enforce the
+byte cap while reading, and check handle metadata and byte count afterward.
+Fingerprint diagnostics report bytes actually read, rather than discovery size.
+
+POSIX opens use `O_NOFOLLOW` and `O_NONBLOCK`. Windows libuv does not support
+those flags; Windows uses ordinary read-only open plus containment and handle
+identity/type/size checks before content reads. This is not a claim that Windows
+provides the same no-follow syscall guarantee. No native helper is installed.
+See [ADR0042](../adr/0042-validated-source-reads.md) and the
+[verification checklist](../testing/source_read_boundaries.md).
+
+A changed source produces a `source-changed` diagnostic. A build refuses that
+uncertain candidate with `LORE_E_STALE_SOURCES`, preserving the selected build.
+Plan reports unknown source state; status refuses an unreadable source, and
+runtime freshness degrades to unknown instead of reporting a definite change.
+Known special-file and oversize exclusions retain their existing warning policy.
+Each read pass closes its handle; the compiler does not retain the entire corpus
+as buffers or open files between hashing and parsing.
+
 ## Symlinks
 
 Not followed by default; each one skipped produces a warning naming it.

@@ -18,6 +18,11 @@ import {
   toPosix,
 } from '@lorepack/core';
 import { formatFor, isPlannedFormat } from '@lorepack/parsers';
+import {
+  captureSourceRead,
+  type SourceReadBoundary,
+  SourceReadIssue,
+} from '../fingerprint/source_reader.js';
 import { createMatcher, type IgnoreRule, readIgnoreRules } from './ignore.js';
 
 export interface DiscoveredArtifact {
@@ -31,6 +36,7 @@ export interface DiscoveredArtifact {
   readonly mediaType: string;
   readonly parserId: string;
   readonly byteSize: number;
+  readonly sourceRead: SourceReadBoundary;
 }
 
 export type DiscoveryWarningCode =
@@ -46,7 +52,8 @@ export type DiscoveryWarningCode =
    * because it is the only stage that reads the content, but it is the same kind of verdict
    * as the others here: a file the build left out, named rather than silently missing.
    */
-  | 'undecodable-content';
+  | 'undecodable-content'
+  | 'source-changed';
 
 export interface DiscoveryWarning {
   readonly code: DiscoveryWarningCode;
@@ -235,6 +242,25 @@ function walkSource(
   // empty path, which is not an identity.
   const canonicalRoot = source.kind === 'file' ? dirname(source.root) : source.root;
 
+  let projectRoot: string;
+  let physicalRoot: string;
+  try {
+    projectRoot = realpathSync(config.projectRoot);
+    physicalRoot = realpathSync(source.root);
+  } catch {
+    warnings.push(unreadableWarning(config, source.root));
+    return;
+  }
+  if (physicalRoot !== projectRoot && !isInsideRoot(projectRoot, physicalRoot)) {
+    warnings.push({
+      code: 'source-changed',
+      path: source.relativeRoot,
+      message: `${source.relativeRoot} changed its target and was not indexed.`,
+    });
+    return;
+  }
+  const readRoot = source.kind === 'file' ? dirname(physicalRoot) : physicalRoot;
+
   const consider = (absolute: string, kind: 'file' | 'special' = 'file'): void => {
     let canonical: string;
     try {
@@ -271,17 +297,24 @@ function walkSource(
       return;
     }
 
-    let size: number;
+    let captured: ReturnType<typeof captureSourceRead>;
     try {
-      size = statSync(absolute).size;
-    } catch {
+      captured = captureSourceRead(absolute, {
+        root: readRoot,
+        projectRoot,
+        maximumBytes: limits.maxArtifactBytes,
+        allowLink: source.kind === 'file' && absolute === source.root,
+        displayPath: display,
+      });
+    } catch (cause) {
       warnings.push({
-        code: 'unreadable',
+        code: cause instanceof SourceReadIssue ? cause.code : 'unreadable',
         path: display,
-        message: `${display} could not be read.`,
+        message: cause instanceof SourceReadIssue ? cause.message : `${display} could not be read.`,
       });
       return;
     }
+    const size = captured.byteSize;
 
     if (size > limits.maxArtifactBytes) {
       warnings.push({
@@ -301,6 +334,7 @@ function walkSource(
       mediaType: format.mediaType,
       parserId: format.parserId,
       byteSize: size,
+      sourceRead: captured.sourceRead,
     });
     if (artifacts.length % 200 === 0) onProgress();
   };

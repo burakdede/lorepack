@@ -26,6 +26,11 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 6. **Seal.** A single atomic rename moves the candidate into `.lore/builds/<build id>`.
 7. **Record and activate.** Activation is a pointer change in one transaction. With
    `--no-activate` it is skipped, leaving a verified build for CI to inspect or pack.
+Source identity changes detected during planning or parsing abort the candidate
+with `LORE_E_STALE_SOURCES`. A partial fingerprint cannot replace the active build.
+[Source-read boundaries](discovery.md#source-reads-after-discovery) explain the
+per-pass handle checks and platform limits.
+
 ## Required-source coverage
 
 Declare required files using canonical project-relative paths in `lore.yaml`:

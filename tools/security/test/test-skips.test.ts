@@ -19,6 +19,11 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'packages/compiler/test/source_read_boundaries.test.ts',
+    line: "it.skipIf(process.platform === 'win32')(",
+    why: 'POSIX FIFOs cannot be created as Windows project-directory entries; file and parent-link replacement, identity and size cases remain enabled on Windows (#584)',
+  },
+  {
     file: 'packages/cli/test/path_canonicalization.e2e.test.ts',
     line: "it.skipIf(process.platform === 'darwin')(",
     why: 'Normalization-insensitive APFS cannot retain distinct NFC/NFD filenames; Linux and Windows exercise real collision refusal and active-build preservation (#589)',

@@ -538,6 +538,8 @@ your Node.js version in a bug report.
 Ignore rules in `.loreignore` are anchored to the project root: with `sources: [docs]`,
 use `/docs/private/` to exclude that directory. [Discovery](docs/architecture/discovery.md)
 explains source selection and migration from pre-release source-root rules.
+[Validated source reads](docs/architecture/discovery.md#source-reads-after-discovery)
+refuse changed source identities before a candidate can replace the active build.
 
 ## Contributing
 

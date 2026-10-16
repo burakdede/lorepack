@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
@@ -23,7 +24,6 @@ import {
   type LoadedConfig,
   loadConfig,
   ProgressBus,
-  sha256Hex,
 } from '@lorepack/core';
 import { ParserHost } from '@lorepack/parsers';
 import {
@@ -70,11 +70,18 @@ describe('lorepack build', () => {
   it('rejects source bytes that no longer match the fingerprint', async () => {
     await project({ 'a.md': '# Original\n' }, async (root) => {
       const original = new TextEncoder().encode('# Original\n');
+      const { discover, fingerprintSources } = await import('@lorepack/compiler');
+      const captured = await fingerprintSources({
+        artifacts: discover({ config: loadConfig({ cwd: root }) }).artifacts,
+      });
+      const artifact = captured.artifacts[0];
+      assert(artifact);
+      expect(readStableSourceBytes(artifact)).toEqual(original);
       writeFileSync(join(root, 'a.md'), '# Changed\n', 'utf8');
 
-      expect(() =>
-        readStableSourceBytes(join(root, 'a.md'), sha256Hex(original), 'a.md'),
-      ).toThrowError(expect.objectContaining({ code: 'LORE_E_STALE_SOURCES', path: 'a.md' }));
+      expect(() => readStableSourceBytes(artifact)).toThrowError(
+        expect.objectContaining({ code: 'LORE_E_STALE_SOURCES', path: 'a.md' }),
+      );
       expect(existsSync(join(root, '.lore', 'cache'))).toBe(false);
     });
   });
