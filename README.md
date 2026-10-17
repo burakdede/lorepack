@@ -576,6 +576,8 @@ Studio development uses Vite 7.3.7. Users receive Studio's built assets in the C
 see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
 Contributor Cloudflare checks use Wrangler 4.149.0; see the dependency decisions above.
+The [required credential gate](docs/integrations/cloudflare-testing.md#required-environment)
+fails when its integration credentials are missing; optional local runs retain explicit skips.
 Their bounded propagation retries require successful upload evidence for the newer API.
 Their [account-scoped ownership ledger](docs/integrations/cloudflare-testing.md#ownership-and-cleanup)
 records fresh test-resource intents before provisioning and keeps failed cleanup retryable.

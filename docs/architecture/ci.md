@@ -122,6 +122,13 @@ The budget is under 10 minutes per job. There is no remote build cache, per arch
 section 8.1: add one only when measured timings demand it.
 
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
+Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,
+while optional local runs retain explicit skips and truthful summary artifacts. See the
+[environment contract](../integrations/cloudflare-testing.md#required-environment).
+
+`actionlint` 1.7.12 rejects the existing `concurrency.queue` key on both baseline and
+changed workflows. GitHub documents [queueing multiple pending runs](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+The control remains intact; this tool limitation is recorded rather than counted as a lint pass.
 After Wrangler deploys it, the harness writes that Worker's actual endpoint into
 the target receipt alongside its name. Deploy and resume confirm activation
 against the same Worker that serves the acceptance requests. Bounded deployment

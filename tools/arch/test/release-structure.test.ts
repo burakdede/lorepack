@@ -30,6 +30,7 @@ interface Step {
   with?: Record<string, unknown>;
 }
 interface Job {
+  env?: Record<string, string>;
   needs?: string | string[];
   environment?: string;
   permissions?: Record<string, string>;
@@ -66,6 +67,11 @@ describe('the checked-in release workflow', () => {
       expect(topLevelPermissionProblems(name, workflow(name))).toEqual([]);
     },
   );
+
+  it('requires credentials in the Cloudflare release qualification job', () => {
+    const ci = parse(workflow('ci.yml'));
+    expect(ci.jobs['cloudflare-acceptance']?.env?.LORE_CF_REQUIRED).toBe('1');
+  });
 
   it('retains queued Cloudflare checks while serializing the shared runtime', () => {
     const ci = parse(workflow('ci.yml'));

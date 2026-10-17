@@ -239,6 +239,7 @@ jobs:
       queue: max
       cancel-in-progress: false
     env:
+      LORE_CF_REQUIRED: '1'
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       LORE_CF_TEST_PREFIX: ${{ secrets.LORE_CF_TEST_PREFIX }}

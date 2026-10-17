@@ -78,6 +78,18 @@ export function missingCloudflareTestingEnv(
   });
 }
 
+export function assertRequiredCloudflareTestingEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): void {
+  if (env.LORE_CF_REQUIRED !== '1') return;
+  const missing = missingCloudflareTestingEnv(env);
+  if (missing.length > 0) {
+    throw new Error(
+      `Cloudflare acceptance requires credentials (LORE_CF_REQUIRED=1). Missing: ${missing.join(', ')}`,
+    );
+  }
+}
+
 export function readCloudflareTestingEnv(
   env: Readonly<Record<string, string | undefined>>,
 ): CloudflareTestingEnv {
