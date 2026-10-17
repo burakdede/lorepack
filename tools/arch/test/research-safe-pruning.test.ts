@@ -4,7 +4,59 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { exhaustiveTopK, safePrunedTopK } from '../../../scripts/research-safe-pruning.mjs';
+import {
+  buildBm25fPostings,
+  exhaustiveTopK,
+  safePrunedTopK,
+} from '../../../scripts/research-safe-pruning.mjs';
+
+it('retains exact BM25F scores for repeated Unicode terms and empty fields', () => {
+  const postings = buildBm25fPostings([
+    { id: 'a', path: 'a', title: 'RÉPÉTÉ RÉPÉTÉ one', heading: null, body: 'répété two two' },
+    { id: 'b', path: 'b', title: 'one', heading: '', body: 'two two RÉPÉTÉ RÉPÉTÉ' },
+  ]);
+  const score = (frequency: number, idf = Math.log(1 + 0.5 / 2.5)) =>
+    (idf * (1.2 + 1) * frequency) / (1.2 + frequency);
+  const expected = new Map([
+    [
+      'a',
+      new Map([
+        ['a', score(4, Math.log(1 + 1.5 / 1.5))],
+        ['répété', score(6 * (2 / (1 - 0.2 + 0.2 * (3 / 2))) + 1 / (1 - 0.75 + 0.75 * (3 / 3.5)))],
+        ['one', score(6 * (1 / (1 - 0.2 + 0.2 * (3 / 2))))],
+        ['two', score(2 / (1 - 0.75 + 0.75 * (3 / 3.5)))],
+      ]),
+    ],
+    [
+      'b',
+      new Map([
+        ['b', score(4, Math.log(1 + 1.5 / 1.5))],
+        ['one', score(6 * (1 / (1 - 0.2 + 0.2 * (1 / 2))))],
+        ['two', score(2 / (1 - 0.75 + 0.75 * (4 / 3.5)))],
+        ['répété', score(6 * (0 / (1 - 0.2 + 0.2 * (1 / 2))) + 2 / (1 - 0.75 + 0.75 * (4 / 3.5)))],
+      ]),
+    ],
+  ]);
+  expect(postings).toHaveProperty('documentTermScores', expected);
+  expect([...postings.keys()]).toEqual(['a', 'répété', 'one', 'two', 'b']);
+  for (const [term, entries] of postings) {
+    expect(entries).toEqual(
+      [...expected]
+        .flatMap(([docId, scores]) => {
+          const contribution = scores.get(term);
+          return contribution === undefined ? [] : [{ docId, contribution }];
+        })
+        .sort(
+          (left, right) =>
+            right.contribution - left.contribution || left.docId.localeCompare(right.docId),
+        ),
+    );
+  }
+  expect(buildBm25fPostings([]).size).toBe(0);
+  expect(
+    buildBm25fPostings([{ id: 'empty', path: '', title: null, heading: '', body: '' }]).size,
+  ).toBe(0);
+});
 
 describe('safe retrieval pruning prototype', () => {
   it('returns no candidates or work for unknown query terms', () => {

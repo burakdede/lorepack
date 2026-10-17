@@ -43,6 +43,12 @@ overlap with the additive ranker. These are ranking comparisons, not semantic-qu
 The pruning result is a valid correctness result and a negative speed result. Both prototypes
 remain research-only and are not evidence that Lorepack currently beats SQLite FTS5.
 
+The report's BM25F calculation counts token frequencies once per field. It retains the
+same tokenization, field lengths, document frequencies, score arithmetic and posting order.
+This avoids repeated token-array scans during coverage measurement without changing the
+corpus, report, scoring method or test deadlines. A hand-calculated repeated-Unicode-term
+case checks exact scores, empty fields and ordering against the original implementation.
+
 The usefulness report also records the position of matched expected citations in each bounded
 context bundle. First, middle and last buckets describe the current deterministic ordering only;
 missing citations are excluded. This is an offline placement metric inspired by Lost in the
