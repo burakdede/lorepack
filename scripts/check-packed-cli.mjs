@@ -28,7 +28,7 @@ import {
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BANNED_PACKAGES } from './check-no-native.mjs';
 import { packCli, runTool } from './pack-cli.mjs';
@@ -480,6 +480,80 @@ async function checkDevRebuild(installDir) {
   }
 }
 
+async function checkInstalledConnect(installDir) {
+  const entry = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');
+  const project = join(installDir, 'connect-project');
+  const home = join(installDir, 'connect-home');
+  const bin = join(installDir, 'connect-client-bin');
+  for (const directory of [project, home, bin]) mkdirSync(directory);
+  writeFileSync(join(project, 'lore.yaml'), 'version: 1\nname: packed-connect\nsources: [docs]\n');
+  mkdirSync(join(project, 'docs'));
+  writeFileSync(join(project, 'docs', 'a.md'), '# Recovery\n\nRestore the checkpoint.\n');
+  const windows = process.platform === 'win32';
+  for (const [name, version] of [
+    ['code', '1.132.0'],
+    ['codex', 'codex-cli 0.146.1'],
+    ['claude', '2.1.296'],
+  ]) {
+    writeFileSync(
+      join(bin, name + (windows ? '.cmd' : '')),
+      windows ? `@echo off\r\necho ${version}\r\n` : `#!/bin/sh\necho ${version}\n`,
+      { mode: 0o755 },
+    );
+  }
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'),
+  );
+  const env = {
+    ...inherited,
+    PATH: [bin, join(installDir, 'node_modules', '.bin'), dirname(process.execPath)].join(
+      delimiter,
+    ),
+    HOME: home,
+    USERPROFILE: home,
+    APPDATA: join(home, 'AppData'),
+    XDG_CONFIG_HOME: join(home, '.config'),
+    CLAUDE_CONFIG_DIR: home,
+    CODEX_HOME: join(home, '.codex'),
+    NO_COLOR: '1',
+  };
+  const result = spawnSync(
+    process.execPath,
+    [entry, '--json', 'connect', 'vscode', '--scope', 'project', '--yes'],
+    {
+      cwd: project,
+      env,
+      encoding: 'utf8',
+      input: '',
+      timeout: 110_000,
+    },
+  );
+  if (result.status !== 0)
+    return [`installed connect failed: ${result.error ?? ''} ${result.stdout} ${result.stderr}`];
+  const report = JSON.parse(result.stdout);
+  const check = report.checks?.[0];
+  if (
+    report.checks?.length !== 1 ||
+    check.ok !== true ||
+    check.step !== 'none' ||
+    typeof check.proof?.buildId !== 'string' ||
+    !check.proof?.locator
+  ) {
+    return [`installed connect did not prove a cited source: ${result.stdout}`];
+  }
+  const configPath = join(project, '.vscode', 'mcp.json');
+  if (!existsSync(configPath))
+    return ['installed connect did not write the isolated project profile'];
+  const config = readFileSync(configPath, 'utf8');
+  if (config.includes('verify_bridge') || config.includes('LOREPACK_VERIFY_TOKEN')) {
+    return ['installed connect exposed its private verification helper in client configuration'];
+  }
+  console.log(
+    'installed npm shim and verification bridge proved the intended build and a cited source in an isolated client profile',
+  );
+  return [];
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const value = (flag) => {
@@ -611,6 +685,7 @@ async function main() {
 
     problems.push(...(await checkTableQuery(installDir, project, nativeParagraph)));
     problems.push(...(await checkDevRebuild(installDir)));
+    problems.push(...(await checkInstalledConnect(installDir)));
 
     const audit = runTool('npm', ['audit', '--omit=dev', '--json'], installDir, {
       allowFailure: true,

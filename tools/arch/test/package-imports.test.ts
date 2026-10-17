@@ -203,6 +203,7 @@ function publishedJavaScriptFiles(packageDir: string, packageName: string | unde
       'parse-child.js',
       'archive-verify-child.js',
       'build_worker.js',
+      'verify_bridge.js',
       ...chunks,
     ]
       .map((file) => join(packageDir, 'dist', file))

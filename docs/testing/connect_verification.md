@@ -59,3 +59,67 @@ Final integrated native verification remains required.
 
 Matching canonical inputs can have the same build ID in different absolute directories.
 The check proves immutable content and provenance; it does not identify a physical directory.
+
+## Wrapper cleanup regression, 2026-10-17
+
+The original shell-wrapper regression failed with a surviving Node descendant and a
+held real project lock on macOS arm64 and native Windows, using Node 24.21.0 and MCP
+client 2.2.0. The direct controls cleaned up. Native diagnostic PR #791 was closed
+unmerged after its capture; a successful diagnostic job was never a product pass.
+
+The regression keeps its original two-second verification timeout. Its final cleanup
+uses a fixture nonce before killing recorded PIDs and checks lock recovery. The new
+ownership implementation passes the wrapper case and all original controls locally.
+Current-source Windows qualification remains required; this does not establish the
+cause of unrelated cancellation, source-churn or runner failures.
+
+## Owned verification processes
+
+The SDK's exact base stdio transport still performs automatic modern discovery and
+legacy fallback. Each SDK process is a small bridge to a private authenticated local
+IPC host. The host owns the actual executable and arguments, including the disposable
+probe that the SDK otherwise hides. It reaps the previous server tree before starting
+the fresh session. A protocol channel and a separate stderr channel preserve independent
+backpressure and byte delivery. Closing stdin and disposing a bridge are distinct events;
+an early stderr EOF from the server must not be mistaken for bridge exit.
+
+Cleanup first prevents new launches. It ends server stdin, waits for normal exit and
+then signals only owned POSIX process groups or runs the Windows system `taskkill /PID
+/T /F` on the owned root. A disposed bridge requests signal-first cleanup for its probe.
+The verifier closes its SDK transports and awaits negotiation afterward. Failure to
+confirm cleanup returns a failed connection check, even after a successful cited read;
+the CLI retains exit code 3 for a failed check. Protocol deadlines and probe retries
+are unchanged. Cleanup adds bounded waits: two seconds per graceful/termination stage,
+and at most five seconds for the Windows tree-kill command.
+
+This owns ordinary child trees, including hanging npm-style wrappers. It is not an OS
+containment service for deliberately daemonized processes or a forcibly killed verifier.
+See [ADR0044](../adr/0044-owned-connect-verification-processes.md).
+
+The focused cases cover real modern CLI processes, both legacy method-not-found and
+exit-on-probe fallback, probe/session lock ordering, npm-style wrappers with literal
+space/metacharacter paths, absence of helper credentials in server environments,
+invalid/incomplete IPC pairs, split headers, opaque protocol bytes and early stderr EOF.
+The original read proof and all timeout/exit assertions remain intact. Run:
+
+```bash
+pnpm build
+pnpm exec vitest run --project connect-clients packages/connect-clients/test/verify.test.ts packages/connect-clients/test/verify_process.test.ts
+pnpm exec vitest run --project cli packages/cli/test/connect.e2e.test.ts packages/cli/test/connect.test.ts
+pnpm check:packed-cli
+```
+
+On Node 24.21.0/macOS arm64, 2026-10-17, all ten focused cases pass. The old binary's
+wrapper red and an intermediate ownership-ordering red remain retained. The new installed
+check drives npm's generated Lorepack shim and the bundled bridge in temporary client
+profiles; it never uses the developer's real configuration. All 365 connector and CLI
+connection cases passed across 14 files. The packed check installed 145 packages, proved
+the cited build through the actual npm shim and reported zero production vulnerabilities.
+The full `pnpm verify` run recorded 3,766 passing runtime tests and four existing skips,
+then failed the protocol contract because the new legacy fixture duplicated a revision
+literal. The fixture now reads the canonical legacy list; its wire value is unchanged.
+All 14 affected contract/ownership cases, strict test types, lint and formatting pass.
+Production bytes are unchanged since the full run. All remaining original local gates
+passed with unchanged source: 86 security cases and five existing platform skips, dependency
+and release policies, schemas, documentation and the executable README demo. Native
+Linux/macOS/Windows qualification of this correction remains pending.

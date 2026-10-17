@@ -46,7 +46,7 @@ Connect an installed AI client:
 lorepack connect claude-code
 ```
 
-The command previews its configuration change and asks before writing it. Verification
+The command previews its configuration change and asks before writing it. [Verification](docs/testing/connect_verification.md)
 checks the intended build and a cited source read; the client's own trust prompt is separate.
 
 [Claude Code](docs/integrations/claude-code.md) · [Codex](docs/integrations/codex.md) · [VS Code](docs/integrations/vscode.md) · [Other MCP clients](docs/integrations/mcp.md)
