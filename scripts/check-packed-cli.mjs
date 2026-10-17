@@ -397,6 +397,89 @@ async function checkTableQuery(installDir, projectDir, nativeParagraph) {
   }
 }
 
+async function checkDevRebuild(installDir) {
+  const entry = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');
+  const project = join(installDir, 'watched-project');
+  mkdirSync(join(project, 'docs'), { recursive: true });
+  writeFileSync(join(project, 'lore.yaml'), 'version: 1\nname: packed-watch\nsources: [docs]\n');
+  writeFileSync(join(project, 'docs', 'runbook.md'), '# Runbook\n\nOriginal checkpoint.\n');
+  const port = await freePort();
+  const child = spawn(process.execPath, [entry, 'dev', project, '--port', String(port)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', (chunk) => {
+    output += chunk;
+  });
+  child.stderr.on('data', (chunk) => {
+    output += chunk;
+  });
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    const startup = Date.now() + 30_000;
+    while (!output.includes('MCP stdio') && child.exitCode === null && Date.now() < startup) {
+      await new Promise((settle) => setTimeout(settle, 100));
+    }
+    if (!output.includes('MCP stdio')) return [`installed dev never started:\n${output}`];
+    const describe = async () => {
+      const response = await fetch(`${base}/v1/build`, { signal: AbortSignal.timeout(10_000) });
+      const body = await response.json();
+      if (response.status !== 200 || typeof body.buildId !== 'string') {
+        throw new Error(`installed dev build response is invalid: ${JSON.stringify(body)}`);
+      }
+      return body.buildId;
+    };
+    const first = await describe();
+    writeFileSync(
+      join(project, 'docs', 'runbook.md'),
+      '# Runbook\n\nUse workercheckpoint for recovery.\n',
+    );
+    const deadline = Date.now() + 30_000;
+    let current = first;
+    while (current === first && child.exitCode === null && Date.now() < deadline) {
+      current = await describe();
+      if (current === first) await new Promise((settle) => setTimeout(settle, 100));
+    }
+    if (current === first)
+      return [`installed dev did not activate a rebuilt candidate:\n${output}`];
+    const response = await fetch(`${base}/v1/search`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: 'workercheckpoint' }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const search = await response.json();
+    if (
+      response.status !== 200 ||
+      search.buildId !== current ||
+      !search.hits?.some((hit) => hit.excerpt.includes('workercheckpoint') && hit.locator)
+    ) {
+      return [`installed dev did not serve cited rebuilt content: ${JSON.stringify(search)}`];
+    }
+    const studio = await fetch(base, { signal: AbortSignal.timeout(10_000) });
+    const html = await studio.text();
+    if (studio.status !== 200 || !html.includes('<html'))
+      return ['installed dev lost Studio after rebuilding'];
+    console.log(
+      'installed dev rebuilt and activated through its shipped worker; cited HTTP and Studio reads passed',
+    );
+    return [];
+  } catch (error) {
+    return [`installed dev rebuild failed: ${String(error)}\n${output}`];
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise((settle) => child.once('exit', settle));
+      const force = setTimeout(() => child.kill('SIGKILL'), 10_000);
+      child.kill('SIGTERM');
+      try {
+        await exited;
+      } finally {
+        clearTimeout(force);
+      }
+    }
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const value = (flag) => {
@@ -527,6 +610,7 @@ async function main() {
     console.log('packed context checked complete JSON/Markdown delivery and omission accounting');
 
     problems.push(...(await checkTableQuery(installDir, project, nativeParagraph)));
+    problems.push(...(await checkDevRebuild(installDir)));
 
     const audit = runTool('npm', ['audit', '--omit=dev', '--json'], installDir, {
       allowFailure: true,

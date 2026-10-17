@@ -20,6 +20,7 @@ export async function bundleCli({
   // The parse process (#594). `ParserHost` forks `./parse-child.js` relative to its own module,
   // and once bundled its module is `public-entry.js`, so the child has to sit beside it.
   const parseChild = join(root, 'packages', 'parsers', 'dist', 'parse-child.js');
+  const buildWorker = join(compiled, 'services', 'build_worker.js');
   const archiveVerifyChild = join(
     root,
     'packages',
@@ -53,7 +54,7 @@ export async function bundleCli({
     'yazl',
   ];
 
-  for (const compiled of [entry, queryChild, parseChild, archiveVerifyChild]) {
+  for (const compiled of [entry, queryChild, parseChild, archiveVerifyChild, buildWorker]) {
     if (!existsSync(compiled)) {
       throw new Error(`${compiled} is missing. Run tsc -b before bundling.`);
     }
@@ -73,6 +74,7 @@ export async function bundleCli({
       'query-child': queryChild,
       'parse-child': parseChild,
       'archive-verify-child': archiveVerifyChild,
+      build_worker: buildWorker,
     },
     external: externalDependencies,
     format: 'esm',

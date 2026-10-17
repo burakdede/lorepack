@@ -72,3 +72,55 @@ returned build ID was unchanged. This reproduces without the unmerged parser obs
 the reset cause remains unproved. The new request/socket trace is intended to distinguish
 connection reuse, request timing and transport failure without changing the workload
 or Node's default error/timeout handling.
+
+## Rebuilding without blocking the runtime
+
+`packages/cli/test/rebuild_responsiveness.e2e.test.ts` drives the actual bundled dev
+binary with a test-only filesystem preload. After startup it arms one 10,500 ms pause
+inside a candidate report's `fsyncSync`, preserving the actual write and fsync afterward.
+A warmed keep-alive request fails with `read ECONNRESET` on the original shared event loop.
+With watched rebuilds in the shipped worker, the same connection returns the previous
+build while the write is paused. REST search, an established MCP client and Studio's HTML
+also answer before the pause ends. The test then requires activation and MCP agreement.
+It records the actual thread executing the stalled write. No HTTP retry is installed.
+
+This is an additional controlled regression, not a shorter replacement for the original
+300-document, sixty-second churn test. It does not change that test's preload, resources,
+scheduling, timeouts, assertions or recorders. The specific filesystem operation behind
+the historical Windows stall remains unidentified; native qualification is still required.
+
+`packages/cli/test/background_build.test.ts` compares ordinary and worker builds for
+identity, manifest and progress; verifies optional activation, error metadata/cause
+messages, cancellation before startup and during parsing, retained active identity,
+released project locks and discarded candidates. A failing progress/output sink cancels
+the worker and propagates the original caller error after cleanup. Worker completion waits for exit.
+
+Run the new cases, then the unchanged original suite:
+
+```bash
+pnpm build
+pnpm exec vitest run --project cli packages/cli/test/background_build.test.ts packages/cli/test/rebuild_responsiveness.e2e.test.ts
+pnpm exec vitest run --project cli packages/cli/test/dev.e2e.test.ts
+```
+
+On Node 24.21.0, macOS arm64, 2026-10-17, the actual-binary regression first failed with
+`read ECONNRESET` and then passed with the worker. The initial five new cases passed locally.
+The unchanged original dev suite also passed all 25 cases, including the sixty-second
+churn and original cancellation workload. Native Windows qualification remains pending.
+The packed-install gate additionally starts the installed dev command, edits a real source,
+requires a new active build and checks cited search and Studio after the shipped worker runs.
+
+The clean npm-installed tarball check passed locally with the same 145-package production
+closure and no native module loaded. Its new watched edit activated and served cited
+HTTP content and Studio through the installed worker. The existing source-free archive,
+context, receipt and table-query checks also passed; npm audit reported zero production
+vulnerabilities. These are development-machine results, not reference hardware claims.
+
+Full local `pnpm verify` passed with unchanged tracked source fingerprint
+`16bc8737e4f3eca3f99c80c1bcfb22663ec27b196e59a708cec0e0a5d5bb1665`:
+3,766 default tests passed with four existing skips, all 183 architecture tests passed,
+and 86 consolidated security tests passed with five existing platform skips. All remaining
+policy, schema, documentation and executable-demo checks passed. A subsequent change adds
+only the progress-sink regression and this verification record; production source is unchanged.
+The final six focused cases then passed, including progress-sink cleanup, with strict
+changed-test types, lint, formatting, documentation, punctuation and changeset checks green.
