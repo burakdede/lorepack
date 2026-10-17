@@ -248,7 +248,7 @@ Explicit activation or rollback stays selected when file events leave source inp
 A genuine source edit resumes automatic building and activation; freshness can remain dirty
 while an older build is selected. Configured subdirectory and file sources also reconcile
 when filesystem events are missed. Temporary source read failures keep the selected build
-available, report unknown freshness and retry reconciliation. See [watch behavior](docs/architecture/watch.md).
+available, report unknown freshness and retry reconciliation. See [watch behavior and serving during rebuilds](docs/architecture/watch.md#serving-during-rebuilds).
 
 For a previously built project that must only serve the active build, use the read-only server:
 
