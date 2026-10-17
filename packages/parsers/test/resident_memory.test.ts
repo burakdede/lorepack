@@ -12,12 +12,59 @@ import { cmapBombPdf } from '@lorepack/test-support';
 import { afterEach, expect, it } from 'vitest';
 import {
   createReportingWatchdog,
+  createStartupWatchdog,
   monitorResidentMemory,
   type ResidentMemoryMonitor,
 } from '../src/resident_memory.js';
 
 const processes: { child: ChildProcess; closed: Promise<unknown> }[] = [];
 const monitors: ResidentMemoryMonitor[] = [];
+
+it('services a pending first observer report at the original startup deadline', async () => {
+  const startedAt = Date.now();
+  let expired = false;
+  const startup = createStartupWatchdog(() => {
+    expired = true;
+  });
+  const child = spawn(
+    process.execPath,
+    ['-e', "process.stdout.write(String(Date.now()) + '\\n'); setInterval(() => {}, 1000)"],
+    { stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  processes.push({ child, closed: once(child, 'close') });
+  let report = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    report += chunk.toString('utf8');
+    if (report.includes('\n')) startup.stop();
+  });
+  try {
+    const until = performance.now() + 5500;
+    while (performance.now() < until) {}
+    await delay(100);
+    expect(Number(report.trim())).toBeGreaterThan(0);
+    expect(Number(report.trim())).toBeLessThanOrEqual(startedAt + 5000);
+    expect(expired).toBe(false);
+    expect(child.exitCode).toBeNull();
+  } finally {
+    startup.stop();
+  }
+}, 15_000);
+
+it('rejects an observer with no first report at the original startup deadline', async () => {
+  let expired = false;
+  const startup = createStartupWatchdog(() => {
+    expired = true;
+  });
+  try {
+    await delay(100);
+    expect(expired).toBe(false);
+    await delay(5000);
+    await nextCheckPhase();
+    expect(expired).toBe(true);
+  } finally {
+    startup.stop();
+  }
+}, 15_000);
 
 it('services pending OS reports after a parent stall before declaring the observer stale', async () => {
   const child = spawn(

@@ -124,6 +124,14 @@ This preserves the 250 ms health deadline and immediate RSS-breach termination;
 it is not a larger memory envelope or a retry. Native failures remain unqualified
 until their unchanged scenarios pass with retained diagnostics.
 
+The same ordering applies to the first observation: the five-second startup
+deadline must service pending I/O before declaring the reader unavailable.
+A real first-report pipe reproduces the timer-only false failure after a parent
+stall, while a silent-reader control still expires. Startup failure diagnostics
+retain elapsed time and bounded reader state. The native Windows benchmark
+failure on `c44dde1c` remains failed until fresh qualification confirms the
+correction; no startup deadline or original benchmark workload is increased.
+
 Linux PID presence is insufficient to infer a live address space. The kernel's
 [smaps rollup implementation](https://github.com/torvalds/linux/blob/v6.8/fs/proc/task_mmu.c#L879)
 returns `ESRCH` when the task or memory descriptor disappears. Native Linux exposed
