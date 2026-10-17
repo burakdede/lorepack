@@ -75,3 +75,18 @@ stopping its watchdog must prevent late data from rearming it.
 This local reproduction and correction do not prove every native failure had
 the same cause. Retain native timing/report-count/reader-state diagnostics and
 rerun the unchanged Windows acceptance scenarios before declaring it resolved.
+
+## Linux address-space teardown
+
+The original low-heap CMap CLI case failed on native Linux at `7155fb4f` because
+`/proc/<owned-pid>/smaps_rollup` returned `ESRCH` before the child-close event.
+A PID can still be present after its address space disappears. The reader now
+recognizes that kernel exit signal, stops sampling without retrying, and leaves
+the existing child-close/stderr classifier to report the original resource exit.
+Zero RSS is still a measurement. Permission errors, other I/O errors and malformed
+reports still fail closed while the parser is live.
+
+The Linux-reader boundary tests run on all OS hosts using explicit syscall-result
+fixtures from this failure; they do not claim native Linux execution. All original
+actual-CLI workloads and their controls remain mandatory on native Linux as well
+as macOS and Windows. Fresh native qualification must confirm the unchanged case.
