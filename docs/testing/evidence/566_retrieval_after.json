@@ -1,0 +1,35 @@
+{
+  "provisional": true,
+  "reason": "Measured on the development machine. The reference machine and the gates are backlog issue #101.",
+  "rankingWeightsVersion": 1,
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "memoryGb": 32,
+    "node": "24.21.0"
+  },
+  "corpus": {
+    "documents": 400,
+    "sectionsEach": 8,
+    "artifacts": 400,
+    "chunks": 3200,
+    "topics": 15
+  },
+  "measurements": {
+    "coldSearchMs": 16.81,
+    "warmSearchP50Ms": 17.1,
+    "warmSearchP95Ms": 19.44,
+    "warmSearchP99Ms": 21.18,
+    "debugSearchP95Ms": 17.28,
+    "contextBundleP50Ms": 542.72,
+    "contextBundleP95Ms": 594.45,
+    "iterations": 60,
+    "queries": 5
+  },
+  "referenceGates": {
+    "warmSearchP95Ms": 250,
+    "contextBundleP95Ms": 1500
+  }
+}

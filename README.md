@@ -141,7 +141,7 @@ user-declared hints. Review the limitations before choosing a production integra
 | Build lifecycle | [Build orchestration](docs/architecture/build-orchestration.md), [validation](docs/validation.md), [watch behavior](docs/architecture/watch.md) |
 | Reproducibility | [Build identity](docs/architecture/build-identity.md), [package format](docs/package-format/README.md) |
 | Context and tables | [Ranking and delivery limits](docs/architecture/retrieval.md), [table storage](docs/architecture/local-storage.md), [receipts](docs/architecture/context_receipts.md) |
-| Runtime access | [MCP](docs/integrations/mcp.md), [HTTP](docs/architecture/serving.md#the-http-surface), [SDK](packages/sdk/README.md) |
+| Runtime access | [MCP](docs/integrations/mcp.md), [HTTP](docs/architecture/serving.md#the-http-surface), [SDK](packages/sdk/README.md), [reader lifetimes](docs/architecture/local-storage.md#request-scoped-build-handles) |
 | Deployment | [Cloudflare setup](docs/integrations/cloudflare-target-setup.md), [deployment and cleanup](docs/architecture/deployment.md) |
 | Evidence and performance | [Benchmark methodology](benchmarks/README.md), [compatibility evidence](docs/compatibility/README.md) |
 

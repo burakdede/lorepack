@@ -296,16 +296,13 @@ function toSummary(row: Record<string, string | number>): BuildSummary {
  *
  * The contract that matters (architecture section 15.2): a request acquires a handle at
  * its start and holds it for its whole life, so activation mid-request cannot mix two
- * builds into one response. The old database closes when its final in-flight request
- * releases, not when the pointer moves.
+ * builds into one response. Each catalog closes after its final handle releases, before
+ * its cleanup pin is removed, even when another process changes the active pointer.
  */
 export class LocalActiveBuildProvider implements ActiveBuildProvider {
   readonly #state: LocalStateStore;
   readonly #buildsDirectory: string;
-  readonly #open = new Map<
-    BuildId,
-    { db: DatabaseSync; refs: number; idleReference?: () => void }
-  >();
+  readonly #open = new Map<BuildId, { db: DatabaseSync; refs: number }>();
   readonly #handles = new WeakMap<BuildHandle, DatabaseSync>();
   readonly #readers = new Map<BuildHandle, () => void>();
   #acquiring: Promise<void> = Promise.resolve();
@@ -363,8 +360,6 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     }
     const identity = this.#state.identity();
 
-    this.#closeIdle(buildId);
-
     let entry = this.#open.get(buildId);
     if (entry === undefined) {
       entry = {
@@ -377,14 +372,12 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
     try {
       releaseReference = registerReadReference(dirname(this.#buildsDirectory), buildId);
     } catch (cause) {
-      if (entry.refs === 0 && entry.idleReference === undefined) {
+      if (entry.refs === 0) {
         entry.db.close();
         this.#open.delete(buildId);
       }
       throw cause;
     }
-    entry.idleReference?.();
-    delete entry.idleReference;
     entry.refs += 1;
     const database = entry.db;
 
@@ -449,40 +442,14 @@ export class LocalActiveBuildProvider implements ActiveBuildProvider {
       return;
     }
 
-    // Keep the currently active build open; closing it would reopen on the next request
-    // for no benefit. Anything else is a drained older build.
-    if (this.#state.current()?.buildId === buildId) {
-      // An idle SQLite connection still owns the file, especially on Windows.
-      entry.idleReference = releaseReference;
-      return;
-    }
     entry.db.close();
     this.#open.delete(buildId);
     releaseReference();
   }
 
-  /**
-   * Closes every database no request holds, except the active build's.
-   *
-   * `#release` keeps the active build open when it drains, which is right until the pointer
-   * moves; after that nothing revisited the entry, so a long-running `dev` or `serve` kept one
-   * database per activation open, and a pruned build's file stayed open and undeletable on
-   * Windows (#566). The pointer is re-read at every acquisition, so that is where a build that
-   * stopped being active is noticed.
-   */
-  #closeIdle(activeBuildId: BuildId): void {
-    for (const [buildId, entry] of this.#open) {
-      if (buildId === activeBuildId || entry.refs > 0) continue;
-      entry.db.close();
-      entry.idleReference?.();
-      this.#open.delete(buildId);
-    }
-  }
-
   closeAll(): void {
     for (const entry of this.#open.values()) {
       entry.db.close();
-      entry.idleReference?.();
     }
     this.#open.clear();
     for (const release of this.#readers.values()) release();
