@@ -59,3 +59,27 @@ Final integrated native verification remains required.
 
 Matching canonical inputs can have the same build ID in different absolute directories.
 The check proves immutable content and provenance; it does not identify a physical directory.
+
+## Disposable wrapper diagnosis for #578
+
+This experimental branch records real Windows `.cmd` cleanup against unchanged
+production commit `d143db98b4e189e6ae043df45f9593a9cc0d3ccd`. Its additional diagnostic
+workflow does not modify the default suites, product sources, dependencies or limits.
+The recipe and pinned source use separate checkouts. Do not merge this experiment.
+
+The probe records the nonce-owned Node and parent PIDs, actual acquired project lock,
+post-timeout process/lock state, source hashes and final fixture cleanup. It preserves
+an identical direct-executable control and the original two-second fixture timeout.
+A completed diagnostic job establishes captured observations, not a cleanup pass.
+Missing startup or lock acquisition is inconclusive and fails the capture. Native
+Windows evidence and an accepted production correction are still pending.
+
+Local recipe check, after building the source checkout with Node 24.21.0:
+
+```sh
+node tools/diagnostics/wrapper_cleanup_probe.mjs /absolute/source /absolute/evidence d143db98b4e189e6ae043df45f9593a9cc0d3ccd
+```
+
+Read `result.json` before choosing a correction. Retire the diagnostic PR unmerged
+after preserving its artifacts; the actual issue-linked correction must retain the
+real failing regression and qualify the final shipped entry point on all platforms.

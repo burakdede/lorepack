@@ -521,6 +521,9 @@ designing a production integration.
 - [Benchmark evidence](docs/compatibility/benchmark-evidence.md): reproducible Lorepack, FTS5,
   and offline RAG comparisons, claim ledger, raw artifacts, and review checklist.
 
+This experimental branch contains a [disposable wrapper diagnosis](docs/testing/connect_verification.md#disposable-wrapper-diagnosis-for-578)
+for #578. It captures unchanged-production behavior and must not be merged as a fix.
+
 ## Source installation
 
 Contributors and users testing unreleased changes can build from source:

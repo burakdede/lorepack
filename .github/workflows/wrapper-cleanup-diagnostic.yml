@@ -1,0 +1,55 @@
+name: Wrapper cleanup diagnostic
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-wrapper-evidence:
+    name: Windows wrapper cleanup diagnosis
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: recipe
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/checkout@v5
+        with:
+          path: source
+          ref: d143db98b4e189e6ae043df45f9593a9cc0d3ccd
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: source/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.21.0'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: source
+
+      - run: pnpm build
+        working-directory: source
+
+      - name: Record actual unchanged-production wrapper outcome
+        shell: pwsh
+        run: |
+          node -e "if (process.platform !== 'win32') process.exit(1)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node recipe/tools/diagnostics/wrapper_cleanup_probe.mjs source evidence d143db98b4e189e6ae043df45f9593a9cc0d3ccd
+          exit $LASTEXITCODE
+
+      - name: Preserve diagnostic observations
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wrapper-cleanup-windows-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
