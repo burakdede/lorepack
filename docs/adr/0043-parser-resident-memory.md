@@ -45,8 +45,9 @@ Observe its resident memory from the unblocked parent using OS facilities:
   command latency cannot create overlapping observers.
 - Windows: use the OS-provided Windows PowerShell 5.1 process query, with profiles
   and interaction disabled. A persistent bounded numeric stream avoids starting
-  PowerShell for every sample. [Get-Process](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-process?view=powershell-5.1)
-  exposes process memory; [WorkingSet64](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.workingset64)
+  PowerShell for every sample. Use the local numeric-PID overload of
+  [Process.GetProcessById](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.getprocessbyid),
+  `Refresh`, and .NET sleeping/output methods, avoiding cmdlet module auto-loading. [WorkingSet64](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.workingset64)
   reports resident bytes. No PowerShell 7 installation is required.
 
 Use a separate operational RSS threshold, default 1,024 MiB, with validated
@@ -87,5 +88,23 @@ before accepting this ADR; the macOS probe alone cannot establish them.
 OS readers add measurement overhead. Verify first-run and no-op behavior,
 process cleanup, packed closure and existing performance gates. Reader failure
 is visible to users; no extra runtime, account, compiler or native add-on is
-introduced. Current public documentation must keep describing the heap-only
-implementation until enforcement and its qualification are complete.
+introduced. Public documentation describes the sampled control and keeps its remaining native
+qualification explicit. The ADR remains proposed until that qualification is complete.
+
+### Privacy-proof integration
+
+The parent adds fixed read-only OS processes on macOS and Windows. No source path
+or source text enters their commands. The privacy preload admits only the exact
+command and options for a live parser PID already admitted under the unchanged
+child permission checks. It rejects other PIDs, altered scripts, shell options and
+observer calls from inside the parser. All original network/process denial probes
+and Node grants remain unchanged. Linux reads procfs without another process.
+
+On 2026-10-17, macOS arm64 / Node 24.21.0: the new native-growth regression
+first reported `parse-timeout` instead of `parse-memory`. After implementation,
+52 parser/CLI tests passed, including the unchanged isolation fixtures, replacement,
+cancellation and no-op identity checks. The privacy/policy run passed 14 tests,
+including the actual seven-format build and five unauthorized observer attempts.
+The Windows startup-failure unit probe is Windows-only; all resource fixtures remain
+mandatory on every platform. These tests do not replace independent actual-CLI
+resource measurements, packed qualification or the three-platform matrix.

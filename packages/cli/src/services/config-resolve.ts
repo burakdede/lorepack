@@ -60,6 +60,7 @@ export const ENVIRONMENT_KEYS = [
   'LORE_LOCK_WAIT_MS',
   'LORE_PARSE_TIMEOUT_MS',
   'LORE_PARSE_MEMORY_MB',
+  'LORE_PARSE_RSS_MB',
 ] as const;
 
 /** Anything whose name looks like a credential is redacted rather than printed. */

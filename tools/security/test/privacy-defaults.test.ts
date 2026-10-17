@@ -144,6 +144,23 @@ describe('privacy defaults: no telemetry or source egress in the build path, iss
     expect(egressProblems(run).join('\n')).toMatch(/LORE_EGRESS_ATTEMPT net\.client\.socket/);
   });
 
+  it('refuses observer queries for other processes, altered commands and shell options', async () => {
+    const run = runSandboxedBuild(await project('observer-process'), {
+      inject: [egress('observer-process.mjs')],
+    });
+
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain(`${FORMATS} artifacts`);
+    expect(run.attempts).toEqual([
+      'child_process.execFile',
+      'child_process.execFile',
+      'child_process.execFile',
+      'child_process.spawn',
+      'child_process.spawn',
+    ]);
+    expect(egressProblems(run)).toHaveLength(5);
+  });
+
   it('refuses a parse process started without the permission model', async () => {
     const run = runSandboxedBuild(await project('unsandboxed-fork.mjs'), {
       inject: [egress('unsandboxed-fork.mjs')],
