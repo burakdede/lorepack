@@ -6,9 +6,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Published @lorepack/cli version to verify
+        description: Published @lorepack/cli version (unused in local tarball mode)
         required: true
         type: string
+      tarball:
+        description: Verify a local tarball without publishing
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -18,6 +23,7 @@ env:
 
 jobs:
   smoke:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.tarball }}
     name: public registry smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -125,3 +131,34 @@ jobs:
             echo "- platform: ${RUNNER_OS}"
             echo "- Node: $(node --version)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  tarball:
+    name: global tarball smoke (${{ matrix.os }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.tarball }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Install the actual global tarball and run the public smoke
+        run: node scripts/check-global-smoke.mjs --out global-smoke-evidence
+      - name: Retain source, tarball and actual result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: global-smoke-${{ matrix.os }}
+          path: global-smoke-evidence/
+          if-no-files-found: error
+          retention-days: 7
