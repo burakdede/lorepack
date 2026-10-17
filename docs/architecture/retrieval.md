@@ -15,6 +15,19 @@ chunk is no longer presented as the complete native evidence. Bodies larger than
 condition away. Search still returns lexical excerpts. See
 [the decision and limits](../adr/0015-native-context-evidence.md).
 
+Both SQLite adapters resolve native evidence by iterating the recorded node references
+and looking up each ID within its artifact and, remotely, its project/build scope.
+Their explicit `CROSS JOIN` order prevents missing planner statistics from turning
+those lookups into repeated artifact or build scans. It works on existing read-only
+catalogs without maintenance writes or a rebuild. Node ordering, missing-reference
+checks and UTF-8 limits remain unchanged. See SQLite's
+[join-order documentation](https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join)
+and the [development query-plan evidence](../testing/evidence/native_unit_lookup_development.json).
+That evidence also records a passing original 13-case instrumented report after
+integration with the compiler and complete-frame recorder corrections. It establishes
+the unchanged report deadline for that snapshot, not final coverage or release readiness.
+
+
 ## Where each part lives, and why
 
 | Part | Package | Why there |
@@ -141,6 +154,31 @@ Duplicate removal uses word shingles and Jaccard overlap: a deterministic signat
 embedding. An embedding would mean a model download, which breaks the zero-surprise install
 (invariant 7), and would make the page depend on a model version.
 
+Exact [prefix filtering](https://rutgers-db.github.io/cs541-fall19/paper/prefixfilter.pdf)
+uses one string order across signatures to exclude impossible pairs. The index contains
+only prefixes of kept signatures and lasts for one ranking call. A prefix match remains
+a candidate: the original size bounds and exact Jaccard predicate decide duplication.
+There is no vocabulary cache or state shared across calls or builds.
+
+The [development comparison](../testing/evidence/retrieval_prefix_development.json)
+records one paired native-window comparison at 3,200 and 50,000 chunks, plus a
+supplemental memory diagnostic. These are development observations, not a general speedup.
+It supports evaluating this candidate beyond isolated recorder timings. It does not
+establish the original recorded-report deadline, reference-machine gates or release readiness.
+
+Shingles remain contiguous windows of the same normalized text. A native replacement
+emits each overlapping window with a NUL separator, which normalization excludes from
+inputs. Removing the unmatched short tail preserves the original short-text behavior.
+The pattern requires a word boundary so a long unbroken token is not rescanned from
+every character. Controls include NUL input and 65,536-character tokens. No word-array
+slices, joins or callbacks are allocated per window; tokenization and evidence stay exact.
+
+Differential tests preserve the original retained objects and deterministic order across
+empty, short, Unicode and repeated text, shuffled candidates and score/path ties.
+Explicit cases cover overlap below, exactly at and above the 0.85 threshold. The pairwise
+predicate is also checked over 12,288 small-set and threshold-boundary combinations.
+These controls establish semantics; they do not establish the recorded report's deadline.
+
 One artifact may contribute at most three chunks to a page. A long document that mentions
 the query in every section would otherwise be the entire answer.
 
@@ -261,14 +299,15 @@ output kept all source lines inside a five-backtick fence and cited `rollout.txt
 
 ## Measured cost
 
-Provisional, on the development machine, since the reference machine is #101:
+Historical provisional measurements before the current prefix and window candidate.
+They are not current-candidate qualification; the reference machine remains #101:
 
 | Corpus | Warm search p95 | Bundle p95 | Gates |
 |---|---|---|---|
 | 3,200 chunks | 6.59 ms | 60.4 ms | 250 ms, 1,500 ms |
 | 50,000 chunks, the stated envelope | 21.45 ms | 199.96 ms | 250 ms, 1,500 ms |
 
-`pnpm bench:retrieval` reproduces them; the recorded runs are in `benchmarks/retrieval/`.
+`pnpm bench:retrieval` reruns these workloads; historical runs are in `benchmarks/retrieval/`.
 Reported, never enforced, until #101 defines the machine.
 
 ### One optimisation worth knowing about
