@@ -123,6 +123,21 @@ describe('a file that exceeds a parse limit', () => {
 });
 
 describe('parse limits from the environment', () => {
+  it('reads the RSS budget and lists its configuration variable', () => {
+    expect(parseLimitsFromEnvironment({ LORE_PARSE_RSS_MB: '256' })).toMatchObject({
+      residentMemoryMb: 256,
+    });
+    expect(ENVIRONMENT_KEYS).toContain('LORE_PARSE_RSS_MB');
+  });
+
+  for (const value of ['', 'many', '1.5', '0', '63', '32769']) {
+    it(`refuses invalid RSS budget ${JSON.stringify(value)}`, () => {
+      expect(() => parseLimitsFromEnvironment({ LORE_PARSE_RSS_MB: value })).toThrow(
+        expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
+      );
+    });
+  }
+
   it('lists both variables among the environment keys, so `lorepack config` shows them', () => {
     expect(ENVIRONMENT_KEYS).toEqual(
       expect.arrayContaining(['LORE_PARSE_TIMEOUT_MS', 'LORE_PARSE_MEMORY_MB']),
@@ -130,13 +145,17 @@ describe('parse limits from the environment', () => {
   });
 
   it('defaults to 30 seconds and 2048 MB', () => {
-    expect(parseLimitsFromEnvironment({})).toEqual({ timeoutMs: 30_000, memoryMb: 2_048 });
+    expect(parseLimitsFromEnvironment({})).toEqual({
+      timeoutMs: 30_000,
+      memoryMb: 2_048,
+      residentMemoryMb: 1024,
+    });
   });
 
   it('reads both variables', () => {
     expect(
       parseLimitsFromEnvironment({ LORE_PARSE_TIMEOUT_MS: '5000', LORE_PARSE_MEMORY_MB: '512' }),
-    ).toEqual({ timeoutMs: 5_000, memoryMb: 512 });
+    ).toEqual({ timeoutMs: 5_000, memoryMb: 512, residentMemoryMb: 1024 });
   });
 
   for (const [name, value] of [

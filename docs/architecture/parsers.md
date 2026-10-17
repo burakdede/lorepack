@@ -55,7 +55,7 @@ Five outcomes, and the difference between them is what the failure says about th
 |---|---|---|
 | **Excluded before parsing** | No parser handles the extension, or the bytes are not readable text | Warning, build succeeds (#165) |
 | **Excluded by a limit** | The file parsed, and a scale limit means part of it is not imported | Warning, build succeeds (#242) |
-| **Excluded by a resource limit** | Parsing the file exceeded the deadline or the V8 heap ceiling | Warning, build succeeds (#594) |
+| **Excluded by a resource limit** | Parsing the file exceeded the deadline, V8 heap ceiling or resident-memory threshold | Warning, build succeeds (#594) |
 | **Excluded by nesting** | The document is nested deeper than its parser can recurse | Warning, build succeeds (#595) |
 | **Fails the build** | A supported, included file whose bytes could not be read | `LORE_E_PARSE_FAILED`, exit 2 |
 
@@ -85,7 +85,7 @@ The **file-count** envelope is unchanged and still refuses the build, offering
 `--allow-large-project`. It is a property of the project as a whole, so there is no smaller thing
 to exclude; a per-file limit has one.
 
-## Built-in parsers have a deadline and a heap ceiling
+## Built-in parser resource controls
 
 A parser is a pure function of its bytes, which is not the same as a bounded one. Small, valid
 files drive the libraries underneath into quadratic time or into gigabytes of memory: 20 KB of
@@ -103,6 +103,7 @@ and its limitations:
 |---|---|---|---|
 | Wall-clock time per file | 30 s | `LORE_PARSE_TIMEOUT_MS`, 100 to 3600000 | `parse-timeout` warning, file left out |
 | V8 heap of the parse process | 2048 MB | `LORE_PARSE_MEMORY_MB`, 64 to 32768 | `parse-memory` warning, file left out |
+| Sampled resident memory of the parse process | 1024 MiB | `LORE_PARSE_RSS_MB`, 64 to 32768 | `parse-memory` warning, file left out |
 
 Both warnings have class `envelope`, name the file, and say which variable to raise. A newly
 sealed build records them in its manifest for `lorepack inspect warnings` and Studio. The
@@ -121,18 +122,20 @@ process* (`FATAL ERROR: Reached heap limit`, exit 134) instead of raising
 Node start per build (the child is reused, and replaced only after it was killed), and a copy of
 each file's bytes and result across the IPC channel.
 
-**What the ceiling covers.** `--max-old-space-size` bounds the JavaScript heap. It does not bound
-`ArrayBuffer` memory, which is where pdfjs inflates a compressed stream, so a decompression bomb
-is stopped by the deadline rather than the ceiling: the 1.5 GB PDF above reached about 3.2 GB of
-resident memory in its 30 s. Issue #599 covers extracted-text amplification, which does not
-bound those buffers. A total resident-memory budget is tracked separately in
-[issue #677](https://github.com/burakdede/lorepack/issues/677), following the isolation work
-completed in #594.
-[ADR 0043](../adr/0043-parser-resident-memory.md) proposes external RSS observation;
-it records the measured baseline and unqualified platform/overshoot requirements.
-That watchdog is not implemented yet.
-Peak memory of a build is therefore the parent, plus at most the heap ceiling, plus whatever
-buffers the parse allocates before its deadline.
+**Heap and resident memory are different controls.** `--max-old-space-size` bounds the
+JavaScript heap, not native buffers. The parent now observes the owned parser's RSS
+outside parser code: Linux procfs, macOS `/bin/ps`, or Windows system PowerShell.
+It requires a valid first observation, then samples every 100 ms after each completed
+observation. An observed threshold breach stops the child with a `parse-memory`
+warning naming the resident-memory budget. Observer failure stops the build with
+`LORE_E_PARSE_FAILED`; it never silently disables the control.
+
+Sampling can overshoot, especially during a large allocation or OS scheduling delay.
+This is not a kernel memory quota. [ADR 0043](../adr/0043-parser-resident-memory.md)
+records the baseline, design and remaining independent three-platform qualification
+under [issue #677](https://github.com/burakdede/lorepack/issues/677). Its 1,536 MiB
+observed-envelope target is not yet a qualified release guarantee. The original
+3.2 GB measurement above describes the earlier heap-only implementation.
 
 **Ctrl-C stops a parse, not just the build after it.** The parent's event loop stays free while
 a file parses, so the interrupt is heard immediately, the child is killed, and the build ends
@@ -140,7 +143,7 @@ with `LORE_E_CANCELLED` before candidate activation. The terminal also delivers 
 the child, which can die of it first; that is reported as the same cancellation rather than as
 a broken file.
 
-**Neither limit is part of the build id.** They are environment variables for the same reason as
+**Resource settings are not part of the build id.** They are environment variables for the same reason as
 `LORE_LOCK_WAIT_MS`: a slow laptop and a fast runner must not disagree about a build's identity
 because one waited longer. Whether a file was left out does reach the id, through the content,
 like any other excluded file. A file left out this way is not cached, so the next build tries it

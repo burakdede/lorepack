@@ -1,11 +1,17 @@
 import { type ChildProcess, fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import type { ArtifactParser, ParsedArtifact, ParseInput } from '@lorepack/core';
+import {
+  type ArtifactParser,
+  LoreError,
+  type ParsedArtifact,
+  type ParseInput,
+} from '@lorepack/core';
 import { type ChildReply, deserializeError } from './isolation-protocol.js';
 import { PARSERS } from './registry-parsers.js';
+import { monitorResidentMemory, type ResidentMemoryMonitor } from './resident_memory.js';
 
 /**
- * Runs each parse in a child process under a wall-clock deadline and a heap ceiling (#594).
+ * Runs each parse in a child with a deadline, heap ceiling and sampled RSS threshold.
  *
  * A parser is a pure function of its bytes, and that is not the same as a bounded one. Small,
  * valid documents drive the libraries underneath into quadratic time (micromark on nested
@@ -37,12 +43,15 @@ export interface ParseLimits {
   readonly timeoutMs: number;
   /** V8's old-generation ceiling in the parse process (`--max-old-space-size`). */
   readonly memoryMb: number;
+  /** Sampled resident-memory threshold in MiB; allocations can overshoot between samples. */
+  readonly residentMemoryMb?: number;
 }
 
 export const PARSE_LIMITS = {
-  defaults: { timeoutMs: 30_000, memoryMb: 2048 },
+  defaults: { timeoutMs: 30_000, memoryMb: 2048, residentMemoryMb: 1024 },
   timeoutMs: { min: 100, max: 3_600_000 },
   memoryMb: { min: 64, max: 32_768 },
+  residentMemoryMb: { min: 64, max: 32_768 },
 } as const;
 
 export type ParseExclusionCode =
@@ -103,14 +112,27 @@ interface Child {
   readonly stderr: { head: string };
   /** Settles when the child has exited and its stderr has drained. */
   readonly closed: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+  readonly memory: ResidentMemoryMonitor;
+  used: boolean;
 }
 
 export class ParserHost {
   readonly #limits: ParseLimits;
+  readonly #residentMemoryMb: number;
   #child: Promise<Child> | null = null;
 
   constructor(limits: ParseLimits = PARSE_LIMITS.defaults) {
     this.#limits = limits;
+    this.#residentMemoryMb = limits.residentMemoryMb ?? PARSE_LIMITS.defaults.residentMemoryMb;
+    if (
+      !Number.isInteger(this.#residentMemoryMb) ||
+      this.#residentMemoryMb < PARSE_LIMITS.residentMemoryMb.min ||
+      this.#residentMemoryMb > PARSE_LIMITS.residentMemoryMb.max
+    ) {
+      throw new LoreError('LORE_E_INVALID_ARGUMENT', 'Invalid parser resident memory budget.', {
+        remediation: 'Use an integer from 64 to 32768 MiB for residentMemoryMb.',
+      });
+    }
   }
 
   async parse(
@@ -163,6 +185,7 @@ export class ParserHost {
       signal?.addEventListener('abort', onAbort, { once: true });
 
       const onMessage = (reply: ChildReply): void => {
+        if (child.memory.state.exceeded || child.memory.state.error !== null) return;
         if (reply.kind === 'parsed')
           finish(() => resolve({ kind: 'parsed', result: reply.result }));
         else if (reply.kind === 'failed') {
@@ -175,10 +198,25 @@ export class ParserHost {
       void child.closed.then(({ code, signal: exitSignal }) => {
         if (settled) return;
         this.#child = null;
+        if (child.memory.state.error !== null) {
+          finish(() => reject(child.memory.state.error));
+          return;
+        }
+        if (child.memory.state.exceeded) {
+          finish(() =>
+            resolve({
+              kind: 'excluded',
+              code: 'parse-memory',
+              message: `Parsing used more than the ${this.#residentMemoryMb} MiB resident memory budget, so the file was left out of the build. Set LORE_PARSE_RSS_MB to allow more, or exclude the file in .loreignore.`,
+            }),
+          );
+          return;
+        }
         finish(() => resolve(classifyExit(code, exitSignal, child.stderr.head, this.#limits)));
       });
 
-      child.process.send({ parserId: parser.id, input });
+      child.used = true;
+      if (child.process.connected) child.process.send({ parserId: parser.id, input });
     });
   }
 
@@ -190,15 +228,37 @@ export class ParserHost {
   }
 
   #ready(): Promise<Child> {
-    this.#child ??= start(this.#limits).catch((error: unknown) => {
-      this.#child = null;
-      throw error;
+    if (this.#child === null) {
+      const pending = start(this.#limits, this.#residentMemoryMb);
+      this.#child = pending;
+      void pending.then(
+        (child) => {
+          void child.closed.then(() => {
+            if (this.#child === pending) this.#child = null;
+          });
+        },
+        () => {
+          if (this.#child === pending) this.#child = null;
+        },
+      );
+    }
+    const pending = this.#child;
+    return pending.then((child) => {
+      if (
+        child.used &&
+        (child.memory.state.exceeded ||
+          child.memory.state.error !== null ||
+          !child.process.connected)
+      ) {
+        if (this.#child === pending) this.#child = null;
+        return this.#ready();
+      }
+      return child;
     });
-    return this.#child;
   }
 }
 
-function start(limits: ParseLimits): Promise<Child> {
+function start(limits: ParseLimits, residentMemoryMb: number): Promise<Child> {
   const child = fork(fileURLToPath(new URL('./parse-child.js', import.meta.url)), [], {
     // Explicit rather than inherited: the parent may run under a test runner's loader or a
     // debugger flag, and the child must start as a plain Node with only these set.
@@ -226,24 +286,42 @@ function start(limits: ParseLimits): Promise<Child> {
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
     child.once('close', (code, signal) => resolve({ code, signal }));
   });
+  const memory = monitorResidentMemory(child, residentMemoryMb);
+  const result: Child = { process: child, stderr, closed, memory, used: false };
+  void closed.then(() => memory.stop());
 
   return new Promise<Child>((resolve, reject) => {
+    let parserReady = false;
+    let memoryReady = false;
+    const complete = (): void => {
+      if (parserReady && memoryReady) resolve(result);
+    };
+    void memory.ready.then(() => {
+      memoryReady = true;
+      complete();
+    }, reject);
     const onMessage = (reply: ChildReply): void => {
       if (reply.kind !== 'ready') return;
       child.off('message', onMessage);
-      resolve({ process: child, stderr, closed });
+      parserReady = true;
+      complete();
     };
     child.on('message', onMessage);
     // Kept for the child's whole life: an `error` event with no listener would throw in the
     // parent. A failed send to a child that died is answered by `close` below, not here.
     child.on('error', reject);
-    void closed.then(({ code, signal }) =>
+    void closed.then(({ code, signal }) => {
+      if (memory.state.exceeded) {
+        resolve(result);
+        return;
+      }
       reject(
-        new Error(
-          `The parse process exited before it was ready (${describeExit(code, signal)}). ${stderr.head.split('\n')[0] ?? ''}`.trim(),
-        ),
-      ),
-    );
+        memory.state.error ??
+          new Error(
+            `The parse process exited before it was ready (${describeExit(code, signal)}). ${stderr.head.split('\n')[0] ?? ''}`.trim(),
+          ),
+      );
+    });
   });
 }
 
