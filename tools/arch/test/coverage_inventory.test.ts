@@ -76,6 +76,26 @@ describe('all-owned coverage inventory', () => {
     );
   });
 
+  it('covers the new resident-memory boundary as critical without rewriting frozen flags', () => {
+    const boundary = 'packages/parsers/src/resident_memory.ts';
+    const existing = 'packages/parsers/src/isolation.ts';
+    put(boundary);
+    put(existing);
+    git(['add', '.']);
+    const inventory = coverageInventory(root, {
+      included: [...frozen.included, { path: existing, critical: false }],
+    });
+    expect(inventory.included.find((entry) => entry.path === boundary)).toMatchObject({
+      critical: true,
+      frozen: false,
+      group: 'parsers',
+    });
+    expect(inventory.included.find((entry) => entry.path === existing)).toMatchObject({
+      critical: false,
+      frozen: true,
+    });
+  });
+
   it.each([
     ['src/types.d.ts', 'nonexecuted declaration'],
     ['test/unit.ts', 'test or fixture code, not production'],
