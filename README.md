@@ -497,6 +497,7 @@ remaining three-platform qualification and independent resource measurements.
 The [resource verification protocol](docs/testing/parser_resident_memory.md) defines
 the four mandatory CLI workloads and retained native evidence.
 The consolidated verification gate retains failed child-test assertions for diagnosis.
+Its deadline checks account for pending observer callbacks after a parent stall.
 [Required-source coverage](docs/architecture/build-orchestration.md#required-source-coverage)
 lets strict builds reject missing or incomplete declared files and sheets before activation.
 The [verification checklist](docs/testing/required-source-coverage.md) records cold and cached
