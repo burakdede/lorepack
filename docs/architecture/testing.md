@@ -289,3 +289,19 @@ facts, reopen the state database and retry without consuming a generation.
 Query contracts check token and byte budgets independently, compound remote row
 estimates and ordinary nested/window forms. Local and remote profiles keep their
 existing admission rules and limits; defensive guards are not removed for coverage.
+
+### Integrating new critical source
+
+Keep parser resident-memory, real CLI resource, privacy and source-churn failure
+context tests in the strict Node audit program. Their imported helpers must be
+checked with the same settings; browser fixtures retain the separate DOM program.
+The new `packages/parsers/src/resident_memory.ts` controls process availability
+and belongs to the live critical coverage set. This extends the denominator without
+rewriting the frozen 345 owned records, their 49 critical flags or the original
+coverage targets. The inventory regression checks both the new boundary and
+preservation of an existing frozen noncritical record.
+
+An integrated checkout containing pending critical fixes is preparation only.
+Keep early gap measurements visibly ineligible for final qualification. After
+required native verification and merges, freeze the actual main-based source and
+run all original nine bundles, including every new owned executable source.

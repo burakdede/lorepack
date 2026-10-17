@@ -23,11 +23,15 @@
     "packages/backend-local/test/tables.test.ts",
     "packages/cli/test/activate.test.ts",
     "packages/cli/test/damaged-build.test.ts",
+    "packages/cli/test/dev.e2e.test.ts",
     "packages/cli/test/diff.test.ts",
+    "packages/cli/test/parse-limits.test.ts",
     "packages/cli/test/read-source.test.ts",
+    "packages/cli/test/resident_memory.e2e.test.ts",
     "packages/cli/test/runtime-contract.test.ts",
     "packages/cli/test/runtime-local.test.ts",
     "packages/cli/test/sql_keyword_suggestions.e2e.test.ts",
+    "packages/cli/test/support/process_memory.ts",
     "packages/cli/test/table_context.test.ts",
     "packages/cli/test/table_formula_evidence.test.ts",
     "packages/cli/test/target_failures.test.ts",
@@ -43,6 +47,7 @@
     "packages/deploy-cloudflare/test/runtime-contract.test.ts",
     "packages/deploy-cloudflare/test/tables.test.ts",
     "packages/parsers/test/csv.test.ts",
+    "packages/parsers/test/resident_memory.test.ts",
     "packages/parsers/test/xlsx.test.ts",
     "packages/runtime/test/delivered_budget.test.ts",
     "packages/runtime/test/http.test.ts",
@@ -61,8 +66,11 @@
     "tools/arch/test/retrieval-comparison.test.ts",
     "tools/arch/test/supply_chain_command.test.ts",
     "tools/arch/test/xlsx_spike.test.ts",
+    "tools/security/test/privacy-defaults.test.ts",
+    "tools/security/test/security-coverage.test.ts",
     "tools/security/test/test-skips.test.ts",
     "tools/test-support/src/runtime-contract.ts",
-    "tools/test-support/test/harness.test.ts"
+    "tools/test-support/test/harness.test.ts",
+    "tools/test-support/test/hostile-fixtures.test.ts"
   ]
 }

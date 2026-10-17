@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 const EXECUTABLE = /\.(?:[cm]?js|[cm]?ts|tsx|jsx)$/;
 const TEST = /(^|\/)(test|tests|fixtures|__tests__)\/|\.(test|spec)\.[^/]+$/;
 const CRITICAL =
-  /(core\/src\/(hash|paths|sql|runtime)|compiler\/src\/(discover|seal|lock|fingerprint)|backend-local\/src\/(archive|atomic|object-store|state-store|runtime-backend|lock|sql)|runtime\/src\/(context|read-source|runtime|http)|cli\/src\/(services\/(build|retention|packing|builds|serving)|commands\/activate)|mcp\/src\/(http|protocol)|deploy-cloudflare\/src\/(access-auth|runtime-auth|retention|projection-state|projection-preflight))/;
+  /(core\/src\/(hash|paths|sql|runtime)|compiler\/src\/(discover|seal|lock|fingerprint)|backend-local\/src\/(archive|atomic|object-store|state-store|runtime-backend|lock|sql)|runtime\/src\/(context|read-source|runtime|http)|cli\/src\/(services\/(build|retention|packing|builds|serving)|commands\/activate)|parsers\/src\/resident_memory\.ts$|mcp\/src\/(http|protocol)|deploy-cloudflare\/src\/(access-auth|runtime-auth|retention|projection-state|projection-preflight))/;
 
 export function classifySource(path) {
   if (!EXECUTABLE.test(path)) return null;
