@@ -159,18 +159,21 @@ The contract from architecture section 15.2:
 5. A missed filesystem notification is harmless, because the generation is re-read at each
    request boundary rather than pushed.
 
-Concurrent readers of the same build share one open database. The currently active build
-stays open when its refcount reaches zero, since reopening it for the next request would
-cost without benefit; older builds close as soon as they drain. A build that drained while
-it was active is closed by the first request after the pointer moves, because every
-acquisition re-reads the pointer and closes any database no request holds except the active
-one (#566). Before that, a long-running `lorepack dev` kept one database open per rebuild, and
-a pruned build's file stayed open, its space never freed and, on Windows, undeletable.
+Concurrent readers of the same build share one open database. The final handle release
+closes that catalog, including its prepared statements, before removing its reader record.
+This applies to the current build too: keeping an idle active connection would leave its
+cleanup pin behind if another process activated a new build before the next request.
+A normal idle `serve` or `dev` therefore does not prevent reclaiming that older build.
 
-If the pointer moves before another request arrives, the previous idle catalog remains
-owned by the runtime. Its reader record keeps that build and its objects out of cleanup on
-every OS. The next acquisition or runtime shutdown closes the connection and releases that
-record, after which a subsequent prune can reclaim it.
+A caller that still holds a handle retains the database and its objects. In particular,
+`serve --build` and `mcp --build` keep their explicitly selected version pinned for the
+server lifetime, including between requests. Backend shutdown closes all remaining owned
+catalogs and the state database; repeated release remains harmless.
+
+This uses no activation watcher, idle timer or deferred cleanup interval. Sequential reads
+reopen the catalog and recheck its schema. [ADR 0045](../adr/0045-close-drained-catalogs.md)
+records the trade-off, and the [cleanup verification](../testing/idle_catalog_cleanup.md)
+records the actual CLI/HTTP/MCP regression and unchanged-workload measurements.
 
 ## Project lock
 

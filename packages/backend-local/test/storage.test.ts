@@ -203,12 +203,12 @@ describe('FileObjectStore', () => {
       const store = new FileObjectStore(project.path('objects'));
       writeFileSync(project.path('escape.txt'), 'not an object', 'utf8');
 
-      await expect(store.get('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+      await expect(store.get('../../../escape.txt')).rejects.toMatchObject({
         code: 'LORE_E_INVALID_ARGUMENT',
-      });
-      await expect(store.has('../../../escape.txt')).rejects.toMatchObject<Partial<LoreError>>({
+      } satisfies Partial<LoreError>);
+      await expect(store.has('../../../escape.txt')).rejects.toMatchObject({
         code: 'LORE_E_INVALID_ARGUMENT',
-      });
+      } satisfies Partial<LoreError>);
     });
   });
 
@@ -567,6 +567,23 @@ describe('LocalActiveBuildProvider', () => {
     });
   });
 
+  it('releases an idle catalog and its reader record before external activation, issue566', async () => {
+    await withProvider(async (provider, state, builds) => {
+      materializeBuild(builds, BUILD_A);
+      state.recordBuild(summary(BUILD_A));
+      state.activate(BUILD_A);
+      const handle = await provider.acquire();
+      const database = provider.database(handle);
+      const statement = database.prepare('SELECT id FROM chunks');
+      expect(statement.get()).toEqual({ id: BUILD_A });
+      handle.release();
+      expect(provider.openBuildCount).toBe(0);
+      expect(database.isOpen).toBe(false);
+      expect(readdirSync(join(builds, '..', 'readers'))).toEqual([]);
+      expect(() => statement.get()).toThrow();
+    });
+  });
+
   it('keeps one build open after many activations with no request in flight (#566)', async () => {
     await withProvider(async (provider, state, builds) => {
       const ids = ['1', '2', '3', '4', '5', '6'].map(buildId);
@@ -577,9 +594,9 @@ describe('LocalActiveBuildProvider', () => {
       for (const id of ids) {
         state.activate(id);
         (await provider.acquire()).release();
-        // A long-running server rebuilds on every save. Each activation used to leave the
-        // previous build's database open, one file descriptor and page cache per save.
-        expect(provider.openBuildCount).toBe(1);
+        // Keep this historical case name; the stricter lifetime now permits no idle cache.
+        // Every original activation/read still runs, without leaving a descriptor or pin.
+        expect(provider.openBuildCount).toBe(0);
       }
     });
   });
@@ -599,7 +616,7 @@ describe('LocalActiveBuildProvider', () => {
       // failure prune hit; elsewhere it is the open count that proves the handle is gone.
       rmSync(join(builds, BUILD_A), { recursive: true });
       expect(existsSync(join(builds, BUILD_A))).toBe(false);
-      expect(provider.openBuildCount).toBe(1);
+      expect(provider.openBuildCount).toBe(0);
     });
   });
 
@@ -614,10 +631,10 @@ describe('LocalActiveBuildProvider', () => {
       state.activate(BUILD_B);
       (await provider.acquire()).release();
 
-      expect(provider.openBuildCount).toBe(2);
+      expect(provider.openBuildCount).toBe(1);
       expect(() => provider.database(inFlight).prepare('SELECT 1').get()).not.toThrow();
       inFlight.release();
-      expect(provider.openBuildCount).toBe(1);
+      expect(provider.openBuildCount).toBe(0);
     });
   });
 
@@ -728,6 +745,7 @@ describe('LocalActiveBuildProvider', () => {
       state.recordBuild(summary(BUILD_A));
       state.activate(BUILD_A);
       const handle = await provider.acquire();
+      const held = await provider.acquire();
       try {
         expect(() => provider.database({ ...handle })).toThrowError(
           expect.objectContaining({ code: 'LORE_E_INVALID_ARGUMENT' }),
@@ -742,11 +760,13 @@ describe('LocalActiveBuildProvider', () => {
       expect(() => handle.release()).not.toThrow();
       const next = await provider.acquire();
       try {
+        expect(provider.database(next)).toBe(provider.database(held));
         expect(provider.database(next).prepare('SELECT id FROM chunks').get()).toEqual({
           id: BUILD_A,
         });
       } finally {
         next.release();
+        held.release();
       }
     });
   });

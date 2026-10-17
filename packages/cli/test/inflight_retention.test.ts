@@ -29,6 +29,9 @@ it('retains an idle catalog until its owner closes after external activation, is
         });
       const first = JSON.parse((await cli(['build'])).stdout).buildId as string;
       const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+      // Ordinary requests now drain; an explicit owner keeps this original idle-pin case real.
+      const held = await backend.provider.acquire();
+      expect(held.buildId).toBe(first);
       try {
         expect((await createRuntime(backend).readSource({ path: 'guide.md' })).text).toContain(
           'Original body',

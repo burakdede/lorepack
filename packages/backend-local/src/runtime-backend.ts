@@ -355,9 +355,9 @@ export interface LocalRuntimeBackend extends RuntimeDeps {
 /**
  * Builds the ports for a project on disk.
  *
- * The caller owns the lifetime: `close()` releases the state database and every build
- * database the provider opened. A request never closes anything, which is what lets an
- * older build stay open until its last in-flight reader releases it.
+ * The caller owns the state database and backend shutdown. Request handles share a catalog
+ * while readers overlap and close it after the final release; `close()` also releases any
+ * handles still owned by the backend.
  */
 export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRuntimeBackend {
   const loreDirectory = join(options.projectRoot, LORE_DIRECTORY);

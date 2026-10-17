@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createLocalRuntimeBackend } from '@lorepack/backend-local';
+import { createLocalRuntimeBackend, type LocalActiveBuildProvider } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
@@ -112,9 +112,7 @@ describe('search over the local ports', () => {
         const handle = await backend.provider.acquire();
         try {
           await backend.open(handle);
-          const db = (
-            backend.provider as { database(h: unknown): { prepare(sql: string): unknown } }
-          ).database(handle);
+          const db = (backend.provider as LocalActiveBuildProvider).database(handle);
           // `schema_migrations` exists in the build database and is not part of the read
           // surface. The authorizer, not the query author, is what stops this.
           expect(() => db.prepare('SELECT * FROM schema_migrations')).toThrow();
@@ -134,14 +132,19 @@ describe('the handle, against a real provider', () => {
       await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
       const backend = createLocalRuntimeBackend({ projectRoot: project.root });
       const runtime = createRuntime(backend);
+      const held = await backend.provider.acquire();
+      try {
+        await runtime.describeBuild();
+        await runtime.search({ query: 'rollback', limit: 3, includeArchived: false, debug: false });
 
-      await runtime.describeBuild();
-      await runtime.search({ query: 'rollback', limit: 3, includeArchived: false, debug: false });
-
-      const provider = backend.provider as unknown as { openBuildCount: number };
-      expect(provider.openBuildCount).toBe(1);
-      backend.close();
-      expect(provider.openBuildCount).toBe(0);
+        const provider = backend.provider as unknown as { openBuildCount: number };
+        expect(provider.openBuildCount).toBe(1);
+        backend.close();
+        expect(provider.openBuildCount).toBe(0);
+      } finally {
+        backend.close();
+        held.release();
+      }
     });
   });
 
