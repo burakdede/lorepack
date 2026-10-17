@@ -75,6 +75,8 @@ stopping its watchdog must prevent late data from rearming it.
 This local reproduction and correction do not prove every native failure had
 the same cause. Retain native timing/report-count/reader-state diagnostics and
 rerun the unchanged Windows acceptance scenarios before declaring it resolved.
+The consolidated suite preserves the child reporter's failed assertion messages,
+so a deadline-test failure includes its actual assertion rather than only its status.
 
 ## Linux address-space teardown
 
