@@ -252,6 +252,9 @@ const EVIDENCE: readonly Evidence[] = [
     path: 'packages/parsers/test/resident_memory.test.ts',
     tests: [
       'stops native resident growth outside a blocked parser, issue677',
+      'services pending OS reports after a parent stall before declaring the observer stale',
+      'still rejects an observer that genuinely stops reporting at the original deadline',
+      'stops the reporting watchdog without arming it again from late data',
       'stops its observer without terminating a healthy parser',
       'does not misreport an exited parser as an observer failure',
     ],

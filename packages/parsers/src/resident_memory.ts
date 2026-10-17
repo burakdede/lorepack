@@ -16,6 +16,37 @@ export interface ResidentMemoryMonitor {
 const INTERVAL_MS = 100;
 const READER_TIMEOUT_MS = 250;
 
+export function createReportingWatchdog(
+  expired: (details: { reports: number; silenceMs: number }) => void,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let pending: ReturnType<typeof setImmediate> | undefined;
+  let stopped = false;
+  let reports = 0;
+  let lastReport = 0;
+  return {
+    report() {
+      if (stopped) return;
+      clearTimeout(timer);
+      clearImmediate(pending);
+      reports++;
+      lastReport = performance.now();
+      timer = setTimeout(() => {
+        const observedReports = reports;
+        pending = setImmediate(() => {
+          if (!stopped && reports === observedReports)
+            expired({ reports, silenceMs: performance.now() - lastReport });
+        });
+      }, READER_TIMEOUT_MS);
+    },
+    stop() {
+      stopped = true;
+      clearTimeout(timer);
+      clearImmediate(pending);
+    },
+  };
+}
+
 export function monitorResidentMemory(
   parser: ChildProcess,
   limitMiB: number,
@@ -30,9 +61,11 @@ export function monitorResidentMemory(
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reader: ChildProcess | undefined;
+  let reporting: ReturnType<typeof createReportingWatchdog> | undefined;
   const stop = (): void => {
     stopped = true;
     clearTimeout(timer);
+    reporting?.stop();
     reader?.kill('SIGKILL');
   };
   const alive = (): boolean => {
@@ -71,10 +104,7 @@ export function monitorResidentMemory(
     resolveReady();
     if (process.platform === 'win32') {
       clearTimeout(timer);
-      timer = setTimeout(
-        () => fail(new Error('The process memory observer stopped reporting.')),
-        READER_TIMEOUT_MS,
-      );
+      reporting?.report();
     }
     if (bytes > limitMiB * 1024 * 1024) {
       state.exceeded = true;
@@ -82,6 +112,13 @@ export function monitorResidentMemory(
       parser.kill('SIGKILL');
     }
   };
+  reporting = createReportingWatchdog(({ reports, silenceMs }) =>
+    fail(
+      new Error(
+        `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.`,
+      ),
+    ),
+  );
   const pid = parser.pid;
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 0) {
     rejectReady(new Error('The parser process did not start.'));
