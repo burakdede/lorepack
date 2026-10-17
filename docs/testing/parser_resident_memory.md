@@ -84,6 +84,22 @@ Node documents that [`setImmediate` callbacks run after I/O callbacks](https://n
 This corrects a reproduced test-ordering race; the assertion details from earlier
 failed runs were not retained, so their precise failure is still unproven.
 
+## First observer report
+
+The small Windows benchmark on `c44dde1c` failed because the observer did not
+become ready within the existing five-second startup deadline. The completed
+job log is retained in issue #677. Startup still used a timer-only decision.
+A real-pipe regression confirms that a report written within that deadline can
+remain pending while a parent stall lets the timer declare failure first.
+The separate silent-observer control still fails after the original deadline.
+
+Startup now services the pending I/O turn before classifying a missing first
+report, and the first valid sample cancels that decision. The five-second startup
+and 250 ms reporting deadlines are unchanged. A genuine startup failure records
+elapsed time, reader PID/exit/signal, buffered length and bounded observer stderr.
+This reproduction does not prove every native startup failure has that cause;
+the original Windows benchmark and all native resource checks must pass afresh.
+
 ## Linux address-space teardown
 
 The original low-heap CMap CLI case failed on native Linux at `7155fb4f` because
