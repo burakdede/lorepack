@@ -29,6 +29,7 @@
     "checked": 18,
     "missing": [
       "commander",
+      "cross-spawn",
       "jsonc-parser",
       "mammoth",
       "mdast-util-from-markdown",
@@ -155,15 +156,15 @@
       "references": [
         "packages/cli/package.json:dependencies"
       ],
-      "latestVersion": "2.1.4",
+      "latestVersion": "2.1.5",
       "pinnedPublishedAt": "2026-07-26T05:02:01.126Z",
-      "latestReleaseAt": "2026-10-08T04:42:19.622Z",
-      "daysSinceLastRelease": 4,
+      "latestReleaseAt": "2026-10-13T08:25:17.433Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@hono%2fnode-server@2.1.4"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@hono%2fnode-server@2.1.5"
       },
       "health": {
         "status": "current"
@@ -290,10 +291,10 @@
         "package.json:devDependencies",
         "tools/studio-e2e/package.json:devDependencies"
       ],
-      "latestVersion": "1.64.0",
+      "latestVersion": "1.64.1",
       "pinnedPublishedAt": "2026-07-30T16:36:55.324Z",
-      "latestReleaseAt": "2026-10-07T20:44:27.702Z",
-      "daysSinceLastRelease": 5,
+      "latestReleaseAt": "2026-10-14T11:58:13.696Z",
+      "daysSinceLastRelease": 0,
       "license": "Apache-2.0",
       "provenance": {
         "status": "not-required",
@@ -314,15 +315,15 @@
       "references": [
         "apps/studio/package.json:dependencies"
       ],
-      "latestVersion": "5.104.2",
+      "latestVersion": "5.104.3",
       "pinnedPublishedAt": "2025-09-23T07:38:15.625Z",
-      "latestReleaseAt": "2026-10-11T19:35:15.506Z",
-      "daysSinceLastRelease": 1,
+      "latestReleaseAt": "2026-10-15T07:53:35.788Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@tanstack%2freact-query@5.104.2"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@tanstack%2freact-query@5.104.3"
       },
       "health": {
         "status": "current"
@@ -387,10 +388,10 @@
       "references": [
         "apps/studio/package.json:devDependencies"
       ],
-      "latestVersion": "14.6.7",
+      "latestVersion": "14.6.8",
       "pinnedPublishedAt": "2025-01-21T17:35:55.574Z",
-      "latestReleaseAt": "2026-09-02T01:56:32.109Z",
-      "daysSinceLastRelease": 40,
+      "latestReleaseAt": "2026-10-13T06:41:22.306Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -398,6 +399,32 @@
       },
       "health": {
         "status": "current"
+      }
+    },
+    {
+      "name": "@types/cross-spawn",
+      "specifiers": [
+        "6.0.6"
+      ],
+      "dependencyTypes": [
+        "devDependencies"
+      ],
+      "references": [
+        "packages/connect-clients/package.json:devDependencies"
+      ],
+      "latestVersion": "6.0.6",
+      "pinnedPublishedAt": "2023-11-20T23:55:06.550Z",
+      "latestReleaseAt": "2023-11-20T23:55:06.550Z",
+      "daysSinceLastRelease": 1057,
+      "license": "MIT",
+      "provenance": {
+        "status": "not-required",
+        "reason": "not in the production direct dependency set"
+      },
+      "health": {
+        "status": "stale-warning",
+        "owner": "maintainer",
+        "decision": "See docs/architecture/dependencies.md for the recorded dependency decision."
       }
     },
     {
@@ -683,9 +710,9 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "5.0.4",
+      "latestVersion": "5.0.5",
       "pinnedPublishedAt": "2026-08-18T14:22:18.896Z",
-      "latestReleaseAt": "2026-10-12T09:45:32.121Z",
+      "latestReleaseAt": "2026-10-15T14:27:49.006Z",
       "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
@@ -767,6 +794,33 @@
       },
       "health": {
         "status": "current"
+      }
+    },
+    {
+      "name": "cross-spawn",
+      "specifiers": [
+        "7.0.6"
+      ],
+      "dependencyTypes": [
+        "dependencies"
+      ],
+      "references": [
+        "packages/cli/package.json:dependencies",
+        "packages/connect-clients/package.json:dependencies"
+      ],
+      "latestVersion": "7.0.6",
+      "pinnedPublishedAt": "2024-11-18T13:59:52.129Z",
+      "latestReleaseAt": "2024-11-18T13:59:52.129Z",
+      "daysSinceLastRelease": 693,
+      "license": "MIT",
+      "provenance": {
+        "status": "missing",
+        "reason": "npm registry metadata has no provenance attestation"
+      },
+      "health": {
+        "status": "stale-warning",
+        "owner": "maintainer",
+        "decision": "See docs/architecture/dependencies.md for the recorded dependency decision."
       }
     },
     {
@@ -883,10 +937,10 @@
       "references": [
         "apps/studio/package.json:devDependencies"
       ],
-      "latestVersion": "30.1.2",
+      "latestVersion": "30.1.3",
       "pinnedPublishedAt": "2025-09-13T04:43:54.808Z",
-      "latestReleaseAt": "2026-10-04T09:15:00.333Z",
-      "daysSinceLastRelease": 8,
+      "latestReleaseAt": "2026-10-15T09:24:38.912Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -1034,15 +1088,15 @@
       "references": [
         "apps/studio/package.json:dependencies"
       ],
-      "latestVersion": "19.3.0",
+      "latestVersion": "19.3.1",
       "pinnedPublishedAt": "2025-10-01T21:38:32.757Z",
-      "latestReleaseAt": "2026-09-09T17:21:30.071Z",
-      "daysSinceLastRelease": 33,
+      "latestReleaseAt": "2026-10-14T16:47:15.290Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/react@19.3.0"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/react@19.3.1"
       },
       "health": {
         "status": "current"
@@ -1059,15 +1113,15 @@
       "references": [
         "apps/studio/package.json:dependencies"
       ],
-      "latestVersion": "19.3.0",
+      "latestVersion": "19.3.1",
       "pinnedPublishedAt": "2025-10-01T21:38:42.388Z",
-      "latestReleaseAt": "2026-09-09T17:17:39.744Z",
-      "daysSinceLastRelease": 33,
+      "latestReleaseAt": "2026-10-14T16:49:10.081Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/react-dom@19.3.0"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/react-dom@19.3.1"
       },
       "health": {
         "status": "current"
@@ -1343,9 +1397,9 @@
       "references": [
         "package.json:devDependencies"
       ],
-      "latestVersion": "5.0.4",
+      "latestVersion": "5.0.5",
       "pinnedPublishedAt": "2026-08-18T14:27:07.240Z",
-      "latestReleaseAt": "2026-10-12T09:47:02.826Z",
+      "latestReleaseAt": "2026-10-15T14:29:01.396Z",
       "daysSinceLastRelease": 0,
       "license": "MIT",
       "provenance": {
@@ -1368,10 +1422,10 @@
         "packages/cli/package.json:devDependencies",
         "packages/deploy-cloudflare/package.json:devDependencies"
       ],
-      "latestVersion": "4.149.0",
+      "latestVersion": "4.151.1",
       "pinnedPublishedAt": "2026-10-08T18:24:09.016Z",
-      "latestReleaseAt": "2026-10-08T18:24:09.016Z",
-      "daysSinceLastRelease": 4,
+      "latestReleaseAt": "2026-10-16T09:55:24.246Z",
+      "daysSinceLastRelease": 0,
       "license": "MIT OR Apache-2.0",
       "provenance": {
         "status": "not-required",
