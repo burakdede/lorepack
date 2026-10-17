@@ -123,3 +123,11 @@ the original timer-only decision and passed after a `setImmediate` check turn.
 This preserves the 250 ms health deadline and immediate RSS-breach termination;
 it is not a larger memory envelope or a retry. Native failures remain unqualified
 until their unchanged scenarios pass with retained diagnostics.
+
+Linux PID presence is insufficient to infer a live address space. The kernel's
+[smaps rollup implementation](https://github.com/torvalds/linux/blob/v6.8/fs/proc/task_mmu.c#L879)
+returns `ESRCH` when the task or memory descriptor disappears. Native Linux exposed
+this before Node delivered child-close, replacing a heap-memory exclusion with an
+observer error. Treat only that errno from the fixed owned-process procfs read as
+an exit signal: stop sampling and await the existing close/stderr classification.
+Other errors remain failures, and no sample, retry, budget or deadline is changed.
