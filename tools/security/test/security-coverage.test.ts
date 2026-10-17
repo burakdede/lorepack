@@ -261,6 +261,28 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/cmapBombPdf\(8\)/, /residentMemoryMb: 1024/, /parse-memory/],
   },
   {
+    name: 'Linux memory reports preserve process-exit classification, issue 677',
+    path: 'packages/parsers/test/linux_resident_memory.test.ts',
+    tests: [
+      'reads resident bytes from the exact owned Linux process report',
+      'keeps zero resident memory as a valid measurement',
+      'recognizes Linux ESRCH before the child exit event without retrying',
+      ...['ENOENT', 'EACCES', 'EIO'].map(
+        (code) => `preserves genuine Linux report failure ${code}`,
+      ),
+      ...['empty', 'nonnumeric', 'negative'].map((name) => `rejects ${name} Linux rollup`),
+    ],
+    patterns: [
+      /ESRCH/,
+      /ENOENT/,
+      /EACCES/,
+      /EIO/,
+      /toBeNull\(\)/,
+      /toBe\(0\)/,
+      /toHaveBeenCalledTimes\(1\)/,
+    ],
+  },
+  {
     name: 'the four CLI memory workloads retain native process evidence, issue 677',
     path: 'packages/cli/test/resident_memory.e2e.test.ts',
     tests: ['flate.pdf', 'cmap.pdf', 'document.docx', 'rows.csv'].map(
