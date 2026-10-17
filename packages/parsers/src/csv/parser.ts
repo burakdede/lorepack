@@ -24,7 +24,7 @@ import {
 import { DELIMITERS, decideHeader, detectDelimiter } from './dialect.js';
 
 export const CSV_PARSER_ID = 'csv' as const;
-export const CSV_PARSER_VERSION = '0.1.0' as const;
+export const CSV_PARSER_VERSION = '0.1.1' as const;
 
 /**
  * Hard limits, mirroring `limits.maxTableRows` and `limits.maxTableColumns` in the config.
@@ -53,13 +53,9 @@ const SAMPLE_ROWS = 5;
  * it describes the table: its name, its columns and their types, its row count, and where it
  * came from. That node is what search finds. The rows are reached by SQL, with provenance.
  *
- * The whole file is read into memory rather than streamed, which is a deliberate limit. The
- * port hands a parser `bytes`, so the file is already resident before this runs, and a
- * streaming reader here would halve nothing while adding a second code path. Measured at the
- * envelope on 2026-08-04: a 500,000-row, five-column file (21 MB on disk) parses in 1.7 s and
- * imports in 0.4 s, holding about 360 MB above baseline. That is affordable for a build
- * process and it is the number to check against, not a guess. A format that outgrows it earns
- * a streaming reader and the port change to justify one.
+ * The port already supplies resident input bytes. Field and record callbacks enforce the
+ * envelope before unbounded arrays can form; valid tables retain their bounded grid for
+ * inference and provenance. Parser isolation remains the independent memory backstop.
  */
 export const csvParser: ArtifactParser = {
   id: CSV_PARSER_ID,
@@ -77,8 +73,9 @@ export const csvParser: ArtifactParser = {
       ? { delimiter: '\t', reason: 'the file extension is .tsv' }
       : detectDelimiter(text);
 
-    const rows = readRows(text, dialect.delimiter, input);
-    const table = buildTable(input, rows, dialect, warnings);
+    const rows = readRows(text, dialect.delimiter, input, warnings);
+    const table = rows === null ? null : buildTable(input, rows, dialect, warnings);
+    const lineEnd = Math.max(1, rows?.length ?? 1);
 
     const builder = new NodeBuilder(input);
     const filename = input.relativePath.split('/').at(-1) ?? input.relativePath;
@@ -89,7 +86,7 @@ export const csvParser: ArtifactParser = {
       kind: 'document',
       title,
       lineStart: 1,
-      lineEnd: Math.max(1, rows.length),
+      lineEnd,
     });
 
     if (table !== null) {
@@ -104,14 +101,14 @@ export const csvParser: ArtifactParser = {
         title,
         text: describeTable(table),
         lineStart: 1,
-        lineEnd: Math.max(1, rows.length),
+        lineEnd,
         metadata: {
           tableId: table.tableId,
           rowCount: table.rows.length,
           columns: table.columns.map((column) => column.name),
         },
       });
-    } else if (rows.length > 0) {
+    } else if (rows === null) {
       /**
        * A file that is real but was not imported, described rather than dropped (#242).
        *
@@ -129,10 +126,10 @@ export const csvParser: ArtifactParser = {
         kind: 'table',
         parentId: root.id,
         title,
-        text: `${title} is a delimited file of ${count(rows.length, 'row')} that was not imported as a table. Its rows are not in this build and cannot be queried; the file itself can be read at ${input.displayPath}.`,
+        text: `${title} is a delimited file that was not imported as a table. Its rows are not in this build and cannot be queried; the file itself can be read at ${input.displayPath}.`,
         lineStart: 1,
-        lineEnd: Math.max(1, rows.length),
-        metadata: { imported: false, rowCount: rows.length },
+        lineEnd,
+        metadata: { imported: false },
       });
     }
 
@@ -160,6 +157,17 @@ function stripBom(text: string): string {
   return text.startsWith('﻿') ? text.slice(1) : text;
 }
 
+class CsvLimitError extends Error {
+  readonly kind: 'rows' | 'columns';
+  readonly observed: number;
+
+  constructor(kind: 'rows' | 'columns', observed: number) {
+    super(`CSV ${kind} limit`);
+    this.kind = kind;
+    this.observed = observed;
+  }
+}
+
 /**
  * Reads the grid, as arrays.
  *
@@ -169,7 +177,13 @@ function stripBom(text: string): string {
  * forbids. Reading arrays means raggedness is a length this code can see and warn about, with
  * the line number attached.
  */
-function readRows(text: string, delimiter: string, input: ParseInput): string[][] {
+function readRows(
+  text: string,
+  delimiter: string,
+  input: ParseInput,
+  warnings: ParserWarning[],
+): string[][] | null {
+  let hasHeader = false;
   try {
     return parseCsv(text, {
       delimiter,
@@ -182,8 +196,32 @@ function readRows(text: string, delimiter: string, input: ParseInput): string[][
       // Whitespace is data until a user says otherwise. Trimming would quietly change
       // ` 007 ` into something a different parser reads differently.
       trim: false,
+      cast(value, context) {
+        if (context.index >= CSV_LIMITS.maxColumns) {
+          throw new CsvLimitError('columns', context.index + 1);
+        }
+        return value;
+      },
+      on_record(record: string[], context) {
+        if (context.records === 1) hasHeader = decideHeader([record], record.length).hasHeader;
+        const bodyRows = context.records - Number(hasHeader);
+        if (bodyRows > CSV_LIMITS.maxRows) throw new CsvLimitError('rows', bodyRows);
+        return record;
+      },
     }) as string[][];
   } catch (cause) {
+    if (cause instanceof CsvLimitError) {
+      warnings.push({
+        code: cause.kind === 'columns' ? 'csv-too-many-columns' : 'csv-too-many-rows',
+        loss: {},
+        message:
+          cause.kind === 'columns'
+            ? `${input.displayPath} has at least ${count(cause.observed, 'column')}, above the supported limit of ${String(CSV_LIMITS.maxColumns)}, so it was not imported as a table. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`
+            : `${input.displayPath} has at least ${count(cause.observed, 'row')}, above the supported limit of ${CSV_LIMITS.maxRows.toLocaleString('en-US')}, so it was not imported as a table. Split it, or filter it to the rows the project needs. The limit exists because every row is imported into the build and served from it.`,
+        line: 1,
+      });
+      return null;
+    }
     throw new LoreError(
       'LORE_E_PARSE_FAILED',
       `${input.displayPath} is not readable as delimited text.`,
@@ -217,29 +255,10 @@ function buildTable(
   // by any unit test, which is the argument for having one.
   let columnCount = 0;
   for (const row of rows) if (row.length > columnCount) columnCount = row.length;
-  if (columnCount > CSV_LIMITS.maxColumns) {
-    warnings.push({
-      code: 'csv-too-many-columns',
-      loss: {},
-      message: `${input.displayPath} has ${count(columnCount, 'column')}, above the supported limit of ${String(CSV_LIMITS.maxColumns)}, so it was not imported as a table. Split it into narrower tables. The limit matches Cloudflare D1, so a table above it could not be deployed either.`,
-      line: 1,
-    });
-    return null;
-  }
 
   const header = decideHeader(rows, columnCount);
   warnings.push(...header.warnings);
   const body = header.hasHeader ? rows.slice(1) : rows;
-
-  if (body.length > CSV_LIMITS.maxRows) {
-    warnings.push({
-      code: 'csv-too-many-rows',
-      loss: {},
-      message: `${input.displayPath} has ${count(body.length, 'row')}, above the supported limit of ${CSV_LIMITS.maxRows.toLocaleString('en-US')}, so it was not imported as a table. Split it, or filter it to the rows the project needs. The limit exists because every row is imported into the build and served from it.`,
-      line: 1,
-    });
-    return null;
-  }
 
   reportRagged(body, columnCount, header.hasHeader, warnings);
 

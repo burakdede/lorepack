@@ -22,6 +22,7 @@ export {
   nestedListHtml,
   nestedQuoteMarkdown,
   nestedTablesDocx,
+  numericCsv,
   singleCharacterCsv,
 } from './hostile-fixtures.js';
 export {

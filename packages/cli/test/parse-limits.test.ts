@@ -3,12 +3,14 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { platform } from 'node:os';
 import { join } from 'node:path';
 import { buildManifestSchema, loadConfig, ProgressBus } from '@lorepack/core';
+import { CSV_LIMITS } from '@lorepack/parsers';
 import {
   cmapBombPdf,
   nestedBracketsMarkdown,
   nestedHtml,
   nestedQuoteMarkdown,
   nestedTablesDocx,
+  numericCsv,
   singleCharacterCsv,
   withTempProject,
 } from '@lorepack/test-support';
@@ -48,11 +50,27 @@ describe('a file that exceeds a parse limit', () => {
           writeFileSync(join(temp.root, path), fixture());
 
           const started = Date.now();
-          const result = await runBuild({
+          let result = await runBuild({
             config: loadConfig({ cwd: temp.root }),
             progress: new ProgressBus(),
             parseLimits: { timeoutMs, memoryMb: 128 },
           });
+          if (path === 'rows.csv') {
+            // The original corpus now refuses rows before exhausting its unchanged budget.
+            // Keep its new guarantee, then retain every memory/activation assertion below.
+            expect(result.counts.artifacts).toBe(2);
+            expect(result.counts.tables).toBe(0);
+            expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(result.buildId);
+            expect(manifestOf(temp.root, result.buildId).warnings).toEqual([
+              expect.objectContaining({ code: 'csv-too-many-rows', path }),
+            ]);
+            writeFileSync(join(temp.root, path), numericCsv(CSV_LIMITS.maxRows, 8));
+            result = await runBuild({
+              config: loadConfig({ cwd: temp.root }),
+              progress: new ProgressBus(),
+              parseLimits: { timeoutMs, memoryMb: 128 },
+            });
+          }
 
           expect(Date.now() - started).toBeLessThan(60_000);
           expect(result.activated).toBe(true);
@@ -140,6 +158,56 @@ describe('parse limits from the environment', () => {
 });
 
 describe('the published binary', () => {
+  it('keeps refused CSV files discoverable and other sources readable, issue596', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': CONFIG,
+          'readme.md': README,
+          'overflow.csv': 'a\n'.repeat(4 * 1024 * 1024),
+          'wide.csv': Array.from({ length: 101 }, (_, index) => `column${index}`).join(','),
+          'valid.csv': 'region,total\nEU,7\n',
+        },
+      },
+      async (temp) => {
+        const run = (args: readonly string[]) =>
+          JSON.parse(
+            execFileSync(process.execPath, [BINARY, '--cwd', temp.root, '--json', ...args], {
+              encoding: 'utf8',
+              env: { ...process.env, LORE_PARSE_TIMEOUT_MS: '60000', LORE_PARSE_MEMORY_MB: '128' },
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+          ) as Record<string, unknown>;
+        const built = run(['build']);
+        expect(built).toMatchObject({
+          activated: true,
+          counts: { artifacts: 4, tables: 1, tableRows: 1 },
+        });
+        expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(built.buildId);
+        expect(manifestOf(temp.root, built.buildId as string).warnings).toEqual([
+          expect.objectContaining({ code: 'csv-too-many-rows', path: 'overflow.csv' }),
+          expect.objectContaining({ code: 'csv-too-many-columns', path: 'wide.csv' }),
+        ]);
+        for (const path of ['overflow.csv', 'wide.csv']) {
+          const found = run(['search', path.replace('.csv', '')]);
+          expect(found).toMatchObject({
+            hits: expect.arrayContaining([
+              expect.objectContaining({ locator: expect.objectContaining({ relativePath: path }) }),
+            ]),
+          });
+          expect(JSON.stringify(found)).toContain('cannot be queried');
+        }
+        expect(run(['search', 'rollback'])).toMatchObject({
+          hits: expect.arrayContaining([
+            expect.objectContaining({
+              locator: expect.objectContaining({ relativePath: 'readme.md' }),
+            }),
+          ]),
+        });
+      },
+    );
+  });
+
   /**
    * Through `public-entry.js`, the bundle users run, not `entry.js`. Bundling moves the host's
    * `import.meta.url` to the bundle, so the child has to be emitted beside it; a build through

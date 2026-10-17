@@ -3,6 +3,7 @@ import { LoreError, sha256Hex } from '@lorepack/core';
 // The built package rather than `../src`: the host forks `parse-child.js` from beside its own
 // module, and only the compiled output has one. `pnpm test` builds first.
 import {
+  CSV_LIMITS,
   csvParser,
   docxParser,
   htmlParser,
@@ -29,6 +30,7 @@ import {
   nestedQuoteMarkdown,
   nestedTablesDocx,
   number,
+  numericCsv,
   paragraph,
   row,
   singleCharacterCsv,
@@ -217,7 +219,22 @@ describe('a parse that exceeds its limits, issue 594', SUITE, () => {
       const parsed = await input();
       const parser = parserFor(parsed) as ArtifactParser;
       const limits: ParseLimits = { timeoutMs: 60_000, memoryMb: 128 };
-      const outcome = await host(limits).parse(parser, parsed);
+      const isolated = host(limits);
+      let outcome = await isolated.parse(parser, parsed);
+      if (parser === csvParser) {
+        // Keep the original fixture/budget and frozen case name. Its row cap now wins first;
+        // an admitted table must still prove the independent memory backstop in this case.
+        expect(outcome).toMatchObject({
+          kind: 'parsed',
+          result: { warnings: [expect.objectContaining({ code: 'csv-too-many-rows', loss: {} })] },
+        });
+        if (outcome.kind === 'parsed') expect(outcome.result.tables).toBeUndefined();
+        await isolated.close();
+        outcome = await host(limits).parse(
+          csvParser,
+          inputFor('admitted.csv', 'text/csv', numericCsv(CSV_LIMITS.maxRows, 8)),
+        );
+      }
       expect(outcome).toMatchObject({ kind: 'excluded', code: 'parse-memory' });
       if (outcome.kind === 'excluded') expect(outcome.message).toContain('128 MB');
     });
