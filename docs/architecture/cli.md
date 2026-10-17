@@ -153,6 +153,7 @@ of them still produce identical builds. `lorepack config` prints each with the l
 | `LORE_LOCK_WAIT_MS` | How long a command waits for the project lock before reporting it held | 30000 |
 | `LORE_PARSE_TIMEOUT_MS` | How long one file may take to parse before it is left out, 100 to 3600000 | 30000 |
 | `LORE_PARSE_MEMORY_MB` | Heap ceiling of the process a file is parsed in, 64 to 32768 | 2048 |
+| `LORE_PARSE_RSS_MB` | Sampled parser resident-memory threshold in MiB, 64 to 32768; may overshoot | 1024 |
 
 **On the lock wait.** Thirty seconds is how long a person will look at a command that appears
 to be doing nothing, which has nothing to do with how long a large project on a slow disk takes
@@ -176,7 +177,7 @@ An empty value is refused rather than read as zero. `Number('')` is 0, an unset 
 expands to the empty string in a shell, and 0 means "do not wait at all": the opposite of what
 someone setting a wait wants, reached by writing nothing.
 
-**On the parse limits.** See [parsers](./parsers.md#built-in-parsers-have-a-deadline-and-a-heap-ceiling).
+**On the parse limits.** See [parsers](./parsers.md#built-in-parser-resource-controls).
 A file that reaches either limit is left out with a warning rather than failing the build, so
 raising a limit is how to get a legitimately huge file in, and lowering one is how a CI job says
 it would rather lose a file than wait.

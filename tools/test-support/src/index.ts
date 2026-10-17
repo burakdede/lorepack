@@ -23,6 +23,7 @@ export {
   nestedQuoteMarkdown,
   nestedTablesDocx,
   singleCharacterCsv,
+  streamedFlateBombPdf,
 } from './hostile-fixtures.js';
 export {
   boolean_,

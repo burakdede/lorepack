@@ -488,6 +488,18 @@ The alpha supports the document, text, PDF, CSV, and XLSX paths described in the
 It preserves the structure those parsers expose and records unsupported or excluded files as
 warnings. [Partly scanned PDFs](docs/architecture/parsers.md#pdf) name the unread pages
 in `lorepack inspect warnings`.
+Built-in parsers have a sampled resident-memory watchdog, default 1,024 MiB,
+separate from the V8 heap limit. Observer startup and health checks service pending reports
+before declaring a stale reader. Linux process-exit reports preserve the original
+parser exit diagnostic. Sampling can overshoot: it is not a hard RSS ceiling.
+Completed macOS RSS reports survive parent-loop delays; malformed reports retain the
+bounded OS output as an escaped diagnostic. Genuine reader failures still stop the build.
+The [resident-memory ADR](docs/adr/0043-parser-resident-memory.md) records the
+accepted limits and independent three-platform resource measurements.
+The [resource verification protocol](docs/testing/parser_resident_memory.md) defines
+the four mandatory CLI workloads and retained native evidence.
+The consolidated verification gate retains failed child-test assertions for diagnosis.
+Its deadline checks account for pending observer callbacks after a parent stall.
 [Required-source coverage](docs/architecture/build-orchestration.md#required-source-coverage)
 lets strict builds reject missing or incomplete declared files and sheets before activation.
 The [verification checklist](docs/testing/required-source-coverage.md) records cold and cached

@@ -21,6 +21,14 @@ const evidence = (tests: readonly string[], extra: Partial<Evidence> = {}): Evid
 describe('the security gate counts only tests that ran and passed, issue 615', () => {
   const outcomes = runVitest(['gate.fixture.ts'], FIXTURE);
 
+  it('retains the failed assertion from the child report', () => {
+    const failed = outcomes.find((outcome) => outcome.fullName === 'conditional skips fails');
+    expect(failed).toMatchObject({
+      status: 'failed',
+      failureMessages: [expect.stringContaining('expected 1 to be 2')],
+    });
+  });
+
   it('rejects a test skipped through its describe block', () => {
     expect(
       problems(
