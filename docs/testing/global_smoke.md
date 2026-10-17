@@ -24,8 +24,19 @@ on macOS, Linux and Windows. Normal release and manual published-version runs
 retain all registry, signature, provenance and public smoke checks. Local tarball
 success is preparation; the public registry run still follows publication.
 
-The original Windows implementation launches `.cmd` files without a command
-interpreter. This branch initially retains it to collect the real native red
-before selecting a correction. No successful native Windows result is claimed.
-See the [Node batch-file contract](https://nodejs.org/download/release/v24.21.0/docs/api/child_process.html#spawning-bat-and-cmd-files-on-windows)
+The original implementation failed the real Windows run with
+`spawnSync npm.cmd EINVAL` after its global tarball installed. Source
+`ae6efe83fc7df451290f81beaf58b7173de51169`, job `117335169765`, is the retained
+native red; its Linux and macOS controls passed.
+
+Windows global-root discovery now runs the configured Node installation's
+bundled npm JavaScript entry. CLI stages run that same Node executable with the
+actual global package's declared entry, after version and entry-path validation.
+This preserves literal paths and arguments without a command interpreter. A
+missing npm installation or package entry fails explicitly. The existing local
+entry override remains available to its original callers; this verifier removes
+it so it always tests the real global package.
+
+See the [Node batch-file contract](https://nodejs.org/download/release/v24.21.0/docs/api/child_process.html#spawning-bat-and-cmd-files-on-windows),
+[Node's bundled Windows npm launcher](https://github.com/nodejs/node/blob/v24.21.0/deps/npm/bin/npm.cmd)
 and [npm global layout](https://docs.npmjs.com/cli/v11/configuring-npm/folders/).

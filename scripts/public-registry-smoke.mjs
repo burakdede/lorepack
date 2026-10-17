@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -48,14 +56,6 @@ export function assertExportResult(payload) {
   }
 }
 
-function npmCommand() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
-}
-
-function lorepackCommand() {
-  return process.platform === 'win32' ? 'lorepack.cmd' : 'lorepack';
-}
-
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,
@@ -69,27 +69,50 @@ function run(command, args, cwd) {
   };
 }
 
-function runLore(args, cwd) {
-  const localEntry = process.env.LOREPACK_SMOKE_CLI;
-  if (localEntry) return run(process.execPath, [localEntry, '--cwd', cwd, ...args], cwd);
-  return run(lorepackCommand(), ['--cwd', cwd, ...args], cwd);
-}
-
-function readInstalledVersion() {
-  const globalRoot = execFileSync(npmCommand(), ['root', '--global'], { encoding: 'utf8' }).trim();
-  const manifest = join(globalRoot, '@lorepack', 'cli', 'package.json');
+export function readInstalledCli(globalRoot) {
+  const packageRoot = resolve(globalRoot, '@lorepack', 'cli');
+  const manifest = join(packageRoot, 'package.json');
   if (!existsSync(manifest)) throw new Error(`global CLI package is missing at ${manifest}`);
-  return JSON.parse(readFileSync(manifest, 'utf8')).version;
+  const installed = JSON.parse(readFileSync(manifest, 'utf8'));
+  const binary = installed.bin?.lorepack;
+  if (typeof binary !== 'string' || binary === '') {
+    throw new Error('global CLI package has no lorepack entry');
+  }
+  const entry = resolve(packageRoot, binary);
+  if (!entry.startsWith(`${packageRoot}${sep}`) || !existsSync(entry)) {
+    throw new Error('global CLI entry is missing or outside its package');
+  }
+  if (
+    !statSync(entry).isFile() ||
+    !realpathSync(entry).startsWith(`${realpathSync(packageRoot)}${sep}`)
+  ) {
+    throw new Error('global CLI entry is missing or outside its package');
+  }
+  return { version: installed.version, entry };
 }
 
-function jsonCommand(args, cwd) {
-  return JSON.parse(assertCommandSucceeded(runLore(args, cwd), args));
+function readGlobalInstall() {
+  const args = ['root', '--global'];
+  const globalRoot =
+    process.platform === 'win32'
+      ? execFileSync(
+          process.execPath,
+          [join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'), ...args],
+          { encoding: 'utf8' },
+        ).trim()
+      : execFileSync('npm', args, { encoding: 'utf8' }).trim();
+  return readInstalledCli(globalRoot);
 }
 
 export function runSmoke(expectedVersion) {
-  if (!process.env.LOREPACK_SMOKE_CLI) {
-    assertInstalledVersion(readInstalledVersion(), expectedVersion);
+  let entry = process.env.LOREPACK_SMOKE_CLI;
+  if (!entry) {
+    const installed = readGlobalInstall();
+    assertInstalledVersion(installed.version, expectedVersion);
+    entry = installed.entry;
   }
+  const runLore = (args, cwd) => run(process.execPath, [entry, '--cwd', cwd, ...args], cwd);
+  const jsonCommand = (args, cwd) => JSON.parse(assertCommandSucceeded(runLore(args, cwd), args));
   const project = mkdtempSync(join(tmpdir(), 'lorepack-public-smoke-'));
   const source = join(project, 'runbook.md');
   const archive = join(project, 'smoke.lorepack');

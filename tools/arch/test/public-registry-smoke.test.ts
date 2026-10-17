@@ -1,3 +1,5 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { globalSmokeEnvironment } from '../../../scripts/check-global-smoke.mjs';
@@ -6,6 +8,7 @@ import {
   assertExportResult,
   assertSearchResult,
   parseReleaseVersion,
+  readInstalledCli,
 } from '../../../scripts/public-registry-smoke.mjs';
 
 describe('public registry smoke assertions', () => {
@@ -73,5 +76,53 @@ describe('disposable global smoke', () => {
     ).toEqual(['npm_config_prefix']);
     expect(original.NPM_CONFIG_PREFIX).toBe('user-global-prefix');
     expect(original.LOREPACK_SMOKE_CLI).toBe('checkout-override.js');
+  });
+});
+
+describe('installed CLI entry', () => {
+  it('reads the actual global package with literal paths and rejects escaping entries', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lorepack-global-entry-'));
+    try {
+      const globalRoot = join(root, 'global prefix & (literal) ^ %LOREPACK_LITERAL%');
+      const packageRoot = join(globalRoot, '@lorepack', 'cli');
+      mkdirSync(join(packageRoot, 'dist'), { recursive: true });
+      const entry = join(packageRoot, 'dist', 'public-entry.js');
+      writeFileSync(entry, 'process.exitCode = 0;');
+      const manifest = join(packageRoot, 'package.json');
+      writeFileSync(
+        manifest,
+        JSON.stringify({
+          version: '0.1.0',
+          bin: { lorepack: './dist/public-entry.js' },
+        }),
+      );
+      expect(readInstalledCli(globalRoot)).toEqual({ version: '0.1.0', entry });
+      for (const binary of ['../outside.js', join(root, 'outside.js'), './missing.js']) {
+        writeFileSync(manifest, JSON.stringify({ version: '0.1.0', bin: { lorepack: binary } }));
+        expect(() => readInstalledCli(globalRoot)).toThrow('missing or outside its package');
+      }
+      const outside = join(root, 'outside');
+      mkdirSync(outside);
+      writeFileSync(join(outside, 'outside.js'), 'process.exitCode = 0;');
+      symlinkSync(
+        outside,
+        join(packageRoot, 'linked'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+      writeFileSync(
+        manifest,
+        JSON.stringify({
+          version: '0.1.0',
+          bin: { lorepack: './linked/outside.js' },
+        }),
+      );
+      expect(() => readInstalledCli(globalRoot)).toThrow('missing or outside its package');
+      for (const binary of ['', null, 42]) {
+        writeFileSync(manifest, JSON.stringify({ version: '0.1.0', bin: { lorepack: binary } }));
+        expect(() => readInstalledCli(globalRoot)).toThrow('no lorepack entry');
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
