@@ -254,6 +254,7 @@ const EVIDENCE: readonly Evidence[] = [
       'stops native resident growth outside a blocked parser, issue677',
       'services pending OS reports after a parent stall before declaring the observer stale',
       'still rejects an observer that genuinely stops reporting at the original deadline',
+      'observes a silent reader after a parent stall and the pending check phase',
       'stops the reporting watchdog without arming it again from late data',
       'stops its observer without terminating a healthy parser',
       'does not misreport an exited parser as an observer failure',
