@@ -271,17 +271,19 @@ Provisional, on the development machine, since the reference machine is #101:
 `pnpm bench:retrieval` reproduces them; the recorded runs are in `benchmarks/retrieval/`.
 Reported, never enforced, until #101 defines the machine.
 
-### One optimisation worth knowing about
+### Exact duplicate detection
 
-Near-duplicate detection dominated assembly: 37 ms of a 45 ms bundle at 216 candidates, and
-it grows with the square of the candidate cap. It now stops as soon as the answer is
-settled. Jaccard overlap reaching a threshold implies a minimum number of shared shingles,
-so once enough elements have missed, the rest of the set does not need examining. Most pairs
-are not near-duplicates and most of those settle after a handful of misses.
+Duplicate removal builds a request-local index from shingles to previously kept signatures.
+It counts shared shingles only for signatures within the original size bounds, stopping
+when the unchanged Jaccard threshold is reached. Empty signatures remain distinct.
+This avoids comparing every eligible pair's full sets. It retains the same tokenization,
+weights, score/path/chunk ordering and original result objects across search and context
+delivery through CLI, HTTP and MCP.
 
-The early exit is exact, not an approximation, and a property test compares it against the
-plain computation over 1,500 generated pairs at three thresholds rather than trusting the
-algebra. Bundle p95 fell from 194.59 ms to 60.4 ms.
+Differential tests compare retained objects with the previous size-bucket algorithm over
+Unicode, repeated text, empty signatures, changing overlap and shuffled input order. The
+pairwise predicate retains its independent comparison with full Jaccard computation.
+The index lasts for one ranking call; it adds no persistent build data or cross-build cache.
 
 ## Execution identity
 

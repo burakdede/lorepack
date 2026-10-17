@@ -31,6 +31,9 @@ function candidate(overrides: Partial<CatalogSearchHit> = {}): CatalogSearchHit 
     headingPath: ['Deployment'],
     lineStart: 1,
     lineEnd: 4,
+    page: null,
+    sheet: null,
+    cellRange: null,
     status: 'active',
     authority: 50,
     estimatedTokens: 20,
@@ -196,6 +199,96 @@ describe('step 4: declared authority', () => {
 });
 
 describe('step 8: near-duplicate removal', () => {
+  it('preserves the original retained objects across mixed signatures and input orders', () => {
+    const signature = (text: string) => {
+      const words = text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()
+        .split(' ')
+        .filter(Boolean);
+      const size = RANKING_WEIGHTS.diversity.shingleSize;
+      return new Set(
+        words.length <= size
+          ? words.length === 0
+            ? []
+            : [words.join(' ')]
+          : words.slice(size - 1).map((_, index) => words.slice(index, index + size).join(' ')),
+      );
+    };
+    const original = (values: readonly ReturnType<typeof score>[]) => {
+      const kept: ReturnType<typeof score>[] = [];
+      const bySize = new Map<number, ReadonlySet<string>[]>();
+      const threshold = RANKING_WEIGHTS.diversity.nearDuplicateOverlap;
+      for (const value of sortDeterministically(values)) {
+        const current = signature(value.hit.text ?? value.hit.excerpt);
+        let duplicate = false;
+        for (
+          let size = Math.ceil(current.size * threshold);
+          size <= Math.floor(current.size / threshold) && !duplicate;
+          size++
+        ) {
+          for (const seen of bySize.get(size) ?? []) {
+            if (isNearDuplicate(seen, current, threshold)) {
+              duplicate = true;
+              break;
+            }
+          }
+        }
+        if (duplicate) continue;
+        kept.push(value);
+        const bucket = bySize.get(current.size);
+        if (bucket === undefined) bySize.set(current.size, [current]);
+        else bucket.push(current);
+      }
+      return kept;
+    };
+    const words = Array.from({ length: 100 }, (_, index) => `word${index}`);
+    const texts = [
+      '',
+      '!!!',
+      'CAFÉ café',
+      'café CAFÉ',
+      'one two three four',
+      'one two three four five',
+    ];
+    for (let changes = 0; changes <= 20; changes++) {
+      texts.push(
+        words.map((word, index) => (index < changes ? `changed${index}` : word)).join(' '),
+      );
+      texts.push(words.slice(changes).join(' '));
+    }
+    for (let document = 0; document < 12; document++) {
+      texts.push(
+        words
+          .map((word, index) => (index % 5 === 0 ? word : `document${document}term${index}`))
+          .join(' '),
+      );
+    }
+    const values = texts.flatMap((text, index) =>
+      [text, text.toUpperCase()].map((variant, copy) => {
+        const hit = candidate({
+          text: variant,
+          excerpt: variant,
+          chunkId: `chunk-${index}-${copy}`,
+          relativePath: `docs/${index % 7}.md`,
+        });
+        return { ...score(hit, input()), score: index % 4 };
+      }),
+    );
+    for (const ordered of [
+      values,
+      [...values].reverse(),
+      [...values.slice(31), ...values.slice(0, 31)],
+    ]) {
+      const expected = original(ordered);
+      const actual = removeNearDuplicates(ordered);
+      expect(actual).toEqual(expected);
+      actual.forEach((value, index) => {
+        expect(value).toBe(expected[index]);
+      });
+    }
+  });
   it('keeps the better-scoring copy of two near-identical chunks', () => {
     const body = 'rollback restores the previous release without recompiling anything at all';
     const strong = score(

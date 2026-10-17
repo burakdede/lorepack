@@ -213,40 +213,49 @@ export function applyVisibility(
  * Word shingles and Jaccard overlap, not an embedding: the same inputs must always produce
  * the same page, and a model download would break the zero-surprise install (invariant 7).
  * The better-scoring chunk of a duplicate pair survives.
+ * A request-local shingle index counts exact intersections with kept signatures.
  */
 export function removeNearDuplicates(scored: readonly RankedHit[]): readonly RankedHit[] {
   const ordered = sortDeterministically(scored);
   const threshold = RANKING_WEIGHTS.diversity.nearDuplicateOverlap;
   const kept: RankedHit[] = [];
-  /** Kept signatures indexed by size, which is what makes the prefilter below cheap. */
-  const bySize = new Map<number, Array<ReadonlySet<string>>>();
+  const byShingle = new Map<string, Array<{ index: number; size: number }>>();
 
   for (const ranked of ordered) {
     const signature = shingles(ranked.hit.text ?? ranked.hit.excerpt);
 
-    // An exact prefilter, not an approximation. Jaccard overlap is bounded above by
-    // min(|A|,|B|) / max(|A|,|B|), so two sets whose sizes differ by more than the
-    // threshold cannot possibly reach it and never need comparing. Comparing every pair
-    // is quadratic and dominated context assembly: 41 ms of a 45 ms bundle at 216
-    // candidates, and it grows with the square of the candidate cap.
     const smallest = Math.ceil(signature.size * threshold);
     const largest = Math.floor(signature.size / threshold);
-
+    const intersections = new Map<number, { shared: number; needed: number }>();
     let duplicate = false;
-    for (let size = smallest; size <= largest && !duplicate; size += 1) {
-      for (const seen of bySize.get(size) ?? []) {
-        if (isNearDuplicate(seen, signature, threshold)) {
+    for (const value of signature) {
+      for (const seen of byShingle.get(value) ?? []) {
+        if (seen.size < smallest || seen.size > largest) continue;
+        let intersection = intersections.get(seen.index);
+        if (intersection === undefined) {
+          intersection = {
+            shared: 0,
+            needed: Math.ceil((threshold * (seen.size + signature.size)) / (1 + threshold)),
+          };
+          intersections.set(seen.index, intersection);
+        }
+        intersection.shared++;
+        if (intersection.shared >= intersection.needed) {
           duplicate = true;
           break;
         }
       }
+      if (duplicate) break;
     }
     if (duplicate) continue;
 
+    const seen = { index: kept.length, size: signature.size };
     kept.push(ranked);
-    const bucket = bySize.get(signature.size);
-    if (bucket === undefined) bySize.set(signature.size, [signature]);
-    else bucket.push(signature);
+    for (const value of signature) {
+      const bucket = byShingle.get(value);
+      if (bucket === undefined) byShingle.set(value, [seen]);
+      else bucket.push(seen);
+    }
   }
   return kept;
 }

@@ -213,6 +213,8 @@ complete CLI JSON, HTTP, MCP and Markdown output using a versioned UTF-8 estimat
 a separate 4 MiB byte ceiling. It is not a provider token count. Omission totals remain
 complete when diagnostic detail is shortened to fit. See [delivery limits](docs/architecture/retrieval.md#delivered-context-limits).
 
+Search and context delivery share the same deterministic [near-duplicate filtering](docs/architecture/retrieval.md#exact-duplicate-detection).
+
 JSON includes resolved
 execution policy and selection IDs; Markdown prints both IDs. These identify the runtime
 configuration and build-scoped request separately from the immutable content build. Lorepack does not summarize
