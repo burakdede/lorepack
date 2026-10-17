@@ -96,7 +96,7 @@ first kind hangs the build with the project lock held and Ctrl-C ignored, and th
 the process with nothing a `try` can catch.
 
 So every built-in parse runs in a **child process**, `packages/parsers/src/isolation.ts`, under
-two limits. [ADR 0001](../adr/0001-parser-process-isolation.md) records the isolation boundary
+these resource controls. [ADR 0001](../adr/0001-parser-process-isolation.md) records the isolation boundary
 and its limitations:
 
 | Limit | Default | Override | When reached |

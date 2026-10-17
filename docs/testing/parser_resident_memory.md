@@ -146,3 +146,24 @@ The Linux-reader boundary tests run on all OS hosts using explicit syscall-resul
 fixtures from this failure; they do not claim native Linux execution. All original
 actual-CLI workloads and their controls remain mandatory on native Linux as well
 as macOS and Windows. Fresh native qualification must confirm the unchanged case.
+
+## Current-main integration, 2026-10-17
+
+The existing correction is rebased onto main `bd97e971`. All 28 issue-specific
+files other than README retain their exact `668bb267` bytes before this
+documentation update. The README keeps its concise layout and links to the
+resource controls. Current-source verification must run afresh.
+
+The earlier native Windows job lost runner communication during the default
+suite. Its job log endpoint returned 404, and the retained workflow archive has
+no Windows verification log. That is a failed qualification with an unproved
+cause, not a demonstrated parser assertion. Linux and macOS provided 16 trials
+on that earlier source; Windows's eight trials are still missing. None of those
+receipts qualifies this newly integrated candidate.
+
+Preserve all four actual-CLI fixture workloads and their two attempts, original
+1,024 MiB threshold, 1,536 MiB sampled envelope, 100 ms cadence, five-second
+startup and 250 ms reporting deadlines, 256-byte reader bound, permissions,
+preloads, scheduling and assertions. Native publication waits for the shared
+Windows release-policy setup correction in issue #762 and its real main
+integration. Current local, installed-package and native results remain pending.
