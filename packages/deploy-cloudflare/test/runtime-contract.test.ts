@@ -1,9 +1,12 @@
-import { NATIVE_UNIT_LIMITS } from '@lorepack/core';
-import { expect, it } from 'vitest';
+import { escapeFtsQuery, NATIVE_UNIT_LIMITS } from '@lorepack/core';
+import { expect, it, vi } from 'vitest';
 import { type ContractFixture, runRuntimeContract } from '../../../tools/test-support/src/index.ts';
+import { D1CatalogStore } from '../src/catalog.js';
 import {
+  ACTIVE_BUILD,
   activateProjectedWorkerRuntimeFixture,
   createProjectedWorkerRuntimeFixture,
+  PROJECT,
 } from './projected-runtime-fixture.js';
 
 runRuntimeContract({
@@ -67,6 +70,45 @@ it('omits oversized projected units instead of returning their permission fragme
         }),
       ]),
     );
+  } finally {
+    await fixture.close();
+  }
+});
+
+it('uses node-ID lookups in an unanalysed projection with repeated build-local IDs, issue783', async () => {
+  const nativeText = 'Rollback only if owner approval is recorded.';
+  const fixture = await createProjectedWorkerRuntimeFixture({ nativeText });
+  try {
+    const capture = vi.spyOn(fixture.projection.raw, 'prepare');
+    const catalog = new D1CatalogStore({
+      db: fixture.projection,
+      namespace: { projectId: PROJECT, buildId: ACTIVE_BUILD },
+    });
+    const result = await catalog.search('rollback', { limit: 10, nativeUnits: true });
+    const sql = capture.mock.calls.find(([query]) => query.includes('AS unitText'))?.[0];
+    capture.mockRestore();
+    if (sql === undefined) throw new Error('Native-unit SQL was not executed.');
+    expect(result[0]?.nativeUnit?.text).toBe(nativeText);
+    const plan = fixture.projection.raw
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(
+        PROJECT,
+        ACTIVE_BUILD,
+        PROJECT,
+        ACTIVE_BUILD,
+        PROJECT,
+        ACTIVE_BUILD,
+        escapeFtsQuery('rollback'),
+        10,
+      );
+    const lookups = plan
+      .map((row) => String(row.detail))
+      .filter((detail) => detail.includes('unit_node'));
+    expect(lookups.length).toBeGreaterThan(0);
+    expect(
+      lookups.every((detail) => /SEARCH unit_node.*\bid=\?/.test(detail)),
+      lookups.join('\n'),
+    ).toBe(true);
   } finally {
     await fixture.close();
   }

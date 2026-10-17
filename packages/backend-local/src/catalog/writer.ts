@@ -305,6 +305,7 @@ export function searchCatalog(
   }
   parameters.push(limit);
 
+  // CROSS JOIN keeps node references in the outer loop even without planner statistics.
   const rows = db
     .prepare(
       `SELECT c.id            AS chunkId,
@@ -317,14 +318,14 @@ export function searchCatalog(
                 settings.nativeUnits === true
                   ? `c.node_ids AS unitNodeIds,
               CASE WHEN json_array_length(c.node_ids) > 0
-                AND (SELECT count(*) FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                AND (SELECT count(*) FROM json_each(c.node_ids) ref CROSS JOIN nodes unit_node
                   ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
                   WHERE unit_node.text IS NOT NULL) = json_array_length(c.node_ids)
                 AND (SELECT coalesce(sum(length(CAST(unit_node.text AS BLOB))), 0) + max(json_array_length(c.node_ids) - 1, 0) * 2
-                  FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                  FROM json_each(c.node_ids) ref CROSS JOIN nodes unit_node
                   ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id) <= ${NATIVE_UNIT_LIMITS.maxUtf8Bytes}
               THEN (SELECT group_concat(body, char(10) || char(10)) FROM (
-                SELECT unit_node.text AS body FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                SELECT unit_node.text AS body FROM json_each(c.node_ids) ref CROSS JOIN nodes unit_node
                 ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
                 ORDER BY CAST(ref.key AS INTEGER))) ELSE NULL END AS unitText,
               `

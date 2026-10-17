@@ -1,0 +1,128 @@
+{
+  "node": "v24.21.0",
+  "sqlite": "3.53.4",
+  "buildId": "lore_6ba8708f6ec2090c2198bd18fd9b8a4f7063bfe9caf136685c25e66bb980e516",
+  "scope": "Local ordinary query diagnosis on the integrated mixed pack-1 corpus, including pending table-reference projection. Not final standalone-head, reference hardware, P01-P06 or release proof. Raw rows, order and scores matched for all variants. Six alternating trials with five executions per variant in each trial.",
+  "integrationHead": "cd970736984d31a2c6597d5f4f06db7e2abed11f",
+  "integrationSourceFingerprint": "6409be50b60c8da5c581e676039a3fec525d015f1e373f7ff0e993acae88f45f",
+  "originalCatalogReadOnly": true,
+  "statisticsVariants": "PRAGMA optimize and ANALYZE ran only on disposable database copies, never on the original sealed catalog.",
+  "records": [
+    {
+      "query": "rollback deployment access",
+      "options": {
+        "limit": 10,
+        "match": "all",
+        "nativeUnits": false
+      },
+      "rows": 0,
+      "rowSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "medianQueryMs": {
+        "original": 0.05865,
+        "referenceFirst": 0.056983,
+        "optimized": 0.054813,
+        "analyzed": 0.055429
+      }
+    },
+    {
+      "query": "release rollback",
+      "options": {
+        "limit": 10,
+        "match": "all",
+        "nativeUnits": false
+      },
+      "rows": 4,
+      "rowSha256": "13a35fe59b232543624516dc657e3fe7930820c6be4a43d63fdf73cc6a8e3e67",
+      "medianQueryMs": {
+        "original": 0.098729,
+        "referenceFirst": 0.100933,
+        "optimized": 0.101404,
+        "analyzed": 0.102779
+      }
+    },
+    {
+      "query": "access policy",
+      "options": {
+        "limit": 10,
+        "match": "all",
+        "nativeUnits": false
+      },
+      "rows": 1,
+      "rowSha256": "26b70bde6a76d529a75d5418a0ab8194d96960b005f47ee2c1a091aa8c4ac7b2",
+      "medianQueryMs": {
+        "original": 0.063954,
+        "referenceFirst": 0.063154,
+        "optimized": 0.061683,
+        "analyzed": 0.064608
+      }
+    },
+    {
+      "query": "How does a deployment rollback work?",
+      "options": {
+        "limit": 1000,
+        "match": "any",
+        "nativeUnits": true
+      },
+      "rows": 137,
+      "rowSha256": "aca8e0420b9b67933b9b1ed187b7a66e0f907e6dccd084f2112ff78238a4f6fa",
+      "medianQueryMs": {
+        "original": 107.4336,
+        "referenceFirst": 2.944538,
+        "optimized": 3.139788,
+        "analyzed": 3.104758
+      }
+    },
+    {
+      "query": "What is the access policy for a project?",
+      "options": {
+        "limit": 1000,
+        "match": "any",
+        "nativeUnits": true
+      },
+      "rows": 186,
+      "rowSha256": "9725c7266a26800a05fe4f005a65797404bc07a5d2693d29dc8c0f9f22a3efba",
+      "medianQueryMs": {
+        "original": 147.418783,
+        "referenceFirst": 4.032092,
+        "optimized": 4.240367,
+        "analyzed": 4.275792
+      }
+    },
+    {
+      "query": "immutable build",
+      "options": {
+        "limit": 1000,
+        "match": "any",
+        "nativeUnits": true
+      },
+      "rows": 118,
+      "rowSha256": "df0f0877272c573639cd2b99b38eee1e8415a5d6c7109bcedf53021ba0052a1d",
+      "medianQueryMs": {
+        "original": 100.275425,
+        "referenceFirst": 2.541883,
+        "optimized": 2.717412,
+        "analyzed": 2.667667
+      }
+    },
+    {
+      "query": "source locator",
+      "options": {
+        "limit": 1000,
+        "match": "any",
+        "nativeUnits": true
+      },
+      "rows": 74,
+      "rowSha256": "1cf25f54332fff3c200a6b251ccaae8b1254c9513b822fc27c67e65f4f2c1b9e",
+      "medianQueryMs": {
+        "original": 63.574437,
+        "referenceFirst": 1.710554,
+        "optimized": 1.820029,
+        "analyzed": 1.842438
+      }
+    }
+  ],
+  "originalPlan": "SEARCH unit_node USING INDEX nodes_artifact (artifact_id=?), then SCAN ref VIRTUAL TABLE",
+  "correctedPlan": "SCAN ref VIRTUAL TABLE, then SEARCH unit_node USING INDEX sqlite_autoindex_nodes_1 (id=?)",
+  "design": "Drive node references first with CROSS JOIN in each native-unit subquery, retaining all ON predicates, byte checks and explicit node ordering. Existing read-only builds require no rebuild or maintenance writes.",
+  "primaryDocumentation": "https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join"
+}
