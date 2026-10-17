@@ -33,6 +33,23 @@ export async function readLinuxResidentMemory(pid: number): Promise<number | nul
   return Number(match[1]) * 1024;
 }
 
+export function createStartupWatchdog(expired: () => void) {
+  let stopped = false;
+  let pending: ReturnType<typeof setImmediate> | undefined;
+  const timer = setTimeout(() => {
+    pending = setImmediate(() => {
+      if (!stopped) expired();
+    });
+  }, 5000);
+  return {
+    stop() {
+      stopped = true;
+      clearTimeout(timer);
+      clearImmediate(pending);
+    },
+  };
+}
+
 export function createReportingWatchdog(
   expired: (details: { reports: number; silenceMs: number }) => void,
 ) {
@@ -79,10 +96,12 @@ export function monitorResidentMemory(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reader: ChildProcess | undefined;
   let reporting: ReturnType<typeof createReportingWatchdog> | undefined;
+  let startup: ReturnType<typeof createStartupWatchdog> | undefined;
   const stop = (): void => {
     stopped = true;
     clearTimeout(timer);
     reporting?.stop();
+    startup?.stop();
     reader?.kill('SIGKILL');
   };
   const alive = (): boolean => {
@@ -120,7 +139,7 @@ export function monitorResidentMemory(
     state.bytes = bytes;
     resolveReady();
     if (process.platform === 'win32') {
-      clearTimeout(timer);
+      startup?.stop();
       reporting?.report();
     }
     if (bytes > limitMiB * 1024 * 1024) {
@@ -152,17 +171,21 @@ export function monitorResidentMemory(
       `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${pid}); ` +
       `while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); ` +
       `[Threading.Thread]::Sleep(${INTERVAL_MS}) }`;
-    timer = setTimeout(
-      () => fail(new Error('The process memory observer did not become ready.')),
-      5000,
+    const startedAt = performance.now();
+    let pending = '';
+    let stderr = '';
+    startup = createStartupWatchdog(() =>
+      fail(
+        new Error(
+          `The process memory observer did not become ready: ${Math.round(performance.now() - startedAt)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}`,
+        ),
+      ),
     );
     reader = spawn(
       win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
       { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
-    let pending = '';
-    let stderr = '';
     reader.stdout?.setEncoding('utf8');
     reader.stderr?.setEncoding('utf8');
     reader.stdout?.on('data', (chunk: string) => {
