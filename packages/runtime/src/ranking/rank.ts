@@ -215,38 +215,37 @@ export function applyVisibility(
  * The better-scoring chunk of a duplicate pair survives.
  */
 export function removeNearDuplicates(scored: readonly RankedHit[]): readonly RankedHit[] {
-  const ordered = sortDeterministically(scored);
   const threshold = RANKING_WEIGHTS.diversity.nearDuplicateOverlap;
   const kept: RankedHit[] = [];
-  /** Kept signatures indexed by size, which is what makes the prefilter below cheap. */
-  const bySize = new Map<number, Array<ReadonlySet<string>>>();
+  const postings = new Map<string, ReadonlySet<string>[]>();
 
-  for (const ranked of ordered) {
+  for (const ranked of sortDeterministically(scored)) {
     const signature = shingles(ranked.hit.text ?? ranked.hit.excerpt);
-
-    // An exact prefilter, not an approximation. Jaccard overlap is bounded above by
-    // min(|A|,|B|) / max(|A|,|B|), so two sets whose sizes differ by more than the
-    // threshold cannot possibly reach it and never need comparing. Comparing every pair
-    // is quadratic and dominated context assembly: 41 ms of a 45 ms bundle at 216
-    // candidates, and it grows with the square of the candidate cap.
+    // Under one common order, any pair meeting the overlap threshold shares a
+    // prefix term. The conservative prefix only filters candidates; it never
+    // decides duplication without the original exact predicate below.
+    const keys = [...signature]
+      .sort()
+      .slice(0, signature.size - Math.floor(threshold * signature.size) + 1);
+    const candidates = new Set(keys.flatMap((key) => postings.get(key) ?? []));
     const smallest = Math.ceil(signature.size * threshold);
     const largest = Math.floor(signature.size / threshold);
-
     let duplicate = false;
-    for (let size = smallest; size <= largest && !duplicate; size += 1) {
-      for (const seen of bySize.get(size) ?? []) {
-        if (isNearDuplicate(seen, signature, threshold)) {
-          duplicate = true;
-          break;
-        }
+    for (const seen of candidates) {
+      if (seen.size < smallest || seen.size > largest) continue;
+      if (isNearDuplicate(seen, signature, threshold)) {
+        duplicate = true;
+        break;
       }
     }
     if (duplicate) continue;
 
     kept.push(ranked);
-    const bucket = bySize.get(signature.size);
-    if (bucket === undefined) bySize.set(signature.size, [signature]);
-    else bucket.push(signature);
+    for (const key of keys) {
+      const bucket = postings.get(key);
+      if (bucket === undefined) postings.set(key, [signature]);
+      else bucket.push(signature);
+    }
   }
   return kept;
 }
@@ -306,12 +305,22 @@ export function queryTerms(query: string): readonly string[] {
 }
 
 function shingles(text: string): ReadonlySet<string> {
-  const words = normalize(text).split(' ').filter(Boolean);
-  const size = RANKING_WEIGHTS.diversity.shingleSize;
-  if (words.length <= size) return new Set(words.length === 0 ? [] : [words.join(' ')]);
-  const set = new Set<string>();
-  for (let i = 0; i + size <= words.length; i += 1) set.add(words.slice(i, i + size).join(' '));
-  return set;
+  const normalized = normalize(text);
+  if (normalized.length === 0) return new Set();
+  let end = -1;
+  for (let word = 0; word < RANKING_WEIGHTS.diversity.shingleSize; word += 1) {
+    end = normalized.indexOf(' ', end + 1);
+    if (end === -1) return new Set([normalized]);
+  }
+  const result = new Set<string>();
+  let start = 0;
+  do {
+    result.add(normalized.slice(start, end));
+    start = normalized.indexOf(' ', start) + 1;
+    end = normalized.indexOf(' ', end + 1);
+  } while (end !== -1);
+  result.add(normalized.slice(start));
+  return result;
 }
 
 /**
