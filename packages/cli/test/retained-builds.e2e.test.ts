@@ -425,9 +425,7 @@ it('keeps the reviewed README build active after sources change, issue696', asyn
       const first = JSON.parse((await cli(project.root, ['build'])).stdout).buildId as string;
       writeFileSync(project.path('docs/a.md'), '# Recovery\n\nRestart the worker.\n');
       const readme = readFileSync(join(import.meta.dirname, '../../../README.md'), 'utf8');
-      const workflow = readme
-        .split('### Keep a coding agent on a reviewed context version')[1]
-        ?.split('```')[1];
+      const workflow = readme.split('### Build and review an update')[1]?.split('```')[1];
       const command = workflow?.split('\n').find((line) => line.startsWith('lorepack mcp'));
       expect(command).toBeDefined();
       const child = spawn(
