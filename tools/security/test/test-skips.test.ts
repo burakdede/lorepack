@@ -20,6 +20,11 @@ import { ROOT } from './support/evidence.js';
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
     file: 'packages/parsers/test/resident_memory.test.ts',
+    line: "it.runIf(process.platform === 'darwin')(",
+    why: 'This completed-ps-output regression exercises the actual macOS reader. Shared pipe bounds and failure controls run on every OS, as do all four mandatory hostile CLI workloads (#677)',
+  },
+  {
+    file: 'packages/parsers/test/resident_memory.test.ts',
     line: "it.runIf(process.platform === 'win32')(",
     why: 'Only Windows locates its OS observer through SystemRoot; this backend startup failure probe applies there. All hostile memory fixtures remain mandatory on all platforms (#677)',
   },

@@ -1,4 +1,4 @@
-import { type ChildProcess, execFile, spawn } from 'node:child_process';
+import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { win32 } from 'node:path';
 import { LoreError } from '@lorepack/core';
@@ -21,6 +21,49 @@ export function parseMacResidentMemory(report: string): number {
   if (!/^\d+$/.test(value))
     throw new Error(`macOS did not report parser resident memory: ${JSON.stringify(report)}.`);
   return Number(value) * 1024;
+}
+
+export function readMacResidentMemory(reader: ChildProcessWithoutNullStreams): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const output = { stdout: '', stderr: '' };
+    let settled = false;
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      reader.kill('SIGKILL');
+      reject(error);
+    };
+    reader.on('error', fail);
+    for (const name of ['stdout', 'stderr'] as const) {
+      reader[name].setEncoding('utf8');
+      reader[name].on('data', (chunk: string) => {
+        if (settled) return;
+        if (Buffer.byteLength(output[name]) + Buffer.byteLength(chunk) > 256) {
+          fail(new Error(`macOS resident-memory ${name} exceeded 256 bytes.`));
+          return;
+        }
+        output[name] += chunk;
+      });
+    }
+    reader.once('close', (code, signal) => {
+      if (settled) return;
+      if (code !== 0 || signal !== null) {
+        fail(
+          new Error(
+            `macOS resident-memory reader exited (${code ?? signal}). ${JSON.stringify(output.stderr)}`,
+          ),
+        );
+        return;
+      }
+      try {
+        const bytes = parseMacResidentMemory(output.stdout);
+        settled = true;
+        resolve(bytes);
+      } catch (error) {
+        fail(error);
+      }
+    });
+  });
 }
 
 export async function readLinuxResidentMemory(pid: number): Promise<number | null> {
@@ -229,19 +272,17 @@ export function monitorResidentMemory(
       if (process.platform !== 'darwin') {
         throw new Error(`Resident memory observation is unsupported on ${process.platform}.`);
       }
-      const report = await new Promise<string>((resolve, reject) => {
-        reader = execFile(
-          '/bin/ps',
-          ['-o', 'rss=', '-p', String(pid)],
-          { encoding: 'utf8', maxBuffer: 256, timeout: READER_TIMEOUT_MS, killSignal: 'SIGKILL' },
-          (error, stdout) => {
-            reader = undefined;
-            if (error !== null) reject(error);
-            else resolve(stdout);
-          },
-        );
+      // spawn's timeout preserves queued output from a query that already exited.
+      const query = spawn('/bin/ps', ['-o', 'rss=', '-p', String(pid)], {
+        timeout: READER_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
       });
-      return parseMacResidentMemory(report);
+      reader = query;
+      try {
+        return await readMacResidentMemory(query);
+      } finally {
+        reader = undefined;
+      }
     };
     const poll = async (): Promise<void> => {
       if (stopped) return;
