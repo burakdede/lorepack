@@ -56,6 +56,8 @@ The dated dependency-health report and CycloneDX SBOM must match the resolved de
 Package builds type-check `src`. `pnpm typecheck:audit` applies the Node settings to
 the audit regression files listed in [`tsconfig.audit_tests.json`](../../tsconfig.audit_tests.json).
 Add new audit regression files to that list. Both `pnpm verify` and native CI run the check.
+This includes the Linux resident-memory reader, reporting-deadline regressions and
+the consolidated gate's child-assertion reader and tests.
 The same command then checks the existing Studio browser-test project with DOM libraries.
 Its strict flags are unchanged. New SQL suggestion tests belong to their actual Node
 and browser programs, so native CI checks both contexts rather than relying on
