@@ -23,6 +23,9 @@ catalogs without maintenance writes or a rebuild. Node ordering, missing-referen
 checks and UTF-8 limits remain unchanged. See SQLite's
 [join-order documentation](https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join)
 and the [development query-plan evidence](../testing/evidence/native_unit_lookup_development.json).
+That evidence also records a passing original 13-case instrumented report after
+integration with the compiler and complete-frame recorder corrections. It establishes
+the unchanged report deadline for that snapshot, not final coverage or release readiness.
 
 
 ## Where each part lives, and why

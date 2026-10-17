@@ -124,5 +124,20 @@
   "originalPlan": "SEARCH unit_node USING INDEX nodes_artifact (artifact_id=?), then SCAN ref VIRTUAL TABLE",
   "correctedPlan": "SCAN ref VIRTUAL TABLE, then SEARCH unit_node USING INDEX sqlite_autoindex_nodes_1 (id=?)",
   "design": "Drive node references first with CROSS JOIN in each native-unit subquery, retaining all ON predicates, byte checks and explicit node ordering. Existing read-only builds require no rebuild or maintenance writes.",
-  "primaryDocumentation": "https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join"
+  "primaryDocumentation": "https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join",
+  "recordedReportIntegration": {
+    "head": "69e8a78eda33ef2c82a65d1b5a32ae6f5231b6cf",
+    "sourceFingerprint": "d41cb0d9c271dbda10b8c573932772d4689ea908aabf391d5a61f4766ed83624",
+    "sourceUnchanged": true,
+    "measuredCases": 13,
+    "passed": 13,
+    "failed": 0,
+    "reportDeadlineMs": 30000,
+    "originalDeadlineAndWorkloadUnchanged": true,
+    "finishedAt": "2026-10-17T13:58:55.795121+00:00",
+    "preparationCases": 151,
+    "preflightCases": 248,
+    "scope": "Focused diagnostic on integrated pending source, including compiler index and complete-frame recorder corrections. Does not establish standalone-head native CI, all-nine coverage, reference-hardware gates or release readiness.",
+    "rawEvidenceDirectory": "/Users/burakdede/Projects/lorepack_release_evidence/runtime_performance/native_unit_lookup_recorded_pass/"
+  }
 }

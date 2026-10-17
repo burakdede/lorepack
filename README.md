@@ -576,7 +576,9 @@ Exact [near-duplicate behavior](docs/architecture/retrieval.md#near-duplicates-a
 is covered by threshold and differential ranking controls.
 Its call-local prefix index preserves exact overlap decisions and deterministic results.
 Real SQLite plan regressions also cover native-node lookups in local and D1 catalogs,
-including immutable catalogs without planner statistics.
+including immutable catalogs without planner statistics. The
+[lookup evidence](docs/testing/evidence/native_unit_lookup_development.json) records
+the original instrumented report passing on its integrated source snapshot.
 The [development comparison](docs/testing/evidence/retrieval_prefix_development.json)
 records paired workloads and the limits of those measurements.
 Studio development uses Vite 7.3.7. Users receive Studio's built assets in the CLI;
