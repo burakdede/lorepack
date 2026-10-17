@@ -12,6 +12,7 @@ export interface Outcome {
   readonly file: string;
   readonly fullName: string;
   readonly status: string;
+  readonly failureMessages?: readonly string[];
 }
 
 /**
@@ -82,6 +83,7 @@ export function runVitest(files: readonly string[], root?: string): readonly Out
         readonly assertionResults: readonly {
           readonly fullName: string;
           readonly status: string;
+          readonly failureMessages?: readonly string[];
         }[];
       }[];
     };
@@ -90,6 +92,7 @@ export function runVitest(files: readonly string[], root?: string): readonly Out
         file: normalize(relative(ROOT, file.name)),
         fullName: test.fullName,
         status: test.status,
+        failureMessages: test.failureMessages ?? [],
       })),
     );
   } finally {
