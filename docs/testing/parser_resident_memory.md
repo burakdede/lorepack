@@ -19,6 +19,12 @@ platform-conditional. The Windows observer-startup unit probe is required on
 Windows and explicitly inapplicable on Linux/macOS. Original isolation,
 cancellation, identity and privacy probes remain unchanged.
 
+The macOS reader retains malformed output as a JSON-escaped literal in its error.
+The fixed `/bin/ps` query keeps its existing 256-byte output limit and 250 ms deadline.
+Numeric interpretation, including zero and outer whitespace, remains unchanged.
+All-platform unit controls verify these cases and escaped malformed reports. A retained
+value supports diagnosis; it does not by itself establish why the OS returned it.
+
 | CLI workload | Fixture input | Heap MiB | Parse deadline | RSS threshold |
 |---|---|---|---|---|
 | FlateDecode PDF | 1500 MiB of repeated text operators | 2048 | 30 s | 1024 MiB |

@@ -492,6 +492,7 @@ Built-in parsers have a sampled resident-memory watchdog, default 1,024 MiB,
 separate from the V8 heap limit. Observer startup and health checks service pending reports
 before declaring a stale reader. Linux process-exit reports preserve the original
 parser exit diagnostic. Sampling can overshoot: it is not a hard RSS ceiling.
+Malformed macOS RSS reports retain the bounded OS output as an escaped diagnostic.
 The [resident-memory ADR](docs/adr/0043-parser-resident-memory.md) records the
 accepted limits and independent three-platform resource measurements.
 The [resource verification protocol](docs/testing/parser_resident_memory.md) defines

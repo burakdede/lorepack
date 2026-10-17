@@ -16,6 +16,13 @@ export interface ResidentMemoryMonitor {
 const INTERVAL_MS = 100;
 const READER_TIMEOUT_MS = 250;
 
+export function parseMacResidentMemory(report: string): number {
+  const value = report.trim();
+  if (!/^\d+$/.test(value))
+    throw new Error(`macOS did not report parser resident memory: ${JSON.stringify(report)}.`);
+  return Number(value) * 1024;
+}
+
 export async function readLinuxResidentMemory(pid: number): Promise<number | null> {
   let report: string;
   try {
@@ -230,12 +237,11 @@ export function monitorResidentMemory(
           (error, stdout) => {
             reader = undefined;
             if (error !== null) reject(error);
-            else resolve(stdout.trim());
+            else resolve(stdout);
           },
         );
       });
-      if (!/^\d+$/.test(report)) throw new Error('macOS did not report parser resident memory.');
-      return Number(report) * 1024;
+      return parseMacResidentMemory(report);
     };
     const poll = async (): Promise<void> => {
       if (stopped) return;
