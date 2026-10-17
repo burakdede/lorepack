@@ -1,0 +1,9 @@
+{
+  "source": "2e41c031c6de642aa0100493b63c7d53ecd71b5b",
+  "tree": "2f76896d2462ada67e726ba5af43a3fd1d0f30c0",
+  "patchSha256": "82f16abdec09a299d4cfa4f6869aafcdf178255673b432a739e2cb022c42ca2b",
+  "files": {
+    "packages/cli/test/dev.e2e.test.ts": "6eaa90f2918d0d5c51cc62facf2440f19c964e664c2916d0d8806e1855ef3f34",
+    "packages/cli/test/support/child_diagnostics.ts": "0cbf8b5b5e5d236700d637a3a30e2f61af1288edb80d1e042c6aafa72dd68db2"
+  }
+}

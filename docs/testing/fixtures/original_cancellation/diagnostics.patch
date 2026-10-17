@@ -1,0 +1,148 @@
+diff --git a/packages/cli/test/dev.e2e.test.ts b/packages/cli/test/dev.e2e.test.ts
+index 60d295a5..3f77a9ef 100644
+--- a/packages/cli/test/dev.e2e.test.ts
++++ b/packages/cli/test/dev.e2e.test.ts
+@@ -13,0 +14 @@ import { join } from 'node:path';
++import { DatabaseSync } from 'node:sqlite';
+@@ -14,0 +16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import { type ChildOutput, observeChild } from './support/child_diagnostics.js';
+@@ -30,0 +33 @@ const running: ChildProcess[] = [];
++let cancellationDiagnostics: (() => void) | undefined;
+@@ -54,0 +58 @@ interface Started {
++  readonly output: () => { stdout: string; stderr: string };
+@@ -91 +95,8 @@ async function dev(extra: readonly string[] = []): Promise<Started> {
+-  return { child, stdout, stderr, log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`, port };
++  return {
++    child,
++    stdout,
++    stderr,
++    log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`,
++    output: () => ({ stdout, stderr }),
++    port,
++  };
+@@ -100 +111,3 @@ beforeEach(() => {
+-afterEach(async () => {
++afterEach(async ({ task }) => {
++  if (task.result?.state === 'fail') cancellationDiagnostics?.();
++  cancellationDiagnostics = undefined;
+@@ -687,0 +701,56 @@ describe('cancelling a real build process', () => {
++    const began = Date.now();
++    let originalBuildId: string | null = null;
++    const stages: { stage: string; elapsedMs: number }[] = [];
++    const checkpoint = (stage: string) => stages.push({ stage, elapsedMs: Date.now() - began });
++    const children: ReturnType<typeof observeChild>[] = [];
++    const observe = (label: string, child: ChildProcess, output?: () => ChildOutput) => {
++      children.push(observeChild(label, child, output));
++    };
++    cancellationDiagnostics = () => {
++      const ownerPath = join(project, '.lore', 'lock', 'owner.json');
++      let lockOwner: string | null = null;
++      try {
++        lockOwner = readFileSync(ownerPath, 'utf8');
++      } catch (error) {
++        lockOwner = String(error);
++      }
++      let activeBuild: unknown = null;
++      try {
++        const database = new DatabaseSync(join(project, '.lore', 'state.sqlite'), {
++          readOnly: true,
++        });
++        try {
++          activeBuild = database
++            .prepare('SELECT build_id, generation FROM active_build WHERE id = 1')
++            .get();
++        } finally {
++          database.close();
++        }
++      } catch (error) {
++        activeBuild = String(error);
++      }
++      console.error(
++        'Build cancellation diagnostics',
++        JSON.stringify({
++          platform: platform(),
++          elapsedMs: Date.now() - began,
++          stages,
++          originalBuildId,
++          activeBuild,
++          lockOwner,
++          running: running.map((child) => ({
++            pid: child.pid,
++            exitCode: child.exitCode,
++            signalCode: child.signalCode,
++          })),
++          children: children.map(({ label, child, capture }) => ({
++            label,
++            pid: child.pid,
++            exitCode: child.exitCode,
++            signalCode: child.signalCode,
++            ...capture(),
++          })),
++        }),
++      );
++    };
++    checkpoint('starting dev');
+@@ -688,0 +758,2 @@ describe('cancelling a real build process', () => {
++    observe('dev', started.child, started.output);
++    checkpoint('reading original active build');
+@@ -694,0 +766,2 @@ describe('cancelling a real build process', () => {
++    originalBuildId = before;
++    checkpoint('stopping dev');
+@@ -697,0 +771 @@ describe('cancelling a real build process', () => {
++    checkpoint('writing original 2400-file fixture');
+@@ -705,0 +780 @@ describe('cancelling a real build process', () => {
++    checkpoint('starting cancellable build');
+@@ -711,0 +787,2 @@ describe('cancelling a real build process', () => {
++    observe('cancelled build', child, () => ({ stdout, stderr }));
++    checkpoint('waiting for parsing');
+@@ -727,0 +805 @@ describe('cancelling a real build process', () => {
++    checkpoint('stopping cancellable build');
+@@ -743,0 +822 @@ describe('cancelling a real build process', () => {
++    checkpoint('checking active build after cancellation');
+@@ -747,0 +827 @@ describe('cancelling a real build process', () => {
++    observe('status', status, () => ({ stdout: statusOutput }));
+@@ -756,0 +837 @@ describe('cancelling a real build process', () => {
++    checkpoint('rebuilding after cancellation');
+@@ -760,0 +842 @@ describe('cancelling a real build process', () => {
++    observe('subsequent build', next, () => ({ stdout: nextOutput }));
+@@ -769,0 +852 @@ describe('cancelling a real build process', () => {
++    checkpoint('verified active build and released lock');
+diff --git a/packages/cli/test/support/child_diagnostics.ts b/packages/cli/test/support/child_diagnostics.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/cli/test/support/child_diagnostics.ts
+@@ -0,0 +1,34 @@
++import type { ChildProcess } from 'node:child_process';
++import type { Readable } from 'node:stream';
++
++export interface ChildOutput {
++  readonly stdout?: string;
++  readonly stderr?: string;
++}
++
++function buffered(stream: Readable | null): string {
++  const chunk = stream?.read() as Buffer | string | null | undefined;
++  return (chunk?.toString() ?? '').slice(-16000);
++}
++
++export function observeChild(label: string, child: ChildProcess, readOutput?: () => ChildOutput) {
++  return {
++    label,
++    child,
++    capture() {
++      const stdoutBufferedBytes = child.stdout?.readableLength ?? 0;
++      const stderrBufferedBytes = child.stderr?.readableLength ?? 0;
++      const stdoutFlowing = child.stdout?.readableFlowing ?? null;
++      const stderrFlowing = child.stderr?.readableFlowing ?? null;
++      const output = readOutput?.() ?? {};
++      return {
++        stdoutBufferedBytes,
++        stderrBufferedBytes,
++        stdoutFlowing,
++        stderrFlowing,
++        stdout: (output.stdout ?? buffered(child.stdout)).slice(-16000),
++        stderr: (output.stderr ?? buffered(child.stderr)).slice(-16000),
++      };
++    },
++  };
++}

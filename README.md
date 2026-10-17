@@ -586,3 +586,6 @@ findings in contributor dependencies.
 ## License
 
 [Apache-2.0](LICENSE)
+
+The temporary [original Windows cancellation replay](docs/testing/original_cancellation_replay.md)
+records the pinned historical investigation for #764. This experiment branch is not a release candidate.

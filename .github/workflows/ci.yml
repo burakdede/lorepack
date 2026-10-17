@@ -18,6 +18,7 @@ env:
 
 jobs:
   verify:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     name: verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -149,6 +150,7 @@ jobs:
           retention-days: 7
 
   acceptance:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     # A separate job, not a step in `verify`, for two reasons: it is minutes rather than
     # seconds, and when it fails the question is "which scenario" rather than "which test".
     # Mixing it into the unit run buries that answer.
@@ -174,6 +176,7 @@ jobs:
         run: pnpm acceptance
 
   packed-install:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     # What an npm user gets, rather than what the pnpm workspace has. Workspace overrides
     # (`@napi-rs/canvas` removed, `mammoth>argparse` pinned) never reach a published manifest,
     # so only an npm install of the packed tarball can show a native add-on or an untested
@@ -205,6 +208,7 @@ jobs:
         run: pnpm check:packed-cli
 
   privacy-sandbox:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     # Linux only, and a job of its own: the network namespace needs root, which no
     # contributor's `pnpm test:security` should ask for, and macOS and Windows have no
     # equivalent. Every other job runs the same test file with the portable permission
@@ -231,6 +235,7 @@ jobs:
         run: sudo env "PATH=$PATH" unshare --net --mount -- bash tools/security/test/sandbox/netns.sh
 
   cloudflare-acceptance:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     name: cloudflare acceptance (ubuntu-latest)
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -271,6 +276,7 @@ jobs:
           retention-days: 7
 
   studio-e2e:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     # Studio in a real browser, against a real `lorepack dev`.
     #
     # One OS, deliberately. This suite answers "does the assembled application work against
@@ -320,6 +326,7 @@ jobs:
           retention-days: 7
 
   clean-install:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     # Invariant 7, the zero-surprise install promise, tested rather than asserted.
     #
     # `--ignore-scripts` is the portable proof: if the product installs and runs with every
@@ -381,6 +388,7 @@ jobs:
         run: pnpm check:studio-bundle
 
   benchmarks:
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     name: benchmarks (reported)
     runs-on: ubuntu-latest
     steps:
@@ -410,3 +418,146 @@ jobs:
           path: benchmarks/ci-*.json
           if-no-files-found: error
           retention-days: 30
+
+  original-cancellation:
+    name: original cancellation evidence (windows-latest)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: original
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: control
+      - uses: actions/checkout@v5
+        with:
+          ref: 2e41c031c6de642aa0100493b63c7d53ecd71b5b
+          fetch-depth: 0
+          path: original
+      - name: Bind original source and passive patch
+        working-directory: .
+        run: node control/scripts/prepare-original-cancellation.mjs original
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: original/package.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: original/pnpm-lock.yaml
+
+      - name: Fail if the resolved Node leaves the supported range
+        shell: bash
+        run: |
+          version="$(node -p 'process.versions.node')"
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          if [ "$major" -ne 24 ] || [ "$minor" -lt 19 ]; then
+            echo "::error::Node $version is outside the supported range >=24.19.0 <25"
+            exit 1
+          fi
+          echo "Node $version is inside the supported range"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm format:check
+
+      - run: pnpm typecheck
+
+      - name: Architecture rules
+        run: pnpm test:arch
+
+      - run: pnpm test
+
+      - name: Consolidated security suite
+        run: pnpm test:security
+
+      - run: pnpm check:no-native
+
+      - run: pnpm check:no-em-dash
+      - run: pnpm check:public-branding
+
+      - name: Nothing claims Lorepack detected a conflict
+        run: pnpm check:no-conflict-claims
+
+      - run: pnpm check:counted-nouns
+
+      - name: Every command the sources mention is registered
+        run: pnpm check:command-set
+
+      - name: Studio fits its bundle budget
+        run: pnpm check:studio-bundle
+
+      - name: Every source file is tracked by git
+        run: pnpm check:sources-tracked
+
+      # Tracked, not merely present. Six generated PNGs sat in `docs/images/` behind a blanket
+      # `*.png` ignore, so the README shipped with broken icons (#214).
+      - name: Every documentation image is referenced and tracked
+        run: pnpm check:docs-images
+
+      - name: Every local documentation link resolves
+        run: pnpm check:docs-links
+
+      - name: Public contribution templates contain required prompts
+        run: pnpm check:templates
+
+      - name: Package manifests follow the Apache-2.0 policy
+        run: pnpm check:license-policy
+
+      - name: Supply-chain policy, audit, licenses, SBOM and provenance
+        run: pnpm check:supply-chain
+
+      - name: Release automation policy
+        run: pnpm check:release-policy
+
+      - name: Performance report claims match measurements
+        run: pnpm check:performance-report
+
+      - name: Retrieval quality stays at the committed lexical baseline
+        run: pnpm bench:quality
+
+      - name: Changeset or explicit no-release marker
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          git fetch --no-tags --no-prune origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" "refs/pull/${{ github.event.pull_request.number }}/head:refs/remotes/origin/pr-${{ github.event.pull_request.number }}"
+          export CHANGESET_HEAD_REF="origin/pr-${{ github.event.pull_request.number }}"
+          pnpm check:changeset-policy
+
+      # These steps and `pnpm verify` are one list. This is what says so.
+      - name: CI and `pnpm verify` run the same checks
+        run: pnpm check:verify-parity
+
+      - name: Public schemas match their Zod definitions
+        run: pnpm schemas:check
+
+      - name: SQLite has FTS5
+        run: pnpm probe:fts5
+
+      - name: The acceptance checklist matches the scenario catalogue
+        run: pnpm acceptance:docs:check
+
+      - name: The CLI reference matches the command definitions
+        run: pnpm cli:docs:check
+
+      - name: The README demo runs against the checked-in examples
+        run: pnpm demo:readme:check
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: original-cancellation-windows
+          path: |
+            original/coverage/
+            original/**/vitest-report.json
+            original-cancellation-evidence/
+          if-no-files-found: ignore
+          retention-days: 7
