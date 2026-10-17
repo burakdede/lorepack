@@ -2,12 +2,13 @@ import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   type Artifact,
+  escapeFtsQuery,
   type LoreNode,
   NATIVE_UNIT_LIMITS,
   SEARCH_QUERY_LIMITS,
 } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   type CatalogArtifact,
   countRows,
@@ -70,7 +71,7 @@ function entry(id: string, title: string, texts: string[], status = 'active'): C
       headingPath: ['Section'],
       text,
       estimatedTokens: 10,
-      locator: { relativePath: id.split(':')[1] ?? '', lineStart: 1, lineEnd: 2 },
+      locator: { artifactId: id, relativePath: id.split(':')[1] ?? '', lineStart: 1, lineEnd: 2 },
       revisionHash: 'd'.repeat(64),
     })),
   };
@@ -93,6 +94,30 @@ async function withCatalog(
 }
 
 describe('native evidence units, issue698', () => {
+  it('looks up referenced node IDs without artifact scans in unanalysed catalogs, issue783', async () => {
+    const record = entry('p:policy.md', 'Policy', [
+      'rollback only if approved',
+      ...Array.from({ length: 256 }, (_, i) => `unrelated ${i}`),
+    ]);
+    await withCatalog([record], (db) => {
+      const capture = vi.spyOn(db, 'prepare');
+      const result = searchCatalog(db, 'rollback', { nativeUnits: true });
+      const sql = capture.mock.calls.find(([query]) => query.includes('AS unitText'))?.[0];
+      capture.mockRestore();
+      if (sql === undefined) throw new Error('Native-unit SQL was not executed.');
+      expect(result[0]?.nativeUnit?.text).toBe('rollback only if approved');
+      const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(escapeFtsQuery('rollback'), 10);
+      const lookups = plan
+        .map((row) => String(row.detail))
+        .filter((detail) => detail.includes('unit_node'));
+      expect(lookups.length).toBeGreaterThan(0);
+      expect(
+        lookups.every((detail) => /SEARCH unit_node.*\bid=\?/.test(detail)),
+        lookups.join('\n'),
+      ).toBe(true);
+    });
+  });
+
   it.each([
     [NATIVE_UNIT_LIMITS.maxUtf8Bytes, 'ascii'],
     [NATIVE_UNIT_LIMITS.maxUtf8Bytes + 1, 'ascii'],

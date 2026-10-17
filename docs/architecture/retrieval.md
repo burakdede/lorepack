@@ -15,6 +15,16 @@ chunk is no longer presented as the complete native evidence. Bodies larger than
 condition away. Search still returns lexical excerpts. See
 [the decision and limits](../adr/0015-native-context-evidence.md).
 
+Both SQLite adapters resolve native evidence by iterating the recorded node references
+and looking up each ID within its artifact and, remotely, its project/build scope.
+Their explicit `CROSS JOIN` order prevents missing planner statistics from turning
+those lookups into repeated artifact or build scans. It works on existing read-only
+catalogs without maintenance writes or a rebuild. Node ordering, missing-reference
+checks and UTF-8 limits remain unchanged. See SQLite's
+[join-order documentation](https://www.sqlite.org/optoverview.html#manual_control_of_query_plans_using_cross_join)
+and the [development query-plan evidence](../testing/evidence/native_unit_lookup_development.json).
+
+
 ## Where each part lives, and why
 
 | Part | Package | Why there |
