@@ -586,3 +586,6 @@ findings in contributor dependencies.
 ## License
 
 [Apache-2.0](LICENSE)
+
+Maintainers can run the [global tarball smoke](docs/testing/global_smoke.md)
+before publication to exercise the actual global install on each supported OS.
