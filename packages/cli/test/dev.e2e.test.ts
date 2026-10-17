@@ -32,6 +32,7 @@ const DOCUMENT =
 let project: string;
 const running: ChildProcess[] = [];
 let cancellationDiagnostics: (() => void) | undefined;
+let churnDiagnostics: (() => void) | undefined;
 
 /**
  * Whether a parent process can ask this child to stop *gracefully*.
@@ -102,8 +103,12 @@ beforeEach(() => {
 });
 
 afterEach(async ({ task }) => {
-  if (task.result?.state === 'fail') cancellationDiagnostics?.();
+  if (task.result?.state === 'fail') {
+    cancellationDiagnostics?.();
+    churnDiagnostics?.();
+  }
   cancellationDiagnostics = undefined;
+  churnDiagnostics = undefined;
   for (const child of running.splice(0)) {
     if (child.exitCode === null) {
       child.kill('SIGTERM');
@@ -403,22 +408,58 @@ describe('watching while it serves', () => {
   }, 120_000);
 
   it('keeps serving through sixty seconds of source churn and converges afterward', async () => {
+    const diagnosticStart = performance.now();
+    const activity = {
+      phase: 'preparing source fixture',
+      readPhase: 'not started',
+      cleanupPhase: 'not started',
+      firstBuildId: null as string | null,
+      lastBuildId: null as string | null,
+      lastHttpStatus: null as number | null,
+      rounds: 0,
+      liveReads: 0,
+      convergenceReads: 0,
+    };
+    let supervisor: Started | undefined;
+    churnDiagnostics = () => {
+      console.error(
+        'Source churn failure diagnostics',
+        JSON.stringify({
+          ...activity,
+          elapsedMs: Math.round(performance.now() - diagnosticStart),
+          childPid: supervisor?.child.pid ?? null,
+          childExitCode: supervisor?.child.exitCode ?? null,
+          childSignal: supervisor?.child.signalCode ?? null,
+          supervisorOutput: supervisor?.log().slice(-16_384) ?? null,
+        }),
+      );
+    };
     for (let index = 0; index < 299; index += 1) {
       writeFileSync(
         join(project, 'docs', `stable-${index}.md`),
         `# Stable ${index}\n\n${'content '.repeat(80)}\n`,
       );
     }
+    activity.phase = 'starting supervisor';
     const started = await dev();
+    supervisor = started;
     const base = `http://127.0.0.1:${started.port}`;
-    const first = ((await (await fetch(`${base}/v1/build`)).json()) as { buildId: string }).buildId;
+    activity.phase = 'initial build headers';
+    const initialResponse = await fetch(`${base}/v1/build`);
+    activity.lastHttpStatus = initialResponse.status;
+    expect(initialResponse.status, started.log()).toBe(200);
+    activity.phase = 'initial build body';
+    const first = buildDescriptionSchema.parse(await initialResponse.json()).buildId;
+    activity.firstBuildId = first;
     const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`));
     const client = new Client(
       { name: 'lorepack-source-churn-test', version: '0.1.0' },
       { versionNegotiation: { mode: { pin: '2026-07-28' } } },
     );
+    activity.phase = 'MCP connection';
     await client.connect(transport);
     try {
+      activity.phase = 'initial MCP search';
       const initial = searchResultSchema.parse(
         (
           await client.callTool({
@@ -439,12 +480,17 @@ describe('watching while it serves', () => {
       const reads = (async () => {
         while (!stopped) {
           readPhase = 'build headers';
+          activity.readPhase = readPhase;
           const response = await fetch(`${base}/v1/build`);
+          activity.lastHttpStatus = response.status;
           expect(response.status, started.log()).toBe(200);
           readPhase = 'build body';
+          activity.readPhase = readPhase;
           const liveBuild = buildDescriptionSchema.parse(await response.json());
           lastBuildId = liveBuild.buildId;
+          activity.lastBuildId = lastBuildId;
           readPhase = 'MCP search';
+          activity.readPhase = readPhase;
           const model = searchResultSchema.parse(
             (
               await client.callTool({
@@ -455,6 +501,7 @@ describe('watching while it serves', () => {
           );
           expect(model.hits.length).toBeGreaterThan(0);
           liveReads += 1;
+          activity.liveReads = liveReads;
           if (!stopped) await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       })().catch((error: unknown) => {
@@ -472,6 +519,7 @@ describe('watching while it serves', () => {
         );
       });
       try {
+        activity.phase = 'source churn';
         while (performance.now() - began < 60_000) {
           for (let index = 0; index < 20; index += 1) {
             writeFileSync(
@@ -482,15 +530,18 @@ describe('watching while it serves', () => {
           for (let index = 0; index < 20; index += 1)
             rmSync(join(project, 'docs', `tmp${index}.md`));
           rounds += 1;
+          activity.rounds = rounds;
           await new Promise<void>((resolve) => setImmediate(resolve));
           expect(started.child.exitCode, started.log()).toBeNull();
           if (readFailure !== undefined) throw readFailure;
         }
       } finally {
+        activity.phase = 'draining churn reads';
         stopped = true;
         await reads;
       }
       if (readFailure !== undefined) throw readFailure;
+      activity.phase = 'checking completed churn';
       expect(performance.now() - began).toBeGreaterThanOrEqual(60_000);
       expect(rounds).toBeGreaterThan(0);
       expect(liveReads).toBeGreaterThan(0);
@@ -501,17 +552,23 @@ describe('watching while it serves', () => {
       const deadline = Date.now() + 60_000;
       let found: ReturnType<typeof searchResultSchema.parse> | undefined;
       while (Date.now() < deadline) {
+        activity.phase = 'convergence headers';
+        activity.convergenceReads += 1;
         expect(started.child.exitCode, started.log()).toBeNull();
         const response = await fetch(`${base}/v1/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'steadywalrus' }),
         });
+        activity.lastHttpStatus = response.status;
         expect(response.status, started.log()).toBe(200);
+        activity.phase = 'convergence body';
         found = searchResultSchema.parse(await response.json());
+        activity.lastBuildId = found.buildId;
         if (found.sourceState === 'clean' && found.hits.length > 0) break;
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
+      activity.phase = 'checking convergence';
       expect(found?.sourceState, started.log()).toBe('clean');
       expect(found?.buildId).not.toBe(first);
       expect(found?.hits).toEqual(
@@ -521,6 +578,7 @@ describe('watching while it serves', () => {
           }),
         ]),
       );
+      activity.phase = 'final MCP search';
       const model = searchResultSchema.parse(
         (
           await client.callTool({
@@ -538,14 +596,18 @@ describe('watching while it serves', () => {
           }),
         ]),
       );
+      activity.phase = 'checking supervisor receipt';
       const receipt = JSON.parse(readFileSync(join(project, '.lore', 'dev.json'), 'utf8')) as {
         pid: number;
       };
       expect(receipt.pid).toBe(started.child.pid);
       expect(started.child.exitCode, started.log()).toBeNull();
     } finally {
+      activity.cleanupPhase = 'client close';
       await client.close();
+      activity.cleanupPhase = 'transport close';
       await transport.close();
+      activity.cleanupPhase = 'closed';
     }
   }, 180_000);
 });

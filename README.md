@@ -546,7 +546,7 @@ refuse changed source identities before a candidate can replace the active build
 [Windows cancellation qualification](docs/testing/windows_build_cancellation.md) records the
 real CLI fixture and failure diagnostics used to investigate native timeouts.
 [Watch read stability](docs/testing/watch_read_stability.md) records the source-churn
-HTTP/MCP check and its response-body lifecycle.
+HTTP/MCP check, response-body lifecycle and full-phase failure context before teardown.
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
 The comparison uses the PR event's head commit without depending on an advertised pull ref.
