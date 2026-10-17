@@ -442,9 +442,27 @@ function validCaptureStreams(streams, entry) {
   );
 }
 
-function selectCommand(registry, args, cwd, descriptor = 4) {
+function selectCommand(registry, args, cwd, descriptor = 4, inheritedProjectRoot) {
   if (!Array.isArray(args)) return null;
   const nodeArguments = [];
+  const inheritProject = (selected) => {
+    if (
+      !selected ||
+      selected.projectRoot !== undefined ||
+      inheritedProjectRoot === undefined ||
+      selected.entry.projectCaptureDirectory === undefined ||
+      nodeArguments.some(
+        (argument) => argument === '--permission' || argument.startsWith('--allow-'),
+      )
+    )
+      return selected;
+    if (
+      realpathSync(cwd ?? process.cwd()) !== inheritedProjectRoot ||
+      (process.permission && !process.permission.has('fs.write', inheritedProjectRoot))
+    )
+      return null;
+    return { ...selected, projectRoot: inheritedProjectRoot };
+  };
   let index = 0;
   for (; index < args.length; index++) {
     const argument = args[index];
@@ -454,7 +472,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
         (value) =>
           value.captureMode === 'eval-import' && (value.captureDescriptor ?? 4) === descriptor,
       );
-      return entry ? { entry, index: -1 } : null;
+      return inheritProject(entry ? { entry, index: -1 } : null);
     }
     if (
       [
@@ -518,11 +536,11 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
     } catch {
       return null;
     }
-    return {
+    return inheritProject({
       entry: preload,
       index: -1,
       ...(projectRoot && preload.projectCaptureDirectory !== undefined ? { projectRoot } : {}),
-    };
+    });
   }
   if (index && !isDeepStrictEqual(nodeArguments, entry.nodeArguments ?? [])) {
     if (entry.projectCaptureDirectory === undefined) return null;
@@ -538,7 +556,7 @@ function selectCommand(registry, args, cwd, descriptor = 4) {
       return null;
     return { entry, index, projectRoot };
   }
-  return { entry, index };
+  return inheritProject({ entry, index });
 }
 
 export function registerCommandCapture(
@@ -546,6 +564,7 @@ export function registerCommandCapture(
   directory,
   audit = false,
   projectRetentionDirectory,
+  inheritedProjectRoot,
 ) {
   const previous = globalThis[commandCollector];
   if (previous && !previous[campaignCollector])
@@ -579,6 +598,7 @@ export function registerCommandCapture(
       options.args?.slice(1),
       options.cwd,
       Array.isArray(options.stdio) && options.stdio.length === 5 ? 5 : 4,
+      inheritedProjectRoot,
     );
     if (!selected) {
       if (audit && !['--version', '--help'].includes(options.args?.[1]))
@@ -699,6 +719,7 @@ export function registerSyncCommandCapture(
   directory,
   audit = false,
   projectRetentionDirectory,
+  inheritedProjectRoot,
 ) {
   const previous = globalThis[syncCollector];
   if (previous && !previous[campaignCollector])
@@ -726,6 +747,7 @@ export function registerSyncCommandCapture(
       args,
       options?.cwd,
       Array.isArray(options?.stdio) && options.stdio.length === 5 ? 5 : 4,
+      inheritedProjectRoot,
     );
     if (!selected && audit && !['--version', '--help'].includes(args?.[0]))
       recordUnregisteredNode(directory, 'sync', args);
@@ -947,13 +969,22 @@ export function createCampaignRegistry(snapshot, launch) {
   return { forkEntries, commandEntries };
 }
 
-export function registerCampaignCapture(snapshot, launch, directory = launch.captureDirectory) {
+export function registerCampaignCapture(
+  snapshot,
+  launch,
+  directory = launch.captureDirectory,
+  projectRoot,
+) {
   const registry = createCampaignRegistry(snapshot, launch);
   const captures = [];
   try {
     captures.push(registerForkCapture(registry.forkEntries, directory, true));
-    captures.push(registerCommandCapture(registry.commandEntries, directory, true, directory));
-    captures.push(registerSyncCommandCapture(registry.commandEntries, directory, true, directory));
+    captures.push(
+      registerCommandCapture(registry.commandEntries, directory, true, directory, projectRoot),
+    );
+    captures.push(
+      registerSyncCommandCapture(registry.commandEntries, directory, true, directory, projectRoot),
+    );
   } catch (error) {
     for (const capture of captures.reverse()) capture.restore();
     throw error;
@@ -986,6 +1017,35 @@ function capturePermissionProfile() {
   return profile;
 }
 
+function projectCaptureScope(
+  directory,
+  message = 'Project capture parent is unavailable under the original grant.',
+) {
+  const root = realpathSync(process.cwd());
+  const profile = capturePermissionProfile();
+  const explicit = isDeepStrictEqual(profile, [
+    '--permission',
+    '--allow-fs-read=*',
+    `--allow-fs-write=${root}`,
+    '--allow-child-process',
+  ]);
+  const inherited = !profile.some(
+    (argument) => argument === '--permission' || argument.startsWith('--allow-'),
+  );
+  if (!explicit && !inherited) return null;
+  const parent = projectCaptureParent(root, process.ppid, directory);
+  let stat;
+  try {
+    stat = lstatSync(parent);
+  } catch (error) {
+    if (inherited && error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  const writable = process.permission ? process.permission.has('fs.write', parent) : inherited;
+  if (!stat.isDirectory() || stat.isSymbolicLink() || !writable) throw new Error(message);
+  return { root, directory: join(parent, String(process.pid)) };
+}
+
 export function registerNestedCampaignCapture(snapshot, launch, url) {
   const path = fileURLToPath(url);
   if (process.execArgv[0] !== '--import' || process.execArgv[1] !== url)
@@ -994,24 +1054,16 @@ export function registerNestedCampaignCapture(snapshot, launch, url) {
   const registryPreload = { path, sha256: digest(readFileSync(path)) };
   if (process.permission && !process.permission.has('child')) return;
   let directory = launch.captureDirectory;
-  if (process.permission && !process.permission.has('fs.write', directory)) {
-    const root = realpathSync(process.cwd());
-    const profile = capturePermissionProfile();
-    if (
-      !isDeepStrictEqual(profile, [
-        '--permission',
-        '--allow-fs-read=*',
-        `--allow-fs-write=${root}`,
-        '--allow-child-process',
-      ])
-    )
-      throw new Error('Nested capture cannot write under the original grant.');
-    const parent = projectCaptureParent(root, process.ppid, directory);
-    if (!lstatSync(parent).isDirectory() || !process.permission.has('fs.write', parent))
-      throw new Error('Project capture parent is unavailable under the original grant.');
-    directory = join(parent, String(process.pid));
-  }
-  const capture = registerCampaignCapture(snapshot, { ...launch, registryPreload }, directory);
+  const project = projectCaptureScope(directory);
+  if (project) directory = project.directory;
+  else if (process.permission && !process.permission.has('fs.write', directory))
+    throw new Error('Nested capture cannot write under the original grant.');
+  const capture = registerCampaignCapture(
+    snapshot,
+    { ...launch, registryPreload },
+    directory,
+    project?.root,
+  );
   process.once('beforeExit', async () => {
     await capture.settled();
   });
@@ -1260,21 +1312,8 @@ export async function runCapturedCli(
   artifacts,
   initialization,
 ) {
-  const projectRoot = realpathSync(process.cwd());
-  const permissionArguments = capturePermissionProfile();
-  if (
-    isDeepStrictEqual(permissionArguments, [
-      '--permission',
-      '--allow-fs-read=*',
-      `--allow-fs-write=${projectRoot}`,
-      '--allow-child-process',
-    ])
-  ) {
-    const parent = projectCaptureParent(projectRoot, process.ppid, directory);
-    if (!lstatSync(parent).isDirectory() || !process.permission?.has('fs.write', parent))
-      throw new Error('Project capture parent is unavailable under the original grant.');
-    directory = join(parent, String(process.pid));
-  }
+  const project = projectCaptureScope(directory);
+  if (project) directory = project.directory;
   if (artifacts !== undefined) verifyArtifactGraph(artifacts);
   if (entrypointSha256 !== undefined && digest(readFileSync(entrypoint)) !== entrypointSha256)
     throw new Error('Captured CLI entrypoint differs from its receipt.');
@@ -1286,7 +1325,7 @@ export async function runCapturedCli(
   const capture = registerForkCapture(entries, directory);
   let commands;
   try {
-    commands = registerCommandCapture(commandEntries, directory);
+    commands = registerCommandCapture(commandEntries, directory, false, undefined, project?.root);
   } catch (error) {
     capture.restore();
     throw error;
@@ -1867,18 +1906,8 @@ export function initializeEarlyCounterStream(filename, fd, coverageVariable, dir
   process.execArgv.splice(0, 2);
   const id = registerCounterStream(fd, coverageVariable);
   earlyCounterStreams.set(coverageVariable, { fd, id });
-  const root = realpathSync(process.cwd());
-  if (process.execArgv.includes(`--allow-fs-write=${root}`)) {
-    const parent = projectCaptureParent(root, process.ppid, directory);
-    const stat = lstatSync(parent);
-    if (
-      !stat.isDirectory() ||
-      stat.isSymbolicLink() ||
-      !process.permission?.has('fs.write', parent)
-    )
-      throw new Error('Early project capture parent differs.');
-    mkdirSync(join(parent, String(process.pid)));
-  }
+  const project = projectCaptureScope(directory, 'Early project capture parent differs.');
+  if (project) mkdirSync(project.directory);
 }
 
 export function continueCounterStream(fd, coverageVariable = variable) {

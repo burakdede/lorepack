@@ -1472,7 +1472,7 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
         ];
         const options = { cwd: working, env: { NODE_NO_WARNINGS: '1' }, encoding: 'utf8' as const };
         const expected = spawnSync(process.execPath, args, options);
-        expect(expected.status).toBe(7);
+        expect(expected.status, `stdout:\n${expected.stdout}\nstderr:\n${expected.stderr}`).toBe(7);
         const registry = createCampaignRegistry(captured, built.launch);
         const directory = join(project, `project-permission-parent-counters-${mode}`);
         const capture =

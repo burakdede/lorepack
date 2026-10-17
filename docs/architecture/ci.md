@@ -588,6 +588,16 @@ fixtures open a separate companion counter file, reserving low descriptors while
 native collector keeps descriptor4. Windows may allocate an opened file below4;
 the collector still rejects that descriptor rather than borrowing stdio or IPC. Both cases verify that fixture source
 counters stay out of the campaign namespace.
+Permission-profile fixtures retain stdout and stderr when their reference child exits
+unexpectedly, before testing the nested collector. Original exit, argument, permission,
+stream, custody and cleanup assertions remain unchanged.
+Node 24.21 can inherit effective child permissions while child execArgv contains only
+its explicit heap flags. Early, CLI and nested initialization therefore share the existing
+PID-bound preclaimed project-directory checks. A validated project scope follows selected
+command descendants with no new permission flags and the same working directory.
+No environment, flags, imports, descriptors, grants or record format is added; the original
+explicit-profile, source, inode, custody and cleanup checks remain.
+
 Temporary compiled output must not look like untracked source to a concurrent inventory
 scan. The ownership guard and source denominator remain unchanged.
 Failed children stop the campaign. Failed thresholds exit unsuccessfully with the report
