@@ -50,17 +50,16 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 const isResidentMemoryQuery = (name, args) => {
   if (IN_PARSE_CHILD) return false;
-  const [file, argv, options, callback] = args;
+  const [file, argv, options] = args;
   for (const [pid, child] of PARSERS) {
     if (child.exitCode !== null || child.signalCode !== null) continue;
     if (
       process.platform === 'darwin' &&
-      name === 'execFile' &&
+      name === 'spawn' &&
       file === '/bin/ps' &&
       same(argv, ['-o', 'rss=', '-p', String(pid)]) &&
-      same(options, { encoding: 'utf8', maxBuffer: 256, timeout: 250, killSignal: 'SIGKILL' }) &&
-      typeof callback === 'function' &&
-      args.length === 4
+      same(options, { timeout: 250, killSignal: 'SIGKILL' }) &&
+      args.length === 3
     )
       return true;
     const command =

@@ -205,6 +205,27 @@ it('stops its observer without terminating a healthy parser', async () => {
   expect(monitor.state.error).toBeNull();
 }, 15_000);
 
+it.runIf(process.platform === 'darwin')(
+  'keeps a completed macOS report queued during a parent stall',
+  async () => {
+    const { child } = waitingProcess();
+    const monitor = monitorResidentMemory(child, 1024);
+    monitors.push(monitor);
+    const ready = monitor.ready.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    const until = performance.now() + 500;
+    while (performance.now() < until) {}
+    expect(await ready).toBeNull();
+    expect(monitor.state.error).toBeNull();
+    expect(monitor.state.bytes).toBeGreaterThan(0);
+    expect(child.exitCode).toBeNull();
+    expect(child.signalCode).toBeNull();
+  },
+  15_000,
+);
+
 it('does not misreport an exited parser as an observer failure', async () => {
   const { child, closed } = waitingProcess();
   const monitor = monitorResidentMemory(child, 1024);

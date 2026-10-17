@@ -155,10 +155,16 @@ describe('privacy defaults: no telemetry or source egress in the build path, iss
       'child_process.execFile',
       'child_process.execFile',
       'child_process.execFile',
+      'child_process.execFile',
+      'child_process.spawn',
+      'child_process.spawn',
+      'child_process.spawn',
+      'child_process.spawn',
+      'child_process.spawn',
       'child_process.spawn',
       'child_process.spawn',
     ]);
-    expect(egressProblems(run)).toHaveLength(5);
+    expect(egressProblems(run)).toHaveLength(11);
   });
 
   it('refuses a parse process started without the permission model', async () => {

@@ -19,11 +19,36 @@ platform-conditional. The Windows observer-startup unit probe is required on
 Windows and explicitly inapplicable on Linux/macOS. Original isolation,
 cancellation, identity and privacy probes remain unchanged.
 
+The actual macOS `ps` parent-stall regression runs only on macOS, where that reader
+is used. All shared real-process output, failure and timeout controls run on every OS;
+the original four CLI memory workloads remain mandatory on every OS.
+
 The macOS reader retains malformed output as a JSON-escaped literal in its error.
 The fixed `/bin/ps` query keeps its existing 256-byte output limit and 250 ms deadline.
 Numeric interpretation, including zero and outer whitespace, remains unchanged.
 All-platform unit controls verify these cases and escaped malformed reports. A retained
 value supports diagnosis; it does not by itself establish why the OS returned it.
+
+## Completed macOS reports under parent load
+
+Node 24.21.0's `execFile` timeout destroys its output streams before killing the
+reader. A real `ps` probe with the existing 250 ms timeout and a 500 ms blocked
+parent returned empty output with exit code zero in eight trials, despite a live
+target process. The actual monitor regression reproduced the same typed failure.
+This establishes a completed-output loss mechanism; earlier malformed-report logs
+did not retain enough timing to attribute each historical failure individually.
+
+The macOS query now uses `spawn` with the same 250 ms timeout and `SIGKILL`, then
+drains both pipes through close with the same 256-byte per-stream limit. A completed
+report stays available when the parent's timeout callback is delayed. Numeric zero
+and malformed/empty rejection are unchanged. Real subprocess controls retain nonzero
+exit, spawn error, hung-reader and ASCII/UTF-8 overflow failures. There is no retry,
+new permission, longer deadline, or larger memory budget.
+
+The privacy proof admits only the fixed query for an already-owned live parser PID.
+It rejects the retired `execFile` form and altered PID, arguments, shell, timeout
+and signal. These checks preserve the parser's existing restrictions and all old
+denial probes. This does not resolve the separate Windows reporting failure.
 
 | CLI workload | Fixture input | Heap MiB | Parse deadline | RSS threshold |
 |---|---|---|---|---|
