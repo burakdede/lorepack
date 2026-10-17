@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { setTimeout as delay } from 'node:timers/promises';
+import { setTimeout as delay, setImmediate as nextCheckPhase } from 'node:timers/promises';
 
 import type { ParseInput } from '@lorepack/core';
 import { sha256Hex } from '@lorepack/core';
@@ -43,14 +43,18 @@ it('services pending OS reports after a parent stall before declaring the observ
   }
 }, 10_000);
 
-it('still rejects an observer that genuinely stops reporting at the original deadline', async () => {
+async function assertSilentObserver(stallMs: number) {
   const reports: { reports: number; silenceMs: number }[] = [];
   const watchdog = createReportingWatchdog((value) => {
     reports.push(value);
   });
   try {
     watchdog.report();
-    await delay(350);
+    const observation = delay(350);
+    const until = performance.now() + stallMs;
+    while (performance.now() < until) {}
+    await observation;
+    await nextCheckPhase();
     expect(reports).toEqual([
       expect.objectContaining({ reports: 1, silenceMs: expect.any(Number) }),
     ]);
@@ -58,6 +62,14 @@ it('still rejects an observer that genuinely stops reporting at the original dea
   } finally {
     watchdog.stop();
   }
+}
+
+it('still rejects an observer that genuinely stops reporting at the original deadline', async () => {
+  await assertSilentObserver(0);
+});
+
+it('observes a silent reader after a parent stall and the pending check phase', async () => {
+  await assertSilentObserver(500);
 });
 
 it('stops the reporting watchdog without arming it again from late data', async () => {

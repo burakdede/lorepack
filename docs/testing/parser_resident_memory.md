@@ -77,6 +77,12 @@ the same cause. Retain native timing/report-count/reader-state diagnostics and
 rerun the unchanged Windows acceptance scenarios before declaring it resolved.
 The consolidated suite preserves the child reporter's failed assertion messages,
 so a deadline-test failure includes its actual assertion rather than only its status.
+The silent-reader test keeps its 350 ms observation and 250 ms minimum silence
+assertion, then services the queued check phase before inspecting the callback.
+A separate 500 ms parent-stall regression fails without that synchronization.
+Node documents that [`setImmediate` callbacks run after I/O callbacks](https://nodejs.org/api/timers.html#setimmediatecallback-args).
+This corrects a reproduced test-ordering race; the assertion details from earlier
+failed runs were not retained, so their precise failure is still unproven.
 
 ## Linux address-space teardown
 
