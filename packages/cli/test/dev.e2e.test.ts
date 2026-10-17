@@ -16,6 +16,7 @@ import { buildDescriptionSchema, searchResultSchema } from '@lorepack/core';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ChildOutput, observeChild } from './support/child_diagnostics.js';
+import { observeHttp } from './support/http_diagnostics.js';
 
 /**
  * `lorepack dev` as a person actually runs it: point it at a folder and expect a running runtime.
@@ -34,6 +35,7 @@ let project: string;
 const running: ChildProcess[] = [];
 let cancellationDiagnostics: (() => void) | undefined;
 let churnDiagnostics: (() => void) | undefined;
+let churnHttpDiagnostics: ReturnType<typeof observeHttp> | undefined;
 
 /**
  * Whether a parent process can ask this child to stop *gracefully*.
@@ -118,6 +120,8 @@ afterEach(async ({ task }) => {
   }
   cancellationDiagnostics = undefined;
   churnDiagnostics = undefined;
+  churnHttpDiagnostics?.stop();
+  churnHttpDiagnostics = undefined;
   for (const child of running.splice(0)) {
     if (child.exitCode === null) {
       child.kill('SIGTERM');
@@ -440,6 +444,7 @@ describe('watching while it serves', () => {
           childExitCode: supervisor?.child.exitCode ?? null,
           childSignal: supervisor?.child.signalCode ?? null,
           supervisorOutput: supervisor?.log().slice(-16_384) ?? null,
+          http: churnHttpDiagnostics?.capture() ?? null,
         }),
       );
     };
@@ -453,6 +458,7 @@ describe('watching while it serves', () => {
     const started = await dev();
     supervisor = started;
     const base = `http://127.0.0.1:${started.port}`;
+    churnHttpDiagnostics = observeHttp(base);
     activity.phase = 'initial build headers';
     const initialResponse = await fetch(`${base}/v1/build`);
     activity.lastHttpStatus = initialResponse.status;

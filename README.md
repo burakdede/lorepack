@@ -548,7 +548,7 @@ real CLI fixture and failure diagnostics used to investigate native timeouts.
 Its recorder preserves pipe backpressure, using existing output buffers and
 reading unconsumed pipes only after a failure.
 [Watch read stability](docs/testing/watch_read_stability.md) records the source-churn
-HTTP/MCP check, response-body lifecycle and full-phase failure context before teardown.
+HTTP/MCP check, response-body lifecycle and bounded request/socket failure context before teardown.
 
 CI retains complete Git history for the changeset gate, including long pull request branches.
 The comparison uses the PR event's head commit without depending on an advertised pull ref.
