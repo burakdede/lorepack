@@ -58,6 +58,8 @@ the audit regression files listed in [`tsconfig.audit_tests.json`](../../tsconfi
 Add new audit regression files to that list. Both `pnpm verify` and native CI run the check.
 This includes the Linux resident-memory reader, reporting-deadline regressions and
 the consolidated gate's child-assertion reader and tests.
+Passive cancellation recording and its real pipe-backpressure tests use the same
+Node-only project.
 The same command then checks the existing Studio browser-test project with DOM libraries.
 Its strict flags are unchanged. New SQL suggestion tests belong to their actual Node
 and browser programs, so native CI checks both contexts rather than relying on
