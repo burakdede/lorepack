@@ -304,23 +304,18 @@ export function queryTerms(query: string): readonly string[] {
   return normalize(query).split(' ').filter(Boolean);
 }
 
+const shingleWindows = new RegExp(
+  `(?<!\\S)(?=(\\S+(?: \\S+){${RANKING_WEIGHTS.diversity.shingleSize - 1}}))\\S+ ?`,
+  'g',
+);
+
 function shingles(text: string): ReadonlySet<string> {
   const normalized = normalize(text);
-  if (normalized.length === 0) return new Set();
-  let end = -1;
-  for (let word = 0; word < RANKING_WEIGHTS.diversity.shingleSize; word += 1) {
-    end = normalized.indexOf(' ', end + 1);
-    if (end === -1) return new Set([normalized]);
-  }
-  const result = new Set<string>();
-  let start = 0;
-  do {
-    result.add(normalized.slice(start, end));
-    start = normalized.indexOf(' ', start) + 1;
-    end = normalized.indexOf(' ', end + 1);
-  } while (end !== -1);
-  result.add(normalized.slice(start));
-  return result;
+  // Normalization excludes NUL. Each replacement emits one complete overlapping
+  // window; the final split item is the unmatched short tail, not a shingle.
+  const windows = normalized.replace(shingleWindows, '$1\0').split('\0');
+  windows.pop();
+  return new Set(windows.length === 0 && normalized.length !== 0 ? [normalized] : windows);
 }
 
 /**

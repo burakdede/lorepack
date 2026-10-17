@@ -4,9 +4,9 @@
   "source": {
     "originalRevision": "7598acd7657a05518df07b7f3d93fcc53b957625",
     "originalRankingSha256": "5060ef4db420d4da0a75c09a3117da8e4f7313b3ed35c25c0b91236db63215a0",
-    "candidateRankingSha256": "880368d3f8be16688363e97a91300cd7f7146a18b5d605fc0c62721ab61fa403",
+    "candidateRankingSha256": "f2e9fd9aef8c3e5cdbda4f25b933d04ec8f0f1f66cf511bedc435ae50df0e62c",
     "originalSourceFingerprint": "d1630d364930aa1f837bab7c0bb7871adacd4d87d806917c6e0e5c532bd3efa6",
-    "candidateSourceFingerprint": "c7c30e41772dd0dc17f92ff8169388728a417b4234b8cbb22e77ed2ba493d662"
+    "candidateSourceFingerprint": "2d550da79f751a0538b2c6f9f199d0d8026ce86ca6c7e9b302f737535093aca5"
   },
   "method": {
     "benchmark": "scripts/bench-retrieval.mjs",
@@ -116,13 +116,13 @@
         "topics": 15
       },
       "measurements": {
-        "coldSearchMs": 18.67,
-        "warmSearchP50Ms": 17.22,
-        "warmSearchP95Ms": 22.41,
-        "warmSearchP99Ms": 28,
-        "debugSearchP95Ms": 17.71,
-        "contextBundleP50Ms": 521.72,
-        "contextBundleP95Ms": 573.68,
+        "coldSearchMs": 17.91,
+        "warmSearchP50Ms": 17.39,
+        "warmSearchP95Ms": 19.2,
+        "warmSearchP99Ms": 19.39,
+        "debugSearchP95Ms": 17.36,
+        "contextBundleP50Ms": 526.72,
+        "contextBundleP95Ms": 570.99,
         "iterations": 60,
         "queries": 5
       },
@@ -151,13 +151,13 @@
         "topics": 15
       },
       "measurements": {
-        "coldSearchMs": 26.53,
-        "warmSearchP50Ms": 30.49,
-        "warmSearchP95Ms": 34,
-        "warmSearchP99Ms": 39.48,
-        "debugSearchP95Ms": 32.27,
-        "contextBundleP50Ms": 571.69,
-        "contextBundleP95Ms": 802.83,
+        "coldSearchMs": 30.62,
+        "warmSearchP50Ms": 30.53,
+        "warmSearchP95Ms": 33.99,
+        "warmSearchP99Ms": 37.88,
+        "debugSearchP95Ms": 33.12,
+        "contextBundleP50Ms": 581.22,
+        "contextBundleP95Ms": 843.04,
         "iterations": 30,
         "queries": 5
       },
@@ -173,11 +173,11 @@
       {
         "trial": 0,
         "variant": "original",
-        "maxRSS": 146304,
+        "maxRSS": 147056,
         "memoryUsage": {
-          "rss": 149831680,
-          "heapTotal": 97861632,
-          "heapUsed": 56946784,
+          "rss": 150601728,
+          "heapTotal": 98385920,
+          "heapUsed": 57700048,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -187,11 +187,11 @@
       {
         "trial": 0,
         "variant": "candidate",
-        "maxRSS": 136544,
+        "maxRSS": 144896,
         "memoryUsage": {
-          "rss": 139837440,
-          "heapTotal": 99172352,
-          "heapUsed": 31010440,
+          "rss": 148406272,
+          "heapTotal": 98648064,
+          "heapUsed": 56603304,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -201,11 +201,11 @@
       {
         "trial": 1,
         "variant": "candidate",
-        "maxRSS": 136880,
+        "maxRSS": 145136,
         "memoryUsage": {
-          "rss": 140165120,
-          "heapTotal": 98648064,
-          "heapUsed": 42489352,
+          "rss": 148652032,
+          "heapTotal": 98385920,
+          "heapUsed": 55984936,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -215,11 +215,11 @@
       {
         "trial": 1,
         "variant": "original",
-        "maxRSS": 146928,
+        "maxRSS": 147200,
         "memoryUsage": {
-          "rss": 150470656,
-          "heapTotal": 98648064,
-          "heapUsed": 56943736,
+          "rss": 150765568,
+          "heapTotal": 97861632,
+          "heapUsed": 57738504,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -229,11 +229,11 @@
       {
         "trial": 2,
         "variant": "original",
-        "maxRSS": 147296,
+        "maxRSS": 146560,
         "memoryUsage": {
-          "rss": 150863872,
+          "rss": 150110208,
           "heapTotal": 98123776,
-          "heapUsed": 57616720,
+          "heapUsed": 56828736,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -243,11 +243,11 @@
       {
         "trial": 2,
         "variant": "candidate",
-        "maxRSS": 136560,
+        "maxRSS": 145232,
         "memoryUsage": {
-          "rss": 139837440,
+          "rss": 148733952,
           "heapTotal": 99172352,
-          "heapUsed": 43178112,
+          "heapUsed": 55995120,
           "external": 2313236,
           "arrayBuffers": 137467
         },
@@ -255,5 +255,12 @@
         "inputs": 15
       }
     ]
-  }
+  },
+  "candidate": "Boundary-anchored native overlapping-window construction plus lexical prefix filtering.",
+  "limitations": [
+    "One baseline-before-candidate development comparison; not a statistically established general speedup.",
+    "Benchmark scripts retain percentile aggregates, not the raw P01-P06 reference distributions.",
+    "Supplemental fresh-process memory diagnostics cover the fifteen saved ranking inputs, not final project or parser resource qualification.",
+    "Original complete recorded report deadline remains 30000 ms and still requires separate qualification."
+  ]
 }

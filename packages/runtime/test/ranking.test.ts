@@ -274,6 +274,10 @@ describe('step 8: near-duplicate removal', () => {
       'café CAFÉ',
       'one two three four',
       'one two three four five',
+      'one\0two three four five',
+      'x'.repeat(65_536),
+      `first second ${'x'.repeat(65_536)}`,
+      `start ${'x'.repeat(65_536)} middle end`,
     ];
     for (let changes = 0; changes <= 20; changes++) {
       texts.push(

@@ -148,13 +148,17 @@ a candidate: the original size bounds and exact Jaccard predicate decide duplica
 There is no vocabulary cache or state shared across calls or builds.
 
 The [development comparison](../testing/evidence/retrieval_prefix_development.json)
-records one paired run at 3,200 and 50,000 chunks, plus a supplemental memory diagnostic.
+records one paired native-window comparison at 3,200 and 50,000 chunks, plus a
+supplemental memory diagnostic. These are development observations, not a general speedup.
 It supports evaluating this candidate beyond isolated recorder timings. It does not
 establish the original recorded-report deadline, reference-machine gates or release readiness.
 
-Shingles are contiguous windows of the same normalized text. Moving the window by
-spaces avoids allocating and joining an array for each overlapping shingle. Tokenization,
-thresholds, deterministic order and returned evidence objects remain unchanged.
+Shingles remain contiguous windows of the same normalized text. A native replacement
+emits each overlapping window with a NUL separator, which normalization excludes from
+inputs. Removing the unmatched short tail preserves the original short-text behavior.
+The pattern requires a word boundary so a long unbroken token is not rescanned from
+every character. Controls include NUL input and 65,536-character tokens. No word-array
+slices, joins or callbacks are allocated per window; tokenization and evidence stay exact.
 
 Differential tests preserve the original retained objects and deterministic order across
 empty, short, Unicode and repeated text, shuffled candidates and score/path ties.
