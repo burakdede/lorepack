@@ -141,6 +141,21 @@ Duplicate removal uses word shingles and Jaccard overlap: a deterministic signat
 embedding. An embedding would mean a model download, which breaks the zero-surprise install
 (invariant 7), and would make the page depend on a model version.
 
+Exact [prefix filtering](https://rutgers-db.github.io/cs541-fall19/paper/prefixfilter.pdf)
+uses one string order across signatures to exclude impossible pairs. The index contains
+only prefixes of kept signatures and lasts for one ranking call. A prefix match remains
+a candidate: the original size bounds and exact Jaccard predicate decide duplication.
+There is no vocabulary cache or state shared across calls or builds.
+
+The [development comparison](../testing/evidence/retrieval_prefix_development.json)
+records one paired run at 3,200 and 50,000 chunks, plus a supplemental memory diagnostic.
+It supports evaluating this candidate beyond isolated recorder timings. It does not
+establish the original recorded-report deadline, reference-machine gates or release readiness.
+
+Shingles are contiguous windows of the same normalized text. Moving the window by
+spaces avoids allocating and joining an array for each overlapping shingle. Tokenization,
+thresholds, deterministic order and returned evidence objects remain unchanged.
+
 Differential tests preserve the original retained objects and deterministic order across
 empty, short, Unicode and repeated text, shuffled candidates and score/path ties.
 Explicit cases cover overlap below, exactly at and above the 0.85 threshold. The pairwise
@@ -267,14 +282,15 @@ output kept all source lines inside a five-backtick fence and cited `rollout.txt
 
 ## Measured cost
 
-Provisional, on the development machine, since the reference machine is #101:
+Historical provisional measurements before the current prefix and window candidate.
+They are not current-candidate qualification; the reference machine remains #101:
 
 | Corpus | Warm search p95 | Bundle p95 | Gates |
 |---|---|---|---|
 | 3,200 chunks | 6.59 ms | 60.4 ms | 250 ms, 1,500 ms |
 | 50,000 chunks, the stated envelope | 21.45 ms | 199.96 ms | 250 ms, 1,500 ms |
 
-`pnpm bench:retrieval` reproduces them; the recorded runs are in `benchmarks/retrieval/`.
+`pnpm bench:retrieval` reruns these workloads; historical runs are in `benchmarks/retrieval/`.
 Reported, never enforced, until #101 defines the machine.
 
 ### One optimisation worth knowing about

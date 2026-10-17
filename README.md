@@ -574,6 +574,9 @@ The test toolchain is outside the published runtime dependencies; see the
 [CI guide](docs/architecture/ci.md) for its regression checks.
 Exact [near-duplicate behavior](docs/architecture/retrieval.md#near-duplicates-and-diversity)
 is covered by threshold and differential ranking controls.
+Its call-local prefix index preserves exact overlap decisions and deterministic results.
+The [development comparison](docs/testing/evidence/retrieval_prefix_development.json) records
+paired workloads and the limits of those measurements.
 Studio development uses Vite 7.3.7. Users receive Studio's built assets in the CLI;
 see the [dependency decisions](docs/architecture/dependencies.md) for contributor tooling.
 Release preparation uses Changesets 3.0.3 with the existing private-package version policy.
