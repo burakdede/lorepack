@@ -122,7 +122,7 @@ outcome = await host.parse(parser, { ... }, signal);   // inside the try
 ```
 
 Built-in parsers run in a separate process under a deadline and a memory ceiling (see
-[parsers](./parsers.md#built-in-parsers-have-a-deadline-and-a-heap-ceiling)); the host rebuilds a
+[parsers](./parsers.md#built-in-parser-resource-controls)); the host rebuilds a
 parser's error on this side with its class, so the `catch` sees what an in-process call would
 have thrown. A parser the child does not know, such as the injected one below, runs in-process
 through the same call.
