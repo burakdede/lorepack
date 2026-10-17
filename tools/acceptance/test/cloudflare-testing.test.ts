@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  assertRequiredCloudflareTestingEnv,
   cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
@@ -23,6 +24,47 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
       'LORE_CF_TEST_PREFIX',
     ]);
   });
+
+  it('keeps missing credentials optional without required mode', () => {
+    expect(() => assertRequiredCloudflareTestingEnv({})).not.toThrow();
+    expect(() => assertRequiredCloudflareTestingEnv({ LORE_CF_REQUIRED: '0' })).not.toThrow();
+  });
+
+  it('accepts a complete required environment', () => {
+    expect(() =>
+      assertRequiredCloudflareTestingEnv({
+        LORE_CF_REQUIRED: '1',
+        CLOUDFLARE_API_TOKEN: 'private-test-token',
+        CLOUDFLARE_ACCOUNT_ID: 'private-test-account',
+        LORE_CF_TEST_PREFIX: 'lorepack-ci',
+      }),
+    ).not.toThrow();
+  });
+
+  it.each(requiredCloudflareTestingEnv())(
+    'rejects missing or blank %s in required mode',
+    (name) => {
+      for (const value of [undefined, '', ' \t\n ']) {
+        const env = {
+          LORE_CF_REQUIRED: '1',
+          CLOUDFLARE_API_TOKEN: 'private-test-token',
+          CLOUDFLARE_ACCOUNT_ID: 'private-test-account',
+          LORE_CF_TEST_PREFIX: 'lorepack-ci',
+          [name]: value,
+        };
+        let message = '';
+        try {
+          assertRequiredCloudflareTestingEnv(env);
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain('Cloudflare acceptance requires credentials');
+        expect(message).toContain(name);
+        expect(message).not.toContain('private-test-token');
+        expect(message).not.toContain('private-test-account');
+      }
+    },
+  );
 
   it('builds a per-run resource prefix when CI metadata is present', () => {
     const env = readCloudflareTestingEnv({
@@ -120,6 +162,7 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
         ? 'Cloudflare environment contract is configured.'
         : `Cloudflare environment contract is missing: ${missing.join(', ')}`,
   });
+  assertRequiredCloudflareTestingEnv(process.env);
   it.skipIf(missing.length > 0)(
     `runs the credentialed Cloudflare integration suite when configured (missing: ${missing.join(', ') || 'none'})`,
     () => {

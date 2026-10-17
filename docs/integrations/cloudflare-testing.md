@@ -15,6 +15,11 @@ The checked-in credential gate expects these environment variables:
 - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account that owns the dedicated test resources
 - `LORE_CF_TEST_PREFIX`: lowercase resource prefix for this repository's integration resources
 
+The required CI job sets `LORE_CF_REQUIRED=1`. Missing, empty or whitespace-only values
+for any of the three variables above fail suite collection before a remote operation.
+The error names variables, never credential values. Leave required mode unset for an
+optional local run that skips the credentialed scenarios explicitly.
+
 Optional CI metadata:
 
 - `GITHUB_RUN_ID`
@@ -48,16 +53,20 @@ logs, deployment receipts, and a remote summary into that directory so CI can up
 artifacts even when the run later fails during verification or teardown. The ownership intent
 is also copied to `ownership-record.json` before CLI provisioning begins.
 
-Even when credentials are absent and the credentialed smoke skips, the acceptance tests now
-write summary JSON files into `LORE_CF_ARTIFACT_DIR` so CI still uploads a visible Cloudflare
-artifact explaining that the run was a skip rather than a pass.
+Both suite boundaries write their summary JSON files into `LORE_CF_ARTIFACT_DIR` before
+checking required mode. Missing credentials retain `credentialed: false` and the missing
+variable names, including when required mode fails. Optional local skips remain visible;
+these summaries are not evidence of successful remote qualification.
 
 ## Where this environment must exist
 
 The primary release-candidate environment is the `cloudflare acceptance (ubuntu-latest)` job in
 `.github/workflows/ci.yml`. A release candidate requires its real credentialed receipts and
-remote summaries. Forks or local shells without the required secrets report a skip; those
-results cannot satisfy the remote qualification gate.
+remote summaries. Its job-level `LORE_CF_REQUIRED=1` makes missing credentials a failed
+check, so an uncredentialed run cannot satisfy the required release check. Forks and
+Dependabot runs without the secrets fail this job; no additional secret access is granted.
+Optional local shells retain explicit skips. GitHub documents that an
+[unset secret becomes an empty string](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
 
 ## Token scopes
 
@@ -129,9 +138,22 @@ wrong runtime bearer token is rejected without being echoed back in the response
 
 ## Visible skip behavior
 
-When the required credentials are absent, the Cloudflare integration suite skips with an
-explicit message that names the missing variables. It skips with an explicit message in test
-output and is not treated as a pass.
+An optional local run without credentials skips with an explicit message naming the missing
+variables. A required run fails with `Cloudflare acceptance requires credentials` and the
+same variable names. The actual-command regression removes all three variables in an
+isolated child environment and proves both outcomes, including the retained summaries:
+
+```bash
+pnpm build
+pnpm --filter @lorepack/acceptance exec vitest run test/cloudflare_required.test.ts
+```
+
+The missing-credential guard does not establish provider availability or successful deploy,
+resume, auth, rollback or cleanup. Those original credentialed scenarios must still pass.
+On 2026-10-17 with Node 24.21.0/macOS arm64, the actual-command regression passed in
+both modes, along with all 71 applicable local Cloudflare cases and four existing
+missing-credential skips. Strict changed-test types and 184 architecture cases passed.
+These local checks made no remote requests and do not claim a credentialed result.
 
 The checked-in gates today are:
 
