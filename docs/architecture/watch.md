@@ -47,6 +47,25 @@ Step 7 is visible rather than silent. A save that changes nothing prints `No cha
 source inputs are unchanged`, because a user who saved and saw nothing happen is
 owed the reason.
 
+## Serving during rebuilds
+
+The initial build completes before the server starts. Each watched rebuild then runs
+in a Node worker using the same `runBuild` pipeline and validated configuration snapshot.
+Synchronous catalog work and durable report writes happen there, while Studio, HTTP and
+MCP continue reading the selected immutable build on the supervisor event loop. Validation
+and activation still belong to the compiler; the worker never serves a second runtime.
+
+Progress returns to the existing bus. Shutdown forwards cancellation, waits for the build's
+normal cleanup and worker exit, then finishes draining. Cancellation is cooperative at the
+existing compiler checkpoints, including when a synchronous operation is slow. Build
+errors retain their code, remediation, path, stack and cause messages. A worker startup or
+unexpected-exit failure reaches the watcher's existing recovery boundary.
+
+The worker inherits Node options and environment. HTTP request and keep-alive timeouts
+are unchanged. See [ADR0043](../adr/0043-background-dev-rebuilds.md) for the boundary and
+[the stalled-write regression](../testing/watch_read_stability.md#rebuilding-without-blocking-the-runtime)
+for the tested HTTP, MCP and Studio behavior.
+
 ## Explicit activation and unchanged inputs
 
 Freshness compares sources with the selected build. The rebuild decision compares sources

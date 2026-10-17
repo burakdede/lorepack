@@ -37,7 +37,8 @@ lorepack dev ./my-docs
 ```
 
 `dev` builds the folder, watches for changes, opens Studio and prints the HTTP and MCP
-endpoints. No Python, Docker, native add-on, model download, API key or account is required.
+endpoints. Reads continue from the active build during rebuilds.
+No Python, Docker, native add-on, model download, API key or account is required.
 
 Connect an installed AI client:
 

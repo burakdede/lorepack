@@ -3,6 +3,7 @@ import { assertFts5Available } from '@lorepack/backend-local';
 import { count, LoreError, loadConfig } from '@lorepack/core';
 import type { CommandContext } from '../framework/context.js';
 import type { CommandDefinition, CommandResult } from '../framework/program.js';
+import { runBackgroundBuild } from '../services/background_build.js';
 import { type BuildResult, runBuild } from '../services/build.js';
 import {
   assertNoLiveSession,
@@ -95,7 +96,7 @@ export function devCommand(): CommandDefinition {
         config,
         warn: context.warn,
         rebuild: async (signal) => {
-          const result = await runBuild({
+          const result = await runBackgroundBuild({
             config,
             progress: context.progress,
             activate: true,
