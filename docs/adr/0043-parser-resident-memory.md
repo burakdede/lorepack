@@ -115,3 +115,11 @@ measurement uses [Win32_Process](https://learn.microsoft.com/en-us/windows/win32
 CIM properties, independently of the production .NET process observer. Current
 macOS samples passed the predeclared observed envelope; the proposed decision
 still requires clean-source full, packed and native qualification.
+
+A reporting-health timer must allow pending I/O to run before inferring observer
+failure after a parent stall. The [Node event-loop documentation](https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick)
+distinguishes timer and poll phases. A real live-pipe reproduction failed with
+the original timer-only decision and passed after a `setImmediate` check turn.
+This preserves the 250 ms health deadline and immediate RSS-breach termination;
+it is not a larger memory envelope or a retry. Native failures remain unqualified
+until their unchanged scenarios pass with retained diagnostics.

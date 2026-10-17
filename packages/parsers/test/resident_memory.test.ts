@@ -10,10 +10,68 @@ import { sha256Hex } from '@lorepack/core';
 import { markdownParser, ParserHost, pdfParser } from '@lorepack/parsers';
 import { cmapBombPdf } from '@lorepack/test-support';
 import { afterEach, expect, it } from 'vitest';
-import { monitorResidentMemory, type ResidentMemoryMonitor } from '../src/resident_memory.js';
+import {
+  createReportingWatchdog,
+  monitorResidentMemory,
+  type ResidentMemoryMonitor,
+} from '../src/resident_memory.js';
 
 const processes: { child: ChildProcess; closed: Promise<unknown> }[] = [];
 const monitors: ResidentMemoryMonitor[] = [];
+
+it('services pending OS reports after a parent stall before declaring the observer stale', async () => {
+  const child = spawn(
+    process.execPath,
+    ['-e', "setInterval(() => process.stdout.write('1\\n'), 100)"],
+    { stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  processes.push({ child, closed: once(child, 'close') });
+  let expired = false;
+  const watchdog = createReportingWatchdog(() => {
+    expired = true;
+  });
+  try {
+    child.stdout.on('data', () => watchdog.report());
+    await once(child.stdout, 'data');
+    const until = performance.now() + 1000;
+    while (performance.now() < until) {}
+    await delay(100);
+    expect(expired).toBe(false);
+    expect(child.exitCode).toBeNull();
+  } finally {
+    watchdog.stop();
+  }
+}, 10_000);
+
+it('still rejects an observer that genuinely stops reporting at the original deadline', async () => {
+  const reports: { reports: number; silenceMs: number }[] = [];
+  const watchdog = createReportingWatchdog((value) => {
+    reports.push(value);
+  });
+  try {
+    watchdog.report();
+    await delay(350);
+    expect(reports).toEqual([
+      expect.objectContaining({ reports: 1, silenceMs: expect.any(Number) }),
+    ]);
+    expect(reports[0]?.silenceMs).toBeGreaterThanOrEqual(250);
+  } finally {
+    watchdog.stop();
+  }
+});
+
+it('stops the reporting watchdog without arming it again from late data', async () => {
+  let expired = false;
+  const watchdog = createReportingWatchdog(() => {
+    expired = true;
+  });
+  watchdog.report();
+  watchdog.stop();
+  watchdog.stop();
+  watchdog.report();
+  await delay(350);
+  expect(expired).toBe(false);
+});
 
 function waitingProcess() {
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
