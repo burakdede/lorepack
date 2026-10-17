@@ -124,6 +124,12 @@ keep that deterministic and faithful (#591):
 Changing either rule changes chunk text and so the build ID, and requires bumping
 `CHUNKER_VERSION` so the parse cache does not serve the old pieces.
 
+Source-locator lookup uses an index scoped to one artifact instead of rescanning every
+node for each sealed chunk. The index retains the first node with each ID, including
+nodes that do not produce content. It needs memory proportional to the artifact's node
+count and is discarded after chunking. This lookup optimization preserves chunk text,
+order, locators and hashes, so it does not change `CHUNKER_VERSION` or cache identity.
+
 ## Roots
 
 `hashRoot` sorts member hashes and includes the count. Sorting means the root does not
