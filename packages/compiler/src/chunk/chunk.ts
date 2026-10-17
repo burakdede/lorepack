@@ -72,6 +72,11 @@ interface Pending {
 export function chunkArtifact(options: ChunkOptions): Chunk[] {
   const { artifactId, nodes, chunking } = options;
   const chunks: Chunk[] = [];
+  const firstNodeById = new Map<string | undefined, LoreNode>();
+  for (const node of nodes) {
+    const id = node.id;
+    if (!firstNodeById.has(id)) firstNodeById.set(id, node);
+  }
   let pending: Pending | null = null;
 
   const flush = (): void => {
@@ -79,7 +84,7 @@ export function chunkArtifact(options: ChunkOptions): Chunk[] {
       pending = null;
       return;
     }
-    chunks.push(makeChunk(artifactId, chunks.length, pending, nodes));
+    chunks.push(makeChunk(artifactId, chunks.length, pending, firstNodeById));
     pending = null;
   };
 
@@ -94,7 +99,7 @@ export function chunkArtifact(options: ChunkOptions): Chunk[] {
     if (tokens + estimateTokens(prefix) > chunking.maximumTokens) {
       flush();
       for (const piece of splitNode(node, chunking, prefix)) {
-        chunks.push(makeChunk(artifactId, chunks.length, piece, nodes));
+        chunks.push(makeChunk(artifactId, chunks.length, piece, firstNodeById));
       }
       continue;
     }
@@ -145,11 +150,11 @@ function makeChunk(
   artifactId: string,
   index: number,
   pending: Pending,
-  nodes: readonly LoreNode[],
+  firstNodeById: ReadonlyMap<string | undefined, LoreNode>,
 ): Chunk {
   const prefix = renderHeadingPrefix(pending.headingPath);
   const text = `${prefix}${pending.texts.join('\n\n')}`;
-  const first = nodes.find((node) => node.id === pending.nodeIds[0]);
+  const first = firstNodeById.get(pending.nodeIds[0]);
 
   return {
     id: chunkId(artifactId, index),

@@ -217,6 +217,55 @@ describe('chunking', () => {
     }
   });
 
+  it('resolves first-node locators with linear node-ID reads, issue788', async () => {
+    const sections = 1024;
+    const parsed = await parseMarkdown(
+      Array.from(
+        { length: sections },
+        (_, index) => `## Section ${index}\n\nBody ${index}.\n`,
+      ).join('\n'),
+    );
+    let idReads = 0;
+    const nodes = parsed.nodes.map((node) => {
+      const id = node.id;
+      return {
+        ...node,
+        get id() {
+          idReads += 1;
+          return id;
+        },
+      };
+    });
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes, chunking });
+
+    expect(chunks).toHaveLength(sections);
+    expect(chunks.map((chunk) => chunk.headingPath)).toEqual(
+      Array.from({ length: sections }, (_, index) => [`Section ${index}`]),
+    );
+    expect(chunks.every((chunk) => chunk.locator.relativePath === 'a.md')).toBe(true);
+    expect(idReads).toBeLessThanOrEqual(nodes.length * 4);
+  });
+
+  it('retains the first matching locator when node IDs repeat, issue788', async () => {
+    const parsed = await parseMarkdown('# First\n\none\n\n# Second\n\ntwo\n');
+    const baseline = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });
+    const firstId = baseline[0]?.nodeIds[0];
+    const secondId = baseline[1]?.nodeIds[0];
+    if (firstId === undefined || secondId === undefined) throw new Error('Fixture has no chunks.');
+    const nodes = parsed.nodes.map((node) => {
+      if (node.id === firstId)
+        return { ...node, locator: { ...node.locator, relativePath: 'first.md' } };
+      if (node.id === secondId)
+        return { ...node, id: firstId, locator: { ...node.locator, relativePath: 'second.md' } };
+      return node;
+    });
+    const chunks = chunkArtifact({ artifactId: 'src:a.md', nodes, chunking });
+
+    expect(chunks.map((chunk) => chunk.locator.relativePath)).toEqual(['first.md', 'first.md']);
+    expect(chunks[1]?.headingPath).toEqual(['Second']);
+    expect(chunks[1]?.text).toContain('two');
+  });
+
   it('produces identical chunks on a repeated run', async () => {
     const parsed = await parseMarkdown('# A\n\none\n\n## B\n\ntwo\n');
     const first = chunkArtifact({ artifactId: 'src:a.md', nodes: parsed.nodes, chunking });

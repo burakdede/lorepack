@@ -1,0 +1,56 @@
+{
+  "scope": "One local development comparison on macOS arm64. Built CLI entry point, three fresh projects per source, all 5000 stored chunk rows compared by SHA256. Not reference hardware, P01-P06, cross-platform qualification or a general speedup promise. Baseline then corrected source; trials were not alternated.",
+  "issue": 788,
+  "node": "v24.21.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "baseCommit": "06ed0a892845a997de68c1311d056d0763b6016a",
+  "fixture": {
+    "sections": 5000,
+    "configSha256": "ec21b7511bbac1a1f1e6bb5f6aa4ec6c2ccd74db9345f656fca35575cf955ebc",
+    "markdownSha256": "6acf5e5784da7ba295f5ede793d48e872196b3964814bc51d615fa29337ae0a4",
+    "markdownBytes": 472779,
+    "configuration": "version: 1\nname: chunk-locator-index\nsources:\n  - docs\n",
+    "markdownTemplate": "## Section ${i}\n\nThe release keeps immutable builds and their source coordinates. Entry ${i}.\n",
+    "sectionSeparator": "\n",
+    "sectionIndexes": "0 through 4999 inclusive"
+  },
+  "command": [
+    "node",
+    "packages/cli/dist/public-entry.js",
+    "--cwd",
+    "<fresh-project>",
+    "--json",
+    "build"
+  ],
+  "chunkRowsQuery": "SELECT * FROM chunks ORDER BY id",
+  "chunkRowsEncoding": "JSON.stringify(rows) followed by LF",
+  "buildId": "lore_b38af0fd59bd0eb1d8d75e7a133011fb61c86dc9b5b0b0f40e25da75bc10dd88",
+  "chunkRowsSha256": "964b8993c4d418705ea2654cd286667796d95856254d5b6db82cce4ec9cfc20a",
+  "sourceSha256": {
+    "baseline": "243eb872726595cdb5e799e5349b650672bcaa72a33894d688a79f0aa4a685fe",
+    "indexed": "ead6452dd57df03bbe2edc0c76547ca06b8f00dc3d2554632a9de02b1d462bfc"
+  },
+  "baselineElapsedMs": [1428.401083, 1380.380834, 1343.0222500000004],
+  "indexedElapsedMs": [1154.671042, 1133.149666, 1148.039166],
+  "baselineRegression": {
+    "sections": 1024,
+    "nodeIdReads": 1051648,
+    "maximumAllowedReads": 8196,
+    "testsFailed": 1,
+    "testsPassed": 32,
+    "processExitCode": 1
+  },
+  "correctedRegression": {
+    "testsPassed": 33,
+    "processExitCode": 0
+  },
+  "qualification": {
+    "compilerTestsPassed": 267,
+    "compilerExistingSkips": 1,
+    "cliBuildAndCacheTestsPassed": 48,
+    "architectureTestsPassed": 183,
+    "buildLintFormatStrictTestTypesDocsPunctuationReleasePolicyAndWhitespace": "passed",
+    "sourceUnchangedDuringQualification": true
+  }
+}
