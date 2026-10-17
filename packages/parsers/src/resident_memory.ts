@@ -16,6 +16,23 @@ export interface ResidentMemoryMonitor {
 const INTERVAL_MS = 100;
 const READER_TIMEOUT_MS = 250;
 
+export async function readLinuxResidentMemory(pid: number): Promise<number | null> {
+  let report: string;
+  try {
+    report = await readFile(`/proc/${pid}/smaps_rollup`, {
+      encoding: 'utf8',
+      signal: AbortSignal.timeout(READER_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH')
+      return null;
+    throw error;
+  }
+  const match = /^Rss:\s+(\d+)\s+kB$/m.exec(report);
+  if (match === null) throw new Error('Linux did not report parser resident memory.');
+  return Number(match[1]) * 1024;
+}
+
 export function createReportingWatchdog(
   expired: (details: { reports: number; silenceMs: number }) => void,
 ) {
@@ -175,15 +192,9 @@ export function monitorResidentMemory(
       fail(new Error(`The process memory observer stopped (${code ?? signal}). ${stderr}`));
     });
   } else {
-    const read = async (): Promise<number> => {
+    const read = async (): Promise<number | null> => {
       if (process.platform === 'linux') {
-        const report = await readFile(`/proc/${pid}/smaps_rollup`, {
-          encoding: 'utf8',
-          signal: AbortSignal.timeout(READER_TIMEOUT_MS),
-        });
-        const match = /^Rss:\s+(\d+)\s+kB$/m.exec(report);
-        if (match === null) throw new Error('Linux did not report parser resident memory.');
-        return Number(match[1]) * 1024;
+        return readLinuxResidentMemory(pid);
       }
       if (process.platform !== 'darwin') {
         throw new Error(`Resident memory observation is unsupported on ${process.platform}.`);
@@ -206,7 +217,12 @@ export function monitorResidentMemory(
     const poll = async (): Promise<void> => {
       if (stopped) return;
       try {
-        sample(await read());
+        const bytes = await read();
+        if (bytes === null) {
+          stop();
+          return;
+        }
+        sample(bytes);
       } catch (error) {
         fail(error);
       }
