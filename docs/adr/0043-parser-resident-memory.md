@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed for issue #677. The baseline and macOS feasibility probe are measured;
-production enforcement and Linux/Windows qualification remain incomplete.
+Accepted on 2026-10-17 for issue #677. Production enforcement, full local and
+packed verification, and the original three-platform CLI workloads passed at
+`0d946812829fd87e9972068fe9efb5f1c2bf8e74`. The measured limits below remain
+part of this decision.
 
 ## Context
 
@@ -88,8 +90,8 @@ before accepting this ADR; the macOS probe alone cannot establish them.
 OS readers add measurement overhead. Verify first-run and no-op behavior,
 process cleanup, packed closure and existing performance gates. Reader failure
 is visible to users; no extra runtime, account, compiler or native add-on is
-introduced. Public documentation describes the sampled control and keeps its remaining native
-qualification explicit. The ADR remains proposed until that qualification is complete.
+introduced. Public documentation describes the sampled control and links the source-bound native
+measurements. Acceptance does not establish a hard RSS ceiling.
 
 ### Privacy-proof integration
 
@@ -113,8 +115,8 @@ The [resource verification protocol](../testing/parser_resident_memory.md) defin
 mandatory actual-CLI cases and independent process-tree sampling. Its Windows
 measurement uses [Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process)
 CIM properties, independently of the production .NET process observer. Current
-macOS samples passed the predeclared observed envelope; the proposed decision
-still requires clean-source full, packed and native qualification.
+macOS samples passed the predeclared observed envelope. Subsequent clean-source
+full, packed and three-platform qualification is recorded below.
 
 A reporting-health timer must allow pending I/O to run before inferring observer
 failure after a parent stall. The [Node event-loop documentation](https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick)
@@ -139,3 +141,33 @@ this before Node delivered child-close, replacing a heap-memory exclusion with a
 observer error. Treat only that errno from the fixed owned-process procfs read as
 an exit signal: stop sampling and await the existing close/stderr classification.
 Other errors remain failures, and no sample, retry, budget or deadline is changed.
+
+## Native qualification, 2026-10-17
+
+The [measurement report](../testing/evidence/parser_memory_0d946812.json) records
+all 24 actual-CLI cases: two complete four-fixture cohorts on each OS, with exact
+fixture hashes, controls, source/bundle identity and artifact archive digests.
+The clean CI merge `297ef0293a75bea23326b4363fbad07b6733b114` has the same Git
+tree as the candidate above. All platforms used Node 24.21.0.
+
+| Platform | Architecture | Largest sampled parser RSS |
+|---|---|---|
+| macOS | arm64 | 1020.453125 MiB |
+| Linux | x64 | 1052.64453125 MiB |
+| Windows | x64 | 1025.7421875 MiB |
+
+These maxima passed the predeclared 1536 MiB observed envelope at a 1024 MiB
+operational threshold. Linux and Windows samples demonstrate overshoot; the
+macOS maximum below the threshold does not establish its absence. Independent
+snapshots wait 100 ms after each completed query and can miss larger allocations
+between queries. They establish neither atomic peaks nor a universal overshoot
+bound. DOCX ZIP timestamps vary, so each actual compressed fixture hash is kept.
+
+The [native CI run](https://github.com/burakdede/lorepack/actions/runs/38995956578)
+passed full verification, acceptance, clean/packed installs and credentialed
+Cloudflare acceptance. Original CLI assertions verify typed located exclusions,
+active and retained builds, no-op identity, lock removal and owned-process cleanup.
+All three original small benchmarks also passed in the
+[benchmark run](https://github.com/burakdede/lorepack/actions/runs/38995956566).
+This closes the resident-memory qualification at the recorded source, not the
+separate cancellation investigation, coverage targets or final release gates.

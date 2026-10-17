@@ -1,9 +1,10 @@
 # Parser resident-memory verification
 
 Issue [#677](https://github.com/burakdede/lorepack/issues/677) owns the sampled
-parser RSS budget. [ADR 0043](../adr/0043-parser-resident-memory.md) remains
-proposed until the full local, packed and native three-platform qualification
-passes. A passing sampled maximum is not an atomic peak or a hard memory quota.
+parser RSS budget. [ADR 0043](../adr/0043-parser-resident-memory.md) records the accepted sampled
+control and its limits. The [three-platform measurement report](evidence/parser_memory_0d946812.json)
+retains source-bound qualification for the original four workloads. A passing
+sampled maximum is not an atomic peak or a hard memory quota.
 
 Run from the repository root, with Node 24.21.0:
 

@@ -1,0 +1,832 @@
+{
+  "candidate": "0d946812829fd87e9972068fe9efb5f1c2bf8e74",
+  "actualCiHead": "297ef0293a75bea23326b4363fbad07b6733b114",
+  "gitTree": "517b64fe96622c638b875a91a2365807d84e7675",
+  "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515",
+  "qualification": "Original four CLI workloads passed twice on each supported OS at the recorded candidate. Sampled resource evidence only; not overall v0.1 release qualification.",
+  "limitations": [
+    "Sample maxima are not atomic peaks or hard quotas.",
+    "DOCX ZIP timestamps can vary; preserve each actual compressed fixture hash."
+  ],
+  "reviews": [
+    {
+      "os": "macos",
+      "artifactId": 12087622648,
+      "archiveDigest": "sha256:6e8ea5a1741e01177b49df928e7048f92effec301aad1a3c082b5427fc2a896f",
+      "records": [
+        {
+          "cohort": "46321",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "f43e8613e5ea5724250b2c38355c376a32f1479d35214adfff29a5252fe8abe8"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 2138.955167,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 447578112,
+            "observedWholeTreeBytes": 572555264,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 13,
+          "parserPids": [47190, 47354]
+        },
+        {
+          "cohort": "46321",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 6040.096707999999,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1021607936,
+            "observedWholeTreeBytes": 1147437056,
+            "observedObserverBytes": 1425408
+          },
+          "sampleCount": 44,
+          "parserPids": [46660, 46995]
+        },
+        {
+          "cohort": "46321",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 1344.453375000001,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 271728640,
+            "observedWholeTreeBytes": 424984576,
+            "observedObserverBytes": 1179648
+          },
+          "sampleCount": 8,
+          "parserPids": [47411]
+        },
+        {
+          "cohort": "46321",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 2430.480958,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1070022656,
+            "observedWholeTreeBytes": 1205993472,
+            "observedObserverBytes": 704512
+          },
+          "sampleCount": 18,
+          "parserPids": [46561, 46600]
+        },
+        {
+          "cohort": "56377",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 6231.646665999999,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 955006976,
+            "observedWholeTreeBytes": 1081556992,
+            "observedObserverBytes": 720896
+          },
+          "sampleCount": 45,
+          "parserPids": [56934, 57034]
+        },
+        {
+          "cohort": "56377",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "2e2e5a68477a211f470d77b4ce37c3d51cdc889e022548292a36e850227d1022"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 1687.8197500000024,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 424656896,
+            "observedWholeTreeBytes": 550518784,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 11,
+          "parserPids": [57366, 57382]
+        },
+        {
+          "cohort": "56377",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 3138.7650000000003,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1065058304,
+            "observedWholeTreeBytes": 1201635328,
+            "observedObserverBytes": 32768
+          },
+          "sampleCount": 21,
+          "parserPids": [56596, 56640]
+        },
+        {
+          "cohort": "56377",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "darwin",
+          "arch": "arm64",
+          "node": "v24.21.0",
+          "durationMs": 1010.2837910000017,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 350011392,
+            "observedWholeTreeBytes": 503283712,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 7,
+          "parserPids": [57436]
+        }
+      ],
+      "maxObservedParserMiB": 1020.453125,
+      "archiveUrl": "https://github.com/burakdede/lorepack/actions/runs/38995956578/artifacts/12087622648"
+    },
+    {
+      "os": "linux",
+      "artifactId": 12087518307,
+      "archiveDigest": "sha256:5dc7c8574d607d07abb6d2c6fa53b8a42c1f05c904c6c0cbb3fda35a32908652",
+      "records": [
+        {
+          "cohort": "18291",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 5600.139192000002,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1063464960,
+            "observedWholeTreeBytes": 1190092800,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 49,
+          "parserPids": [18466, 18517]
+        },
+        {
+          "cohort": "18291",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "76c6ba0fe5bbe7acbe8efc385e93358774400943f7a75f35a695d6a51cb206ce"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 3691.0911349999988,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 361021440,
+            "observedWholeTreeBytes": 488329216,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 32,
+          "parserPids": [18590, 18633]
+        },
+        {
+          "cohort": "18291",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 4810.587508999999,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1103777792,
+            "observedWholeTreeBytes": 1241522176,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 41,
+          "parserPids": [18339, 18386]
+        },
+        {
+          "cohort": "18291",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 3189.1874489999973,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 291921920,
+            "observedWholeTreeBytes": 445104128,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 28,
+          "parserPids": [18724]
+        },
+        {
+          "cohort": "24297",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 5546.8637640000015,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 880439296,
+            "observedWholeTreeBytes": 1006542848,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 49,
+          "parserPids": [24467, 24517]
+        },
+        {
+          "cohort": "24297",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "f0625509e748ec66f05d3b48b864fc7a9a6479629658ff8db0f196cefd74454e"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 3592.6526589999994,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 363016192,
+            "observedWholeTreeBytes": 490082304,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 31,
+          "parserPids": [24591, 24632]
+        },
+        {
+          "cohort": "24297",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 4730.759877999999,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1101852672,
+            "observedWholeTreeBytes": 1239896064,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 40,
+          "parserPids": [24343, 24389]
+        },
+        {
+          "cohort": "24297",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "linux",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 3259.0610989999986,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "ps RSS in KiB",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 287412224,
+            "observedWholeTreeBytes": 441237504,
+            "observedObserverBytes": 0
+          },
+          "sampleCount": 28,
+          "parserPids": [24723]
+        }
+      ],
+      "maxObservedParserMiB": 1052.64453125,
+      "archiveUrl": "https://github.com/burakdede/lorepack/actions/runs/38995956578/artifacts/12087518307"
+    },
+    {
+      "os": "windows",
+      "artifactId": 12088596363,
+      "archiveDigest": "sha256:e3d0e92c7a83e511603fd1b59f99d34ff31f0b4dde678b967c42f216dd61a4db",
+      "records": [
+        {
+          "cohort": "5880",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 6275.2844000000005,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 865173504,
+            "observedWholeTreeBytes": 1051193344,
+            "observedObserverBytes": 76574720
+          },
+          "parserPids": [7656, 6508],
+          "sampleCount": 39
+        },
+        {
+          "cohort": "5880",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "2029ac5b6305db6cae030216eb7c5b339222213866dd795e1118f5a2034bd88a"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 2746.8076,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 284471296,
+            "observedWholeTreeBytes": 466907136,
+            "observedObserverBytes": 74522624
+          },
+          "parserPids": [5540, 5268],
+          "sampleCount": 16
+        },
+        {
+          "cohort": "5880",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 6128.273799999999,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1075568640,
+            "observedWholeTreeBytes": 1273552896,
+            "observedObserverBytes": 76447744
+          },
+          "parserPids": [668, 5472],
+          "sampleCount": 38
+        },
+        {
+          "cohort": "5880",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 1838.701000000001,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 245489664,
+            "observedWholeTreeBytes": 457867264,
+            "observedObserverBytes": 73875456
+          },
+          "parserPids": [8536],
+          "sampleCount": 11
+        },
+        {
+          "cohort": "6384",
+          "fixture": {
+            "path": "cmap.pdf",
+            "bytes": 1081,
+            "sha256": "e2cdb39e3b2438867310ca5ed69ed2533f2306f3d3d2ea13b858d4ac3ebf20b3"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 7273.6649,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 854478848,
+            "observedWholeTreeBytes": 1038843904,
+            "observedObserverBytes": 76693504
+          },
+          "parserPids": [5992, 10004],
+          "sampleCount": 41
+        },
+        {
+          "cohort": "6384",
+          "fixture": {
+            "path": "document.docx",
+            "bytes": 67079,
+            "sha256": "e749b2d41c7a925344dfc343e25e31327702de3db9b7b37d3ea16f83dac10ebc"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 3146.2906999999977,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 210759680,
+            "observedWholeTreeBytes": 394526720,
+            "observedObserverBytes": 74166272
+          },
+          "parserPids": [3720, 3060],
+          "sampleCount": 17
+        },
+        {
+          "cohort": "6384",
+          "fixture": {
+            "path": "flate.pdf",
+            "bytes": 3815885,
+            "sha256": "9c738603ce2455eb6eebebe2ade7ee334e5d9ce93fe6787b9776e258c46c6672"
+          },
+          "controls": {
+            "heapMiB": 2048,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 7604.618800000002,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 1074540544,
+            "observedWholeTreeBytes": 1272963072,
+            "observedObserverBytes": 76951552
+          },
+          "parserPids": [6060, 7320],
+          "sampleCount": 42
+        },
+        {
+          "cohort": "6384",
+          "fixture": {
+            "path": "rows.csv",
+            "bytes": 8000002,
+            "sha256": "0bfd1caa29c63b9b47d21c4c46f9eff5a5e113f2554ef39e2115f772bfe41bd6"
+          },
+          "controls": {
+            "heapMiB": 128,
+            "timeoutMs": 30000,
+            "residentThresholdMiB": 1024,
+            "observedEnvelopeMiB": 1536
+          },
+          "source": {
+            "head": "297ef0293a75bea23326b4363fbad07b6733b114",
+            "dirty": false,
+            "cliSha256": "828950c5ae3cea5594eeb648b87507d596f9e03203940fcecd82fa5957814515"
+          },
+          "platform": "win32",
+          "arch": "x64",
+          "node": "v24.21.0",
+          "durationMs": 2543.041299999997,
+          "observation": {
+            "intervalAfterSnapshotMs": 100,
+            "method": "Win32_Process CIM",
+            "limitation": "Independent sampled maxima, not atomic peaks or hard memory quotas.",
+            "observedParserBytes": 257515520,
+            "observedWholeTreeBytes": 468819968,
+            "observedObserverBytes": 74022912
+          },
+          "parserPids": [6232],
+          "sampleCount": 15
+        }
+      ],
+      "maxObservedParserMiB": 1025.7421875,
+      "archiveUrl": "https://github.com/burakdede/lorepack/actions/runs/38995956578/artifacts/12088596363"
+    }
+  ]
+}

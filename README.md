@@ -493,7 +493,7 @@ separate from the V8 heap limit. Observer startup and health checks service pend
 before declaring a stale reader. Linux process-exit reports preserve the original
 parser exit diagnostic. Sampling can overshoot: it is not a hard RSS ceiling.
 The [resident-memory ADR](docs/adr/0043-parser-resident-memory.md) records the
-remaining three-platform qualification and independent resource measurements.
+accepted limits and independent three-platform resource measurements.
 The [resource verification protocol](docs/testing/parser_resident_memory.md) defines
 the four mandatory CLI workloads and retained native evidence.
 The consolidated verification gate retains failed child-test assertions for diagnosis.
