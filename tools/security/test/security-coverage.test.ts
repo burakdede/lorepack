@@ -258,6 +258,41 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/cmapBombPdf\(8\)/, /residentMemoryMb: 1024/, /parse-memory/],
   },
   {
+    name: 'the four CLI memory workloads retain native process evidence, issue 677',
+    path: 'packages/cli/test/resident_memory.e2e.test.ts',
+    tests: ['flate.pdf', 'cmap.pdf', 'document.docx', 'rows.csv'].map(
+      (path) => `bounds ${path} through the shipped CLI and preserves retained builds, issue677`,
+    ),
+    patterns: [
+      /streamedFlateBombPdf\(1500\)/,
+      /cmapBombPdf\(8\)/,
+      /docxBomb\(64\)/,
+      /singleCharacterCsv\(4_000_000\)/,
+      /measureCliMemory/,
+      /1536 \* 1024 \* 1024/,
+      /remainingPids/,
+      /inspect', 'warnings/,
+    ],
+  },
+  {
+    name: 'streaming preserves the exact Flate workload bytes, issue 677',
+    path: 'tools/test-support/test/hostile-fixtures.test.ts',
+    tests: [0, 1, 4].map((size) => `preserves the exact ${size} MiB Flate fixture when streamed`),
+    patterns: [/streamedFlateBombPdf\(megabytes\)/, /toEqual\(flateBombPdf\(megabytes\)\)/],
+  },
+  {
+    name: 'Windows observer startup failure stops the owned parser, issue 677',
+    path: 'packages/parsers/test/resident_memory.test.ts',
+    tests: ['stops parsing when the Windows OS observer cannot start'],
+    patterns: [/lore-missing-observer/, /LORE_E_PARSE_FAILED/, /await closed/],
+    skippedOn: {
+      darwin:
+        'The SystemRoot-based observer is Windows-only; all memory workloads remain mandatory.',
+      linux:
+        'The SystemRoot-based observer is Windows-only; all memory workloads remain mandatory.',
+    },
+  },
+  {
     name: 'a document nested past the parser stack is excluded, not a failed build, issue 595',
     path: 'packages/parsers/test/isolation.test.ts',
     tests: [

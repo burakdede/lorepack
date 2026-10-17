@@ -108,3 +108,10 @@ including the actual seven-format build and five unauthorized observer attempts.
 The Windows startup-failure unit probe is Windows-only; all resource fixtures remain
 mandatory on every platform. These tests do not replace independent actual-CLI
 resource measurements, packed qualification or the three-platform matrix.
+
+The [resource verification protocol](../testing/parser_resident_memory.md) defines
+mandatory actual-CLI cases and independent process-tree sampling. Its Windows
+measurement uses [Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process)
+CIM properties, independently of the production .NET process observer. Current
+macOS samples passed the predeclared observed envelope; the proposed decision
+still requires clean-source full, packed and native qualification.
