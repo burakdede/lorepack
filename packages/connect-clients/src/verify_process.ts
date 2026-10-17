@@ -53,41 +53,41 @@ async function settles(promise: Promise<void>, timeout: number): Promise<boolean
   }
 }
 
-function groupAlive(pid: number): boolean {
-  try {
-    process.kill(-pid, 0);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false;
-    throw new LoreError(
-      'LORE_E_INTERNAL',
-      `Could not inspect verification group ${pid}: ${(error as Error).message}`,
-      {
-        remediation: 'Check that the verification process can inspect its own server children.',
-        cause: error,
-      },
-    );
-  }
-}
-
-async function waitForGroup(pid: number): Promise<boolean> {
+async function signalAndWaitForGroup(pid: number, signal: NodeJS.Signals): Promise<boolean> {
   const deadline = Date.now() + GRACE_MS;
-  while (groupAlive(pid) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  return !groupAlive(pid);
-}
-
-function signalGroup(pid: number, signal: NodeJS.Signals): void {
+  const failure = (action: string, error: unknown) =>
+    new LoreError(
+      'LORE_E_INTERNAL',
+      `Could not ${action} verification group ${pid}: ${(error as Error).message}`,
+      { remediation: 'Stop the reported verification server before reconnecting.', cause: error },
+    );
+  let signalError: unknown;
   try {
     process.kill(-pid, signal);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH')
-      throw new LoreError(
-        'LORE_E_INTERNAL',
-        `Could not send ${signal} to verification group ${pid}: ${(error as Error).message}`,
-        { remediation: 'Stop the reported verification server before reconnecting.', cause: error },
-      );
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ESRCH') return true;
+    if (code !== 'EPERM') throw failure(`send ${signal} to`, error);
+    signalError = error;
+  }
+  let inspectionError: unknown;
+  for (;;) {
+    try {
+      process.kill(-pid, 0);
+      inspectionError = undefined;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ESRCH') return true;
+      if (code !== 'EPERM') throw failure('inspect', error);
+      inspectionError = error;
+    }
+    if (Date.now() >= deadline) {
+      if (inspectionError !== undefined) throw failure('inspect', inspectionError);
+      if (signalError !== undefined) throw failure(`send ${signal} to`, signalError);
+      return false;
+    }
+    // macOS can expose an unreaped group as EPERM. Only ESRCH confirms absence.
+    await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
 
@@ -134,19 +134,16 @@ async function reap(session: Session, graceful: boolean): Promise<void> {
         `The verification server ${child.pid} did not exit after process-tree cleanup.`,
         { remediation: 'Stop the reported verification server before reconnecting.' },
       );
-  } else if (groupAlive(child.pid)) {
-    signalGroup(child.pid, 'SIGTERM');
-    if (!(await waitForGroup(child.pid))) {
-      signalGroup(child.pid, 'SIGKILL');
-      if (!(await waitForGroup(child.pid)))
-        throw new LoreError(
-          'LORE_E_INTERNAL',
-          `The verification process group ${child.pid} did not exit.`,
-          {
-            remediation: 'Stop the reported verification server before reconnecting.',
-          },
-        );
-    }
+  } else {
+    if (
+      !(await signalAndWaitForGroup(child.pid, 'SIGTERM')) &&
+      !(await signalAndWaitForGroup(child.pid, 'SIGKILL'))
+    )
+      throw new LoreError(
+        'LORE_E_INTERNAL',
+        `The verification process group ${child.pid} did not exit.`,
+        { remediation: 'Stop the reported verification server before reconnecting.' },
+      );
     await session.exited;
   }
 }

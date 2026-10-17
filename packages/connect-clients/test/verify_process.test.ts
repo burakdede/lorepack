@@ -4,7 +4,7 @@ import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getDefaultEnvironment } from '@modelcontextprotocol/client/stdio';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { createVerificationProcessHost } from '../src/verify_process.js';
 
 function connect(endpoint: string): Promise<Socket> {
@@ -112,3 +112,84 @@ process.stdin.pipe(process.stdout);
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+it.skipIf(process.platform === 'win32').each(['transient', 'persistent'] as const)(
+  'requires confirmed POSIX group absence after %s EPERM inspection',
+  async (mode) => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-verify-permission-'));
+    const marker = join(root, 'pid');
+    const nonce = randomBytes(16).toString('hex');
+    const host = await createVerificationProcessHost(
+      process.execPath,
+      [
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(marker)},JSON.stringify({pid:process.pid,nonce:${JSON.stringify(nonce)}}));process.stdout.write('ready');setInterval(()=>{},1000);`,
+      ],
+      getDefaultEnvironment(),
+    );
+    const originalKill = process.kill.bind(process);
+    let pid: number | undefined;
+    let restore: (() => void) | undefined;
+    let data: Socket | undefined;
+    let stderr: Socket | undefined;
+    try {
+      const id = randomBytes(16).toString('hex');
+      data = await connect(host.endpoint);
+      stderr = await connect(host.endpoint);
+      const started = new Promise<void>((resolve, reject) => {
+        data?.once('data', () => resolve());
+        data?.once('error', reject);
+      });
+      data.write(`${host.token}:${id}:0\n`);
+      stderr.write(`${host.token}:${id}:1\n`);
+      await started;
+      const record = JSON.parse(readFileSync(marker, 'utf8')) as { pid: number; nonce: string };
+      expect(record.nonce).toBe(nonce);
+      pid = record.pid;
+      let inspections = 0;
+      const spy = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
+        if (target === -record.pid && signal === 0) {
+          inspections += 1;
+          if (mode === 'persistent' || inspections === 1) {
+            throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' });
+          }
+        }
+        return originalKill(target, signal);
+      });
+      restore = () => spy.mockRestore();
+      if (mode === 'transient') {
+        await expect(host.close()).resolves.toBeUndefined();
+        expect(inspections).toBeGreaterThanOrEqual(2);
+      } else {
+        await expect(host.close()).rejects.toThrow(/EPERM/);
+      }
+      expect(() => originalKill(record.pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }));
+    } finally {
+      restore?.();
+      if (pid !== undefined) {
+        try {
+          originalKill(pid, 'SIGKILL');
+        } catch (error) {
+          expect(error).toMatchObject({ code: 'ESRCH' });
+        }
+        for (let attempt = 0; attempt < 100; attempt++) {
+          try {
+            originalKill(pid, 0);
+          } catch (error) {
+            expect(error).toMatchObject({ code: 'ESRCH' });
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(() => originalKill(pid as number, 0)).toThrow(
+          expect.objectContaining({ code: 'ESRCH' }),
+        );
+      }
+      data?.destroy();
+      stderr?.destroy();
+      await host.close().catch(() => undefined);
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);

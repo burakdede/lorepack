@@ -123,3 +123,28 @@ Production bytes are unchanged since the full run. All remaining original local 
 passed with unchanged source: 86 security cases and five existing platform skips, dependency
 and release policies, schemas, documentation and the executable README demo. Native
 Linux/macOS/Windows qualification of this correction remains pending.
+
+
+## macOS process-group inspection, 2026-10-17
+
+PR #796 at `bad2ed8c` failed its real macOS packed-install connection check with
+`EPERM` while inspecting an owned process group. This remains failed native evidence.
+A separate Node-only macOS probe held an owned exited child unreaped: group inspection
+returned `EPERM` with process state `Z`, then `ESRCH` after its parent reaped it. Apple's
+[kernel group-signalling implementation](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/kern_sig.c)
+excludes zombie members and can return `EPERM` when no eligible member is found. The
+probe establishes that OS condition; the failed CI job did not capture its exact member state.
+
+Cleanup now sends the owned group's termination signal and waits within the existing
+two-second stage for confirmed absence. An intervening `EPERM` is unknown, never success.
+A persistent permission error still fails verification. The escalation stages, protocol
+deadlines and original wrapper workload are unchanged. Two fault-injection cases first
+failed and now pass: transient inspection followed by absence, and persistent inspection
+failure even after the child exits. They apply to POSIX process groups; Windows uses the
+separate tree-kill path covered by the original native wrapper and lock regressions.
+
+On Node 24.21.0/macOS arm64, all 367 connector/CLI cases and the clean installed-artifact
+check passed after this correction. The installed tree matched 145 tested production
+packages and its production audit was clean. Strict test types, lint/format and documentation
+checks passed. The full frozen-source suite and native CI remain separate qualification gates;
+these focused and installed checks establish local evidence only.
