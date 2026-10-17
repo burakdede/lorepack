@@ -248,6 +248,16 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/parse-timeout/, /parse-memory/, /cmapBombPdf/, /docxBomb/, /flateBombPdf/],
   },
   {
+    name: 'resident memory is observed outside the blocked parser, issue 677',
+    path: 'packages/parsers/test/resident_memory.test.ts',
+    tests: [
+      'stops native resident growth outside a blocked parser, issue677',
+      'stops its observer without terminating a healthy parser',
+      'does not misreport an exited parser as an observer failure',
+    ],
+    patterns: [/cmapBombPdf\(8\)/, /residentMemoryMb: 1024/, /parse-memory/],
+  },
+  {
     name: 'a document nested past the parser stack is excluded, not a failed build, issue 595',
     path: 'packages/parsers/test/isolation.test.ts',
     tests: [
@@ -609,6 +619,7 @@ const EVIDENCE: readonly Evidence[] = [
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a fetch from a worker thread',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the parse process connects',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 refuses a parse process started without the permission model',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 refuses observer queries for other processes, altered commands and shell options',
     ],
     patterns: [
       /builds every parser format in a sandbox/,
