@@ -623,8 +623,9 @@ changing committed artifacts. Live dependency-health checks remain part of verif
 The comparison command contract runs the real small-corpus controller and checks both reports
 against the same corpus/workload identity, preserving its original sample and query counts.
 Run `pnpm verify` for local checks, including `pnpm typecheck:audit` for the audit regression
-tests, including parser memory, independent CLI resource receipts and source-churn
-failure context. Node cases belong in `tsconfig.audit_tests.json`; Studio browser tests use their existing
+tests, including Linux parser-exit reports, observer deadlines, retained child assertions,
+independent CLI resource receipts and source-churn failure context.
+Node cases belong in `tsconfig.audit_tests.json`; Studio browser tests use their existing
 project with DOM types, shared PDF/XLSX fixtures and the same strict settings. Fixtures
 implement current ports, including nullable coordinates, binary inputs and sealed
 source inventory with build identity and freshness. Run `pnpm coverage:inventory`
