@@ -141,6 +141,12 @@ Duplicate removal uses word shingles and Jaccard overlap: a deterministic signat
 embedding. An embedding would mean a model download, which breaks the zero-surprise install
 (invariant 7), and would make the page depend on a model version.
 
+Differential tests preserve the original retained objects and deterministic order across
+empty, short, Unicode and repeated text, shuffled candidates and score/path ties.
+Explicit cases cover overlap below, exactly at and above the 0.85 threshold. The pairwise
+predicate is also checked over 12,288 small-set and threshold-boundary combinations.
+These controls establish semantics; they do not establish the recorded report's deadline.
+
 One artifact may contribute at most three chunks to a page. A long document that mentions
 the query in every section would otherwise be the entire answer.
 
