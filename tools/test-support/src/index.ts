@@ -24,6 +24,7 @@ export {
   nestedTablesDocx,
   numericCsv,
   singleCharacterCsv,
+  streamedFlateBombPdf,
 } from './hostile-fixtures.js';
 export {
   boolean_,
