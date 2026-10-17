@@ -6,17 +6,28 @@ not identify the stage, so it does not prove a lock leak or process-tree defect.
 
 The test records stage elapsed times and prints diagnostics only on failure:
 original and current active build IDs (read-only state query), child PIDs/exit signals,
-the final 16000 characters of each child's captured output, and the lock owner record (or read error).
+stream buffering/flow state, the final 16000 characters of available child output,
+and the lock owner record (or read error).
 Capture runs at the start of the existing cleanup hook before children are
 killed or the fixture is deleted. Vitest onTestFailed runs after cleanup and
 cannot inspect that original state. All output comes from the disposable
 test fixture. The initial dev startup
 retains its existing connection-block failure message and output capture.
 
+The recorder uses existing caller-owned output buffers. It adds no stream readers
+while the scenario runs. Previously unconsumed pipes are read only when failure
+diagnostics are requested. Node documents that [adding a data listener changes
+stream flow](https://nodejs.org/download/release/v24.21.0/docs/api/stream.html#two-reading-modes),
+so active observation could remove backpressure and hide a stall. A real finite
+stderr producer reproduces that observation defect; the passive recorder leaves
+it blocked and captures bounded pending output on request. This does not establish
+the cause of the original native timeout.
+
 Run the actual built CLI fixture with the repository's pinned toolchain:
 
 ```sh
 pnpm build
+pnpm exec vitest run packages/cli/test/cancellation_diagnostics.test.ts
 pnpm exec vitest run packages/cli/test/dev.e2e.test.ts
 ```
 
@@ -36,3 +47,11 @@ removed; the original tests and assertions remain intact.
 
 Native failure-stage evidence and root-cause correction remain outstanding.
 #578 separately owns Windows MCP .cmd descendant cleanup.
+
+On 2026-10-17, macOS arm64 / Node 24.21.0: the passive recorder passed two
+real-process controls, all 25 current dev cases, strict Node-only test types,
+181 architecture checks and static/documentation checks. A disposable copy
+injected failure after the original parsing checkpoint and confirmed the live
+child, matching lock owner and unchanged active build before cleanup. The copy
+was removed and source fingerprints matched before and after the probe. This
+proves diagnostic wiring, not the cause or resolution of the native timeout.
