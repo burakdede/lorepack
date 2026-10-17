@@ -1,4 +1,6 @@
-import { deflateSync } from 'node:zlib';
+import { Readable, Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createDeflate, deflateSync } from 'node:zlib';
 import { makeDocx, paragraph } from './docx-fixtures.js';
 
 /**
@@ -60,6 +62,35 @@ export function flateBombPdf(megabytes: number): Uint8Array {
   return singlePagePdf(deflateSync(Buffer.from(body, 'latin1'), { level: 9 }), {
     filter: 'FlateDecode',
   });
+}
+
+/** The same fixture bytes, generated without a single giant input string or buffer. */
+export async function streamedFlateBombPdf(megabytes: number): Promise<Uint8Array> {
+  const operator = '(AAAAAAAAAAAAAAAA) Tj ';
+  const blockOperators = 16_384;
+  const block = Buffer.from(operator.repeat(blockOperators), 'latin1');
+  function* chunks(): Generator<Buffer> {
+    yield Buffer.from('BT /F1 1 Tf 0 0 Td ', 'latin1');
+    let remaining = Math.ceil((megabytes * 1024 * 1024) / operator.length);
+    while (remaining > 0) {
+      const count = Math.min(remaining, blockOperators);
+      yield block.subarray(0, count * operator.length);
+      remaining -= count;
+    }
+    yield Buffer.from('ET', 'latin1');
+  }
+  const compressed: Buffer[] = [];
+  await pipeline(
+    Readable.from(chunks()),
+    createDeflate({ level: 9 }),
+    new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        compressed.push(chunk);
+        callback();
+      },
+    }),
+  );
+  return singlePagePdf(Buffer.concat(compressed), { filter: 'FlateDecode' });
 }
 
 /**
