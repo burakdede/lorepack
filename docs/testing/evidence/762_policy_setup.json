@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-17",
+  "platform": "macOS arm64",
+  "node": "24.21.0",
+  "git": "2.55.0",
+  "baseline": "bd97e9712ad85e33f0ea5ca04ab1684513ae0f1c",
+  "cases": [
+    "checks an explicit pull request head ref",
+    "evaluates a long PR graph: all four original marker/pruning combinations"
+  ],
+  "before": {
+    "setupCount": 5,
+    "gitLaunchesPerSetup": 6,
+    "totalSetupGitLaunches": 30,
+    "setups": [
+      {
+        "commands": [
+          ["git", "init"],
+          ["git", "config", "user.email", "test@example.com"],
+          ["git", "config", "user.name", "Test User"],
+          ["git", "add", "."],
+          ["git", "commit", "-m", "Initial commit"],
+          ["git", "branch", "-M", "main"]
+        ],
+        "nativeGitSeconds": 0.039633
+      },
+      {
+        "commands": [
+          ["git", "init"],
+          ["git", "config", "user.email", "test@example.com"],
+          ["git", "config", "user.name", "Test User"],
+          ["git", "add", "."],
+          ["git", "commit", "-m", "Initial commit"],
+          ["git", "branch", "-M", "main"]
+        ],
+        "nativeGitSeconds": 0.038013
+      },
+      {
+        "commands": [
+          ["git", "init"],
+          ["git", "config", "user.email", "test@example.com"],
+          ["git", "config", "user.name", "Test User"],
+          ["git", "add", "."],
+          ["git", "commit", "-m", "Initial commit"],
+          ["git", "branch", "-M", "main"]
+        ],
+        "nativeGitSeconds": 0.044012
+      },
+      {
+        "commands": [
+          ["git", "init"],
+          ["git", "config", "user.email", "test@example.com"],
+          ["git", "config", "user.name", "Test User"],
+          ["git", "add", "."],
+          ["git", "commit", "-m", "Initial commit"],
+          ["git", "branch", "-M", "main"]
+        ],
+        "nativeGitSeconds": 0.041607
+      },
+      {
+        "commands": [
+          ["git", "init"],
+          ["git", "config", "user.email", "test@example.com"],
+          ["git", "config", "user.name", "Test User"],
+          ["git", "add", "."],
+          ["git", "commit", "-m", "Initial commit"],
+          ["git", "branch", "-M", "main"]
+        ],
+        "nativeGitSeconds": 0.040535999999999996
+      }
+    ],
+    "limitation": "Trace durations are local native Git time, excluding OS spawn and Node work. They do not isolate the historical Windows slow call."
+  },
+  "after": {
+    "setupCount": 5,
+    "gitLaunchesPerSetup": 3,
+    "totalSetupGitLaunches": 15,
+    "setups": [
+      [
+        ["git", "init", "--initial-branch=main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "Initial commit"]
+      ],
+      [
+        ["git", "init", "--initial-branch=main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "Initial commit"]
+      ],
+      [
+        ["git", "init", "--initial-branch=main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "Initial commit"]
+      ],
+      [
+        ["git", "init", "--initial-branch=main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "Initial commit"]
+      ],
+      [
+        ["git", "init", "--initial-branch=main"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "Initial commit"]
+      ]
+    ],
+    "limitation": "Local Git event trace establishes process counts, not the historical Windows slow command or native qualification."
+  },
+  "traceSha256": {
+    "before": "efab585aab3ed6778d8d85aab7e0d6bbfea4d7822d3675c3a321290205f7e8c8",
+    "after": "70f03c7215952425d41497e5550e5d3ea681ef284d72791fccd6f0d6c97085c1"
+  },
+  "qualification": "Local setup process counts only. Native Windows qualification pending."
+}

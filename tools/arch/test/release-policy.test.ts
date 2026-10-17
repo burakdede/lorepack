@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, type SpawnSyncReturns } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,19 +24,43 @@ describe('changeset policy', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'lore-changeset-'));
-    execFileSync('git', ['init'], { cwd: root });
-    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
-    execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: root });
+    execFileSync('git', ['init', '--initial-branch=main'], { cwd: root });
+    const configPath = join(root, '.git', 'config');
+    // Preserve Git's generated configuration and templates while avoiding two extra starts.
+    writeFileSync(
+      configPath,
+      `${readFileSync(configPath, 'utf8')}\n[user]\n\temail = test@example.com\n\tname = Test User\n`,
+    );
     mkdirSync(join(root, '.changeset'), { recursive: true });
     writeFileSync(join(root, '.changeset', 'config.json'), '{}\n');
     writeFileSync(join(root, 'package.json'), '{"name":"fixture"}\n');
     execFileSync('git', ['add', '.'], { cwd: root });
     execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: root });
-    execFileSync('git', ['branch', '-M', 'main'], { cwd: root });
   });
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('initializes the real main commit, files and local identity, issue762', () => {
+    expect(readFileSync(join(root, '.git', 'HEAD'), 'utf8')).toBe('ref: refs/heads/main\n');
+    expect(readFileSync(join(root, '.changeset', 'config.json'), 'utf8')).toBe('{}\n');
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).toBe('{"name":"fixture"}\n');
+    const configuration = execFileSync('git', ['config', '--local', '--null', '--list'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    expect(configuration).toContain('user.email\ntest@example.com\0');
+    expect(configuration).toContain('user.name\nTest User\0');
+    const initial = execFileSync(
+      'git',
+      ['show', '--no-patch', '--format=%an%x00%ae%x00%s', 'HEAD'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+      },
+    );
+    expect(initial.trimEnd()).toBe('Test User\0test@example.com\0Initial commit');
   });
 
   it('accepts an uncommitted changeset before the PR commit exists', () => {
@@ -227,7 +251,7 @@ describe('changeset policy', () => {
     const fetches = [...verify.matchAll(/git fetch ([^\n]+)/g)];
     expect(fetches).toHaveLength(1);
     for (const [, command] of fetches) {
-      const args = expand(command).match(/"[^"]*"|\S+/g);
+      const args = expand(command as string).match(/"[^"]*"|\S+/g);
       if (!args) throw new Error('Missing workflow fetch arguments.');
       execFileSync('git', ['fetch', ...args.map((value) => value.replace(/^"|"$/g, ''))], {
         cwd: checkout,
@@ -348,22 +372,28 @@ describe('release policy', () => {
 
 describe('npm package preflight', () => {
   const packageJson = (name: string) => ({ directory: '/tmp/package', name });
+  const npmResponse = (status: number, stderr = ''): SpawnSyncReturns<string> => ({
+    pid: 1,
+    output: [null, '', stderr],
+    stdout: '',
+    stderr,
+    status,
+    signal: null,
+  });
 
   it('discovers only the public CLI package', () => {
     expect(discoverPublishablePackages().map(({ name }) => name)).toEqual(['@lorepack/cli']);
   });
 
   it('accepts packages that exist in the registry', () => {
-    expect(packageExists(packageJson('@lorepack/cli'), () => ({ status: 0 }))).toBe(true);
+    expect(packageExists(packageJson('@lorepack/cli'), () => npmResponse(0))).toBe(true);
   });
 
   it('reports only packages missing from the registry', () => {
-    const missing = findMissingPackages(
+    const missing: Array<ReturnType<typeof packageJson>> = findMissingPackages(
       [packageJson('@lorepack/cli'), packageJson('@lorepack/core')],
-      ([, name]) =>
-        name === '@lorepack/cli'
-          ? { status: 0 }
-          : { status: 1, stdout: '', stderr: 'npm error code E404' },
+      ([, name]: readonly string[]) =>
+        name === '@lorepack/cli' ? npmResponse(0) : npmResponse(1, 'npm error code E404'),
     );
 
     expect(missing.map(({ name }) => name)).toEqual(['@lorepack/core']);
@@ -371,11 +401,7 @@ describe('npm package preflight', () => {
 
   it('fails closed for registry errors that are not missing packages', () => {
     expect(() =>
-      packageExists(packageJson('@lorepack/cli'), () => ({
-        status: 1,
-        stdout: '',
-        stderr: 'npm error code E401',
-      })),
+      packageExists(packageJson('@lorepack/cli'), () => npmResponse(1, 'npm error code E401')),
     ).toThrow('npm view failed for @lorepack/cli');
   });
 });
