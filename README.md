@@ -68,11 +68,14 @@ lorepack build --no-activate
 lorepack validate
 lorepack diff <active-build-id> <candidate-build-id>
 lorepack activate <candidate-build-id>
+lorepack mcp --follow-active
 ```
 
 Use the full build IDs printed by the commands. `build` activates on success unless you
 pass `--no-activate`. `lorepack rollback` selects the previously active build without
 recompiling sources.
+`mcp --follow-active` serves the reviewed active build and reports source freshness without
+rebuilding it. See [MCP serving modes](docs/integrations/mcp.md) for other startup policies.
 
 ### Find evidence for a task
 
