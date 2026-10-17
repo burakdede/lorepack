@@ -489,7 +489,8 @@ It preserves the structure those parsers expose and records unsupported or exclu
 warnings. [Partly scanned PDFs](docs/architecture/parsers.md#pdf) name the unread pages
 in `lorepack inspect warnings`.
 Built-in parsers have a sampled resident-memory watchdog, default 1,024 MiB,
-separate from the V8 heap limit. Sampling can overshoot: it is not a hard RSS ceiling.
+separate from the V8 heap limit. Observer health checks service pending reports
+before declaring a stale reader. Sampling can overshoot: it is not a hard RSS ceiling.
 The [resident-memory ADR](docs/adr/0043-parser-resident-memory.md) records the
 remaining three-platform qualification and independent resource measurements.
 The [resource verification protocol](docs/testing/parser_resident_memory.md) defines

@@ -59,3 +59,19 @@ Manual review must confirm all four files on each OS, exact source/bundle custod
 typed located warnings, parent survival, retained-build integrity, lock cleanup
 and process cleanup. Then run the original full verification and packed CLI gates.
 Do not raise the observed envelope or alter workloads after a failing run.
+
+## Observer scheduling regression
+
+The first Windows native acceptance run at `7ac0d44b` failed four ordinary
+scenarios because the 250 ms reporting watchdog declared the observer stale.
+A separate real-pipe test reproduces a parent event-loop stall leaving reports
+pending when that timer runs. The check now services one I/O turn before
+classifying silence, and cancels the stale check when a newer report arrives.
+The 250 ms deadline, 100 ms observations, memory threshold and fixture envelope
+are unchanged. Observed RSS breaches still terminate immediately; they never
+wait for this health check. A genuinely silent reader must still fail, and
+stopping its watchdog must prevent late data from rearming it.
+
+This local reproduction and correction do not prove every native failure had
+the same cause. Retain native timing/report-count/reader-state diagnostics and
+rerun the unchanged Windows acceptance scenarios before declaring it resolved.
