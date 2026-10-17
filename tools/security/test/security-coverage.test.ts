@@ -714,7 +714,10 @@ describe('consolidated security suite coverage, issues 98 and 615', () => {
 
   for (const item of EVIDENCE) {
     it(item.name, () => {
-      expect(problems(item, outcomes)).toEqual([]);
+      const failures = outcomes
+        .filter((outcome) => runFiles(item).includes(outcome.file) && outcome.status === 'failed')
+        .flatMap((outcome) => outcome.failureMessages ?? []);
+      expect(problems(item, outcomes), failures.join('\n')).toEqual([]);
       const text = read(item.path);
       for (const pattern of item.patterns) {
         expect(text, `${item.path} must match ${pattern}`).toMatch(pattern);
