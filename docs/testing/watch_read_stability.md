@@ -20,6 +20,30 @@ child state and the final 16 KiB of supervisor output. This includes initial
 HTTP/MCP setup, convergence and the final MCP read, beyond the parallel loop.
 There is no retry or ignored connection reset.
 
+The fixture also subscribes to the Node fetch
+[Undici diagnostics channels](https://github.com/nodejs/undici/blob/v7.29.1/docs/docs/api/DiagnosticsChannel.md).
+Before teardown it includes the last 64 request events and the number of older events
+removed from the trace. Each event identifies the request, method, path without its
+query, response status or error code, socket identity/use count, original local/remote
+ports, byte counters and time since the previous completed response. Headers, bodies
+and URL queries are never recorded. Subscription starts before the initial HTTP read
+and stops after diagnostics on both success and failure. It adds no socket listeners,
+does not read a stream and does not handle or suppress a transport error.
+
+`packages/cli/test/http_diagnostics.test.ts` sends a real POST to a local server that
+resets its TCP connection. It compares the unobserved and observed fetch error/cause,
+verifies one reset request per attempt,
+socket reuse and metadata, unchanged listener counts, redaction, bounded history,
+origin isolation and unsubscription. This verifies the recorder, not the cause of the
+native source-churn failure. Run it with:
+
+```bash
+pnpm exec vitest run packages/cli/test/http_diagnostics.test.ts
+```
+
+The recorder checks passed on Node 24.21.0 with bundled Undici 7.29.1, macOS arm64,
+on 2026-10-17. Current-head native Windows qualification remains pending.
+
 A disposable local probe sends a real TCP reset during the initial build fetch.
 Before the full-phase capture it reproduced an unlabelled `fetch failed` with
 an `ECONNRESET` cause. Afterward it also identified `initial build headers`,
@@ -39,3 +63,12 @@ The same case recurred on
 Its failing phase remains unknown: the original parallel-read wrapper did not
 appear in the report. A passing cancellation case in that job does not resolve
 the separate cancellation investigation in #764.
+
+The current-main failure on
+[7f7c3d2f's Windows job](https://github.com/burakdede/lorepack/actions/runs/39015872372/job/117347745672)
+occurred at convergence headers after 5,244 churn rounds, 27 live reads and five
+convergence reads. The supervisor still had null exit/signal values and its last
+returned build ID was unchanged. This reproduces without the unmerged parser observer;
+the reset cause remains unproved. The new request/socket trace is intended to distinguish
+connection reuse, request timing and transport failure without changing the workload
+or Node's default error/timeout handling.
