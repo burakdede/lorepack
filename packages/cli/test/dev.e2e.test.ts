@@ -15,6 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { buildDescriptionSchema, searchResultSchema } from '@lorepack/core';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { type ChildOutput, observeChild } from './support/child_diagnostics.js';
 
 /**
  * `lorepack dev` as a person actually runs it: point it at a folder and expect a running runtime.
@@ -57,6 +58,7 @@ interface Started {
   readonly stdout: string;
   /** Live, so an assertion can quote what the supervisor said while it was failing. */
   readonly log: () => string;
+  readonly output: () => { stdout: string; stderr: string };
   readonly stderr: string;
   readonly port: number;
 }
@@ -93,7 +95,14 @@ async function dev(extra: readonly string[] = []): Promise<Started> {
     stdout,
     `lorepack dev never printed its connection block. stdout:\n${stdout}\nstderr:\n${stderr}`,
   ).toContain('MCP stdio');
-  return { child, stdout, stderr, log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`, port };
+  return {
+    child,
+    stdout,
+    stderr,
+    log: () => `stdout:\n${stdout}\n\nstderr:\n${stderr}`,
+    output: () => ({ stdout, stderr }),
+    port,
+  };
 }
 
 beforeEach(() => {
@@ -1032,16 +1041,9 @@ describe('cancelling a real build process', () => {
     let originalBuildId: string | null = null;
     const stages: { stage: string; elapsedMs: number }[] = [];
     const checkpoint = (stage: string) => stages.push({ stage, elapsedMs: Date.now() - began });
-    const children: { label: string; child: ChildProcess; stdout: string; stderr: string }[] = [];
-    const observe = (label: string, child: ChildProcess) => {
-      const record = { label, child, stdout: '', stderr: '' };
-      children.push(record);
-      child.stdout?.on('data', (chunk: Buffer) => {
-        record.stdout += chunk.toString('utf8');
-      });
-      child.stderr?.on('data', (chunk: Buffer) => {
-        record.stderr += chunk.toString('utf8');
-      });
+    const children: ReturnType<typeof observeChild>[] = [];
+    const observe = (label: string, child: ChildProcess, output?: () => ChildOutput) => {
+      children.push(observeChild(label, child, output));
     };
     cancellationDiagnostics = () => {
       const ownerPath = join(project, '.lore', 'lock', 'owner.json');
@@ -1080,20 +1082,19 @@ describe('cancelling a real build process', () => {
             exitCode: child.exitCode,
             signalCode: child.signalCode,
           })),
-          children: children.map(({ label, child, stdout, stderr }) => ({
+          children: children.map(({ label, child, capture }) => ({
             label,
             pid: child.pid,
             exitCode: child.exitCode,
             signalCode: child.signalCode,
-            stdout: stdout.slice(-16000),
-            stderr: stderr.slice(-16000),
+            ...capture(),
           })),
         }),
       );
     };
     checkpoint('starting dev');
     const started = await dev();
-    observe('dev', started.child);
+    observe('dev', started.child, started.output);
     checkpoint('reading original active build');
     const before = (
       (await (await fetch(`http://127.0.0.1:${started.port}/v1/build`)).json()) as {
@@ -1120,10 +1121,10 @@ describe('cancelling a real build process', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     running.push(child);
-    observe('cancelled build', child);
-    checkpoint('waiting for parsing');
     let stdout = '';
     let stderr = '';
+    observe('cancelled build', child, () => ({ stdout, stderr }));
+    checkpoint('waiting for parsing');
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8');
     });
@@ -1161,8 +1162,8 @@ describe('cancelling a real build process', () => {
     const status = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'status'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    observe('status', status);
     let statusOutput = '';
+    observe('status', status, () => ({ stdout: statusOutput }));
     status.stdout?.on('data', (chunk: Buffer) => {
       statusOutput += chunk.toString('utf8');
     });
@@ -1176,8 +1177,8 @@ describe('cancelling a real build process', () => {
     const next = spawn(process.execPath, [BINARY, '--cwd', project, '--json', 'build'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    observe('subsequent build', next);
     let nextOutput = '';
+    observe('subsequent build', next, () => ({ stdout: nextOutput }));
     next.stdout?.on('data', (chunk: Buffer) => {
       nextOutput += chunk.toString('utf8');
     });
