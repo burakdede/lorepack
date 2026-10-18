@@ -174,3 +174,16 @@ startup and 250 ms reporting deadlines, 256-byte reader bound, permissions,
 preloads, scheduling and assertions. Native publication waits for the shared
 Windows release-policy setup correction in issue #762 and its real main
 integration. Current local, installed-package and native results remain pending.
+
+## Windows build-worker environment
+
+Native PR780 head `4a1cccb8` failed background builds because the observer read
+only `process.env.SystemRoot`. Windows worker threads copy environment names
+case-sensitively, so an inherited `SYSTEMROOT` was invisible to that lookup.
+Resolve the Windows variable name without case sensitivity, then require the
+same absolute path before selecting system PowerShell. Missing, empty and
+relative values still fail closed; no guessed directory or PATH lookup is used.
+
+The cross-platform observer regression covers four key spellings and three
+invalid environments. The original background-build and dev cases remain
+mandatory on native Windows. See [Node process environment semantics](https://nodejs.org/api/process.html#processenv).

@@ -212,7 +212,9 @@ export function monitorResidentMemory(
   }
 
   if (process.platform === 'win32') {
-    const systemRoot = process.env.SystemRoot;
+    const systemRoot = Object.entries(process.env).find(
+      ([name]) => name.toLowerCase() === 'systemroot',
+    )?.[1];
     if (systemRoot === undefined || !win32.isAbsolute(systemRoot)) {
       fail(new Error('Windows did not provide an absolute SystemRoot.'));
       return { ready, state, stop };
