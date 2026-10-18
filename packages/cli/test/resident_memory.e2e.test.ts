@@ -6,6 +6,7 @@ import { buildManifestSchema } from '@lorepack/core';
 import {
   cmapBombPdf,
   docxBomb,
+  numericCsv,
   singleCharacterCsv,
   streamedFlateBombPdf,
   withTempProject,
@@ -25,6 +26,10 @@ const CASES = [
 for (const entry of CASES) {
   it(`bounds ${entry.path} through the shipped CLI and preserves retained builds, issue677`, async () => {
     const bytes = await entry.fixture();
+    const memoryInput =
+      entry.path === 'rows.csv'
+        ? { path: 'rows_memory.csv', bytes: numericCsv(500_000, 8) }
+        : undefined;
     await withTempProject(
       {
         files: { 'lore.yaml': 'version: 1\nname: memory\nsources: [.]\n', 'ready.md': '# Ready\n' },
@@ -48,6 +53,9 @@ for (const entry of CASES) {
           join(temp.root, '.lore', 'builds', buildId, 'manifest.json');
         const original = readFileSync(manifestPath(first.buildId));
         writeFileSync(join(temp.root, entry.path), bytes);
+        if (memoryInput !== undefined) {
+          writeFileSync(join(temp.root, memoryInput.path), memoryInput.bytes);
+        }
         writeFileSync(join(temp.root, 'ready.md'), '# Ready\n\nA new retained paragraph.\n');
 
         const measured = await measureCliMemory([BINARY, '--cwd', temp.root, '--json', 'build'], {
@@ -72,8 +80,9 @@ for (const entry of CASES) {
           String(process.pid),
         );
         mkdirSync(evidenceDirectory, { recursive: true });
+        const evidencePath = join(evidenceDirectory, `${entry.path}.json`);
         writeFileSync(
-          join(evidenceDirectory, `${entry.path}.json`),
+          evidencePath,
           JSON.stringify(
             {
               source: {
@@ -91,6 +100,16 @@ for (const entry of CASES) {
                 bytes: bytes.byteLength,
                 sha256: createHash('sha256').update(bytes).digest('hex'),
               },
+              additionalFixtures:
+                memoryInput === undefined
+                  ? []
+                  : [
+                      {
+                        path: memoryInput.path,
+                        bytes: memoryInput.bytes.byteLength,
+                        sha256: createHash('sha256').update(memoryInput.bytes).digest('hex'),
+                      },
+                    ],
               controls: {
                 heapMiB: entry.heap,
                 timeoutMs: 30_000,
@@ -120,14 +139,27 @@ for (const entry of CASES) {
         expect(observedParserBytes).toBeLessThanOrEqual(1536 * 1024 * 1024);
         expect(measured.remainingPids).toEqual([]);
         const built = JSON.parse(measured.stdout);
-        expect(built).toMatchObject({ activated: true, created: true, counts: { artifacts: 1 } });
+        expect(built).toMatchObject({
+          activated: true,
+          created: true,
+          counts: { artifacts: memoryInput === undefined ? 1 : 2 },
+        });
         const manifest = buildManifestSchema.parse(
           JSON.parse(readFileSync(manifestPath(built.buildId), 'utf8')),
         );
-        expect(manifest.warnings).toEqual([
-          expect.objectContaining({ code: 'parse-memory', class: 'envelope', path: entry.path }),
-        ]);
-        const warning = manifest.warnings[0];
+        const expectedWarnings = [
+          expect.objectContaining({
+            code: 'parse-memory',
+            class: 'envelope',
+            path: memoryInput?.path ?? entry.path,
+          }),
+          ...(memoryInput === undefined
+            ? []
+            : [expect.objectContaining({ code: 'csv-too-many-rows', path: entry.path })]),
+        ];
+        expect(manifest.warnings).toHaveLength(expectedWarnings.length);
+        expect(manifest.warnings).toEqual(expect.arrayContaining(expectedWarnings));
+        const warning = manifest.warnings.find(({ code }) => code === 'parse-memory');
         if (entry.resident) {
           expect(warning?.message).toContain('1024 MiB resident memory budget');
           expect(warning?.message).toContain('LORE_PARSE_RSS_MB');
@@ -135,9 +167,22 @@ for (const entry of CASES) {
         const inspected = run('inspect', 'warnings');
         expect(inspected).toMatchObject({
           buildId: built.buildId,
-          total: 1,
-          warnings: [expect.objectContaining({ code: 'parse-memory', path: entry.path })],
+          total: expectedWarnings.length,
+          warnings: expect.arrayContaining(expectedWarnings),
         });
+        expect(inspected.warnings).toHaveLength(expectedWarnings.length);
+        writeFileSync(
+          evidencePath,
+          JSON.stringify(
+            {
+              ...JSON.parse(readFileSync(evidencePath, 'utf8')),
+              manifestWarnings: manifest.warnings,
+              inspectedWarnings: inspected,
+            },
+            null,
+            2,
+          ),
+        );
         expect(readActiveBuild(join(temp.root, '.lore'))?.buildId).toBe(built.buildId);
         expect(readFileSync(manifestPath(first.buildId))).toEqual(original);
         expect(existsSync(join(temp.root, '.lore', 'lock'))).toBe(false);

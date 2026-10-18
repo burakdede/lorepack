@@ -1,7 +1,7 @@
 # Parser resident-memory verification
 
 Issue [#677](https://github.com/burakdede/lorepack/issues/677) owns the sampled
-parser RSS budget. [ADR 0043](../adr/0043-parser-resident-memory.md) records the accepted sampled
+parser RSS budget. [ADR 0046](../adr/0046-parser-resident-memory.md) records the accepted sampled
 control and its limits. The [three-platform measurement report](evidence/parser_memory_0d946812.json)
 retains source-bound qualification for the original four workloads. A passing
 sampled maximum is not an atomic peak or a hard memory quota.
@@ -57,11 +57,18 @@ denial probes. This does not resolve the separate Windows reporting failure.
 | DOCX | 64 MiB document text | 128 | 30 s | 1024 MiB |
 | CSV | 4,000,000 one-character rows | 128 | 30 s | 1024 MiB |
 
-The CSV and DOCX cases retain the original low heap limit. Both memory controls
-remain active; a heap exclusion is valid for these cases. The FlateDecode and
-CMap cases must report the resident-memory-specific warning. Streaming only
-changes fixture construction: small cases must match the existing Flate helper
-byte for byte, while the large case avoids a giant JavaScript string in setup.
+The CSV and DOCX cases retain the original low heap limit. The original CSV
+input now receives a typed row-limit refusal and a cited fallback artifact. The
+same measured build also includes an admitted 500,000-row, eight-column numeric
+CSV (`rows_memory.csv`) to exercise the independent heap backstop. Both exact
+input hashes are retained. The original case, CLI call count, deadlines, memory
+limits, process cleanup and immutable-build assertions are unchanged. The record
+must contain exactly the row refusal and the separate memory exclusion. Sampled
+process-tree RSS covers the whole build, not independently attributable per-file
+peaks. DOCX still proves its original heap exclusion; FlateDecode and CMap must
+report the resident-memory-specific warning. Streaming only changes fixture
+construction: small Flate cases match the existing helper byte for byte, while
+the large case avoids a giant JavaScript string in setup.
 
 Each case drives `public-entry.js`, inspects the typed warning through the CLI,
 checks the new active build, verifies the previous manifest is unchanged, checks

@@ -131,7 +131,7 @@ warning naming the resident-memory budget. Observer failure stops the build with
 `LORE_E_PARSE_FAILED`; it never silently disables the control.
 
 Sampling can overshoot, especially during a large allocation or OS scheduling delay.
-This is not a kernel memory quota. [ADR 0043](../adr/0043-parser-resident-memory.md)
+This is not a kernel memory quota. [ADR 0046](../adr/0046-parser-resident-memory.md)
 records the baseline, design and remaining independent three-platform qualification
 under [issue #677](https://github.com/burakdede/lorepack/issues/677). Its 1,536 MiB
 observed-envelope target is not yet a qualified release guarantee. The original
