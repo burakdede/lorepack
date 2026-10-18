@@ -446,15 +446,25 @@ that too is a warning, because renaming a column is a decision the reader should
 
 ### Limits
 
-100 columns and 500,000 rows, both hard failures with the count and the limit in the message.
-The column limit matches Cloudflare D1's, so a table that imports locally can be projected in
-Phase 6 rather than failing there for the first time.
+100 columns and 500,000 data rows. CSV field and record callbacks stop at the first
+observed excess, before retaining an unbounded grid. Delimiter sampling slices logical
+records rather than concatenating their characters. The column limit also fits the
+Cloudflare D1 projection.
 
-Measured at the envelope on 2026-08-04: a 500,000-row, five-column file (21 MB) parses in
-1.7 s and imports in 0.4 s, holding about 360 MB above baseline. The whole file is read into
-memory rather than streamed, which is deliberate: the parser port hands over `bytes`, so the
-file is already resident, and a streaming reader would add a second code path while saving
-nothing.
+An excess produces `csv-too-many-columns` or `csv-too-many-rows`, with an **at least**
+count because the rest of the file was not scanned. The build keeps the artifact and a
+cited description saying its table was not imported; it imports no prefix rows and does
+not report an invented total row count. The build can activate with other valid sources.
+Malformed CSV encountered before a limit remains a parse error.
+
+The parser port supplies resident input bytes. These bounds limit retained CSV records
+and fields; they are not a total process RSS limit or a streaming-input promise. Process
+isolation remains the independent deadline and heap backstop for inputs within the table
+envelope. Parser revision `0.1.1` invalidates cached parses so earlier exclusions are
+reconsidered; normalization revision stays `1` because accepted table values are unchanged.
+
+[CSV limit regressions and peak-memory receipts](../testing/csv_limits.md) record the
+exact generated inputs, diagnostic budgets, measured native peak RSS and CLI verification.
 
 ## XLSX
 

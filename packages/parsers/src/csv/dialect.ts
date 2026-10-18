@@ -63,24 +63,25 @@ export function detectDelimiter(text: string, sampleLines = 20): DialectDecision
  */
 function sampleLogicalLines(text: string, limit: number): string[] {
   const lines: string[] = [];
-  let current = '';
+  let start = 0;
   let quoted = false;
   for (let index = 0; index < text.length && lines.length < limit; index += 1) {
     const character = text[index] as string;
     if (character === '"') {
       quoted = !quoted;
-      current += character;
       continue;
     }
     if (!quoted && (character === '\n' || character === '\r')) {
-      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      const current = text.slice(start, index);
       if (current.trim() !== '') lines.push(current);
-      current = '';
-      continue;
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      start = index + 1;
     }
-    current += character;
   }
-  if (current.trim() !== '' && lines.length < limit) lines.push(current);
+  if (lines.length < limit) {
+    const current = text.slice(start);
+    if (current.trim() !== '') lines.push(current);
+  }
   return lines;
 }
 

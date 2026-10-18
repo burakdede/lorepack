@@ -48,6 +48,11 @@ export function singleCharacterCsv(rows: number): Uint8Array {
   return utf8(`a\n${'a\n'.repeat(rows)}`);
 }
 
+export function numericCsv(rows: number, columns: number): Uint8Array {
+  const line = `${Array.from({ length: columns }, () => '1').join(',')}\n`;
+  return utf8(line.repeat(rows));
+}
+
 /** A DOCX whose `word/document.xml` compresses to almost nothing and inflates to `megabytes`. */
 export function docxBomb(megabytes: number): Promise<Uint8Array> {
   return makeDocx({ body: paragraph('A'.repeat(megabytes * 1024 * 1024)) });

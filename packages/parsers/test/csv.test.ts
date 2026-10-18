@@ -310,3 +310,39 @@ describe('the 500,000-row envelope', () => {
     );
   }, 60_000);
 });
+
+describe('CSV allocation bounds, issue596', () => {
+  it('counts the first numeric row as data at the exact row limit', () => {
+    const parsed = parse('1\n'.repeat(CSV_LIMITS.maxRows));
+    expect(tableOf(parsed).rows).toHaveLength(CSV_LIMITS.maxRows);
+    expect(tableOf(parsed).metadata?.hasHeader).toBe(false);
+    expect(parsed.warnings).toEqual([]);
+  }, 60_000);
+
+  it('stops at the first excess data row before reading a malformed tail', () => {
+    const parsed = parse(`${'1\n'.repeat(CSV_LIMITS.maxRows + 1)}"unterminated`);
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toEqual([
+      expect.objectContaining({
+        code: 'csv-too-many-rows',
+        message: expect.stringContaining('at least 500,001 rows'),
+        loss: {},
+      }),
+    ]);
+    expect(parsed.nodes.every((node) => node.metadata?.rowCount === undefined)).toBe(true);
+  }, 60_000);
+
+  it('allows exactly 100 columns and refuses a later wider record', () => {
+    const row = Array.from({ length: CSV_LIMITS.maxColumns }, () => '1').join(',');
+    expect(tableOf(parse(`${row}\n`)).columns).toHaveLength(CSV_LIMITS.maxColumns);
+    const parsed = parse(`${row}\n${row},1\n"unterminated`);
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'csv-too-many-columns',
+        message: expect.stringContaining('at least 101 columns'),
+        loss: {},
+      }),
+    );
+  });
+});

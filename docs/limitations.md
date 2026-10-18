@@ -11,6 +11,9 @@ What v0.1 does not do, stated plainly so nobody finds out the hard way.
   19-digit id stays text, and `03/04/2026` stays text because the file never says which country
   wrote it. Excel formulas are stored as text and never evaluated. A worksheet whose layout is
   not a table is described and reported, never invented into one.
+- **CSV tables are bounded to 100 columns and 500,000 data rows.** Excess tables are
+  refused with a typed warning and a cited file description; no prefix is imported.
+  See [CSV limits](architecture/parsers.md#limits) for memory boundaries and measurements.
 - **The SQL surface is one read-only SELECT over one table**, run in a process that is killed on
   a deadline, behind an authorizer that permits that table and nothing else in the build. It
   cannot write, cannot reach another table, and cannot read the catalog.

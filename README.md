@@ -119,7 +119,7 @@ screenshots and detailed workflows.
 
 ## Supported inputs and limits
 
-[Format guide](docs/architecture/parsers.md) · [v0.1 limitations](docs/limitations.md) · [Compatibility and measurements](docs/compatibility/README.md)
+[Format guide](docs/architecture/parsers.md) · [CSV limits](docs/architecture/parsers.md#limits) · [v0.1 limitations](docs/limitations.md) · [Compatibility and measurements](docs/compatibility/README.md)
 
 Markdown, plain text, source code, HTML, DOCX, text-layer PDF, CSV and XLSX are supported.
 Lorepack preserves the structure each parser exposes and reports unsupported or excluded
