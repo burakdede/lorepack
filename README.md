@@ -145,7 +145,7 @@ user-declared hints. Review the limitations before choosing a production integra
 ## Contributing
 
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md).
-[Source installation](docs/getting-started.md#install), [testing and CI](docs/architecture/ci.md)
+[Source installation](docs/getting-started.md#install), [testing and CI](docs/architecture/ci.md), including [policy fixtures](docs/architecture/ci.md#keep-release-policy-setup-inside-its-hook)
 and [dependency decisions](docs/architecture/dependencies.md) live in the contributor docs.
 Cloudflare CI requires credentials; see the [integration test setup](docs/integrations/cloudflare-testing.md#required-environment).
 

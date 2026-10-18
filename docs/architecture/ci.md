@@ -172,3 +172,27 @@ commands and depth from CI. Their import creates the PR ref directly; cloning pe
 `fetch.prune` through [git clone --config](https://git-scm.com/docs/git-clone), and the test
 checks that stored configuration before using it. This removes three redundant Git launches
 per case without reducing history, skipping the real clone/fetch or changing the 5000ms deadline.
+
+### Keep release-policy setup inside its hook
+
+Every policy case creates a fresh real Git repository inside the original 10-second
+`beforeEach` hook. Initialize `main` directly with
+[`git init --initial-branch`](https://git-scm.com/docs/git-init), preserve the generated
+configuration and append the fixture's fixed local identity using
+[Git configuration syntax](https://git-scm.com/docs/git-config#_syntax). Real `git add`
+and `git commit` still create the initial tree and commit. This avoids two configuration
+processes and a redundant branch rename without changing hooks or inherited settings.
+
+The regression reads the actual HEAD, files, local Git configuration and committed
+author identity. The original 28 policy cases, all four 70-commit marker/pruning
+combinations, real clones and policy subprocesses, assertions and deadlines remain.
+On macOS arm64 with Node 24.21.0 and Git 2.55.0 (2026-10-17), an additive Git event
+[trace measurement](../testing/evidence/762_policy_setup.json) over the explicit-head case and four original matrix cases recorded six setup
+Git launches per case before this change and three afterward. These counts exclude
+case-body work and do not identify which historical Windows command was slow.
+
+Run the policy suite with `pnpm exec vitest run tools/arch/test/release-policy.test.ts`.
+Local verification passed 29 policy cases and 185 architecture cases. The native
+Windows hook failure and pending exact-head qualification remain tracked in
+[issue #762](https://github.com/burakdede/lorepack/issues/762). No hook or test deadline,
+workload, scheduling, retry, skip, preload or coverage control was relaxed.
