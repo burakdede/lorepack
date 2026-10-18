@@ -61,8 +61,9 @@ const nodeOptionImports = (paths: readonly string[]): string =>
  * `--allow-wasi`, Node refuses each of those outright.
  *
  * `--allow-child-process` is there because the build parses every file in a forked
- * `parse-child.js` (#594). The monitor refuses every other process, and lets that fork through
- * only when it runs under the permission model with no write, process or worker grant. The
+ * `parse-child.js` (#594). The monitor admits that fork only under the permission model with
+ * no write, process or worker grant, plus the parent's fixed read-only OS query of that
+ * live child's resident memory (#677). It refuses all other processes. The
  * preloads travel in `NODE_OPTIONS` rather than as flags so the parse child loads the monitor
  * too, which keeps the parsers, the code that reads hostile documents, inside the proof.
  */

@@ -173,8 +173,8 @@ export function lockWaitFromEnvironment(
 }
 
 /**
- * The per-file parse deadline and heap ceiling (#594), from `LORE_PARSE_TIMEOUT_MS` and
- * `LORE_PARSE_MEMORY_MB`.
+ * The operational parser deadline, heap ceiling and sampled resident-memory threshold,
+ * from `LORE_PARSE_TIMEOUT_MS`, `LORE_PARSE_MEMORY_MB` and `LORE_PARSE_RSS_MB`.
  *
  * Operational for the same reason as `LORE_LOCK_WAIT_MS`: a slow laptop and a fast CI runner
  * should not disagree about a build's identity because one of them waited longer. The limit
@@ -201,6 +201,13 @@ export function parseLimitsFromEnvironment(
       'megabytes',
       PARSE_LIMITS.defaults.memoryMb,
       PARSE_LIMITS.memoryMb,
+    ),
+    residentMemoryMb: boundedInteger(
+      environment,
+      'LORE_PARSE_RSS_MB',
+      'mebibytes',
+      PARSE_LIMITS.defaults.residentMemoryMb,
+      PARSE_LIMITS.residentMemoryMb,
     ),
   };
 }

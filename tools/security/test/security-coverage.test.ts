@@ -248,6 +248,79 @@ const EVIDENCE: readonly Evidence[] = [
     patterns: [/parse-timeout/, /parse-memory/, /cmapBombPdf/, /docxBomb/, /flateBombPdf/],
   },
   {
+    name: 'resident memory is observed outside the blocked parser, issue 677',
+    path: 'packages/parsers/test/resident_memory.test.ts',
+    tests: [
+      'stops native resident growth outside a blocked parser, issue677',
+      'services a pending first observer report at the original startup deadline',
+      'rejects an observer with no first report at the original startup deadline',
+      'services pending OS reports after a parent stall before declaring the observer stale',
+      'still rejects an observer that genuinely stops reporting at the original deadline',
+      'observes a silent reader after a parent stall and the pending check phase',
+      'stops the reporting watchdog without arming it again from late data',
+      'stops its observer without terminating a healthy parser',
+      'does not misreport an exited parser as an observer failure',
+    ],
+    patterns: [/cmapBombPdf\(8\)/, /residentMemoryMb: 1024/, /parse-memory/],
+  },
+  {
+    name: 'Linux memory reports preserve process-exit classification, issue 677',
+    path: 'packages/parsers/test/linux_resident_memory.test.ts',
+    tests: [
+      'reads resident bytes from the exact owned Linux process report',
+      'keeps zero resident memory as a valid measurement',
+      'recognizes Linux ESRCH before the child exit event without retrying',
+      ...['ENOENT', 'EACCES', 'EIO'].map(
+        (code) => `preserves genuine Linux report failure ${code}`,
+      ),
+      ...['empty', 'nonnumeric', 'negative'].map((name) => `rejects ${name} Linux rollup`),
+    ],
+    patterns: [
+      /ESRCH/,
+      /ENOENT/,
+      /EACCES/,
+      /EIO/,
+      /toBeNull\(\)/,
+      /toBe\(0\)/,
+      /toHaveBeenCalledTimes\(1\)/,
+    ],
+  },
+  {
+    name: 'the four CLI memory workloads retain native process evidence, issue 677',
+    path: 'packages/cli/test/resident_memory.e2e.test.ts',
+    tests: ['flate.pdf', 'cmap.pdf', 'document.docx', 'rows.csv'].map(
+      (path) => `bounds ${path} through the shipped CLI and preserves retained builds, issue677`,
+    ),
+    patterns: [
+      /streamedFlateBombPdf\(1500\)/,
+      /cmapBombPdf\(8\)/,
+      /docxBomb\(64\)/,
+      /singleCharacterCsv\(4_000_000\)/,
+      /measureCliMemory/,
+      /1536 \* 1024 \* 1024/,
+      /remainingPids/,
+      /inspect', 'warnings/,
+    ],
+  },
+  {
+    name: 'streaming preserves the exact Flate workload bytes, issue 677',
+    path: 'tools/test-support/test/hostile-fixtures.test.ts',
+    tests: [0, 1, 4].map((size) => `preserves the exact ${size} MiB Flate fixture when streamed`),
+    patterns: [/streamedFlateBombPdf\(megabytes\)/, /toEqual\(flateBombPdf\(megabytes\)\)/],
+  },
+  {
+    name: 'Windows observer startup failure stops the owned parser, issue 677',
+    path: 'packages/parsers/test/resident_memory.test.ts',
+    tests: ['stops parsing when the Windows OS observer cannot start'],
+    patterns: [/lore-missing-observer/, /LORE_E_PARSE_FAILED/, /await closed/],
+    skippedOn: {
+      darwin:
+        'The SystemRoot-based observer is Windows-only; all memory workloads remain mandatory.',
+      linux:
+        'The SystemRoot-based observer is Windows-only; all memory workloads remain mandatory.',
+    },
+  },
+  {
     name: 'a document nested past the parser stack is excluded, not a failed build, issue 595',
     path: 'packages/parsers/test/isolation.test.ts',
     tests: [
@@ -609,6 +682,7 @@ const EVIDENCE: readonly Evidence[] = [
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the build path sends a fetch from a worker thread',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 fails when the parse process connects',
       'privacy defaults: no telemetry or source egress in the build path, issue 616 refuses a parse process started without the permission model',
+      'privacy defaults: no telemetry or source egress in the build path, issue 616 refuses observer queries for other processes, altered commands and shell options',
     ],
     patterns: [
       /builds every parser format in a sandbox/,
@@ -643,7 +717,10 @@ describe('consolidated security suite coverage, issues 98 and 615', () => {
 
   for (const item of EVIDENCE) {
     it(item.name, () => {
-      expect(problems(item, outcomes)).toEqual([]);
+      const failures = outcomes
+        .filter((outcome) => runFiles(item).includes(outcome.file) && outcome.status === 'failed')
+        .flatMap((outcome) => outcome.failureMessages ?? []);
+      expect(problems(item, outcomes), failures.join('\n')).toEqual([]);
       const text = read(item.path);
       for (const pattern of item.patterns) {
         expect(text, `${item.path} must match ${pattern}`).toMatch(pattern);
