@@ -199,7 +199,7 @@ it('observes mutable locators in independent fits and public renders', async () 
   );
 });
 
-it.each([1000, 2500, 5000, 10000])(
+it.each([999, 1000, 1001, 2499, 2500, 2501, 4000, 5000, 9999, 10000, 10001])(
   'preserves the uncached greedy result, order and accounting at budget %i',
   async (budget) => {
     const input = await fixture(budget);

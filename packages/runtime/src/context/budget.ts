@@ -93,6 +93,7 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
     let measured = measureRepresentations(bundle, renderMarkdown);
     while (measured.estimatedTokens > bundle.estimatedTokens) {
       bundle.estimatedTokens = measured.estimatedTokens;
+      if (bundle.estimatedTokens > bundle.budget) break;
       measured = measureRepresentations(bundle, renderMarkdown);
     }
     if (bundle.estimatedTokens <= bundle.budget && measured.bytes <= MAXIMUM_CONTEXT_BYTES) {

@@ -365,3 +365,8 @@ The current recorded regression and CPU diagnostic are documented in
 [issue #783](https://github.com/burakdede/lorepack/issues/783). Its original
 30-second complete-report gate remains mandatory; this change alone does not
 establish a passing report or a release performance claim.
+
+Fitting stops fixed-point measurements as soon as a candidate's retained estimate
+exceeds its budget. That estimate only increases, so the candidate is already
+rejected. The original greedy detail and item removal order still applies, and
+every accepted candidate reaches the complete representation fixed point.
