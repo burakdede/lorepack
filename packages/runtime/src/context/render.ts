@@ -30,6 +30,26 @@ export function moreCommandFor(task: string): string {
 }
 
 export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptions): string {
+  return renderMarkdown(bundle, options, lineRange);
+}
+
+export function createBundleMarkdownRenderer(): typeof renderBundleMarkdown {
+  const coordinates = new WeakMap<ContextBundle['citations'][number], string>();
+  const formatLocator = (locator: ContextBundle['citations'][number]): string => {
+    const cached = coordinates.get(locator);
+    if (cached !== undefined) return cached;
+    const formatted = lineRange(locator);
+    coordinates.set(locator, formatted);
+    return formatted;
+  };
+  return (bundle, options) => renderMarkdown(bundle, options, formatLocator);
+}
+
+function renderMarkdown(
+  bundle: ContextBundle,
+  options: ExportOptions,
+  formatLocator: (locator: ContextBundle['citations'][number]) => string,
+): string {
   const lines: string[] = [];
 
   lines.push(`# Context for: ${oneLine(bundle.task)}`, '');
@@ -69,7 +89,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
         const heading =
           item.headingPath.length === 0 ? '' : `${oneLine(item.headingPath.join(' > '))}, `;
         const labels = item.labels.length === 0 ? '' : ` [${item.labels.join(', ')}]`;
-        lines.push(`**${heading}${lineRange(item.locator)}**${labels}`, '');
+        lines.push(`**${heading}${formatLocator(item.locator)}**${labels}`, '');
         // Fenced, because the text is a document's and the lines around it are Lorepack's.
         // Appended raw, a plain-text source could write `## Citations` and a `### path` of
         // its choosing and pass its claim off as another file's (#552).
@@ -86,7 +106,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
     );
     for (const item of bundle.alternatives) {
       const labels = item.labels.length === 0 ? '' : ` [${item.labels.join(', ')}]`;
-      lines.push(`- \`${item.locator.relativePath}\` ${lineRange(item.locator)}${labels}`);
+      lines.push(`- \`${item.locator.relativePath}\` ${formatLocator(item.locator)}${labels}`);
     }
     lines.push('');
   }
@@ -99,7 +119,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
 
   lines.push('## Citations', '');
   for (const citation of bundle.citations) {
-    lines.push(`- \`${citation.relativePath}\` ${lineRange(citation)}`);
+    lines.push(`- \`${citation.relativePath}\` ${formatLocator(citation)}`);
   }
   lines.push('');
 
@@ -122,7 +142,7 @@ export function renderBundleMarkdown(bundle: ContextBundle, options: ExportOptio
       lines.push(`**${describeReason(reason)}** (${count(items.length, 'passage')})`, '');
       for (const item of items.slice(0, 20)) {
         lines.push(
-          `- \`${item.locator.relativePath}\` ${lineRange(item.locator)}, about ${count(item.estimatedTokens, 'token')}`,
+          `- \`${item.locator.relativePath}\` ${formatLocator(item.locator)}, about ${count(item.estimatedTokens, 'token')}`,
         );
       }
       if (items.length > 20) lines.push(`- and ${count(items.length - 20, 'more passage')}`);

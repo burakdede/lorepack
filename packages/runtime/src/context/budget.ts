@@ -1,5 +1,5 @@
 import { type ContextBundle, LoreError } from '@lorepack/core/worker';
-import { moreCommandFor, renderBundleMarkdown } from './render.js';
+import { createBundleMarkdownRenderer, moreCommandFor, renderBundleMarkdown } from './render.js';
 import { toolResult } from './serialize.js';
 
 export const MAXIMUM_CONTEXT_BYTES = 4 * 1024 * 1024;
@@ -35,6 +35,13 @@ export function measureContextRepresentations(bundle: ContextBundle): {
   estimatedTokens: number;
   bytes: number;
 } {
+  return measureRepresentations(bundle, renderBundleMarkdown);
+}
+
+function measureRepresentations(
+  bundle: ContextBundle,
+  renderMarkdown: typeof renderBundleMarkdown,
+): { estimatedTokens: number; bytes: number } {
   const mcp = {
     ...toolResult(bundle),
     ...(bundle.execution.policy.serialization.receipt === undefined
@@ -51,7 +58,7 @@ export function measureContextRepresentations(bundle: ContextBundle): {
     `${JSON.stringify(bundle, null, 2)}\n`,
     JSON.stringify(bundle),
     JSON.stringify(mcp),
-    renderBundleMarkdown(bundle, {
+    renderMarkdown(bundle, {
       projectName: 'x'.repeat(MAXIMUM_PROJECT_NAME_LENGTH),
       moreCommand: moreCommandFor(bundle.task),
       sourceState: bundle.sourceState,
@@ -64,6 +71,7 @@ export function measureContextRepresentations(bundle: ContextBundle): {
 }
 
 export function fitDeliveredContext(input: ContextBundle): ContextBundle {
+  const renderMarkdown = createBundleMarkdownRenderer();
   const overview = [...input.overview];
   const selected = [...input.selected];
   const alternatives = [...input.alternatives];
@@ -82,10 +90,10 @@ export function fitDeliveredContext(input: ContextBundle): ContextBundle {
       omissionSummary: omissionSummary(allOmitted, detailCount),
       estimatedTokens: 0,
     };
-    let measured = measureContextRepresentations(bundle);
+    let measured = measureRepresentations(bundle, renderMarkdown);
     while (measured.estimatedTokens > bundle.estimatedTokens) {
       bundle.estimatedTokens = measured.estimatedTokens;
-      measured = measureContextRepresentations(bundle);
+      measured = measureRepresentations(bundle, renderMarkdown);
     }
     if (bundle.estimatedTokens <= bundle.budget && measured.bytes <= MAXIMUM_CONTEXT_BYTES) {
       return bundle;

@@ -352,3 +352,16 @@ Exact emission receipts are separately tracked by #434. Replay requires retained
 and compatible policies; this metadata alone cannot reproduce a downstream model answer.
 Legacy bundles missing execution metadata cannot supply an execution identity. Version1
 schemas require the descriptor and reject unknown top-level versions/fields.
+
+### Coordinate formatting during delivery fitting
+
+Delivery fitting measures every supported representation repeatedly while reducing
+omission detail and evidence to the requested budget. Coordinate labels are reused
+only within that synchronous fit, keyed by locator object. A fresh fit and every
+public Markdown render read their current locator values. JSON/MCP serialization,
+token estimates, byte limits and greedy selection remain unchanged.
+
+The current recorded regression and CPU diagnostic are documented in
+[issue #783](https://github.com/burakdede/lorepack/issues/783). Its original
+30-second complete-report gate remains mandatory; this change alone does not
+establish a passing report or a release performance claim.
