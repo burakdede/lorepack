@@ -136,13 +136,23 @@ export function devCommand(): CommandDefinition {
         host,
       });
 
-      // Step 6.
-      context.write(
-        `${render({ initialized, built, url: server.url, studio: server.studio, projectRoot: config.projectRoot, name: config.config.name })}\n`,
-      );
-
-      await untilInterrupted(context.warn);
-      await shutdown(config, watching, server, context.warn);
+      const interrupted = untilInterrupted(context.warn);
+      try {
+        const ready = await Promise.race([
+          watching.ready.then(() => true),
+          interrupted.then(() => false),
+        ]);
+        if (ready) {
+          // Step 6. This block says the session is watching, so wait for the first
+          // reconciliation before publishing it.
+          context.write(
+            `${render({ initialized, built, url: server.url, studio: server.studio, projectRoot: config.projectRoot, name: config.config.name })}\n`,
+          );
+          await interrupted;
+        }
+      } finally {
+        await shutdown(config, watching, server, context.warn);
+      }
       return { human: '', json: undefined };
     },
   };
