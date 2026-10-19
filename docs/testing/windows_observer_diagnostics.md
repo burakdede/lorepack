@@ -90,6 +90,32 @@ closure. It does not execute PowerShell or establish a native failure mechanism.
 The existing real PowerShell stall case awaits readiness before stalling and
 therefore checks reporting after startup, not startup queue delivery.
 
+### Installed-package startup failure
+
+Main `0d8d07db` failed the Windows packed-install build before its first RSS
+sample: 5009 ms, reader1888, no observed exit or signal and zero buffered stdout.
+The reviewed4992-member archive and145-package installed closure had passed;
+the original73-artifact build stopped at Parsing0/73. Raw job118066763121 is
+retained at `release_gates/main_0d8d07db_cohort/failed-job-118066763121.raw.log`
+under the sibling release evidence directory, SHA256
+`0fad38b505f9eb97b6aab301f9b1e471f5329b57a83f31ac83e493dd3da9ae43`.
+
+The normal packed-install check keeps diagnostics off. Only if that original
+step fails on Windows does the same job run one separate instrumented checker
+with the existing flag. The original failure still fails the job, even if the
+diagnostic run passes. The original command, fixture, resource limits, deadlines,
+retries and skips remain unchanged. No extra diagnostic job or dispatch is used.
+
+This second execution is evidence only. The flag evaluates
+`[System.Diagnostics.Process].Assembly.FullName` before the first sample, loading
+the type earlier than normal mode, and adds phase writes and owner-loop metrics.
+The second execution also follows an already attempted build and install.
+These differences can change startup timing. A pass neither qualifies the
+original failed check nor establishes the historical cause. Read the bounded
+startup, runtime-identity and sample markers in the job log; missing markers
+remain inconclusive. The existing16-event ring,1024-character pending buffer,
+4096-byte final trace and100/250/5000ms controls are preserved.
+
 ## POSIX reader failures
 
 Issue #801 also retains two distinct acceptance failures from PR #800 head
