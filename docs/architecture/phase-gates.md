@@ -30,11 +30,16 @@ Deliberately few. Adding a kind should be rare and considered.
 
 | Kind | Checks | Fails when |
 |---|---|---|
-| `command` | A script exits zero | Non-zero exit; the tail of its output is reported |
+| `command` | A script exits zero | Non-zero exit; exit code and both captured output streams are reported |
 | `exports` | A built package still exports named symbols | A symbol is gone, or the module cannot be imported |
 | `path` | Files or directories exist | Any is missing, and it is named |
 | `issues` | Every issue in a milestone is closed | An unexpected issue is open, and it is named |
 | `audit` | The next phase's epic carries a dated audit | No audit section, or one without a date |
+
+Failed command details retain the complete stdout and stderr already captured by the
+executor, with stream labels and the exit code, in both text and JSON reports. This
+keeps assertion values visible even when a long stack follows them. The existing
+subprocess output bound and command deadline still apply.
 
 ## The forward audit
 
