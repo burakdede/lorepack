@@ -53,6 +53,25 @@ when the callback throws. The randomised root is not incidental: it doubles as t
 Cleanup is best effort on Windows, where a lingering handle can block removal. A leaked
 temp directory must never fail a test.
 
+## Compiled fixture custody
+
+Tests that relocate compiled helpers use `copyCompiledFixture` from
+`tools/test-support`. It preserves emitted JavaScript bytes and rebases only
+flat sourcemap source paths, so native coverage still belongs to the original
+source. The helper rejects a changed basename or nonempty `sourceRoot` rather
+than recording coverage against a temporary copy.
+
+Archive extraction and verification tests retain sealed bytes, private-snapshot
+cleanup and real helper replies. Discovery tests remove real files after
+enumeration or path resolution. These process and filesystem boundaries need
+their own integration assertions; lexer or parser tests do not exercise them.
+
+Runtime adapter contracts exercise the same literal values, refusals and
+provenance on local SQLite and the remote adapter. CLI retention tests hold
+explicit request handles: releasing the last handle must remove its protection
+before backend shutdown. A cached idle reader must not become a hidden lease.
+Read-source and diff tests remove original files before reading sealed builds.
+
 ## Fixture layout
 
 ```text
