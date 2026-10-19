@@ -68,8 +68,10 @@ jobs:
             echo 'LORE_BENCH_PROFILE=mixed'
           } >> "$GITHUB_ENV"
 
-      - name: Run Lorepack, FTS5 and offline RAG on the same inputs
+      - name: Run Lorepack, FTS5 and offline RAG with Windows observer diagnostics
         shell: bash
+        env:
+          LOREPACK_OBSERVER_DIAGNOSTIC: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
