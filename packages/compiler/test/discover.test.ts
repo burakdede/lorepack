@@ -1,9 +1,9 @@
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALWAYS_EXCLUDE, LoreError, loadConfig } from '@lorepack/core';
 import { checkDeterminism, withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
-import { discover, EXCLUSION_SAMPLE_LIMIT } from '../src/discover/discover.js';
+import { discover, EXCLUSION_SAMPLE_LIMIT, formatBytes } from '../src/discover/discover.js';
 import { createMatcher, parseIgnoreFile } from '../src/discover/ignore.js';
 
 const CONFIG = 'version: 1\nname: p\nsources:\n  - .\n';
@@ -25,6 +25,50 @@ const paths = (result: ReturnType<typeof discoverIn>): string[] =>
   result.artifacts.map((artifact) => artifact.relativePath);
 
 describe('walking sources', () => {
+  it('reports a file source removed after configuration was resolved', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./only.md\n',
+          'only.md': '# Vanishing source',
+        },
+      },
+      (project) => {
+        const config = loadConfig({ cwd: project.root });
+        rmSync(project.path('only.md'));
+        const result = discover({ config });
+        expect(result.artifacts).toEqual([]);
+        expect(result.warnings).toContainEqual({
+          code: 'unreadable',
+          path: 'only.md',
+          message: 'only.md could not be read.',
+        });
+      },
+    );
+  });
+
+  it('reports a directory source removed after configuration was resolved', async () => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: p\nsources:\n  - ./docs\n',
+          'docs/only.md': '# Vanishing directory',
+        },
+      },
+      (project) => {
+        const config = loadConfig({ cwd: project.root });
+        rmSync(project.path('docs'), { recursive: true });
+        const result = discover({ config });
+        expect(result.artifacts).toEqual([]);
+        expect(result.warnings).toContainEqual({
+          code: 'unreadable',
+          path: 'docs',
+          message: 'docs could not be read.',
+        });
+      },
+    );
+  });
+
   it('finds supported files at any depth', async () => {
     await withProject(
       { 'a.md': '# A', 'docs/b.md': '# B', 'docs/deep/c.txt': 'C', 'src/d.ts': 'export {};' },
@@ -67,6 +111,28 @@ describe('walking sources', () => {
         expect(paths(discoverIn(project.root))).toEqual(['only.md']);
       },
     );
+  });
+});
+
+describe('discovery byte formatting boundaries', () => {
+  it.each([
+    [0, '0 B'],
+    [1023, '1023 B'],
+    [1024, '1.0 KiB'],
+    [1536, '1.5 KiB'],
+    [1024 ** 2, '1.0 MiB'],
+    [1024 ** 3, '1.0 GiB'],
+    [1024 ** 4, '1.0 TiB'],
+    [1024 ** 5, '1024.0 TiB'],
+  ])('formats %s bytes as %s', (bytes, expected) => {
+    expect(formatBytes(bytes)).toBe(expected);
+  });
+
+  it('ignores a bare negation without dropping valid following ignore rules', () => {
+    expect(parseIgnoreFile('!\n!   \n# ignored\n*.tmp\n!keep.tmp\n', '.loreignore')).toEqual([
+      { pattern: '*.tmp', negated: false, source: '.loreignore' },
+      { pattern: 'keep.tmp', negated: true, source: '.loreignore' },
+    ]);
   });
 });
 
