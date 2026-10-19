@@ -7,6 +7,11 @@ import {
   inspectInstalledTree,
   optionalPeerNames,
 } from '../../../scripts/check-packed-cli.mjs';
+import {
+  compareMembers,
+  parseMembers,
+  readReviewedMembers,
+} from '../../../scripts/packed-cli-members.mjs';
 
 /**
  * The pure halves of `check:packed-cli`: reading an npm-installed tree and comparing it to the
@@ -145,5 +150,53 @@ describe('optionalPeerNames', () => {
   it('reads optional peers from the workspace lockfile', () => {
     expect(readFileSync(join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')).toContain('supports-color');
     expect(optionalPeerNames(REPO_ROOT).has('supports-color')).toBe(true);
+  });
+});
+
+describe('packed CLI member allow-list', () => {
+  it('rejects an extra CLI file and a missing dependency file', () => {
+    const expected = parseMembers(
+      'package/LICENSE\npackage/dist/public-entry.js\npackage/node_modules/zod/package.json\n',
+      'reviewed allow-list',
+    ).members;
+    const actual = parseMembers(
+      'package/LICENSE\npackage/dist/public-entry.js\npackage/dist/private-fixture.txt\n',
+      'packed tarball',
+    ).members;
+
+    expect(compareMembers(expected, actual)).toEqual([
+      'unexpected tarball member: package/dist/private-fixture.txt',
+      'missing tarball member: package/node_modules/zod/package.json',
+    ]);
+  });
+
+  it('rejects duplicate and unsafe tar names before comparing membership', () => {
+    const listed = parseMembers(
+      'package/dist/public-entry.js\npackage/dist/public-entry.js\npackage/../outside\n/package/absolute\npackage\\windows\n',
+      'packed tarball',
+    );
+
+    expect(listed.problems).toEqual([
+      'packed tarball: duplicate tarball member package/dist/public-entry.js',
+      'packed tarball: unsafe tarball member "package/../outside"',
+      'packed tarball: unsafe tarball member "/package/absolute"',
+      'packed tarball: unsafe tarball member "package\\\\windows"',
+    ]);
+  });
+
+  it('requires a reviewed, sorted full-path manifest', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-members-'));
+    try {
+      const path = join(root, 'members.txt');
+      writeFileSync(path, 'package/LICENSE\npackage/dist/public-entry.js\n');
+      expect([...readReviewedMembers(path)]).toEqual([
+        'package/LICENSE',
+        'package/dist/public-entry.js',
+      ]);
+      writeFileSync(path, 'package/dist/public-entry.js\npackage/LICENSE\n');
+      expect(() => readReviewedMembers(path)).toThrow('sorted paths');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

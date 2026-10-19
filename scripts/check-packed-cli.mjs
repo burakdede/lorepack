@@ -33,9 +33,11 @@ import { delimiter, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BANNED_PACKAGES } from './check-no-native.mjs';
 import { packCli, runTool } from './pack-cli.mjs';
+import { compareMembers, listTarMembers, readReviewedMembers } from './packed-cli-members.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const PDF_FIXTURE = join(ROOT, 'benchmarks', 'corpus', 'generated', 'release-notes.pdf');
+const REVIEWED_MEMBERS = join(ROOT, 'scripts', 'packed-cli-members.txt');
 
 /**
  * Every installed package under `nodeModules`, as `name@version`, plus anything native.
@@ -675,7 +677,24 @@ async function main() {
     if (spec === undefined && tarball === undefined) {
       tarball = packCli({ outDir: join(work, 'pack') });
       console.log(`packed ${tarball}`);
+    } else if (spec !== undefined) {
+      const destination = join(work, 'pack');
+      mkdirSync(destination);
+      const packed = runTool(
+        'npm',
+        ['pack', spec, '--ignore-scripts', '--json', '--pack-destination', destination],
+        ROOT,
+      );
+      const report = JSON.parse(packed.stdout);
+      const entry = Array.isArray(report) ? report[0] : Object.values(report)[0];
+      tarball = join(destination, entry.filename);
     }
+
+    const listed = listTarMembers(resolve(tarball));
+    const expected = readReviewedMembers(REVIEWED_MEMBERS);
+    problems.push(...listed.problems, ...compareMembers(expected, listed.members));
+    if (problems.length > 0) throw new Error(problems.join('\n'));
+    console.log(`packed tarball matches the reviewed ${expected.size}-member allow-list`);
 
     const installDir = join(work, 'install');
     mkdirSync(installDir);
@@ -685,7 +704,7 @@ async function main() {
     );
     runTool(
       'npm',
-      ['install', '--ignore-scripts', '--no-audit', '--no-fund', spec ?? resolve(tarball)],
+      ['install', '--ignore-scripts', '--no-audit', '--no-fund', resolve(tarball)],
       installDir,
     );
 
@@ -802,9 +821,7 @@ async function main() {
       console.log('npm audit --omit=dev: 0 vulnerabilities');
     }
 
-    const source =
-      spec ??
-      `${resolve(tarball)} (sha256 ${createHash('sha256').update(readFileSync(tarball)).digest('hex')})`;
+    const source = `${spec ?? resolve(tarball)} (sha256 ${createHash('sha256').update(readFileSync(tarball)).digest('hex')})`;
     problems.push(...checkInstalledTypes(installDir, source));
   } finally {
     rmSync(work, { recursive: true, force: true });

@@ -29,6 +29,15 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
+const BUNDLED_JS = new Set([
+  'archive-verify-child.js',
+  'build_worker.js',
+  'parse-child.js',
+  'public-entry.js',
+  'public-index.js',
+  'query-child.js',
+  'verify_bridge.js',
+]);
 
 function closePublicTypes(root, stage) {
   const context = join(stage, 'dist', 'framework', 'context.d.ts');
@@ -50,6 +59,27 @@ function closePublicTypes(root, stage) {
     context,
     declaration.replace(importCore, "import { ProgressBus } from './progress-events.js';"),
   );
+}
+
+function trimPackedDist(stage) {
+  const dist = join(stage, 'dist');
+  const visit = (directory, prefix = '') => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(full, relative);
+      } else if (
+        entry.name.endsWith('.map') ||
+        entry.name.endsWith('.tsbuildinfo') ||
+        (entry.name.endsWith('.js') &&
+          !(BUNDLED_JS.has(relative) || /^chunk-[A-Z0-9]{8}\.js$/.test(relative)))
+      ) {
+        rmSync(full);
+      }
+    }
+  };
+  visit(dist);
 }
 
 /** Runs a package-manager command, through the shell only where Windows needs a `.cmd` shim. */
@@ -136,6 +166,7 @@ export function packCli({ outDir, root = ROOT }) {
     );
 
     closePublicTypes(root, stage);
+    trimPackedDist(stage);
 
     const manifestPath = join(stage, 'package.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
