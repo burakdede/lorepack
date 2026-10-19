@@ -19,17 +19,18 @@ on:
         required: true
         default: false
         type: boolean
-      coverage_only:
-        description: Run only the original Linux all-nine coverage qualification
+      qualification:
+        description: Select the manual qualification workload
         required: false
-        default: false
-        type: boolean
+        default: benchmark
+        type: choice
+        options: [benchmark, coverage, windows-observer]
 
 permissions:
   contents: read
 
 concurrency:
-  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.coverage_only && 'coverage' || inputs.profile || 'small' }}
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.qualification == 'coverage' && 'coverage' || inputs.qualification == 'windows-observer' && 'windows-observer' || inputs.profile || 'small' }}
   cancel-in-progress: true
 
 env:
@@ -38,7 +39,7 @@ env:
 
 jobs:
   benchmark:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.coverage_only != true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.qualification || 'benchmark') == 'benchmark' }}
     name: benchmark (${{ matrix.os }}, ${{ github.event_name == 'pull_request' && 'small' || inputs.profile || 'medium' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -101,7 +102,7 @@ jobs:
 
   summary:
     name: benchmark summary
-    if: ${{ needs.benchmark.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.coverage_only != true) }}
+    if: ${{ needs.benchmark.result == 'success' && (github.event_name != 'workflow_dispatch' || (inputs.qualification || 'benchmark') == 'benchmark') }}
     needs: benchmark
     runs-on: ubuntu-latest
     steps:
@@ -145,7 +146,7 @@ jobs:
 
   hosted-rag:
     name: hosted RAG smoke
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.hosted == true && inputs.coverage_only != true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.hosted == true && (inputs.qualification || 'benchmark') == 'benchmark' }}
     environment: benchmark-hosted
     runs-on: ubuntu-latest
     steps:
@@ -182,7 +183,7 @@ jobs:
 
   coverage:
     name: original all-nine coverage (ubuntu-latest)
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.coverage_only == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification == 'coverage' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -288,6 +289,99 @@ jobs:
           path: |
             ${{ runner.temp }}/lorepack-nine/
             ${{ runner.temp }}/lorepack-nine-hash-check.log
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-observer:
+    name: Windows observer diagnostic case
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification == 'windows-observer' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      LOREPACK_OBSERVER_DIAGNOSTIC: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.18.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Record the exact diagnostic source and runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          $head = (& git rev-parse HEAD).Trim()
+          $tree = (& git rev-parse 'HEAD^{tree}').Trim()
+          $status = (& git status --porcelain | Out-String).Trim()
+          $node = (& node --version).Trim()
+          $pnpm = (& pnpm --version).Trim()
+          @{
+            head = $head; tree = $tree; status = $status
+            node = $node; pnpm = $pnpm; cwd = $PWD.Path
+            workflowRef = $env:GITHUB_WORKFLOW_REF; workflowSha = $env:GITHUB_WORKFLOW_SHA
+            requestedRef = $env:GITHUB_REF; eventSha = $env:GITHUB_SHA
+            run = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT
+            platform = $env:RUNNER_OS; observerDiagnostic = $env:LOREPACK_OBSERVER_DIAGNOSTIC
+          } | ConvertTo-Json | Set-Content (Join-Path $evidence 'identity.json')
+          if ($status -or $head -ne $env:GITHUB_SHA -or $node -ne 'v24.21.0' -or $pnpm -ne '11.18.0') {
+            throw 'Diagnostic source or pinned runtime differs'
+          }
+      - name: Install the frozen dependencies
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          & pnpm install --frozen-lockfile 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'install.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'install.exit.txt') $code
+          exit $code
+      - name: Build the actual diagnostic candidate
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          & pnpm build 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'build.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'build.exit.txt') $code
+          exit $code
+      - name: Run only the existing large-result pipe acceptance case
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'acceptance.json'
+          & pnpm exec vitest run --root tools/acceptance -t output/a-large-result-survives-a-pipe --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'acceptance.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'acceptance.exit.txt') $code
+          exit $code
+      - name: Retain the final source state and artifact hashes
+        if: always()
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          if (Test-Path $evidence) {
+            & git rev-parse HEAD | Set-Content (Join-Path $evidence 'head.after.txt')
+            & git status --porcelain | Set-Content (Join-Path $evidence 'status.after.txt')
+            $hashes = @(Get-ChildItem -Path $evidence -File |
+              Where-Object Name -ne 'hashes.json' | Get-FileHash -Algorithm SHA256 |
+              Select-Object Path, Hash)
+            $hashes | ConvertTo-Json | Set-Content (Join-Path $evidence 'hashes.json')
+          }
+      - name: Upload the Windows observer evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lorepack-windows-observer/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
