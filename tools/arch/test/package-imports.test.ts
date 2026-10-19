@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { join, relative } from 'node:path';
@@ -104,6 +105,57 @@ await captureCompiledBuild(bundleCli,{root:process.argv[1],output:process.argv[2
           entry.path.includes('.bundle-inventory-'),
         ),
       ).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('emits identical bundle bytes from root and package working directories', () => {
+    const directory = mkdtempSync(join(REPO_ROOT, 'packages/cli/dist/.bundle-cwd-'));
+    const snapshot = (folder: string): Record<string, string> => {
+      const files: Record<string, string> = {};
+      for (const entry of readdirSync(folder, { withFileTypes: true })) {
+        const file = join(folder, entry.name);
+        if (entry.isDirectory()) Object.assign(files, snapshot(file));
+        else
+          files[relative(directory, file)] = createHash('sha256')
+            .update(readFileSync(file))
+            .digest('hex');
+      }
+      return files;
+    };
+    const bundle = (cwd: string): void => {
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `
+import {pathToFileURL} from 'node:url';
+const {captureCompiledBuild}=await import(pathToFileURL(process.argv[1]+'/scripts/coverage_instrumented.mjs').href);
+const {bundleCli}=await import(pathToFileURL(process.argv[1]+'/scripts/bundle-cli.mjs').href);
+await captureCompiledBuild(bundleCli,{root:process.argv[1],output:process.argv[2]},process.argv[2]);
+`,
+          REPO_ROOT,
+          directory,
+        ],
+        { cwd, encoding: 'utf8', stdio: 'pipe' },
+      );
+    };
+    try {
+      bundle(REPO_ROOT);
+      const ordinary = snapshot(directory);
+      expect(Object.keys(ordinary)).toEqual(
+        expect.arrayContaining([
+          'public-entry.js',
+          'public-entry.js.map',
+          'parse-child.js',
+          'linux_resident_reader_worker.js',
+        ]),
+      );
+      rmSync(directory, { recursive: true, force: true });
+      bundle(join(REPO_ROOT, 'packages/cli'));
+      expect(snapshot(directory)).toEqual(ordinary);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
