@@ -10,6 +10,7 @@ vi.mock('node:child_process', async (original) => ({
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.mocked(spawn).mockReset();
@@ -46,7 +47,7 @@ it('retains a bounded diagnostic when an alive Windows reader stops reporting', 
   const monitor = monitorResidentMemory(parser, 1024);
   try {
     const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4];
-    expect(command).toContain('[Console]::Out.WriteLine($p.WorkingSet64)');
+    expect(command).toContain('[Console]::Out.WriteLine($rss)');
     expect(command).toContain('[Threading.Thread]::Sleep(100)');
     for (let report = 1; report <= 5; report++) {
       stdout.write('81219584\n');
@@ -106,13 +107,119 @@ it('retains a bounded diagnostic when an alive Windows reader stops reporting', 
   }
 }, 10000);
 
+it('records a fail-closed startup trace at the original Windows deadline', async () => {
+  vi.useFakeTimers();
+  const { parser, reader, stderr } = windowsObserver({
+    SystemRoot: 'C:\\Windows',
+    LOREPACK_OBSERVER_DIAGNOSTIC: '1',
+  });
+  const diagnosticLines: string[] = [];
+  vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    diagnosticLines.push(String(chunk));
+    return true;
+  });
+  const monitor = monitorResidentMemory(parser, 1024);
+  const ready = monitor.ready.catch((error: unknown) => error);
+  try {
+    const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4] ?? '';
+    const milestones = [
+      'LPS:entry:',
+      '::GetProcessById(',
+      '$p.Refresh()',
+      'LPS:refresh:',
+      '$rss=$p.WorkingSet64',
+      'LPS:rss:',
+      'LPS:before-write:',
+      '[Console]::Out.WriteLine($rss)',
+      '[Threading.Thread]::Sleep(100)',
+    ];
+    let previous = -1;
+    for (const milestone of milestones) {
+      const position = command.indexOf(milestone);
+      expect(position).toBeGreaterThan(previous);
+      previous = position;
+    }
+    reader.emit('spawn');
+    stderr.write('LPS:entry:0\nLPS:refresh:1\n');
+    vi.advanceTimersByTime(4999);
+    expect(monitor.state.error).toBeNull();
+    expect(parser.kill).not.toHaveBeenCalled();
+    expect(reader.kill).not.toHaveBeenCalled();
+    expect(diagnosticLines).toEqual([]);
+    vi.advanceTimersByTime(1);
+    vi.runOnlyPendingTimers();
+    expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
+    expect(monitor.state.bytes).toBeNull();
+    expect(monitor.state.exceeded).toBe(false);
+    expect(parser.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
+    const cause = monitor.state.error?.cause as Error;
+    const snapshot = () =>
+      JSON.parse(cause.message.split('Observer trace: ')[1] ?? '') as {
+        readerCloseObserved: boolean;
+        events: Array<Record<string, unknown>>;
+      };
+    expect(snapshot().events.map((event) => event.kind)).toEqual([
+      'startup-arm',
+      'spawn',
+      'script',
+      'script',
+      'startup-fire',
+      'startup-check',
+    ]);
+    expect(snapshot().readerCloseObserved).toBe(false);
+    expect(diagnosticLines).toEqual([]);
+    for (let index = 0; index < 24; index++) stderr.write(`LPS:rss:${String(index)}\n`);
+    stderr.write('LPS:arbitrary-secret:1\nLPS:entry:credential-secret\n');
+    stderr.write('sensitive-path:docs/runbook.md\n');
+    reader.emit('close', 1, null);
+    const final = snapshot();
+    expect(final.readerCloseObserved).toBe(true);
+    expect(final.events).toHaveLength(16);
+    expect(final.events).toContainEqual(
+      expect.objectContaining({ kind: 'script', phase: 'rss', readerMs: 23 }),
+    );
+    expect(final.events.at(-1)).toMatchObject({ kind: 'close', exitCode: 1, signal: 'none' });
+    expect(diagnosticLines).toHaveLength(1);
+    expect(Buffer.byteLength(diagnosticLines[0] ?? '')).toBeLessThanOrEqual(4097);
+    for (const secret of ['arbitrary-secret', 'credential-secret', 'docs/runbook.md']) {
+      expect(JSON.stringify(final)).not.toContain(secret);
+      expect(diagnosticLines[0]).not.toContain(secret);
+    }
+  } finally {
+    monitor.stop();
+  }
+});
+
+it('keeps startup instrumentation out of an observer without the opt-in', async () => {
+  const { parser, reader, stdout } = windowsObserver({ SystemRoot: 'C:\\Windows' });
+  const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const monitor = monitorResidentMemory(parser, 1024);
+  try {
+    const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4];
+    expect(command).not.toContain('LPS:');
+    expect(command).not.toContain('LPR:');
+    expect(command).toContain('[Console]::Out.WriteLine($p.WorkingSet64)');
+    stdout.write('4096\n');
+    await monitor.ready;
+    monitor.stop();
+    reader.emit('close', 0, null);
+    expect(monitor.state.error).toBeNull();
+    expect(output).not.toHaveBeenCalled();
+  } finally {
+    monitor.stop();
+  }
+});
+
 it('does not emit a diagnostic after a successful Windows observer stop', async () => {
-  const { parser, reader, stdout } = windowsObserver({
+  const { parser, reader, stdout, stderr } = windowsObserver({
     SystemRoot: 'C:\\Windows',
     LOREPACK_OBSERVER_DIAGNOSTIC: '1',
   });
   const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   const monitor = monitorResidentMemory(parser, 1024);
+  reader.emit('spawn');
+  stderr.write('LPS:entry:0\nLPS:refresh:1\nLPS:rss:2\nLPS:before-write:3\n');
   stdout.write('4096\n');
   await monitor.ready;
   monitor.stop();

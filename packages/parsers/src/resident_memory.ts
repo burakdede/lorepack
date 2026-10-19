@@ -83,11 +83,17 @@ export async function readLinuxResidentMemory(pid: number): Promise<number | nul
   return Number(match[1]) * 1024;
 }
 
-export function createStartupWatchdog(expired: () => void) {
+export function createStartupWatchdog(
+  expired: () => void,
+  observe?: (phase: 'arm' | 'fire' | 'check') => void,
+) {
   let stopped = false;
   let pending: ReturnType<typeof setImmediate> | undefined;
+  observe?.('arm');
   const timer = setTimeout(() => {
+    observe?.('fire');
     pending = setImmediate(() => {
+      observe?.('check');
       if (!stopped) expired();
     });
   }, 5000);
@@ -249,30 +255,41 @@ export function monitorResidentMemory(
       return { ready, state, stop };
     }
     const command =
-      `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${pid}); ` +
-      (diagnostic ? '$n=1; $clock=[Diagnostics.Stopwatch]::StartNew(); ' : '') +
-      `while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); ` +
+      `$ErrorActionPreference='Stop'; ` +
       (diagnostic
-        ? `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); $n++; `
+        ? `$n=1; $clock=[Diagnostics.Stopwatch]::StartNew(); ` +
+          `[Console]::Error.WriteLine('LPS:entry:'+$clock.ElapsedMilliseconds); `
         : '') +
+      `$p=[System.Diagnostics.Process]::GetProcessById(${pid}); while($true) { $p.Refresh(); ` +
+      (diagnostic
+        ? `if($n -eq 1) { [Console]::Error.WriteLine('LPS:refresh:'+$clock.ElapsedMilliseconds); } ` +
+          `$rss=$p.WorkingSet64; if($n -eq 1) { ` +
+          `[Console]::Error.WriteLine('LPS:rss:'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPS:before-write:'+$clock.ElapsedMilliseconds); } ` +
+          `[Console]::Out.WriteLine($rss); ` +
+          `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); $n++; `
+        : '[Console]::Out.WriteLine($p.WorkingSet64); ') +
       `[Threading.Thread]::Sleep(${INTERVAL_MS}) }`;
     const startedAt = performance.now();
     let pending = '';
     let stderr = '';
     let diagnosticPending = '';
     let reports = 0;
-    startup = createStartupWatchdog(() =>
-      fail(
-        new Error(
-          `The process memory observer did not become ready: ${Math.round(performance.now() - startedAt)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}`,
+    startup = createStartupWatchdog(
+      () =>
+        fail(
+          new Error(
+            `The process memory observer did not become ready: ${Math.round(performance.now() - startedAt)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}`,
+          ),
         ),
-      ),
+      diagnostic ? (phase) => record({ kind: `startup-${phase}` }) : undefined,
     );
     reader = spawn(
       win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
       { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
     );
+    if (diagnostic) reader.once('spawn', () => record({ kind: 'spawn' }));
     reader.stdout?.setEncoding('utf8');
     reader.stderr?.setEncoding('utf8');
     reader.stdout?.on('data', (chunk: string) => {
@@ -309,6 +326,14 @@ export function monitorResidentMemory(
         const match = /^LPR:(\d{1,10}):(\d{1,15})$/.exec(line);
         if (match !== null) {
           record({ kind: 'emission', reports: Number(match[1]), readerMs: Number(match[2]) });
+        }
+        const startupMatch = /^LPS:(entry|refresh|rss|before-write):(\d{1,15})$/.exec(line);
+        if (startupMatch !== null) {
+          record({
+            kind: 'script',
+            phase: startupMatch[1] as string,
+            readerMs: Number(startupMatch[2]),
+          });
         }
         newline = diagnosticPending.indexOf('\n');
       }

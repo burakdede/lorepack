@@ -25,6 +25,7 @@ const { parse, stringify } = createRequire(join(REPO_ROOT, 'packages', 'cli', 'p
 
 interface Step {
   name?: string;
+  env?: Record<string, string>;
   uses?: string;
   run?: string;
   with?: Record<string, unknown>;
@@ -42,6 +43,7 @@ interface Job {
   steps?: Step[];
 }
 interface Workflow {
+  env?: Record<string, string>;
   permissions?: Record<string, string>;
   jobs: Record<string, Job>;
 }
@@ -164,6 +166,32 @@ describe('the rules catch', () => {
     );
     expect(topLevelPermissionProblems('ci.yml', 'on: push\njobs: {}\n')).toEqual([
       'ci.yml must declare a read-only top-level permissions block',
+    ]);
+  });
+});
+
+describe('the benchmark observer diagnostic', () => {
+  it('opts in only the Windows measurement step without changing its commands', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const job = benchmark.jobs.benchmark;
+    const step = job?.steps?.find((entry) =>
+      entry.run?.includes('node scripts/bench-retrieval-comparison.mjs'),
+    );
+    expect(step).toBeDefined();
+    expect(step?.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe(
+      '$' + "{{ runner.os == 'Windows' && '1' || '0' }}",
+    );
+    expect(benchmark.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBeUndefined();
+    expect(job?.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBeUndefined();
+    expect(job?.steps?.filter((entry) => entry.env?.LOREPACK_OBSERVER_DIAGNOSTIC)).toEqual([step]);
+    const runnerOs = '$' + '{RUNNER_OS}';
+    expect(step?.run?.trim().split('\n')).toEqual([
+      'set -euo pipefail',
+      'mkdir -p benchmark-artifacts',
+      `node scripts/bench-retrieval-comparison.mjs --out "benchmark-artifacts/comparison-${runnerOs}.json"`,
+      `node scripts/bench-rag.mjs --out "benchmark-artifacts/rag-${runnerOs}.json"`,
+      `node scripts/bench-usefulness.mjs --out "benchmark-artifacts/usefulness-${runnerOs}.json"`,
+      `node scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${runnerOs}.json"`,
     ]);
   });
 });
