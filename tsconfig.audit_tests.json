@@ -57,6 +57,7 @@
     "packages/parsers/test/linux_resident_memory.test.ts",
     "packages/parsers/test/mac_resident_memory.test.ts",
     "packages/parsers/test/pdf.test.ts",
+    "packages/parsers/test/posix_resident_memory.test.ts",
     "packages/parsers/test/resident_memory.test.ts",
     "packages/parsers/test/windows_resident_memory.test.ts",
     "packages/parsers/test/xlsx.test.ts",
