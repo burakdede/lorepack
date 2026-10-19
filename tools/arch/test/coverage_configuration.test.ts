@@ -238,6 +238,29 @@ test('owns the shared resource',async()=>{
       assertCollectionParity([...collection, ...collection], [...collection, ...collection]),
     ).toThrow('collection differs');
   });
+
+  it('compares real directory aliases without merging different files or projects', () => {
+    const original = join(root, configPath);
+    const alias = join(root, 'package-alias');
+    symlinkSync(realpathSync.native(join(root, 'packages')), alias, 'junction');
+    const throughAlias = join(alias, 'core', 'vitest.config.ts');
+    expect(realpathSync.native(throughAlias)).toBe(realpathSync.native(original));
+    const ordinary = [{ file: original, projectName: 'core' }];
+    const measured = [{ file: throughAlias, projectName: 'core' }];
+    expect(assertCollectionParity(ordinary, measured)).toEqual({ files: 1, status: 'Pass' });
+    expect(() =>
+      assertCollectionParity(ordinary, [{ file: throughAlias, projectName: 'renamed' }]),
+    ).toThrow('collection differs');
+    put('packages/parsers/vitest.config.ts', configCode);
+    expect(() =>
+      assertCollectionParity(ordinary, [
+        { file: join(root, 'packages/parsers/vitest.config.ts'), projectName: 'core' },
+      ]),
+    ).toThrow('collection differs');
+    expect(() =>
+      assertCollectionParity([...ordinary, ...measured], [...ordinary, ...measured]),
+    ).toThrow('collection differs');
+  });
 });
 
 describe('source-bound transformation preparation', () => {

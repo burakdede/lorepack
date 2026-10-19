@@ -106,7 +106,7 @@ export function renderCoverageConfig(config, preparation) {
 }
 
 export function assertCollectionParity(ordinary, measured) {
-  const identity = (entry) => `${entry.projectName}\0${realpathSync(entry.file)}`;
+  const identity = (entry) => `${entry.projectName}\0${realpathSync.native(entry.file)}`;
   const before = ordinary.map(identity).sort();
   const after = measured.map(identity).sort();
   const missing = before.filter((entry) => !after.includes(entry));
