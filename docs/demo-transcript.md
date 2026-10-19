@@ -56,7 +56,7 @@ Discovering     4                               done
 Fingerprinting  0/4 <elapsed>ms
 Fingerprinting  4/4 files                       done
 Parsing         0/4 <elapsed>ms
-Parsing         4/4                             done
+Parsing         4/4 documents                   done
 Indexing        0 <elapsed>ms
 Indexing        6                               done
 Validating      0 <elapsed>ms
@@ -120,7 +120,7 @@ Discovering     4                               done
 Fingerprinting  0/4 <elapsed>ms
 Fingerprinting  4/4 files                       done
 Parsing         0/4 <elapsed>ms
-Parsing         4/4                             done
+Parsing         4/4 documents                   done
 Indexing        0 <elapsed>ms
 Indexing        7                               done
 Validating      0 <elapsed>ms
@@ -219,7 +219,7 @@ Discovering     3                               done
 Fingerprinting  0/3 <elapsed>ms
 Fingerprinting  3/3 files                       done
 Parsing         0/3 <elapsed>ms
-Parsing         3/3                             done
+Parsing         3/3 documents                   done
 Indexing        0 <elapsed>ms
 Indexing        5                               done
 Validating      0 <elapsed>ms
