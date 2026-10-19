@@ -180,6 +180,18 @@ describe('structural release policy, issue618', () => {
 });
 
 describe('structural verify parity, issue618', () => {
+  it.each(['typecheck:audit', 'coverage:inventory'])('rejects an omitted %s CI step', (command) => {
+    mutate('ci.yml', (workflow) => {
+      const steps = job(workflow, 'verify').steps;
+      const index = steps.findIndex((step) => step.run === `pnpm ${command}`);
+      if (index < 0) throw new Error(`${command} CI fixture missing`);
+      steps.splice(index, 1);
+    });
+    const result = run('check-verify-parity.mjs');
+    expect(result.status, result.stdout).toBe(1);
+    expect(result.stderr).toContain(`${command} is in`);
+  });
+
   it('accepts an unconditional block scalar containing the exact command', () => {
     mutate('ci.yml', (workflow) => {
       security(workflow).run = 'pnpm test:security\n';

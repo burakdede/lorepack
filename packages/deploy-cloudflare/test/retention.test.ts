@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   type ProjectionMigrationDatabaseLike,
@@ -17,7 +17,7 @@ import {
 class SqliteStatement implements ProjectionMigrationStatementLike {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -25,6 +25,7 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
   }
 
   bind(...values: unknown[]): SqliteStatement {
+    if (!values.every(isSqlInputValue)) throw new TypeError('Unsupported SQLite bind value');
     this.#bindings = values;
     return this;
   }
@@ -33,14 +34,24 @@ class SqliteStatement implements ProjectionMigrationStatementLike {
     const statement = this.#db.prepare(this.#query);
     const trimmed = this.#query.trim().toLowerCase();
     if (trimmed.startsWith('select') || trimmed.startsWith('pragma')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     if (/\breturning\b/i.test(this.#query)) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
   }
+}
+
+function isSqlInputValue(value: unknown): value is SQLInputValue {
+  return (
+    value === null ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'string' ||
+    ArrayBuffer.isView(value)
+  );
 }
 
 class SqliteProjectionDatabase implements ProjectionMigrationDatabaseLike {
