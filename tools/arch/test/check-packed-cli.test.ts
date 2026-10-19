@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -14,9 +15,7 @@ import {
 } from '../../../scripts/packed-cli-members.mjs';
 
 /**
- * The pure halves of `check:packed-cli`: reading an npm-installed tree and comparing it to the
- * tested lockfile. The npm install itself runs in the `packed install` CI job, because it needs
- * the network.
+ * The npm install itself runs in the `packed install` CI job, because it needs the network.
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
@@ -198,5 +197,105 @@ describe('packed CLI member allow-list', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('packed CLI member proposal command', () => {
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+
+  function fixture() {
+    const root = mkdtempSync(join(tmpdir(), 'lore-member-proposal-'));
+    roots.push(root);
+    mkdirSync(join(root, 'package'));
+    writeFileSync(join(root, 'package', 'z.txt'), 'last');
+    writeFileSync(join(root, 'package', 'a.txt'), 'first');
+    const tarball = join(root, 'fixture.tgz');
+    const output = join(root, 'proposal.txt');
+    const packed = spawnSync(
+      'tar',
+      ['-czf', tarball, '-C', root, 'package/z.txt', 'package/a.txt'],
+      { encoding: 'utf8', timeout: 10_000 },
+    );
+    expect(packed.error).toBeUndefined();
+    expect(packed.signal).toBeNull();
+    expect(packed.status, packed.stderr).toBe(0);
+    return { root, tarball, output };
+  }
+
+  function propose(root: string, args: string[]) {
+    return spawnSync(
+      process.execPath,
+      [join(REPO_ROOT, 'scripts', 'propose-packed-cli-members.mjs'), ...args],
+      { cwd: root, encoding: 'utf8', timeout: 10_000, maxBuffer: 64 * 1024 },
+    );
+  }
+
+  it('writes sorted full paths with one final LF from a real tarball', () => {
+    const { root, tarball, output } = fixture();
+    const result = propose(root, ['--tarball', tarball, '--out', output]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe('wrote 2 proposed member paths for review\n');
+    expect(readFileSync(output)).toEqual(Buffer.from('package/a.txt\npackage/z.txt\n'));
+  });
+
+  it('refuses to replace an existing proposal and preserves its bytes', () => {
+    const { root, tarball, output } = fixture();
+    const args = ['--tarball', tarball, '--out', output];
+    const initial = propose(root, args);
+    expect(initial.error).toBeUndefined();
+    expect(initial.signal).toBeNull();
+    expect(initial.status, initial.stderr).toBe(0);
+    const before = readFileSync(output);
+    const result = propose(root, args);
+
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('EEXIST');
+    expect(readFileSync(output)).toEqual(before);
+  });
+
+  it.each(['missing output flag', 'reordered flags'])(
+    'rejects %s without creating a proposal',
+    (variant) => {
+      const { root, tarball, output } = fixture();
+      const args =
+        variant === 'missing output flag'
+          ? ['--tarball', tarball]
+          : ['--out', output, '--tarball', tarball];
+      const result = propose(root, args);
+
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toBe(
+        'usage: propose-packed-cli-members.mjs --tarball <tgz> --out <new file>\n',
+      );
+      expect(existsSync(output)).toBe(false);
+    },
+  );
+
+  it('rejects an invalid tarball without creating a proposal', () => {
+    const { root, output } = fixture();
+    const invalid = join(root, 'invalid.tgz');
+    writeFileSync(invalid, 'not a gzip tarball\n');
+    const result = propose(root, ['--tarball', invalid, '--out', output]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.signal).toBeNull();
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('tar -tzf');
+    expect(result.stderr).toContain('failed (exit ');
+    expect(existsSync(output)).toBe(false);
   });
 });
