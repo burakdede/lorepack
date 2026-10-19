@@ -433,7 +433,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
         }
       } finally {
-        host.close();
+        await host.closeAndWait();
       }
       progress.finish('parsing', handled);
 

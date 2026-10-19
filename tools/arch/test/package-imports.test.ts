@@ -62,6 +62,7 @@ await import(pathToFileURL(entry).href);
         ],
         { cwd: REPO_ROOT, encoding: 'utf8' },
       );
+      expect(existsSync(join(directory, 'linux_resident_reader_worker.js'))).toBe(true);
       expect(output).toContain('pack');
       expect(output).toContain('serve');
       expect(output).toContain('mcp');
@@ -234,6 +235,7 @@ function publishedJavaScriptFiles(packageDir: string, packageName: string | unde
       'public-index.js',
       'query-child.js',
       'parse-child.js',
+      'linux_resident_reader_worker.js',
       'archive-verify-child.js',
       'build_worker.js',
       'verify_bridge.js',

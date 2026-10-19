@@ -169,8 +169,15 @@ link and a remote image. It asserts the build succeeds and that nothing reached 
 There are two layers (#616).
 
 **The permission sandbox, on every platform.** The build runs under Node's permission model with
-read access, write access to the project only, and no `--allow-worker`, `--allow-addons` or
-`--allow-wasi`, so Node refuses a worker thread outright. It does grant `--allow-child-process`,
+read access, write access to the project only, and no addon or WASI grant. On Linux,
+the monitor admits only the exact shipped RSS reader URL, expected options and live
+owned parser PID with matching bounded birth-identity data. The sampler receives
+explicit read permission alone; its preloaded
+proof checks that writes, children, workers, addons and WASI remain denied. Its
+monitor also refuses signals. Node worker permissions do not inherit automatically.
+Every other worker is reported and refused before construction, including nested
+workers in the actual parser and sampler. Other platforms retain the parent worker
+denial. The build does grant `--allow-child-process`,
 because every parse runs in a forked `parse-child.js` (#594), so the monitor does the refusing
 for processes: it lets that one fork through only while the child is itself under the
 permission model with no write, process or worker grant, and reports and refuses every other
