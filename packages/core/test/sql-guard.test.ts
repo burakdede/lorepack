@@ -78,6 +78,54 @@ describe('names of other objects', () => {
   });
 });
 
+describe('reserved names and physical-name boundaries in data tokens', () => {
+  it.each(['local', 'remote'] as const)('refuses reserved object literals for %s', (profile) => {
+    for (const name of ['dbstat', 'main', 'temp', 'temporary']) {
+      const sql = `SELECT '${name}' AS label FROM ${TABLE}`;
+      expect(() => guard(sql, profile, { schemaNames: [TABLE] }), sql).toThrow(
+        expect.objectContaining(REFUSED),
+      );
+    }
+  });
+
+  it.each(['local', 'remote'] as const)(
+    'refuses physical object literals absent from the schema snapshot for %s',
+    (profile) => {
+      for (const name of [
+        'later_0123456789abcdef',
+        't_0123456789ab',
+        't_long_slug_0123456789ab',
+        't_long_0123456789ab',
+      ]) {
+        const sql = `SELECT '${name}' AS label FROM ${TABLE}`;
+        expect(() => guard(sql, profile, { schemaNames: [TABLE] }), sql).toThrow(
+          expect.objectContaining(REFUSED),
+        );
+      }
+    },
+  );
+
+  it.each(['local', 'remote'] as const)(
+    'retains ordinary literals next to the reserved name shapes for %s',
+    (profile) => {
+      for (const value of [
+        'mainland',
+        'temporary_note',
+        'memo_0123456789abcdef_tail',
+        'memo_f',
+        'memo_gggggggggggggggg',
+        'prefix-t_0123456789ab',
+        't_0123456789ab-tail',
+        't_f',
+        't_gggggggggggg',
+      ]) {
+        const sql = `SELECT '${value}' AS label FROM ${TABLE}`;
+        expect(guard(sql, profile, { schemaNames: [TABLE] }), sql).toBe(sql);
+      }
+    },
+  );
+});
+
 describe('row sources', () => {
   it.each([
     // A name never declared, in a row-source position.
