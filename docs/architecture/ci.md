@@ -220,3 +220,34 @@ Local verification passed 29 policy cases and 185 architecture cases. The native
 Windows hook failure and pending exact-head qualification remain tracked in
 [issue #762](https://github.com/burakdede/lorepack/issues/762). No hook or test deadline,
 workload, scheduling, retry, skip, preload or coverage control was relaxed.
+
+## Manual Linux all-nine coverage
+
+The existing benchmark workflow also accepts `coverage_only=true` on a selected
+branch. This manual mode runs only the original Linux coverage campaign; normal
+push, pull-request, scheduled and benchmark dispatch runs keep their existing jobs.
+It requests no hosted environment or secrets. After freezing and publishing a
+reviewed clean candidate, dispatch its workflow version with:
+
+```bash
+gh workflow run benchmarks.yml --ref <reviewed-branch> \
+  -f coverage_only=true -f hosted=false -f profile=medium
+```
+
+The job checks out the event's exact commit, records its HEAD/tree, clean status,
+Node24.21.0/pnpm11.18.0 versions, tracked-source hashes and before/after built
+artifact hashes. It runs `pnpm coverage:capture --suite all` without a selection,
+deadline, worker or threshold override. Default, acceptance and security each
+retain configs/direct/children bundles from that single Linux candidate.
+Frozen345/49 and overall95/95/95/90 and critical98/98/95/95 targets remain enforced.
+Mac and Linux bundles are not combined.
+
+The `all-nine-linux-<run>-<attempt>` artifact retains raw combined output, real
+exit status, source archive/bundle, hash checks and all partial capture/native
+streams even after failure. Process snapshots and remaining campaign-group
+records are cleanup observations, not proof that detached descendants are absent.
+Review native execution/closure receipts before accepting cleanup. Missing bytes,
+upload/storage failure, remaining owned processes or an interrupted campaign
+block qualification. A dispatched run is not a passing gate: inspect all nine
+origins, suite receipts, rejection records and the final report. This provides
+coverage evidence only, separate from native CI, mutation and release gates.
