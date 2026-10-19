@@ -128,7 +128,7 @@ When a reviewed package change changes member paths, run
 Compare that new file with the checked-in allow-list and commit the accepted path changes.
 The checker never derives its expected paths from the candidate tarball. The pack step removes
 CLI-owned source maps, build information and unbundled JavaScript from the shipped stage;
-the seven runtime bundle entries, their chunks, migrations and public declaration closure stay.
+the eight runtime bundle entries, their chunks, migrations and public declaration closure stay.
 
 ## Provenance
 
