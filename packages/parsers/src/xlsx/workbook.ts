@@ -1,4 +1,8 @@
+import { LoreError } from '@lorepack/core';
 import type { Package } from './zip.js';
+
+export const MAX_SHARED_STRINGS = 1_000_000;
+export const MAX_CELL_TEXT_LENGTH = 32_767;
 
 /**
  * The parts of a workbook that are not the cells: sheet names, the date system, the shared
@@ -26,10 +30,10 @@ export interface WorkbookParts {
   readonly date1904: boolean;
 }
 
-export async function readWorkbookParts(pkg: Package): Promise<WorkbookParts> {
+export async function readWorkbookParts(pkg: Package, displayPath: string): Promise<WorkbookParts> {
   const [sheets, sharedStrings, styles] = [
-    await readSheets(pkg),
-    await readSharedStrings(pkg),
+    await readSheets(pkg, displayPath),
+    await readSharedStrings(pkg, displayPath),
     await readStyles(pkg),
   ];
   return {
@@ -48,7 +52,10 @@ export async function readWorkbookParts(pkg: Package): Promise<WorkbookParts> {
  * file numbers do not renumber and `sheet3.xml` can be the second sheet. Relationships are
  * the only mapping the format actually guarantees.
  */
-async function readSheets(pkg: Package): Promise<{ refs: SheetRef[]; date1904: boolean }> {
+async function readSheets(
+  pkg: Package,
+  displayPath: string,
+): Promise<{ refs: SheetRef[]; date1904: boolean }> {
   const relationships = new Map<string, string>();
   await pkg.readXml('xl/_rels/workbook.xml.rels', {
     open: (name, attributes) => {
@@ -84,10 +91,23 @@ async function readSheets(pkg: Package): Promise<{ refs: SheetRef[]; date1904: b
     .sort();
 
   const refs: SheetRef[] = [];
+  const usedParts = new Set<string>();
   for (const [index, sheet] of declared.entries()) {
     const viaRelationship = sheet.rid === undefined ? undefined : relationships.get(sheet.rid);
     const part = viaRelationship ?? fallback[index];
     if (part === undefined || !pkg.entries.has(part)) continue;
+    if (usedParts.has(part)) {
+      throw new LoreError(
+        'LORE_E_ENVELOPE_EXCEEDED',
+        `${displayPath} maps more than one sheet to worksheet part ${part}.`,
+        {
+          remediation: 'Open and re-save the workbook so each sheet has its own worksheet part.',
+          path: displayPath,
+          details: { limit: 'uniqueSheetParts' },
+        },
+      );
+    }
+    usedParts.add(part);
     refs.push({ name: sheet.name, part });
   }
   return { refs, date1904 };
@@ -107,7 +127,7 @@ function normalizeTarget(target: string): string {
  * entries here. A cell referencing an index past the end reads as empty rather than throwing,
  * because a damaged table should cost one cell and not the file.
  */
-async function readSharedStrings(pkg: Package): Promise<string[]> {
+async function readSharedStrings(pkg: Package, displayPath: string): Promise<string[]> {
   const strings: string[] = [];
   let depth = 0;
   let buffer = '';
@@ -116,6 +136,17 @@ async function readSharedStrings(pkg: Package): Promise<string[]> {
   await pkg.readXml('xl/sharedStrings.xml', {
     open: (name) => {
       if (name === 'si') {
+        if (strings.length >= MAX_SHARED_STRINGS) {
+          throw new LoreError(
+            'LORE_E_ENVELOPE_EXCEEDED',
+            `${displayPath} has more than ${String(MAX_SHARED_STRINGS)} shared strings.`,
+            {
+              remediation: 'Split the workbook or remove unused shared strings.',
+              path: displayPath,
+              details: { limit: 'sharedStrings' },
+            },
+          );
+        }
         depth = 1;
         buffer = '';
         return;
@@ -126,7 +157,20 @@ async function readSharedStrings(pkg: Package): Promise<string[]> {
       if (name === 't' && depth === 1) inText = true;
     },
     text: (value) => {
-      if (inText) buffer += value;
+      if (inText) {
+        if (buffer.length + value.length > MAX_CELL_TEXT_LENGTH) {
+          throw new LoreError(
+            'LORE_E_ENVELOPE_EXCEEDED',
+            `${displayPath} has shared cell text longer than ${String(MAX_CELL_TEXT_LENGTH)} characters.`,
+            {
+              remediation: 'Shorten the cell text or split it across cells.',
+              path: displayPath,
+              details: { limit: 'cellText' },
+            },
+          );
+        }
+        buffer += value;
+      }
     },
     close: (name) => {
       if (name === 't') inText = false;

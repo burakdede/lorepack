@@ -15,11 +15,11 @@ import { ColumnAccumulator, unifyCellTypes } from '../table/infer.js';
 import { cellReference } from './cells.js';
 import { detectRegion, rangeOf, rowValues } from './region.js';
 import { SHEET_LIMITS, type SheetRow, streamSheet } from './sheet.js';
-import { readWorkbookParts } from './workbook.js';
+import { MAX_CELL_TEXT_LENGTH, readWorkbookParts } from './workbook.js';
 import { openPackage } from './zip.js';
 
 export const XLSX_PARSER_ID = 'xlsx' as const;
-export const XLSX_PARSER_VERSION = '0.1.0' as const;
+export const XLSX_PARSER_VERSION = '0.1.3' as const;
 
 export const XLSX_LIMITS = {
   maxColumns: SHEET_LIMITS.maxColumns,
@@ -67,7 +67,7 @@ export const xlsxParser: ArtifactParser = {
     const sheetSummaries: { name: string; rows: number; note: string }[] = [];
 
     try {
-      const parts = await readWorkbookParts(pkg);
+      const parts = await readWorkbookParts(pkg, input.displayPath);
       if (parts.sheets.length > XLSX_LIMITS.maxSheets) {
         throw new LoreError(
           'LORE_E_ENVELOPE_EXCEEDED',
@@ -95,6 +95,26 @@ export const xlsxParser: ArtifactParser = {
         sheetSummaries.push({ name: sheet.name, rows: built.rows, note: built.note });
         if (built.table !== null) tables.push(built.table);
       }
+    } catch (cause) {
+      if (!(cause instanceof LoreError) || cause.code !== 'LORE_E_ENVELOPE_EXCEEDED') throw cause;
+      if (
+        cause.details?.limit !== 'uniqueSheetParts' &&
+        cause.details?.limit !== 'sharedStrings' &&
+        cause.details?.limit !== 'cellText' &&
+        cause.details?.limit !== 'decompressedPart' &&
+        cause.details?.limit !== 'decompressedTotal'
+      ) {
+        throw cause;
+      }
+      tables.length = 0;
+      sheetSummaries.length = 0;
+      warnings.length = 0;
+      warnings.push({
+        code: 'xlsx-over-budget',
+        loss: {},
+        message: `${cause.message} ${cause.remediation ?? 'Split the workbook and try again.'}`,
+        line: 1,
+      });
     } finally {
       pkg.close();
     }
@@ -218,6 +238,17 @@ async function readSheetTable(
     content = await streamSheet(pkg, sheet.part, context, input.displayPath, sheet.name, take);
   } catch (cause) {
     if (!(cause instanceof LoreError) || cause.code !== 'LORE_E_ENVELOPE_EXCEEDED') throw cause;
+    if (cause.details?.limit === 'cellText') {
+      const reason = `it has cell text longer than the ${String(MAX_CELL_TEXT_LENGTH)} character limit`;
+      warnings.push({
+        code: 'xlsx-over-budget',
+        loss: { sheet: sheet.name },
+        message: `Sheet ${sheet.name} was not imported as a table because ${reason}. Shorten the cell text or split it across cells.`,
+        line: 1,
+      });
+      return { table: null, rows: 0, note: reason };
+    }
+    if (cause.details?.limit !== 'rows') throw cause;
     const reason = `it has more than the ${count(XLSX_LIMITS.maxRows, 'row')} Lorepack imports`;
     warnings.push({
       code: 'xlsx-too-many-rows',

@@ -18,10 +18,10 @@ import yauzl, { type Entry, type ZipFile } from 'yauzl';
  * instead of at the point where it would have exhausted the process.
  */
 export const ZIP_LIMITS = {
-  /** Total decompressed bytes across every part read. 40x a 64 MB workbook. */
-  maxTotalBytes: 2_048 * 1024 * 1024,
+  /** Total decompressed bytes across every part read. */
+  maxTotalBytes: 256 * 1024 * 1024,
   /** One part. A sheet is the big one; the others are small by construction. */
-  maxPartBytes: 1_024 * 1024 * 1024,
+  maxPartBytes: 192 * 1024 * 1024,
   /** Parts opened. A real workbook has one per sheet plus a handful. */
   maxParts: 512,
 } as const;
@@ -241,6 +241,10 @@ function streamXml(
                 remediation:
                   'A file this small that decompresses this large is usually a zip bomb rather than a spreadsheet. If it is genuinely this big, split it.',
                 path: displayPath,
+                details: {
+                  limit:
+                    partBytes > ZIP_LIMITS.maxPartBytes ? 'decompressedPart' : 'decompressedTotal',
+                },
               },
             ),
           );

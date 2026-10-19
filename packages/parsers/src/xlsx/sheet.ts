@@ -1,5 +1,6 @@
 import { count, LoreError } from '@lorepack/core';
 import { type Cell, type DecodeContext, decodeCell, parseReference } from './cells.js';
+import { MAX_CELL_TEXT_LENGTH } from './workbook.js';
 import type { Package } from './zip.js';
 
 /**
@@ -74,6 +75,7 @@ export async function streamSheet(
                 remediation:
                   'Split the sheet, or filter it to the rows the project needs. Every row is imported into the build and served from it.',
                 path: displayPath,
+                details: { limit: 'rows' },
               },
             );
           }
@@ -107,9 +109,23 @@ export async function streamSheet(
     },
     text: (text) => {
       // Accumulated rather than assigned: a stream splits long text across events.
-      if (inValue) value += text;
-      else if (inFormula) formula += text;
-      else if (inInline) inline += text;
+      if (inValue || inFormula || inInline) {
+        const length = (inValue ? value : inFormula ? formula : inline).length;
+        if (length + text.length > MAX_CELL_TEXT_LENGTH) {
+          throw new LoreError(
+            'LORE_E_ENVELOPE_EXCEEDED',
+            `${displayPath}, sheet ${sheetName}, has cell text longer than ${String(MAX_CELL_TEXT_LENGTH)} characters.`,
+            {
+              remediation: 'Shorten the cell text or split it across cells.',
+              path: displayPath,
+              details: { limit: 'cellText' },
+            },
+          );
+        }
+        if (inValue) value += text;
+        else if (inFormula) formula += text;
+        else inline += text;
+      }
     },
     close: (name) => {
       switch (name) {
