@@ -166,9 +166,9 @@ describe('a workbook becomes typed tables', () => {
   it('rejects duplicate XML parts instead of selecting one by archive order', async () => {
     const duplicate = await withDuplicatePart(await makeXlsx(SIMPLE), 'xl/workbook.xml');
 
-    await expect(parseBytes(duplicate)).rejects.toMatchObject<Partial<LoreError>>({
+    await expect(parseBytes(duplicate)).rejects.toMatchObject({
       code: 'LORE_E_UNSUPPORTED_FORMAT',
-    });
+    } satisfies Partial<LoreError>);
   });
 
   it('reads a sheet into a table with its columns and rows', async () => {
@@ -546,10 +546,25 @@ describe('hardening', () => {
   it('warns once when two sheet names resolve to the same worksheet part', async () => {
     const bytes = await makeXlsx({
       sheets: [
-        { name: 'First', rows: row(1, [inlineString('A1', 'name')]) },
-        { name: 'Second', rows: row(1, [inlineString('A1', 'other')]) },
+        {
+          name: 'First',
+          rows: [row(1, [inlineString('A1', 'name')]), row(2, [inlineString('A2', 'Ada')])].join(
+            '',
+          ),
+        },
+        {
+          name: 'Second',
+          rows: [row(1, [inlineString('A1', 'name')]), row(2, [inlineString('A2', 'Bob')])].join(
+            '',
+          ),
+        },
       ],
     });
+    const control = await parseBytes(bytes);
+    expect(control.tables?.map((table) => [table.sheet, table.rows])).toEqual([
+      ['First', [['Ada']]],
+      ['Second', [['Bob']]],
+    ]);
     const parsed = await parseBytes(await withAliasedSheet(bytes));
 
     expect(parsed.tables).toBeUndefined();
