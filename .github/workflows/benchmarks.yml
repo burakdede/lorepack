@@ -19,12 +19,17 @@ on:
         required: true
         default: false
         type: boolean
+      coverage_only:
+        description: Run only the original Linux all-nine coverage qualification
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.profile || 'small' }}
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.coverage_only && 'coverage' || inputs.profile || 'small' }}
   cancel-in-progress: true
 
 env:
@@ -33,6 +38,7 @@ env:
 
 jobs:
   benchmark:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.coverage_only != true }}
     name: benchmark (${{ matrix.os }}, ${{ github.event_name == 'pull_request' && 'small' || inputs.profile || 'medium' }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -95,7 +101,7 @@ jobs:
 
   summary:
     name: benchmark summary
-    if: ${{ needs.benchmark.result == 'success' }}
+    if: ${{ needs.benchmark.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.coverage_only != true) }}
     needs: benchmark
     runs-on: ubuntu-latest
     steps:
@@ -139,7 +145,7 @@ jobs:
 
   hosted-rag:
     name: hosted RAG smoke
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.hosted == true }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.hosted == true && inputs.coverage_only != true }}
     environment: benchmark-hosted
     runs-on: ubuntu-latest
     steps:
@@ -171,5 +177,117 @@ jobs:
         with:
           name: benchmark-${{ github.run_id }}-hosted-rag
           path: benchmark-hosted/
+          if-no-files-found: error
+          retention-days: 30
+
+  coverage:
+    name: original all-nine coverage (ubuntu-latest)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.coverage_only == true }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Capture the original nine bundles and source custody
+        shell: bash
+        env:
+          TMPDIR: /tmp
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/lorepack-nine"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, sys, time
+
+          root = pathlib.Path.cwd()
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'lorepack-nine'
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          def save(name, value):
+              (evidence / name).write_text(json.dumps(value, indent=2) + '\n')
+          def sha(path):
+              digest = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b''):
+                      digest.update(block)
+              return digest.hexdigest()
+          def sources():
+              paths = subprocess.check_output(['git', 'ls-files', '-z']).decode().split('\0')
+              return {p: sha(root / p) for p in paths if p}
+          def builds():
+              directories = [package / 'dist' for package in sorted(root.glob('packages/*')) if package.is_dir()]
+              directories += [root / 'apps/studio/dist', root / 'packages/cli/studio-dist']
+              records = {}
+              for directory in directories:
+                  records[str(directory.relative_to(root))] = {
+                      'exists': directory.exists(),
+                      'files': {str(p.relative_to(root)): (
+                          {'symlink': os.readlink(p)} if p.is_symlink() else {'sha256': sha(p)}
+                      ) for p in sorted(directory.rglob('*')) if p.is_symlink() or p.is_file()},
+                  }
+              return records
+          def processes(name):
+              with (evidence / name).open('w') as stream:
+                  subprocess.run(['ps', '-eo', 'pid,ppid,pgid,lstart,comm'], stdout=stream, check=True)
+
+          head, tree, status = git('rev-parse', 'HEAD'), git('rev-parse', 'HEAD^{tree}'), git('status', '--porcelain')
+          versions = {tool: subprocess.check_output([tool, '--version'], text=True).strip() for tool in ['node', 'pnpm']}
+          save('identity.json', {'head': head, 'tree': tree, 'status': status, 'versions': versions,
+              'workflowRef': os.environ['GITHUB_WORKFLOW_REF'], 'workflowSha': os.environ['GITHUB_WORKFLOW_SHA'],
+              'requestedRef': os.environ['GITHUB_REF'], 'eventSha': os.environ['GITHUB_SHA'],
+              'run': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'platform': list(os.uname()), 'cwd': str(root), 'TMPDIR': os.environ['TMPDIR']})
+          if status or head != os.environ['GITHUB_SHA'] or versions != {'node': 'v24.21.0', 'pnpm': '11.18.0'}:
+              raise RuntimeError('Candidate or pinned runtime mismatch')
+          before = sources()
+          save('sources.before.json', before)
+          save('builds.before.json', builds())
+          subprocess.run(['git', 'archive', '--format=tar', '-o', str(evidence / 'source.tar'), head], check=True)
+          subprocess.run(['git', 'bundle', 'create', str(evidence / 'source.bundle'), 'HEAD'], check=True)
+          processes('processes.before.txt')
+          command = ['pnpm', 'coverage:capture', '--suite', 'all', '--out', str(evidence / 'capture')]
+          started = time.time()
+          with (evidence / 'campaign.raw.log').open('wb') as log:
+              child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+              save('campaign.started.json', {'argv': command, 'pid': child.pid, 'processGroup': child.pid, 'started': started})
+              code = child.wait()
+          processes('processes.after.txt')
+          remaining = subprocess.check_output(['ps', '-eo', 'pid=,pgid='], text=True)
+          owned_group = [line.strip() for line in remaining.splitlines() if line.split()[-1] == str(child.pid)]
+          after = sources()
+          save('sources.after.json', after)
+          save('builds.after.json', builds())
+          unchanged = before == after and git('rev-parse', 'HEAD') == head and git('status', '--porcelain') == ''
+          save('campaign.exit.json', {'exit': code, 'started': started, 'ended': time.time(),
+              'sourceUnchanged': unchanged, 'remainingCampaignGroup': owned_group,
+              'cleanup': 'observed group only; detached descendants require receipt review'})
+          if code or not unchanged or owned_group:
+              sys.exit(code if 0 < code < 256 else 1)
+          PY
+      - name: Hash all retained bytes including partial native streams
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/lorepack-nine"
+          find . -type f ! -path ./SHA256SUMS -print0 > "$RUNNER_TEMP/lorepack-nine-files.list"
+          sort -z "$RUNNER_TEMP/lorepack-nine-files.list" | xargs -0 sha256sum > SHA256SUMS
+          sha256sum --check SHA256SUMS > "$RUNNER_TEMP/lorepack-nine-hash-check.log"
+      - name: Retain original coverage custody
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: all-nine-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/lorepack-nine/
+            ${{ runner.temp }}/lorepack-nine-hash-check.log
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
