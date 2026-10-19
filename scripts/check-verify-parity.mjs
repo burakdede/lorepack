@@ -11,11 +11,13 @@
 // had never once run in CI. The only thing that caught it was a phase gate, two workflows away,
 // because the phase 0 `command-set` criterion runs `pnpm run verify` and CI does not.
 //
-// Regex over the workflow rather than a YAML parser, deliberately. This has to hold with no
-// dependency and no post-install script, and the shape being matched is `run: pnpm <script>`,
-// which is not the part of YAML that needs a parser to read.
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
+
+const { parse } = createRequire(join(import.meta.dirname, '..', 'packages/cli/package.json'))(
+  'yaml',
+);
 
 const ROOT = join(import.meta.dirname, '..');
 const WORKFLOW = join(ROOT, '.github', 'workflows', 'ci.yml');
@@ -48,35 +50,50 @@ const OUTSIDE_VERIFY = new Map([
   ],
 ]);
 
-/** The `verify` script is one string of `pnpm a && pnpm b`, so every mention is a command. */
-const scriptsInVerify = (text) =>
-  new Set([...text.matchAll(/pnpm (?:run )?([a-z][a-z0-9:_-]*)/g)].map((match) => match[1]));
-
-/**
- * Only what a workflow actually runs.
- *
- * Anchored to `run:` rather than matching anywhere in the file, because a step's `name:` is
- * prose and may perfectly reasonably mention `pnpm verify`. The first version of this check
- * matched its own step name and reported that CI runs a script called `verify`.
- */
-const scriptsInWorkflow = (text) =>
-  new Set(
-    [...text.matchAll(/^\s*(?:-\s*)?run:\s*pnpm (?:run )?([a-z][a-z0-9:_-]*)/gm)].map(
-      (match) => match[1],
-    ),
-  );
-
 const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-const verify = scriptsInVerify(packageJson.scripts.verify);
-const ci = scriptsInWorkflow(readFileSync(WORKFLOW, 'utf8'));
+const commands = packageJson.scripts.verify.split('&&').map((command) => command.trim());
+const commandPattern = /^pnpm (?:run )?([a-z][a-z0-9:_-]*)$/;
+const malformed = commands.filter((command) => !commandPattern.test(command));
+const verify = new Set(commands.flatMap((command) => command.match(commandPattern)?.[1] ?? []));
+const workflow = parse(readFileSync(WORKFLOW, 'utf8'));
+const ci = new Set();
+const unsafe = new Set();
+for (const job of Object.values(workflow.jobs ?? {})) {
+  for (const step of job.steps ?? []) {
+    if (typeof step.run !== 'string') continue;
+    const run = step.run.trim();
+    const mentions = [...run.matchAll(/(?:^|\n)\s*pnpm (?:run )?([a-z][a-z0-9:_-]*)/g)];
+    for (const [, script] of mentions) {
+      ci.add(script);
+      if (!verify.has(script)) continue;
+      if (
+        run.match(commandPattern)?.[1] !== script ||
+        step.if !== undefined ||
+        job.if !== undefined ||
+        step['continue-on-error'] !== undefined ||
+        job['continue-on-error'] !== undefined
+      )
+        unsafe.add(script);
+    }
+  }
+}
 
 const missingFromCi = [...verify].filter((script) => !ci.has(script)).sort();
 const missingFromVerify = [...ci]
   .filter((script) => !verify.has(script) && !OUTSIDE_VERIFY.has(script))
   .sort();
 
-if (missingFromCi.length > 0 || missingFromVerify.length > 0) {
+if (
+  missingFromCi.length > 0 ||
+  missingFromVerify.length > 0 ||
+  unsafe.size > 0 ||
+  malformed.length > 0
+) {
   console.error('check:verify-parity: `pnpm verify` and CI have drifted');
+  for (const command of malformed)
+    console.error(`  verify must use exact pnpm commands joined by &&: ${command}`);
+  for (const script of unsafe)
+    console.error(`  ${script} must run as an exact unconditional, non-optional CI command`);
   for (const script of missingFromCi) {
     console.error(`  ${script} is in \`verify\` and is never run by ci.yml`);
   }
