@@ -3,7 +3,14 @@ import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { loadConfig, ProgressBus, RUNTIME_LIMITS } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
-import { makePdf, withTempProject } from '@lorepack/test-support';
+import {
+  inlineString,
+  makePdf,
+  makeXlsx,
+  number,
+  row,
+  withTempProject,
+} from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
@@ -145,6 +152,82 @@ describe('a line range means source lines', () => {
   });
 });
 
+describe('sealed range boundaries', () => {
+  it('reads a parent heading and nested section in document order after source removal', async () => {
+    await withRuntime(async (runtime, root) => {
+      rmSync(join(root, 'guides'), { recursive: true, force: true });
+      const result = await runtime.readSource({
+        path: 'guides/spaced.md',
+        headingPath: ['Title'],
+      });
+      expect(result.text).toContain('First paragraph');
+      expect(result.text).toContain('Second paragraph');
+      expect(result.text.indexOf('First paragraph')).toBeLessThan(
+        result.text.indexOf('Second paragraph'),
+      );
+      expect(result.locator).toMatchObject({
+        relativePath: 'guides/spaced.md',
+        headingPath: ['Title'],
+        lineStart: 5,
+        lineEnd: 13,
+      });
+      expect(result.truncated).toBe(false);
+    });
+  });
+
+  it.each([
+    {
+      range: { lineStart: 13 },
+      included: 'Second paragraph',
+      excluded: 'First paragraph',
+      start: 13,
+      end: 13,
+    },
+    {
+      range: { lineEnd: 5 },
+      included: 'First paragraph',
+      excluded: 'Second paragraph',
+      start: 5,
+      end: 5,
+    },
+  ])(
+    'resolves the open-ended range $range from sealed nodes',
+    async ({ range, included, excluded, start, end }) => {
+      await withRuntime(async (runtime, root) => {
+        rmSync(join(root, 'guides'), { recursive: true, force: true });
+        const result = await runtime.readSource({ path: 'guides/spaced.md', ...range });
+        expect(result.text).toContain(included);
+        expect(result.text).not.toContain(excluded);
+        expect(result.locator).toMatchObject({ lineStart: start, lineEnd: end });
+      });
+    },
+  );
+
+  it('does not invent heading provenance for a plain text range', async () => {
+    await withRuntime(async (runtime) => {
+      const result = await runtime.readSource({ path: 'notes/plain.txt', lineStart: 2 });
+      expect(result.text).toContain('Second line of the note.');
+      expect(result.locator.relativePath).toBe('notes/plain.txt');
+      expect(result.locator.headingPath).toBeUndefined();
+    });
+  });
+
+  it('explains how to read a PDF when a line range has no recorded coordinates', async () => {
+    await withPdfRuntime(async (runtime) => {
+      await expect(
+        runtime.readSource({ path: 'contract.pdf', lineStart: 1 }),
+      ).rejects.toMatchObject({
+        code: 'LORE_E_INVALID_ARGUMENT',
+        remediation: 'This artifact records no line numbers, so read it whole.',
+      });
+      const whole = await runtime.readSource({ path: 'contract.pdf' });
+      expect(whole.text).toContain('Support contract');
+      expect(whole.text).toContain('Escalation');
+      expect(whole.locator.page).toBeUndefined();
+    });
+  });
+});
+
 describe('addressing', () => {
   it('accepts an artifact id as readily as a path', async () => {
     await withRuntime(async (runtime) => {
@@ -203,6 +286,76 @@ describe('addressing', () => {
       expect(result.locator.lineEnd).toBeUndefined();
     });
   });
+});
+
+describe('sealed spreadsheet coordinates', () => {
+  it.each([false, true])(
+    'retains precise coordinates without inventing a whole-workbook location (multiple sheets: %s)',
+    async (multipleSheets) => {
+      const orders = {
+        name: 'Orders',
+        rows:
+          row(1, [inlineString('A1', 'Product'), inlineString('B1', 'Quantity')]) +
+          row(2, [inlineString('A2', 'Notebook'), number('B2', 3)]) +
+          row(3, [inlineString('A3', 'Pencil'), number('B3', 7)]),
+      };
+      const workbook = await makeXlsx({
+        sheets: [
+          orders,
+          ...(multipleSheets
+            ? [
+                {
+                  name: 'Budget',
+                  rows:
+                    row(1, [inlineString('A1', 'Team'), inlineString('B1', 'Amount')]) +
+                    row(2, [inlineString('A2', 'Support'), number('B2', 120)]),
+                },
+              ]
+            : []),
+        ],
+      });
+      await withTempProject(
+        { files: { 'lore.yaml': CONFIG, 'inventory.xlsx': workbook } },
+        async (project) => {
+          await runBuild({
+            config: loadConfig({ cwd: project.root }),
+            progress: new ProgressBus(),
+          });
+          rmSync(join(project.root, 'inventory.xlsx'));
+          const backend = createLocalRuntimeBackend({ projectRoot: project.root });
+          try {
+            const runtime = createRuntime(backend);
+            const whole = await runtime.readSource({ path: 'inventory.xlsx' });
+            expect(whole.text).toContain('Notebook');
+            expect(whole.locator.relativePath).toBe('inventory.xlsx');
+            expect(whole.locator.lineStart).toBeUndefined();
+            expect(whole.locator.lineEnd).toBeUndefined();
+            if (multipleSheets) {
+              expect(whole.text).toContain('Support');
+              expect(whole.locator.sheet).toBeUndefined();
+              expect(whole.locator.cellRange).toBeUndefined();
+            } else {
+              expect(whole.locator).toMatchObject({ sheet: 'Orders', cellRange: 'A1:B3' });
+            }
+            const selected = await runtime.readSource({
+              path: 'inventory.xlsx',
+              headingPath: ['Orders'],
+            });
+            expect(selected.text).toContain('Notebook');
+            expect(selected.text).not.toContain('Support');
+            expect(selected.locator).toMatchObject({
+              relativePath: 'inventory.xlsx',
+              headingPath: ['Orders'],
+              sheet: 'Orders',
+              cellRange: 'A1:B3',
+            });
+          } finally {
+            backend.close();
+          }
+        },
+      );
+    },
+  );
 });
 
 describe('the request never reaches a filesystem', () => {

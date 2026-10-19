@@ -5,6 +5,8 @@ import { type BuildId, buildDiffSchema, loadConfig, ProgressBus } from '@lorepac
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { readSnapshot } from '../src/services/builds.js';
+import { readActiveBuild } from '../src/services/project.js';
 import { run } from './helpers.js';
 
 const CONFIG = 'version: 1\nname: demo\nsources:\n  - .\n';
@@ -224,6 +226,84 @@ describe('diff engine', () => {
 });
 
 describe('lorepack diff', () => {
+  it('retains every declared supersession in sealed snapshots after source deletion', async () => {
+    await project(
+      {
+        'docs/current.md': '# Current\n\nCurrent rollout instructions.',
+        'docs/old-a.md': '# Old A\n\nFirst older rollout instructions.',
+        'docs/old-b.md': '# Old B\n\nSecond older rollout instructions.',
+      },
+      async (root, lore) => {
+        const first = await build(root);
+        const oldIds = readSnapshot(join(root, '.lore'), first.buildId)
+          .artifacts.filter(({ relativePath }) => relativePath.startsWith('docs/old-'))
+          .map(({ id }) => id)
+          .sort();
+        expect(oldIds).toHaveLength(2);
+        writeFileSync(
+          join(root, 'lore.yaml'),
+          `${CONFIG}rules:\n  - match: docs/current.md\n    authority: 90\n    supersedes: ["docs/old-*.md"]\n`,
+        );
+        const second = await build(root);
+        rmSync(join(root, 'docs'), { recursive: true });
+
+        const stored = readSnapshot(join(root, '.lore'), second.buildId);
+        expect(
+          stored.artifacts.find(({ relativePath }) => relativePath === 'docs/current.md'),
+        ).toMatchObject({ authority: 90, supersedes: oldIds });
+        const json = await lore(['--json', 'diff', first.buildId, second.buildId]);
+        expect(json.code).toBe(0);
+        const diff = buildDiffSchema.parse(JSON.parse(json.stdout));
+        expect(diff.rules).toEqual(
+          expect.arrayContaining([
+            { path: 'docs/current.md', field: 'authority', from: '50', to: '90' },
+            {
+              path: 'docs/current.md',
+              field: 'supersedes',
+              from: null,
+              to: oldIds.join(', '),
+            },
+          ]),
+        );
+        const human = await lore(['diff', first.buildId, second.buildId]);
+        expect(human.code).toBe(0);
+        expect(human.stdout).toContain('docs/current.md');
+        for (const id of oldIds) expect(human.stdout).toContain(id);
+        expect(readActiveBuild(join(root, '.lore'))?.buildId).toBe(second.buildId);
+      },
+    );
+  });
+
+  it('refuses a recorded build whose manifest is missing without changing activation', async () => {
+    await project({ 'a.md': '# A\n\nOriginal.' }, async (root, lore) => {
+      const first = await build(root);
+      writeFileSync(join(root, 'a.md'), '# A\n\nReplacement.');
+      const second = await build(root);
+      const before = readActiveBuild(join(root, '.lore'));
+      rmSync(join(root, '.lore', 'builds', first.buildId, 'manifest.json'));
+
+      const refused = await lore(['diff', first.buildId, second.buildId]);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain('LORE_E_BUILD_NOT_FOUND');
+      expect(refused.stderr).toContain('has no manifest');
+      expect(refused.stdout).toBe('');
+      expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+    });
+  });
+
+  it('rejects a whitespace-only build reference with an actionable error', async () => {
+    await project({ 'a.md': '# A\n\nOriginal.' }, async (root, lore) => {
+      const built = await build(root);
+      const before = readActiveBuild(join(root, '.lore'));
+      const refused = await lore(['diff', '   ', built.buildId]);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain('LORE_E_INVALID_ARGUMENT');
+      expect(refused.stderr).toContain('No build was named');
+      expect(refused.stderr).toContain('lorepack builds');
+      expect(readActiveBuild(join(root, '.lore'))).toEqual(before);
+    });
+  });
+
   it('compares the previous build to the active one by default', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const first = await build(root);
