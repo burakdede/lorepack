@@ -19,6 +19,13 @@ export const PDF_LIMITS = {
    * file is worse than a build that refuses it and says why.
    */
   maxPages: 5000,
+  /** Raw UTF-16 code units, checked while consuming each page's text stream. */
+  maxPageChars: 1_000_000,
+  /** A file exceeding this total is refused rather than partially indexed. */
+  maxDocumentChars: 20_000_000,
+  /** Extra guard for small compressed inputs that expand into large text layers. */
+  maxTextInputRatio: 100,
+  minRatioChars: 1_000_000,
   /** Bumping this is a parser-version change: it alters the text a build stores. */
   normalizationVersion: 1,
 } as const;

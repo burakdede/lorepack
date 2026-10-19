@@ -312,6 +312,16 @@ than fail it.
 One damaged page does not fail the document. It becomes a warning naming the page, which is
 section 24.4's visible loss rather than a build that dies on page 400 of 600.
 
+PDF text extraction refuses a file when a page produces more than 1,000,000 UTF-16 code units,
+the document produces more than 20,000,000, or the document exceeds 100 characters per input
+byte after a 1,000,000-character floor. The parser counts text while consuming pdf.js chunks
+and discards further text from an over-limit page before raising `LORE_E_UNSUPPORTED_FORMAT`.
+It drains that page because stopping pdf.js's stream early can leave an unhandled stream error.
+No partial PDF artifact is returned. A 2,000-page PDF sharing one content stream is covered by
+the parser regression. The parser version is `0.1.2` so earlier cached parses cannot bypass
+these limits. These character limits bound text entering chunking and indexing; the parser
+process deadline and memory ceiling remain the controls for costly decompression and CMaps.
+
 ### Hyphens: the conservative choice, stated
 
 `depart-\nment` is one word split by typesetting. `long-\nterm` is a compound that wrapped at

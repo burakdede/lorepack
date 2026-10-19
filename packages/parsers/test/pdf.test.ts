@@ -37,6 +37,39 @@ const textOf = (parsed: ParsedArtifact): string =>
     .map((node) => node.text)
     .join(' ');
 
+function sharedContentPdf(
+  pages: number,
+  textOperators: number,
+  fontSize = 1,
+  leading = 1,
+): Uint8Array {
+  const objects: string[] = ['', '', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  const content = `BT /F1 ${fontSize} Tf 72 720 Td ${leading} TL ${'(AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA) Tj T* '.repeat(textOperators)}ET`;
+  objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+  const children: number[] = [];
+  for (let page = 0; page < pages; page += 1) {
+    children.push(
+      objects.push(
+        '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>',
+      ),
+    );
+  }
+  objects[0] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[1] = `<< /Type /Pages /Kids [${children.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages} >>`;
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
+
 describe('extraction', () => {
   it('reads text per page with a page locator on every node', async () => {
     const parsed = await parse([
@@ -189,6 +222,47 @@ describe('text normalization, which is versioned policy', () => {
 });
 
 describe('the scale envelope', () => {
+  it('refuses a page whose text layer exceeds the page cap', async () => {
+    const failure = await parseBytes(sharedContentPdf(1, 16_000, 0.1, 0.03)).catch(
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(LoreError);
+    const error = failure as LoreError;
+    expect(error.code).toBe('LORE_E_UNSUPPORTED_FORMAT');
+    expect(error.message).toContain(`page 1`);
+    expect(error.message).toContain(`${PDF_LIMITS.maxPageChars}`);
+  }, 120_000);
+
+  it('refuses amplified text from a shared content stream', async () => {
+    const bytes = sharedContentPdf(2_000, 600);
+    const failure = await parseBytes(bytes).catch((error: unknown) => error);
+
+    if (!(failure instanceof LoreError)) {
+      throw new Error(`shared PDF produced ${textOf(failure as ParsedArtifact).length} characters`);
+    }
+    expect(failure).toBeInstanceOf(LoreError);
+    const error = failure as LoreError;
+    expect(error.code).toBe('LORE_E_UNSUPPORTED_FORMAT');
+    expect(error.message).toContain(`${PDF_LIMITS.maxDocumentChars}`);
+    expect(error.remediation).toContain('Split the document');
+  }, 120_000);
+
+  it('uses the input-to-text ratio for a smaller shared-stream PDF', async () => {
+    const bytes = sharedContentPdf(400, 600);
+    const ratioCap = Math.max(
+      PDF_LIMITS.minRatioChars,
+      bytes.byteLength * PDF_LIMITS.maxTextInputRatio,
+    );
+    expect(ratioCap).toBeLessThan(PDF_LIMITS.maxDocumentChars);
+
+    const failure = await parseBytes(bytes).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(LoreError);
+    const error = failure as LoreError;
+    expect(error.code).toBe('LORE_E_UNSUPPORTED_FORMAT');
+    expect(error.message).toContain(`${ratioCap}`);
+  }, 120_000);
+
   it('warns beyond the documented page count without refusing the document', async () => {
     const pages = Array.from({ length: PDF_LIMITS.warnPages + 2 }, (_, index) => ({
       lines: [`Page ${index + 1} content`],

@@ -10,7 +10,7 @@
       "pages": 3
     },
     "parserId": "pdf-text",
-    "parserVersion": "0.1.1",
+    "parserVersion": "0.1.2",
     "relativePath": "documents/pdf/release-guide.pdf",
     "sourceId": "fixtures",
     "status": "active",

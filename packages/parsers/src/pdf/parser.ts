@@ -18,7 +18,7 @@ export const PDF_PARSER_ID = 'pdf-text' as const;
  * The text normalization policy in `text.ts` is part of what this version covers, because
  * de-hyphenating a line changes the text a build contains.
  */
-export const PDF_PARSER_VERSION = '0.1.1' as const;
+export const PDF_PARSER_VERSION = '0.1.2' as const;
 
 /**
  * Text-layer PDF to the canonical node tree.
@@ -78,8 +78,16 @@ export const pdfParser: ArtifactParser = {
 
       let pagesWithText = 0;
       const unreadPages: number[] = [];
+      const budget = {
+        totalChars: 0,
+        maxDocumentChars: Math.min(
+          PDF_LIMITS.maxDocumentChars,
+          Math.max(PDF_LIMITS.minRatioChars, input.bytes.byteLength * PDF_LIMITS.maxTextInputRatio),
+        ),
+        displayPath: input.displayPath,
+      };
       for (let number = 1; number <= pageCount; number += 1) {
-        const emitted = await readPage(document, number, builder, root.id, warnings);
+        const emitted = await readPage(document, number, builder, root.id, warnings, budget);
         if (emitted) pagesWithText += 1;
         else unreadPages.push(number);
       }
@@ -126,7 +134,9 @@ export const pdfParser: ArtifactParser = {
 interface PdfDocument {
   readonly numPages: number;
   getPage(n: number): Promise<{
-    getTextContent(): Promise<{ items: readonly { str?: string; hasEOL?: boolean }[] }>;
+    streamTextContent(): AsyncIterable<{
+      items: readonly { str?: string; hasEOL?: boolean }[];
+    }>;
   }>;
   getMetadata(): Promise<{ info?: { Title?: unknown } }>;
 }
@@ -193,15 +203,34 @@ async function readPage(
   builder: NodeBuilder,
   parentId: string,
   warnings: ParserWarning[],
+  budget: { totalChars: number; maxDocumentChars: number; displayPath: string },
 ): Promise<boolean> {
   let raw: string;
   try {
     const page = await document.getPage(number);
-    const content = await page.getTextContent();
-    raw = content.items
-      .map((item) => (item.str ?? '') + (item.hasEOL === true ? '\n' : ''))
-      .join('');
+    const parts: string[] = [];
+    let pageChars = 0;
+    let overLimit: LoreError | null = null;
+    for await (const chunk of page.streamTextContent()) {
+      for (const item of chunk.items) {
+        if (overLimit !== null) continue;
+        const value = (item.str ?? '') + (item.hasEOL === true ? '\n' : '');
+        if (value.length > PDF_LIMITS.maxPageChars - pageChars) {
+          overLimit = textLimit(budget.displayPath, `page ${number}`, PDF_LIMITS.maxPageChars);
+          continue;
+        }
+        if (value.length > budget.maxDocumentChars - budget.totalChars - pageChars) {
+          overLimit = textLimit(budget.displayPath, 'document', budget.maxDocumentChars);
+          continue;
+        }
+        pageChars += value.length;
+        parts.push(value);
+      }
+    }
+    if (overLimit !== null) throw overLimit;
+    raw = parts.join('');
   } catch (cause) {
+    if (cause instanceof LoreError) throw cause;
     // One damaged page does not fail a document. Section 24.4: visible warning, not silent
     // quality loss, and not a build that dies on page 400 of 600.
     warnings.push({
@@ -216,6 +245,14 @@ async function readPage(
   }
 
   const paragraphs = normalizePageText(raw);
+  const normalizedChars = paragraphs.reduce((sum, paragraph) => sum + paragraph.length, 0);
+  if (normalizedChars > PDF_LIMITS.maxPageChars) {
+    throw textLimit(budget.displayPath, `page ${number}`, PDF_LIMITS.maxPageChars);
+  }
+  if (normalizedChars > budget.maxDocumentChars - budget.totalChars) {
+    throw textLimit(budget.displayPath, 'document', budget.maxDocumentChars);
+  }
+  budget.totalChars += normalizedChars;
   if (paragraphs.length === 0) return false;
 
   // One section per page. A PDF has pages, not headings, and the locator says `page` because
@@ -243,6 +280,17 @@ async function readPage(
     });
   }
   return true;
+}
+
+function textLimit(path: string, scope: string, limit: number): LoreError {
+  return new LoreError(
+    'LORE_E_UNSUPPORTED_FORMAT',
+    `${path} exceeds the ${limit}-character PDF text cap for ${scope}.`,
+    {
+      remediation: 'Split the document, or exclude it in .loreignore.',
+      path,
+    },
+  );
 }
 
 /** The document's declared title, then the filename. Never the first line of text. */
