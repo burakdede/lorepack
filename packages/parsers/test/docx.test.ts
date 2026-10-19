@@ -1,6 +1,12 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { hashBytes, LoreError, type ParsedArtifact, type ParseInput } from '@lorepack/core';
-import { makeDocx, paragraph, table, trackedChange } from '@lorepack/test-support';
+import { docxBomb, makeDocx, paragraph, table, trackedChange } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
+import yazl from 'yazl';
 import { docxParser } from '../src/docx/parser.js';
 
 /**
@@ -32,6 +38,47 @@ async function parseBytes(bytes: Uint8Array, relativePath = 'doc.docx'): Promise
 const kinds = (parsed: ParsedArtifact): string[] => parsed.nodes.map((node) => node.kind);
 const texts = (parsed: ParsedArtifact): string =>
   parsed.nodes.map((node) => node.text ?? node.title ?? '').join(' | ');
+
+async function packageWithExtraParts(
+  parts: readonly { name: string; content: string | Uint8Array }[],
+  body = paragraph('original'),
+): Promise<Uint8Array> {
+  const zip = new yazl.ZipFile();
+  const document = (body: string): string =>
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}</w:body></w:document>`;
+  const defaults = [
+    {
+      name: '[Content_Types].xml',
+      content:
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    },
+    {
+      name: '_rels/.rels',
+      content:
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+    },
+    { name: 'word/document.xml', content: document(body) },
+    {
+      name: 'word/_rels/document.xml.rels',
+      content:
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="file:///tmp/missing-lorepack-image.png" TargetMode="External"/></Relationships>',
+    },
+  ];
+  for (const part of [...defaults, ...parts]) {
+    const content =
+      typeof part.content === 'string'
+        ? Buffer.from(part.content)
+        : Buffer.from(part.content.buffer, part.content.byteOffset, part.content.byteLength);
+    zip.addBuffer(content, part.name);
+  }
+  zip.end();
+  return await new Promise<Uint8Array>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    zip.outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    zip.outputStream.on('error', reject);
+    zip.outputStream.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks))));
+  });
+}
 
 describe('Word structure becomes the same nodes as HTML', () => {
   it('maps heading styles to nested sections with the heading path', async () => {
@@ -120,6 +167,82 @@ describe('what is flattened is visible', () => {
 });
 
 describe('refusals', () => {
+  it('rejects duplicate package parts before mammoth chooses a copy', async () => {
+    const bytes = await packageWithExtraParts([
+      {
+        name: 'word/document.xml',
+        content:
+          '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>second</w:t></w:r></w:p></w:body></w:document>',
+      },
+    ]);
+    await expect(parseBytes(bytes)).rejects.toMatchObject({
+      code: 'LORE_E_UNSUPPORTED_FORMAT',
+      message: expect.stringContaining('duplicate'),
+    });
+  });
+
+  it('rejects a document part that expands beyond the DOCX cap', async () => {
+    const parserPath = join(import.meta.dirname, '..', 'dist', 'docx', 'parser.js');
+    const corePath = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
+    expect(existsSync(parserPath), 'Build the DOCX parser before this regression.').toBe(true);
+    const root = mkdtempSync(join(tmpdir(), 'lore-docx-limit-'));
+    try {
+      const bytes = await docxBomb(100);
+      const path = join(root, 'bomb.docx');
+      writeFileSync(path, bytes);
+      const code = `
+import {readFileSync} from 'node:fs';
+import {docxParser} from ${JSON.stringify(pathToFileURL(parserPath).href)};
+import {hashBytes} from ${JSON.stringify(pathToFileURL(corePath).href)};
+const bytes=readFileSync(process.argv[1]);
+const input={artifactId:'fixture:bomb.docx',sourceId:'fixture',relativePath:'bomb.docx',
+ displayPath:'bomb.docx',mediaType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+ byteSize:bytes.byteLength,contentHash:hashBytes(bytes),bytes};
+try {
+  await docxParser.parse(input);
+  process.stderr.write('The bomb was accepted.');
+  process.exitCode=2;
+} catch (error) {
+  process.stdout.write(JSON.stringify({code:error?.code,message:error?.message})+'\\n');
+}
+`;
+      const result = spawnSync(
+        process.execPath,
+        ['--max-old-space-size=128', '--input-type=module', '-e', code, path],
+        { encoding: 'utf8', timeout: 30_000 },
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.status, `${result.signal ?? ''}\n${result.stderr}`).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ code: 'LORE_E_ENVELOPE_EXCEEDED' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 45_000);
+
+  it('rejects an archive with too many parts', async () => {
+    const extras = Array.from({ length: 509 }, (_, index) => ({
+      name: `word/extra-${String(index)}.xml`,
+      content: '<x/>',
+    }));
+    const bytes = await packageWithExtraParts(extras);
+    await expect(parseBytes(bytes)).rejects.toMatchObject({
+      code: 'LORE_E_ENVELOPE_EXCEEDED',
+    });
+  });
+
+  it('rejects package bytes spread across individually allowed parts', async () => {
+    const content = Buffer.alloc(55 * 1024 * 1024, 65);
+    const bytes = await packageWithExtraParts(
+      Array.from({ length: 3 }, (_, index) => ({
+        name: `word/extra-${String(index)}.bin`,
+        content,
+      })),
+    );
+    await expect(parseBytes(bytes)).rejects.toMatchObject({
+      code: 'LORE_E_ENVELOPE_EXCEEDED',
+    });
+  });
+
   it('refuses a legacy .doc by name rather than failing obscurely', async () => {
     const bytes = await makeDocx({ body: paragraph('x') });
     const failure = await parseBytes(bytes, 'old.doc').catch((error: unknown) => error);
@@ -144,6 +267,27 @@ describe('refusals', () => {
     const bytes = await makeDocx({ body: '', corrupt: true });
     const failure = await parseBytes(bytes).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(LoreError);
+  });
+});
+
+describe('conversion losses', () => {
+  it('warns when mammoth cannot include an externally linked image', async () => {
+    const image =
+      '<w:p><w:r><w:pict><v:shape><v:imagedata r:id="rIdImage"/></v:shape></w:pict></w:r></w:p>';
+    const bytes = await packageWithExtraParts([], image);
+    const parsed = await parseBytes(bytes);
+    expect(parsed.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'docx-dropped-content',
+          message: expect.stringMatching(/1 content item could not be included/i),
+          loss: {},
+        }),
+      ]),
+    );
+    expect(
+      parsed.warnings.filter((warning) => warning.code === 'docx-dropped-content'),
+    ).toHaveLength(1);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   type ParserWarning,
 } from '@lorepack/core';
 import { parseHtmlSource } from '../html/parser.js';
+import { checkDocxArchive } from './archive.js';
 
 export const DOCX_PARSER_ID = 'docx' as const;
 /**
@@ -14,7 +15,7 @@ export const DOCX_PARSER_ID = 'docx' as const;
  * mammoth's version belongs to this number too: a change to how it maps a Word style to HTML
  * changes the nodes a build contains, and the dependency is pinned for that reason.
  */
-export const DOCX_PARSER_VERSION = '0.1.0' as const;
+export const DOCX_PARSER_VERSION = '0.1.1' as const;
 
 /**
  * DOCX to the canonical node tree, by way of HTML.
@@ -48,6 +49,7 @@ export const docxParser: ArtifactParser = {
 
   async parse(input: ParseInput): Promise<ParsedArtifact> {
     assertNotLegacyDoc(input);
+    await checkDocxArchive(input.bytes, input.displayPath);
 
     const warnings: ParserWarning[] = [];
     const html = await convert(input, warnings);
@@ -95,7 +97,7 @@ async function convert(input: ParseInput, warnings: ParserWarning[]): Promise<st
   const mammoth = (await import('mammoth')).default;
   try {
     const result = await mammoth.convertToHtml({ buffer: Buffer.from(input.bytes) });
-    recordStyleWarnings(result.messages, warnings);
+    recordConversionWarnings(result.messages, warnings);
     return result.value;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -131,14 +133,19 @@ async function convert(input: ParseInput, warnings: ParserWarning[]): Promise<st
  * sorted, because a document with two hundred paragraphs in one custom style should produce
  * one warning rather than two hundred.
  */
-function recordStyleWarnings(
+function recordConversionWarnings(
   messages: readonly { type: string; message: string }[],
   warnings: ParserWarning[],
 ): void {
   const styles = new Set<string>();
   const others: string[] = [];
+  let dropped = 0;
 
   for (const message of messages) {
+    if (message.type === 'error') {
+      dropped++;
+      continue;
+    }
     const named = /Unrecognised (?:paragraph|run|table) style: .*\(Style ID: ([^)]+)\)/.exec(
       message.message,
     );
@@ -166,5 +173,13 @@ function recordStyleWarnings(
   }
   for (const message of [...new Set(others)].sort()) {
     warnings.push({ code: 'docx-conversion', message, line: 1 });
+  }
+  if (dropped > 0) {
+    warnings.push({
+      code: 'docx-dropped-content',
+      message: `${String(dropped)} content ${dropped === 1 ? 'item' : 'items'} could not be included during DOCX conversion.`,
+      line: 1,
+      loss: {},
+    });
   }
 }
