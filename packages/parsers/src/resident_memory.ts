@@ -89,14 +89,22 @@ export function createStartupWatchdog(
 ) {
   let stopped = false;
   let pending: ReturnType<typeof setImmediate> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const startedAt = performance.now();
+  const arm = (delayMs: number): void => {
+    timer = setTimeout(() => {
+      observe?.('fire');
+      pending = setImmediate(() => {
+        observe?.('check');
+        if (stopped) return;
+        const remaining = 5000 - (performance.now() - startedAt);
+        if (remaining > 0) arm(Math.ceil(remaining));
+        else expired();
+      });
+    }, delayMs);
+  };
   observe?.('arm');
-  const timer = setTimeout(() => {
-    observe?.('fire');
-    pending = setImmediate(() => {
-      observe?.('check');
-      if (!stopped) expired();
-    });
-  }, 5000);
+  arm(5000);
   return {
     stop() {
       stopped = true;
@@ -115,6 +123,20 @@ export function createReportingWatchdog(
   let stopped = false;
   let reports = 0;
   let lastReport = 0;
+  const arm = (delayMs: number): void => {
+    timer = setTimeout(() => {
+      const observedReports = reports;
+      observe?.('fire', observedReports);
+      pending = setImmediate(() => {
+        observe?.('check', reports);
+        if (stopped || reports !== observedReports) return;
+        const silenceMs = performance.now() - lastReport;
+        const remaining = READER_TIMEOUT_MS - silenceMs;
+        if (remaining > 0) arm(Math.ceil(remaining));
+        else expired({ reports, silenceMs });
+      });
+    }, delayMs);
+  };
   return {
     report() {
       if (stopped) return;
@@ -123,15 +145,7 @@ export function createReportingWatchdog(
       reports++;
       lastReport = performance.now();
       observe?.('arm', reports);
-      timer = setTimeout(() => {
-        const observedReports = reports;
-        observe?.('fire', observedReports);
-        pending = setImmediate(() => {
-          observe?.('check', reports);
-          if (!stopped && reports === observedReports)
-            expired({ reports, silenceMs: performance.now() - lastReport });
-        });
-      }, READER_TIMEOUT_MS);
+      arm(READER_TIMEOUT_MS);
     },
     stop() {
       stopped = true;

@@ -22,6 +22,13 @@ The diagnostic preserves numeric RSS stdout, 100 ms sampling, the 250 ms
 reporting deadline, 5000 ms startup deadline, output caps and fail-closed parser
 termination. It does not retry, wait for closure or extend a parser lifetime.
 
+A separate D247 Ubuntu verification failure exposed an early timer callback:
+the reporting watchdog declared silence at 249.951 ms, before its 250 ms
+deadline. Both watchdogs now check monotonic elapsed time in the pending-I/O
+phase and, if early, schedule only the rounded-up remainder. A new report or
+stop cancels that pending timer. This corrects premature expiry; it does not
+explain the Windows reporting or startup stalls.
+
 Run the affected parser checks with:
 
 ```sh

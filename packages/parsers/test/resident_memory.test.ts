@@ -9,7 +9,7 @@ import type { ParseInput } from '@lorepack/core';
 import { sha256Hex } from '@lorepack/core';
 import { markdownParser, ParserHost, pdfParser } from '@lorepack/parsers';
 import { cmapBombPdf } from '@lorepack/test-support';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import {
   createReportingWatchdog,
   createStartupWatchdog,
@@ -19,6 +19,123 @@ import {
 
 const processes: { child: ChildProcess; closed: Promise<unknown> }[] = [];
 const monitors: ResidentMemoryMonitor[] = [];
+
+function manualWatchdogClock() {
+  let nowMs = 0;
+  const timeouts: Array<{ callback: () => void; handle: NodeJS.Timeout }> = [];
+  const immediates: Array<{ callback: () => void; handle: NodeJS.Immediate }> = [];
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+  const timeout = vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback) => {
+    const handle = {} as NodeJS.Timeout;
+    timeouts.push({ callback: callback as () => void, handle });
+    return handle;
+  });
+  const immediate = vi.spyOn(globalThis, 'setImmediate').mockImplementation((callback) => {
+    const handle = {} as NodeJS.Immediate;
+    immediates.push({ callback: callback as () => void, handle });
+    return handle;
+  });
+  const clearTimeout = vi.spyOn(globalThis, 'clearTimeout').mockImplementation((handle) => {
+    const index = timeouts.findIndex((entry) => entry.handle === handle);
+    if (index !== -1) timeouts.splice(index, 1);
+  });
+  const clearImmediate = vi.spyOn(globalThis, 'clearImmediate').mockImplementation((handle) => {
+    const index = immediates.findIndex((entry) => entry.handle === handle);
+    if (index !== -1) immediates.splice(index, 1);
+  });
+  return {
+    at(ms: number) {
+      nowMs = ms;
+    },
+    fireTimer() {
+      const callback = timeouts.shift()?.callback;
+      expect(callback).toBeDefined();
+      callback?.();
+    },
+    fireCheck() {
+      const callback = immediates.shift()?.callback;
+      expect(callback).toBeDefined();
+      callback?.();
+    },
+    pendingTimers() {
+      return timeouts.length;
+    },
+    restore() {
+      clearImmediate.mockRestore();
+      clearTimeout.mockRestore();
+      immediate.mockRestore();
+      timeout.mockRestore();
+      clock.mockRestore();
+    },
+  };
+}
+
+it('keeps a reporting watchdog armed until actual 250 ms silence', () => {
+  const clock = manualWatchdogClock();
+  const expired: number[] = [];
+  const watchdog = createReportingWatchdog(({ silenceMs }) => expired.push(silenceMs));
+  try {
+    watchdog.report();
+    clock.at(249.95);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(expired).toEqual([]);
+    expect(clock.pendingTimers()).toBe(1);
+    clock.at(250);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(expired).toEqual([250]);
+  } finally {
+    watchdog.stop();
+    clock.restore();
+  }
+});
+
+it('keeps a startup watchdog armed until actual 5000 ms silence', () => {
+  const clock = manualWatchdogClock();
+  const expired: number[] = [];
+  const watchdog = createStartupWatchdog(() => expired.push(performance.now()));
+  try {
+    clock.at(4999.95);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(expired).toEqual([]);
+    expect(clock.pendingTimers()).toBe(1);
+    clock.at(5000);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(expired).toEqual([5000]);
+  } finally {
+    watchdog.stop();
+    clock.restore();
+  }
+});
+
+it('cancels a pending remainder on a new report and after stop', () => {
+  const clock = manualWatchdogClock();
+  const expired: number[] = [];
+  const watchdog = createReportingWatchdog(({ silenceMs }) => expired.push(silenceMs));
+  try {
+    watchdog.report();
+    clock.at(249.95);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(clock.pendingTimers()).toBe(1);
+    watchdog.report();
+    expect(clock.pendingTimers()).toBe(1);
+    clock.at(499.9);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(expired).toEqual([]);
+    watchdog.stop();
+    watchdog.report();
+    expect(clock.pendingTimers()).toBe(0);
+    expect(expired).toEqual([]);
+  } finally {
+    watchdog.stop();
+    clock.restore();
+  }
+});
 
 it('services a pending first observer report at the original startup deadline', async () => {
   const startedAt = Date.now();
