@@ -87,7 +87,7 @@ this command exercises the configured report path rather than failing during sta
 
 The owned-source inventory preserves the frozen 345 source files and 49 critical flags from
 `7141e61a`. It hashes all current tracked executable sources and classifies the parser
-resident-memory observer as critical. The pinned Istanbul provider retains private-method
+resident-memory observer and Linux sampler sources as critical. The pinned Istanbul provider retains private-method
 function and branch counters that the unpatched provider omitted. `pnpm typecheck:audit`
 checks the affected Node tests and the separate browser fixture program. These checks run
 as part of `pnpm verify`.

@@ -48,6 +48,7 @@ const variable = '__LOREPACK_NATIVE_COVERAGE__';
 const projectCaptureOwners = new Map();
 const earlyCounterStreams = new Map();
 const campaignVariable = '__LOREPACK_CAMPAIGN_COVERAGE__';
+let verifiedCliProfile;
 function assertCoverageVariable(value) {
   if (value !== variable && value !== campaignVariable)
     throw new Error('Unsupported native counter namespace.');
@@ -379,17 +380,21 @@ function retainProjectCapture(owner, pid, directory) {
   }
 }
 
-function prependCounterPreload(entry, args) {
+function prependCounterPreload(entry, args, cwd) {
   if (entry.registryPreload !== undefined) {
     const { path, sha256 } = entry.registryPreload;
-    if (
-      typeof path !== 'string' ||
-      digest(readFileSync(path)) !== sha256 ||
-      args[0] !== '--import' ||
-      args[1] !== pathToFileURL(entry.target).href
-    )
+    if (typeof path !== 'string' || digest(readFileSync(path)) !== sha256)
       throw new Error('Nested registry initializer differs from its receipt.');
-    args = [...args.slice(0, 2), '--import', pathToFileURL(path).href, ...args.slice(2)];
+    if (entry.registryMode === 'cli-profile') {
+      const selected = selectCommand(new Map([[entry.target, entry]]), args, cwd);
+      if (entry.captureMode !== undefined || selected?.entry !== entry || selected.index < 0)
+        throw new Error('CLI profile initializer differs from its entrypoint.');
+      args = ['--import', pathToFileURL(path).href, ...args];
+    } else {
+      if (args[0] !== '--import' || args[1] !== pathToFileURL(entry.target).href)
+        throw new Error('Nested registry initializer differs from its receipt.');
+      args = [...args.slice(0, 2), '--import', pathToFileURL(path).href, ...args.slice(2)];
+    }
   }
   if (entry.counterPreload === undefined) return args;
   const { path, sha256 } = entry.counterPreload;
@@ -399,6 +404,13 @@ function prependCounterPreload(entry, args) {
 }
 
 function assertNodeArguments(entry) {
+  if (
+    entry.registryMode !== undefined &&
+    (entry.registryMode !== 'cli-profile' ||
+      entry.captureMode !== undefined ||
+      entry.registryPreload === undefined)
+  )
+    throw new Error('Invalid CLI profile initializer mode.');
   if (
     entry.projectCaptureDirectory !== undefined &&
     (typeof entry.projectCaptureDirectory !== 'string' ||
@@ -492,7 +504,7 @@ function selectCommand(registry, args, cwd, descriptor = 4, inheritedProjectRoot
     }
     if (
       typeof argument === 'string' &&
-      /^(?:--permission|--allow-child-process|--no-warnings|--experimental-import-meta-resolve|--(?:import|allow-fs-read|allow-fs-write|require|conditions)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
+      /^(?:--permission|--allow-child-process|--allow-worker|--no-warnings|--experimental-import-meta-resolve|--(?:import|allow-fs-read|allow-fs-write|require|conditions)=.+|--input-type=(?:module|commonjs)|--max-old-space-size=[1-9][0-9]*)$/.test(
         argument,
       )
     ) {
@@ -516,15 +528,7 @@ function selectCommand(registry, args, cwd, descriptor = 4, inheritedProjectRoot
       } catch {
         return null;
       }
-      if (
-        !isDeepStrictEqual(nodeArguments, [
-          '--permission',
-          '--allow-fs-read=*',
-          `--allow-fs-write=${projectRoot}`,
-          '--allow-child-process',
-        ])
-      )
-        return null;
+      if (!isProjectNodeProfile(nodeArguments, projectRoot)) return null;
     }
     const preload = [...registry.values()].find(
       (value) =>
@@ -545,15 +549,7 @@ function selectCommand(registry, args, cwd, descriptor = 4, inheritedProjectRoot
   if (index && !isDeepStrictEqual(nodeArguments, entry.nodeArguments ?? [])) {
     if (entry.projectCaptureDirectory === undefined) return null;
     const projectRoot = realpathSync(cwd ?? process.cwd());
-    if (
-      !isDeepStrictEqual(nodeArguments, [
-        '--permission',
-        '--allow-fs-read=*',
-        `--allow-fs-write=${projectRoot}`,
-        '--allow-child-process',
-      ])
-    )
-      return null;
+    if (!isProjectNodeProfile(nodeArguments, projectRoot)) return null;
     return { entry, index, projectRoot };
   }
   return inheritProject({ entry, index });
@@ -636,6 +632,7 @@ export function registerCommandCapture(
                   entry.target,
                   ...options.args.slice(index + 2),
                 ],
+            options.cwd,
           ),
         ],
         stdio: [...streams, ...(streams.length === 3 ? ['ignore'] : []), fd],
@@ -659,6 +656,7 @@ export function registerCommandCapture(
       ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
       ...(entry.captureDescriptor ? { captureDescriptor: entry.captureDescriptor } : {}),
       ...(entry.registryPreload ? { registryPreload: entry.registryPreload } : {}),
+      ...(entry.registryMode ? { registryMode: entry.registryMode } : {}),
       environment: 'normalized',
       argumentsSha256: digest(JSON.stringify(options.args)),
     };
@@ -779,6 +777,7 @@ export function registerSyncCommandCapture(
           index === -1
             ? ['--import', pathToFileURL(entry.target).href, ...args]
             : [...args.slice(0, index), entry.target, ...args.slice(index + 1)],
+          options.cwd,
         ),
         {
           ...options,
@@ -811,6 +810,7 @@ export function registerSyncCommandCapture(
       ...(entry.captureMode ? { captureMode: entry.captureMode } : {}),
       ...(entry.captureDescriptor ? { captureDescriptor: entry.captureDescriptor } : {}),
       ...(entry.registryPreload ? { registryPreload: entry.registryPreload } : {}),
+      ...(entry.registryMode ? { registryMode: entry.registryMode } : {}),
       environment:
         options.env === undefined
           ? 'inherited'
@@ -963,6 +963,9 @@ export function createCampaignRegistry(snapshot, launch) {
     originalSha256: launch.entrySha256,
     targetSha256: launch.entrySha256,
     interruptionSignals: ['SIGTERM', 'SIGKILL'],
+    ...(launch.registryPreload
+      ? { registryPreload: launch.registryPreload, registryMode: 'cli-profile' }
+      : {}),
   };
   commandEntries.push(
     cli,
@@ -1020,18 +1023,26 @@ function capturePermissionProfile() {
   return profile;
 }
 
+function isProjectNodeProfile(profile, root) {
+  const original = [
+    '--permission',
+    '--allow-fs-read=*',
+    `--allow-fs-write=${root}`,
+    '--allow-child-process',
+  ];
+  return (
+    isDeepStrictEqual(profile, original) ||
+    (process.platform === 'linux' && isDeepStrictEqual(profile, [...original, '--allow-worker']))
+  );
+}
+
 function projectCaptureScope(
   directory,
   message = 'Project capture parent is unavailable under the original grant.',
 ) {
   const root = realpathSync(process.cwd());
   const profile = capturePermissionProfile();
-  const explicit = isDeepStrictEqual(profile, [
-    '--permission',
-    '--allow-fs-read=*',
-    `--allow-fs-write=${root}`,
-    '--allow-child-process',
-  ]);
+  const explicit = isProjectNodeProfile(profile, root);
   const inherited = !profile.some(
     (argument) => argument === '--permission' || argument.startsWith('--allow-'),
   );
@@ -1070,6 +1081,50 @@ export function registerNestedCampaignCapture(snapshot, launch, url) {
   process.once('beforeExit', async () => {
     await capture.settled();
   });
+}
+
+function assertCliCaptureProfile(profile) {
+  const { snapshot, launch, registry } = profile;
+  if (
+    threadId !== 0 ||
+    process.argv[1] !== launch.entry ||
+    realpathSync(launch.entry) !== launch.entry ||
+    digest(readFileSync(registry.path)) !== registry.sha256
+  )
+    throw new Error('Verified CLI execution profile differs.');
+  createCampaignRegistry(snapshot, { ...launch, registryPreload: registry });
+  const helper = join(dirname(launch.entrypoint), 'linux_resident_reader_worker.js');
+  if (
+    !launch.artifacts.some((artifact) => artifact.path === helper) ||
+    realpathSync(helper) !== helper
+  )
+    throw new Error('Verified CLI resident reader is missing from its artifact graph.');
+  return helper;
+}
+
+export function registerCliCaptureProfile(snapshot, launch, url) {
+  if (process.execArgv[0] !== '--import' || process.execArgv[1] !== url)
+    throw new Error('CLI profile preload arguments differ.');
+  process.execArgv.splice(0, 2);
+  if (verifiedCliProfile !== undefined)
+    throw new Error('Verified CLI execution profile already registered.');
+  const path = realpathSync(fileURLToPath(url));
+  const profile = {
+    snapshot: structuredClone(snapshot),
+    launch: structuredClone(launch),
+    registry: { path, sha256: digest(readFileSync(path)) },
+  };
+  assertCliCaptureProfile(profile);
+  verifiedCliProfile = profile;
+}
+
+export function isVerifiedCliCaptureResidentReader(url) {
+  if (verifiedCliProfile === undefined || !(url instanceof URL)) return false;
+  try {
+    return url.href === pathToFileURL(assertCliCaptureProfile(verifiedCliProfile)).href;
+  } catch {
+    return false;
+  }
 }
 
 export async function reconcileForkCapture(snapshot, directory, entries, direct = {}) {
@@ -1184,6 +1239,8 @@ export async function reconcileForkCapture(snapshot, directory, entries, direct 
       if (entry[key] !== launch[key]) throw new Error(`Fork entrypoint receipt differs: ${file}`);
     if (!isDeepStrictEqual(entry.registryPreload, launch.registryPreload))
       throw new Error(`Nested registry receipt differs: ${file}`);
+    if (entry.registryMode !== launch.registryMode)
+      throw new Error(`CLI profile initializer mode differs: ${file}`);
     const closeFile = `${launch.id}.close.json`;
     const counterFile = `${launch.id}.counters.jsonl`;
     if (!files.includes(closeFile) || !files.includes(counterFile))
@@ -1414,6 +1471,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
     'public-index.js',
     'query-child.js',
     'parse-child.js',
+    'linux_resident_reader_worker.js',
     'archive-verify-child.js',
     'build_worker.js',
     'verify_bridge.js',
@@ -1514,7 +1572,7 @@ export async function buildNativeCli(snapshot, preparations, output, coverageVar
   const registryPath = join(directory, 'capture-registry.mjs');
   writeFileSync(
     registryPath,
-    `import {registerNestedCampaignCapture} from ${JSON.stringify(import.meta.url)};registerNestedCampaignCapture(${JSON.stringify(snapshot)},${JSON.stringify(launch)},import.meta.url);\n`,
+    `import {registerNestedCampaignCapture,registerCliCaptureProfile} from ${JSON.stringify(import.meta.url)};\nconst snapshot=${JSON.stringify(snapshot)},launch=${JSON.stringify(launch)};\nif(process.argv[1]===launch.entry)registerCliCaptureProfile(snapshot,launch,import.meta.url);else registerNestedCampaignCapture(snapshot,launch,import.meta.url);\n`,
     { flag: 'wx' },
   );
   const registeredLaunch = {

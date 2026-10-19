@@ -170,7 +170,8 @@ whose configuration is nested inside the project.
 
 `pnpm coverage:inventory` hashes every tracked executable source. The frozen audit
 floor remains exactly 345 owned files and 49 critical files; later source is added to
-the live denominator, including `packages/parsers/src/resident_memory.ts` as critical.
+the live denominator, including `packages/parsers/src/resident_memory.ts`,
+`linux_resident_reader.ts` and `linux_resident_reader_worker.ts` as critical.
 The current denominator must be computed from the final clean checkout, not copied
 from an earlier candidate. `pnpm typecheck:audit` checks affected Node regression
 tests under the strict ES2024/Node program, then Studio browser fixtures under their
@@ -186,6 +187,15 @@ execution fails the report before percentages are computed. The original nine-bu
 aggregate and 100-mutant requirement are separate from a focused capture fixture or
 the three default-suite bundle files. They remain unqualified until a frozen-source
 campaign records their actual results.
+
+The Linux sampler uses the existing inherited counter descriptor while retaining
+its read-only worker permissions. Its measured helper is admitted only through a
+module-private CLI execution profile that rechecks the actual entry and complete
+artifact graph. A global callback, adjacent filename or environment switch cannot
+authorize a helper. The sampler owns no child process; parser capture stays with
+the original parent. Run the complete campaign on Linux to exercise real procfs
+sampling, and retain the other native-platform checks as separate evidence.
+
 Run `pnpm coverage:capture --out coverage/nine-<fresh-name> --suite all` on the same
 clean candidate for the nine-bundle aggregate. Bare `--out` remains a default-suite
 diagnostic whose partial threshold failure is retained. The all-suite command runs

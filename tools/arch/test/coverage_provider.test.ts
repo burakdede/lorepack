@@ -1,4 +1,4 @@
-import { execFileSync, fork, spawn, spawnSync } from 'node:child_process';
+import { execFileSync, fork, type SpawnSyncReturns, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   appendFileSync,
@@ -1310,6 +1310,7 @@ await new Promise((resolve,reject)=>{worker.once('error',reject);worker.once('ex
         'backend-local/src/sql/query-child.ts',
         'backend-local/src/archive-verify-child.ts',
         'parsers/src/parse-child.ts',
+        'parsers/src/linux_resident_reader_worker.ts',
         'cli/src/services/build_worker.ts',
         'connect-clients/src/verify_bridge.ts',
       ];
@@ -1333,13 +1334,15 @@ const {stdout}=await promisify(execFile)(process.execPath,['--max-old-space-size
 console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
             : file.endsWith('archive-verify-child.ts')
               ? 'console.log(JSON.stringify({marker:marker(),execArgv:process.execArgv}));\n'
-              : file.endsWith('build_worker.ts')
-                ? "import {parentPort} from 'node:worker_threads';parentPort?.postMessage({marker:marker()});parentPort?.close();\n"
-                : file.endsWith('verify_bridge.ts')
-                  ? 'console.log(JSON.stringify({marker:marker()}));\n'
-                  : file.endsWith('child.ts')
-                    ? "process.send?.({marker:marker(),writeAllowed:process.permission?.has('fs.write')});setInterval(()=>{},1000);\n"
-                    : ''
+              : file.endsWith('linux_resident_reader_worker.ts')
+                ? "import {parentPort} from 'node:worker_threads';parentPort?.postMessage({marker:marker(),writeAllowed:process.permission?.has('fs.write'),childAllowed:process.permission?.has('child'),workerAllowed:process.permission?.has('worker')});parentPort?.close();\n"
+                : file.endsWith('build_worker.ts')
+                  ? "import {parentPort} from 'node:worker_threads';parentPort?.postMessage({marker:marker()});parentPort?.close();\n"
+                  : file.endsWith('verify_bridge.ts')
+                    ? 'console.log(JSON.stringify({marker:marker()}));\n'
+                    : file.endsWith('child.ts')
+                      ? "process.send?.({marker:marker(),writeAllowed:process.permission?.has('fs.write')});setInterval(()=>{},1000);\n"
+                      : ''
         }`;
         mkdirSync(dirname(join(project, path)), { recursive: true });
         writeFileSync(join(project, path), source);
@@ -1438,12 +1441,13 @@ console.log(stdout.trim());process.exit(7);console.log('must not run');\n`
     it('builds separate CLI artifacts without changing ordinary output', async () => {
       const { built, output, captured, native, project } = scenario;
       const launch = built.launch;
-      expect(built.receipts).toHaveLength(8);
+      expect(built.receipts).toHaveLength(9);
       for (const file of [
         'public-entry.js',
         'public-index.js',
         'query-child.js',
         'parse-child.js',
+        'linux_resident_reader_worker.js',
         'archive-verify-child.js',
         'build_worker.js',
         'verify_bridge.js',
@@ -1526,6 +1530,179 @@ console.log(JSON.stringify(message));await closed;\n`,
         }),
       ).rejects.toThrow('Native worker counter context missing.');
     });
+    it('retains real readonly worker counters through the existing inherited descriptor', async () => {
+      const { captured, output, project, repository } = scenario;
+      const driver = join(project, 'readonly-reader-driver.mjs');
+      const file = join(project, 'readonly-reader.counters.jsonl');
+      writeFileSync(
+        driver,
+        `import {Worker} from 'node:worker_threads';
+import {continueCounterStream} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+continueCounterStream(4,'__LOREPACK_CAMPAIGN_COVERAGE__');
+const worker=new Worker(new URL(${JSON.stringify(pathToFileURL(join(output, 'linux_resident_reader_worker.js')).href)}),{execArgv:['--permission','--allow-fs-read=*']});
+const closed=new Promise((resolve,reject)=>{worker.once('error',reject);worker.once('exit',code=>code===0?resolve():reject(new Error('Readonly worker failed')));});
+const message=await new Promise((resolve,reject)=>{worker.once('message',resolve);worker.once('error',reject);});
+console.log(JSON.stringify(message));await closed;\n`,
+      );
+      const fd = openSync(file, 'wx');
+      let result: SpawnSyncReturns<string>;
+      try {
+        result = spawnSync(process.execPath, [driver], {
+          encoding: 'utf8',
+          timeout: 30_000,
+          stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd],
+        });
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.signal).toBeNull();
+      expect(JSON.parse(result.stdout)).toEqual({
+        marker: 'measured',
+        writeAllowed: false,
+        childAllowed: false,
+        workerAllowed: false,
+      });
+      const replay = await replayCounterFile(captured, file, {
+        pid: result.pid,
+        threadId: 0,
+        code: 0,
+        signal: null,
+      });
+      expect(replay.threads).toHaveLength(1);
+      const map =
+        replay.maps[join(project, 'packages/parsers/src/linux_resident_reader_worker.ts')];
+      expect(map).toBeDefined();
+      expect(Object.values(map.s).some((hits) => typeof hits === 'number' && hits > 0)).toBe(true);
+    });
+    it('binds the CLI helper profile privately to its actual executing artifact graph', () => {
+      const { project, repository, built } = scenario;
+      const preload = built.launch.registryPreload;
+      if (!preload) throw new Error('Missing CLI profile registry.');
+      const helper = join(dirname(built.launch.entry), 'linux_resident_reader_worker.js');
+      const probe = join(project, 'reader-profile-probe.mjs');
+      writeFileSync(
+        probe,
+        `import {isVerifiedCliCaptureResidentReader} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+globalThis[Symbol.for('lorepack.verifiedCliCapture')]={schema:1,acceptsResidentReader:()=>true};
+console.log(JSON.stringify({accepted:isVerifiedCliCaptureResidentReader(new URL(${JSON.stringify(pathToFileURL(helper).href)})),query:isVerifiedCliCaptureResidentReader(new URL(${JSON.stringify(`${pathToFileURL(helper).href}?other`)})),foreign:isVerifiedCliCaptureResidentReader(new URL(${JSON.stringify(pathToFileURL(join(project, 'foreign-reader.js')).href)}))}));\n`,
+      );
+      for (const registered of [false, true]) {
+        const file = join(project, `profile-${registered}.jsonl`);
+        const fd = openSync(file, 'wx');
+        let result: SpawnSyncReturns<string>;
+        try {
+          result = spawnSync(
+            process.execPath,
+            [
+              '--require',
+              built.launch.counterPreload.path,
+              ...(registered ? ['--import', pathToFileURL(preload.path).href] : []),
+              '--import',
+              pathToFileURL(probe).href,
+              built.launch.entry,
+            ],
+            { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+          );
+        } finally {
+          closeSync(fd);
+        }
+        expect(result.status, result.stderr).toBe(7);
+        const firstLine = result.stdout.split('\n')[0];
+        if (firstLine === undefined) throw new Error('Missing CLI profile probe output.');
+        expect(JSON.parse(firstLine)).toEqual({
+          accepted: registered,
+          query: false,
+          foreign: false,
+        });
+      }
+    });
+    it('rechecks a published private helper profile after its artifact changes', () => {
+      const { project, repository, built } = scenario;
+      const preload = built.launch.registryPreload;
+      if (!preload) throw new Error('Missing CLI profile registry.');
+      const helper = join(dirname(built.launch.entry), 'linux_resident_reader_worker.js');
+      const probe = join(project, 'reader-profile-stale-probe.mjs');
+      writeFileSync(
+        probe,
+        `import {readFileSync,writeFileSync} from 'node:fs';
+import {isVerifiedCliCaptureResidentReader} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};
+const helper=${JSON.stringify(helper)},url=new URL(${JSON.stringify(pathToFileURL(helper).href)});
+const before=readFileSync(helper),accepted=isVerifiedCliCaptureResidentReader(url);let changed;
+try{writeFileSync(helper,Buffer.concat([before,Buffer.from('\\n// changed after publication')]));changed=isVerifiedCliCaptureResidentReader(url);}finally{writeFileSync(helper,before);}
+console.log(JSON.stringify({accepted,changed}));\n`,
+      );
+      const fd = openSync(join(project, 'profile-stale.jsonl'), 'wx');
+      let result: SpawnSyncReturns<string>;
+      try {
+        result = spawnSync(
+          process.execPath,
+          [
+            '--require',
+            built.launch.counterPreload.path,
+            '--import',
+            pathToFileURL(preload.path).href,
+            '--import',
+            pathToFileURL(probe).href,
+            built.launch.entry,
+          ],
+          { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+        );
+      } finally {
+        closeSync(fd);
+      }
+      expect(result.status, result.stderr).toBe(7);
+      const firstLine = result.stdout.split('\n')[0];
+      if (firstLine === undefined) throw new Error('Missing CLI profile probe output.');
+      expect(JSON.parse(firstLine)).toEqual({ accepted: true, changed: false });
+    });
+    it.each(['missing-helper', 'changed-helper', 'changed-entry', 'wrong-argv'])(
+      'refuses invalid CLI execution profile %s before application execution',
+      (mode) => {
+        const { project, repository, captured, built } = scenario;
+        const helper = join(dirname(built.launch.entry), 'linux_resident_reader_worker.js');
+        const launch = structuredClone(built.launch);
+        if (mode === 'missing-helper')
+          launch.artifacts = launch.artifacts.filter((entry) => entry.path !== helper);
+        const preload = join(project, `invalid-profile-${mode}.mjs`);
+        writeFileSync(
+          preload,
+          `import {registerCliCaptureProfile} from ${JSON.stringify(pathToFileURL(join(repository, 'scripts/coverage_instrumented.mjs')).href)};registerCliCaptureProfile(${JSON.stringify(captured)},${JSON.stringify(launch)},import.meta.url);\n`,
+        );
+        const changed =
+          mode === 'changed-helper' ? helper : mode === 'changed-entry' ? launch.entry : null;
+        const before = changed ? readFileSync(changed) : null;
+        const wrong = join(project, 'wrong-profile-entry.mjs');
+        writeFileSync(wrong, "console.log('must not run');\n");
+        const file = join(project, `invalid-profile-${mode}.jsonl`);
+        const fd = openSync(file, 'wx');
+        let result: SpawnSyncReturns<string>;
+        try {
+          if (changed && before)
+            writeFileSync(
+              changed,
+              Buffer.concat([before, Buffer.from('\n// changed profile input')]),
+            );
+          result = spawnSync(
+            process.execPath,
+            [
+              '--require',
+              built.launch.counterPreload.path,
+              '--import',
+              pathToFileURL(preload).href,
+              mode === 'wrong-argv' ? wrong : launch.entry,
+            ],
+            { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe', 'ignore', fd] },
+          );
+        } finally {
+          closeSync(fd);
+          if (changed && before) writeFileSync(changed, before);
+        }
+        expect(result.status).toBe(1);
+        expect(result.stdout).toBe('');
+        expect(result.stderr).toMatch(/Verified CLI|Campaign CLI launch|Native CLI artifact/);
+      },
+    );
     it('captures the real verification bridge launch with unchanged output', async () => {
       const { built, captured, project } = scenario;
       const original = join(project, 'packages/connect-clients/dist/verify_bridge.js');
@@ -1923,11 +2100,16 @@ console.log(JSON.stringify(message));await closed;\n`,
       },
     );
 
-    it.each(['sync', 'async'] as const)(
-      'retains nested script custody under the original project-only grant (%s)',
-      async (mode) => {
+    const projectGrantCases: ['sync' | 'async', boolean][] = [
+      ['sync', false],
+      ['async', false],
+    ];
+    if (process.platform === 'linux') projectGrantCases.push(['sync', true], ['async', true]);
+    it.each(projectGrantCases)(
+      'retains nested script custody under the project-only grant (%s, worker %s)',
+      async (mode, allowWorker) => {
         const { project, captured, built } = scenario;
-        const cwd = join(project, `restricted-nested-${mode}`);
+        const cwd = join(project, `restricted-nested-${mode}-worker-${allowWorker}`);
         mkdirSync(cwd);
         const leaf = join(cwd, 'leaf.mjs');
         const parent = join(cwd, 'parent.mjs');
@@ -1938,6 +2120,7 @@ console.log(JSON.stringify(message));await closed;\n`,
           '--allow-fs-read=*',
           `--allow-fs-write=${cwd}`,
           '--allow-child-process',
+          ...(allowWorker ? ['--allow-worker'] : []),
           '--import',
           pathToFileURL(preload).href,
         ];
@@ -2280,6 +2463,8 @@ console.log(JSON.stringify({delta:process.resourceUsage().maxRSS*1024-before,for
       'public-entry.js',
       'measurement-public-entry.js',
       'measurement-query-child.js',
+      'linux_resident_reader_worker.js',
+      'measurement-linux_resident_reader_worker.js',
       'measurement-build_worker.js',
       'measurement-verify_bridge.js',
       'capture-bootstrap.mjs',
