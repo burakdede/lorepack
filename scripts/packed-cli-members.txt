@@ -2,13 +2,13 @@ package/LICENSE
 package/dist/archive-verify-child.js
 package/dist/build_worker.js
 package/dist/chunk-527Z6RB6.js
-package/dist/chunk-5ODW6GNW.js
+package/dist/chunk-64ENERFC.js
+package/dist/chunk-7SG77IJE.js
 package/dist/chunk-DIQEDCZH.js
 package/dist/chunk-FCLWY6VU.js
 package/dist/chunk-FGGDUELX.js
 package/dist/chunk-G4AKNQB6.js
-package/dist/chunk-GQXUCPDM.js
-package/dist/chunk-OURL3JN7.js
+package/dist/chunk-J5TMGMOW.js
 package/dist/chunk-PX6F3LHL.js
 package/dist/chunk-RQRQK4RA.js
 package/dist/chunk-YQWB4NLB.js
