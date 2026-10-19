@@ -26,7 +26,21 @@ log, a test collector, and later the Studio, without the pipeline knowing.
 `stage-progress` requires a `completed` count. A spinner is not acceptable progress for
 parsing or indexing, because it cannot distinguish slow work from a hang. The renderer
 throttles to at most one update per `minUpdateIntervalMs` (default 1000), so a burst of
-ten thousand events becomes a readable line per second.
+ten thousand events becomes a readable line per second. Builds report each handled
+artifact, including cache hits and exclusions, so the renderer retains the latest real
+count even when it suppresses an event's output.
+
+The CLI also refreshes the most recent unfinished stage every second during an async
+wait. A refresh repeats known completed/total counts and advances elapsed time; it does
+not claim additional work completed. These explicit observations bypass event throttling,
+so a recent producer event cannot suppress the next quiet update. An event and a timer
+tick can therefore produce adjacent truthful lines. JSON progress stays on stderr, and
+each invocation clears its timer and subscription on success, failure or cancellation.
+
+The renderer owns no timer. Its caller owns refresh and disposal, including the MCP
+rebuild renderer, whose output is always stderr. Timers share the caller's JavaScript
+event loop: synchronous transforms and native calls can delay callbacks. This is quiet
+async-wait visibility, not a hard real-time guarantee for blocking work.
 
 ## TTY and CI
 

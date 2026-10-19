@@ -95,6 +95,65 @@ describe('ProgressRenderer', () => {
     for (const line of lines) expect(line).toMatch(/\d/);
   });
 
+  it('refreshes quiet stages using only the latest known count and current elapsed time', () => {
+    let clock = 1000;
+    const out: string[] = [];
+    const renderer = new ProgressRenderer({ write: (text) => out.push(text), now: () => clock });
+    renderer.handle({
+      type: 'stage-started',
+      stage: 'parsing',
+      label: 'Parsing',
+      total: 2,
+      at: clock,
+    });
+    clock = 2000;
+    renderer.refresh();
+    expect(out.at(-1)).toMatch(/^Parsing +0\/2 +1\.0s\n$/);
+    clock = 2900;
+    renderer.handle({
+      type: 'stage-progress',
+      stage: 'parsing',
+      completed: 1,
+      total: 2,
+      at: clock,
+    });
+    expect(out).toHaveLength(2);
+    clock = 3000;
+    renderer.refresh();
+    expect(out.at(-1)).toMatch(/^Parsing +1\/2 +2\.0s\n$/);
+    renderer.handle({
+      type: 'stage-finished',
+      stage: 'parsing',
+      completed: 2,
+      outcome: 'done',
+      at: clock,
+    });
+    const finished = out.join('');
+    clock = 5000;
+    renderer.refresh();
+    renderer.dispose();
+    renderer.refresh();
+    expect(out.join('')).toBe(finished);
+  });
+
+  it('closes an unfinished TTY line on disposal without claiming completion', () => {
+    const { renderer, text } = setup(true);
+    renderer.handle({
+      type: 'stage-started',
+      stage: 'parsing',
+      label: 'Parsing',
+      total: 2,
+      at: 1000,
+    });
+    expect(text().endsWith('\n')).toBe(false);
+    renderer.dispose();
+    expect(text().endsWith('\n')).toBe(true);
+    expect(text()).not.toContain('done');
+    const disposed = text();
+    renderer.refresh();
+    expect(text()).toBe(disposed);
+  });
+
   it('throttles bursts to the configured interval', () => {
     const { renderer, out } = setup(false, 1000);
     renderer.handle({ type: 'stage-started', stage: 'indexing', label: 'Indexing', at: 0 });

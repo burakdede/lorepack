@@ -33,6 +33,7 @@ import {
   makeDocx,
   makePdf,
   makeXlsx,
+  nestedBracketsMarkdown,
   number,
   paragraph,
   row,
@@ -65,6 +66,70 @@ function buildsIn(root: string): string[] {
   const directory = join(root, '.lore', 'builds');
   return existsSync(directory) ? readdirSync(directory).sort() : [];
 }
+
+it.each(['normal', 'cache', 'exclusion'] as const)(
+  'reports the real %s artifact count before awaiting the next parser',
+  async (mode) => {
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: counted-progress\nsources: [docs]\n',
+          'docs/a.md':
+            mode === 'exclusion' ? nestedBracketsMarkdown(100_000) : '# A\n\nFirst document.\n',
+        },
+      },
+      async (project) => {
+        const config = loadConfig({ cwd: project.root });
+        if (mode === 'cache') {
+          writeFileSync(project.path('docs/z.md'), '# Z\n\nBefore the edit.\n');
+          await runBuild({ config, progress: new ProgressBus() });
+        }
+        writeFileSync(project.path('docs/z.md'), '# Z\n\nSecond document.\n');
+        const progress = new ProgressBus();
+        const counts: number[] = [];
+        progress.subscribe((event) => {
+          if (event.type === 'stage-progress' && event.stage === 'parsing')
+            counts.push(event.completed);
+        });
+        let release: () => void = () => {};
+        const waiting = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let reachedSecond = false;
+        const original = ParserHost.prototype.parse;
+        const parsing = vi.spyOn(ParserHost.prototype, 'parse').mockImplementation(async function (
+          this: ParserHost,
+          ...args: Parameters<ParserHost['parse']>
+        ) {
+          if (args[1].relativePath === 'z.md') {
+            reachedSecond = true;
+            await waiting;
+          }
+          return original.apply(this, args);
+        });
+        const pending = runBuild({
+          config,
+          progress,
+          parseLimits: { timeoutMs: 1500, memoryMb: 256 },
+        });
+        try {
+          await vi.waitFor(() => expect(reachedSecond).toBe(true), { timeout: 10_000 });
+          expect(counts).toEqual([1]);
+        } finally {
+          release();
+          try {
+            const result = await pending;
+            expect(counts).toEqual([1, 2]);
+            if (mode === 'cache') expect(result.reusedArtifacts).toBe(1);
+            if (mode === 'exclusion') expect(result.warnings).toBe(1);
+          } finally {
+            parsing.mockRestore();
+          }
+        }
+      },
+    );
+  },
+);
 
 describe('lorepack build', () => {
   it('rejects source bytes that no longer match the fingerprint', async () => {

@@ -336,6 +336,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             reusedArtifacts += 1;
             parsed.push(withRules(cached, rulesById));
             handled += 1;
+            progress.progress('parsing', handled, { unit: 'documents' });
             continue;
           }
 
@@ -403,6 +404,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             // on this file, and a person watching deserves to know why it paused.
             progress.diagnostic('warn', `${discovered.displayPath}: ${outcome.message}`);
             handled += 1;
+            progress.progress('parsing', handled, { unit: 'documents' });
             continue;
           }
           const result: ParsedArtifact = outcome.result;
@@ -431,7 +433,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           parsed.push(withRules(entry, rulesById));
 
           handled += 1;
-          if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
+          progress.progress('parsing', handled, { unit: 'documents' });
         }
       } finally {
         await host.closeAndWait();
