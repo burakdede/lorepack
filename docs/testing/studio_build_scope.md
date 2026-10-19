@@ -26,5 +26,7 @@ The Chromium regression in `tools/studio-e2e/test/build_scoped_inspection.spec.t
 uses a real project, CLI build, server and clipboard. The component regressions
 cover typed export errors and cache replacement for warnings and tables. On
 19 October 2026, macOS arm64, Node 24.21.0 and pinned Playwright 1.62.1,
-the two browser flows passed. The captured [Sources screenshot](../images/studio_build_scoped_source.png)
-was inspected and shows the new build id alongside its revised Stored text.
+the two browser flows passed. The captured Sources screenshot was inspected and
+shows the new build id alongside its revised Stored text.
+
+![Sources showing the active build and revised Stored text](../images/studio_build_scoped_source.png)
