@@ -136,6 +136,7 @@ it('records a fail-closed startup trace at the original Windows deadline', async
   const ready = monitor.ready.catch((error: unknown) => error);
   try {
     const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4] ?? '';
+    expect(command).toContain("[Threading.Thread]::Sleep(100); [Console]::Error.WriteLine('LPP:'");
     const milestones = [
       'LPS:entry:',
       'LPI:ps:',
