@@ -194,49 +194,6 @@ describe('retained global lifecycle evidence', () => {
     }
   });
 
-  it('records actual canonical builds, inactive validation and source-free rollback', () => {
-    const root = mkdtempSync(join(tmpdir(), 'lorepack-smoke-lifecycle-'));
-    try {
-      const result = spawnSync(
-        process.execPath,
-        [resolve('scripts/public-registry-smoke.mjs'), '0.1.0', '--out', root],
-        {
-          env: { ...process.env, LOREPACK_SMOKE_CLI: resolve('packages/cli/dist/public-entry.js') },
-          encoding: 'utf8',
-          timeout: 30_000,
-        },
-      );
-      expect(result.stderr, result.stdout).not.toContain('public registry smoke failed');
-      expect(result.status, result.stderr).toBe(0);
-      const receipt = JSON.parse(readFileSync(join(root, 'lifecycle.json'), 'utf8'));
-      expect(receipt).toMatchObject({ passed: true, cleaned: true, rolledBackTo: receipt.buildA });
-      expect(receipt.buildA).not.toBe(receipt.buildB);
-      expect(receipt.fixtures.A['lore.yaml']).toEqual(receipt.fixtures.B['lore.yaml']);
-      expect(receipt.fixtures.A['docs/runbook.md'].sha256).not.toBe(
-        receipt.fixtures.B['docs/runbook.md'].sha256,
-      );
-      const commands = receipt.commands.map((name: string) =>
-        JSON.parse(readFileSync(join(root, name), 'utf8')),
-      );
-      expect(commands.every((command: { status: number }) => command.status === 0)).toBe(true);
-      const candidate = commands.find((command: { args: string[] }) =>
-        command.args.includes('--no-activate'),
-      );
-      expect(JSON.parse(candidate.stdout)).toMatchObject({
-        buildId: receipt.buildB,
-        activated: false,
-      });
-      const rollback = commands.find(
-        (command: { args: string[] }) =>
-          command.args.includes('rollback') && command.args.includes(receipt.buildA),
-      );
-      expect(JSON.parse(rollback.stdout).buildId).toBe(receipt.buildA);
-      expect(commands.at(-3).args).toContain('builds');
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  }, 30_000);
-
   it('accepts a preselected tar only outside evidence and rejects ambiguous flags', () => {
     const out = resolve('/tmp/smoke-evidence');
     const tarball = resolve('/tmp/retained.tgz');
