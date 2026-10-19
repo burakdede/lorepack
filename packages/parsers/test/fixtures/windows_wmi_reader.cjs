@@ -4,7 +4,7 @@
   var WScript = this.WScript;
   var ActiveXObject = this.ActiveXObject;
   var stage = 'arguments';
-  var pidText, birth, locator, service, path, date, process, raw, rss, code;
+  var pidText, birth, locator, service, path, date, process, actualBirth, raw, rss, code;
   try {
     if (WScript.Arguments.length !== 2) throw new Error('Invalid arguments');
     pidText = String(WScript.Arguments.Item(0));
@@ -23,7 +23,8 @@
       process = service.Get(path, 0);
       stage = 'identity';
       date.Value = String(process.CreationDate);
-      if (String(process.Handle) !== pidText || String(date.GetFileTime(false)) !== birth)
+      actualBirth = String(date.GetFileTime(false));
+      if (String(process.Handle) !== pidText || actualBirth !== birth)
         throw new Error('Process identity changed');
       stage = 'rss';
       raw = String(process.WorkingSetSize);
@@ -37,7 +38,8 @@
       WScript.Sleep(100);
     }
   } catch (error) {
-    code = typeof error.number === 'number' ? (error.number >>> 0).toString(16) : 'none';
+    if (stage === 'identity') code = `expected=${birth},actual=${actualBirth}`;
+    else code = typeof error.number === 'number' ? (error.number >>> 0).toString(16) : 'none';
     WScript.StdErr.WriteLine('LPF:'.concat(stage, ':', code));
     WScript.Quit(1);
   }
