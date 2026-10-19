@@ -128,6 +128,35 @@ This is diagnostic preparation, not a causal correction of the retained native
 reader failures. Fresh native evidence and a demonstrated mechanism are still
 required before #801 can close.
 
+## Windows per-sample reporting trace
+
+PR #806 at `a4f8fb52` failed the Windows large-pipe acceptance setup after 213
+reports and 497 ms of silence. The reader was still alive and its last RSS was
+76,673,024 bytes. That failure does not identify which sampling stage was late.
+
+The existing diagnostic flag now records before/after markers for every Refresh,
+WorkingSet64 read, stdout write and 100 ms sleep. It retains one allow-listed
+PowerShell version, CLR version and Process assembly identity. Watchdog fire/check
+events record elapsed owner-loop time, signed deviation from the unchanged 250 ms
+deadline and event-loop utilization. Numeric values are rounded to three decimal
+places; they are not clamped into a different observation.
+
+The 16-event ring, 1024-character pending buffer and 4096-byte final line remain.
+Markers never count as RSS reports. Diagnostics add no timer or readiness rule;
+without the flag, no event-loop utilization call is made. The exact large-pipe
+scenario enables the flag only on Windows and restores its original environment.
+Its source documents, build command, output assertions and deadlines stay intact.
+
+Missing markers remain inconclusive because their delivery can also be late.
+Owner-loop activity and reader-stage timestamps narrow the investigation; neither
+alone establishes an exclusive historical cause. Native execution of this trace
+is still required. An instrumented timing result is not final performance proof.
+
+On macOS with Node 24.21.0 and pnpm 11.18.0, the six-file reader suite passed
+84 tests with two native-Windows skips. Strict Node-only test typing, build,
+lint, format and documentation checks passed. The original large-pipe acceptance
+case passed separately. These results do not reproduce the Windows reporting gap.
+
 On macOS with Node 24.21.0 and pnpm 11.18.0, the unchanged implementation failed
 five diagnostic-context assertions and passed the intentional-stop case. After
 the wrapper, all six passed. The original affected six-file suite passed 82

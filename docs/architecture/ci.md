@@ -223,7 +223,7 @@ workload, scheduling, retry, skip, preload or coverage control was relaxed.
 
 ## Manual Linux all-nine coverage
 
-The existing benchmark workflow also accepts `coverage_only=true` on a selected
+The existing benchmark workflow accepts `qualification=coverage` on a selected
 branch. This manual mode runs only the original Linux coverage campaign; normal
 push, pull-request, scheduled and benchmark dispatch runs keep their existing jobs.
 It requests no hosted environment or secrets. After freezing and publishing a
@@ -231,7 +231,7 @@ reviewed clean candidate, dispatch its workflow version with:
 
 ```bash
 gh workflow run benchmarks.yml --ref <reviewed-branch> \
-  -f coverage_only=true -f hosted=false -f profile=medium
+  -f qualification=coverage -f hosted=false -f profile=medium
 ```
 
 The job checks out the event's exact commit, records its HEAD/tree, clean status,
@@ -251,3 +251,27 @@ upload/storage failure, remaining owned processes or an interrupted campaign
 block qualification. A dispatched run is not a passing gate: inspect all nine
 origins, suite receipts, rejection records and the final report. This provides
 coverage evidence only, separate from native CI, mutation and release gates.
+
+## Manual Windows observer diagnostic
+
+Dispatch `qualification=windows-observer` on the reviewed diagnostic branch to
+run only the existing `output/a-large-result-survives-a-pipe` acceptance case:
+
+```bash
+gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
+  -f qualification=windows-observer -f hosted=false -f profile=medium
+```
+
+This job uses Windows, Node24.21.0, pnpm11.18.0, frozen dependencies and the real
+built CLI. It enables `LOREPACK_OBSERVER_DIAGNOSTIC=1` and uses the original
+acceptance config, fixture, assertions, workers and deadlines. The
+`windows-observer-<run>-<attempt>` artifact retains the actual HEAD/tree and tool
+identity, combined install/build/test output, real exits, any JSON report produced
+before failure, final source state and artifact hashes. Upload runs after failure;
+missing or interrupted evidence does not prove the case passed or cleanup ended.
+
+The manual `benchmark` default retains the benchmark matrix, summary and optional
+hosted run. Manual coverage and Windows diagnostics have separate concurrency
+keys and request no hosted environment or secrets. Normal push, pull-request and
+scheduled workloads keep their existing behavior. Dispatching a diagnostic branch
+does not require opening a pull request; merging the change still requires one.
