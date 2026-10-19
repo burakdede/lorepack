@@ -30,6 +30,28 @@ import { pathToFileURL } from 'node:url';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
+function closePublicTypes(root, stage) {
+  const context = join(stage, 'dist', 'framework', 'context.d.ts');
+  const progress = join(root, 'packages', 'core', 'dist', 'progress', 'events.d.ts');
+  const importCore = "import { ProgressBus } from '@lorepack/core';";
+  const declaration = readFileSync(context, 'utf8');
+  const progressDeclaration = readFileSync(progress, 'utf8');
+  if (
+    !declaration.startsWith(importCore) ||
+    /^\s*(?:import|export).*from\s/m.test(progressDeclaration)
+  ) {
+    throw new Error('The public CLI progress declaration is no longer self-contained.');
+  }
+  writeFileSync(
+    join(stage, 'dist', 'framework', 'progress-events.d.ts'),
+    progressDeclaration.replace(/^\/\/# sourceMappingURL=.*(?:\r?\n|$)/gm, ''),
+  );
+  writeFileSync(
+    context,
+    declaration.replace(importCore, "import { ProgressBus } from './progress-events.js';"),
+  );
+}
+
 /** Runs a package-manager command, through the shell only where Windows needs a `.cmd` shim. */
 export function runTool(tool, args, cwd, options = {}) {
   const windows = process.platform === 'win32';
@@ -112,6 +134,8 @@ export function packCli({ outDir, root = ROOT }) {
       workspace,
       { env: { CI: 'true' } },
     );
+
+    closePublicTypes(root, stage);
 
     const manifestPath = join(stage, 'package.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));

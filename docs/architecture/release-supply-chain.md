@@ -82,13 +82,20 @@ apply. It then sets `bundleDependencies` to the CLI's dependencies, drops the wo
 `devDependencies`, and runs `npm pack`. The injected deploy matters: `pnpm deploy --legacy`
 re-resolved the ranges and drifted 17 packages from the lockfile when tried.
 
+The root CLI declaration exposes `CommandContext.progress` as core's `ProgressBus`. Since core is
+private, the pack step copies the compiled, self-contained progress declaration into the CLI
+and points the public context declaration at that copy. This preserves the real event and
+stage types without making npm consumers install an internal package.
+
 `scripts/check-packed-cli.mjs` is the gate. It installs the tarball with **npm** into an empty
 directory and fails on any `*.node` file or `@napi-rs/*` package, on any difference from the
 CLI's production tree in the frozen lockfile (an optional peer the workspace happens to resolve,
 such as `supports-color` for `debug`, is excused), on a PDF build and search with the installed
 CLI that `dlopen`s anything, on a CSV table query through the installed binary's `serve` that
 does not return its rows (the query runs in a forked child, `dist/query-child.js`, which esbuild
-must emit as its own entry: #639), and on any `npm audit --omit=dev` finding. It runs:
+must emit as its own entry: #639), on any `npm audit --omit=dev` finding, and when the
+advertised root types fail a strict TypeScript consumer compile from the installed package.
+It runs:
 
 - in the `packed install` CI job on Ubuntu, Windows and macOS (`pnpm check:packed-cli`);
 - in the release workflow, against the exact tarball that is then published;

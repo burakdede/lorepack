@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Installs the CLI the way a user does, with npm into an empty directory, and checks what
 // arrived: no native add-on, the production tree CI tested, a PDF build that loads nothing
-// native, a table query answered by the bundled query child, and a clean `npm audit --omit=dev`.
+// native, a table query answered by the bundled query child, a clean `npm audit --omit=dev`,
+// and a strict consumer compile of any advertised TypeScript declarations.
 //
 // The workspace checks (`check:no-native`, the clean-install job) inspect the pnpm install,
 // which applies workspace overrides that never reach a published manifest. Only an npm install
@@ -145,6 +146,107 @@ export function lockedProductionTree(root = ROOT) {
   };
   for (const project of JSON.parse(result.stdout)) visit(project.dependencies);
   return tree;
+}
+
+function checkInstalledTypes(installDir, source) {
+  const packageDir = join(installDir, 'node_modules', '@lorepack', 'cli');
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
+  const exportTypes = manifest.exports?.['.']?.types;
+  if (manifest.types === undefined && exportTypes === undefined) {
+    console.log('installed CLI advertises no TypeScript types');
+    return [];
+  }
+  if (typeof manifest.types !== 'string' || manifest.types !== exportTypes) {
+    return [`${source}: installed CLI root types and exports.types disagree`];
+  }
+  for (const [name, path] of [
+    ['types', manifest.types],
+    ['root JavaScript', manifest.exports?.['.']?.default],
+    ['binary', manifest.bin?.lorepack],
+  ]) {
+    if (typeof path !== 'string' || !existsSync(join(packageDir, path))) {
+      return [`${source}: installed CLI ${name} entry ${String(path)} is missing`];
+    }
+  }
+
+  const tools = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).devDependencies;
+  writeFileSync(
+    join(installDir, 'consumer.mts'),
+    `import { CLI_NAME, planInit, runCli, type CommandContext, type CommandDefinition, type InitPlan, type RunOptions } from '@lorepack/cli';
+const options: RunOptions = { exitProcess: false };
+const result: Promise<number> = runCli([], options);
+const plan: InitPlan = planInit({ directory: process.cwd(), dryRun: true });
+declare const command: CommandDefinition;
+declare const context: CommandContext;
+const progress = context.progress;
+const unsubscribe: () => void = progress.subscribe((event) => {
+  if (event.type === 'stage-progress') {
+    const completed: number = event.completed;
+    void completed;
+  }
+});
+progress.start('parsing', 'Parsing', 1);
+progress.progress('parsing', 1, { detail: 'Complete' });
+progress.finish('parsing', 1, 'done');
+progress.diagnostic('info', 'Complete');
+progress.emit({ type: 'diagnostic', level: 'info', message: 'Complete', at: 0 });
+unsubscribe();
+void [CLI_NAME, result, plan, command, progress];
+`,
+  );
+  writeFileSync(
+    join(installDir, 'tsconfig.json'),
+    `${JSON.stringify({
+      compilerOptions: {
+        target: 'ES2024',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: false,
+        types: ['node'],
+        verbatimModuleSyntax: true,
+      },
+      files: ['consumer.mts'],
+    })}\n`,
+  );
+  const installed = runTool(
+    'npm',
+    [
+      'install',
+      '--no-save',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      `typescript@${tools.typescript}`,
+      `@types/node@${tools['@types/node']}`,
+    ],
+    installDir,
+    { allowFailure: true },
+  );
+  if (installed.status !== 0) {
+    return [
+      `${source}: installing pinned TypeScript tools failed (exit ${installed.status})\n${installed.stdout}${installed.stderr}`,
+    ];
+  }
+  const compiler = spawnSync(
+    process.execPath,
+    [
+      join(installDir, 'node_modules', 'typescript', 'bin', 'tsc'),
+      '--project',
+      'tsconfig.json',
+      '--pretty',
+      'false',
+    ],
+    { cwd: installDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+  if (compiler.error !== undefined || compiler.status !== 0) {
+    return [
+      `${source}: installed CLI TypeScript consumer failed (exit ${compiler.status})\n${compiler.error ?? ''}${compiler.stdout}${compiler.stderr}`,
+    ];
+  }
+  console.log('installed CLI TypeScript consumer compiled with strict declaration checking');
+  return [];
 }
 
 const DLOPEN_HOOK = `
@@ -699,6 +801,11 @@ async function main() {
     } else {
       console.log('npm audit --omit=dev: 0 vulnerabilities');
     }
+
+    const source =
+      spec ??
+      `${resolve(tarball)} (sha256 ${createHash('sha256').update(readFileSync(tarball)).digest('hex')})`;
+    problems.push(...checkInstalledTypes(installDir, source));
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
