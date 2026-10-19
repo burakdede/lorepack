@@ -32,6 +32,7 @@ const ROOT = resolve(import.meta.dirname, '..');
 const BUNDLED_JS = new Set([
   'archive-verify-child.js',
   'build_worker.js',
+  'linux_resident_reader_worker.js',
   'parse-child.js',
   'public-entry.js',
   'public-index.js',
