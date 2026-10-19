@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { hashBytes, LoreError, type ParsedArtifact, type ParsedTable } from '@lorepack/core';
 import {
   boolean_,
@@ -42,8 +43,8 @@ async function parseBytes(bytes: Uint8Array, relativePath = 'book.xlsx'): Promis
   })) as ParsedArtifact;
 }
 
-async function withDuplicatePart(bytes: Uint8Array, partName: string): Promise<Uint8Array> {
-  const parts = await new Promise<Array<{ name: string; bytes: Uint8Array }>>((resolve, reject) => {
+async function readParts(bytes: Uint8Array): Promise<Array<{ name: string; bytes: Uint8Array }>> {
+  return await new Promise<Array<{ name: string; bytes: Uint8Array }>>((resolve, reject) => {
     yauzl.fromBuffer(Buffer.from(bytes), { lazyEntries: true }, (error, zip) => {
       if (error !== null || zip === undefined) {
         reject(error ?? new Error('Could not open XLSX fixture.'));
@@ -70,12 +71,64 @@ async function withDuplicatePart(bytes: Uint8Array, partName: string): Promise<U
       zip.readEntry();
     });
   });
+}
+
+async function writeParts(parts: Array<{ name: string; bytes: Uint8Array }>): Promise<Uint8Array> {
+  const zip = new yazl.ZipFile();
+  for (const part of parts) zip.addBuffer(Buffer.from(part.bytes), part.name);
+  zip.end();
+  const output: Buffer[] = [];
+  return await new Promise<Uint8Array>((resolve, reject) => {
+    zip.outputStream.on('data', (chunk: Buffer) => output.push(chunk));
+    zip.outputStream.on('error', reject);
+    zip.outputStream.on('end', () => resolve(new Uint8Array(Buffer.concat(output))));
+  });
+}
+
+async function withDuplicatePart(bytes: Uint8Array, partName: string): Promise<Uint8Array> {
+  const parts = await readParts(bytes);
   const duplicate = parts.find((part) => part.name === partName);
   if (duplicate === undefined) throw new Error(`XLSX fixture has no ${partName}.`);
+  return writeParts([duplicate, ...parts]);
+}
 
+async function withAliasedSheet(bytes: Uint8Array): Promise<Uint8Array> {
+  const parts = await readParts(bytes);
+  const relations = parts.find((part) => part.name === 'xl/_rels/workbook.xml.rels');
+  if (relations === undefined) throw new Error('XLSX fixture has no workbook relationships.');
+  const xml = Buffer.from(relations.bytes).toString('utf8');
+  const changed = xml.replace('Target="worksheets/sheet2.xml"', 'Target="worksheets/sheet1.xml"');
+  if (changed === xml) throw new Error('XLSX fixture has no second sheet relationship.');
+  relations.bytes = Buffer.from(changed, 'utf8');
+  return writeParts(parts);
+}
+
+async function withExpandedParts(
+  bytes: Uint8Array,
+  sharedMib = 129,
+  stylesMib = 129,
+): Promise<Uint8Array> {
+  const parts = await readParts(bytes);
   const zip = new yazl.ZipFile();
-  zip.addBuffer(Buffer.from(duplicate.bytes), duplicate.name);
-  for (const part of parts) zip.addBuffer(Buffer.from(part.bytes), part.name);
+  for (const part of parts) {
+    const root =
+      part.name === 'xl/sharedStrings.xml'
+        ? 'sst'
+        : part.name === 'xl/styles.xml'
+          ? 'styleSheet'
+          : null;
+    if (root !== null) {
+      async function* oversizedXml(): AsyncGenerator<Buffer> {
+        yield Buffer.from(`<${root}>`);
+        const mib = root === 'sst' ? sharedMib : stylesMib;
+        for (let index = 0; index < mib; index += 1) yield Buffer.alloc(1024 * 1024, 32);
+        yield Buffer.from(`</${root}>`);
+      }
+      zip.addReadStream(Readable.from(oversizedXml()), part.name);
+    } else {
+      zip.addBuffer(Buffer.from(part.bytes), part.name);
+    }
+  }
   zip.end();
   const output: Buffer[] = [];
   return await new Promise<Uint8Array>((resolve, reject) => {
@@ -490,6 +543,97 @@ describe('types match the CSV rules exactly', () => {
 });
 
 describe('hardening', () => {
+  it('warns once when two sheet names resolve to the same worksheet part', async () => {
+    const bytes = await makeXlsx({
+      sheets: [
+        { name: 'First', rows: row(1, [inlineString('A1', 'name')]) },
+        { name: 'Second', rows: row(1, [inlineString('A1', 'other')]) },
+      ],
+    });
+    const parsed = await parseBytes(await withAliasedSheet(bytes));
+
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toMatchObject([
+      { code: 'xlsx-over-budget', loss: {}, message: expect.stringContaining('worksheet part') },
+    ]);
+  });
+
+  it('warns when shared-string items exceed the retained table budget', async () => {
+    const entries = '<si/>'.repeat(1_000_001);
+    const parsed = await parse({
+      rawSharedStrings: `<sst>${entries}</sst>`,
+      sheets: [{ name: 'Data', rows: row(1, [inlineString('A1', 'name')]) }],
+    });
+
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toMatchObject([
+      { code: 'xlsx-over-budget', loss: {}, message: expect.stringContaining('shared strings') },
+    ]);
+  });
+
+  it('warns on oversized shared-string text before retaining it', async () => {
+    const parsed = await parse({
+      sharedStrings: ['x'.repeat(32_768)],
+      sheets: [{ name: 'Data', rows: row(1, [shared('A1', 0)]) }],
+    });
+
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toMatchObject([
+      { code: 'xlsx-over-budget', loss: {}, message: expect.stringContaining('cell text') },
+    ]);
+  });
+
+  it('excludes an oversized inline cell and still reads another sheet', async () => {
+    const parsed = await parse({
+      sheets: [
+        { name: 'Long', rows: row(1, [inlineString('A1', 'x'.repeat(32_768))]) },
+        {
+          name: 'Safe',
+          rows: [row(1, [inlineString('A1', 'name')]), row(2, [inlineString('A2', 'Ada')])].join(
+            '',
+          ),
+        },
+      ],
+    });
+
+    expect(parsed.tables?.map((table) => table.sheet)).toEqual(['Safe']);
+    expect(parsed.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'xlsx-over-budget',
+        loss: { sheet: 'Long' },
+        message: expect.stringContaining('cell text'),
+      }),
+    );
+  });
+
+  it('warns when separate parts exceed the total decompressed byte budget', async () => {
+    const bytes = await withExpandedParts(await makeXlsx(SIMPLE));
+    const parsed = await parseBytes(bytes);
+
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toMatchObject([
+      {
+        code: 'xlsx-over-budget',
+        loss: {},
+        message: expect.stringContaining('expands to more data'),
+      },
+    ]);
+  }, 180_000);
+
+  it('warns when one part exceeds its decompressed byte budget', async () => {
+    const bytes = await withExpandedParts(await makeXlsx(SIMPLE), 193, 0);
+    const parsed = await parseBytes(bytes);
+
+    expect(parsed.tables).toBeUndefined();
+    expect(parsed.warnings).toMatchObject([
+      {
+        code: 'xlsx-over-budget',
+        loss: {},
+        message: expect.stringContaining('expands to more data'),
+      },
+    ]);
+  }, 180_000);
+
   /**
    * Entity expansion, refused outright. `sax` in strict mode does not expand custom entities
    * anyway (verified separately), but the guarantee we rely on should be one we assert.

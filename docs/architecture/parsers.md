@@ -541,6 +541,17 @@ Verified separately that `sax` in strict mode does not expand custom entities at
 payload and a billion-laughs payload both yield a parse error and the literal `&x;`. The
 DOCTYPE refusal stays anyway, because a guarantee we depend on should be one we assert.
 
+The XLSX reader stops after 192 MiB from one part or 256 MiB across parts. It holds at most
+1,000,000 shared strings, and stops accumulating any cell text after 32,767 characters,
+[Excel's published cell limit](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits).
+Two sheet names resolving to one worksheet part are refused before the
+part is parsed twice. These guards emit `xlsx-over-budget` warnings with loss metadata. An
+oversized cell excludes its sheet while other sheets can still be imported. A shared-string,
+duplicate-target or decompression violation excludes the workbook's tables, because their
+shared input can no longer be trusted. The existing 500,000-row envelope fixture still passes
+under these budgets. The refusal semantics use XLSX parser version `0.1.3`; normalization
+version `1` remains the table-shape marker.
+
 ### Measured at the envelope
 
 On 2026-08-04, 500,000 rows across 2,000,000 cells (11 MB compressed): **6.5 s**, and **16 MB

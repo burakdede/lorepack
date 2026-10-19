@@ -15,7 +15,7 @@
       ]
     },
     "parserId": "xlsx",
-    "parserVersion": "0.1.0",
+    "parserVersion": "0.1.3",
     "relativePath": "documents/xlsx/pricing.xlsx",
     "sourceId": "fixtures",
     "status": "active",
