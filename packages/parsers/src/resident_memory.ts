@@ -361,7 +361,7 @@ export function monitorResidentMemory(
           `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); ` +
           `[Console]::Error.WriteLine('LPP:'+$n+':before-sleep:'+$clock.ElapsedMilliseconds); `
         : '[Console]::Out.WriteLine($p.WorkingSet64); ') +
-      `[Threading.Thread]::Sleep(${INTERVAL_MS}) ` +
+      `[Threading.Thread]::Sleep(${INTERVAL_MS})${diagnostic ? ';' : ''} ` +
       (diagnostic
         ? `[Console]::Error.WriteLine('LPP:'+$n+':after-sleep:'+$clock.ElapsedMilliseconds); $n++; `
         : '') +
