@@ -116,6 +116,41 @@ startup, runtime-identity and sample markers in the job log; missing markers
 remain inconclusive. The existing16-event ring,1024-character pending buffer,
 4096-byte final trace and100/250/5000ms controls are preserved.
 
+## Normal Windows owner failure context
+
+Normal Windows observation also retains one event-loop utilization baseline at
+startup and replaces a reporting baseline after each accepted numeric RSS sample.
+The existing watchdog callbacks retain their timer-fire time. Only an actual
+startup or reporting failure appends a bounded `Owner context` object to its
+original cause. It records the unchanged expected deadline, actual elapsed time,
+signed deadline difference, observed owner-window and timer-fire/check offsets,
+and event-loop active/idle milliseconds and utilization. Numbers are rounded to
+three decimal places; unavailable nonfinite or oversized metrics are `null`.
+
+This adds small owner-side observation overhead on Windows, including one ELU
+snapshot per accepted report. It adds no timer, reader instruction, flag, ring or
+successful-run output. The ordinary PowerShell command and arguments are
+unchanged: no early Process assembly reflection, phase writes or altered payload.
+Readiness still requires an actual RSS sample;100/250/5000ms controls, output caps,
+exit guards and resource limits remain unchanged.
+
+[Node24.21 timers](https://nodejs.org/download/release/v24.21.0/docs/api/timers.html#scheduling-timers)
+do not guarantee exact callback timing. The offsets describe when the owner ran
+its existing callbacks, not when the reader finished a native operation.
+[ELU](https://nodejs.org/download/release/v24.21.0/docs/api/perf_hooks.html#performanceeventlooputilizationutilization1-utilization2)
+measures event-provider active/idle time, not CPU utilization. Synchronous
+blocking can produce high ELU without high CPU use. Neither high activity nor
+idle time proves an exclusive cause, or distinguishes reader descheduling,
+PowerShell initialization, native memory lookup, sleep or pipe delivery delays.
+
+Main0d8's normal Windows CSV failure occurred in the repeated build after its
+measured build and independent observer had finished: eight reports,362ms silence.
+Its separate packed failure had no first sample by5009ms. The owner context is
+preparation for the next required native qualification, not a causal correction
+or a reproduction of either historical failure. Controlled wiring tests preserve
+these attribution limits. The separate phase-flag replay remains instrumented,
+nonqualifying evidence and cannot explain a normal failure merely by passing.
+
 ## POSIX reader failures
 
 Issue #801 also retains two distinct acceptance failures from PR #800 head
@@ -169,7 +204,8 @@ places; they are not clamped into a different observation.
 
 The 16-event ring, 1024-character pending buffer and 4096-byte final line remain.
 Markers never count as RSS reports. Diagnostics add no timer or readiness rule;
-without the flag, no event-loop utilization call is made. The exact large-pipe
+without the flag, no reader-phase instrumentation is added. Normal owner-loop
+failure context is described below. The exact large-pipe
 scenario enables the flag only on Windows and restores its original environment.
 Its source documents, build command, output assertions and deadlines stay intact.
 
