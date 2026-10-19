@@ -27,15 +27,8 @@ const ALLOWED_LICENSES = new Set([
   '(MIT OR GPL-3.0-or-later)',
 ]);
 const STALE_AFTER_DAYS = 548;
-const REPORT_DATE = '2026-10-13';
-const REPORT_DATE_TIME = `${REPORT_DATE}T00:00:00.000Z`;
-const EMPTY_AUDIT_VULNERABILITIES = {
-  info: 0,
-  low: 0,
-  moderate: 0,
-  high: 0,
-  critical: 0,
-};
+const EXCEPTIONS = join(ROOT, 'scripts', 'supply-chain-exceptions.json');
+const AUDIT_SEVERITIES = ['info', 'low', 'moderate', 'high', 'critical'];
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -123,30 +116,83 @@ function runNpm(args) {
 
 function npmView(name) {
   const value = JSON.parse(runNpm(['view', name, 'version', 'time', 'license', 'dist', '--json']));
-  return Array.isArray(value) ? (value[0] ?? {}) : value;
+  if (!isRecord(value) || typeof value.version !== 'string' || value.version.trim() === '') {
+    throw new Error(`npm view ${name} produced no single version metadata object`);
+  }
+  const pinned = name.match(/@(\d+\.\d+\.\d+)$/)?.[1];
+  if (pinned !== undefined && value.version !== pinned) {
+    throw new Error(`npm view ${name} returned version ${value.version}`);
+  }
+  return value;
 }
 
-function auditJson() {
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseAudit(stdout, command) {
+  const value = JSON.parse(stdout);
+  const counts = value?.metadata?.vulnerabilities;
+  if (
+    !isRecord(value) ||
+    !isRecord(counts) ||
+    AUDIT_SEVERITIES.some(
+      (severity) => !Number.isSafeInteger(counts[severity]) || counts[severity] < 0,
+    )
+  ) {
+    throw new Error(`${command} produced no valid vulnerability counts`);
+  }
+  return value;
+}
+
+export function auditJson() {
+  const args = ['audit', '--prod', '--audit-level', 'moderate', '--json'];
+  let stdout;
   try {
-    const stdout = runPnpm(['audit', '--prod', '--audit-level', 'moderate', '--json']);
-    if (stdout.trim() === '' && process.platform === 'win32') {
-      return { metadata: { vulnerabilities: EMPTY_AUDIT_VULNERABILITIES } };
-    }
-    return JSON.parse(stdout);
+    stdout = runPnpm(args);
   } catch (error) {
-    const stdout = error.stdout?.toString() ?? '';
-    if (stdout.trim() !== '') return JSON.parse(stdout);
-    throw error;
+    const audit = parseAudit(error.stdout?.toString() ?? '', 'pnpm audit --prod --json');
+    if (
+      !Number.isInteger(error.status) ||
+      error.status <= 0 ||
+      AUDIT_SEVERITIES.every((severity) => audit.metadata.vulnerabilities[severity] === 0)
+    ) {
+      throw error;
+    }
+    return audit;
   }
+  return parseAudit(stdout, 'pnpm audit --prod --json');
 }
 
-function licenseInventory() {
-  const stdout = runPnpm(['licenses', 'list', '--prod', '--json']);
-  if (stdout.trim() !== '') return JSON.parse(stdout);
-  if (process.platform !== 'win32' || !existsSync(REPORT)) {
-    throw new Error('pnpm licenses list --prod --json produced no JSON output');
+export function licenseInventory() {
+  const value = JSON.parse(runPnpm(['licenses', 'list', '--prod', '--json']));
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length === 0 ||
+    Object.entries(value).some(
+      ([license, entries]) =>
+        license.trim() === '' ||
+        !Array.isArray(entries) ||
+        entries.length === 0 ||
+        entries.some(
+          (entry) =>
+            !isRecord(entry) ||
+            typeof entry.name !== 'string' ||
+            entry.name.trim() === '' ||
+            !Array.isArray(entry.versions) ||
+            entry.versions.length === 0 ||
+            entry.versions.some(
+              (version) => typeof version !== 'string' || version.trim() === '',
+            ) ||
+            !Array.isArray(entry.paths) ||
+            entry.paths.length === 0 ||
+            entry.paths.some((path) => typeof path !== 'string' || path.trim() === ''),
+        ),
+    )
+  ) {
+    throw new Error('pnpm licenses list --prod --json produced no valid installed inventory');
   }
-  return Object.fromEntries(readJson(REPORT).licenses.map((license) => [license, []]));
+  return value;
 }
 
 function packageLicenseMap(licenses) {
@@ -164,7 +210,9 @@ function packageLicenseMap(licenses) {
 }
 
 function daysBetween(a, b) {
-  return Math.max(0, Math.floor((Date.parse(a) - Date.parse(b)) / 86_400_000));
+  const days = Math.floor((Date.parse(a) - Date.parse(b)) / 86_400_000);
+  if (!Number.isFinite(days)) throw new Error('registry release date is missing or invalid');
+  return Math.max(0, days);
 }
 
 function newestRegistryDate(view) {
@@ -177,11 +225,15 @@ function pinnedPublishDate(view, specifiers) {
 }
 
 function pinnedSpecifier(specifiers) {
-  return specifiers.find((specifier) => /^\d+\.\d+\.\d+$/.test(specifier)) ?? null;
+  return specifiers.length === 1 && /^\d+\.\d+\.\d+$/.test(specifiers[0]) ? specifiers[0] : null;
 }
 
 function provenanceStatus(view, dependency) {
-  if (!dependency.dependencyTypes.includes('dependencies')) {
+  if (
+    !dependency.dependencyTypes.some(
+      (type) => type === 'dependencies' || type === 'optionalDependencies',
+    )
+  ) {
     return { status: 'not-required', reason: 'not in the production direct dependency set' };
   }
   const pinned = pinnedSpecifier(dependency.specifiers);
@@ -192,6 +244,9 @@ function provenanceStatus(view, dependency) {
   if (predicateType === undefined) {
     return { status: 'missing', reason: 'npm registry metadata has no provenance attestation' };
   }
+  if (typeof predicateType !== 'string' || predicateType.trim() === '') {
+    throw new Error(`${dependency.name}@${pinned}: malformed provenance predicate`);
+  }
   return {
     status: 'present',
     predicateType,
@@ -199,19 +254,22 @@ function provenanceStatus(view, dependency) {
   };
 }
 
-function healthReport() {
+export function healthReport() {
+  const observedAt = new Date().toISOString();
+  const exceptions = readJson(EXCEPTIONS);
   const licenses = licenseInventory();
   const licenseByPackage = packageLicenseMap(licenses);
   const audit = auditJson();
-  const vulnerabilities = audit.metadata?.vulnerabilities ?? {};
+  const vulnerabilities = audit.metadata.vulnerabilities;
   const dependencies = directDependencies().map((dependency) => {
     const view = npmView(dependency.name);
     const latestReleaseAt = newestRegistryDate(view);
-    const pinnedPublishedAt = pinnedPublishDate(view, dependency.specifiers);
     const pinned = pinnedSpecifier(dependency.specifiers);
     const licenseView = pinned === null ? view : npmView(`${dependency.name}@${pinned}`);
-    const daysSinceLastRelease =
-      latestReleaseAt === undefined ? null : daysBetween(REPORT_DATE_TIME, latestReleaseAt);
+    const pinnedPublishedAt = pinnedPublishDate(licenseView, dependency.specifiers);
+    const daysSinceLastRelease = daysBetween(observedAt, latestReleaseAt);
+    const staleDecision =
+      exceptions.stale?.[`${dependency.name}@${dependency.specifiers.join(' || ')}`];
     return {
       name: dependency.name,
       specifiers: dependency.specifiers,
@@ -222,21 +280,21 @@ function healthReport() {
       latestReleaseAt: latestReleaseAt ?? null,
       daysSinceLastRelease,
       license: licenseView.license ?? licenseByPackage.get(dependency.name) ?? 'unknown',
-      provenance: provenanceStatus(view, dependency),
+      provenance: provenanceStatus(licenseView, dependency),
       health:
         daysSinceLastRelease !== null && daysSinceLastRelease > STALE_AFTER_DAYS
           ? {
               status: 'stale-warning',
-              owner: 'maintainer',
-              decision:
-                'See docs/architecture/dependencies.md for the recorded dependency decision.',
+              owner: staleDecision?.owner ?? null,
+              decision: staleDecision?.reason ?? null,
             }
           : { status: 'current' },
     };
   });
   return {
     schemaVersion: 1,
-    policyDate: REPORT_DATE,
+    policyDate: observedAt.slice(0, 10),
+    observedAt,
     staleAfterDays: STALE_AFTER_DAYS,
     audit: {
       command: 'pnpm audit --prod --audit-level moderate --json',
@@ -287,16 +345,14 @@ function cyclonedxFromReport(report) {
 /**
  * The registry's latest-version fields are a snapshot, not package identity.
  *
- * npm can publish a new release, or attach an attestation, while this check is running. Those
- * changes must not make a committed report fail an otherwise clean build. The fields below are
- * the contract the report must keep current: the audit result, dependency inventory, licences
- * and pinned package identity. The volatile registry observation fields remain useful in the
- * report, but are deliberately not used as a byte-for-byte freshness key.
+ * Observation time and latest releases do not define pinned dependency identity. Compare the
+ * audit result, dependency inventory, licenses and pinned attestation status. Evaluate current
+ * maintenance age separately, so a report does not become stale merely at midnight while new
+ * missing attestations and expired maintenance decisions still fail the gate.
  */
 export function stableReportView(report) {
   return {
     schemaVersion: report.schemaVersion,
-    policyDate: report.policyDate,
     staleAfterDays: report.staleAfterDays,
     audit: report.audit,
     licenses: report.licenses,
@@ -307,6 +363,10 @@ export function stableReportView(report) {
         dependencyTypes: dependency.dependencyTypes,
         references: dependency.references,
         license: dependency.license,
+        provenance: {
+          status: dependency.provenance.status,
+          predicateType: dependency.provenance.predicateType ?? null,
+        },
       }))
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
   };
@@ -357,8 +417,8 @@ function checkLicenses(report, problems) {
 }
 
 function checkAudit(report, problems) {
-  const count = Object.values(report.audit.vulnerabilities).reduce(
-    (sum, value) => sum + Number(value),
+  const count = AUDIT_SEVERITIES.reduce(
+    (sum, severity) => sum + report.audit.vulnerabilities[severity],
     0,
   );
   if (count > 0) problems.push(`production audit reports ${count} vulnerabilities`);
@@ -366,26 +426,50 @@ function checkAudit(report, problems) {
 
 export function checkContributorAudit(problems) {
   try {
-    runPnpm(['audit', '--audit-level', 'high']);
+    const audit = parseAudit(
+      runPnpm(['audit', '--audit-level', 'high', '--json']),
+      'pnpm audit --audit-level high --json',
+    );
+    if (audit.metadata.vulnerabilities.high > 0 || audit.metadata.vulnerabilities.critical > 0) {
+      throw new Error('contributor audit reports High or Critical findings');
+    }
   } catch (error) {
     console.error(error.stdout?.toString() || error.stderr?.toString() || error.message);
     problems.push('contributor audit failed; run pnpm audit --audit-level high');
   }
 }
 
-function checkDocs(report, problems) {
+export function checkDocs(report, problems, exceptions = readJson(EXCEPTIONS)) {
   const text = readFileSync(DOC, 'utf8');
   for (const dependency of report.dependencies) {
     if (!text.includes(`\`${dependency.name}\``)) {
       problems.push(`docs/architecture/dependencies.md has no rationale for ${dependency.name}`);
     }
-    if (dependency.health.status === 'stale-warning' && !text.includes(dependency.name)) {
-      problems.push(`stale dependency ${dependency.name} has no recorded decision`);
+  }
+  checkDependencyDecisions(report, problems, exceptions);
+}
+
+export function checkDependencyDecisions(report, problems, exceptions = readJson(EXCEPTIONS)) {
+  for (const dependency of report.dependencies) {
+    const key = `${dependency.name}@${dependency.specifiers.join(' || ')}`;
+    for (const [condition, active] of [
+      ['stale', dependency.health.status === 'stale-warning'],
+      ['missingProvenance', dependency.provenance.status === 'missing'],
+    ]) {
+      if (!active) continue;
+      const decision = exceptions[condition]?.[key];
+      if (
+        !isRecord(decision) ||
+        typeof decision.owner !== 'string' ||
+        decision.owner.trim() === '' ||
+        typeof decision.reason !== 'string' ||
+        decision.reason.trim() === ''
+      ) {
+        problems.push(`${key}: ${condition} requires an explicit owner and decision`);
+      }
     }
-    if (dependency.provenance.status === 'missing' && !text.includes(dependency.name)) {
-      problems.push(
-        `dependency ${dependency.name} has missing provenance with no recorded decision`,
-      );
+    if (dependency.provenance.status === 'not-checked') {
+      problems.push(`${dependency.name}: production provenance requires one exact pinned version`);
     }
   }
 }

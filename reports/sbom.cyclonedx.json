@@ -263,11 +263,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.104.3"
+          "value": "5.104.4"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-15T07:53:35.788Z"
+          "value": "2026-10-17T17:55:14.077Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1015,7 +1015,7 @@
         },
         {
           "name": "lorepack:provenanceStatus",
-          "value": "present"
+          "value": "missing"
         }
       ]
     },
@@ -1039,7 +1039,7 @@
         },
         {
           "name": "lorepack:provenanceStatus",
-          "value": "present"
+          "value": "missing"
         }
       ]
     },
