@@ -2,6 +2,11 @@ import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from 'n
 import { readFile } from 'node:fs/promises';
 import { win32 } from 'node:path';
 import { LoreError } from '@lorepack/core';
+import {
+  createLinuxResidentReader,
+  type LinuxReader,
+  type LinuxReaderFactory,
+} from './linux_resident_reader.js';
 
 export interface ResidentMemoryMonitor {
   readonly ready: Promise<void>;
@@ -11,6 +16,8 @@ export interface ResidentMemoryMonitor {
     error: LoreError | null;
   };
   stop(): void;
+  settle(): Promise<void>;
+  readonly closed: Promise<void>;
 }
 
 const INTERVAL_MS = 100;
@@ -66,12 +73,15 @@ export function readMacResidentMemory(reader: ChildProcessWithoutNullStreams): P
   });
 }
 
-export async function readLinuxResidentMemory(pid: number): Promise<number | null> {
+export async function readLinuxResidentMemory(
+  pid: number,
+  signal = AbortSignal.timeout(READER_TIMEOUT_MS),
+): Promise<number | null> {
   let report: string;
   try {
     report = await readFile(`/proc/${pid}/smaps_rollup`, {
       encoding: 'utf8',
-      signal: AbortSignal.timeout(READER_TIMEOUT_MS),
+      signal,
     });
   } catch (error) {
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ESRCH')
@@ -158,6 +168,7 @@ export function createReportingWatchdog(
 export function monitorResidentMemory(
   parser: ChildProcess,
   limitMiB: number,
+  linuxFactory: LinuxReaderFactory = createLinuxResidentReader,
 ): ResidentMemoryMonitor {
   const state: ResidentMemoryMonitor['state'] = { bytes: null, exceeded: false, error: null };
   let resolveReady: () => void = () => {};
@@ -167,6 +178,17 @@ export function monitorResidentMemory(
     rejectReady = reject;
   });
   let stopped = false;
+  let linuxReader: LinuxReader | undefined;
+  const settle = () => linuxReader?.settle() ?? Promise.resolve();
+  const result = {
+    ready,
+    state,
+    stop: () => stop(),
+    settle,
+    get closed() {
+      return linuxReader?.closed ?? Promise.resolve();
+    },
+  };
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reader: ChildProcess | undefined;
   let reporting: ReturnType<typeof createReportingWatchdog> | undefined;
@@ -195,6 +217,7 @@ export function monitorResidentMemory(
     reporting?.stop();
     startup?.stop();
     reader?.kill('SIGKILL');
+    linuxReader?.stop();
   };
   const alive = (): boolean => {
     if (parser.pid === undefined || parser.exitCode !== null || parser.signalCode !== null)
@@ -206,8 +229,14 @@ export function monitorResidentMemory(
       return (error as NodeJS.ErrnoException).code !== 'ESRCH';
     }
   };
-  const fail = (cause: unknown): void => {
-    if (stopped || !alive()) return;
+  const fail = (cause: unknown, authoritative = false): void => {
+    const native = cause instanceof Error ? cause.cause : undefined;
+    const disappeared =
+      native !== null &&
+      typeof native === 'object' &&
+      'code' in native &&
+      (native.code === 'ENOENT' || native.code === 'ESRCH');
+    if ((!authoritative && (stopped || !alive())) || (disappeared && !alive())) return;
     if (diagnostic && cause instanceof Error) {
       diagnosticBaseMessage = cause.message;
       diagnosticCause = cause;
@@ -224,11 +253,11 @@ export function monitorResidentMemory(
     );
     state.error = error;
     stop();
-    parser.kill('SIGKILL');
+    if (alive()) parser.kill('SIGKILL');
     rejectReady(error);
   };
-  const sample = (bytes: number): void => {
-    if (stopped) return;
+  const sample = (bytes: number, authoritative = false): void => {
+    if (stopped && !authoritative) return;
     if (!Number.isSafeInteger(bytes) || bytes < 0) {
       fail(new Error('The operating system returned an invalid resident size.'));
       return;
@@ -242,7 +271,7 @@ export function monitorResidentMemory(
     if (bytes > limitMiB * 1024 * 1024) {
       state.exceeded = true;
       stop();
-      parser.kill('SIGKILL');
+      if (alive()) parser.kill('SIGKILL');
     }
   };
   reporting = createReportingWatchdog(
@@ -257,16 +286,30 @@ export function monitorResidentMemory(
   const pid = parser.pid;
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 0) {
     rejectReady(new Error('The parser process did not start.'));
-    return { ready, state, stop };
+    return result;
   }
 
-  if (process.platform === 'win32') {
+  if (process.platform === 'linux') {
+    try {
+      linuxReader = linuxFactory(pid, limitMiB, {
+        sample,
+        error: fail,
+        gone: (reason) => {
+          if (reason === 'identity-mismatch' && alive())
+            fail(new Error('Linux parser memory identity changed.'));
+          else stop();
+        },
+      });
+    } catch (error) {
+      fail(error);
+    }
+  } else if (process.platform === 'win32') {
     const systemRoot = Object.entries(process.env).find(
       ([name]) => name.toLowerCase() === 'systemroot',
     )?.[1];
     if (systemRoot === undefined || !win32.isAbsolute(systemRoot)) {
       fail(new Error('Windows did not provide an absolute SystemRoot.'));
-      return { ready, state, stop };
+      return result;
     }
     const command =
       `$ErrorActionPreference='Stop'; ` +
@@ -423,5 +466,5 @@ export function monitorResidentMemory(
     };
     void poll();
   }
-  return { ready, state, stop };
+  return result;
 }

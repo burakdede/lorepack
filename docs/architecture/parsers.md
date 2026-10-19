@@ -130,6 +130,16 @@ observation. An observed threshold breach stops the child with a `parse-memory`
 warning naming the resident-memory budget. Observer failure stops the build with
 `LORE_E_PARSE_FAILED`; it never silently disables the control.
 
+Linux procfs reads run on a built-in sampler worker so compiler transforms cannot
+block the reader's JavaScript loop. The public host retains the actual parser
+child and every signal. The sampler owns no subprocess and cannot signal a PID.
+Terminal state is shared before its detail is posted, and the host checks it
+before accepting parser results or classifying exit. Sampling continues across
+reused-child jobs with the same cadence and native read deadline. Enforcement
+still depends on the owner's event loop, as before; this is no kernel quota.
+The CLI ships the sampler as an explicit helper. [ADR 0047](../adr/0047-linux-resident-reader-isolation.md)
+records the boundary, cleanup requirements and unresolved Windows failures.
+
 Sampling can overshoot, especially during a large allocation or OS scheduling delay.
 This is not a kernel memory quota. [ADR 0046](../adr/0046-parser-resident-memory.md)
 records the baseline, design and remaining independent three-platform qualification

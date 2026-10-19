@@ -7,6 +7,11 @@ import {
   type ParseInput,
 } from '@lorepack/core';
 import { type ChildReply, deserializeError } from './isolation-protocol.js';
+import {
+  createLinuxResidentReader,
+  type LinuxReaderFactory,
+  readLinuxProcessBirthSync,
+} from './linux_resident_reader.js';
 import { PARSERS } from './registry-parsers.js';
 import { monitorResidentMemory, type ResidentMemoryMonitor } from './resident_memory.js';
 
@@ -120,6 +125,7 @@ export class ParserHost {
   readonly #limits: ParseLimits;
   readonly #residentMemoryMb: number;
   #child: Promise<Child> | null = null;
+  readonly #children = new Set<Child>();
 
   constructor(limits: ParseLimits = PARSE_LIMITS.defaults) {
     this.#limits = limits;
@@ -185,17 +191,21 @@ export class ParserHost {
       signal?.addEventListener('abort', onAbort, { once: true });
 
       const onMessage = (reply: ChildReply): void => {
-        if (child.memory.state.exceeded || child.memory.state.error !== null) return;
-        if (reply.kind === 'parsed')
-          finish(() => resolve({ kind: 'parsed', result: reply.result }));
-        else if (reply.kind === 'failed') {
-          const error = deserializeError(reply.error);
-          finish(() => (overflowedStack(error) ? resolve(NESTING_TOO_DEEP) : reject(error)));
-        }
+        void child.memory.settle().then(() => {
+          if (settled) return;
+          if (child.memory.state.exceeded || child.memory.state.error !== null) return;
+          if (reply.kind === 'parsed')
+            finish(() => resolve({ kind: 'parsed', result: reply.result }));
+          else if (reply.kind === 'failed') {
+            const error = deserializeError(reply.error);
+            finish(() => (overflowedStack(error) ? resolve(NESTING_TOO_DEEP) : reject(error)));
+          }
+        });
       };
       child.process.on('message', onMessage);
 
-      void child.closed.then(({ code, signal: exitSignal }) => {
+      void child.closed.then(async ({ code, signal: exitSignal }) => {
+        await child.memory.settle();
         if (settled) return;
         this.#child = null;
         if (child.memory.state.error !== null) {
@@ -222,14 +232,36 @@ export class ParserHost {
 
   /** Ends the child. Safe to call more than once, and with no child started. */
   close(): void {
-    const child = this.#child;
     this.#child = null;
-    void child?.then((started) => started.process.kill('SIGKILL')).catch(() => undefined);
+    for (const child of this.#children) {
+      child.memory.stop();
+      child.process.kill('SIGKILL');
+    }
+  }
+
+  async closeAndWait(): Promise<void> {
+    const children = [...this.#children];
+    this.close();
+    await Promise.all(
+      children.map(async (child) => {
+        await child.closed;
+        await child.memory.closed;
+        if (child.memory.state.error !== null) throw child.memory.state.error;
+      }),
+    );
   }
 
   #ready(): Promise<Child> {
     if (this.#child === null) {
-      const pending = start(this.#limits, this.#residentMemoryMb);
+      const pending = start(this.#limits, this.#residentMemoryMb, (child) => {
+        this.#children.add(child);
+        void child.closed
+          .then(async () => {
+            await child.memory.closed;
+            this.#children.delete(child);
+          })
+          .catch(() => undefined);
+      });
       this.#child = pending;
       void pending.then(
         (child) => {
@@ -243,7 +275,8 @@ export class ParserHost {
       );
     }
     const pending = this.#child;
-    return pending.then((child) => {
+    return pending.then(async (child) => {
+      await child.memory.settle();
       if (
         child.used &&
         (child.memory.state.exceeded ||
@@ -258,7 +291,11 @@ export class ParserHost {
   }
 }
 
-function start(limits: ParseLimits, residentMemoryMb: number): Promise<Child> {
+function start(
+  limits: ParseLimits,
+  residentMemoryMb: number,
+  started?: (child: Child) => void,
+): Promise<Child> {
   const child = fork(fileURLToPath(new URL('./parse-child.js', import.meta.url)), [], {
     // Explicit rather than inherited: the parent may run under a test runner's loader or a
     // debugger flag, and the child must start as a plain Node with only these set.
@@ -286,15 +323,47 @@ function start(limits: ParseLimits, residentMemoryMb: number): Promise<Child> {
   const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
     child.once('close', (code, signal) => resolve({ code, signal }));
   });
-  const memory = monitorResidentMemory(child, residentMemoryMb);
+  let linuxFactory: LinuxReaderFactory | undefined;
+  if (process.platform === 'linux' && child.pid !== undefined) {
+    try {
+      const expectedBirth = readLinuxProcessBirthSync(child.pid);
+      linuxFactory = (pid, limit, callbacks) =>
+        createLinuxResidentReader(
+          pid,
+          limit,
+          callbacks,
+          new URL('./linux_resident_reader_worker.js', import.meta.url),
+          expectedBirth,
+        );
+    } catch (cause) {
+      linuxFactory = () => {
+        throw cause;
+      };
+    }
+  }
+  const memory = monitorResidentMemory(child, residentMemoryMb, linuxFactory);
   const result: Child = { process: child, stderr, closed, memory, used: false };
-  void closed.then(() => memory.stop());
+  started?.(result);
+  // closeAndWait observes teardown failures through memory.closed.
+  void closed
+    .then(async () => {
+      await memory.settle();
+      memory.stop();
+      await memory.closed;
+    })
+    .catch(() => undefined);
 
   return new Promise<Child>((resolve, reject) => {
     let parserReady = false;
     let memoryReady = false;
+    let completing = false;
     const complete = (): void => {
-      if (parserReady && memoryReady) resolve(result);
+      if (!parserReady || !memoryReady || completing) return;
+      completing = true;
+      void memory.settle().then(() => {
+        if (memory.state.error !== null) reject(memory.state.error);
+        else resolve(result);
+      });
     };
     void memory.ready.then(() => {
       memoryReady = true;
@@ -310,7 +379,8 @@ function start(limits: ParseLimits, residentMemoryMb: number): Promise<Child> {
     // Kept for the child's whole life: an `error` event with no listener would throw in the
     // parent. A failed send to a child that died is answered by `close` below, not here.
     child.on('error', reject);
-    void closed.then(({ code, signal }) => {
+    void closed.then(async ({ code, signal }) => {
+      await memory.settle();
       if (memory.state.exceeded) {
         resolve(result);
         return;

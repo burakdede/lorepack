@@ -57,8 +57,9 @@ const nodeOptionImports = (paths: readonly string[]): string =>
  * Runs `lorepack build` in its own Node process under the permission model.
  *
  * The grants are the whole sandbox: read anywhere, write only inside the project, start a
- * child process, and nothing else. With no `--allow-worker`, `--allow-addons` or
- * `--allow-wasi`, Node refuses each of those outright.
+ * child process, and only its readonly Linux RSS sampler worker. The monitor admits
+ * that exact helper with read permission alone and refuses other workers. No addon
+ * or WASI grant is provided.
  *
  * `--allow-child-process` is there because the build parses every file in a forked
  * `parse-child.js` (#594). The monitor admits that fork only under the permission model with
@@ -81,6 +82,7 @@ export function runSandboxedBuild(projectRoot: string, options: SandboxOptions =
     // grant against the resolved path a write lands on.
     `--allow-fs-write=${realpathSync(projectRoot)}`,
     '--allow-child-process',
+    ...(process.platform === 'linux' ? ['--allow-worker'] : []),
     ...(options.inject ?? []).flatMap(imports),
     CLI,
     'build',
