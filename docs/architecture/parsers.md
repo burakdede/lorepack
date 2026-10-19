@@ -342,6 +342,13 @@ would be a large surface with quiet failure modes.
 The cost is recorded rather than hidden: mammoth pulls `jszip`, a second ZIP implementation
 alongside the `yauzl` the XLSX reader uses. Accepted deliberately.
 
+Before mammoth reads a DOCX, `yauzl` checks every archive member for duplicate names, a
+512-part ceiling, an 80 MiB per-part ceiling and a 160 MiB total uncompressed ceiling. It
+checks declared sizes first and streams the members to verify actual bytes. A 64 MiB document
+still reaches the separate parser-process memory guard; a 100 MiB document bomb is refused
+with `LORE_E_ENVELOPE_EXCEEDED` before mammoth allocates its HTML tree. The archive ceilings
+bound byte expansion, while the process guard remains necessary for excessive node counts.
+
 **Re-check due 2026-08-04 plus one year**, or sooner if releases stop appearing. A library
 going quiet is exactly the trigger that produced #113.
 
@@ -355,6 +362,9 @@ refuse to infer headings: there, no declaration exists to read.
 A style with no semantic equivalent is **named in a warning**, deduplicated, once per style
 rather than once per paragraph. That information exists only at conversion time: once the HTML
 is produced, a paragraph styled `CustomCallout` is indistinguishable from one never styled.
+When mammoth reports an error while omitting content, the parser adds one counted
+`docx-dropped-content` warning with `loss: {}`. It does not include external image paths from
+the underlying error in the warning.
 
 ### A DOCX has no pages
 

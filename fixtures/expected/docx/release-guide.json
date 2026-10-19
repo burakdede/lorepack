@@ -11,7 +11,7 @@
       "pagination": "none: a DOCX is paginated at render time, so it has no page numbers"
     },
     "parserId": "docx",
-    "parserVersion": "0.1.0",
+    "parserVersion": "0.1.1",
     "relativePath": "documents/docx/release-guide.docx",
     "sourceId": "fixtures",
     "status": "active",
