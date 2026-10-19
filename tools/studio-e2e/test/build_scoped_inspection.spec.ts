@@ -9,7 +9,7 @@ const BINARY = join(import.meta.dirname, '../../../packages/cli/dist/public-entr
 
 test('Stored text follows an external build activation, issue609', async ({
   page,
-  session,
+  isolatedSession: session,
 }, info) => {
   await page.goto(`${session.url}/#/sources`);
   await page.getByRole('button', { name: 'docs/runbook.md' }).click();
@@ -54,7 +54,10 @@ test('Stored text follows an external build activation, issue609', async ({
   });
 });
 
-test('Copy as export follows the assembled bundle, issue609', async ({ page, session }) => {
+test('Copy as export follows the assembled bundle, issue609', async ({
+  page,
+  isolatedSession: session,
+}) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(`${session.url}/#/playground`);
   await page.getByRole('textbox', { name: 'Task' }).fill('pipeline input output');
