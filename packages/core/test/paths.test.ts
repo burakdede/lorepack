@@ -1,10 +1,11 @@
 import { sep } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LoreError } from '../src/errors/lore-error.js';
 import {
   assertNoCaseCollisions,
   compareCanonical,
   findCaseCollisions,
+  hasWindowsDriveLetter,
   isInsideRoot,
   normalizeUnicode,
   sortCanonical,
@@ -101,12 +102,61 @@ describe('toCanonical', () => {
     expect(() => toCanonical(WINDOWS_ROOT, input)).toThrowError(LoreError);
   });
 
+  it.each([
+    [
+      String.raw`\\?\C:\project\a.md`,
+      'Device',
+      'Use an ordinary filesystem path inside the project.',
+    ],
+    [String.raw`\\.\pipe\thing`, 'Device', 'Use an ordinary filesystem path inside the project.'],
+    [
+      String.raw`\\server\share\a.md`,
+      'UNC',
+      'Map the share to a drive letter, or copy the sources into the project.',
+    ],
+  ])('identifies the unsupported namespace and recovery for %s', (input, kind, remediation) => {
+    const root = onWindows ? WINDOWS_ROOT : POSIX_ROOT;
+    const file = `${root}${sep}ordinary.md`;
+    const expected = expect.objectContaining({
+      code: 'LORE_E_PATH_ESCAPE',
+      message: expect.stringMatching(new RegExp(`^${kind} paths are not supported:`)),
+      path: input,
+      remediation,
+    });
+    expect(() => toCanonical(root, input)).toThrow(expected);
+    expect(() => toCanonical(input, file)).toThrow(expected);
+  });
+
+  it.each([String.raw`embedded\\.\inside.md`, String.raw`embedded\\server\share.md`])(
+    'accepts a contained path whose interior resembles a namespace: %s',
+    (relative) => {
+      const root = onWindows ? WINDOWS_ROOT : POSIX_ROOT;
+      expect(() => toCanonical(root, `${root}${sep}${relative}`)).not.toThrow();
+    },
+  );
+
   it('normalizes decomposed unicode filenames to NFC', () => {
     const root = onWindows ? WINDOWS_ROOT : POSIX_ROOT;
     const decomposed = normalizeUnicode('cafe\u0301.md').normalize('NFD');
     const file = onWindows ? `${WINDOWS_ROOT}\\${decomposed}` : `${POSIX_ROOT}/${decomposed}`;
     expect(toCanonical(root, file)).toBe('café.md');
   });
+});
+
+describe('Windows drive prefixes', () => {
+  it.each(['C:\\project\\a.md', 'z:relative.md', 'A:/project/a.md'])(
+    'recognizes the leading ASCII drive letter in %s',
+    (path) => {
+      expect(hasWindowsDriveLetter(path)).toBe(true);
+    },
+  );
+
+  it.each(['folder/C:notes.md', '/C:/project/a.md', '1:/project/a.md', '_:relative.md'])(
+    'does not infer a drive prefix from %s',
+    (path) => {
+      expect(hasWindowsDriveLetter(path)).toBe(false);
+    },
+  );
 });
 
 describe('isInsideRoot', () => {
@@ -122,6 +172,24 @@ describe('isInsideRoot', () => {
 describe('toDisplay', () => {
   it('renders native separators for the user while ids stay POSIX', () => {
     expect(toDisplay('docs/a/b.md')).toBe(['docs', 'a', 'b.md'].join(sep));
+  });
+
+  it.each([
+    ['/', 'docs/a/b.md'],
+    ['\\', 'docs\\a\\b.md'],
+  ])('renders with the platform separator %s', async (separator, expected) => {
+    vi.resetModules();
+    vi.doMock('node:path', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('node:path')>()),
+      sep: separator,
+    }));
+    try {
+      const paths = await import('../src/paths/canonical.js');
+      expect(paths.toDisplay('docs/a/b.md')).toBe(expected);
+    } finally {
+      vi.doUnmock('node:path');
+      vi.resetModules();
+    }
   });
 });
 
