@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -46,6 +46,7 @@ describe('check:no-native', () => {
     const dir = packageDir(root, name);
     writeJson(join(dir, 'package.json'), { name, ...manifest });
     for (const extraFile of extraFiles) {
+      mkdirSync(dirname(join(dir, extraFile)), { recursive: true });
       writeFileSync(join(dir, extraFile), '', 'utf8');
     }
   }
@@ -120,4 +121,170 @@ describe('check:no-native', () => {
       'native add-on (binding.gyp) at node_modules/native-helper',
     );
   });
+
+  it('inspects a dependency whose exports hide its manifest', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { hono: '1.0.0' },
+    });
+    writeInstalledPackage(
+      root,
+      'hono',
+      {
+        exports: { '.': './index.js' },
+        scripts: { postinstall: 'node-gyp rebuild' },
+      },
+      ['index.js', 'binding.gyp'],
+    );
+
+    expect(checkNoNative(root)).toContain('native add-on (binding.gyp) at node_modules/hono');
+    expect(checkNoNative(root)).toContain(
+      'published dependency hono (node_modules/hono) declares a "postinstall" script',
+    );
+  });
+
+  it('reports a banned optional dependency even when it is absent', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { 'pdfjs-dist': '1.0.0' },
+    });
+    writeInstalledPackage(root, 'pdfjs-dist', {
+      optionalDependencies: { '@napi-rs/canvas': '1.0.0' },
+    });
+
+    expect(checkNoNative(root)).toContain(
+      'published dependency pdfjs-dist declares banned dependency @napi-rs/canvas',
+    );
+  });
+
+  it.each<{ manifest: Record<string, unknown>; files: string[]; message: string }>([
+    { manifest: { gypfile: true }, files: [], message: 'declares gypfile' },
+    { manifest: {}, files: ['prebuilds/platform/binding.node'], message: 'binding.node' },
+  ])(
+    'detects native artifacts without install hooks ($message)',
+    ({ manifest, files, message }) => {
+      const root = createRepo();
+      writeWorkspacePackage(root, 'packages/cli', {
+        name: '@lorepack/cli',
+        dependencies: { helper: '1.0.0' },
+      });
+      writeInstalledPackage(root, 'helper', manifest, files);
+
+      expect(checkNoNative(root).some((problem) => problem.includes(message))).toBe(true);
+    },
+  );
+
+  it.each(['dependencies', 'optionalDependencies', 'peerDependencies'])(
+    'reports absent declared %s',
+    (field) => {
+      const root = createRepo();
+      writeWorkspacePackage(root, 'packages/cli', {
+        name: '@lorepack/cli',
+        [field]: { missing: '1.0.0' },
+      });
+
+      expect(checkNoNative(root)).toContain(
+        'published dependency @lorepack/cli cannot resolve dependency missing',
+      );
+    },
+  );
+
+  it('inspects required peers and installed optional peers', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      peerDependencies: { required: '1.0.0', optional: '1.0.0', absent: '1.0.0' },
+      peerDependenciesMeta: { optional: { optional: true }, absent: { optional: true } },
+    });
+    writeInstalledPackage(root, 'required', {}, ['binding.gyp']);
+    writeInstalledPackage(root, 'optional', {}, ['binding.gyp']);
+
+    expect(checkNoNative(root)).toEqual([
+      'native add-on (binding.gyp) at node_modules/optional',
+      'native add-on (binding.gyp) at node_modules/required',
+    ]);
+  });
+
+  it('resolves nested scoped dependencies before hoisted copies', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { parent: '1.0.0' },
+    });
+    writeInstalledPackage(root, 'parent', { dependencies: { '@scope/helper': '1.0.0' } });
+    writeInstalledPackage(root, '@scope/helper', {});
+    writeInstalledPackage(packageDir(root, 'parent'), '@scope/helper', {}, ['binding.gyp']);
+
+    expect(checkNoNative(root)).toContain(
+      'native add-on (binding.gyp) at node_modules/parent/node_modules/@scope/helper',
+    );
+  });
+
+  it('inspects declared packages whose names also identify Node builtins', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { string_decoder: '1.0.0' },
+    });
+    writeInstalledPackage(root, 'string_decoder', {}, ['binding.gyp']);
+
+    expect(checkNoNative(root)).toContain(
+      'native add-on (binding.gyp) at node_modules/string_decoder',
+    );
+  });
+
+  it('follows physical package symlinks once through dependency cycles', () => {
+    const root = createRepo();
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { first: '1.0.0', second: '1.0.0' },
+    });
+    const store = join(root, '.store');
+    writeInstalledPackage(store, 'helper', { dependencies: { helper: '1.0.0' } }, ['binding.gyp']);
+    mkdirSync(join(root, 'node_modules'), { recursive: true });
+    for (const name of ['first', 'second']) {
+      symlinkSync(packageDir(store, 'helper'), packageDir(root, name), 'junction');
+    }
+
+    expect(checkNoNative(root)).toEqual([
+      'native add-on (binding.gyp) at .store/node_modules/helper',
+    ]);
+  });
+
+  it('permits only the explicitly removed absent pdfjs canvas optional edge', () => {
+    const root = createRepo();
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), "overrides:\n  '@napi-rs/canvas': '-'\n");
+    writeWorkspacePackage(root, 'packages/cli', {
+      name: '@lorepack/cli',
+      dependencies: { 'pdfjs-dist': '1.0.0' },
+    });
+    writeInstalledPackage(root, 'pdfjs-dist', {
+      optionalDependencies: { '@napi-rs/canvas': '1.0.0' },
+    });
+
+    expect(checkNoNative(root)).toEqual([]);
+
+    writeInstalledPackage(root, '@napi-rs/canvas', {});
+    expect(checkNoNative(root)).toContain(
+      'published dependency closure contains @napi-rs/canvas (node_modules/@napi-rs/canvas)',
+    );
+  });
+
+  it.each(['dependencies', 'optionalDependencies'])(
+    'does not exempt another package declaring removed canvas in %s',
+    (field) => {
+      const root = createRepo();
+      writeFileSync(join(root, 'pnpm-workspace.yaml'), "overrides:\n  '@napi-rs/canvas': '-'\n");
+      writeWorkspacePackage(root, 'packages/cli', {
+        name: '@lorepack/cli',
+        [field]: { '@napi-rs/canvas': '1.0.0' },
+      });
+
+      expect(checkNoNative(root)).toContain(
+        'published dependency @lorepack/cli declares banned dependency @napi-rs/canvas',
+      );
+    },
+  );
 });
