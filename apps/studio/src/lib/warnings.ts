@@ -1,5 +1,5 @@
 /**
- * `GET /v1/warnings`, the one shape cached under `['warnings']`.
+ * `GET /v1/warnings`, cached by the selected build id.
  *
  * Overview and Sources both read it and once each cached their own transformation under the
  * same key, so whichever route loaded first decided what the other received (#401). The
@@ -35,14 +35,19 @@ export interface WarningsReport {
   readonly excludedByRule: number | null;
 }
 
-export const WARNINGS_KEY = ['warnings'] as const;
+export const warningsKey = (buildId: string | undefined): readonly [string, string | undefined] => [
+  'warnings',
+  buildId,
+];
 
 export async function fetchWarnings({
   signal,
+  buildId,
 }: {
   readonly signal: AbortSignal;
+  readonly buildId: string;
 }): Promise<WarningsReport> {
-  const response = await fetch('/v1/warnings', { signal });
+  const response = await fetch(`/v1/warnings?buildId=${encodeURIComponent(buildId)}`, { signal });
   if (!response.ok) throw new Error('Warnings are not available from this server.');
   return (await response.json()) as WarningsReport;
 }

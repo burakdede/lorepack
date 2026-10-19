@@ -157,12 +157,16 @@ export class LoreClient {
     return this.#get(sourcePath(`/v1/sources/${encodeURIComponent(artifactId)}`, options), signal);
   }
 
-  listTables(signal?: AbortSignal): Promise<TableListResult> {
-    return this.#get('/v1/tables', signal);
+  listTables(signal?: AbortSignal, buildId?: string): Promise<TableListResult> {
+    return this.#get(sourcePath('/v1/tables', { buildId }), signal);
   }
 
-  describeTable(tableId: string, signal?: AbortSignal): Promise<TableDescription> {
-    return this.#get(`/v1/tables/${encodeURIComponent(tableId)}`, signal);
+  describeTable(
+    tableId: string,
+    signal?: AbortSignal,
+    buildId?: string,
+  ): Promise<TableDescription> {
+    return this.#get(sourcePath(`/v1/tables/${encodeURIComponent(tableId)}`, { buildId }), signal);
   }
 
   queryTable(
@@ -178,11 +182,7 @@ export class LoreClient {
     );
   }
 
-  /**
-   * Retried, because a GET here changes nothing and a cold server may not be listening yet.
-   * Bounded exponential backoff, and never on a response the server actually produced: a
-   * 400 means the request was wrong, and asking again more slowly will not fix it.
-   */
+  /** Retry transport failures for idempotent GETs, never server responses. */
   async #get<T>(path: string, signal?: AbortSignal): Promise<T> {
     if (this.#buildId !== undefined && path !== '/health') {
       const url = new URL(path, `${this.#baseUrl}/`);

@@ -112,17 +112,18 @@ function ContextTab(): React.JSX.Element {
   });
 
   const copyExport = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (sent: ReturnType<typeof request> & { buildId: string }) => {
       // The server renders it with the same function `lorepack export` calls, so what is copied
       // is what a chat product would receive rather than a second rendering of the same data.
       const response = await fetch('/v1/export', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(request()),
+        body: JSON.stringify(sent),
       });
-      if (!response.ok) throw new Error('The export could not be rendered.');
+      if (!response.ok) throw await response.json();
       const markdown = await response.text();
-      await navigator.clipboard?.writeText(markdown);
+      if (navigator.clipboard === undefined) throw new Error('The clipboard is not available.');
+      await navigator.clipboard.writeText(markdown);
       return markdown;
     },
     onSuccess: () => {
@@ -143,7 +144,10 @@ function ContextTab(): React.JSX.Element {
         className="task-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (task.trim() !== '' && !budgetError) run.mutate(request());
+          if (task.trim() !== '' && !budgetError) {
+            copyExport.reset();
+            run.mutate(request());
+          }
         }}
       >
         <label className="task-field">
@@ -305,12 +309,17 @@ function ContextTab(): React.JSX.Element {
               <button
                 type="button"
                 className="action"
-                onClick={() => copyExport.mutate()}
+                onClick={() => {
+                  if (run.variables !== undefined && run.data !== undefined) {
+                    copyExport.mutate({ ...run.variables, buildId: run.data.bundle.buildId });
+                  }
+                }}
                 disabled={copyExport.isPending}
               >
                 {copied ? 'Copied' : 'Copy as export'}
               </button>
             </div>
+            {copyExport.isError && <Failure {...toDisplayable(copyExport.error)} />}
             {run.data.bundle.selected.length === 0 ? (
               <Empty title="Nothing fit. Every candidate is in the omissions below." />
             ) : (

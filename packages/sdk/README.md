@@ -41,7 +41,9 @@ and freshness reports whether sources have moved on. IDs are not credentials. He
 
 Set `buildId` to a full build ID when creating `LoreClient` to keep all eight read capabilities
 on that version across activation changes. Search, context, source and query requests can
-override the client selection with their own `buildId`. Missing or unavailable versions fail
+override the client selection with their own `buildId`. Table catalog and detail reads accept
+the build ID as their second and third argument respectively, after the optional abort signal.
+Missing or unavailable versions fail
 with `LORE_E_BUILD_NOT_FOUND`; the client refuses a successful response with missing or
 different build proof as `LORE_E_SCHEMA_MISMATCH`, including an older server that ignores
 selection. Health is a server probe and is not selected by the client.
@@ -49,6 +51,8 @@ selection. Health is a server probe and is not selected by the client.
 ```ts
 const selected = new LoreClient({ baseUrl: 'http://127.0.0.1:4321', buildId: build.buildId });
 const bundle = await selected.contextForTask({ task: 'rollback procedure' });
+await selected.listTables(undefined, bundle.buildId);
+await selected.describeTable('pricing', undefined, bundle.buildId);
 ```
 
 ## Methods

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Tables } from '../src/routes/Tables.js';
@@ -115,6 +115,7 @@ const queryTable = vi.fn();
  */
 vi.mock('../src/lib/api.js', () => ({
   client: {
+    describeBuild: vi.fn(async () => ({ buildId: ORDERS.buildId })),
     listTables: (...args: unknown[]) => listTables(...args),
     describeTable: (...args: unknown[]) => describeTable(...args),
     queryTable: (...args: unknown[]) => queryTable(...args),
@@ -136,15 +137,42 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderRoute(): void {
+function renderRoute(): QueryClient {
+  const shared = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
+    <QueryClientProvider client={shared}>
       <Tables />
     </QueryClientProvider>,
   );
+  return shared;
 }
+
+it('loads table detail and clears the old query when the active build changes', async () => {
+  const nextBuild = `lore_${'c'.repeat(64)}`;
+  describeTable.mockImplementation(async (_id: string, _signal: AbortSignal, buildId: string) =>
+    buildId === nextBuild ? { ...ORDERS, buildId: nextBuild, rowCount: 4 } : ORDERS,
+  );
+  const shared = renderRoute();
+  await screen.findByRole('table', { name: 'Orders schema' });
+  await userEvent.click(screen.getByRole('button', { name: 'Run query' }));
+  expect(await screen.findByText(QUERY_RESULT.queryId)).toBeVisible();
+
+  act(() => {
+    shared.setQueryData(['build'], { buildId: nextBuild });
+  });
+  await waitFor(() => expect(screen.getByText('Rows').closest('.fact')).toHaveTextContent('4'));
+  expect(screen.queryByText(QUERY_RESULT.queryId)).not.toBeInTheDocument();
+  expect(describeTable).toHaveBeenCalledWith(ORDERS.tableId, expect.anything(), nextBuild);
+  await userEvent.click(screen.getByRole('button', { name: 'Run query' }));
+  await waitFor(() =>
+    expect(queryTable).toHaveBeenCalledWith(
+      ORDERS.tableId,
+      expect.any(String),
+      { buildId: nextBuild },
+      expect.anything(),
+    ),
+  );
+});
 
 describe('the schema a build recorded', () => {
   it('shows every column with the generated name a query has to use', async () => {
