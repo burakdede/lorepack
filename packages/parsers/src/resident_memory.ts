@@ -102,6 +102,7 @@ export function createStartupWatchdog(expired: () => void) {
 
 export function createReportingWatchdog(
   expired: (details: { reports: number; silenceMs: number }) => void,
+  observe?: (phase: 'arm' | 'fire' | 'check', reports: number) => void,
 ) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pending: ReturnType<typeof setImmediate> | undefined;
@@ -115,9 +116,12 @@ export function createReportingWatchdog(
       clearImmediate(pending);
       reports++;
       lastReport = performance.now();
+      observe?.('arm', reports);
       timer = setTimeout(() => {
         const observedReports = reports;
+        observe?.('fire', observedReports);
         pending = setImmediate(() => {
+          observe?.('check', reports);
           if (!stopped && reports === observedReports)
             expired({ reports, silenceMs: performance.now() - lastReport });
         });
@@ -147,6 +151,24 @@ export function monitorResidentMemory(
   let reader: ChildProcess | undefined;
   let reporting: ReturnType<typeof createReportingWatchdog> | undefined;
   let startup: ReturnType<typeof createStartupWatchdog> | undefined;
+  const diagnostic =
+    process.platform === 'win32' && process.env.LOREPACK_OBSERVER_DIAGNOSTIC === '1';
+  const diagnosticStartedAt = performance.now();
+  const events: Array<Record<string, string | number>> = [];
+  let diagnosticCause: Error | undefined;
+  let diagnosticBaseMessage = '';
+  let readerCloseObserved = false;
+  const traceSnapshot = () => JSON.stringify({ readerCloseObserved, events });
+  const refreshTrace = (): void => {
+    if (diagnosticCause === undefined) return;
+    diagnosticCause.message = `${diagnosticBaseMessage} Observer trace: ${traceSnapshot()}`;
+  };
+  const record = (event: Record<string, string | number>): void => {
+    if (!diagnostic) return;
+    if (events.length === 16) events.shift();
+    events.push({ ...event, parentMs: Math.round(performance.now() - diagnosticStartedAt) });
+    refreshTrace();
+  };
   const stop = (): void => {
     stopped = true;
     clearTimeout(timer);
@@ -166,11 +188,16 @@ export function monitorResidentMemory(
   };
   const fail = (cause: unknown): void => {
     if (stopped || !alive()) return;
+    if (diagnostic && cause instanceof Error) {
+      diagnosticBaseMessage = cause.message;
+      diagnosticCause = cause;
+      refreshTrace();
+    }
     const error = new LoreError(
       'LORE_E_PARSE_FAILED',
       'Could not observe parser resident memory.',
       {
-        cause,
+        cause: diagnosticCause ?? cause,
         remediation:
           'Restore access to the operating system process memory report before retrying. The parser was stopped.',
       },
@@ -198,12 +225,14 @@ export function monitorResidentMemory(
       parser.kill('SIGKILL');
     }
   };
-  reporting = createReportingWatchdog(({ reports, silenceMs }) =>
-    fail(
-      new Error(
-        `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.`,
+  reporting = createReportingWatchdog(
+    ({ reports, silenceMs }) =>
+      fail(
+        new Error(
+          `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.`,
+        ),
       ),
-    ),
+    diagnostic ? (phase, reports) => record({ kind: phase, reports }) : undefined,
   );
   const pid = parser.pid;
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 0) {
@@ -221,11 +250,17 @@ export function monitorResidentMemory(
     }
     const command =
       `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${pid}); ` +
+      (diagnostic ? '$n=1; $clock=[Diagnostics.Stopwatch]::StartNew(); ' : '') +
       `while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); ` +
+      (diagnostic
+        ? `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); $n++; `
+        : '') +
       `[Threading.Thread]::Sleep(${INTERVAL_MS}) }`;
     const startedAt = performance.now();
     let pending = '';
     let stderr = '';
+    let diagnosticPending = '';
+    let reports = 0;
     startup = createStartupWatchdog(() =>
       fail(
         new Error(
@@ -255,15 +290,41 @@ export function monitorResidentMemory(
           fail(new Error('The process memory observer returned a nonnumeric report.'));
           return;
         }
+        if (diagnostic) {
+          reports++;
+          record({ kind: 'receipt', reports, bytes: Number(line) });
+        }
         sample(Number(line));
         newline = pending.indexOf('\n');
       }
     });
     reader.stderr?.on('data', (chunk: string) => {
       stderr = (stderr + chunk).slice(0, 1024);
+      if (!diagnostic) return;
+      diagnosticPending = (diagnosticPending + chunk).slice(-1024);
+      let newline = diagnosticPending.indexOf('\n');
+      while (newline !== -1) {
+        const line = diagnosticPending.slice(0, newline).trim();
+        diagnosticPending = diagnosticPending.slice(newline + 1);
+        const match = /^LPR:(\d{1,10}):(\d{1,15})$/.exec(line);
+        if (match !== null) {
+          record({ kind: 'emission', reports: Number(match[1]), readerMs: Number(match[2]) });
+        }
+        newline = diagnosticPending.indexOf('\n');
+      }
     });
     reader.on('error', fail);
     reader.once('close', (code, signal) => {
+      if (diagnostic) {
+        readerCloseObserved = true;
+        record({ kind: 'close', exitCode: code ?? 'none', signal: signal ?? 'none' });
+        if (diagnosticCause !== undefined) {
+          const line = `LOREPACK_OBSERVER_DIAGNOSTIC_FINAL ${traceSnapshot()}`;
+          process.stderr.write(
+            `${Buffer.byteLength(line) <= 4096 ? line : 'LOREPACK_OBSERVER_DIAGNOSTIC_FINAL {"truncated":true}'}\n`,
+          );
+        }
+      }
       fail(new Error(`The process memory observer stopped (${code ?? signal}). ${stderr}`));
     });
   } else {

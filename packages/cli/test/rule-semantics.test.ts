@@ -57,20 +57,27 @@ const paths = (hits: readonly Hit[]): string[] => hits.map((hit) => hit.locator.
 
 describe('a declaration changes what is returned', () => {
   it('keeps a superseded source out of default results while it stays readable', async () => {
-    await built(async (lore) => {
-      const search = JSON.parse((await lore(['--json', 'search', 'rollback'])).stdout) as {
-        hits: Hit[];
-      };
-      expect(paths(search.hits)).toContain('docs/runbook-v2.md');
-      // The superseded file matches the query just as well. It is absent because the user
-      // said so, not because Lorepack judged it.
-      expect(paths(search.hits)).not.toContain('docs/runbook-v1.md');
+    const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+    if (process.platform === 'win32') process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+    try {
+      await built(async (lore) => {
+        const search = JSON.parse((await lore(['--json', 'search', 'rollback'])).stdout) as {
+          hits: Hit[];
+        };
+        expect(paths(search.hits)).toContain('docs/runbook-v2.md');
+        // The superseded file matches the query just as well. It is absent because the user
+        // said so, not because Lorepack judged it.
+        expect(paths(search.hits)).not.toContain('docs/runbook-v1.md');
 
-      // Still readable, which is the difference between superseded and excluded.
-      const read = await lore(['inspect', 'docs/runbook-v1.md']);
-      expect(read.code).toBe(0);
-      expect(read.stdout).toContain('runbook-v1.md');
-    });
+        // Still readable, which is the difference between superseded and excluded.
+        const read = await lore(['inspect', 'docs/runbook-v1.md']);
+        expect(read.code).toBe(0);
+        expect(read.stdout).toContain('runbook-v1.md');
+      });
+    } finally {
+      if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+      else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+    }
   });
 
   it('ranks a higher declared authority above a lower one', async () => {

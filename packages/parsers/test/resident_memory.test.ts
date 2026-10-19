@@ -226,6 +226,36 @@ it.runIf(process.platform === 'darwin')(
   15_000,
 );
 
+// Windows uses a PowerShell observer whose pipe delivery must survive a stalled parent.
+it.runIf(process.platform === 'win32')(
+  'keeps real PowerShell reports queued during a parent stall',
+  async () => {
+    const { child } = waitingProcess();
+    const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+    let monitor: ResidentMemoryMonitor;
+    try {
+      process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+      monitor = monitorResidentMemory(child, 1024);
+      monitors.push(monitor);
+    } finally {
+      if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+      else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+    }
+    await monitor.ready;
+    await delay(250);
+    expect(monitor.state.bytes).toBeGreaterThan(0);
+    const until = performance.now() + 800;
+    while (performance.now() < until) {}
+    await delay(350);
+    await nextCheckPhase();
+    expect(monitor.state.error).toBeNull();
+    expect(monitor.state.bytes).toBeGreaterThan(0);
+    expect(child.exitCode).toBeNull();
+    expect(child.signalCode).toBeNull();
+  },
+  15_000,
+);
+
 it('does not misreport an exited parser as an observer failure', async () => {
   const { child, closed } = waitingProcess();
   const monitor = monitorResidentMemory(child, 1024);
