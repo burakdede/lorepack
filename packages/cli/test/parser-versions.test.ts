@@ -36,7 +36,7 @@ function workbook(): Promise<Uint8Array> {
         rows: [
           row(1, [shared('A1', 0), shared('B1', 1)]),
           row(2, [shared('A2', 2), number('B2', 5)]),
-        ],
+        ].toString(),
       },
     ],
   });
@@ -143,9 +143,16 @@ describe('parser versions in build identity', () => {
    * contributing parsers later fails here and sends the reader to the reasoning.
    */
   it('depends on a parser that contributed nothing to this project', async () => {
-    const ids = await idsAcrossBump('xlsx', { 'a.md': '# A\n\nText.' });
+    const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+    if (process.platform === 'win32') process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+    try {
+      const ids = await idsAcrossBump('xlsx', { 'a.md': '# A\n\nText.' });
 
-    expect(ids.after).not.toBe(ids.before);
+      expect(ids.after).not.toBe(ids.before);
+    } finally {
+      if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+      else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+    }
   });
 
   /** The control: with nothing mutated, two builds of one tree at two paths agree. */
