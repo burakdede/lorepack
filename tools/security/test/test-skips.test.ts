@@ -19,6 +19,11 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'tools/arch/test/coverage_provider.test.ts',
+    line: "it.skipIf(['win32', 'os400'].includes(process.platform))(",
+    why: 'Node execve is unavailable on Windows and IBM i; the four actual native-image regressions run on POSIX (#700)',
+  },
+  {
     file: 'packages/parsers/test/resident_memory.test.ts',
     line: "it.runIf(process.platform === 'darwin')(",
     why: 'This completed-ps-output regression exercises the actual macOS reader. Shared pipe bounds and failure controls run on every OS, as do all four mandatory hostile CLI workloads (#677)',
