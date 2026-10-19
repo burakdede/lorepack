@@ -1,0 +1,122 @@
+{
+  "missingProvenance": {
+    "commander@15.0.0": {
+      "owner": "maintainer",
+      "reason": "CLI argument parsing and output interception. Retain the reviewed pinned package despite absent publisher provenance. Replace if it stops supporting `exitOverride` and controlled output streams."
+    },
+    "cross-spawn@7.0.6": {
+      "owner": "maintainer",
+      "reason": "Windows executable shim handling for owned verification processes. Retain this reviewed pinned package despite absent publisher provenance while literal-argument process tests pass; replace on an advisory or runtime incompatibility."
+    },
+    "jsonc-parser@3.3.1": {
+      "owner": "maintainer",
+      "reason": "Comment-preserving VS Code MCP config edits. Retain the reviewed pinned package despite absent publisher provenance. Replace if VS Code moves away from JSONC or the parser stops exposing edit spans."
+    },
+    "mammoth@1.12.0": {
+      "owner": "maintainer",
+      "reason": "DOCX semantic extraction via styles. Retain the reviewed pinned package despite absent publisher provenance. Replace if maintenance stalls or a smaller maintained semantic DOCX reader appears."
+    },
+    "mdast-util-from-markdown@2.0.2": {
+      "owner": "maintainer",
+      "reason": "Markdown AST parsing support. Retain the reviewed pinned package despite absent publisher provenance. Replace only as part of a unified/remark parser replacement."
+    },
+    "picomatch@4.0.5": {
+      "owner": "maintainer",
+      "reason": "Include/exclude and ignore glob matching. Retain the reviewed pinned package despite absent publisher provenance. Replace if gitignore semantics diverge or a Node builtin becomes sufficient."
+    },
+    "react@19.2.0": {
+      "owner": "maintainer",
+      "reason": "Studio UI runtime. The reviewed pinned version has no npm publisher provenance attestation; retain it while browser and security tests pass, and reassess on upgrade or a registry attestation change."
+    },
+    "react-dom@19.2.0": {
+      "owner": "maintainer",
+      "reason": "Studio browser renderer. The reviewed pinned version has no npm publisher provenance attestation; retain it while browser and security tests pass, and reassess on upgrade or a registry attestation change."
+    },
+    "rehype-parse@9.0.1": {
+      "owner": "maintainer",
+      "reason": "HTML AST parser with positions. Retain the reviewed pinned package despite absent publisher provenance. Replace only with a parser that preserves source positions."
+    },
+    "remark-frontmatter@5.0.0": {
+      "owner": "maintainer",
+      "reason": "Frontmatter node support. Retain the reviewed pinned package despite absent publisher provenance. Replace if frontmatter parsing moves fully into the YAML layer."
+    },
+    "remark-gfm@4.0.1": {
+      "owner": "maintainer",
+      "reason": "GFM table/list/task syntax support. Retain the reviewed pinned package despite absent publisher provenance. Replace if Markdown support narrows away from GFM."
+    },
+    "remark-parse@11.0.0": {
+      "owner": "maintainer",
+      "reason": "Markdown parser. Retain the reviewed pinned package despite absent publisher provenance. Replace only with a maintained parser that preserves line positions."
+    },
+    "sax@1.6.1": {
+      "owner": "maintainer",
+      "reason": "Streaming XML for XLSX. Retain the reviewed pinned package despite absent publisher provenance. Replace if it loses safe streaming behaviour or a better maintained equivalent appears."
+    },
+    "unified@11.0.5": {
+      "owner": "maintainer",
+      "reason": "Shared parser pipeline for Markdown and HTML. Retain the reviewed pinned package despite absent publisher provenance. Replace if the parser stack stops being maintained together."
+    },
+    "yaml@2.9.0": {
+      "owner": "maintainer",
+      "reason": "`lore.yaml`, lockfile and frontmatter parsing. Retain the reviewed pinned package despite absent publisher provenance. Replace if it stops preserving actionable error locations."
+    },
+    "yauzl@3.4.0": {
+      "owner": "maintainer",
+      "reason": "ZIP reader for `.lorepack` and XLSX. Retain the reviewed pinned package despite absent publisher provenance. Replace only with an equally low-level pure-JS ZIP reader."
+    },
+    "yazl@3.3.1": {
+      "owner": "maintainer",
+      "reason": "Deterministic ZIP writer for `.lorepack`. Retain the reviewed pinned package despite absent publisher provenance. Replace only with a writer exposing entry order, timestamps and metadata control."
+    }
+  },
+  "stale": {
+    "@types/cross-spawn@6.0.6": {
+      "owner": "maintainer",
+      "reason": "Contributor-only declarations for the process adapter. Retain this pinned version while cross-spawn remains at 7.0.6; remove it if the runtime package bundles types or is replaced."
+    },
+    "@types/mdast@4.0.4": {
+      "owner": "maintainer",
+      "reason": "Type declarations for Markdown AST nodes. Stable API remains needed despite the release interval. Staleness is acceptable while mdast stays stable; replace when remark exposes sufficient bundled types."
+    },
+    "@types/sax@^1.2.7": {
+      "owner": "maintainer",
+      "reason": "Type declarations for the SAX XML parser. Stable API remains needed despite the release interval. Staleness is acceptable while the sax API stays stable; replace if sax bundles types or the XML reader changes."
+    },
+    "@types/unist@3.0.3": {
+      "owner": "maintainer",
+      "reason": "Type declarations for the common syntax-tree node shape. Stable API remains needed despite the release interval. Staleness is acceptable while unist stays stable; replace when unified exposes sufficient bundled types."
+    },
+    "cross-spawn@7.0.6": {
+      "owner": "maintainer",
+      "reason": "Windows executable shim handling for owned verification processes. The SDK closure already uses 7.0.6; retain the old release while literal-argument tests pass and review a compatible maintained replacement on an advisory or runtime incompatibility."
+    },
+    "jsonc-parser@3.3.1": {
+      "owner": "maintainer",
+      "reason": "Comment-preserving VS Code MCP config edits. Stable API remains needed despite the release interval. Replace if VS Code moves away from JSONC or the parser stops exposing edit spans."
+    },
+    "rehype-parse@9.0.1": {
+      "owner": "maintainer",
+      "reason": "HTML AST parser with positions. Stable API remains needed despite the release interval. Replace only with a parser that preserves source positions."
+    },
+    "remark-frontmatter@5.0.0": {
+      "owner": "maintainer",
+      "reason": "Frontmatter node support. Stable API remains needed despite the release interval. Replace if frontmatter parsing moves fully into the YAML layer."
+    },
+    "remark-gfm@4.0.1": {
+      "owner": "maintainer",
+      "reason": "GFM table/list/task syntax support. Stable API remains needed despite the release interval. Replace if Markdown support narrows away from GFM."
+    },
+    "remark-parse@11.0.0": {
+      "owner": "maintainer",
+      "reason": "Markdown parser. Stable API remains needed despite the release interval. Replace only with a maintained parser that preserves line positions."
+    },
+    "unified@11.0.5": {
+      "owner": "maintainer",
+      "reason": "Shared parser pipeline for Markdown and HTML. Stable API remains needed despite the release interval. Replace if the parser stack stops being maintained together."
+    },
+    "yazl@3.3.1": {
+      "owner": "maintainer",
+      "reason": "Deterministic ZIP writer for `.lorepack`. Stable API remains needed despite the release interval. Replace only with a writer exposing entry order, timestamps and metadata control."
+    }
+  }
+}

@@ -431,9 +431,9 @@ describe('contributor dependency audit', () => {
   it('audits development dependencies and accepts an exit below the High threshold', () => {
     writeFileSync(
       packageManager,
-      `const expected = ['audit', '--audit-level', 'high'];
+      `const expected = ['audit', '--audit-level', 'high', '--json'];
 if (JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expected)) process.exit(3);
-process.stdout.write('2 Moderate findings');
+process.stdout.write(JSON.stringify({metadata:{vulnerabilities:{info:0,low:0,moderate:2,high:0,critical:0}}}));
 `,
     );
     const problems: string[] = [];
