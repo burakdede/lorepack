@@ -88,7 +88,11 @@ and points the public context declaration at that copy. This preserves the real 
 stage types without making npm consumers install an internal package.
 
 `scripts/check-packed-cli.mjs` is the gate. It installs the tarball with **npm** into an empty
-directory and fails on any `*.node` file or `@napi-rs/*` package, on any difference from the
+directory. Before installation, it compares every tar member path with the reviewed
+`scripts/packed-cli-members.txt` allow-list. Added, missing, duplicate and unsafe paths fail.
+This includes bundled dependency files, not only their package names. `--spec` first downloads
+the selected registry tarball, then checks and installs those same bytes. The gate also fails
+on any `*.node` file or `@napi-rs/*` package, on any difference from the
 CLI's production tree in the frozen lockfile (an optional peer the workspace happens to resolve,
 such as `supports-color` for `debug`, is excused), on a PDF build and search with the installed
 CLI that `dlopen`s anything, on a CSV table query through the installed binary's `serve` that
@@ -118,6 +122,13 @@ It runs:
 The cost is a larger tarball (18 MB packed, 81 MB unpacked, about 4,900 files, measured
 2026-10-10), which users download once instead of resolving 145 packages. `npm audit` still
 covers the bundled packages: npm reads them from `node_modules` like any other.
+
+When a reviewed package change changes member paths, run
+`node scripts/propose-packed-cli-members.mjs --tarball <candidate.tgz> --out <new-file>`.
+Compare that new file with the checked-in allow-list and commit the accepted path changes.
+The checker never derives its expected paths from the candidate tarball. The pack step removes
+CLI-owned source maps, build information and unbundled JavaScript from the shipped stage;
+the seven runtime bundle entries, their chunks, migrations and public declaration closure stay.
 
 ## Provenance
 
