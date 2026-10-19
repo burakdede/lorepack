@@ -330,7 +330,7 @@ export function searchCatalog(
                   WHERE table_ref.artifact_id=c.artifact_id
                   AND table_ref.id IN (
                     SELECT json_extract(unit_node.metadata, '$.tableId')
-                    FROM json_each(c.node_ids) ref JOIN nodes unit_node
+                    FROM json_each(c.node_ids) ref CROSS JOIN nodes unit_node
                       ON unit_node.id=ref.value AND unit_node.artifact_id=c.artifact_id
                       ) ORDER BY table_ref.id) table_ref) AS unitTables,
               CASE WHEN json_array_length(c.node_ids) > 0
