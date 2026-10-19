@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { releaseStructureProblems, topLevelPermissionProblems } from './release-structure.mjs';
+
+const { parse } = createRequire(join(import.meta.dirname, '..', 'packages/cli/package.json'))(
+  'yaml',
+);
 
 const ROOT = process.env.LOREPACK_ROOT ?? join(import.meta.dirname, '..');
 const RELEASE = readFileSync(join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
@@ -36,6 +41,42 @@ const REQUIRED = [
 ];
 
 const problems = [];
+const workflow = parse(RELEASE);
+const build = workflow.jobs?.build;
+const gates = (build?.steps ?? []).filter((step) =>
+  step.name?.startsWith('Verify required release gates'),
+);
+const gate = gates[0];
+const executable = String(gate?.run ?? '')
+  .split('\n')
+  .filter((line) => !line.trimStart().startsWith('#'))
+  .join('\n');
+if (
+  gates.length !== 1 ||
+  gate.if !== undefined ||
+  gate['continue-on-error'] !== undefined ||
+  build['continue-on-error'] !== undefined ||
+  !executable.includes('for name in "$' + '{required_checks[@]}"; do') ||
+  !executable.includes('gh api ') ||
+  !executable.includes('/check-runs') ||
+  !executable.includes('if [ "$conclusion" != "success" ]; then') ||
+  !executable.includes('all_green=false') ||
+  !executable.includes('[ "$all_green" = true ]') ||
+  !/^\s*exit 1\s*$/m.test(executable)
+)
+  problems.push(
+    'release.yml required release gate step must enforce its check loop unconditionally',
+  );
+for (const check of REQUIRED) {
+  if (!executable.split('\n').some((line) => line.trim() === `"${check}"`)) {
+    problems.push(`release.yml required release gate does not require ${check}`);
+  }
+}
+const publish = workflow.jobs?.publish;
+const publicationConfig = JSON.stringify({ env: workflow.env, publish });
+if (/secrets\s*[.[]|_authToken|\.npmrc|NPM_TOKEN|NODE_AUTH_TOKEN/i.test(publicationConfig)) {
+  problems.push('release.yml publish credentials must use OIDC without long-lived tokens');
+}
 
 // Which job holds which capability, from the parsed workflow rather than from substrings (#604).
 problems.push(...releaseStructureProblems(RELEASE));
@@ -85,18 +126,6 @@ if (!RELEASE.includes('scripts/preflight-npm-packages.mjs')) {
 }
 if (!RELEASE.includes('scripts/publish-packages.mjs')) {
   problems.push('release.yml must use the tested npm publisher');
-}
-if (!RELEASE.includes('Trusted Publishing')) {
-  problems.push('release.yml must use npm Trusted Publishing for real releases');
-}
-if (RELEASE.includes('NPM_TOKEN') || RELEASE.includes('NODE_AUTH_TOKEN')) {
-  problems.push('release.yml must not use a long-lived npm publish token');
-}
-if (!RELEASE.includes('id-token: write')) {
-  problems.push('release.yml must grant id-token: write for npm provenance');
-}
-if (!RELEASE.includes('check-runs') || !RELEASE.includes('$conclusion" != "success"')) {
-  problems.push('release.yml must verify successful required check runs before publish');
 }
 if (!RELEASE.includes('gh release create')) {
   problems.push('release.yml must create the GitHub release');
@@ -168,28 +197,6 @@ for (const phrase of [
   if (!PUBLIC_SMOKE.includes(phrase)) {
     problems.push(`public-registry-smoke.yml lacks ${phrase}`);
   }
-}
-
-const trustedPublishingPreflight = RELEASE.indexOf(
-  'Require npm Trusted Publishing for real release',
-);
-for (const sideEffect of [
-  'Commit version and generated release artifacts',
-  'Create GitHub release with SBOM and example artifact',
-  'Publish npm packages with Trusted Publishing',
-]) {
-  const sideEffectIndex = RELEASE.indexOf(sideEffect);
-  if (
-    trustedPublishingPreflight === -1 ||
-    sideEffectIndex === -1 ||
-    trustedPublishingPreflight > sideEffectIndex
-  ) {
-    problems.push(`release.yml must check npm Trusted Publishing before ${sideEffect}`);
-  }
-}
-
-for (const check of REQUIRED) {
-  if (!RELEASE.includes(check)) problems.push(`release.yml does not require ${check}`);
 }
 
 for (const phrase of [
