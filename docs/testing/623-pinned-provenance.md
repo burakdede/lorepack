@@ -48,4 +48,33 @@ version-specific decision in `scripts/supply-chain-exceptions.json`.
 `pnpm exec tsc --ignoreConfig --noEmit --strict --target ES2024 --module NodeNext
 --moduleResolution NodeNext --types node,vitest/globals --allowJs --skipLibCheck
 tools/arch/test/pinned-supply-chain.test.ts tools/arch/test/release-policy.test.ts`
-passed. The native Windows and Linux matrix has not run for this change yet.
+passed.
+
+## ESM package-manager entrypoints
+
+The retained Windows qualification for PR #800 head `d247d87f` reached the
+supply-chain gate after its ordinary and security tests passed. The gate failed
+while parsing successful, empty license-command output. The log does not record
+the child's `npm_execpath`, stderr or Windows file association, so it cannot prove
+the exact historical launch chain.
+
+The installed pnpm 11.18.0 package declares `bin/pnpm.mjs` as its executable and
+sets lifecycle `npm_execpath` from its entrypoint. The gate recognized `.cjs` and
+`.js` as Node scripts but sent `.mjs` through the shell on Windows. All three
+extensions now run through the current Node executable with separate arguments.
+Empty or malformed audit and license output still fails closed.
+
+The regression uses a real temporary ESM package-manager script in a path with
+spaces, checks its arguments and reads its installed-license JSON. Separate
+command-construction cases verify the Node launch on all three platform branches.
+On macOS, Node 24.21.0 and pnpm 11.18.0, the unfixed focused suite failed four
+cases: the real script failed with `EACCES`, and each platform branch selected
+the wrong executable for `.mjs`. This reproduces the entrypoint dispatch bug;
+it does not reproduce the Windows file association itself.
+
+After the dispatch correction, the focused suite passed all 118 cases and the
+architecture suite passed all 305 cases. Lint, format, project typecheck, the
+strict test typecheck above and the build passed on the same macOS toolchain.
+Calling `licenseInventory()` through the installed pnpm 11.18.0 `.mjs` entrypoint
+returned 11 licenses and 154 installed packages. Native Windows execution of
+this correction remains required; these local results do not qualify that run.

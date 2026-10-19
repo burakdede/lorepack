@@ -114,6 +114,20 @@ describe.each(['darwin', 'linux', 'win32'])(
       Object.defineProperty(process, 'platform', { value: platform });
       vi.stubEnv('npm_execpath', undefined);
     });
+    it.each(['cjs', 'js', 'mjs'])(
+      'runs a .%s package-manager entrypoint through Node without a shell',
+      (extension) => {
+        const entrypoint = `C:\\Program Files\\pnpm\\pnpm.${extension}`;
+        vi.stubEnv('npm_execpath', entrypoint);
+        vi.mocked(execFileSync).mockReturnValue(licenseOutput);
+        licenseInventory();
+        expect(execFileSync).toHaveBeenLastCalledWith(
+          process.execPath,
+          [entrypoint, 'licenses', 'list', '--prod', '--json'],
+          expect.not.objectContaining({ shell: true }),
+        );
+      },
+    );
     it.each([
       '',
       ' ',

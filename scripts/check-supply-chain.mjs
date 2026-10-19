@@ -97,7 +97,11 @@ function run(command, args, options = {}) {
 
 function runPnpm(args) {
   const npmExecPath = process.env.npm_execpath;
-  if (npmExecPath?.endsWith('.cjs') === true || npmExecPath?.endsWith('.js') === true) {
+  if (
+    npmExecPath?.endsWith('.cjs') === true ||
+    npmExecPath?.endsWith('.js') === true ||
+    npmExecPath?.endsWith('.mjs') === true
+  ) {
     return run(process.execPath, [npmExecPath, ...args]);
   }
   if (npmExecPath !== undefined) {
