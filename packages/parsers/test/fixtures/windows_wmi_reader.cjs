@@ -38,7 +38,7 @@
       WScript.Sleep(100);
     }
   } catch (error) {
-    if (stage === 'identity') code = `expected=${birth},actual=${actualBirth}`;
+    if (stage === 'identity') code = 'expected='.concat(birth, ',actual=', String(actualBirth));
     else code = typeof error.number === 'number' ? (error.number >>> 0).toString(16) : 'none';
     WScript.StdErr.WriteLine('LPF:'.concat(stage, ':', code));
     WScript.Quit(1);
