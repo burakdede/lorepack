@@ -19,7 +19,7 @@ import { MAX_CELL_TEXT_LENGTH, readWorkbookParts } from './workbook.js';
 import { openPackage } from './zip.js';
 
 export const XLSX_PARSER_ID = 'xlsx' as const;
-export const XLSX_PARSER_VERSION = '0.1.3' as const;
+export const XLSX_PARSER_VERSION = '0.1.4' as const;
 
 export const XLSX_LIMITS = {
   maxColumns: SHEET_LIMITS.maxColumns,

@@ -11,7 +11,7 @@
       "normalizationVersion": 1
     },
     "parserId": "csv",
-    "parserVersion": "0.1.1",
+    "parserVersion": "0.1.2",
     "relativePath": "documents/csv/pricing.csv",
     "sourceId": "fixtures",
     "status": "active",

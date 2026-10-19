@@ -1,0 +1,4 @@
+{
+  "lore.yaml": "version: 1\nname: csv-evidence-identity\nsources: [docs]\n",
+  "docs/orders.csv": "item,quantity\nA,2\nB,3\n"
+}
