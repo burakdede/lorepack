@@ -82,6 +82,7 @@ export async function bundleCli({
     if (/^chunk-[A-Z0-9]{8}\.js(?:\.map)?$/.test(filename)) rmSync(join(dist, filename));
   }
   await build({
+    absWorkingDir: root,
     ...(banner ? { banner } : {}),
     plugins,
     bundle: true,
