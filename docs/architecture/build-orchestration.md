@@ -33,6 +33,11 @@ disk-full classification. The sealed directory remains unrecorded and cannot be
 activated; the previous active build stays readable. Correct the reported storage
 problem and run `lorepack build` again to record the already sealed build.
 
+Index-write failures identify the indexing stage, build and candidate database rather
+than blaming an individual source for an aggregate write. Errors thrown during validation
+name that stage while retaining the affected object subject, checksum details and storage
+cause. Both preserve existing typed codes and remediation.
+
 Source identity changes detected during planning or parsing abort the candidate
 with `LORE_E_STALE_SOURCES`. A partial fingerprint cannot replace the active build.
 [Source-read boundaries](discovery.md#source-reads-after-discovery) explain the

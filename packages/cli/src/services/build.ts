@@ -1,5 +1,5 @@
 import { closeSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   buildMigrationsDirectory,
   checkStoredLocatorRanges,
@@ -547,12 +547,25 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           // A fixed timestamp, not the wall clock: a sealed build must carry no
           // operational time. Otherwise two builds of identical content differ in bytes,
           // and `.lorepack` stops being reproducible.
-          runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => SEALED_AT);
-          const counts = writeCatalog({
-            db,
-            artifacts: parsed,
-            warnings,
-          });
+          let counts: ReturnType<typeof writeCatalog>;
+          try {
+            runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => SEALED_AT);
+            counts = writeCatalog({
+              db,
+              artifacts: parsed,
+              warnings,
+            });
+          } catch (cause) {
+            const failure = diskFullError(cause) ?? LoreError.from(cause);
+            throw new LoreError(failure.code, `Failed while indexing build ${buildId}.`, {
+              path:
+                failure.path ?? `${LORE_DIRECTORY}/tmp/${basename(candidate.path)}/context.sqlite`,
+              subject: failure.subject ?? buildId,
+              ...(failure.remediation === undefined ? {} : { remediation: failure.remediation }),
+              details: { ...failure.details, stage: 'indexing' },
+              cause,
+            });
+          }
           progress.finish('indexing', counts.chunks);
 
           const manifest: BuildManifest = {
@@ -590,18 +603,30 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           };
 
           progress.start('validating', 'Validating');
-          const report = await validateCandidate({
-            db,
-            objects,
-            artifacts: parsed,
-            manifest: manifest as unknown as Record<string, unknown>,
-            secrets: secretsFromEnv(),
-            integrityCheck,
-            search: (database, query, limit) => searchCatalog(database, query, limit),
-            countRows,
-            tableMappingCheck: checkTableMappings,
-            locatorRangeCheck: checkStoredLocatorRanges,
-          });
+          let report: Awaited<ReturnType<typeof validateCandidate>>;
+          try {
+            report = await validateCandidate({
+              db,
+              objects,
+              artifacts: parsed,
+              manifest: manifest as unknown as Record<string, unknown>,
+              secrets: secretsFromEnv(),
+              integrityCheck,
+              search: (database, query, limit) => searchCatalog(database, query, limit),
+              countRows,
+              tableMappingCheck: checkTableMappings,
+              locatorRangeCheck: checkStoredLocatorRanges,
+            });
+          } catch (cause) {
+            const failure = diskFullError(cause) ?? LoreError.from(cause);
+            throw new LoreError(failure.code, `Failed while validating build ${buildId}.`, {
+              ...(failure.path === undefined ? {} : { path: failure.path }),
+              subject: failure.subject ?? buildId,
+              ...(failure.remediation === undefined ? {} : { remediation: failure.remediation }),
+              details: { ...failure.details, stage: 'validating' },
+              cause,
+            });
+          }
           progress.finish('validating', report.checksRun.length, report.ok ? 'done' : 'failed');
 
           if (!report.ok) {

@@ -17,6 +17,7 @@ import {
   loadProjectConfig,
   ProgressBus,
   renderAsJson,
+  renderForCli,
 } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
@@ -242,6 +243,7 @@ it.each(['parse', 'index', 'checksum', 'seal', 'state-record'] as const)(
           'state-record': 'sealing',
         }[fault];
         expect(started.at(-1)).toBe(expectedStage);
+        const diagnostic = renderAsJson(failure, { secrets: [] }).error;
         if (fault === 'parse')
           expect(failure).toMatchObject({
             code: 'LORE_E_UNSUPPORTED_FORMAT',
@@ -249,12 +251,28 @@ it.each(['parse', 'index', 'checksum', 'seal', 'state-record'] as const)(
             message: 'docs/broken.docx is not a readable .docx archive.',
             remediation: expect.stringContaining('exclude it in .loreignore'),
           });
-        if (fault === 'index')
+        if (fault === 'index') {
           expect(failure).toMatchObject({
             code: 'LORE_E_DISK_FULL',
             remediation: expect.stringMatching(/free/i),
+            cause: expect.objectContaining({
+              code: 'LORE_E_DISK_FULL',
+              cause: expect.objectContaining({ errcode: 13 }),
+            }),
           });
-        if (fault === 'checksum')
+          expect(diagnostic).toMatchObject({
+            code: 'LORE_E_DISK_FULL',
+            message: expect.stringMatching(/indexing/i),
+            path: expect.stringMatching(/^\.lore\/tmp\/[^/]+\/context\.sqlite$/),
+            subject: expect.stringMatching(/^lore_[a-f0-9]{64}$/),
+            details: { stage: 'indexing' },
+          });
+          expect(diagnostic.causes?.join(' ')).toMatch(/full/i);
+          const human = renderForCli(failure, { color: false, secrets: [] });
+          expect(human).toContain('indexing');
+          expect(human).toContain(diagnostic.path);
+        }
+        if (fault === 'checksum') {
           expect(failure).toMatchObject({
             code: 'LORE_E_OBJECT_CORRUPT',
             subject: corruption.checksumHash,
@@ -264,11 +282,41 @@ it.each(['parse', 'index', 'checksum', 'seal', 'state-record'] as const)(
               actual: hashBytes(new TextEncoder().encode('corrupt normalized body')),
             },
           });
-        if (fault === 'seal')
+          expect(diagnostic).toMatchObject({
+            code: 'LORE_E_OBJECT_CORRUPT',
+            message: expect.stringMatching(/validating/i),
+            subject: corruption.checksumHash,
+            details: {
+              stage: 'validating',
+              expected: corruption.checksumHash,
+              actual: hashBytes(new TextEncoder().encode('corrupt normalized body')),
+            },
+          });
+          expect(diagnostic.causes?.join(' ')).toContain('failed its checksum');
+          expect(failure).toMatchObject({
+            cause: expect.objectContaining({
+              code: 'LORE_E_OBJECT_CORRUPT',
+              subject: corruption.checksumHash,
+              details: { expected: corruption.checksumHash, actual: diagnostic.details?.actual },
+            }),
+          });
+          const human = renderForCli(failure, { color: false, secrets: [] });
+          expect(human).toContain('validating');
+          expect(human).toContain(corruption.checksumHash);
+        }
+        if (fault === 'seal') {
           expect(failure).toMatchObject({
             code: 'LORE_E_INTERNAL',
             cause: expect.objectContaining({ code: 'EACCES' }),
           });
+          expect(diagnostic).toMatchObject({
+            message: expect.stringMatching(
+              /Could not seal a build into .*[/\\]\.lore[/\\]builds[/\\]lore_[a-f0-9]{64}\./,
+            ),
+            remediation: 'Check free space and that no other process holds the directory.',
+            causes: expect.arrayContaining(['CORE08 seal denied']),
+          });
+        }
         expect(recorded(project.root)).toEqual(before);
         expect(readActiveBuild(lore)).toEqual(before.active);
         if (fault === 'state-record') {
