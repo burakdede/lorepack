@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -56,17 +59,27 @@ export function assertExportResult(payload) {
   }
 }
 
-function run(command, args, cwd) {
+export function runSmokeCommand(command, args, cwd, evidence) {
+  const startedAt = new Date().toISOString();
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     env: { ...process.env, NO_COLOR: '1' },
   });
-  return {
+  const record = {
+    command,
+    args,
+    cwd,
+    startedAt,
+    finishedAt: new Date().toISOString(),
     status: result.status ?? 1,
+    signal: result.signal,
+    error: result.error?.message ?? null,
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? result.error?.message ?? '',
   };
+  if (evidence !== undefined) writeFileSync(evidence, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
 }
 
 export function readInstalledCli(globalRoot) {
@@ -104,69 +117,223 @@ function readGlobalInstall() {
   return readInstalledCli(globalRoot);
 }
 
-export function runSmoke(expectedVersion) {
+const CONFIG = 'version: 1\nname: global-release-proof\nsources: [docs]\n';
+const FIRST = '# Rollback\n\nRun the rollback procedure after a failed deploy.\n';
+const SECOND = `${FIRST}\nKeep the receipt.\n`;
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+export function runSmoke(expectedVersion, { outDir } = {}) {
   let entry = process.env.LOREPACK_SMOKE_CLI;
   if (!entry) {
     const installed = readGlobalInstall();
     assertInstalledVersion(installed.version, expectedVersion);
     entry = installed.entry;
   }
-  const runLore = (args, cwd) => run(process.execPath, [entry, '--cwd', cwd, ...args], cwd);
-  const jsonCommand = (args, cwd) => JSON.parse(assertCommandSucceeded(runLore(args, cwd), args));
+  if (outDir !== undefined) mkdirSync(outDir, { recursive: true });
   const project = mkdtempSync(join(tmpdir(), 'lorepack-public-smoke-'));
-  const source = join(project, 'runbook.md');
+  const source = join(project, 'docs', 'runbook.md');
   const archive = join(project, 'smoke.lorepack');
-
+  const proof = {
+    schema: 1,
+    expectedVersion,
+    platform: process.platform,
+    architecture: process.arch,
+    node: process.version,
+    entry,
+    invocation: 'installed-node-entry',
+    commands: [],
+    fixtures: {},
+    passed: false,
+  };
+  const runLore = (args) => {
+    const name = `${String(proof.commands.length + 1).padStart(2, '0')}-${args[0]}.json`;
+    proof.commands.push(name);
+    return runSmokeCommand(
+      process.execPath,
+      [entry, '--cwd', project, ...args],
+      project,
+      outDir === undefined ? undefined : join(outDir, name),
+    );
+  };
+  const command = (args) => assertCommandSucceeded(runLore(args), args);
+  const jsonCommand = (args) => JSON.parse(command([...args, '--json']));
+  const fixture = (revision) => {
+    proof.fixtures[revision] = Object.fromEntries(
+      ['lore.yaml', 'docs/runbook.md', 'lore.lock']
+        .filter((path) => existsSync(join(project, path)))
+        .map((path) => {
+          const bytes = readFileSync(join(project, path));
+          return [
+            path,
+            { sha256: digest(bytes), bytes: bytes.length, content: bytes.toString('utf8') },
+          ];
+        }),
+    );
+  };
+  const validate = (id) => {
+    const result = jsonCommand(['validate', '--build', id]);
+    assert(
+      result.buildId === id && result.ok === true && result.mode === 'existing-build',
+      'retained validation did not verify the requested build',
+    );
+  };
+  const search = (id) => {
+    const result = jsonCommand(['search', 'rollback']);
+    assertSearchResult(result);
+    assert(result.buildId === id, 'search did not read the expected active build');
+  };
   try {
-    writeFileSync(source, '# Rollback\n\nRun the rollback procedure after a failed deploy.\n');
-    assertCommandSucceeded(runLore(['init'], project), ['lorepack', 'init']);
-    assertCommandSucceeded(runLore(['build'], project), ['lorepack', 'build']);
-    const firstBuild = jsonCommand(['status', '--json'], project).activeBuildId;
-    if (!firstBuild) throw new Error('public registry smoke has no active build');
-
-    assertSearchResult(jsonCommand(['search', 'rollback', '--json'], project));
-    assertExportResult(
-      jsonCommand(
-        ['export', '--task', 'How should a failed deploy recover?', '--format', 'json'],
-        project,
-      ),
+    command(['init']);
+    mkdirSync(join(project, 'docs'), { recursive: true });
+    writeFileSync(join(project, 'lore.yaml'), CONFIG);
+    writeFileSync(source, FIRST);
+    fixture('beforeA');
+    const planA = jsonCommand(['plan']);
+    assert(planA.artifacts.added === 1, 'initial plan did not identify the canonical source');
+    const builtA = jsonCommand(['build']);
+    const firstBuild = jsonCommand(['status']).activeBuildId;
+    assert(
+      typeof firstBuild === 'string' &&
+        firstBuild.length > 0 &&
+        builtA.buildId === firstBuild &&
+        builtA.activated === true,
+      'initial build was not activated',
     );
-    assertCommandSucceeded(runLore(['plan', '--json'], project), ['lorepack', 'plan', '--json']);
-
-    writeFileSync(
-      source,
-      '# Rollback\n\nRun the rollback procedure after a failed deploy.\n\nKeep the receipt.\n',
+    proof.buildA = firstBuild;
+    fixture('A');
+    validate(firstBuild);
+    const manifestA = jsonCommand(['inspect', 'build', firstBuild]);
+    assert(
+      manifestA.buildId === firstBuild && manifestA.projectName === 'global-release-proof',
+      'inspection did not return the canonical initial build',
     );
-    assertCommandSucceeded(runLore(['build'], project), ['lorepack', 'build']);
-    const secondBuild = jsonCommand(['status', '--json'], project).activeBuildId;
-    if (!secondBuild || secondBuild === firstBuild)
-      throw new Error('source edit did not create a new build');
-    assertCommandSucceeded(runLore(['diff', firstBuild, secondBuild], project), [
-      'lorepack',
-      'diff',
-      firstBuild,
-      secondBuild,
-    ]);
-    assertCommandSucceeded(runLore(['pack', '--out', archive], project), ['lorepack', 'pack']);
-    assertCommandSucceeded(runLore(['pack', '--verify', archive], project), [
-      'lorepack',
-      'pack',
-      '--verify',
-    ]);
-    assertCommandSucceeded(runLore(['serve', '--help'], project), ['lorepack', 'serve', '--help']);
-    assertCommandSucceeded(runLore(['mcp', '--help'], project), ['lorepack', 'mcp', '--help']);
+    const sources = jsonCommand(['inspect', 'sources']);
+    assert(
+      sources.buildId === firstBuild &&
+        sources.artifacts.length === 1 &&
+        sources.artifacts[0].displayPath === 'docs/runbook.md',
+      'source inspection lost the fixture',
+    );
+    search(firstBuild);
+    const exported = JSON.parse(
+      command(['export', '--task', 'How should a failed deploy recover?', '--format', 'json']),
+    );
+    assertExportResult(exported);
+    assert(exported.buildId === firstBuild, 'export did not read the expected active build');
+
+    writeFileSync(source, SECOND);
+    const planB = jsonCommand(['plan']);
+    assert(
+      planB.artifacts.changed === 1 && planB.artifacts.added === 0 && planB.artifacts.removed === 0,
+      'edited plan did not identify the changed source',
+    );
+    const builtB = jsonCommand(['build', '--no-activate']);
+    const secondBuild = builtB.buildId;
+    assert(
+      typeof secondBuild === 'string' &&
+        secondBuild.length > 0 &&
+        secondBuild !== firstBuild &&
+        builtB.activated === false,
+      'edited candidate was not a distinct inactive build',
+    );
+    proof.buildB = secondBuild;
+    fixture('B');
+    assert(
+      jsonCommand(['status']).activeBuildId === firstBuild,
+      'candidate build changed the active pointer',
+    );
+    validate(secondBuild);
+    assert(
+      jsonCommand(['activate', secondBuild]).buildId === secondBuild,
+      'activation returned the wrong build',
+    );
+    assert(
+      jsonCommand(['status']).activeBuildId === secondBuild,
+      'activation did not move the pointer',
+    );
+    assert(
+      jsonCommand(['inspect', 'build', secondBuild]).buildId === secondBuild,
+      'inspection returned the wrong candidate',
+    );
+    const diff = jsonCommand(['diff', firstBuild, secondBuild]);
+    assert(
+      diff.from === firstBuild &&
+        diff.to === secondBuild &&
+        diff.identical === false &&
+        diff.artifacts.changed === 1 &&
+        diff.artifacts.changes.some(
+          (change) => change.path === 'runbook.md' && change.change === 'changed',
+        ),
+      'diff lost the source edit',
+    );
+    command(['pack', '--out', archive]);
+    command(['pack', '--verify', archive]);
+    const inventory = jsonCommand(['builds'])
+      .builds.map((build) => build.buildId)
+      .sort();
+    assert.deepEqual(inventory, [firstBuild, secondBuild].sort(), 'unexpected build inventory');
+    const sealed = new Map(
+      [firstBuild, secondBuild].map((id) => [
+        id,
+        readFileSync(join(project, '.lore', 'builds', id, 'manifest.json')),
+      ]),
+    );
+    rmSync(join(project, 'docs'), { recursive: true });
+    validate(secondBuild);
+    search(secondBuild);
+    assert(
+      jsonCommand(['rollback', firstBuild]).buildId === firstBuild,
+      'rollback returned the wrong build',
+    );
+    assert(
+      jsonCommand(['builds']).activeBuildId === firstBuild,
+      'rollback did not restore the initial pointer',
+    );
+    search(firstBuild);
+    for (const [id, bytes] of sealed)
+      assert(
+        bytes.equals(readFileSync(join(project, '.lore', 'builds', id, 'manifest.json'))),
+        'rollback changed a sealed manifest',
+      );
+    assert.deepEqual(
+      jsonCommand(['builds'])
+        .builds.map((build) => build.buildId)
+        .sort(),
+      inventory,
+      'rollback changed the build inventory',
+    );
+    proof.rolledBackTo = firstBuild;
+    command(['serve', '--help']);
+    command(['mcp', '--help']);
+    proof.passed = true;
     console.log(
       `public registry smoke passed: ${expectedVersion} on ${process.platform} ${process.arch}`,
     );
+    return proof;
+  } catch (error) {
+    proof.error = error instanceof Error ? error.stack : String(error);
+    throw error;
   } finally {
-    rmSync(project, { recursive: true, force: true });
+    try {
+      rmSync(project, { recursive: true, force: true });
+      proof.cleaned = true;
+    } finally {
+      if (outDir !== undefined)
+        writeFileSync(join(outDir, 'lifecycle.json'), `${JSON.stringify(proof, null, 2)}\n`);
+    }
   }
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   try {
-    runSmoke(parseReleaseVersion(process.argv[2] ?? ''));
+    if (process.argv.length !== 3 && !(process.argv.length === 5 && process.argv[3] === '--out')) {
+      throw new Error('usage: public-registry-smoke.mjs <version> [--out <directory>]');
+    }
+    runSmoke(
+      parseReleaseVersion(process.argv[2] ?? ''),
+      process.argv[4] === undefined ? {} : { outDir: resolve(process.argv[4]) },
+    );
   } catch (error) {
     console.error(`public registry smoke failed: ${error.message}`);
     process.exitCode = 1;
