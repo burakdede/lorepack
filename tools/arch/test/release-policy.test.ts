@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   checkContributorAudit,
+  licenseInventory,
   reportsMatch,
   sbomsMatch,
 } from '../../../scripts/check-supply-chain.mjs';
@@ -426,6 +427,22 @@ describe('contributor dependency audit', () => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reads installed licenses from a real ESM package-manager entrypoint', () => {
+    const entrypoint = join(root, 'package-manager.mjs');
+    vi.stubEnv('npm_execpath', entrypoint);
+    writeFileSync(
+      entrypoint,
+      `import { basename } from 'node:path';
+const expected = ['licenses', 'list', '--prod', '--json'];
+if (basename(process.argv[1]) !== 'package-manager.mjs' || JSON.stringify(process.argv.slice(2)) !== JSON.stringify(expected)) process.exit(3);
+process.stdout.write(JSON.stringify({MIT:[{name:'fixture',versions:['1.0.0'],paths:[process.argv[1]]}]}));
+`,
+    );
+    expect(licenseInventory()).toEqual({
+      MIT: [{ name: 'fixture', versions: ['1.0.0'], paths: [entrypoint] }],
+    });
   });
 
   it('audits development dependencies and accepts an exit below the High threshold', () => {
