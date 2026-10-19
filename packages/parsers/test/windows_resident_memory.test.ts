@@ -234,7 +234,7 @@ it('records a fail-closed startup trace at the Windows startup deadline', async 
   }
 });
 
-it('keeps startup instrumentation out of an observer without the opt-in', async () => {
+it('keeps reader instrumentation out of an observer without the opt-in', async () => {
   const { parser, reader, stdout } = windowsObserver({ SystemRoot: 'C:\\Windows' });
   const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
@@ -245,14 +245,169 @@ it('keeps startup instrumentation out of an observer without the opt-in', async 
     expect(command).not.toContain('LPR:');
     expect(command).not.toContain('LPP:');
     expect(command).not.toContain('LPI:');
-    expect(command).toContain('[Console]::Out.WriteLine($p.WorkingSet64)');
+    expect(command).toBe(
+      `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${process.pid}); while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); [Threading.Thread]::Sleep(100) }`,
+    );
     stdout.write('4096\n');
     await monitor.ready;
     monitor.stop();
     reader.emit('close', 0, null);
     expect(monitor.state.error).toBeNull();
     expect(output).not.toHaveBeenCalled();
-    expect(utilization).not.toHaveBeenCalled();
+    expect(utilization).toHaveBeenCalledTimes(2);
+  } finally {
+    monitor.stop();
+  }
+});
+
+it('retains owner startup context without changing the normal reader command', async () => {
+  vi.useFakeTimers();
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const baseline = { active: 10, idle: 20, utilization: 1 / 3 };
+  const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
+  utilization.mockReturnValueOnce(baseline).mockReturnValue({
+    active: 4999.123456,
+    idle: 9.876544,
+    utilization: 4999.123456 / 5009,
+  });
+  const { parser, reader } = windowsObserver({ SystemRoot: 'C:\\Windows' });
+  const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const monitor = monitorResidentMemory(parser, 1024);
+  const ready = monitor.ready.catch((error: unknown) => error);
+  try {
+    now = 4999.95;
+    vi.advanceTimersByTime(5000);
+    vi.runOnlyPendingTimers();
+    expect(monitor.state.error).toBeNull();
+    now = 5000;
+    vi.advanceTimersByTime(1);
+    now = 5009;
+    vi.runOnlyPendingTimers();
+    expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
+    const cause = monitor.state.error?.cause;
+    expect(cause).toBeInstanceOf(Error);
+    const message = (cause as Error).message;
+    expect(message).toMatch(/^The process memory observer did not become ready: 5009 ms;/);
+    const context = JSON.parse(message.split('Owner context: ')[1] ?? '');
+    expect(context).toEqual({
+      window: 'startup',
+      expectedMs: 5000,
+      elapsedMs: 5009,
+      deadlineDeltaMs: 9,
+      ownerElapsedMs: 5009,
+      timerFireElapsedMs: 5000,
+      timerToCheckMs: 9,
+      ownerActiveMs: 4999.123,
+      ownerIdleMs: 9.877,
+      ownerUtilization: 0.998,
+    });
+    expect(utilization).toHaveBeenLastCalledWith(baseline);
+    expect(Buffer.byteLength(JSON.stringify(context))).toBeLessThanOrEqual(1024);
+    expect(parser.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(output).not.toHaveBeenCalled();
+  } finally {
+    monitor.stop();
+  }
+});
+
+it('uses the latest accepted report for bounded normal owner failure context', async () => {
+  vi.useFakeTimers();
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const baseline = { active: 30, idle: 40, utilization: 3 / 7 };
+  const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
+  utilization
+    .mockReturnValueOnce({ active: 0, idle: 0, utilization: 0 })
+    .mockReturnValueOnce({ active: 10, idle: 20, utilization: 1 / 3 })
+    .mockReturnValueOnce(baseline)
+    .mockReturnValue({ active: 350, idle: 12, utilization: 350 / 362 });
+  const { parser, reader, stdout } = windowsObserver({ SystemRoot: 'C:\\Windows' });
+  const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const monitor = monitorResidentMemory(parser, 1024);
+  try {
+    now = 100;
+    stdout.write('4096\n');
+    await monitor.ready;
+    vi.advanceTimersByTime(100);
+    now = 200;
+    stdout.write('8192\n');
+    now = 550;
+    vi.advanceTimersByTime(250);
+    now = 562;
+    vi.runOnlyPendingTimers();
+    const cause = monitor.state.error?.cause;
+    expect(cause).toBeInstanceOf(Error);
+    const message = (cause as Error).message;
+    expect(message).toMatch(/^The process memory observer stopped reporting: 2 reports; 362 ms/);
+    const context = JSON.parse(message.split('Owner context: ')[1] ?? '');
+    expect(context).toEqual({
+      window: 'reporting',
+      expectedMs: 250,
+      elapsedMs: 362,
+      deadlineDeltaMs: 112,
+      ownerElapsedMs: 362,
+      timerFireElapsedMs: 350,
+      timerToCheckMs: 12,
+      ownerActiveMs: 350,
+      ownerIdleMs: 12,
+      ownerUtilization: 0.967,
+    });
+    expect(utilization).toHaveBeenCalledTimes(4);
+    expect(utilization).toHaveBeenLastCalledWith(baseline);
+    expect(Buffer.byteLength(JSON.stringify(context))).toBeLessThanOrEqual(1024);
+    expect(parser.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
+    reader.emit('close', null, 'SIGKILL');
+    expect(monitor.state.error?.cause).toMatchObject({ message });
+    expect(output).not.toHaveBeenCalled();
+  } finally {
+    monitor.stop();
+  }
+});
+
+it('bounds unavailable owner metrics without weakening a normal reader failure', async () => {
+  vi.useFakeTimers();
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  vi.spyOn(nodePerformance, 'eventLoopUtilization')
+    .mockReturnValueOnce({ active: 0, idle: 0, utilization: 0 })
+    .mockReturnValue({
+      active: Number.POSITIVE_INFINITY,
+      idle: Number.MAX_VALUE,
+      utilization: NaN,
+    });
+  const { parser, reader } = windowsObserver({ SystemRoot: 'C:\\Windows' });
+  const monitor = monitorResidentMemory(parser, 1024);
+  const ready = monitor.ready.catch((error: unknown) => error);
+  try {
+    now = 5000;
+    vi.advanceTimersByTime(5000);
+    vi.runOnlyPendingTimers();
+    expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
+    const cause = monitor.state.error?.cause;
+    expect(cause).toBeInstanceOf(Error);
+    const message = (cause as Error).message;
+    const context = JSON.parse(message.split('Owner context: ')[1] ?? '');
+    expect(context).toMatchObject({
+      expectedMs: 5000,
+      elapsedMs: 5000,
+      ownerActiveMs: null,
+      ownerIdleMs: null,
+      ownerUtilization: null,
+    });
+    expect(
+      Object.values(context).every(
+        (value) =>
+          value === null ||
+          typeof value === 'string' ||
+          (typeof value === 'number' && Number.isFinite(value)),
+      ),
+    ).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(context))).toBeLessThanOrEqual(1024);
+    expect(parser.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
   } finally {
     monitor.stop();
   }
