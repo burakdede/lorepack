@@ -1,6 +1,7 @@
 import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { win32 } from 'node:path';
+import { type EventLoopUtilization, performance as nodePerformance } from 'node:perf_hooks';
 import { LoreError } from '@lorepack/core';
 import {
   createLinuxResidentReader,
@@ -197,10 +198,11 @@ export function monitorResidentMemory(
     process.platform === 'win32' && process.env.LOREPACK_OBSERVER_DIAGNOSTIC === '1';
   const diagnosticStartedAt = performance.now();
   const events: Array<Record<string, string | number>> = [];
+  const identity: Record<string, string> = {};
   let diagnosticCause: Error | undefined;
   let diagnosticBaseMessage = '';
   let readerCloseObserved = false;
-  const traceSnapshot = () => JSON.stringify({ readerCloseObserved, events });
+  const traceSnapshot = () => JSON.stringify({ readerCloseObserved, identity, events });
   const refreshTrace = (): void => {
     if (diagnosticCause === undefined) return;
     diagnosticCause.message = `${diagnosticBaseMessage} Observer trace: ${traceSnapshot()}`;
@@ -274,6 +276,9 @@ export function monitorResidentMemory(
       if (alive()) parser.kill('SIGKILL');
     }
   };
+  let ownerArmedAt = 0;
+  let ownerBaseline: EventLoopUtilization | undefined;
+  const rounded = (value: number): number => Math.round(value * 1000) / 1000;
   reporting = createReportingWatchdog(
     ({ reports, silenceMs }) =>
       fail(
@@ -281,7 +286,27 @@ export function monitorResidentMemory(
           `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.`,
         ),
       ),
-    diagnostic ? (phase, reports) => record({ kind: phase, reports }) : undefined,
+    diagnostic
+      ? (phase, reports) => {
+          if (phase === 'arm') {
+            ownerArmedAt = performance.now();
+            ownerBaseline = nodePerformance.eventLoopUtilization();
+            record({ kind: phase, reports });
+          } else {
+            const elapsedMs = performance.now() - ownerArmedAt;
+            const owner = nodePerformance.eventLoopUtilization(ownerBaseline);
+            record({
+              kind: phase,
+              reports,
+              ownerElapsedMs: rounded(elapsedMs),
+              deadlineDeltaMs: rounded(elapsedMs - READER_TIMEOUT_MS),
+              ownerActiveMs: rounded(owner.active),
+              ownerIdleMs: rounded(owner.idle),
+              ownerUtilization: rounded(owner.utilization),
+            });
+          }
+        }
+      : undefined,
   );
   const pid = parser.pid;
   if (pid === undefined || !Number.isSafeInteger(pid) || pid <= 0) {
@@ -315,18 +340,32 @@ export function monitorResidentMemory(
       `$ErrorActionPreference='Stop'; ` +
       (diagnostic
         ? `$n=1; $clock=[Diagnostics.Stopwatch]::StartNew(); ` +
-          `[Console]::Error.WriteLine('LPS:entry:'+$clock.ElapsedMilliseconds); `
+          `[Console]::Error.WriteLine('LPS:entry:'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPI:ps:'+$PSVersionTable.PSVersion.ToString()); ` +
+          `[Console]::Error.WriteLine('LPI:clr:'+([Environment]::Version.ToString())); ` +
+          `[Console]::Error.WriteLine('LPI:process:'+([System.Diagnostics.Process].Assembly.FullName)); `
         : '') +
-      `$p=[System.Diagnostics.Process]::GetProcessById(${pid}); while($true) { $p.Refresh(); ` +
+      `$p=[System.Diagnostics.Process]::GetProcessById(${pid}); while($true) { ` +
       (diagnostic
-        ? `if($n -eq 1) { [Console]::Error.WriteLine('LPS:refresh:'+$clock.ElapsedMilliseconds); } ` +
-          `$rss=$p.WorkingSet64; if($n -eq 1) { ` +
-          `[Console]::Error.WriteLine('LPS:rss:'+$clock.ElapsedMilliseconds); ` +
-          `[Console]::Error.WriteLine('LPS:before-write:'+$clock.ElapsedMilliseconds); } ` +
+        ? `[Console]::Error.WriteLine('LPP:'+$n+':before-refresh:'+$clock.ElapsedMilliseconds); `
+        : '') +
+      `$p.Refresh(); ` +
+      (diagnostic
+        ? `[Console]::Error.WriteLine('LPP:'+$n+':after-refresh:'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPP:'+$n+':before-rss:'+$clock.ElapsedMilliseconds); ` +
+          `$rss=$p.WorkingSet64; ` +
+          `[Console]::Error.WriteLine('LPP:'+$n+':after-rss:'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPP:'+$n+':before-write:'+$clock.ElapsedMilliseconds); ` +
           `[Console]::Out.WriteLine($rss); ` +
-          `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); $n++; `
+          `[Console]::Error.WriteLine('LPP:'+$n+':after-write:'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPR:'+$n+':'+$clock.ElapsedMilliseconds); ` +
+          `[Console]::Error.WriteLine('LPP:'+$n+':before-sleep:'+$clock.ElapsedMilliseconds); `
         : '[Console]::Out.WriteLine($p.WorkingSet64); ') +
-      `[Threading.Thread]::Sleep(${INTERVAL_MS}) }`;
+      `[Threading.Thread]::Sleep(${INTERVAL_MS}) ` +
+      (diagnostic
+        ? `[Console]::Error.WriteLine('LPP:'+$n+':after-sleep:'+$clock.ElapsedMilliseconds); $n++; `
+        : '') +
+      `}`;
     const startedAt = performance.now();
     let pending = '';
     let stderr = '';
@@ -391,6 +430,30 @@ export function monitorResidentMemory(
             phase: startupMatch[1] as string,
             readerMs: Number(startupMatch[2]),
           });
+        }
+        const phaseMatch =
+          /^LPP:(\d{1,10}):(before-refresh|after-refresh|before-rss|after-rss|before-write|after-write|before-sleep|after-sleep):(\d{1,15})$/.exec(
+            line,
+          );
+        if (phaseMatch !== null)
+          record({
+            kind: 'sample',
+            reports: Number(phaseMatch[1]),
+            phase: phaseMatch[2] as string,
+            readerMs: Number(phaseMatch[3]),
+          });
+        const identityMatch = /^LPI:(ps|clr):(\d{1,10}(?:\.\d{1,10}){1,3})$/.exec(line);
+        if (identityMatch !== null && identity[identityMatch[1] as string] === undefined) {
+          identity[identityMatch[1] as string] = identityMatch[2] as string;
+          refreshTrace();
+        }
+        const assemblyMatch =
+          /^LPI:process:([A-Za-z0-9.]{1,64}, Version=\d{1,10}(?:\.\d{1,10}){1,3}, Culture=neutral, PublicKeyToken=(?:[a-fA-F0-9]{16}|null))$/.exec(
+            line,
+          );
+        if (assemblyMatch !== null && identity.process === undefined) {
+          identity.process = assemblyMatch[1] as string;
+          refreshTrace();
         }
         newline = diagnosticPending.indexOf('\n');
       }

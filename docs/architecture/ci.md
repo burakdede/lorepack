@@ -196,3 +196,21 @@ Local verification passed 29 policy cases and 185 architecture cases. The native
 Windows hook failure and pending exact-head qualification remain tracked in
 [issue #762](https://github.com/burakdede/lorepack/issues/762). No hook or test deadline,
 workload, scheduling, retry, skip, preload or coverage control was relaxed.
+
+## Manual Windows observer diagnosis
+
+The registered benchmark workflow can run its branch version with
+`qualification=windows-observer` and `hosted=false`. That mode runs only the
+existing large-result pipe acceptance case on Windows, with its original
+fixture, configuration and deadlines. It enables the bounded observer trace
+described in [Windows diagnostics](../testing/windows_observer_diagnostics.md).
+Normal benchmark triggers, profiles and concurrency groups stay unchanged.
+
+```sh
+gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
+  -f qualification=windows-observer -f hosted=false -f profile=medium
+```
+
+The job retains the exact checkout/runtime identity, raw output, native exit
+codes and partial JSON report even after failure. An isolated diagnostic pass
+does not establish the full acceptance suite or explain an earlier failure.

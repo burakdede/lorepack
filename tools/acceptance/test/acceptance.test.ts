@@ -35,10 +35,20 @@ for (const area of AREAS) {
   describe(area.title, () => {
     for (const scenario of automated) {
       it.skipIf(skippedHere(scenario))(`${scenario.id}: ${scenario.title}`, async () => {
-        const report = await runScenario(scenario, { binary: BINARY });
-        // One assertion carrying every failure, because a scenario that fails three ways
-        // should say so once rather than hide two of them behind the first.
-        expect(report.failures.join('\n\n'), `${scenario.id} proves: ${scenario.proves}`).toBe('');
+        const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+        if (process.platform === 'win32' && scenario.id === 'output/a-large-result-survives-a-pipe')
+          process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+        try {
+          const report = await runScenario(scenario, { binary: BINARY });
+          // One assertion carrying every failure, because a scenario that fails three ways
+          // should say so once rather than hide two of them behind the first.
+          expect(report.failures.join('\n\n'), `${scenario.id} proves: ${scenario.proves}`).toBe(
+            '',
+          );
+        } finally {
+          if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+          else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+        }
       });
     }
   });

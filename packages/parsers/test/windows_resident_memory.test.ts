@@ -1,4 +1,5 @@
 import { ChildProcess, spawn } from 'node:child_process';
+import { performance as nodePerformance } from 'node:perf_hooks';
 import { PassThrough } from 'node:stream';
 import { setTimeout as delay, setImmediate as nextCheckPhase } from 'node:timers/promises';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -94,7 +95,20 @@ it('retains a bounded diagnostic when an alive Windows reader stops reporting', 
     for (const event of events) {
       expect(
         Object.keys(event).every((key) =>
-          ['kind', 'reports', 'bytes', 'readerMs', 'parentMs', 'exitCode', 'signal'].includes(key),
+          [
+            'kind',
+            'reports',
+            'bytes',
+            'readerMs',
+            'parentMs',
+            'exitCode',
+            'signal',
+            'ownerElapsedMs',
+            'deadlineDeltaMs',
+            'ownerActiveMs',
+            'ownerIdleMs',
+            'ownerUtilization',
+          ].includes(key),
         ),
       ).toBe(true);
     }
@@ -124,14 +138,22 @@ it('records a fail-closed startup trace at the original Windows deadline', async
     const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4] ?? '';
     const milestones = [
       'LPS:entry:',
+      'LPI:ps:',
+      'LPI:clr:',
+      'LPI:process:',
       '::GetProcessById(',
+      ':before-refresh:',
       '$p.Refresh()',
-      'LPS:refresh:',
+      ':after-refresh:',
+      ':before-rss:',
       '$rss=$p.WorkingSet64',
-      'LPS:rss:',
-      'LPS:before-write:',
+      ':after-rss:',
+      ':before-write:',
       '[Console]::Out.WriteLine($rss)',
+      ':after-write:',
+      ':before-sleep:',
       '[Threading.Thread]::Sleep(100)',
+      ':after-sleep:',
     ];
     let previous = -1;
     for (const milestone of milestones) {
@@ -194,11 +216,14 @@ it('records a fail-closed startup trace at the original Windows deadline', async
 it('keeps startup instrumentation out of an observer without the opt-in', async () => {
   const { parser, reader, stdout } = windowsObserver({ SystemRoot: 'C:\\Windows' });
   const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
   const monitor = monitorResidentMemory(parser, 1024);
   try {
     const command = vi.mocked(spawn).mock.calls[0]?.[1]?.[4];
     expect(command).not.toContain('LPS:');
     expect(command).not.toContain('LPR:');
+    expect(command).not.toContain('LPP:');
+    expect(command).not.toContain('LPI:');
     expect(command).toContain('[Console]::Out.WriteLine($p.WorkingSet64)');
     stdout.write('4096\n');
     await monitor.ready;
@@ -206,6 +231,84 @@ it('keeps startup instrumentation out of an observer without the opt-in', async 
     reader.emit('close', 0, null);
     expect(monitor.state.error).toBeNull();
     expect(output).not.toHaveBeenCalled();
+    expect(utilization).not.toHaveBeenCalled();
+  } finally {
+    monitor.stop();
+  }
+});
+
+it('retains bounded per-sample phases and one runtime identity across the event ring', async () => {
+  vi.useFakeTimers();
+  let now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
+  utilization.mockReturnValue({ idle: 0.05, active: 249.95, utilization: 0.9998 });
+  const { parser, reader, stdout, stderr } = windowsObserver({
+    SystemRoot: 'C:\\Windows',
+    LOREPACK_OBSERVER_DIAGNOSTIC: '1',
+  });
+  const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  const monitor = monitorResidentMemory(parser, 1024);
+  try {
+    stderr.write('LPI:ps:5.1.26100.1\nLPI:clr:4.0.30319.42000\n');
+    stderr.write(
+      'LPI:process:System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089\n',
+    );
+    stderr.write('LPI:ps:9.9\nLPI:process:credential/secret\n');
+    stdout.write('4096\n');
+    await monitor.ready;
+    for (let sample = 1; sample <= 3; sample++) {
+      for (const phase of [
+        'before-refresh',
+        'after-refresh',
+        'before-rss',
+        'after-rss',
+        'before-write',
+        'after-write',
+        'before-sleep',
+        'after-sleep',
+      ])
+        stderr.write(`LPP:${String(sample)}:${phase}:${String(sample * 100)}\n`);
+    }
+    stderr.write('LPP:3:arbitrary-secret:1\nLPP:3:before-rss:credential-secret\n');
+    now = 249.95;
+    vi.advanceTimersByTime(250);
+    vi.runOnlyPendingTimers();
+    now = 250;
+    vi.advanceTimersByTime(1);
+    vi.runOnlyPendingTimers();
+    reader.emit('close', null, 'SIGKILL');
+    const cause = monitor.state.error?.cause as Error;
+    const trace = JSON.parse(cause.message.split('Observer trace: ')[1] ?? '');
+    expect(trace.identity).toEqual({
+      ps: '5.1.26100.1',
+      clr: '4.0.30319.42000',
+      process: 'System, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089',
+    });
+    expect(trace.events).toHaveLength(16);
+    expect(trace.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'sample', reports: 3, phase: 'before-rss', readerMs: 300 }),
+        expect.objectContaining({
+          kind: 'sample',
+          reports: 3,
+          phase: 'after-sleep',
+          readerMs: 300,
+        }),
+        expect.objectContaining({
+          kind: 'fire',
+          ownerElapsedMs: 249.95,
+          deadlineDeltaMs: -0.05,
+          ownerActiveMs: 249.95,
+          ownerIdleMs: 0.05,
+          ownerUtilization: 1,
+        }),
+        expect.objectContaining({ kind: 'check', ownerElapsedMs: 250, deadlineDeltaMs: 0 }),
+      ]),
+    );
+    expect(JSON.stringify(trace)).not.toContain('secret');
+    expect(Buffer.byteLength(String(output.mock.calls[0]?.[0]))).toBeLessThanOrEqual(4097);
+    expect(utilization).toHaveBeenCalled();
   } finally {
     monitor.stop();
   }
