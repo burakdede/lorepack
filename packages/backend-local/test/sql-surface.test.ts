@@ -1,9 +1,11 @@
+import type { ChildProcess } from 'node:child_process';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { LoreError, type ParsedTable, validateStatement } from '@lorepack/core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { sqlNameFor, writeTables } from '../src/catalog/tables.js';
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { buildMigrationsDirectory } from '../src/migrations-path.js';
@@ -22,6 +24,49 @@ let directory: string;
 let databasePath: string;
 let ordersTable: string;
 let secretsTable: string;
+
+function observeQueryChildren() {
+  const children: { process: ChildProcess; closed: boolean }[] = [];
+  const started = (message: unknown) => {
+    const process = (message as { process: ChildProcess }).process;
+    const observed = { process, closed: false };
+    children.push(observed);
+    process.once('close', () => {
+      observed.closed = true;
+    });
+  };
+  subscribe('child_process', started);
+  const assertClosed = async () => {
+    await vi.waitFor(() => expect(children.every((child) => child.closed)).toBe(true), {
+      timeout: 10_000,
+    });
+  };
+  return {
+    async verify(count: number) {
+      expect(children).toHaveLength(count);
+      for (const child of children)
+        expect(child.process.spawnargs.some((arg) => /[/\\]query-child\.js$/.test(arg))).toBe(true);
+      await assertClosed();
+      console.info(
+        'CORE41 SQL resource receipt',
+        JSON.stringify(
+          children.map(({ process: child, closed }) => ({
+            pid: child.pid,
+            argv: child.spawnargs,
+            closed,
+            exitCode: child.exitCode,
+            signal: child.signalCode,
+          })),
+        ),
+      );
+    },
+    async dispose() {
+      unsubscribe('child_process', started);
+      for (const child of children) if (!child.closed) child.process.kill('SIGKILL');
+      await assertClosed();
+    },
+  };
+}
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'lore-sql-'));
@@ -377,21 +422,42 @@ describe('bounds', () => {
    * and on the main thread it would hold the event loop indefinitely.
    */
   it('stops a runaway recursive query on the deadline', async () => {
-    const started = Date.now();
-    const error = await failure(
-      'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c',
-    );
-    expect(error.code).toBe('LORE_E_LIMIT_EXCEEDED');
-    expect(Date.now() - started).toBeLessThan(QUERY_LIMITS.deadlineMs * 3);
-    expect(error.remediation).toContain('termination condition');
+    const observed = observeQueryChildren();
+    try {
+      const started = Date.now();
+      const error = await failure(
+        'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c',
+      );
+      expect(error.code).toBe('LORE_E_LIMIT_EXCEEDED');
+      expect(Date.now() - started).toBeLessThan(QUERY_LIMITS.deadlineMs * 3);
+      expect(error.remediation).toContain('termination condition');
+      await observed.verify(1);
+    } finally {
+      await observed.dispose();
+    }
   }, 30_000);
 
   it('serves other queries normally after a deadline kill', async () => {
-    await failure(
-      'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c',
-    );
-    const result = await query(`SELECT count(*) AS n FROM ${ordersTable}`);
-    expect(result.rows[0]).toMatchObject({ n: 3 });
+    const observed = observeQueryChildren();
+    try {
+      await failure(
+        'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c',
+      );
+      await observed.verify(1);
+      const result = await query(`SELECT count(*) AS n FROM ${ordersTable}`);
+      expect(result.rows[0]).toMatchObject({ n: 3 });
+      await observed.verify(2);
+      const reopened = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        expect(reopened.prepare(`SELECT count(*) AS n FROM ${ordersTable}`).get()).toMatchObject({
+          n: 3,
+        });
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      await observed.dispose();
+    }
   }, 30_000);
 });
 
