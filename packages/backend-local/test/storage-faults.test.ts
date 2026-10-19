@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext } from 'vitest';
 import { verifyArchive, writeArchive } from '../src/archive.js';
 import { createCandidateDirectory, sweepCandidateDirectories } from '../src/atomic.js';
 import { writeCatalog } from '../src/catalog/writer.js';
@@ -23,6 +23,72 @@ import { validBuild } from './archive_fixture.js';
 const PACKAGE = join(import.meta.dirname, '..');
 const MIGRATIONS = join(PACKAGE, 'migrations');
 const COMPILED_ARCHIVE = pathToFileURL(join(PACKAGE, 'dist', 'archive.js')).href;
+
+async function writeArchiveUnderUmask(
+  destination: string,
+  members: Parameters<typeof writeArchive>[1],
+  context: Pick<TestContext, 'signal' | 'onTestFinished'>,
+): Promise<void> {
+  const writer = spawn(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `const { writeArchive } = await import(${JSON.stringify(COMPILED_ARCHIVE)});
+       const chunks = [];
+       for await (const chunk of process.stdin) chunks.push(chunk);
+       const { destination, members } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+       const previous = process.umask(0o077);
+       try {
+         await writeArchive(destination, members.map(({ path, bytes }) => ({
+           path, bytes: Buffer.from(bytes, 'base64'),
+         })));
+       } finally {
+         process.umask(previous);
+       }`,
+    ],
+    { stdio: ['pipe', 'ignore', 'pipe'], signal: context.signal, killSignal: 'SIGKILL' },
+  );
+  let failure: Error | undefined;
+  let stderr = '';
+  const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    writer.once('error', (error) => {
+      failure = error;
+    });
+    writer.stdin.once('error', (error) => {
+      failure ??= error;
+      writer.kill('SIGKILL');
+    });
+    writer.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
+    writer.once('close', (code, signal) => resolve({ code, signal }));
+  });
+  context.onTestFinished(async () => {
+    if (writer.exitCode === null && writer.signalCode === null) writer.kill('SIGKILL');
+    await closed;
+  });
+  try {
+    writer.stdin.end(
+      JSON.stringify({
+        destination,
+        members: members.map(({ path, bytes }) => ({
+          path,
+          bytes: Buffer.from(bytes).toString('base64'),
+        })),
+      }),
+    );
+  } catch (error) {
+    writer.kill('SIGKILL');
+    await closed;
+    throw error;
+  }
+  const result = await closed;
+  if (failure || result.code !== 0 || result.signal !== null)
+    throw new Error(`Archive writer exited ${result.code}/${result.signal}: ${stderr}`, {
+      cause: failure,
+    });
+}
 
 /** Caps the database at its current size, so the next page it needs fails as SQLITE_FULL. */
 function fillDisk(db: ReturnType<typeof openWritable>): void {
@@ -60,7 +126,7 @@ function bigArtifact(index: number) {
         headingPath: [],
         text,
         estimatedTokens: 10,
-        locator: { relativePath: `doc-${index}.md`, lineStart: 1, lineEnd: 1 },
+        locator: { artifactId: id, relativePath: `doc-${index}.md`, lineStart: 1, lineEnd: 1 },
         revisionHash: 'd'.repeat(64),
       },
     ],
@@ -164,7 +230,7 @@ describe('writing an archive', () => {
 
   it.skipIf(process.platform === 'win32')(
     'preserves the existing mode under a stricter umask',
-    async () => {
+    async (context) => {
       await withTempProject({}, async (project) => {
         const destination = project.path('shared.lorepack');
         await writeArchive(
@@ -172,23 +238,20 @@ describe('writing an archive', () => {
           validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
         );
         chmodSync(destination, 0o644);
-        const previous = process.umask(0o077);
-        try {
-          await writeArchive(
-            destination,
-            validBuild(project.root, 'new').map(([path, bytes]) => ({ path, bytes })),
-          );
-          expect(statSync(destination).mode & 0o777).toBe(0o644);
-          expect((await verifyArchive(destination)).ok).toBe(true);
-          const fresh = project.path('fresh.lorepack');
-          await writeArchive(
-            fresh,
-            validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
-          );
-          expect(statSync(fresh).mode & 0o777).toBe(0o600);
-        } finally {
-          process.umask(previous);
-        }
+        await writeArchiveUnderUmask(
+          destination,
+          validBuild(project.root, 'new').map(([path, bytes]) => ({ path, bytes })),
+          context,
+        );
+        expect(statSync(destination).mode & 0o777).toBe(0o644);
+        expect((await verifyArchive(destination)).ok).toBe(true);
+        const fresh = project.path('fresh.lorepack');
+        await writeArchiveUnderUmask(
+          fresh,
+          validBuild(project.root).map(([path, bytes]) => ({ path, bytes })),
+          context,
+        );
+        expect(statSync(fresh).mode & 0o777).toBe(0o600);
       });
     },
   );
