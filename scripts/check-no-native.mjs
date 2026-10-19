@@ -3,7 +3,7 @@
 // See AGENTS.md section 9 and architecture section 6.1.
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const BANNED_PACKAGES = [
@@ -80,54 +80,118 @@ function inspectInstalledPackage(rootDir, packageDir, manifest, problems) {
   if (existsSync(join(packageDir, 'binding.gyp'))) {
     problems.push(`native add-on (binding.gyp) at ${formatPath(rootDir, packageDir)}`);
   }
+
+  if (manifest.gypfile === true) {
+    problems.push(`published dependency ${manifest.name} declares gypfile`);
+  }
+
+  function inspectFiles(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const file = join(dir, entry.name);
+      if (entry.isDirectory() && entry.name !== 'node_modules') inspectFiles(file);
+      else if (entry.isFile() && entry.name.endsWith('.node')) {
+        problems.push(`native add-on (.node) at ${formatPath(rootDir, file)}`);
+      }
+    }
+  }
+  inspectFiles(packageDir);
 }
 
-function dependencyNames(manifest) {
-  return [
-    ...Object.keys(manifest.dependencies ?? {}),
-    ...Object.keys(manifest.optionalDependencies ?? {}),
-  ];
+function dependencyEdges(manifest) {
+  const edges = new Map();
+  for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+    edges.set(name, {
+      name,
+      optionalPeer: manifest.peerDependenciesMeta?.[name]?.optional === true,
+    });
+  }
+  for (const name of Object.keys(manifest.dependencies ?? {})) {
+    edges.set(name, { name });
+  }
+  for (const name of Object.keys(manifest.optionalDependencies ?? {})) {
+    edges.set(name, { name, optional: true });
+  }
+  return edges.values();
 }
 
 function resolveDependencyPackage(rootDir, packageDir, dependencyName, workspaceByName) {
-  const workspacePackage = workspaceByName.get(dependencyName);
-  if (workspacePackage) return workspacePackage;
-
-  const requireFromPackage = createRequire(join(packageDir, 'package.json'));
-  try {
-    const manifestPath = requireFromPackage.resolve(`${dependencyName}/package.json`);
+  const lookupDirs = [];
+  for (let dir = realpathSync.native(packageDir); ; dir = dirname(dir)) {
+    if (basename(dir) !== 'node_modules') lookupDirs.push(join(dir, 'node_modules'));
+    if (dirname(dir) === dir) break;
+  }
+  for (const lookupDir of lookupDirs) {
+    const candidate = join(lookupDir, dependencyName, 'package.json');
+    if (!existsSync(candidate)) continue;
+    const manifestPath = realpathSync.native(candidate);
     return {
       manifest: readJson(manifestPath),
       manifestPath,
       dir: dirname(manifestPath),
       relativePath: formatPath(rootDir, manifestPath),
     };
-  } catch {
-    return null;
   }
+  return workspaceByName.get(dependencyName) ?? null;
 }
 
-function walkPublishedClosure(rootDir, pkg, workspaceByName, seen, problems) {
-  const key = resolve(pkg.manifestPath);
+function walkPublishedClosure(rootDir, pkg, workspaceByName, seen, problems, removesCanvas) {
+  const key = realpathSync.native(pkg.manifestPath);
   if (seen.has(key)) return;
   seen.add(key);
 
   inspectInstalledPackage(rootDir, pkg.dir, pkg.manifest, problems);
 
-  for (const dependencyName of dependencyNames(pkg.manifest)) {
+  for (const edge of dependencyEdges(pkg.manifest)) {
+    const dependencyName = edge.name;
     const resolvedDependency = resolveDependencyPackage(
       rootDir,
       pkg.dir,
       dependencyName,
       workspaceByName,
     );
-    if (!resolvedDependency) continue;
-    walkPublishedClosure(rootDir, resolvedDependency, workspaceByName, seen, problems);
+    if (
+      !resolvedDependency &&
+      removesCanvas &&
+      edge.optional &&
+      pkg.manifest.name === 'pdfjs-dist' &&
+      dependencyName === '@napi-rs/canvas'
+    )
+      continue;
+    if (BANNED_PACKAGES.includes(dependencyName)) {
+      problems.push(
+        `published dependency ${pkg.manifest.name} declares banned dependency ${dependencyName}`,
+      );
+    }
+    if (!resolvedDependency) {
+      if (!edge.optionalPeer) {
+        problems.push(
+          `published dependency ${pkg.manifest.name} cannot resolve dependency ${dependencyName}`,
+        );
+      }
+      continue;
+    }
+    walkPublishedClosure(
+      rootDir,
+      resolvedDependency,
+      workspaceByName,
+      seen,
+      problems,
+      removesCanvas,
+    );
   }
 }
 
 export function checkNoNative(rootDir = process.cwd()) {
   const problems = [];
+  const workspaceConfig = join(rootDir, 'pnpm-workspace.yaml');
+  let removesCanvas = false;
+  if (existsSync(workspaceConfig)) {
+    const { parse } = createRequire(new URL('../packages/cli/package.json', import.meta.url))(
+      'yaml',
+    );
+    removesCanvas =
+      parse(readFileSync(workspaceConfig, 'utf8'))?.overrides?.['@napi-rs/canvas'] === '-';
+  }
   const workspacePackages = readWorkspacePackages(rootDir);
 
   for (const pkg of workspacePackages) {
@@ -146,7 +210,7 @@ export function checkNoNative(rootDir = process.cwd()) {
   const seen = new Set();
 
   for (const pkg of publishablePackages) {
-    walkPublishedClosure(rootDir, pkg, workspaceByName, seen, problems);
+    walkPublishedClosure(rootDir, pkg, workspaceByName, seen, problems, removesCanvas);
   }
 
   return problems.sort((a, b) => a.localeCompare(b));
