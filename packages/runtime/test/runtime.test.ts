@@ -619,6 +619,40 @@ describe('capabilities this phase has not delivered yet', () => {
     expect(result.buildId).toBe(BUILD_A);
   });
 
+  it.each([
+    { range: { lineStart: 3 }, expected: 'the body of the only node' },
+    { range: { lineEnd: 4 }, expected: 'the body of the only node' },
+    { range: { headingPath: ['Guides'] }, expected: 'the body of the only node' },
+    { range: { headingPath: [] }, expected: 'the whole normalized body' },
+  ])('distinguishes source selectors from a whole read: $range', async ({ range, expected }) => {
+    const scope = scopeFor(BUILD_A);
+    const body = vi
+      .spyOn(scope.objects, 'get')
+      .mockResolvedValue(new TextEncoder().encode('the whole normalized body'));
+    const runtime = runtimeOver(new TrackingProvider(), { open: async () => scope });
+    const result = await runtime.readSource({ path: 'guides/a.md', ...range });
+    expect(result.text).toBe(expected);
+    if ('headingPath' in range && range.headingPath?.length === 0)
+      expect(body).toHaveBeenCalledOnce();
+    else expect(body).not.toHaveBeenCalled();
+  });
+
+  it.each(['path', 'id'] as const)('resolves a source using its %s namespace', async (mode) => {
+    const scope = scopeFor(BUILD_A);
+    const artifact = await scope.catalog.artifact('guides/a.md', 'path');
+    if (artifact === null) throw new Error('Expected the catalog artifact fixture.');
+    const lookup = vi.spyOn(scope.catalog, 'artifact').mockResolvedValue(artifact);
+    const runtime = runtimeOver(new TrackingProvider(), { open: async () => scope });
+    const address =
+      mode === 'path' ? { path: artifact.relativePath } : { artifactId: artifact.artifactId };
+    const result = await runtime.readSource({ ...address, lineStart: 3 });
+    expect(lookup).toHaveBeenCalledExactlyOnceWith(
+      mode === 'path' ? artifact.relativePath : artifact.artifactId,
+      mode,
+    );
+    expect(result.locator.artifactId).toBe(artifact.artifactId);
+  });
+
   it('answers table calls as a build without tables, not as a missing method', async () => {
     const runtime = runtimeOver(new TrackingProvider());
     expect(await runtime.listTables()).toEqual({
