@@ -8,6 +8,7 @@ import {
   inspectInstalledTree,
   optionalPeerNames,
 } from '../../../scripts/check-packed-cli.mjs';
+import { copyWorkspace } from '../../../scripts/pack-cli.mjs';
 import {
   compareMembers,
   parseMembers,
@@ -19,6 +20,38 @@ import {
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+
+describe('packed CLI staging workspace', () => {
+  it('copies an actual referenced dependency patch with identical bytes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lore-pack-input-'));
+    const staged = mkdtempSync(join(tmpdir(), 'lore-pack-staged-'));
+    try {
+      for (const group of ['packages', 'apps', 'tools']) {
+        mkdirSync(join(root, group), { recursive: true });
+      }
+      const patchPath = 'patches/@vitest__coverage-istanbul@4.1.11.patch';
+      const patchBytes = Buffer.from('diff --git a/index.js b/index.js\n');
+      writeFileSync(join(root, 'package.json'), '{}\n');
+      writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+      writeFileSync(
+        join(root, 'pnpm-workspace.yaml'),
+        `patchedDependencies:\n  '@vitest/coverage-istanbul@4.1.11': ${patchPath}\n`,
+      );
+      mkdirSync(dirname(join(root, patchPath)), { recursive: true });
+      writeFileSync(join(root, patchPath), patchBytes);
+      writeJson(join(root, 'packages', 'cli', 'package.json'), { name: '@lorepack/cli' });
+      mkdirSync(join(root, 'packages', 'cli', 'dist'));
+      mkdirSync(join(root, 'packages', 'cli', 'studio-dist'));
+
+      copyWorkspace(root, staged);
+
+      expect(readFileSync(join(staged, patchPath))).toEqual(patchBytes);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(staged, { recursive: true, force: true });
+    }
+  });
+});
 
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
