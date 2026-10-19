@@ -94,4 +94,5 @@ Ubuntu, Windows and macOS with Node 24.21.0. See [`testing.md`](testing.md) and
 | SQL surface and authorizer boundary | [`adr-sql-surface.md`](adr-sql-surface.md) |
 | TOML splice writer for Codex config | [`adr-toml-merge.md`](adr-toml-merge.md) |
 | XLSX parser choice | [`adr-xlsx-parser.md`](adr-xlsx-parser.md) |
+| Linux resident reader isolation | [`0047-linux-resident-reader-isolation.md`](../adr/0047-linux-resident-reader-isolation.md) |
 | Stateless Cloudflare Worker projection | [`adr-cloudflare-worker-stateless.md`](adr-cloudflare-worker-stateless.md) |

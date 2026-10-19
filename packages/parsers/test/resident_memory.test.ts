@@ -10,12 +10,23 @@ import { sha256Hex } from '@lorepack/core';
 import { markdownParser, ParserHost, pdfParser } from '@lorepack/parsers';
 import { cmapBombPdf } from '@lorepack/test-support';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createLinuxResidentReader } from '../src/linux_resident_reader.js';
 import {
   createReportingWatchdog,
   createStartupWatchdog,
-  monitorResidentMemory,
+  monitorResidentMemory as monitorWithFactory,
   type ResidentMemoryMonitor,
 } from '../src/resident_memory.js';
+
+const monitorResidentMemory: typeof monitorWithFactory = (parser, limit) =>
+  monitorWithFactory(parser, limit, (pid, limitMiB, callbacks) =>
+    createLinuxResidentReader(
+      pid,
+      limitMiB,
+      callbacks,
+      new URL('../dist/linux_resident_reader_worker.js', import.meta.url),
+    ),
+  );
 
 const processes: { child: ChildProcess; closed: Promise<unknown> }[] = [];
 const monitors: ResidentMemoryMonitor[] = [];

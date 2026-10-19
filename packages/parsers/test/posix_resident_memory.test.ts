@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { PassThrough } from 'node:stream';
 import { afterEach, expect, it, vi } from 'vitest';
+import { pollLinuxResidentMemory } from '../src/linux_resident_reader.js';
 import { monitorResidentMemory, type ResidentMemoryMonitor } from '../src/resident_memory.js';
 
 vi.mock('node:child_process', async (original) => ({
@@ -67,7 +68,9 @@ it('retains Linux timeout timing and the original abort chain without sensitive 
     nowMs = 349.95;
     throw original;
   });
-  const monitor = monitorResidentMemory(parser, 1024);
+  const monitor = monitorResidentMemory(parser, 1024, (pid, _limit, callbacks) =>
+    pollLinuxResidentMemory(pid, callbacks),
+  );
   monitors.push(monitor);
   await expect(monitor.ready).rejects.toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
   const { error, value } = context(monitor);
@@ -97,7 +100,9 @@ it('distinguishes a later Linux read failure while preserving the 100 ms sample 
       nowMs = 480;
       throw original;
     });
-  const monitor = monitorResidentMemory(parser, 1024);
+  const monitor = monitorResidentMemory(parser, 1024, (pid, _limit, callbacks) =>
+    pollLinuxResidentMemory(pid, callbacks),
+  );
   monitors.push(monitor);
   await monitor.ready;
   nowMs = 200;
@@ -118,7 +123,9 @@ it('excludes arbitrary native error names and messages from structured reader co
     name: 'private-reader-path',
   });
   vi.mocked(readFile).mockRejectedValue(original);
-  const monitor = monitorResidentMemory(parser, 1024);
+  const monitor = monitorResidentMemory(parser, 1024, (pid, _limit, callbacks) =>
+    pollLinuxResidentMemory(pid, callbacks),
+  );
   monitors.push(monitor);
   await expect(monitor.ready).rejects.toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
   const { error, value } = context(monitor);
@@ -181,4 +188,21 @@ it('suppresses a late macOS reader rejection after intentional monitor stop', as
   expect(monitor.state.error).toBeNull();
   expect(parser.kill).not.toHaveBeenCalled();
   expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
+});
+
+it('suppresses a late Linux identity mismatch after intentional reader stop', async () => {
+  let release: (value: string) => void = () => {};
+  const pending = new Promise<string>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(readFile).mockReturnValue(pending);
+  const callbacks = { sample: vi.fn(), error: vi.fn(), gone: vi.fn() };
+  const reader = pollLinuxResidentMemory(123, callbacks, '123:1');
+  reader.stop();
+  release(`123 (node) S ${Array.from({ length: 18 }, () => '0').join(' ')} 2`);
+  await reader.closed;
+  expect(callbacks.gone).not.toHaveBeenCalled();
+  expect(callbacks.sample).not.toHaveBeenCalled();
+  expect(callbacks.error).not.toHaveBeenCalled();
+  expect(readFile).toHaveBeenCalledTimes(1);
 });

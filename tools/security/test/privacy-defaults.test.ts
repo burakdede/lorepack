@@ -97,6 +97,7 @@ async function project(name: string): Promise<string> {
 }
 
 const egress = (name: string): string => join(EGRESS_FIXTURES, name);
+const samplerProbe = (name: string): string => join(import.meta.dirname, 'sandbox', name);
 
 describe('privacy defaults: no telemetry or source egress in the build path, issue 616', () => {
   it('builds every parser format in a sandbox with no network, process or thread, and attempts nothing', async () => {
@@ -107,6 +108,61 @@ describe('privacy defaults: no telemetry or source egress in the build path, iss
     expect(run.stdout).toMatch(/Build lore_[0-9a-f]{64}/);
     expect(run.stdout).toContain(`${FORMATS} artifacts`);
   });
+
+  it.runIf(process.platform === 'linux')(
+    'keeps the actual reader readonly and preloaded without process or worker grants',
+    async () => {
+      const run = runSandboxedBuild(await project('reader-permissions'), {
+        injectEverywhere: [samplerProbe('reader_permission_probe.mjs')],
+      });
+
+      expect(egressProblems(run)).toEqual([]);
+      expect(run.stderr).toContain('LORE_READER_PERMISSION_PROOF');
+      expect(run.stdout).toContain(`${FORMATS} artifacts`);
+    },
+  );
+
+  it.runIf(process.platform === 'linux')(
+    'refuses alternate reader paths, changed options and unowned process identities',
+    async () => {
+      const run = runSandboxedBuild(await project('reader-admission'), {
+        inject: [samplerProbe('reader_admission_probe.mjs')],
+      });
+
+      expect(run.code).toBe(0);
+      expect(run.stderr).toContain('LORE_READER_ADMISSION_PROOF');
+      expect(run.stdout).toContain(`${FORMATS} artifacts`);
+      expect(run.attempts).toEqual(Array.from({ length: 11 }, () => 'worker_threads.Worker'));
+      expect(egressProblems(run)).toHaveLength(11);
+    },
+  );
+
+  it('refuses nested parser workers and Linux reader descendants and signals', async () => {
+    const run = runSandboxedBuild(await project('reader-denials'), {
+      injectEverywhere: [samplerProbe('reader_denial_probe.mjs')],
+    });
+
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).toContain('LORE_NESTED_PARSER_PROBE');
+    if (process.platform === 'linux') {
+      expect(run.stderr).toContain('LORE_NESTED_READER_PROBE');
+      expect(run.attempts).toContain('worker_threads.Worker');
+      expect(run.attempts).toContain('child_process.spawnSync');
+      expect(run.attempts).toContain('process.kill');
+    }
+    expect(egressProblems(run).join('\n')).toContain('worker_threads.Worker');
+  });
+
+  it.runIf(process.platform === 'linux')(
+    'observes network attempts inside the actual readonly reader',
+    async () => {
+      const run = runSandboxedBuild(await project('reader-network'), {
+        injectEverywhere: [samplerProbe('reader_network_probe.mjs')],
+      });
+
+      expect(egressProblems(run).join('\n')).toContain('network attempt: net.client.socket');
+    },
+  );
 
   /**
    * The four routes #616 showed the first version missed, each loaded into the real build

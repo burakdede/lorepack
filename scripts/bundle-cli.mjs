@@ -20,6 +20,13 @@ export async function bundleCli({
   // The parse process (#594). `ParserHost` forks `./parse-child.js` relative to its own module,
   // and once bundled its module is `public-entry.js`, so the child has to sit beside it.
   const parseChild = join(root, 'packages', 'parsers', 'dist', 'parse-child.js');
+  const residentReader = join(
+    root,
+    'packages',
+    'parsers',
+    'dist',
+    'linux_resident_reader_worker.js',
+  );
   const buildWorker = join(compiled, 'services', 'build_worker.js');
   const verifyBridge = join(root, 'packages', 'connect-clients', 'dist', 'verify_bridge.js');
   const archiveVerifyChild = join(
@@ -60,6 +67,7 @@ export async function bundleCli({
     entry,
     queryChild,
     parseChild,
+    residentReader,
     archiveVerifyChild,
     buildWorker,
     verifyBridge,
@@ -82,6 +90,7 @@ export async function bundleCli({
       'public-index': index,
       'query-child': queryChild,
       'parse-child': parseChild,
+      linux_resident_reader_worker: residentReader,
       'archive-verify-child': archiveVerifyChild,
       build_worker: buildWorker,
       verify_bridge: verifyBridge,

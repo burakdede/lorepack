@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   compareTrees,
   inspectInstalledTree,
+  inspectParserHelpers,
   optionalPeerNames,
 } from '../../../scripts/check-packed-cli.mjs';
 
@@ -15,6 +16,28 @@ import {
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..', '..');
+
+describe('installed parser helpers', () => {
+  it('reports each missing flat parser entry file', () => {
+    const install = mkdtempSync(join(tmpdir(), 'lore-reader-closure-'));
+    try {
+      const dist = join(install, 'node_modules', '@lorepack', 'cli', 'dist');
+      mkdirSync(dist, { recursive: true });
+      expect(inspectParserHelpers(install)).toEqual([
+        'installed parser helper is missing: parse-child.js',
+        'installed parser helper is missing: linux_resident_reader_worker.js',
+      ]);
+      writeFileSync(join(dist, 'parse-child.js'), '');
+      expect(inspectParserHelpers(install)).toEqual([
+        'installed parser helper is missing: linux_resident_reader_worker.js',
+      ]);
+      writeFileSync(join(dist, 'linux_resident_reader_worker.js'), '');
+      expect(inspectParserHelpers(install)).toEqual([]);
+    } finally {
+      rmSync(install, { recursive: true, force: true });
+    }
+  });
+});
 
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });

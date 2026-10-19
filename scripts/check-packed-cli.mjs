@@ -22,6 +22,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -169,6 +170,67 @@ function runInstalledCli(installDir, projectDir, args, hookPath, logPath) {
     );
   }
   return result.stdout;
+}
+
+export function inspectParserHelpers(installDir) {
+  const dist = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist');
+  return ['parse-child.js', 'linux_resident_reader_worker.js']
+    .filter((name) => !existsSync(join(dist, name)))
+    .map((name) => `installed parser helper is missing: ${name}`);
+}
+
+function checkInstalledResidentReader(installDir) {
+  const problems = inspectParserHelpers(installDir);
+  if (problems.length > 0 || process.platform !== 'linux') return problems;
+  const dist = join(installDir, 'node_modules', '@lorepack', 'cli', 'dist');
+  const helper = join(dist, 'linux_resident_reader_worker.js');
+  const hidden = `${helper}.withheld`;
+  const project = join(installDir, 'resident-reader-project');
+  mkdirSync(join(project, 'docs'), { recursive: true });
+  writeFileSync(join(project, 'docs', 'proof.md'), '# Reader closure\n\nquartzreaderproof\n');
+  const entry = join(dist, 'public-entry.js');
+  const run = (args) =>
+    spawnSync(process.execPath, [entry, ...args], {
+      cwd: project,
+      encoding: 'utf8',
+      timeout: 30_000,
+      env: { ...process.env, NO_COLOR: '1' },
+    });
+  const initialized = run(['init', '.']);
+  if (initialized.status !== 0)
+    return [`installed reader project init failed: ${initialized.stdout}${initialized.stderr}`];
+  let omitted;
+  renameSync(helper, hidden);
+  try {
+    omitted = run(['--json', 'build']);
+  } finally {
+    renameSync(hidden, helper);
+  }
+  if (
+    omitted.error !== undefined ||
+    omitted.signal !== null ||
+    omitted.status === null ||
+    omitted.status === 0 ||
+    !`${omitted.stdout}${omitted.stderr}`.includes('LORE_E_PARSE_FAILED')
+  )
+    return [
+      `installed build did not fail closed with its reader withheld: ${omitted.stdout}${omitted.stderr}`,
+    ];
+  const restored = run(['build']);
+  if (restored.status !== 0)
+    return [
+      `installed build failed after restoring its reader: ${restored.stdout}${restored.stderr}`,
+    ];
+  const searched = run(['--json', 'search', 'quartzreaderproof']);
+  if (
+    searched.status !== 0 ||
+    !JSON.parse(searched.stdout).hits?.some((hit) => hit.locator?.relativePath === 'docs/proof.md')
+  )
+    return [`installed reader lost its located result: ${searched.stdout}${searched.stderr}`];
+  console.log(
+    'installed Linux reader omission failed closed; restored helper parsed without a checkout',
+  );
+  return [];
 }
 
 function freePort() {
@@ -590,6 +652,7 @@ async function main() {
     const installed = inspectInstalledTree(join(installDir, 'node_modules'));
     problems.push(...installed.problems);
     console.log(`installed ${installed.packages.size} packages with npm`);
+    problems.push(...checkInstalledResidentReader(installDir));
 
     if (spec === undefined) {
       const expected = lockedProductionTree();

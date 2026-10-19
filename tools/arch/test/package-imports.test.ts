@@ -47,6 +47,7 @@ await runCli(['node','lorepack','--help'],{exitProcess:false});
         ],
         { cwd: REPO_ROOT, encoding: 'utf8' },
       );
+      expect(existsSync(join(outputDirectory, 'linux_resident_reader_worker.js'))).toBe(true);
       const output = execFileSync(
         process.execPath,
         [
@@ -201,6 +202,7 @@ function publishedJavaScriptFiles(packageDir: string, packageName: string | unde
       'public-index.js',
       'query-child.js',
       'parse-child.js',
+      'linux_resident_reader_worker.js',
       'archive-verify-child.js',
       'build_worker.js',
       'verify_bridge.js',

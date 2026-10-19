@@ -11,6 +11,7 @@ import { type ErrorCode, LoreError, type ParsedArtifact } from '@lorepack/core';
 export interface SerializedError {
   readonly name: string;
   readonly message: string;
+  readonly code?: string | number;
   readonly stack?: string;
   readonly lore?: {
     readonly code: ErrorCode;
@@ -39,6 +40,9 @@ export function serializeError(value: unknown, depth = 0): SerializedError {
   return {
     name: value.name,
     message: value.message,
+    ...('code' in value && (typeof value.code === 'string' || typeof value.code === 'number')
+      ? { code: value.code }
+      : {}),
     ...(value.stack === undefined ? {} : { stack: value.stack }),
     ...(value instanceof LoreError
       ? {
@@ -68,6 +72,7 @@ export function deserializeError(serialized: SerializedError): Error {
   }
   const error = new Error(serialized.message, cause === undefined ? undefined : { cause });
   error.name = serialized.name;
+  if (serialized.code !== undefined) Object.assign(error, { code: serialized.code });
   if (serialized.stack !== undefined) error.stack = serialized.stack;
   return error;
 }
