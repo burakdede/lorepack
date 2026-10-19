@@ -1,0 +1,185 @@
+name: Linux reader mechanism diagnostic
+
+on:
+  push:
+    branches: [801-linux-reader-diagnostic]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-reader-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD: 482cbbfd9d00d78ea34c3b66e7da63ad194d89bb
+      EXPECTED_TREE: cba77f622eb76615934dd3c14c16b22f5daa6ce2
+      EXPECTED_READER_SHA: 6689cdd11c5b8c562a4ae55e247906562a4490e4df9e9d64a55ad3318f2c15f9
+      EXPECTED_PRELOAD_SHA: f96d53b4a3563c2634ad180b7b5b4c86290721e1a70afe9abc7135366d6f15d7
+      EXPECTED_WITNESS_SHA: 6be4ee8000d0db9bd4b9e6e1ac94ed3be6fd74ec3447db26f7ac0975d12b5196
+      TMPDIR: /tmp
+    steps:
+      - name: Read the exact diagnostic transport commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: transport
+          persist-credentials: false
+
+      - name: Read the exact failing source independently
+        uses: actions/checkout@v5
+        with:
+          ref: 482cbbfd9d00d78ea34c3b66e7da63ad194d89bb
+          path: candidate
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.18.0
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.21.0'
+          cache: pnpm
+          cache-dependency-path: candidate/pnpm-lock.yaml
+
+      - name: Bind transport and clean source
+        shell: bash
+        env:
+          TRANSPORT_HEAD: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUNNER_IMAGE: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          test "$(git -C "$GITHUB_WORKSPACE/transport" rev-parse HEAD)" = "$TRANSPORT_HEAD"
+          test -z "$(git -C "$GITHUB_WORKSPACE/transport" status --porcelain)"
+          mkdir "$GITHUB_WORKSPACE/evidence"
+          evidence="$GITHUB_WORKSPACE/evidence"
+          cd "$GITHUB_WORKSPACE/candidate"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          test -z "$(git status --porcelain)"
+          git archive HEAD > "$evidence/source.tar"
+          git rev-parse HEAD 'HEAD^{tree}' > "$evidence/source-identity.txt"
+          printf 'transport=%s\nrun=%s\nattempt=%s\nrunner=%s\n' "$TRANSPORT_HEAD" "$RUN_ID" "$RUN_ATTEMPT" "$RUNNER_IMAGE" > "$evidence/transport-identity.txt"
+          printf 'ImageOS=%s\nImageVersion=%s\n' "${ImageOS-}" "${ImageVersion-}" >> "$evidence/transport-identity.txt"
+          cp "$GITHUB_WORKSPACE/transport/.github/workflows/linux-reader-diagnostic.yml" "$evidence/transport-workflow.yml"
+          cp "$GITHUB_WORKSPACE/transport/diagnostics/linux-reader/linux_reader_witness.mjs" "$evidence/linux_reader_witness.mjs"
+          printf '%s  %s\n' "$EXPECTED_WITNESS_SHA" "$evidence/linux_reader_witness.mjs" | sha256sum --check
+          cp "$GITHUB_WORKSPACE/transport/diagnostics/linux-reader/parent_loop_probe.mjs" "$evidence/parent_loop_probe.mjs"
+          printf '%s  %s\n' "$EXPECTED_PRELOAD_SHA" "$evidence/parent_loop_probe.mjs" | sha256sum --check
+          node --version > "$evidence/node-version.txt"
+          pnpm --version > "$evidence/pnpm-version.txt"
+          test "$(cat "$evidence/node-version.txt")" = 'v24.21.0'
+          test "$(cat "$evidence/pnpm-version.txt")" = '11.18.0'
+
+      - name: Frozen install and build the original workload graph
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$GITHUB_WORKSPACE/candidate"
+          evidence="$GITHUB_WORKSPACE/evidence"
+          pnpm install --frozen-lockfile > "$evidence/install.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/install.exit"
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          pnpm exec tsc -b > "$evidence/build.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/build.exit"
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          printf '%s  %s\n' "$EXPECTED_READER_SHA" 'packages/parsers/dist/resident_memory.js' | sha256sum --check > "$evidence/reader-binding.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/reader-binding.exit"
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          find packages tools apps -type f -path '*/dist/*' -print0 | sort -z > "$RUNNER_TEMP/built-files.list"
+          xargs -0 sha256sum < "$RUNNER_TEMP/built-files.list" > "$evidence/built-files.sha256"
+          tar --null -T "$RUNNER_TEMP/built-files.list" -cf "$evidence/built-workload-graph.tar"
+          git status --porcelain > "$evidence/post-build-git-status.txt"
+          test ! -s "$evidence/post-build-git-status.txt"
+
+      - name: One idle and one parent-stall diagnostic, sequentially
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$GITHUB_WORKSPACE/evidence"
+          candidate="$GITHUB_WORKSPACE/candidate"
+          witness="$evidence/linux_reader_witness.mjs"
+          node --check "$witness" > "$evidence/syntax.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/syntax.exit"
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          for condition in idle parent-stall; do
+            date --utc --iso-8601=ns > "$evidence/$condition.started.txt"
+            timeout --signal=TERM --kill-after=5s 20s node "$witness" \
+              --candidate "$candidate" --expected-head "$EXPECTED_HEAD" \
+              --expected-reader-dist-sha256 "$EXPECTED_READER_SHA" --condition "$condition" \
+              --output "$evidence/$condition" > "$evidence/$condition.launch.raw.log" 2>&1
+            code=$?
+            printf '%s\n' "$code" > "$evidence/$condition.launch.exit"
+            date --utc --iso-8601=ns > "$evidence/$condition.ended.txt"
+            ps -eo pid=,ppid=,pgid=,stat=,comm= > "$evidence/$condition.process-scan.raw.log"
+            if [ "$code" -ne 0 ]; then exit "$code"; fi
+            test -f "$evidence/$condition/receipt.json" || exit 1
+          done
+
+      - name: Observe the single originally failing pruning workload
+        shell: bash
+        env:
+          LORE_BENCH_PACKS: '10'
+          LORE_BENCH_SCALE: medium
+          LORE_BENCH_PROFILE: mixed
+          LOREPACK_OBSERVER_DIAGNOSTIC: '0'
+        run: |
+          set -uo pipefail
+          cd "$GITHUB_WORKSPACE/candidate"
+          evidence="$GITHUB_WORKSPACE/evidence"
+          export LORE_LOOP_RECEIPT="$evidence/workload-loop.receipt.json"
+          export LORE_LOOP_HEAD="$EXPECTED_HEAD"
+          export LORE_LOOP_READER_SHA="$EXPECTED_READER_SHA"
+          mkdir benchmark-artifacts
+          node --check "$evidence/parent_loop_probe.mjs" > "$evidence/preload-syntax.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/preload-syntax.exit"
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          date --utc --iso-8601=ns > "$evidence/workload.started.txt"
+          timeout --signal=TERM --kill-after=5s 120s node --import "$evidence/parent_loop_probe.mjs" \
+            scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${RUNNER_OS}.json" \
+            > "$evidence/workload.launch.raw.log" 2>&1
+          code=$?
+          printf '%s\n' "$code" > "$evidence/workload.launch.exit"
+          date --utc --iso-8601=ns > "$evidence/workload.ended.txt"
+          ps -eo pid=,ppid=,pgid=,stat=,comm= > "$evidence/workload.process-scan.raw.log"
+          if [ -f benchmark-artifacts/pruning-Linux.json ]; then
+            cp benchmark-artifacts/pruning-Linux.json "$evidence/pruning-Linux.json"
+          fi
+          if [ "$code" -ne 0 ]; then exit "$code"; fi
+          test -f "$LORE_LOOP_RECEIPT" || exit 1
+
+      - name: Retain terminal identities even on failure
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$GITHUB_WORKSPACE/evidence"
+          if [ ! -d "$evidence" ]; then exit 1; fi
+          git -C "$GITHUB_WORKSPACE/candidate" rev-parse HEAD 'HEAD^{tree}' > "$evidence/terminal-source-identity.txt"
+          git -C "$GITHUB_WORKSPACE/candidate" status --porcelain > "$evidence/terminal-git-status.txt"
+          ps -eo pid=,ppid=,pgid=,stat=,comm= > "$evidence/terminal-process-scan.raw.log"
+          cd "$evidence"
+          find . -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/linux-reader-files.sha256"
+          mv "$RUNNER_TEMP/linux-reader-files.sha256" "$evidence/files.sha256"
+
+      - name: Upload source, build, workflow and raw diagnostic custody
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-reader-diagnostic-${{ github.sha }}-${{ github.run_attempt }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
