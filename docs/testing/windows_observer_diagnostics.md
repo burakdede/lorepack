@@ -226,3 +226,35 @@ cases with two existing native-Windows skips; architecture checks passed 305
 cases. Strict Node-only test typing, project types, lint, format, build and release
 policy checks passed. The controlled failure tests verify context retention and
 fail-closed behavior; they do not explain either historical native POSIX failure.
+
+## Auxiliary cscript/WMI selection control
+
+The Windows-only native comparison in `resident_memory.test.ts` evaluates an
+unshipped WSH JScript fixture. It does not replace the production PowerShell
+reader or change parser permissions, Node support, deadlines or original tests.
+One auxiliary Node child commits 128 MiB while its JavaScript thread stays busy.
+The candidate repeatedly fetches the exact WMI process instance and verifies
+PID/creation identity; resident growth and a stable final reading are checked
+against independent Framework OS snapshots. FILETIME remains a string to avoid
+64-bit integer loss. Wrong identity must fail before RSS output; target exit must fail rather than
+continue with cached-success reports.
+
+The ordinary flag-off PowerShell command observes the same child separately.
+Its failure is recorded as a baseline failure and its reader is closed; it does
+not prevent collecting the candidate's own guarded result. All original
+PowerShell/parser cases remain mandatory. Candidate startup/reporting failures,
+stale growth or bad identity fail the new control and clean up its owned helpers
+and target. The existing 5000 ms/250 ms watchdogs and 100 ms cadence remain.
+
+One bounded `LOREPACK_WMI_CONTROL` receipt records first/sample-window times,
+maximum accepted-report gap, native growth samples, independent reference,
+fixture/command hashes and actual exits, including on failure. The Framework
+identity snapshot precedes both fresh reader processes, so this is not a
+machine-cold or unperturbed performance measurement. Hosted administrator
+execution does not establish standard-user or enterprise-policy compatibility.
+A pass does not explain any historical failure or select a production adapter.
+
+The real Node-producer controls exercise controller guard/cleanup only. Local
+Node syntax checking of the JScript fixture does not execute WMI or establish
+Windows Script Host syntax compatibility. Native proof must come from the next
+required Windows qualification, without an extra dispatch or unchanged rerun.
