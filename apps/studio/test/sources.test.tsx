@@ -4,6 +4,11 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sources } from '../src/routes/Sources.js';
 
+vi.mock('../src/lib/api.js', async (original) => ({
+  ...(await original<typeof import('../src/lib/api.js')>()),
+  client: { describeBuild: vi.fn(async () => ({ buildId: 'lore_x' })) },
+}));
+
 /**
  * Sources, which answers "exactly what was parsed, and exactly what was not".
  *

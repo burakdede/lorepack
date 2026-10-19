@@ -16,7 +16,7 @@ import {
 import { client, toDisplayable } from '../lib/api.js';
 import { type Client, fetchDiagnostics } from '../lib/diagnostics.js';
 import { serverOrigin } from '../lib/equivalents.js';
-import { fetchWarnings, WARNINGS_KEY, type Warning } from '../lib/warnings.js';
+import { fetchWarnings, type Warning, warningsKey } from '../lib/warnings.js';
 import './Overview.css';
 
 /**
@@ -138,7 +138,7 @@ export function Overview(): React.JSX.Element {
 
         <div className="overview-side">
           <PlanPanel asked={planAsked} onAsk={() => setPlanAsked(true)} />
-          <Warnings count={data.warningCount} />
+          <Warnings count={data.warningCount} buildId={data.buildId} />
         </div>
       </div>
     </section>
@@ -174,10 +174,16 @@ function BuildId({
   );
 }
 
-function Warnings({ count }: { readonly count: number }): React.JSX.Element | null {
+function Warnings({
+  count,
+  buildId,
+}: {
+  readonly count: number;
+  readonly buildId: string;
+}): React.JSX.Element | null {
   const warnings = useQuery({
-    queryKey: WARNINGS_KEY,
-    queryFn: fetchWarnings,
+    queryKey: warningsKey(buildId),
+    queryFn: ({ signal }) => fetchWarnings({ signal, buildId }),
     // Nothing to fetch when the build recorded none, which is the common case.
     enabled: count > 0,
   });

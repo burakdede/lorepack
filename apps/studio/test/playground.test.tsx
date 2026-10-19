@@ -132,13 +132,13 @@ const contextForTask = vi.fn();
 const search = vi.fn();
 const contextForTaskWithReceipt = vi.fn();
 
-vi.mock('../src/lib/api.js', () => ({
+vi.mock('../src/lib/api.js', async (original) => ({
+  ...(await original<typeof import('../src/lib/api.js')>()),
   client: {
     contextForTask: (...args: unknown[]) => contextForTask(...args),
     search: (...args: unknown[]) => search(...args),
     contextForTaskWithReceipt: (...args: unknown[]) => contextForTaskWithReceipt(...args),
   },
-  toDisplayable: (error: unknown) => ({ message: String(error) }),
 }));
 
 beforeEach(() => {
@@ -167,6 +167,33 @@ async function assemble(): Promise<void> {
 }
 
 describe('assembling a bundle', () => {
+  it('shows the typed server error when Copy as export fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: 'LORE_E_BUILD_NOT_FOUND',
+                message: 'The selected build is no longer available.',
+                remediation: 'Select a build that is still stored.',
+              },
+            }),
+            { status: 404 },
+          ),
+      ),
+    );
+    renderRoute();
+    await assemble();
+    await screen.findByRole('button', { name: 'Copy as export' });
+    await userEvent.click(screen.getByRole('button', { name: 'Copy as export' }));
+
+    expect(await screen.findByText('The selected build is no longer available.')).toBeVisible();
+    expect(screen.getByText('LORE_E_BUILD_NOT_FOUND')).toBeVisible();
+    expect(screen.getByText('Select a build that is still stored.')).toBeVisible();
+  });
+
   it('shows what was selected, with provenance on every item', async () => {
     renderRoute();
     await assemble();

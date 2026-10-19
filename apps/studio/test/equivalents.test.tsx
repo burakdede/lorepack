@@ -84,6 +84,13 @@ describe('the other requests', () => {
       name: 'lore_query_table',
       arguments: { tableId: 't_orders', sql: 'SELECT 1' },
     });
+    const selected = tableQueryEquivalents('t_orders', 'SELECT 1', ORIGIN, 'lore_selected');
+    expect(curlBody(selected.http)).toEqual({ sql: 'SELECT 1', buildId: 'lore_selected' });
+    expect(selected.mcp.arguments).toEqual({
+      tableId: 't_orders',
+      sql: 'SELECT 1',
+      buildId: 'lore_selected',
+    });
   });
 
   it('reads a source with or without its cited lines', () => {
@@ -100,6 +107,12 @@ describe('the other requests', () => {
       artifactId: 'docs:runbook.md',
       lineStart: 9,
       lineEnd: 11,
+    });
+    const selected = readSourceEquivalents('docs:runbook.md', null, ORIGIN, 'lore_selected');
+    expect(selected.http).toContain('?buildId=lore_selected');
+    expect(selected.mcp.arguments).toEqual({
+      artifactId: 'docs:runbook.md',
+      buildId: 'lore_selected',
     });
   });
 

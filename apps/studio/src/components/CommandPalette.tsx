@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { client, fetchSources } from '../lib/api.js';
 import type { ThemeChoice } from '../lib/theme.js';
@@ -55,11 +55,16 @@ export function CommandPalette({
   const list = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  const sources = useQuery({ queryKey: ['sources'], queryFn: fetchSources });
+  const sources = useQuery({
+    queryKey: ['sources', buildId],
+    queryFn: buildId === undefined ? skipToken : ({ signal }) => fetchSources({ signal, buildId }),
+  });
   const tables = useQuery({
-    queryKey: ['tables'],
-    queryFn: ({ signal }) => client.listTables(signal),
-    enabled: hasTables,
+    queryKey: ['tables', buildId],
+    queryFn:
+      buildId === undefined || !hasTables
+        ? skipToken
+        : ({ signal }) => client.listTables(signal, buildId),
   });
 
   useEffect(() => {

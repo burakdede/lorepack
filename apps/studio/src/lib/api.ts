@@ -95,8 +95,10 @@ export interface SourceArtifact {
  */
 export async function fetchSources({
   signal,
+  buildId,
 }: {
   readonly signal: AbortSignal;
+  readonly buildId?: string;
 }): Promise<{ buildId: string; artifacts: readonly SourceArtifact[] }> {
   async function page(options: SourceListRequest): Promise<SourceListResult> {
     const query = new URLSearchParams();
@@ -106,7 +108,7 @@ export async function fetchSources({
     if (!response.ok) throw new Error('This server does not list sources.');
     return (await response.json()) as SourceListResult;
   }
-  const first = await page({});
+  const first = await page({ buildId });
   const artifacts = [...first.artifacts];
   let offset = first.nextOffset;
   while (offset !== null) {

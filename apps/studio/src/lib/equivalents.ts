@@ -81,10 +81,21 @@ export function searchEquivalents(request: SearchRequest, origin: string): Equiv
 }
 
 /** The CLI has no SQL command, so a table query has no CLI rendering. */
-export function tableQueryEquivalents(tableId: string, sql: string, origin: string): Equivalents {
+export function tableQueryEquivalents(
+  tableId: string,
+  sql: string,
+  origin: string,
+  buildId?: string,
+): Equivalents {
   return {
-    http: curlPost(origin, `/v1/tables/${encodeURIComponent(tableId)}/query`, { sql }),
-    mcp: { name: 'lore_query_table', arguments: { tableId, sql } },
+    http: curlPost(origin, `/v1/tables/${encodeURIComponent(tableId)}/query`, {
+      sql,
+      ...(buildId === undefined ? {} : { buildId }),
+    }),
+    mcp: {
+      name: 'lore_query_table',
+      arguments: { tableId, sql, ...(buildId === undefined ? {} : { buildId }) },
+    },
   };
 }
 
@@ -101,16 +112,28 @@ export function readSourceEquivalents(
   artifactId: string,
   range: LineRange | null,
   origin: string,
+  buildId?: string,
 ): Equivalents {
-  const query = range === null ? '' : `?lineStart=${range.start}&lineEnd=${range.end}`;
+  const params = new URLSearchParams();
+  if (range !== null) {
+    params.set('lineStart', String(range.start));
+    params.set('lineEnd', String(range.end));
+  }
+  if (buildId !== undefined) params.set('buildId', buildId);
+  const query = params.size === 0 ? '' : `?${params}`;
   return {
     http: `curl -s ${shellQuote(`${origin}/v1/sources/${encodeURIComponent(artifactId)}${query}`)}`,
     mcp: {
       name: 'lore_read_source',
       arguments:
         range === null
-          ? { artifactId }
-          : { artifactId, lineStart: range.start, lineEnd: range.end },
+          ? { artifactId, ...(buildId === undefined ? {} : { buildId }) }
+          : {
+              artifactId,
+              lineStart: range.start,
+              lineEnd: range.end,
+              ...(buildId === undefined ? {} : { buildId }),
+            },
     },
   };
 }

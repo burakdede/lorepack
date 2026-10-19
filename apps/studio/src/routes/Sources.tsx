@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Citation } from '../components/Citation.js';
 import { Equivalents } from '../components/Equivalents.js';
@@ -14,9 +14,10 @@ import {
   toneForStatus,
 } from '../components/primitives.js';
 import { fetchSources, type SourceArtifact, toDisplayable } from '../lib/api.js';
+import { useActiveBuild } from '../lib/build.js';
 import { type LineRange, readSourceEquivalents, serverOrigin } from '../lib/equivalents.js';
 import { useHashParam } from '../lib/location.js';
-import { type Exclusion, fetchWarnings, WARNINGS_KEY } from '../lib/warnings.js';
+import { type Exclusion, fetchWarnings, warningsKey } from '../lib/warnings.js';
 import './Sources.css';
 
 /**
@@ -56,11 +57,16 @@ export function Sources(): React.JSX.Element {
     }
   }, [linked]);
 
-  const sources = useQuery({ queryKey: ['sources'], queryFn: fetchSources });
+  const build = useActiveBuild();
+  const buildId = build.data?.buildId;
+  const sources = useQuery({
+    queryKey: ['sources', buildId],
+    queryFn: buildId === undefined ? skipToken : ({ signal }) => fetchSources({ signal, buildId }),
+  });
 
   const excluded = useQuery({
-    queryKey: WARNINGS_KEY,
-    queryFn: fetchWarnings,
+    queryKey: warningsKey(buildId),
+    queryFn: buildId === undefined ? skipToken : ({ signal }) => fetchWarnings({ signal, buildId }),
     select: (report) => ({
       discovered: report.groups.flatMap((group) =>
         group.warnings.map((warning): Excluded => ({ ...warning, class: group.class })),
@@ -83,6 +89,8 @@ export function Sources(): React.JSX.Element {
 
   const detail = artifacts.find((artifact) => artifact.artifactId === selected) ?? null;
 
+  if (build.isError) return <Failure {...toDisplayable(build.error)} />;
+  if (buildId === undefined) return <Loading label="Reading the active build." />;
   if (sources.isPending) return <Loading label="Reading the artifact list." />;
   if (sources.isError) {
     return (
@@ -173,8 +181,9 @@ export function Sources(): React.JSX.Element {
 
       {view === 'indexed' && detail !== null && (
         <SourceReader
-          key={detail.artifactId}
+          key={`${buildId}:${detail.artifactId}`}
           artifact={detail}
+          buildId={buildId}
           range={linked === detail.artifactId ? parseLines(linkedLines) : null}
         />
       )}
@@ -480,17 +489,20 @@ interface SourceRead {
  */
 function SourceReader({
   artifact,
+  buildId,
   range,
 }: {
   readonly artifact: Artifact;
+  readonly buildId: string;
   readonly range: LineRange | null;
 }): React.JSX.Element {
   const read = useQuery({
-    queryKey: ['source', artifact.artifactId],
+    queryKey: ['source', buildId, artifact.artifactId],
     queryFn: async ({ signal }): Promise<SourceRead> => {
-      const response = await fetch(`/v1/sources/${encodeURIComponent(artifact.artifactId)}`, {
-        signal,
-      });
+      const response = await fetch(
+        `/v1/sources/${encodeURIComponent(artifact.artifactId)}?buildId=${encodeURIComponent(buildId)}`,
+        { signal },
+      );
       const parsed = (await response.json()) as Partial<SourceRead>;
       if (!response.ok) throw parsed;
       if (typeof parsed.text !== 'string') throw new Error('This server cannot read a source.');
@@ -561,7 +573,7 @@ function SourceReader({
             </p>
           )}
           <Equivalents
-            forms={readSourceEquivalents(artifact.artifactId, range, serverOrigin())}
+            forms={readSourceEquivalents(artifact.artifactId, range, serverOrigin(), buildId)}
             label="Read it anywhere"
           />
         </>

@@ -76,6 +76,22 @@ describe('exact retained-build selection, issue432', () => {
     });
     expect((await client.search({ query: 'rollback', buildId: second })).buildId).toBe(second);
   });
+
+  it('pins table catalog and detail reads to the requested build', async () => {
+    const seen: string[] = [];
+    const client = new LoreClient({
+      baseUrl: 'https://runtime.test',
+      buildId: first,
+      fetch: async (input) => {
+        const url = new URL(String(input));
+        seen.push(url.searchParams.get('buildId') ?? '');
+        return Response.json({ buildId: second });
+      },
+    });
+    await client.listTables(undefined, second);
+    await client.describeTable('pricing', undefined, second);
+    expect(seen).toEqual([second, second]);
+  });
 });
 
 describe('the package', () => {

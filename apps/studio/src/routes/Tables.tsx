@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Citation } from '../components/Citation.js';
 import { Equivalents } from '../components/Equivalents.js';
@@ -13,6 +13,7 @@ import {
   RouteHeader,
 } from '../components/primitives.js';
 import { client, type DisplayableError, toDisplayable } from '../lib/api.js';
+import { useActiveBuild } from '../lib/build.js';
 import { serverOrigin, tableQueryEquivalents } from '../lib/equivalents.js';
 import { useHashParam } from '../lib/location.js';
 import './Tables.css';
@@ -56,6 +57,8 @@ interface Column {
 }
 
 export function Tables(): React.JSX.Element {
+  const build = useActiveBuild();
+  const buildId = build.data?.buildId;
   // The command palette opens this route on one table with `?table=`.
   const linked = useHashParam('table');
   const [selected, setSelected] = useState<string | null>(linked);
@@ -64,8 +67,8 @@ export function Tables(): React.JSX.Element {
   }, [linked]);
 
   const tables = useQuery({
-    queryKey: ['tables'],
-    queryFn: ({ signal }) => client.listTables(signal),
+    queryKey: ['tables', buildId],
+    queryFn: buildId === undefined ? skipToken : ({ signal }) => client.listTables(signal, buildId),
   });
 
   const list = useMemo(() => tables.data?.tables ?? [], [tables.data]);
@@ -83,6 +86,8 @@ export function Tables(): React.JSX.Element {
     </>
   );
 
+  if (build.isError) return titled(<Failure {...toDisplayable(build.error)} />);
+  if (buildId === undefined) return titled(<Loading label="Reading the active build" />);
   if (tables.isPending) return titled(<Loading label="Reading the table catalog" />);
   if (tables.isError) return titled(<Failure {...toDisplayable(tables.error)} />);
 
@@ -117,15 +122,23 @@ export function Tables(): React.JSX.Element {
         </ul>
       </nav>
 
-      {current === null ? null : <TableDetail tableId={current} />}
+      {current === null ? null : (
+        <TableDetail key={`${buildId}:${current}`} tableId={current} buildId={buildId} />
+      )}
     </section>,
   );
 }
 
-function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Element {
+function TableDetail({
+  tableId,
+  buildId,
+}: {
+  readonly tableId: string;
+  readonly buildId: string;
+}): React.JSX.Element {
   const described = useQuery({
-    queryKey: ['table', tableId],
-    queryFn: ({ signal }) => client.describeTable(tableId, signal),
+    queryKey: ['table', buildId, tableId],
+    queryFn: ({ signal }) => client.describeTable(tableId, signal, buildId),
   });
 
   if (described.isPending) return <Loading label="Reading the table" />;
@@ -207,6 +220,7 @@ function TableDetail({ tableId }: { readonly tableId: string }): React.JSX.Eleme
 
       <QueryConsole
         tableId={tableId}
+        buildId={buildId}
         sqlName={table.sqlName}
         columns={columns.map((column) => column.sqlName)}
       />
@@ -228,10 +242,12 @@ function formatRange(statistics: ColumnStatistics): string {
  */
 function QueryConsole({
   tableId,
+  buildId,
   sqlName,
   columns,
 }: {
   readonly tableId: string;
+  readonly buildId: string;
   readonly sqlName: string;
   readonly columns: readonly string[];
 }): React.JSX.Element {
@@ -247,8 +263,8 @@ function QueryConsole({
   }, [starting]);
 
   const result = useQuery({
-    queryKey: ['table-query', tableId, ran],
-    queryFn: ({ signal }) => client.queryTable(tableId, ran as string, {}, signal),
+    queryKey: ['table-query', buildId, tableId, ran],
+    queryFn: ({ signal }) => client.queryTable(tableId, ran as string, { buildId }, signal),
     enabled: ran !== null,
     retry: false,
   });
@@ -297,7 +313,7 @@ function QueryConsole({
 
       {ran === null ? null : <ConsoleResult query={result} />}
       {ran === null ? null : (
-        <Equivalents forms={tableQueryEquivalents(tableId, ran, serverOrigin())} />
+        <Equivalents forms={tableQueryEquivalents(tableId, ran, serverOrigin(), buildId)} />
       )}
     </section>
   );

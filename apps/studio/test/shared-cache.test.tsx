@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Overview } from '../src/routes/Overview.js';
 import { Sources } from '../src/routes/Sources.js';
@@ -48,19 +49,43 @@ const WARNINGS = {
   exclusions: [],
   excludedByRule: 0,
 };
+const BUILD_C = `lore_${'c'.repeat(64)}`;
+const BUILD_D = `lore_${'d'.repeat(64)}`;
 
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       const target = String(url);
-      if (target === '/v1/sources') {
+      if (target.startsWith('/v1/sources?')) {
+        const buildId = new URL(target, 'http://localhost').searchParams.get('buildId');
+        return new Response(JSON.stringify({ buildId, nextOffset: null, artifacts: [] }), {
+          status: 200,
+        });
+      }
+      if (target.startsWith('/v1/warnings?'))
         return new Response(
-          JSON.stringify({ buildId: 'lore_c', nextOffset: null, artifacts: [] }),
+          JSON.stringify(
+            target.includes(BUILD_D)
+              ? {
+                  ...WARNINGS,
+                  groups: [
+                    {
+                      ...WARNINGS.groups[0],
+                      warnings: [
+                        {
+                          ...WARNINGS.groups[0]?.warnings[0],
+                          path: 'docs/revised.bin',
+                          message: 'docs/revised.bin has no supported parser.',
+                        },
+                      ],
+                    },
+                  ],
+                }
+              : WARNINGS,
+          ),
           { status: 200 },
         );
-      }
-      if (target === '/v1/warnings') return new Response(JSON.stringify(WARNINGS), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
     }),
   );
@@ -79,7 +104,9 @@ describe('routes that share a query key', () => {
         <Sources />
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(shared.getQueryState(['warnings'])?.status).toBe('success'));
+    await waitFor(() =>
+      expect(shared.getQueryState(['warnings', BUILD_C])?.status).toBe('success'),
+    );
     sources.unmount();
 
     render(
@@ -91,5 +118,26 @@ describe('routes that share a query key', () => {
     // The warning Overview lists comes from the same cache entry Sources filled.
     expect(await screen.findByText('docs/diagram.bin')).toBeInTheDocument();
     expect(screen.getByText('unsupported-file')).toBeInTheDocument();
+  });
+
+  it('replaces cached warnings after an external build change', async () => {
+    const shared = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={shared}>
+        <Sources />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'excluded 1' }));
+    expect(await screen.findByText('docs/diagram.bin')).toBeVisible();
+
+    act(() => {
+      shared.setQueryData(['build'], {
+        ...shared.getQueryData<object>(['build']),
+        buildId: BUILD_D,
+      });
+    });
+    expect(await screen.findByText('docs/revised.bin')).toBeVisible();
+    expect(screen.queryByText('docs/diagram.bin')).not.toBeInTheDocument();
+    expect(shared.getQueryState(['warnings', BUILD_D])?.status).toBe('success');
   });
 });
