@@ -41,7 +41,7 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
   {
     file: 'packages/parsers/test/resident_memory.test.ts',
     line: "it.runIf(process.platform === 'win32')(",
-    why: 'Only Windows locates its OS observer through SystemRoot; this backend startup failure probe applies there. All hostile memory fixtures remain mandatory on all platforms (#677)',
+    why: 'Windows-only SystemRoot/startup and queued PowerShell cases plus the auxiliary cscript/WMI blocked-growth comparison require native Windows. Original hostile memory fixtures stay mandatory on every OS; the comparison controller runs everywhere (#677, #801)',
   },
   {
     file: 'packages/compiler/test/source_read_boundaries.test.ts',

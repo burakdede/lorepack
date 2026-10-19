@@ -1,9 +1,11 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { setTimeout as delay, setImmediate as nextCheckPhase } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 
 import type { ParseInput } from '@lorepack/core';
 import { sha256Hex } from '@lorepack/core';
@@ -433,3 +435,378 @@ for (const residentMemoryMb of [0, 63, 32769, Number.NaN, Number.POSITIVE_INFINI
     );
   });
 }
+
+function comparisonReader(executable: string, args: string[]) {
+  const startedAt = performance.now();
+  const samples: Array<{ elapsedMs: number; wallMs: number; bytes: number }> = [];
+  let count = 0;
+  let pending = '';
+  let stderr = '';
+  let stopped = false;
+  let error: string | null = null;
+  let firstSampleMs: number | null = null;
+  let lastSampleMs: number | null = null;
+  let maxGapMs = 0;
+  let failureElapsedMs: number | null = null;
+  let resolveSample: () => void = () => {};
+  let nextSample = new Promise<void>((resolve) => {
+    resolveSample = resolve;
+  });
+  let resolveFailure: (reason: string) => void = () => {};
+  const failure = new Promise<string>((resolve) => {
+    resolveFailure = resolve;
+  });
+  let resolveReady: () => void = () => {};
+  const first = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
+  const stop = async () => {
+    stopped = true;
+    startup.stop();
+    reporting.stop();
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await closed;
+  };
+  const fail = (reason: string) => {
+    if (stopped || error !== null) return;
+    error = reason;
+    failureElapsedMs = performance.now() - startedAt;
+    resolveFailure(reason);
+    void stop();
+  };
+  const startup = createStartupWatchdog(() => fail('startup-deadline'));
+  const reporting = createReportingWatchdog(() => fail('report-deadline'));
+  const child = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()));
+  processes.push({ child, closed });
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr = (stderr + chunk).slice(-1024);
+  });
+  child.stdout.on('data', (chunk: string) => {
+    if (stopped) return;
+    pending += chunk;
+    if (pending.length > 4096) {
+      fail('stdout-limit');
+      return;
+    }
+    let newline = pending.indexOf('\n');
+    while (newline !== -1 && !stopped) {
+      const line = pending.slice(0, newline).trim();
+      pending = pending.slice(newline + 1);
+      const bytes = Number(line);
+      if (!/^\d+$/.test(line) || !Number.isSafeInteger(bytes) || bytes < 0) {
+        fail('invalid-report');
+        return;
+      }
+      const elapsedMs = performance.now() - startedAt;
+      firstSampleMs ??= elapsedMs;
+      if (lastSampleMs !== null) maxGapMs = Math.max(maxGapMs, elapsedMs - lastSampleMs);
+      lastSampleMs = elapsedMs;
+      count++;
+      if (samples.length === 16) samples.shift();
+      samples.push({ elapsedMs, wallMs: Date.now(), bytes });
+      startup.stop();
+      reporting.report();
+      resolveReady();
+      const previous = resolveSample;
+      nextSample = new Promise<void>((resolve) => {
+        resolveSample = resolve;
+      });
+      previous();
+      newline = pending.indexOf('\n');
+    }
+  });
+  child.on('error', () => fail('reader-error'));
+  child.once('close', () => fail('reader-exit'));
+  const guarded = async (promise: Promise<void>) => {
+    const result = await Promise.race([promise.then(() => null), failure]);
+    if (result !== null) throw new Error(result);
+  };
+  const ready = guarded(first);
+  void ready.catch(() => undefined);
+  return {
+    child,
+    ready,
+    samples,
+    failure,
+    stop,
+    next: () => guarded(nextSample),
+    receipt: () => ({
+      pid: child.pid ?? null,
+      firstSampleMs,
+      lastSampleMs,
+      maxGapMs,
+      failureElapsedMs,
+      reports: count,
+      samples: samples
+        .slice(-8)
+        .map(({ elapsedMs, bytes }) => ({ elapsedMs: Math.round(elapsedMs), bytes })),
+      failure: error,
+      exit: child.exitCode,
+      signal: child.signalCode,
+      stderr: stderr.slice(-128),
+    }),
+  };
+}
+
+async function independentWindowsSnapshot(pid: number, powershell: string) {
+  const command =
+    `$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById(${pid}); ` +
+    `[Console]::Out.WriteLine($p.StartTime.ToFileTimeUtc().ToString()); $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64)`;
+  const child = spawn(
+    powershell,
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
+    {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
+  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()));
+  processes.push({ child, closed });
+  let stdout = '';
+  let failed = false;
+  const guard = createStartupWatchdog(() => {
+    failed = true;
+    child.kill('SIGKILL');
+  });
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => {
+    stdout += chunk;
+    if (stdout.length > 4096) {
+      failed = true;
+      child.kill('SIGKILL');
+    }
+  });
+  child.stderr.resume();
+  child.on('error', () => {
+    failed = true;
+  });
+  try {
+    await closed;
+    if (failed || child.exitCode !== 0 || child.signalCode !== null)
+      throw new Error('Independent Windows snapshot failed.');
+    const lines = stdout.trim().split(/\r?\n/);
+    if (lines.length !== 2 || !/^\d{1,20}$/.test(lines[0] ?? '') || !/^\d+$/.test(lines[1] ?? ''))
+      throw new Error('Invalid independent Windows snapshot.');
+    const birth = lines[0];
+    const bytes = Number(lines[1]);
+    if (birth === undefined || !Number.isSafeInteger(bytes) || bytes <= 0)
+      throw new Error('Invalid independent Windows RSS.');
+    return { birth, bytes };
+  } finally {
+    guard.stop();
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    await closed;
+  }
+}
+
+it('checks the auxiliary reader controller with actual numeric Node output', async () => {
+  const reader = comparisonReader(process.execPath, [
+    '-e',
+    'console.log(4096); setInterval(() => console.log(8192),100)',
+  ]);
+  try {
+    await reader.ready;
+    await reader.next();
+    expect(reader.samples.at(-1)?.bytes).toBe(8192);
+    expect(reader.receipt().failure).toBeNull();
+  } finally {
+    await reader.stop();
+  }
+  expect(reader.child.signalCode).toBe('SIGKILL');
+});
+
+it('fails and joins an actual silent auxiliary reader at the original startup guard', async () => {
+  const reader = comparisonReader(process.execPath, ['-e', 'setInterval(() => {},1000)']);
+  try {
+    await expect(reader.ready).rejects.toThrow('startup-deadline');
+    expect(reader.receipt().reports).toBe(0);
+  } finally {
+    await reader.stop();
+  }
+  expect(reader.child.signalCode).toBe('SIGKILL');
+}, 10000);
+
+it('fails and joins an actual auxiliary reader that stops reporting', async () => {
+  const reader = comparisonReader(process.execPath, [
+    '-e',
+    'console.log(4096); setInterval(() => {},1000)',
+  ]);
+  try {
+    await reader.ready;
+    expect(await reader.failure).toBe('report-deadline');
+  } finally {
+    await reader.stop();
+  }
+  expect(reader.child.signalCode).toBe('SIGKILL');
+});
+
+it.runIf(process.platform === 'win32')(
+  'compares auxiliary cscript WMI RSS with the normal Windows reader on native blocked growth',
+  async () => {
+    const systemRoot = Object.entries(process.env).find(
+      ([key]) => key.toLowerCase() === 'systemroot',
+    )?.[1];
+    if (systemRoot === undefined || !win32.isAbsolute(systemRoot))
+      throw new Error('Missing absolute SystemRoot.');
+    const powershell = win32.join(
+      systemRoot,
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    );
+    const cscript = win32.join(systemRoot, 'System32', 'cscript.exe');
+    const fixture = fileURLToPath(new URL('./fixtures/windows_wmi_reader.cjs', import.meta.url));
+    const target = spawn(
+      process.execPath,
+      [
+        '--permission',
+        '--allow-fs-read=*',
+        '--max-old-space-size=2048',
+        fileURLToPath(new URL('./fixtures/resident_growth.mjs', import.meta.url)),
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] },
+    );
+    const targetClosed = new Promise<void>((resolve) => target.once('close', () => resolve()));
+    processes.push({ child: target, closed: targetClosed });
+    const readers: ReturnType<typeof comparisonReader>[] = [];
+    let baseline: ReturnType<typeof comparisonReader> | undefined;
+    let candidate: ReturnType<typeof comparisonReader> | undefined;
+    let invalid: ReturnType<typeof comparisonReader> | undefined;
+    let error: unknown;
+    let finalReceipt = '';
+    let growthSamples: Array<{ elapsedMs: number; wallMs: number; bytes: number }> = [];
+    let baselineCommandSha256: string | undefined;
+    let initialReference: { birth: string; bytes: number } | undefined;
+    let initialCandidate: number | undefined;
+    let reference: { birth: string; bytes: number } | undefined;
+    let growth: { startedAt: number; finishedAt: number; blockedMs: number } | undefined;
+    try {
+      const timeout = new Promise<never>((_, reject) => {
+        const guard = createStartupWatchdog(() => {
+          target.kill('SIGKILL');
+          reject(new Error('Auxiliary target startup failed.'));
+        });
+        void once(target, 'message').then(
+          () => guard.stop(),
+          () => guard.stop(),
+        );
+      });
+      const [readyMessage] = await Promise.race([once(target, 'message'), timeout]);
+      expect(readyMessage).toEqual({ kind: 'ready' });
+      const pid = target.pid;
+      if (pid === undefined) throw new Error('Target has no PID.');
+      const before = await independentWindowsSnapshot(pid, powershell);
+      initialReference = before;
+      const command = `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${pid}); while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); [Threading.Thread]::Sleep(100) }`;
+      baselineCommandSha256 = sha256Hex(Buffer.from(command));
+      baseline = comparisonReader(powershell, [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        command,
+      ]);
+      readers.push(baseline);
+      candidate = comparisonReader(cscript, [
+        '//B',
+        '//Nologo',
+        '//E:JScript',
+        fixture,
+        String(pid),
+        before.birth,
+      ]);
+      readers.push(candidate);
+      const ownedStart = processes.findIndex(({ child }) => child === target);
+      void candidate.failure.then(() => {
+        for (const { child } of processes.slice(ownedStart))
+          if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      });
+      await candidate.ready;
+      await Promise.race([
+        baseline.ready.catch(() => undefined),
+        candidate.failure.then((reason) => {
+          throw new Error(reason);
+        }),
+      ]);
+      const initial = candidate.samples.at(-1)?.bytes;
+      initialCandidate = initial;
+      if (initial === undefined) throw new Error('Missing candidate baseline.');
+      const grown = once(target, 'message');
+      target.send('grow');
+      const [message] = await Promise.race([
+        grown,
+        candidate.failure.then((reason) => {
+          throw new Error(reason);
+        }),
+      ]);
+      growth = message as typeof growth;
+      expect(message).toMatchObject({ kind: 'grown' });
+      expect(growth?.blockedMs).toBeGreaterThanOrEqual(800);
+      if (growth === undefined) throw new Error('Missing native growth interval.');
+      const interval = growth;
+      growthSamples = candidate.samples.filter(
+        ({ wallMs }) => wallMs >= interval.startedAt && wallMs <= interval.finishedAt,
+      );
+      await candidate.next();
+      await candidate.next();
+      reference = await independentWindowsSnapshot(pid, powershell);
+      expect(reference.birth).toBe(before.birth);
+      expect(reference.bytes - before.bytes).toBeGreaterThanOrEqual(64 * 1024 * 1024);
+      const after = candidate.samples.at(-1)?.bytes;
+      if (after === undefined || growth === undefined)
+        throw new Error('Missing native growth reports.');
+      expect(after - initial).toBeGreaterThanOrEqual(64 * 1024 * 1024);
+      expect(Math.abs(after - reference.bytes)).toBeLessThanOrEqual(16 * 1024 * 1024);
+      expect(new Set(growthSamples.map(({ bytes }) => bytes)).size).toBeGreaterThanOrEqual(3);
+      expect(candidate.receipt().failure).toBeNull();
+      invalid = comparisonReader(cscript, [
+        '//B',
+        '//Nologo',
+        '//E:JScript',
+        fixture,
+        String(pid),
+        (BigInt(before.birth) + 1n).toString(),
+      ]);
+      readers.push(invalid);
+      expect(await invalid.failure).toBe('reader-exit');
+      await invalid.stop();
+      expect(invalid.receipt()).toMatchObject({ reports: 0, exit: 1, signal: null });
+      expect(invalid.receipt().stderr).toContain('LPF:identity:');
+      target.kill('SIGKILL');
+      await targetClosed;
+      expect(await candidate.failure).toBe('reader-exit');
+      await candidate.stop();
+      expect(candidate.receipt()).toMatchObject({ exit: 1, signal: null });
+      expect(candidate.receipt().stderr).toContain('LPF:get:');
+    } catch (failure) {
+      error = failure;
+    } finally {
+      await Promise.all(readers.map((reader) => reader.stop()));
+      if (target.exitCode === null && target.signalCode === null) target.kill('SIGKILL');
+      await targetClosed;
+      finalReceipt = JSON.stringify({
+        auxiliaryOnly: true,
+        warmup: 'independent Framework snapshot precedes fresh readers',
+        baseline: baseline?.receipt() ?? null,
+        candidate: candidate?.receipt() ?? null,
+        invalidIdentity: invalid?.receipt() ?? null,
+        initialReference,
+        initialCandidate,
+        reference,
+        growth,
+        growthSamples,
+        baselineCommandSha256,
+        fixtureSha256: sha256Hex(readFileSync(fixture)),
+        target: { pid: target.pid, exit: target.exitCode, signal: target.signalCode },
+      });
+      process.stderr.write(`LOREPACK_WMI_CONTROL ${finalReceipt}\n`);
+    }
+    if (error !== undefined) throw error;
+    expect(Buffer.byteLength(finalReceipt)).toBeLessThanOrEqual(4096);
+  },
+  45000,
+);
