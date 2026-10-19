@@ -70,7 +70,7 @@ export function createContext(
   options: GlobalOptions,
   streams: Streams,
   signal?: AbortSignal,
-): CommandContext {
+): CommandContext & { readonly dispose: () => void } {
   const progress = new ProgressBus();
   const humanTarget = options.json ? streams.stderr : streams.stdout;
 
@@ -83,15 +83,25 @@ export function createContext(
     color: options.json ? options.colorStderr : options.color,
     columns: humanIsTty ? streams.columns : undefined,
   });
-  progress.subscribe((event) => {
+  let refresh: ReturnType<typeof setInterval> | undefined;
+  const unsubscribe = progress.subscribe((event) => {
     if (event.type === 'diagnostic' && event.level === 'debug' && !options.verbose) return;
     renderer.handle(event);
+    if (event.type === 'stage-started' && refresh === undefined) {
+      refresh = setInterval(() => renderer.refresh(), 1000);
+      refresh.unref();
+    }
   });
 
   return {
     options,
     streams,
     progress,
+    dispose: () => {
+      clearInterval(refresh);
+      unsubscribe();
+      renderer.dispose();
+    },
     ...(signal === undefined ? {} : { signal }),
     // Prompts, plans and warnings name files from the corpus, so they are made inert like a
     // command's result (#579). Progress goes through the renderer, which does the same.

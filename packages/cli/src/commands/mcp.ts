@@ -300,7 +300,9 @@ async function rebuild(options: {
 }): Promise<void> {
   const progress = new ProgressBus();
   const renderer = new ProgressRenderer({ write: options.warn, isTty: false });
-  progress.subscribe((event) => renderer.handle(event));
+  const unsubscribe = progress.subscribe((event) => renderer.handle(event));
+  const refresh = setInterval(() => renderer.refresh(), 1000);
+  refresh.unref();
 
   try {
     await runBuild({
@@ -320,5 +322,9 @@ async function rebuild(options: {
         cause,
       },
     );
+  } finally {
+    clearInterval(refresh);
+    unsubscribe();
+    renderer.dispose();
   }
 }
