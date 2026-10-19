@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PHASE_0 } from '../src/phases/phase-0.js';
 import { PHASE_1 } from '../src/phases/phase-1.js';
 import { PHASE_6 } from '../src/phases/phase-6.js';
@@ -30,15 +30,58 @@ describe('command criterion', () => {
   };
 
   it('passes on exit zero and records what it ran', async () => {
-    const result = await checkCriterion(criterion, options({ execute: ok }));
+    const result = await checkCriterion(
+      criterion,
+      options({
+        execute: async () => ({ code: 0, stdout: 'successful output', stderr: 'notice' }),
+      }),
+    );
     expect(result.outcome).toBe('passed');
     expect(result.evidence).toContain('pnpm lint');
+    expect(result.detail).toBeUndefined();
   });
 
-  it('fails on a non-zero exit and keeps the tail of the output', async () => {
+  it('fails on a non-zero exit and keeps its diagnostics', async () => {
     const result = await checkCriterion(criterion, options({ execute: fail }));
     expect(result.outcome).toBe('failed');
     expect(result.detail).toContain('boom');
+  });
+
+  it('retains both failed streams and assertion values beyond the stderr tail in both reports', async () => {
+    const stdout =
+      'AssertionError: expected latency to be below limit\nExpected: < 450\nReceived: 719\n';
+    const stderr = [
+      'worker failed',
+      ...Array.from({ length: 20 }, (_, i) => `    at frame${i}`),
+    ].join('\n');
+    const execute = vi.fn(async () => ({ code: 17, stdout, stderr }));
+    const timedCriterion = { ...criterion, timeoutMs: 12_345 };
+    const report = await checkPhase(
+      { phase: 9, title: 'Diagnostic regression', epic: 999, criteria: [timedCriterion] },
+      options({ execute }),
+    );
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith('pnpm', ['lint'], 12_345, REPO_ROOT);
+    expect(report.outcome).toBe('failed');
+    expect(EXIT[report.outcome]).toBe(1);
+    expect(report.counts).toEqual({ passed: 0, failed: 1, unverified: 0 });
+    const detail = `Exit code: 17\nstdout:\n${stdout}\nstderr:\n${stderr}`;
+    expect(report.results[0]?.detail).toBe(detail);
+    expect(JSON.parse(JSON.stringify(report))).toEqual(report);
+    const text = formatReport(report);
+    for (const diagnostic of [
+      'Exit code: 17',
+      'stdout:',
+      'stderr:',
+      'AssertionError:',
+      'Expected: < 450',
+      'Received: 719',
+      'worker failed',
+      'at frame19',
+    ])
+      expect(text).toContain(diagnostic);
+    expect(text).toContain('1 failed');
   });
 });
 
@@ -566,7 +609,7 @@ describe('phase 7 definition', () => {
     const match = workflow.match(/fromJSON\('\[([\d,\s]+)\]'\)/);
     expect(match?.[1]).toBeDefined();
     const workflowPhases = match?.[1]
-      .split(',')
+      ?.split(',')
       .map((value) => Number(value.trim()))
       .filter((value) => Number.isFinite(value));
 

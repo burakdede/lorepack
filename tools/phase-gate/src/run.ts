@@ -56,7 +56,7 @@ async function checkCommand(
   return {
     ...base,
     outcome: 'failed',
-    detail: (result.stderr || result.stdout).trim().split('\n').slice(-8).join('\n'),
+    detail: `Exit code: ${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   };
 }
 
