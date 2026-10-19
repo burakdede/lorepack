@@ -146,3 +146,24 @@ no intermediate directory to replace with a link. The connector safety contract
 checks that layout explicitly. File-link and permission evidence runs for every
 connector; intermediate-directory link evidence runs for Codex and VS Code,
 whose configuration is nested inside the project.
+
+## Owned-source coverage custody
+
+`pnpm coverage:inventory` hashes every tracked executable source. The frozen audit
+floor remains exactly 345 owned files and 49 critical files; later source is added to
+the live denominator, including `packages/parsers/src/resident_memory.ts` as critical.
+The current denominator must be computed from the final clean checkout, not copied
+from an earlier candidate. `pnpm typecheck:audit` checks affected Node regression
+tests under the strict ES2024/Node program, then Studio browser fixtures under their
+separate DOM program. Existing Studio component tests are in the root project build.
+
+The measured default-suite campaign retains direct, configuration and native child
+receipts without changing test selection, schedules, grants or deadlines. Restricted
+children keep their original project-write grant; the host transfers only validated
+receipts into campaign custody after close ([ADR 0026](../adr/0026-project-capture-custody.md)).
+Worker-thread counters require matching launch and close evidence
+([ADR 0025](../adr/0025-worker-counter-contexts.md)). An absent source or rejected native
+execution fails the report before percentages are computed. The original nine-bundle
+aggregate and 100-mutant requirement are separate from a focused capture fixture or
+the three default-suite bundle files. They remain unqualified until a frozen-source
+campaign records their actual results.

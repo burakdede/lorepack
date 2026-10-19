@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createRuntimeTokenAuthorizer,
@@ -17,7 +17,7 @@ import {
 class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   readonly #db: DatabaseSync;
   readonly #query: string;
-  #bindings: readonly unknown[] = [];
+  #bindings: readonly SQLInputValue[] = [];
 
   constructor(db: DatabaseSync, query: string) {
     this.#db = db;
@@ -25,6 +25,7 @@ class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   }
 
   bind(...values: unknown[]): RuntimeAuthStatementLike {
+    if (!values.every(isSqlInputValue)) throw new TypeError('Unsupported SQLite bind value');
     this.#bindings = values;
     return this;
   }
@@ -32,11 +33,21 @@ class SqliteRuntimeStatement implements RuntimeAuthStatementLike {
   async run<T = Record<string, unknown>>(): Promise<{ readonly results?: readonly T[] }> {
     const statement = this.#db.prepare(this.#query);
     if (this.#query.trim().toLowerCase().startsWith('select')) {
-      return { results: statement.all(...this.#bindings) as readonly T[] };
+      return { results: statement.all(...this.#bindings) as unknown as readonly T[] };
     }
     statement.run(...this.#bindings);
     return {};
   }
+}
+
+function isSqlInputValue(value: unknown): value is SQLInputValue {
+  return (
+    value === null ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'string' ||
+    ArrayBuffer.isView(value)
+  );
 }
 
 class SqliteRuntimeDatabase implements RuntimeAuthDatabaseLike {
@@ -92,6 +103,7 @@ describe('runtime token auth, issue 90', () => {
       await authorize({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${token}`,
       }),
     ).toBe(true);
@@ -103,13 +115,19 @@ describe('runtime token auth, issue 90', () => {
     await storeRuntimeTokenHash(auth, await hashRuntimeToken(token), '2026-08-09T10:00:00.000Z');
     const authorize = createRuntimeTokenAuthorizer(auth);
 
-    expect(await authorize({ method: 'GET', path: '/v1/build' })).toBe(
-      'This token is not valid for this build.',
-    );
     expect(
       await authorize({
         method: 'GET',
         path: '/v1/build',
+        authorization: undefined,
+        headers: new Headers(),
+      }),
+    ).toBe('This token is not valid for this build.');
+    expect(
+      await authorize({
+        method: 'GET',
+        path: '/v1/build',
+        headers: new Headers(),
         authorization: 'Bearer wrong',
       }),
     ).toBe('This token is not valid for this build.');
@@ -117,6 +135,7 @@ describe('runtime token auth, issue 90', () => {
       await authorize({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: 'Basic abc',
       }),
     ).toBe('This token is not valid for this build.');
@@ -136,6 +155,7 @@ describe('runtime token auth, issue 90', () => {
       await authorize({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${deploymentCredential}`,
       }),
     ).toBe('This token is not valid for this build.');
@@ -176,6 +196,7 @@ describe('runtime token auth, issue 90', () => {
     const request = (token: string) => ({
       method: 'GET',
       path: '/v1/build',
+      headers: new Headers(),
       authorization: `Bearer ${token}`,
     });
     expect(await at('2026-08-09T00:15:00.000Z')(request(tokenA))).toBe(
@@ -222,6 +243,7 @@ describe('runtime token auth, issue 90', () => {
       await duringOverlap({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${firstToken}`,
       }),
     ).toBe(true);
@@ -229,6 +251,7 @@ describe('runtime token auth, issue 90', () => {
       await duringOverlap({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${secondToken}`,
       }),
     ).toBe(true);
@@ -238,6 +261,7 @@ describe('runtime token auth, issue 90', () => {
       await afterOverlap({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${firstToken}`,
       }),
     ).toBe('This token is not valid for this build.');
@@ -245,6 +269,7 @@ describe('runtime token auth, issue 90', () => {
       await afterOverlap({
         method: 'GET',
         path: '/v1/build',
+        headers: new Headers(),
         authorization: `Bearer ${secondToken}`,
       }),
     ).toBe(true);

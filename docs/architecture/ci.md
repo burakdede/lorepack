@@ -85,6 +85,24 @@ the text summary and JSON report to `coverage/`; the directory is local output a
 committed. The coverage provider is pinned to the same version as Vitest in the workspace so
 this command exercises the configured report path rather than failing during startup.
 
+The owned-source inventory preserves the frozen 345 source files and 49 critical flags from
+`7141e61a`. It hashes all current tracked executable sources and classifies the parser
+resident-memory observer as critical. The pinned Istanbul provider retains private-method
+function and branch counters that the unpatched provider omitted. `pnpm typecheck:audit`
+checks the affected Node tests and the separate browser fixture program. These checks run
+as part of `pnpm verify`.
+
+`pnpm coverage:capture --out coverage/campaign-<fresh-name>` prepares the default project
+suite, compares ordinary and measured collection, builds a separate source-bound CLI,
+and retains direct, configuration and child-process counter receipts. The current CLI
+also bundles a build worker and connection verification bridge; measurement must account
+for their real worker-thread and subprocess execution. The report refuses missing source
+maps or rejected native executions before applying the unchanged targets: overall
+lines/statements/functions 95% and branches 90%; critical lines/statements 98% and
+functions/branches 95%. The default-suite campaign alone does not establish the original
+nine-bundle and 100-mutant release criteria. The complete campaign remains a separate
+qualification on one frozen candidate and is not included in `pnpm verify`.
+
 ## `commit-hygiene.yml`
 
 Runs on pull requests only. Rejects AI attribution trailers and footers, and an em dash in

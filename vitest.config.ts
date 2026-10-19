@@ -21,6 +21,6 @@ export default defineConfig({
       'tools/phase-gate',
       'tools/test-support',
     ],
-    coverage: { provider: 'v8', reporter: ['text', 'json'], reportsDirectory: 'coverage' },
+    coverage: { provider: 'istanbul', reporter: ['text', 'json'], reportsDirectory: 'coverage' },
   },
 });

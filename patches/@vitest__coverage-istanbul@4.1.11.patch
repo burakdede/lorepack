@@ -1,0 +1,29 @@
+diff --git a/dist/provider.js b/dist/provider.js
+--- a/dist/provider.js
++++ b/dist/provider.js
+@@ -820,0 +821,6 @@
++	function coverDefaultExport(path) {
++	    if (path.get('declaration').isExpression()) {
++	        this.insertStatementCounter(path);
++	    }
++	}
++
+@@ -988 +994 @@
+-	    ExportDefaultDeclaration: entries(), // ignore processing only
++	    ExportDefaultDeclaration: entries(coverDefaultExport),
+@@ -990,0 +997 @@
++	    ClassPrivateMethod: entries(coverFunction),
+@@ -3748 +3755,8 @@
+-	return await sourceMapStore.transformCoverage(coverageMap);
++	const transformed = await sourceMapStore.transformCoverage(coverageMap);
++	for (const filename of coverageMap.files()) {
++		const map = coverageMap.fileCoverageFor(filename).toJSON();
++		if (Object.keys(map.s).length === 0 && Object.keys(map.f).length === 0 && Object.keys(map.b).length === 0) {
++			transformed.addFileCoverage({ ...map, path: removeQueryParameters(map.path) });
++		}
++	}
++	return transformed;
+@@ -3759 +3773,2 @@
+-export { IstanbulCoverageProvider };
++const createNativeInstrumenter = srcExports.createInstrumenter;
++export { IstanbulCoverageProvider, createNativeInstrumenter, transformCoverage as remapNativeCoverage };
