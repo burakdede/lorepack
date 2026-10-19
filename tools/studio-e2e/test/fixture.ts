@@ -80,6 +80,7 @@ export interface Session {
 
 /** Test-scoped: a new one per test, because it acts on that test's page. */
 interface TestFixtures {
+  readonly isolatedSession: Session;
   /** Runs axe against the current page and fails on any critical or serious violation. */
   readonly checkA11y: () => Promise<AxeResults>;
   /**
@@ -126,58 +127,83 @@ async function setupStep(project: string, args: readonly string[]): Promise<void
   }
 }
 
+async function createSession(inventorySourceCount: number, port: number) {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'lore-studio-e2e-'));
+  let child: ChildProcess | undefined;
+  const dispose = async (): Promise<void> => {
+    try {
+      if (child !== undefined) await stop(child);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  };
+  try {
+    mkdirSync(join(projectRoot, 'docs'));
+    writeFileSync(join(projectRoot, 'docs', 'runbook.md'), RUNBOOK, 'utf8');
+    for (let index = 0; index < inventorySourceCount; index += 1) {
+      writeFileSync(
+        join(projectRoot, 'docs', `page-${String(index).padStart(2, '0')}.md`),
+        `# Inventory page ${index}\n\nA retained source document.\n`,
+      );
+    }
+    writeFileSync(join(projectRoot, 'docs', 'onboarding.md'), ONBOARDING, 'utf8');
+    // A file no parser handles, so the exclusion list on Sources has something real in it.
+    writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));
+    writeFileSync(join(projectRoot, 'docs', 'pricing.csv'), PRICING, 'utf8');
+    // Names that look like percent-encoding, each with a body naming itself. A second decode
+    // of the source route's parameter read one of these as another (#608).
+    for (const [name, body] of Object.entries(ENCODED_NAMES)) {
+      writeFileSync(join(projectRoot, 'docs', name), `# ${body}\n\n${body}\n`, 'utf8');
+    }
+    // And a document removed by a rule, which is the other and more common way to be
+    // missing from a build. Sources listed only the first kind until #202.
+    mkdirSync(join(projectRoot, 'drafts'));
+    writeFileSync(join(projectRoot, 'drafts', 'unfinished.md'), '# Unfinished\n', 'utf8');
+
+    await setupStep(projectRoot, ['init', '.']);
+    writeFileSync(join(projectRoot, '.loreignore'), 'drafts/\n', { flag: 'a' });
+    await setupStep(projectRoot, ['build']);
+    // A second build, so Versions has a history to compare, activate and roll back.
+    writeFileSync(
+      join(projectRoot, 'docs', 'runbook.md'),
+      `${RUNBOOK}\n## Change freeze\n\nNo deployments during a change freeze.\n`,
+      'utf8',
+    );
+    await setupStep(projectRoot, ['build']);
+
+    child = spawn(process.execPath, [BINARY, 'dev', projectRoot, '--port', String(port)], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const url = await waitForServer(child, port);
+    return { session: { url, projectRoot }, dispose };
+  } catch (cause) {
+    await dispose();
+    throw cause;
+  }
+}
+
 /** One project and one server for the whole run, because building per test is minutes. */
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   inventorySourceCount: [0, { scope: 'worker', option: true }],
   session: [
     async ({ inventorySourceCount }, use) => {
-      const projectRoot = mkdtempSync(join(tmpdir(), 'lore-studio-e2e-'));
-      mkdirSync(join(projectRoot, 'docs'));
-      writeFileSync(join(projectRoot, 'docs', 'runbook.md'), RUNBOOK, 'utf8');
-      for (let index = 0; index < inventorySourceCount; index += 1) {
-        writeFileSync(
-          join(projectRoot, 'docs', `page-${String(index).padStart(2, '0')}.md`),
-          `# Inventory page ${index}\n\nA retained source document.\n`,
-        );
+      const owned = await createSession(inventorySourceCount, 43_190);
+      try {
+        await use(owned.session);
+      } finally {
+        await owned.dispose();
       }
-      writeFileSync(join(projectRoot, 'docs', 'onboarding.md'), ONBOARDING, 'utf8');
-      // A file no parser handles, so the exclusion list on Sources has something real in it.
-      writeFileSync(join(projectRoot, 'docs', 'diagram.bin'), Buffer.from([0, 1, 2, 3]));
-      writeFileSync(join(projectRoot, 'docs', 'pricing.csv'), PRICING, 'utf8');
-      // Names that look like percent-encoding, each with a body naming itself. A second decode
-      // of the source route's parameter read one of these as another (#608).
-      for (const [name, body] of Object.entries(ENCODED_NAMES)) {
-        writeFileSync(join(projectRoot, 'docs', name), `# ${body}\n\n${body}\n`, 'utf8');
-      }
-      // And a document removed by a rule, which is the other and more common way to be
-      // missing from a build. Sources listed only the first kind until #202.
-      mkdirSync(join(projectRoot, 'drafts'));
-      writeFileSync(join(projectRoot, 'drafts', 'unfinished.md'), '# Unfinished\n', 'utf8');
-
-      await setupStep(projectRoot, ['init', '.']);
-      writeFileSync(join(projectRoot, '.loreignore'), 'drafts/\n', { flag: 'a' });
-      await setupStep(projectRoot, ['build']);
-      // A second build, so Versions has a history to compare, activate and roll back.
-      writeFileSync(
-        join(projectRoot, 'docs', 'runbook.md'),
-        `${RUNBOOK}\n## Change freeze\n\nNo deployments during a change freeze.\n`,
-        'utf8',
-      );
-      await setupStep(projectRoot, ['build']);
-
-      const port = 43_190;
-      const child = spawn(process.execPath, [BINARY, 'dev', projectRoot, '--port', String(port)], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      const url = await waitForServer(child, port);
-
-      await use({ url, projectRoot });
-
-      await stop(child);
-      rmSync(projectRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
     { scope: 'worker' },
   ],
+  isolatedSession: async ({ inventorySourceCount }, use) => {
+    const owned = await createSession(inventorySourceCount, 43_191);
+    try {
+      await use(owned.session);
+    } finally {
+      await owned.dispose();
+    }
+  },
 
   cspViolations: [
     async ({ page }, use) => {
