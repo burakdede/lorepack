@@ -36,6 +36,44 @@ export interface VerifyOptions {
   readonly expected: ReadConnectionExpectation;
   /** Bound, because a server that never answers must fail rather than hang a connect. */
   readonly timeoutMs?: number;
+  readonly diagnostic?: (event: VerifyDiagnostic) => void;
+}
+
+export type VerifyDiagnostic =
+  | { readonly event: 'launch'; readonly ordinal: number; readonly pid: number | null }
+  | {
+      readonly event: 'exit';
+      readonly ordinal: number;
+      readonly pid: number | null;
+      readonly code: number | null;
+      readonly signal: NodeJS.Signals | null;
+      readonly memoryObserverFailure: boolean;
+    }
+  | {
+      readonly event: 'connected';
+      readonly era: string | null;
+      readonly version: string | null;
+      readonly probeVersions: readonly string[];
+    }
+  | { readonly event: 'discover-result'; readonly versions: readonly string[] }
+  | {
+      readonly event: 'discover-error';
+      readonly name: 'Error' | 'OtherError';
+      readonly code: number | null;
+    };
+
+function observe(options: VerifyOptions, event: () => VerifyDiagnostic): void {
+  if (options.diagnostic === undefined) return;
+  try {
+    options.diagnostic(event());
+  } catch {
+    // Diagnostics must not change verification or process cleanup.
+  }
+}
+
+function safeProtocol(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '<invalid>';
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -60,7 +98,25 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
   let bridge: string;
   try {
     bridge = verificationBridgeEntry();
-    ownership = await createVerificationProcessHost(command, options.args, getDefaultEnvironment());
+    ownership = await createVerificationProcessHost(
+      command,
+      options.args,
+      getDefaultEnvironment(),
+      options.diagnostic === undefined
+        ? undefined
+        : (ordinal, pid) => observe(options, () => ({ event: 'launch', ordinal, pid })),
+      options.diagnostic === undefined
+        ? undefined
+        : (ordinal, pid, code, signal, memoryObserverFailure) =>
+            observe(options, () => ({
+              event: 'exit',
+              ordinal,
+              pid,
+              code,
+              signal,
+              memoryObserverFailure,
+            })),
+    );
   } catch (error) {
     return { ok: false, step: 'spawn', detail: `Verification could not start: ${message(error)}` };
   }
@@ -116,6 +172,14 @@ async function check(
 ): Promise<ConnectionCheck> {
   try {
     await withTimeout(connecting, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, 'spawn');
+    observe(options, () => ({
+      event: 'connected',
+      era: client.getProtocolEra() ?? null,
+      version: safeProtocol(client.getNegotiatedProtocolVersion()),
+      probeVersions: (client.getDiscoverResult()?.supportedVersions ?? [])
+        .slice(0, 4)
+        .map((version) => safeProtocol(version) ?? '<missing>'),
+    }));
   } catch (error) {
     return {
       ok: false,
@@ -132,8 +196,23 @@ async function check(
       options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       'discover',
     );
+    observe(options, () => ({
+      event: 'discover-result',
+      versions: (discovered.supportedVersions ?? [])
+        .slice(0, 4)
+        .map((version) => safeProtocol(version) ?? '<missing>'),
+    }));
     protocolVersion = discovered.supportedVersions?.[0];
-  } catch {
+  } catch (error) {
+    observe(options, () => {
+      const rawCode =
+        error !== null && typeof error === 'object' && 'code' in error ? error.code : undefined;
+      return {
+        event: 'discover-error',
+        name: error instanceof Error ? 'Error' : 'OtherError',
+        code: typeof rawCode === 'number' && Number.isSafeInteger(rawCode) ? rawCode : null,
+      };
+    });
     // Not a failure. A 2025-era server has no `server/discover` and is still perfectly
     // usable, which is the backward compatibility the specification requires us to keep.
     protocolVersion = undefined;
