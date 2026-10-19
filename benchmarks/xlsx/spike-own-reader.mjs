@@ -1,8 +1,11 @@
 // Spike: read-only XLSX on yauzl (already vendored for .lorepack) + sax.
 // Proves the four criteria no maintained library met together: cell addresses, formula text,
 // merge ranges, and bounded memory at the envelope.
-import sax from 'sax';
-import yauzl from 'yauzl';
+import { createRequire } from 'node:module';
+
+const require = createRequire(new URL('../../packages/parsers/package.json', import.meta.url));
+const sax = require('sax');
+const yauzl = require('yauzl');
 
 function openZip(path) {
   return new Promise((res, rej) =>
@@ -28,15 +31,16 @@ function stream(zip, entry) {
 /** Streams one XML entry through sax, calling back per element. Never buffers the document. */
 async function parseXml(zip, entry, handlers) {
   const parser = sax.createStream(true, { trim: false, position: false });
-  // Hardening the spike has to prove is possible: refuse entity expansion outright.
-  parser.on('doctype', () => {
-    throw new Error('DTD refused');
-  });
   if (handlers.open) parser.on('opentag', handlers.open);
   if (handlers.text) parser.on('text', handlers.text);
   if (handlers.close) parser.on('closetag', handlers.close);
   const rs = await stream(zip, entry);
   await new Promise((res, rej) => {
+    parser.on('doctype', () => {
+      rs.unpipe(parser);
+      rs.destroy();
+      rej(new Error('DTD refused'));
+    });
     parser.on('end', res);
     parser.on('error', rej);
     rs.on('error', rej);
