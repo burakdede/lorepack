@@ -72,3 +72,49 @@ then typed failure and parser/reader termination, bounded late markers and final
 closure. It does not execute PowerShell or establish a native failure mechanism.
 The existing real PowerShell stall case awaits readiness before stalling and
 therefore checks reporting after startup, not startup queue delivery.
+
+## POSIX reader failures
+
+Issue #801 also retains two distinct acceptance failures from PR #800 head
+`4f0cbe74`. Ubuntu aborted a `/proc/<pid>/smaps_rollup` read with a timeout cause
+during the setup build for `lifecycle/diff-reads-builds-not-sources`. macOS
+reported a `SIGKILL` reader exit during the first build for
+`mixed/every-format-contributes-with-its-own-provenance`. Each native suite had
+163 passes, one failure and four existing skips. The logs do not establish
+elapsed read time, why a read was late, or who killed the macOS reader.
+
+POSIX failures now add a structured context message around the original error,
+preserving that error as `cause`. It contains the platform, initial or subsequent
+sample phase, monotonic elapsed milliseconds, reader PID, exit code, signal,
+local kill-request state and an allow-listed abort reason name. The context
+contains no paths or arbitrary error text. The original cause chain remains
+available separately. Successful reads produce no diagnostic output and add no
+timer or process. These failure-only fields do not require the Windows diagnostic
+flag, since the native acceptance failures do not enable it.
+
+The macOS `localKillRequested` field reports Node's `ChildProcess.killed` state.
+It does not identify the sender of a signal or prove that the spawn timeout
+caused a termination. The original 250 ms POSIX query deadline, 100 ms sample
+interval, output limits, parser budgets and fail-closed result remain intact.
+
+The diagnostic-contract regression uses controlled reader failures to verify
+context and original cause retention, and checks intentional-stop cancellation.
+Its controlled 249.95 ms value verifies numeric capture only; it does not
+reproduce a native premature POSIX abort. Run it with the original real reader
+and parser-isolation tests:
+
+```sh
+pnpm exec vitest run packages/parsers/test/posix_resident_memory.test.ts packages/parsers/test/mac_resident_memory.test.ts packages/parsers/test/linux_resident_memory.test.ts packages/parsers/test/resident_memory.test.ts packages/parsers/test/windows_resident_memory.test.ts packages/parsers/test/isolation.test.ts
+```
+
+This is diagnostic preparation, not a causal correction of the retained native
+reader failures. Fresh native evidence and a demonstrated mechanism are still
+required before #801 can close.
+
+On macOS with Node 24.21.0 and pnpm 11.18.0, the unchanged implementation failed
+five diagnostic-context assertions and passed the intentional-stop case. After
+the wrapper, all six passed. The original affected six-file suite passed 82
+cases with two existing native-Windows skips; architecture checks passed 305
+cases. Strict Node-only test typing, project types, lint, format, build and release
+policy checks passed. The controlled failure tests verify context retention and
+fail-closed behavior; they do not explain either historical native POSIX failure.

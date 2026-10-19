@@ -368,20 +368,41 @@ export function monitorResidentMemory(
     });
   } else {
     const read = async (): Promise<number | null> => {
-      if (process.platform === 'linux') {
-        return readLinuxResidentMemory(pid);
-      }
-      if (process.platform !== 'darwin') {
+      if (process.platform !== 'linux' && process.platform !== 'darwin') {
         throw new Error(`Resident memory observation is unsupported on ${process.platform}.`);
       }
-      // spawn's timeout preserves queued output from a query that already exited.
-      const query = spawn('/bin/ps', ['-o', 'rss=', '-p', String(pid)], {
-        timeout: READER_TIMEOUT_MS,
-        killSignal: 'SIGKILL',
-      });
-      reader = query;
+      const startedAt = performance.now();
+      let query: ChildProcessWithoutNullStreams | undefined;
       try {
+        if (process.platform === 'linux') {
+          return await readLinuxResidentMemory(pid);
+        }
+        // spawn's timeout preserves queued output from a query that already exited.
+        query = spawn('/bin/ps', ['-o', 'rss=', '-p', String(pid)], {
+          timeout: READER_TIMEOUT_MS,
+          killSignal: 'SIGKILL',
+        });
+        reader = query;
         return await readMacResidentMemory(query);
+      } catch (cause) {
+        const names =
+          cause instanceof Error
+            ? [cause.cause instanceof Error ? cause.cause.name : null, cause.name]
+            : [];
+        const context = {
+          platform: process.platform === 'linux' ? 'linux' : 'darwin',
+          samplePhase: state.bytes === null ? 'initial' : 'subsequent',
+          elapsedMs: Math.round((performance.now() - startedAt) * 1000) / 1000,
+          readerPid: query?.pid ?? null,
+          exitCode: query?.exitCode ?? null,
+          signalCode: query?.signalCode ?? null,
+          localKillRequested: query?.killed ?? null,
+          abortReason:
+            names.find((name) => name === 'TimeoutError' || name === 'AbortError') ?? null,
+        };
+        throw new Error(`POSIX resident-memory read context: ${JSON.stringify(context)}`, {
+          cause,
+        });
       } finally {
         reader = undefined;
       }
