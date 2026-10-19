@@ -37,7 +37,11 @@
       actualBirth = String(date.GetFileTime(false));
       date.SetFileTime(birth, false);
       expectedBirth = String(date.GetFileTime(false));
-      if (String(process.Handle) !== pidText || actualBirth !== expectedBirth)
+      // WMI CreationDate has microsecond precision, so ignore FILETIME's 100 ns digit.
+      if (
+        String(process.Handle) !== pidText ||
+        actualBirth.slice(0, -1) !== expectedBirth.slice(0, -1)
+      )
         throw new Error('Process identity changed');
       stage = 'rss';
       raw = String(process.WorkingSetSize);
