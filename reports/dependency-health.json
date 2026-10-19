@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyDate": "2026-10-19",
-  "observedAt": "2026-10-19T00:46:34.079Z",
+  "observedAt": "2026-10-19T01:51:02.649Z",
   "staleAfterDays": 548,
   "audit": {
     "command": "pnpm audit --prod --audit-level moderate --json",
@@ -656,6 +656,7 @@
     {
       "name": "@types/yazl",
       "specifiers": [
+        "3.3.1",
         "^3.3.1"
       ],
       "dependencyTypes": [
@@ -663,10 +664,11 @@
       ],
       "references": [
         "packages/backend-local/package.json:devDependencies",
+        "packages/parsers/package.json:devDependencies",
         "tools/test-support/package.json:devDependencies"
       ],
       "latestVersion": "3.3.1",
-      "pinnedPublishedAt": null,
+      "pinnedPublishedAt": "2026-04-07T22:11:34.726Z",
       "latestReleaseAt": "2026-04-07T22:11:34.726Z",
       "daysSinceLastRelease": 194,
       "license": "MIT",
