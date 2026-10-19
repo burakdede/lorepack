@@ -119,11 +119,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.1.4"
+          "value": "2.1.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-08T04:42:19.622Z"
+          "value": "2026-10-13T08:25:17.433Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -239,11 +239,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "1.64.0"
+          "value": "1.64.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-07T20:44:27.702Z"
+          "value": "2026-10-14T11:58:13.696Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -263,11 +263,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.104.2"
+          "value": "5.104.3"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-11T19:35:15.506Z"
+          "value": "2026-10-15T07:53:35.788Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -335,11 +335,35 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "14.6.7"
+          "value": "14.6.8"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-02T01:56:32.109Z"
+          "value": "2026-10-13T06:41:22.306Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "not-required"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@types/cross-spawn",
+      "version": "6.0.6",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "6.0.6"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2023-11-20T23:55:06.550Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -623,11 +647,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.0.4"
+          "value": "5.0.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-12T09:45:32.121Z"
+          "value": "2026-10-15T14:27:49.006Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -700,6 +724,30 @@
         {
           "name": "lorepack:latestReleaseAt",
           "value": "2026-05-29T09:16:23.076Z"
+        },
+        {
+          "name": "lorepack:provenanceStatus",
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "cross-spawn",
+      "version": "7.0.6",
+      "licenses": [
+        {
+          "expression": "MIT"
+        }
+      ],
+      "properties": [
+        {
+          "name": "lorepack:latestVersion",
+          "value": "7.0.6"
+        },
+        {
+          "name": "lorepack:latestReleaseAt",
+          "value": "2024-11-18T13:59:52.129Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -815,11 +863,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "30.1.2"
+          "value": "30.1.3"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-04T09:15:00.333Z"
+          "value": "2026-10-15T09:24:38.912Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -959,11 +1007,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "19.3.0"
+          "value": "19.3.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-09T17:21:30.071Z"
+          "value": "2026-10-14T16:47:15.290Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -983,11 +1031,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "19.3.0"
+          "value": "19.3.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-09T17:17:39.744Z"
+          "value": "2026-10-14T16:49:10.081Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1247,11 +1295,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.0.4"
+          "value": "5.0.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-12T09:47:02.826Z"
+          "value": "2026-10-15T14:29:01.396Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1271,11 +1319,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.149.0"
+          "value": "4.151.1"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-08T18:24:09.016Z"
+          "value": "2026-10-16T09:55:24.246Z"
         },
         {
           "name": "lorepack:provenanceStatus",

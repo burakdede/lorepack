@@ -122,6 +122,8 @@ provenance when two candidates are otherwise equivalent.
 | `axe-core` | Accessibility checks in Studio e2e. | Replace only with an equivalent rule engine. |
 | `chokidar` | Watch accelerator for `lorepack dev`. | Replace if native watchers or Node watchers cover the same cross-platform behaviour. |
 | `commander` | CLI argument parsing and output interception. | Replace if it stops supporting `exitOverride` and controlled output streams. |
+| `cross-spawn` | Portable executable and npm `.cmd` argument handling for owned verification processes; the same 7.0.6 already used by the MCP SDK. | Replace when Node supports the required Windows shims and literal arguments, or a compatible maintained release is required. |
+| `@types/cross-spawn` | Contributor-only declarations for the process adapter. | Remove if cross-spawn ships declarations or is replaced. |
 | `csv-parse` | RFC 4180-style CSV parser without coercion. | Replace if it adds dependencies or loses array-mode parsing. |
 | `hono` | Shared REST runtime for Node and Worker. | Replace if the shared Node/Worker route model breaks or security advisories cannot be patched promptly. |
 | `jose` | Cloudflare Access JWT verification. | Replace if Workers expose a simpler verified Access token primitive. |
@@ -223,3 +225,20 @@ handler with real files and Vite's allow/deny policy, rather than asserting a ve
 These MIT tooling packages remain outside the published runtime closure. Installation
 continues to decline dependency scripts; the upgrade adds no runtime dependency or native
 build requirement.
+
+## Verification launcher, 2026-10-17
+
+`cross-spawn` 7.0.6 is now explicit in the connector and shipped CLI manifests because
+our host owns the actual server processes. The SDK already uses this exact version;
+the production dependency closure gains no new package. Its
+[documented Windows shim handling](https://github.com/moxystudio/node-cross-spawn#why)
+preserves arguments without hand-written shell quoting. Plain `spawn` cannot launch
+npm `.cmd` wrappers equivalently, and enabling `shell` would require our own escaping.
+
+Registry metadata checked on 2026-10-17: latest release 7.0.6, 2024-11-18, MIT,
+16,094 unpacked bytes, three runtime dependencies, no native code or install hooks.
+The old release date remains a visible maintenance warning; keep this existing SDK
+closure while its literal-argument tests pass and review a compatible maintained
+replacement on a new advisory or runtime incompatibility. `@types/cross-spawn` 6.0.6
+is MIT and contributor-only. Fresh audit and generated health/SBOM evidence must pass
+before merge. The report generator's existing policy-date behavior remains owned by #623.

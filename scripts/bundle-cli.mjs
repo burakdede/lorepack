@@ -21,6 +21,7 @@ export async function bundleCli({
   // and once bundled its module is `public-entry.js`, so the child has to sit beside it.
   const parseChild = join(root, 'packages', 'parsers', 'dist', 'parse-child.js');
   const buildWorker = join(compiled, 'services', 'build_worker.js');
+  const verifyBridge = join(root, 'packages', 'connect-clients', 'dist', 'verify_bridge.js');
   const archiveVerifyChild = join(
     root,
     'packages',
@@ -35,6 +36,7 @@ export async function bundleCli({
     '@modelcontextprotocol/*',
     'chokidar',
     'commander',
+    'cross-spawn',
     'csv-parse',
     'hono',
     'jose',
@@ -54,7 +56,14 @@ export async function bundleCli({
     'yazl',
   ];
 
-  for (const compiled of [entry, queryChild, parseChild, archiveVerifyChild, buildWorker]) {
+  for (const compiled of [
+    entry,
+    queryChild,
+    parseChild,
+    archiveVerifyChild,
+    buildWorker,
+    verifyBridge,
+  ]) {
     if (!existsSync(compiled)) {
       throw new Error(`${compiled} is missing. Run tsc -b before bundling.`);
     }
@@ -75,6 +84,7 @@ export async function bundleCli({
       'parse-child': parseChild,
       'archive-verify-child': archiveVerifyChild,
       build_worker: buildWorker,
+      verify_bridge: verifyBridge,
     },
     external: externalDependencies,
     format: 'esm',

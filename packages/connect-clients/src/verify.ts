@@ -3,6 +3,11 @@ import { buildDescriptionSchema, LoreError, sourceReadResultSchema } from '@lore
 import type { Client } from '@modelcontextprotocol/client';
 import { resolveExecutable } from './executable.js';
 import type { ConnectionCheck, ConnectionExpectation, ReadConnectionExpectation } from './port.js';
+import {
+  createVerificationProcessHost,
+  VERIFY_TOKEN_ENV,
+  verificationBridgeEntry,
+} from './verify_process.js';
 
 /**
  * Confirming that the thing we just configured actually answers.
@@ -47,13 +52,22 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
     };
   }
 
-  const [{ Client }, { StdioClientTransport }] = await Promise.all([
+  const [{ Client }, { StdioClientTransport, getDefaultEnvironment }] = await Promise.all([
     import('@modelcontextprotocol/client'),
     import('@modelcontextprotocol/client/stdio'),
   ]);
+  let ownership: Awaited<ReturnType<typeof createVerificationProcessHost>>;
+  let bridge: string;
+  try {
+    bridge = verificationBridgeEntry();
+    ownership = await createVerificationProcessHost(command, options.args, getDefaultEnvironment());
+  } catch (error) {
+    return { ok: false, step: 'spawn', detail: `Verification could not start: ${message(error)}` };
+  }
   const transport = new StdioClientTransport({
-    command,
-    args: [...options.args],
+    command: process.execPath,
+    args: [bridge, ownership.endpoint],
+    env: { [VERIFY_TOKEN_ENV]: ownership.token },
     stderr: 'pipe',
   });
 
@@ -70,17 +84,29 @@ export async function verifyStdioServer(options: VerifyOptions): Promise<Connect
   const connecting = client.connect(transport);
   connecting.catch(() => undefined);
 
+  let result: ConnectionCheck;
+  let cleanupFailure: { error: unknown } | undefined;
   try {
-    return await check(client, connecting, options);
+    result = await check(client, connecting, options);
   } finally {
     // Every path, not only success. A server stuck in a long `--ensure-current` build holds
     // the project lock, and a timeout that walked away from it left it holding the lock after
     // `connect` had returned (#578). Closing the session transport also aborts a probe still
     // in flight, which is what lets `connecting` settle and reap the sibling.
+    await ownership.close().catch((error: unknown) => {
+      cleanupFailure = { error };
+    });
     await client.close().catch(() => undefined);
     await transport.close().catch(() => undefined);
     await connecting.catch(() => undefined);
   }
+  return cleanupFailure === undefined
+    ? result
+    : {
+        ok: false,
+        step: 'spawn',
+        detail: `Verification could not confirm server cleanup: ${message(cleanupFailure.error)}`,
+      };
 }
 
 async function check(

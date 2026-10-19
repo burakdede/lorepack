@@ -69,6 +69,11 @@ const ALLOWED: readonly { readonly file: string; readonly line: string; readonly
     why: 'Windows chmod does not implement POSIX group and other permission bits (#686)',
   },
   {
+    file: 'packages/connect-clients/test/verify_process.test.ts',
+    line: "it.skipIf(process.platform === 'win32').each(['transient', 'persistent'] as const)(",
+    why: 'POSIX negative-PID process-group inspection is unsupported on Windows; its native .cmd wrapper/lock, modern/legacy negotiation and installed proof stay enabled (#578)',
+  },
+  {
     file: 'packages/connect-clients/test/claude-code.test.ts',
     line: "it.skipIf(process.platform === 'win32')(",
     why: 'project links need administrator rights or Developer Mode, and chmod modes are POSIX-only',
