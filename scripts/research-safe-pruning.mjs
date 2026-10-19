@@ -97,7 +97,7 @@ function buildPostings(rows) {
   return postings;
 }
 
-function buildBm25fPostings(rows) {
+export function buildBm25fPostings(rows) {
   const fields = [
     { name: 'path', weight: RANKING_WEIGHTS.columns.path, b: 0.2 },
     { name: 'title', weight: RANKING_WEIGHTS.columns.title, b: 0.2 },
@@ -107,8 +107,15 @@ function buildBm25fPostings(rows) {
   const k1 = 1.2;
   const fieldData = rows.map((row) => {
     const values = new Map();
-    for (const field of fields) values.set(field.name, tokens(row[field.name]));
-    return { row, values };
+    const frequencies = new Map();
+    for (const field of fields) {
+      const terms = tokens(row[field.name]);
+      const counts = new Map();
+      for (const term of terms) counts.set(term, (counts.get(term) ?? 0) + 1);
+      values.set(field.name, terms);
+      frequencies.set(field.name, counts);
+    }
+    return { row, values, frequencies };
   });
   const averages = new Map(
     fields.map((field) => [
@@ -131,7 +138,7 @@ function buildBm25fPostings(rows) {
       const idf = Math.log(1 + (rows.length - frequency + 0.5) / (frequency + 0.5));
       const normalizedTermFrequency = fields.reduce((total, field) => {
         const values = item.values.get(field.name);
-        const termFrequency = values.filter((value) => value === term).length;
+        const termFrequency = item.frequencies.get(field.name).get(term) ?? 0;
         const averageLength = averages.get(field.name) || 1;
         const normalization = 1 - field.b + field.b * (values.length / averageLength);
         return total + field.weight * (termFrequency / normalization);
