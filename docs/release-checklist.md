@@ -87,3 +87,27 @@ If a release is bad:
 3. Open a blocking issue and link it from the GitHub release notes.
 4. Tell users to activate or roll back to the previous immutable build. For Cloudflare targets,
    roll back the active deployment pointer rather than re-projecting.
+
+## Retained global tarball lifecycle
+
+On each clean supported OS, use the exact retained tar and a clean checkout at its
+`gitHead`, with the matching CLI version:
+
+```sh
+node scripts/check-global-smoke.mjs --out /absolute/fresh-evidence --tarball /absolute/retained.tgz
+```
+
+Without `--tarball`, the helper packs the current built checkout as before. The
+receipt records the installed version, source, tar hash and unchanged-byte check.
+`lifecycle/` retains every actual command's stdout, stderr and exit status, plus
+canonical fixture/config/lock bytes and hashes, build A, inactive candidate B,
+activation, source-free reads and rollback to A. After removing the configured
+source directory, pointer checks use `builds`: `status` validates source-directory
+existence and is not a source-free command. Compare the corresponding fixture
+records and build IDs across all three OSes; equal source commits alone do not
+establish equal tar bytes or build identities. Archive all evidence durably before
+the workflow's seven-day artifact retention expires.
+
+This smoke invokes the actual globally installed entry through Node. It does not
+prove the OS command shim, real dev/connect flows, human client trust prompts or
+credentialed Cloudflare operations. Those original release checks remain separate.
