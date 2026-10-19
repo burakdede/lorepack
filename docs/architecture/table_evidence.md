@@ -5,8 +5,10 @@ CSV and XLSX parsers store `tableEvidence` version `1` in each imported table's 
 remains literal. XLSX presence covers imported data independently of the existing 1,000 raw
 formula-expression cap; cached values are retained without evaluating expressions.
 `conversionWarnings` records actual code/message pairs for that table. A sheet warning
-must not leak into a different sheet's evidence. Parser version `0.1.1` invalidates old parse
-cache entries so missing evidence cannot be mistaken for known absence.
+must not leak into a different sheet's evidence. CSV parser `0.1.2` and XLSX parser `0.1.4`
+give this changed evidence a new build identity. Table-bearing parses already bypass the
+parse cache; a distinct parser version prevents reusing an older sealed build as well.
+Global build normalization stays `2`; parser-local table normalization stays `1`.
 
 Historical builds without this metadata do not establish formula absence or an empty
 conversion-warning list. Public readers must preserve that distinction.

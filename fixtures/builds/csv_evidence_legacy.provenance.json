@@ -1,0 +1,308 @@
+{
+  "formatVersion": 1,
+  "producer": {
+    "head": "39f9cf3d544f919de3164b8c57a874942d03e8a0",
+    "tarballSha256": "ee0a1c47b42c47e858a1aca1e83a0d2d02ff57b29e33ae4502ee0d51befbbdc2"
+  },
+  "runtime": {
+    "node": "v24.21.0",
+    "sqlite": "3.53.4",
+    "nodeExecutable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+    "npm": "11.19.0",
+    "npmCli": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/npm",
+    "pnpm": "11.18.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "recipeSha256": "efed689fae561d552b86416aa97dd3304e393a0c076107bfe1f2c82cd8c7637a",
+  "inputsSha256": "20fbbd083c4cea4e2916bfd599a20ed674ed69a29895005a8470c98165ca85e5",
+  "inputs": {
+    "lore.yaml": "0851e8668dc7a6b975108eb8fca38889936182eadf9b8a7fc414745ae8e7fd8f",
+    "docs/orders.csv": "c48749bb945d3bf2194669141053774efd6cf5c738b1ec415f3474bdee303080"
+  },
+  "archive": {
+    "buildId": "lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b",
+    "sha256": "a938dbe3f8aa513a14f0a9d352841246c1dbe6caaaed8672db80e0d8b7f88450"
+  },
+  "identity": {
+    "formatVersion": 1,
+    "schemaVersion": 3,
+    "compilerVersion": "0.1.0",
+    "canonicalizationVersion": 1,
+    "normalizationVersion": 2,
+    "effectiveConfig": {
+      "version": 1,
+      "defaultsVersion": 3,
+      "name": "csv-evidence-identity",
+      "sources": ["docs"],
+      "include": ["**/*"],
+      "exclude": [
+        "lore.yaml",
+        "lore.lock",
+        ".loreignore",
+        "*.lorepack",
+        ".gitignore",
+        ".gitattributes",
+        ".git/",
+        "node_modules/",
+        ".lore/",
+        "dist/",
+        "build/",
+        "coverage/",
+        ".env*",
+        "*.pem",
+        "*.key",
+        "id_rsa*",
+        "id_ed25519*",
+        "*.p12",
+        "*.pfx",
+        "*.jks",
+        "*credentials*.json",
+        ".mcp.json",
+        ".claude/",
+        ".codex/",
+        ".cursor/",
+        ".vscode/",
+        "*.lorepack-*.bak",
+        ".DS_Store",
+        "Thumbs.db"
+      ],
+      "followSymlinks": false,
+      "strictRules": false,
+      "build": {
+        "profile": "permissive",
+        "required": []
+      },
+      "includeOriginals": false,
+      "chunking": {
+        "targetTokens": 700,
+        "maximumTokens": 1200,
+        "overlapTokens": 100
+      },
+      "limits": {
+        "maxSourceFiles": 2500,
+        "maxTotalBytes": 1073741824,
+        "maxArtifactBytes": 67108864,
+        "maxChunks": 50000,
+        "maxTableRows": 500000,
+        "maxTableColumns": 100,
+        "maxPdfPages": 500
+      },
+      "contextProfile": "agent",
+      "rules": []
+    },
+    "parserVersions": {
+      "csv": "0.1.1",
+      "docx": "0.1.0",
+      "html": "0.1.0",
+      "markdown": "0.1.0",
+      "pdf-text": "0.1.1",
+      "text": "0.1.0",
+      "xlsx": "0.1.0"
+    },
+    "ruleResolution": [],
+    "embeddingProfile": null,
+    "canonicalRoots": {
+      "artifacts": "2f0e85c33700933e8f1071e1bc8a6f53ce944af3acb68ccce5fdb24706a1d843",
+      "nodes": "dc086008a54aa9c06f0f6f48f3960ae1c2cb1e857db071ffbd56e2f7a5b17324",
+      "chunks": "83f7f2b516548186e5e15e272c000f24cf6c8c39744e0b1fed4abdfb57317172",
+      "tables": "6ffada8ca866ae04f89d2b22c04fd9537d42f62797ac7d3220ad52532b1e1994",
+      "objects": "58b0f536e1ba05848f7807b152cc59a54a12d0b6366c8482d1ac5d4c2d892673"
+    }
+  },
+  "originalDescription": {
+    "buildId": "lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b",
+    "table": {
+      "tableId": "docs:orders.csv#table",
+      "name": "orders",
+      "sqlName": "t_orders_16237d3c7414",
+      "columns": [
+        {
+          "name": "item",
+          "sqlName": "c_0_item",
+          "type": "text",
+          "nullable": false,
+          "statistics": {
+            "nullCount": 0,
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "min": "A",
+            "max": "B"
+          }
+        },
+        {
+          "name": "quantity",
+          "sqlName": "c_1_quantity",
+          "type": "integer",
+          "nullable": false,
+          "statistics": {
+            "nullCount": 0,
+            "distinctEstimate": 2,
+            "distinctIsExact": true,
+            "min": 2,
+            "max": 3
+          }
+        }
+      ],
+      "rowCount": 2,
+      "sample": [
+        {
+          "item": "A",
+          "quantity": 2
+        },
+        {
+          "item": "B",
+          "quantity": 3
+        }
+      ],
+      "locator": {
+        "artifactId": "docs:orders.csv",
+        "relativePath": "orders.csv",
+        "lineStart": 1,
+        "lineEnd": 3
+      }
+    },
+    "metadata": {
+      "delimiter": ",",
+      "delimiterReason": "consistent 2 fields across 3 sampled rows",
+      "hasHeader": true,
+      "headerReason": "row 1 is all non-empty text",
+      "inferenceSampleRows": 2,
+      "normalizationVersion": 1
+    }
+  },
+  "originalArtifact": {
+    "buildId": "lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b",
+    "artifact": {
+      "id": "docs:orders.csv",
+      "source_id": "docs",
+      "relative_path": "orders.csv",
+      "display_path": "docs/orders.csv",
+      "media_type": "text/csv",
+      "byte_size": 22,
+      "content_hash": "c48749bb945d3bf2194669141053774efd6cf5c738b1ec415f3474bdee303080",
+      "parser_id": "csv",
+      "parser_version": "0.1.1",
+      "title": "orders",
+      "status": "active",
+      "authority": 50,
+      "object_hash": "ee095c78eff0af2fa4ee8d2d85020109b970fdb2a07fdd5255f32932cc073f15",
+      "metadata": "{\"delimiter\":\",\",\"normalizationVersion\":1}"
+    },
+    "chunkCount": 1,
+    "nodes": [
+      {
+        "id": "docs:orders.csv#0",
+        "kind": "document",
+        "title": "orders",
+        "headingPath": "[]",
+        "lineStart": 1
+      },
+      {
+        "id": "docs:orders.csv#0.1",
+        "kind": "table",
+        "title": "orders",
+        "headingPath": "[]",
+        "lineStart": 1
+      }
+    ]
+  },
+  "packVerification": {
+    "archive": "/tmp/lore-csv-evidence-legacy-uDVuTF/csv_evidence_legacy.lorepack",
+    "ok": true,
+    "memberCount": 8,
+    "failures": [],
+    "buildId": "lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b",
+    "assurance": "integrity-only",
+    "authenticated": false
+  },
+  "commands": [
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/npm",
+      "args": [
+        "install",
+        "--offline",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+        "/tmp/lorepack-596-39f9cf3d-artifact/lorepack-cli-0.1.0.tgz"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/install",
+      "stdout": "\nadded 1 package in 3s\n",
+      "exitCode": 0
+    },
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+      "args": [
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/install/node_modules/@lorepack/cli/dist/public-entry.js",
+        "--cwd",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+        "--json",
+        "build"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+      "stdout": "{\n  \"buildId\": \"lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b\",\n  \"created\": true,\n  \"activated\": true,\n  \"counts\": {\n    \"artifacts\": 1,\n    \"nodes\": 2,\n    \"chunks\": 1,\n    \"tables\": 1,\n    \"tableRows\": 2\n  },\n  \"warnings\": 0,\n  \"reusedArtifacts\": 0,\n  \"rebuiltArtifacts\": 1,\n  \"durationMs\": 294\n}\n",
+      "exitCode": 0
+    },
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+      "args": [
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/install/node_modules/@lorepack/cli/dist/public-entry.js",
+        "--cwd",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+        "--json",
+        "inspect",
+        "tables",
+        "orders"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+      "stdout": "{\n  \"buildId\": \"lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b\",\n  \"table\": {\n    \"tableId\": \"docs:orders.csv#table\",\n    \"name\": \"orders\",\n    \"sqlName\": \"t_orders_16237d3c7414\",\n    \"columns\": [\n      {\n        \"name\": \"item\",\n        \"sqlName\": \"c_0_item\",\n        \"type\": \"text\",\n        \"nullable\": false,\n        \"statistics\": {\n          \"nullCount\": 0,\n          \"distinctEstimate\": 2,\n          \"distinctIsExact\": true,\n          \"min\": \"A\",\n          \"max\": \"B\"\n        }\n      },\n      {\n        \"name\": \"quantity\",\n        \"sqlName\": \"c_1_quantity\",\n        \"type\": \"integer\",\n        \"nullable\": false,\n        \"statistics\": {\n          \"nullCount\": 0,\n          \"distinctEstimate\": 2,\n          \"distinctIsExact\": true,\n          \"min\": 2,\n          \"max\": 3\n        }\n      }\n    ],\n    \"rowCount\": 2,\n    \"sample\": [\n      {\n        \"item\": \"A\",\n        \"quantity\": 2\n      },\n      {\n        \"item\": \"B\",\n        \"quantity\": 3\n      }\n    ],\n    \"locator\": {\n      \"artifactId\": \"docs:orders.csv\",\n      \"relativePath\": \"orders.csv\",\n      \"lineStart\": 1,\n      \"lineEnd\": 3\n    }\n  },\n  \"metadata\": {\n    \"delimiter\": \",\",\n    \"delimiterReason\": \"consistent 2 fields across 3 sampled rows\",\n    \"hasHeader\": true,\n    \"headerReason\": \"row 1 is all non-empty text\",\n    \"inferenceSampleRows\": 2,\n    \"normalizationVersion\": 1\n  }\n}\n",
+      "exitCode": 0
+    },
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+      "args": [
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/install/node_modules/@lorepack/cli/dist/public-entry.js",
+        "--cwd",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+        "--json",
+        "inspect",
+        "docs/orders.csv"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+      "stdout": "{\n  \"buildId\": \"lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b\",\n  \"artifact\": {\n    \"id\": \"docs:orders.csv\",\n    \"source_id\": \"docs\",\n    \"relative_path\": \"orders.csv\",\n    \"display_path\": \"docs/orders.csv\",\n    \"media_type\": \"text/csv\",\n    \"byte_size\": 22,\n    \"content_hash\": \"c48749bb945d3bf2194669141053774efd6cf5c738b1ec415f3474bdee303080\",\n    \"parser_id\": \"csv\",\n    \"parser_version\": \"0.1.1\",\n    \"title\": \"orders\",\n    \"status\": \"active\",\n    \"authority\": 50,\n    \"object_hash\": \"ee095c78eff0af2fa4ee8d2d85020109b970fdb2a07fdd5255f32932cc073f15\",\n    \"metadata\": \"{\\\"delimiter\\\":\\\",\\\",\\\"normalizationVersion\\\":1}\"\n  },\n  \"chunkCount\": 1,\n  \"nodes\": [\n    {\n      \"id\": \"docs:orders.csv#0\",\n      \"kind\": \"document\",\n      \"title\": \"orders\",\n      \"headingPath\": \"[]\",\n      \"lineStart\": 1\n    },\n    {\n      \"id\": \"docs:orders.csv#0.1\",\n      \"kind\": \"table\",\n      \"title\": \"orders\",\n      \"headingPath\": \"[]\",\n      \"lineStart\": 1\n    }\n  ]\n}\n",
+      "exitCode": 0
+    },
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+      "args": [
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/install/node_modules/@lorepack/cli/dist/public-entry.js",
+        "--cwd",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+        "--json",
+        "pack",
+        "--out",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/csv_evidence_legacy.lorepack"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+      "stdout": "{\n  \"buildId\": \"lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b\",\n  \"archive\": \"/tmp/lore-csv-evidence-legacy-uDVuTF/csv_evidence_legacy.lorepack\",\n  \"members\": 8,\n  \"includeOriginals\": false\n}\n",
+      "exitCode": 0
+    },
+    {
+      "executable": "/Users/burakdede/.local/share/mise/installs/node/24.21.0/bin/node",
+      "args": [
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/install/node_modules/@lorepack/cli/dist/public-entry.js",
+        "--cwd",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+        "--json",
+        "pack",
+        "--verify",
+        "/tmp/lore-csv-evidence-legacy-uDVuTF/csv_evidence_legacy.lorepack"
+      ],
+      "cwd": "/tmp/lore-csv-evidence-legacy-uDVuTF/project",
+      "stdout": "{\n  \"archive\": \"/tmp/lore-csv-evidence-legacy-uDVuTF/csv_evidence_legacy.lorepack\",\n  \"ok\": true,\n  \"memberCount\": 8,\n  \"failures\": [],\n  \"buildId\": \"lore_4c5c546d5170f458b46c75ce12e274b31ce574b4faa35b5335c65fdcedb3160b\",\n  \"assurance\": \"integrity-only\",\n  \"authenticated\": false\n}\n",
+      "exitCode": 0
+    }
+  ],
+  "recipeSource": "import assert from 'node:assert/strict';\nimport { execFileSync } from 'node:child_process';\nimport { createHash } from 'node:crypto';\nimport {\n  copyFileSync,\n  existsSync,\n  mkdirSync,\n  mkdtempSync,\n  readFileSync,\n  realpathSync,\n  rmSync,\n  writeFileSync,\n} from 'node:fs';\nimport { tmpdir } from 'node:os';\nimport { dirname, join, resolve } from 'node:path';\n\nconst PRODUCER = '39f9cf3d544f919de3164b8c57a874942d03e8a0';\nconst TARBALL_SHA256 = 'ee0a1c47b42c47e858a1aca1e83a0d2d02ff57b29e33ae4502ee0d51befbbdc2';\nconst tarball = process.argv[2];\nif (tarball === undefined) {\n  throw new Error('Pass the retained, qualified #596 CLI tarball as the sole argument.');\n}\nassert.equal(process.argv.length, 3);\nassert.equal(process.version, 'v24.21.0');\nassert.equal(process.versions.sqlite, '3.53.4');\nassert.notEqual(process.platform, 'win32', 'Generate on POSIX; the sealed fixture runs on every OS.');\nconst sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');\nassert.equal(sha256(readFileSync(tarball)), TARBALL_SHA256);\nconst npmCli = realpathSync(join(dirname(process.execPath), 'npm'));\nconst npmVersion = execFileSync(npmCli, ['--version'], { encoding: 'utf8' }).trim();\nconst pnpmVersion = execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim();\nassert.equal(npmVersion, '11.19.0');\nassert.equal(pnpmVersion, '11.18.0');\nconst destination = join(import.meta.dirname, 'csv_evidence_legacy.lorepack');\nconst provenancePath = join(import.meta.dirname, 'csv_evidence_legacy.provenance.json');\nassert.equal(existsSync(destination), false, 'Preserve the existing reviewed fixture.');\nassert.equal(existsSync(provenancePath), false, 'Preserve the existing provenance receipt.');\nconst inputsPath = join(import.meta.dirname, 'csv_evidence_legacy_inputs.json');\nconst inputs = JSON.parse(readFileSync(inputsPath, 'utf8'));\nconst temporary = mkdtempSync(join(tmpdir(), 'lore-csv-evidence-legacy-'));\nconst commands = [];\ntry {\n  const install = join(temporary, 'install');\n  const project = join(temporary, 'project');\n  mkdirSync(install);\n  mkdirSync(project);\n  const execute = (executable, args, cwd) => {\n    const stdout = execFileSync(executable, args, { cwd, encoding: 'utf8' });\n    commands.push({ executable, args, cwd, stdout, exitCode: 0 });\n    return stdout;\n  };\n  execute(\n    npmCli,\n    ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', resolve(tarball)],\n    install,\n  );\n  const entry = join(install, 'node_modules', '@lorepack', 'cli', 'dist', 'public-entry.js');\n  const cli = (...args) =>\n    JSON.parse(execute(process.execPath, [entry, '--cwd', project, '--json', ...args], project));\n  for (const [path, content] of Object.entries(inputs)) {\n    const full = join(project, path);\n    mkdirSync(dirname(full), { recursive: true });\n    writeFileSync(full, content, 'utf8');\n  }\n  const built = cli('build');\n  assert.equal(built.counts.tables, 1);\n  assert.equal(built.counts.tableRows, 2);\n  const directory = join(project, '.lore', 'builds', built.buildId);\n  const identity = JSON.parse(readFileSync(join(directory, 'reports', 'build-id-inputs.json'), 'utf8'));\n  assert.equal(identity.parserVersions.csv, '0.1.1');\n  assert.equal(identity.normalizationVersion, 2);\n  const table = cli('inspect', 'tables', 'orders');\n  assert.equal(table.metadata.tableEvidence, undefined);\n  assert.equal(table.metadata.normalizationVersion, 1);\n  const artifact = cli('inspect', 'docs/orders.csv');\n  assert.equal(artifact.artifact.parser_version, '0.1.1');\n  const archive = join(temporary, 'csv_evidence_legacy.lorepack');\n  const packed = cli('pack', '--out', archive);\n  assert.equal(packed.buildId, built.buildId);\n  const verified = cli('pack', '--verify', archive);\n  assert.equal(verified.ok, true);\n  const provenance = {\n    formatVersion: 1,\n    producer: { head: PRODUCER, tarballSha256: TARBALL_SHA256 },\n    runtime: {\n      node: process.version,\n      sqlite: process.versions.sqlite,\n      nodeExecutable: process.execPath,\n      npm: npmVersion,\n      npmCli,\n      pnpm: pnpmVersion,\n      platform: process.platform,\n      arch: process.arch,\n    },\n    recipeSha256: sha256(readFileSync(import.meta.filename)),\n    inputsSha256: sha256(readFileSync(inputsPath)),\n    inputs: Object.fromEntries(\n      Object.entries(inputs).map(([path, contents]) => [path, sha256(contents)]),\n    ),\n    archive: { buildId: built.buildId, sha256: sha256(readFileSync(archive)) },\n    identity,\n    originalDescription: table,\n    originalArtifact: artifact,\n    packVerification: verified,\n    commands,\n  };\n  copyFileSync(archive, destination);\n  writeFileSync(provenancePath, `${JSON.stringify(provenance, null, 2)}\\n`);\n  console.log(JSON.stringify({ archive: destination, provenance: provenancePath, ...provenance.archive }));\n} finally {\n  rmSync(temporary, { recursive: true, force: true });\n}\n"
+}
