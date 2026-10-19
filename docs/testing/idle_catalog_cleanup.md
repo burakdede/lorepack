@@ -62,3 +62,29 @@ still warm OS caches; each now reopens its connection.
 This one local comparison establishes that both runs remain within those target values;
 it does not establish a speedup or reference-hardware release signoff. Keep the exact
 workload and final release performance obligations intact.
+
+## Connection diagnostic qualification
+
+Connection verification accepts an optional diagnostic observer. Events record child launch
+ordinals and PIDs, exit codes/signals, SDK negotiation fields and explicit discovery results.
+Discovery errors use the fixed `Error`/`OtherError` enum and a safe integer code or `null`.
+The exit event reports only a boolean for the fixed parser resident-memory observer failure
+phrase. Events contain no raw stderr, command arguments, paths or document content.
+Observers and diagnostic field access cannot change protocol verification or child cleanup;
+when no observer is supplied, diagnostic fields are not read.
+
+Child exit diagnostics use Node's `close` event, which follows process exit and stdio closure.
+Cleanup can finish before that event reaches a bounded test snapshot. A missing exit event
+is inconclusive. These diagnostics do not establish the cause of historical reader SIGKILL
+or protocol fallback failures.
+
+```bash
+pnpm build
+pnpm exec vitest run packages/connect-clients/test/verify.test.ts packages/connect-clients/test/verify_process.test.ts packages/backend-local/test/storage.test.ts packages/cli/test/prune_idle.e2e.test.ts packages/cli/test/inflight_retention.test.ts packages/cli/test/runtime-local.test.ts
+```
+
+On 2026-10-19, Node 24.21.0/macOS arm64: the three diagnostic safety regressions first failed;
+a further throwing error-code getter regression failed with diagnostics enabled and disabled.
+After the diagnostic safety corrections, all five cases passed and the six-file run passed
+86 cases. The real SDK discovery call, protocol assertions and original deadlines remain.
+This focused run does not replace full local or native Windows/Linux qualification.

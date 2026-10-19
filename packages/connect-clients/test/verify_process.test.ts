@@ -1,8 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { getDefaultEnvironment } from '@modelcontextprotocol/client/stdio';
 import { expect, it, vi } from 'vitest';
 import { createVerificationProcessHost } from '../src/verify_process.js';
@@ -23,6 +25,86 @@ function consume(socket: Socket): Promise<Buffer> {
     socket.once('end', () => resolve(Buffer.concat(chunks)));
   });
 }
+
+it('keeps ownership and closes a child when the launch diagnostic throws', async () => {
+  let launched: () => void = () => undefined;
+  const sawLaunch = new Promise<void>((resolve) => {
+    launched = resolve;
+  });
+  let pid: number | null = null;
+  const host = await createVerificationProcessHost(
+    process.execPath,
+    ['-e', 'process.stdin.resume()'],
+    getDefaultEnvironment(),
+    (_ordinal, childPid) => {
+      pid = childPid;
+      launched();
+      throw new Error('diagnostic callback failed');
+    },
+  );
+  let data: Socket | undefined;
+  let stderr: Socket | undefined;
+  try {
+    const id = randomBytes(16).toString('hex');
+    data = await connect(host.endpoint);
+    stderr = await connect(host.endpoint);
+    data.write(`${host.token}:${id}:0\n`);
+    stderr.write(`${host.token}:${id}:1\n`);
+    await sawLaunch;
+    await expect(host.close()).resolves.toBeUndefined();
+    expect(pid).not.toBeNull();
+    expect(() => process.kill(pid as number, 0)).toThrow(
+      expect.objectContaining({ code: 'ESRCH' }),
+    );
+  } finally {
+    data?.destroy();
+    stderr?.destroy();
+    await host.close().catch(() => undefined);
+    if (pid !== null) {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch (error) {
+        expect(error).toMatchObject({ code: 'ESRCH' });
+      }
+    }
+  }
+});
+
+it('does not let a child exit diagnostic throw from an event callback', () => {
+  const entry = pathToFileURL(join(import.meta.dirname, '..', 'dist', 'verify_process.js')).href;
+  const script = `
+import { createConnection } from 'node:net';
+import { createVerificationProcessHost } from ${JSON.stringify(entry)};
+let sawExit;
+const exited = new Promise((resolve) => { sawExit = resolve; });
+const host = await createVerificationProcessHost(
+  process.execPath,
+  ['-e', 'process.exit(0)'],
+  process.env,
+  undefined,
+  () => { sawExit(); throw new Error('diagnostic callback failed'); },
+);
+const connect = () => new Promise((resolve, reject) => {
+  const socket = createConnection({ path: host.endpoint, allowHalfOpen: true });
+  socket.once('error', reject);
+  socket.once('connect', () => resolve(socket));
+});
+const id = 'a'.repeat(32);
+const [data, stderr] = await Promise.all([connect(), connect()]);
+data.write(host.token + ':' + id + ':0\\n');
+stderr.write(host.token + ':' + id + ':1\\n');
+await exited;
+await host.close();
+data.destroy();
+stderr.destroy();
+`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    encoding: 'utf8',
+    timeout: 15_000,
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+}, 20_000);
 
 it('rejects unauthenticated, malformed and incomplete pairs without launching a server', async () => {
   const root = mkdtempSync(join(tmpdir(), 'lore-verify-auth-'));

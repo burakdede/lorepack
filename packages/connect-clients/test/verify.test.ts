@@ -3,10 +3,10 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectLock } from '../../backend-local/src/lock.js';
 import { LEGACY_HANDSHAKE_VERSIONS } from '../../mcp/src/protocol.js';
-import { verifyStdioServer } from '../src/verify.js';
+import { type VerifyDiagnostic, verifyStdioServer } from '../src/verify.js';
 import { readExpectedSource } from './expected_build.js';
 
 /**
@@ -48,19 +48,88 @@ afterEach(() => {
 
 describe('a server that works', () => {
   it('confirms the protocol revision and the tool surface', async () => {
+    const diagnostics: VerifyDiagnostic[] = [];
     const check = await verifyStdioServer({
       expected: () => readExpectedSource(project),
       executable: process.execPath,
       args: [BINARY, '--cwd', project, 'mcp', '--ensure-current'],
+      diagnostic: (event) => {
+        if (diagnostics.length < 12) diagnostics.push(event);
+      },
     });
 
-    expect(check.ok, check.detail).toBe(true);
-    expect(check.step).toBe('none');
+    const diagnostic = JSON.stringify(diagnostics);
+    expect(check.ok, `${check.detail}; diagnostic ${diagnostic}`).toBe(true);
+    expect(check.step, diagnostic).toBe('none');
     // The assertion that matters: `tools/list` alone would pass against a 2025-era server,
     // because it ignores an unrecognized `_meta` and answers normally. Only `server/discover`
     // settles which revision is actually being spoken.
-    expect(check.protocolVersion).toBe('2026-07-28');
+    expect(check.protocolVersion, diagnostic).toBe('2026-07-28');
     expect(check.detail).toContain('tools');
+  }, 120_000);
+
+  it.each([false, true])(
+    'preserves discovery fallback when diagnostic error fields throw (enabled: %s)',
+    async (enabled) => {
+      const { Client } = await import('@modelcontextprotocol/client');
+      const readCode = vi.fn(() => {
+        throw new Error('diagnostic field access failed');
+      });
+      const error = Object.defineProperty(new Error('explicit discovery failed'), 'code', {
+        get: readCode,
+      });
+      const discover = vi.spyOn(Client.prototype, 'discover').mockRejectedValueOnce(error);
+      const diagnostics: VerifyDiagnostic[] = [];
+      try {
+        const check = await verifyStdioServer({
+          expected: () => readExpectedSource(project),
+          executable: process.execPath,
+          args: [BINARY, '--cwd', project, 'mcp', '--ensure-current'],
+          ...(enabled
+            ? {
+                diagnostic: (event: VerifyDiagnostic) => {
+                  if (diagnostics.length < 12) diagnostics.push(event);
+                },
+              }
+            : {}),
+        });
+        expect(check.ok, check.detail).toBe(true);
+        expect(check.protocolVersion).toBeUndefined();
+        expect(readCode).toHaveBeenCalledTimes(enabled ? 1 : 0);
+        expect(JSON.stringify(diagnostics)).not.toContain('diagnostic field access failed');
+      } finally {
+        discover.mockRestore();
+      }
+    },
+    120_000,
+  );
+
+  it('does not disclose shaped discovery error fields in diagnostics', async () => {
+    const { Client } = await import('@modelcontextprotocol/client');
+    const error = Object.assign(new Error('explicit discovery failed'), {
+      name: 'SecretName',
+      code: 'SECRET_CODE',
+    });
+    const discover = vi.spyOn(Client.prototype, 'discover').mockRejectedValueOnce(error);
+    const diagnostics: VerifyDiagnostic[] = [];
+    try {
+      const check = await verifyStdioServer({
+        expected: () => readExpectedSource(project),
+        executable: process.execPath,
+        args: [BINARY, '--cwd', project, 'mcp', '--ensure-current'],
+        diagnostic: (event) => {
+          if (diagnostics.length < 12) diagnostics.push(event);
+        },
+      });
+      const recorded = JSON.stringify(diagnostics);
+      expect(check.ok, check.detail).toBe(true);
+      expect(check.protocolVersion).toBeUndefined();
+      expect(diagnostics.some((event) => event.event === 'discover-error')).toBe(true);
+      expect(recorded).not.toContain('SecretName');
+      expect(recorded).not.toContain('SECRET_CODE');
+    } finally {
+      discover.mockRestore();
+    }
   }, 120_000);
 });
 

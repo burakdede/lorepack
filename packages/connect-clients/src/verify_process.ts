@@ -10,6 +10,7 @@ import spawn from 'cross-spawn';
 
 const GRACE_MS = 2000;
 const HEADER_BYTES = 100;
+const MEMORY_OBSERVER_FAILURE = 'Could not observe parser resident memory.';
 export const VERIFY_TOKEN_ENV = 'LOREPACK_VERIFY_TOKEN';
 
 interface Session {
@@ -153,6 +154,14 @@ export async function createVerificationProcessHost(
   command: string,
   args: readonly string[],
   env: Readonly<Record<string, string>>,
+  onLaunch?: (ordinal: number, pid: number | null) => void,
+  onExit?: (
+    ordinal: number,
+    pid: number | null,
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    memoryObserverFailure: boolean,
+  ) => void,
 ): Promise<VerificationProcessHost> {
   const token = randomBytes(32).toString('hex');
   const tokenBytes = Buffer.from(token);
@@ -167,6 +176,7 @@ export async function createVerificationProcessHost(
   let closing = false;
   let closingPromise: Promise<void> | undefined;
   let queue: Promise<void> = Promise.resolve();
+  let launchOrdinal = 0;
   const stop = (session: Session, graceful = true) => {
     session.stopped ??= (async () => {
       try {
@@ -196,6 +206,30 @@ export async function createVerificationProcessHost(
       windowsHide: process.platform === 'win32',
     });
     session.child = child;
+    const ordinal = ++launchOrdinal;
+    const pid = child.pid ?? null;
+    try {
+      onLaunch?.(ordinal, pid);
+    } catch {
+      // Diagnostic observers must not interrupt child ownership or cleanup.
+    }
+    if (onExit !== undefined) {
+      let memoryObserverFailure = false;
+      let stderrTail = '';
+      child.stderr?.on('data', (chunk: Buffer) => {
+        if (memoryObserverFailure) return;
+        const text = stderrTail + chunk.toString('utf8');
+        if (text.includes(MEMORY_OBSERVER_FAILURE)) memoryObserverFailure = true;
+        stderrTail = text.slice(1 - MEMORY_OBSERVER_FAILURE.length);
+      });
+      child.once('close', (code, signal) => {
+        try {
+          onExit(ordinal, pid, code, signal, memoryObserverFailure);
+        } catch {
+          // Diagnostic observers must not escape the asynchronous close event.
+        }
+      });
+    }
     session.exited = new Promise<void>((resolve) => {
       child.once('exit', () => resolve());
       child.once('error', () => {
