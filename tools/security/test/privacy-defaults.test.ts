@@ -123,7 +123,7 @@ describe('privacy defaults: no telemetry or source egress in the build path, iss
   );
 
   it.runIf(process.platform === 'linux')(
-    'refuses alternate reader paths, changed options and unowned process identities',
+    'refuses forged capture profiles, alternate paths, changed options and unowned identities',
     async () => {
       const run = runSandboxedBuild(await project('reader-admission'), {
         inject: [samplerProbe('reader_admission_probe.mjs')],

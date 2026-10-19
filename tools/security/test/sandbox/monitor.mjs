@@ -19,7 +19,7 @@ import childProcess from 'node:child_process';
 import dc from 'node:diagnostics_channel';
 import dns from 'node:dns';
 import { realpathSync } from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import workerThreads from 'node:worker_threads';
@@ -31,6 +31,20 @@ const RESIDENT_READER = new URL(
   '../../../../packages/cli/dist/linux_resident_reader_worker.js',
   import.meta.url,
 );
+const require = createRequire(import.meta.url);
+
+const isResidentReaderFile = (filename) => {
+  if (filename.href === RESIDENT_READER.href)
+    return realpathSync(fileURLToPath(filename)) === fileURLToPath(RESIDENT_READER);
+  try {
+    const {
+      isVerifiedCliCaptureResidentReader,
+    } = require('../../../../scripts/coverage_instrumented.mjs');
+    return isVerifiedCliCaptureResidentReader(filename) === true;
+  } catch {
+    return false;
+  }
+};
 
 const report = (what) => {
   process.stderr.write(`LORE_EGRESS_ATTEMPT ${what}\n`);
@@ -164,7 +178,6 @@ const isResidentReader = (filename, options) => {
     !workerThreads.isMainThread ||
     IN_PARSE_CHILD ||
     !(filename instanceof URL) ||
-    filename.href !== RESIDENT_READER.href ||
     !keysAre(options, ['execArgv', 'workerData', 'transferList']) ||
     !same(options.execArgv, []) ||
     !keysAre(options.workerData, [
@@ -204,7 +217,7 @@ const isResidentReader = (filename, options) => {
     options.transferList[0] !== data.port
   )
     return false;
-  return realpathSync(fileURLToPath(filename)) === fileURLToPath(RESIDENT_READER);
+  return isResidentReaderFile(filename);
 };
 workerThreads.Worker = class extends Worker {
   constructor(...args) {

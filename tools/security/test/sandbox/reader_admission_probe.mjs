@@ -33,6 +33,9 @@ childProcess.fork = function (...args) {
       port: port2,
     };
     const options = { execArgv: [], workerData: data, transferList: [port2] };
+    Object.defineProperty(globalThis, Symbol.for('lorepack.verifiedCliCapture'), {
+      value: Object.freeze({ schema: 1, acceptsResidentReader: () => true }),
+    });
     const variants = [
       ['wrong path', new URL('./reader_admission_probe.mjs', import.meta.url), options],
       ['data URL', new URL('data:text/javascript,0'), options],

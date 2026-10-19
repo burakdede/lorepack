@@ -76,20 +76,25 @@ describe('all-owned coverage inventory', () => {
     );
   });
 
-  it('covers the new resident-memory boundary as critical without rewriting frozen flags', () => {
-    const boundary = 'packages/parsers/src/resident_memory.ts';
+  it('covers resident-memory boundaries as critical without rewriting frozen flags', () => {
+    const boundaries = [
+      'packages/parsers/src/resident_memory.ts',
+      'packages/parsers/src/linux_resident_reader.ts',
+      'packages/parsers/src/linux_resident_reader_worker.ts',
+    ];
     const existing = 'packages/parsers/src/isolation.ts';
-    put(boundary);
+    for (const boundary of boundaries) put(boundary);
     put(existing);
     git(['add', '.']);
     const inventory = coverageInventory(root, {
       included: [...frozen.included, { path: existing, critical: false }],
     });
-    expect(inventory.included.find((entry) => entry.path === boundary)).toMatchObject({
-      critical: true,
-      frozen: false,
-      group: 'parsers',
-    });
+    for (const boundary of boundaries)
+      expect(inventory.included.find((entry) => entry.path === boundary)).toMatchObject({
+        critical: true,
+        frozen: false,
+        group: 'parsers',
+      });
     expect(inventory.included.find((entry) => entry.path === existing)).toMatchObject({
       critical: false,
       frozen: true,
@@ -173,6 +178,9 @@ describe('all-owned coverage inventory', () => {
     expect(baseline.included).toHaveLength(345);
     expect(baseline.included.filter((entry: { critical: boolean }) => entry.critical)).toHaveLength(
       49,
+    );
+    expect(createHash('sha256').update(JSON.stringify(baseline.included)).digest('hex')).toBe(
+      '8a4cecd1d816a87f515a9fd13d0edb7f08b0a0ba37a49f4c744b8f7088576a46',
     );
     const altered = JSON.parse(readFileSync(BASELINE, 'utf8'));
     altered.included[0].path = 'src/different.ts';
