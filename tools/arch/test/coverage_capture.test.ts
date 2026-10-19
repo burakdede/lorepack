@@ -10,14 +10,26 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { captureCampaign, nodeCommand } from '../../../scripts/coverage_capture.mjs';
-import { preparingInstrumenter } from '../../../scripts/coverage_configuration.mjs';
+import {
+  assertCampaignPreparations,
+  assertNineCampaignBundles,
+  captureCampaign,
+  nodeCommand,
+} from '../../../scripts/coverage_capture.mjs';
+import {
+  assertCollectionParity,
+  preparingInstrumenter,
+  renderCoverageConfig,
+  sourceCoverageConfig,
+} from '../../../scripts/coverage_configuration.mjs';
 import {
   createEvalCapture,
   prepareNativeCapture,
@@ -35,6 +47,11 @@ beforeEach(() => {
   directory = realpathSync(mkdtempSync(join(tmpdir(), 'lorepack-capture-driver-')));
 });
 afterEach(() => rmSync(directory, { recursive: true, force: true }));
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('Missing fixture entry.');
+  return value;
+}
 
 function inventory() {
   const path = 'packages/core/vitest.config.ts';
@@ -83,6 +100,34 @@ describe('coverage campaign execution boundaries', () => {
       'pnpm coverage:capture',
     );
     expect(existsSync(join(directory, 'output'))).toBe(false);
+  });
+
+  it('rejects an unknown suite before creating capture artifacts', async () => {
+    const output = join(directory, 'unknown');
+    await expect(captureCampaign(ROOT, output, 'unused', 'all,default')).rejects.toThrow(
+      'Unknown coverage suite',
+    );
+    expect(existsSync(output)).toBe(false);
+  });
+
+  it('rejects duplicate CLI suite selectors before starting a campaign', () => {
+    const output = join(directory, 'duplicate');
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(ROOT, 'scripts/coverage_capture.mjs'),
+        '--out',
+        output,
+        '--suite',
+        'all',
+        '--suite',
+        'all',
+      ],
+      { encoding: 'utf8', env: { ...process.env, npm_execpath: '' } },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Select --suite only once.');
+    expect(existsSync(output)).toBe(false);
   });
 
   it('refuses existing output rather than overwriting evidence', async () => {
@@ -155,6 +200,226 @@ describe('coverage campaign execution boundaries', () => {
   });
 });
 
+describe('nine-suite campaign eligibility', () => {
+  const suiteNames = ['default', 'acceptance', 'security'];
+  const kinds = ['configs', 'direct', 'children'];
+  const snapshot = {
+    candidate: 'fixed-candidate',
+    dirty: false,
+    included: [{ path: 'owned.ts', sha256: 'fixed-source' }],
+  };
+  const bundles = (): Array<{
+    schemaVersion: number;
+    origin: string;
+    candidate: string;
+    dirty: boolean;
+    files: Record<string, { sha256: string }>;
+    nativeEvidence?: { acceptedExecutions: number; rejected: string[] };
+  }> =>
+    suiteNames.flatMap((suite) =>
+      kinds.map((kind) => ({
+        schemaVersion: 1,
+        origin: `${suite}:${kind}`,
+        candidate: snapshot.candidate,
+        dirty: false,
+        files: { 'owned.ts': { sha256: 'fixed-source' } },
+        ...(kind === 'direct' ? {} : { nativeEvidence: { acceptedExecutions: 1, rejected: [] } }),
+      })),
+    );
+  const receipts = () =>
+    suiteNames.map((suite) => ({
+      suite,
+      candidate: snapshot.candidate,
+      dirty: false,
+      preparations: 'Pass',
+      collection: 'Pass',
+      files: 1,
+      measurement: 'Pass',
+      children: 'Pass',
+    }));
+
+  it('accepts exactly nine source-bound results from the three fixed suites', () => {
+    expect(() => assertNineCampaignBundles(snapshot, bundles(), receipts())).not.toThrow();
+  });
+
+  it('rejects missing, duplicate and substituted suite origins', () => {
+    const original = bundles();
+    expect(() => assertNineCampaignBundles(snapshot, original.slice(1), receipts())).toThrow(
+      'three complete suite receipts',
+    );
+    const repeated = bundles();
+    repeated[8] = required(repeated[0]);
+    expect(() => assertNineCampaignBundles(snapshot, repeated, receipts())).toThrow(
+      'Duplicate or unexpected',
+    );
+    const substituted = bundles();
+    substituted[8] = { ...required(substituted[8]), origin: 'default:extra' };
+    expect(() => assertNineCampaignBundles(snapshot, substituted, receipts())).toThrow(
+      'Duplicate or unexpected',
+    );
+  });
+
+  it('rejects mixed candidates, dirty inputs and stale source bytes', () => {
+    const mixed = bundles();
+    mixed[1] = { ...required(mixed[1]), candidate: 'another-candidate' };
+    expect(() => assertNineCampaignBundles(snapshot, mixed, receipts())).toThrow(
+      'candidate differs',
+    );
+    const stale = bundles();
+    stale[2] = { ...required(stale[2]), files: { 'owned.ts': { sha256: 'stale-source' } } };
+    expect(() => assertNineCampaignBundles(snapshot, stale, receipts())).toThrow('source differs');
+    expect(() =>
+      assertNineCampaignBundles({ ...snapshot, dirty: true }, bundles(), receipts()),
+    ).toThrow('one clean candidate');
+  });
+
+  it('rejects absent or rejected child execution evidence', () => {
+    const absent = bundles();
+    delete required(absent[2]).nativeEvidence;
+    expect(() => assertNineCampaignBundles(snapshot, absent, receipts())).toThrow(
+      'native evidence differs',
+    );
+    const rejected = bundles();
+    rejected[8] = {
+      ...required(rejected[8]),
+      nativeEvidence: { acceptedExecutions: 1, rejected: ['rejected child'] },
+    };
+    expect(() => assertNineCampaignBundles(snapshot, rejected, receipts())).toThrow(
+      'native evidence differs',
+    );
+  });
+
+  it('refuses absent preparation, collection and native child receipts', () => {
+    expect(() => assertNineCampaignBundles(snapshot, bundles(), receipts().slice(1))).toThrow(
+      'three complete suite receipts',
+    );
+    for (const field of ['preparations', 'collection', 'measurement', 'children']) {
+      const missing = receipts();
+      missing[1] = { ...required(missing[1]), [field]: 'Fail' };
+      expect(() => assertNineCampaignBundles(snapshot, bundles(), missing)).toThrow(
+        'preparation or execution receipt is missing',
+      );
+    }
+  });
+});
+
+it('requires actual source-bound preparations before native compilation', () => {
+  const preparations = join(directory, 'preparations');
+  mkdirSync(preparations);
+  const snapshot = {
+    included: [
+      { path: 'default.mjs', sha256: 'default-source' },
+      { path: 'tools/acceptance/only.mjs', sha256: 'acceptance-source' },
+    ],
+  };
+  writeFileSync(
+    join(preparations, 'default.json'),
+    JSON.stringify({ path: 'default.mjs', sha256: 'default-source' }),
+  );
+  expect(() => assertCampaignPreparations(snapshot, preparations)).toThrow(
+    'missing executable preparations',
+  );
+  writeFileSync(
+    join(preparations, 'acceptance.json'),
+    JSON.stringify({ path: 'tools/acceptance/only.mjs', sha256: 'wrong-source' }),
+  );
+  expect(() => assertCampaignPreparations(snapshot, preparations)).toThrow(
+    'Invalid executable preparation',
+  );
+  writeFileSync(
+    join(preparations, 'acceptance.json'),
+    JSON.stringify({ path: 'tools/acceptance/only.mjs', sha256: 'acceptance-source' }),
+  );
+  expect(assertCampaignPreparations(snapshot, preparations).included).toEqual(snapshot.included);
+});
+
+it('preserves real acceptance and security collection and resolved execution options', () => {
+  const require = createRequire(join(ROOT, 'package.json'));
+  const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
+  symlinkSync(join(ROOT, 'node_modules'), join(directory, 'node_modules'), 'junction');
+  mkdirSync(join(directory, 'packages'));
+  for (const suite of ['acceptance', 'security']) {
+    const folder = join(directory, 'tools', suite);
+    mkdirSync(join(folder, 'test'), { recursive: true });
+    writeFileSync(join(folder, 'package.json'), JSON.stringify({ name: `fixture-${suite}` }));
+    writeFileSync(
+      join(folder, 'vitest.config.ts'),
+      readFileSync(join(ROOT, 'tools', suite, 'vitest.config.ts'), 'utf8'),
+    );
+    writeFileSync(
+      join(folder, 'test', 'fixture.test.ts'),
+      "import { test } from 'vitest'; test('fixture', () => {});",
+    );
+    const base = {
+      name: suite,
+      include: ['test/**/*.test.ts'],
+      pool: 'forks',
+      ...(suite === 'acceptance'
+        ? { fileParallelism: false, maxWorkers: 1, testTimeout: 600_000, hookTimeout: 120_000 }
+        : { testTimeout: 120_000, hookTimeout: 60_000 }),
+    };
+    const config = sourceCoverageConfig(
+      directory,
+      [`tools/${suite}`],
+      { root: directory, included: [] },
+      join(directory, `${suite}-coverage`),
+      '',
+      base,
+    );
+    expect(required(config.test.projects[0]).test).toBeUndefined();
+    expect(config.test).toMatchObject(base);
+    const measuredConfig = join(directory, `${suite}.config.mjs`);
+    writeFileSync(measuredConfig, renderCoverageConfig(config));
+    const optionsInspector = join(directory, `${suite}.options.mjs`);
+    const resolvedOptions = join(directory, `${suite}.options.json`);
+    writeFileSync(
+      optionsInspector,
+      `import { createVitest } from 'vitest/node';
+import { writeFileSync } from 'node:fs';
+const results=[];
+const pick=(config)=>Object.fromEntries(['name','include','pool','fileParallelism','maxWorkers','testTimeout','hookTimeout','setupFiles','sequence'].map(key=>[key,config[key]]));
+for(const options of ${JSON.stringify([
+        { root: folder },
+        { root: directory, config: measuredConfig },
+      ])}) {
+  const runner=await createVitest('test',options);
+  try { results.push({global:pick(runner.config),projects:runner.projects.map(project=>pick(project.config))}); }
+  finally { await runner.close(); }
+}
+writeFileSync(${JSON.stringify(resolvedOptions)},JSON.stringify(results));`,
+    );
+    execFileSync(process.execPath, [optionsInspector], { cwd: directory, stdio: 'pipe' });
+    const [ordinaryOptions, measuredOptions] = JSON.parse(readFileSync(resolvedOptions, 'utf8'));
+    expect(measuredOptions).toEqual(ordinaryOptions);
+    expect(measuredOptions.projects).toHaveLength(1);
+    expect(measuredOptions.projects[0]).toMatchObject(base);
+    const ordinary = join(directory, `${suite}.ordinary.json`);
+    const measured = join(directory, `${suite}.measured.json`);
+    execFileSync(
+      process.execPath,
+      [vitest, 'list', '--root', `tools/${suite}`, '--filesOnly', `--json=${ordinary}`],
+      {
+        cwd: directory,
+        stdio: 'pipe',
+      },
+    );
+    execFileSync(
+      process.execPath,
+      [vitest, 'list', '--config', measuredConfig, '--filesOnly', `--json=${measured}`],
+      {
+        cwd: directory,
+        stdio: 'pipe',
+      },
+    );
+    expect(
+      assertCollectionParity(
+        JSON.parse(readFileSync(ordinary, 'utf8')),
+        JSON.parse(readFileSync(measured, 'utf8')),
+      ),
+    ).toEqual({ files: 1, status: 'Pass' });
+  }
+});
+
 async function nativeFixture(code = 'export const value = 7;') {
   const path = 'owned.mjs';
   const source = join(directory, path);
@@ -180,6 +445,42 @@ async function nativeFixture(code = 'export const value = 7;') {
     readdirSync(output).map((file) => JSON.parse(readFileSync(join(output, file), 'utf8')));
   return { source, entry, bootstrap, output, records, preparations: nativePreparations, snapshot };
 }
+
+it('keeps real native child counters isolated across the three suite directories', async () => {
+  const fixture = await nativeFixture('export function choose(flag) { return flag ? 1 : 2; }');
+  const results = [];
+  for (const [index, suite] of ['default', 'acceptance', 'security'].entries()) {
+    const captures = join(directory, suite, 'captures');
+    const preload = join(directory, `${suite}-preload.mjs`);
+    const entry = createEvalCapture(fixture.snapshot, fixture.preparations, preload);
+    const capture = registerSyncCommandCapture([entry], captures);
+    try {
+      const result = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `const {choose}=await import(${JSON.stringify(pathToFileURL(fixture.source).href)}); for(let i=0;i<${index + 1};i++)choose(true);`,
+        ],
+        { cwd: directory, encoding: 'utf8', env: {} },
+      );
+      expect(result).toBe('');
+    } finally {
+      capture.restore();
+    }
+    results.push({ suite, captures, entry });
+  }
+  for (const [index, result] of results.entries()) {
+    const measured = await reconcileForkCapture(fixture.snapshot, result.captures, [result.entry]);
+    expect(measured.processes).toBe(1);
+    const map = (measured.maps as Record<string, { f: Record<string, number> }>)[fixture.source];
+    expect(Object.values(required(map).f)).toEqual([index + 1]);
+    const foreign = required(results[(index + 1) % results.length]);
+    await expect(
+      reconcileForkCapture(fixture.snapshot, result.captures, [foreign.entry]),
+    ).rejects.toThrow();
+  }
+});
 
 describe('native instrumentation process capture', () => {
   it.each(['module', 'commonjs'] as const)(
@@ -605,7 +906,7 @@ choose(); choose(true);`);
     expect(completed.rejected).toEqual([]);
     expect(completed.loadedSources).toHaveLength(1);
     const map = completed.maps[fixture.source];
-    expect(Object.values(map.f)).toEqual([2, 0]);
+    expect(Object.values(required(map).f)).toEqual([2, 0]);
     expect(Object.values(map.b)).toEqual([[1], [1, 1]]);
     expect(readdirSync(fixture.output).some((file) => file.endsWith('.tmp'))).toBe(false);
   });
