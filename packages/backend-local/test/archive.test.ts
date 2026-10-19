@@ -448,6 +448,23 @@ describe('archive identity and index boundaries', () => {
       const archive = join(project.root, 'no-index.lorepack');
       await writeZip(archive, validBuild(project.root));
       await expect(verifyArchive(archive)).rejects.toMatchObject({ code: 'LORE_E_OBJECT_CORRUPT' });
+      await expect(verifyArchive(archive)).rejects.toMatchObject({
+        remediation: 'This is not a Lorepack archive, or it was truncated. Pack the build again.',
+      });
+    });
+  });
+
+  it('accepts a valid checksum index exactly at its declared byte limit', async () => {
+    await withTempProject({}, async (project) => {
+      const archive = join(project.root, 'exact-index-limit.lorepack');
+      const members = validBuild(project.root);
+      const index = Buffer.concat([Buffer.from(indexOf(members)), Buffer.from(' '.repeat(4096))]);
+      await writeZip(archive, [...members, ['checksums.json', index]]);
+      const result = await verifyArchive(archive, {
+        limits: { ...ARCHIVE_LIMITS, maxIndexBytes: index.byteLength },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.failures).toEqual([]);
     });
   });
 

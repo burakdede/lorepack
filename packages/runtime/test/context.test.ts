@@ -31,6 +31,9 @@ function candidate(index: number, overrides: Partial<CatalogSearchHit> = {}): Ca
     relativePath: `doc${index}.md`,
     displayPath: `doc${index}.md`,
     headingPath: [`Doc ${index}`],
+    page: null,
+    sheet: null,
+    cellRange: null,
     lineStart: 1,
     lineEnd: 10,
     status: 'active',
@@ -351,6 +354,75 @@ describe('determinism', () => {
 });
 
 describe('the per-artifact cap', () => {
+  it.each([
+    { task: 'unrelated words entirely', expected: MAX_ITEMS_PER_ARTIFACT },
+    { task: 'explain one.md', expected: 7 },
+  ])('applies the assembly cap only to untargeted requests: $task', ({ task, expected }) => {
+    const ranked = Array.from({ length: 7 }, (_, index) => ({
+      hit: candidate(index, {
+        artifactId: 'p:one.md',
+        relativePath: 'one.md',
+        chunkId: `p:one.md@${index}`,
+        estimatedTokens: 1500,
+      }),
+      score: 10 - index,
+      components: {},
+      labels: [],
+    }));
+    const bundle = assembleBundle({
+      task,
+      profile: 'agent',
+      budget: 12000,
+      ranked,
+      dropped: [],
+      suppressed: [],
+    });
+    expect(bundle.overview).toEqual([]);
+    expect(bundle.selected.map((item) => item.chunkId)).toEqual(
+      ranked.slice(0, expected).map(({ hit }) => hit.chunkId),
+    );
+    expect(bundle.omitted).toEqual(
+      ranked.slice(expected).map(({ hit }) =>
+        expect.objectContaining({
+          chunkId: hit.chunkId,
+          reason: 'diversity',
+        }),
+      ),
+    );
+    expect(bundle.estimatedTokens).toBe(expected * 1500);
+  });
+
+  it('retains the citation and reason for a structurally excluded native unit', () => {
+    const ranked = {
+      hit: candidate(0, { nativeUnit: { nodeIds: ['node-0'], text: 'complete unit' } }),
+      score: 1,
+      components: {},
+      labels: [],
+    };
+    const bundle = assembleBundle({
+      task: 'rollback',
+      profile: 'agent',
+      budget: 12000,
+      ranked: [],
+      dropped: [],
+      suppressed: [],
+      structuralOmissions: [ranked],
+    });
+    expect(bundle.selected).toEqual([]);
+    expect(bundle.omitted).toEqual([
+      expect.objectContaining({
+        chunkId: ranked.hit.chunkId,
+        reason: 'structural-unit',
+        estimatedTokens: ranked.hit.estimatedTokens,
+        nativeUnit: { nodeIds: ['node-0'], status: 'omitted' },
+        locator: expect.objectContaining({
+          artifactId: ranked.hit.artifactId,
+          relativePath: ranked.hit.relativePath,
+        }),
+      }),
+    ]);
+  });
+
   it('is what the constant says it is', () => {
     const candidates = Array.from({ length: 12 }, (_, index) =>
       candidate(index, {

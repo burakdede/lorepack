@@ -428,6 +428,10 @@ describe('LocalStateStore', () => {
       } catch (error) {
         expect((error as LoreError).code).toBe('LORE_E_BUILD_VALIDATION');
         expect((error as LoreError).message).toContain('only a verified build');
+        expect(error).toMatchObject({
+          subject: BUILD_A,
+          remediation: 'Rebuild, or activate a build that passed validation.',
+        });
       }
       expect(state.current()).toBeNull();
     });
@@ -436,6 +440,14 @@ describe('LocalStateStore', () => {
   it('refuses to activate an unknown build', async () => {
     await withState((state) => {
       expect(() => state.activate(BUILD_B)).toThrowError(LoreError);
+      expect(() => state.activate(BUILD_B)).toThrowError(
+        expect.objectContaining({
+          code: 'LORE_E_BUILD_NOT_FOUND',
+          subject: BUILD_B,
+          remediation: 'Run `lorepack inspect builds` to list available builds.',
+        }),
+      );
+      expect(state.current()).toBeNull();
     });
   });
 
