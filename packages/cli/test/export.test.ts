@@ -279,12 +279,14 @@ describe('refusals', () => {
 describe('freshness', () => {
   it('warns in the file itself when the sources have moved on', async () => {
     await withTempProject({ files: CORPUS }, async (project) => {
-      await run(['--cwd', project.root, 'build']);
+      const built = await run(['--cwd', project.root, 'build']);
+      expect(built.code, JSON.stringify(built)).toBe(0);
       writeFileSync(join(project.root, 'new.md'), '# New\n\nNot in the build.\n', 'utf8');
 
       const result = await run(['--cwd', project.root, 'export', '--task', 'rollback']);
-      expect(result.stdout).toContain('sources have changed');
-      expect(result.stdout).toContain('lorepack build');
+      expect(result.code, JSON.stringify(result)).toBe(0);
+      expect(result.stdout, JSON.stringify(result)).toContain('sources have changed');
+      expect(result.stdout, JSON.stringify(result)).toContain('lorepack build');
     });
   });
 });
