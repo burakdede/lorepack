@@ -1,6 +1,7 @@
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { copyCompiledFixture } from '@lorepack/test-support';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -23,9 +24,7 @@ beforeAll(() => {
   stray = mkdtempSync(join(PACKAGE, 'dist', '.missing-child-'));
   mkdirSync(join(stray, 'layout', 'sql'), { recursive: true });
   moved = join(stray, 'layout', 'sql', 'execute.js');
-  copyFileSync(COMPILED, moved);
-  // The source map too, or the test runner reports a missing map on every run.
-  if (existsSync(`${COMPILED}.map`)) copyFileSync(`${COMPILED}.map`, `${moved}.map`);
+  copyCompiledFixture(COMPILED, moved);
 });
 
 afterAll(() => {

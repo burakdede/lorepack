@@ -45,4 +45,9 @@ export {
   type ContractOptions,
   runRuntimeContract,
 } from './runtime-contract.js';
-export { type TempProject, type TempProjectOptions, withTempProject } from './temp-project.js';
+export {
+  copyCompiledFixture,
+  type TempProject,
+  type TempProjectOptions,
+  withTempProject,
+} from './temp-project.js';
