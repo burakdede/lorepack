@@ -1,6 +1,17 @@
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as delay } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import {
   createLocalRuntimeBackend,
   LocalStateStore,
@@ -161,6 +172,205 @@ it.each(['table', 'locator'] as const)(
           corruption.kind = 'none';
         }
         await sourceFreeRecovery(project.root, first.buildId, second.buildId);
+      },
+    );
+  },
+);
+
+it.each(['parsing', 'indexing', 'validating', 'sealing', 'state-record'] as const)(
+  'recovers after a real process interruption at the %s boundary, CORE08',
+  async (boundary) => {
+    const dist = join(import.meta.dirname, '..', 'dist');
+    const binary = realpathSync(join(dist, 'public-entry.js'));
+    const progressSource = readFileSync(
+      join(import.meta.dirname, '..', '..', 'core', 'src', 'progress', 'events.ts'),
+      'utf8',
+    );
+    const modules = readdirSync(dist)
+      .filter((name) => name.endsWith('.js.map'))
+      .filter((name) => {
+        const map = JSON.parse(readFileSync(join(dist, name), 'utf8')) as {
+          sources: string[];
+          sourcesContent: string[];
+        };
+        const index = map.sources.findIndex((source) =>
+          source.endsWith('/core/src/progress/events.ts'),
+        );
+        if (index === -1) return false;
+        expect(map.sourcesContent[index]).toBe(progressSource);
+        return true;
+      })
+      .map((name) => realpathSync(join(dist, name.slice(0, -4))));
+    expect(modules).toHaveLength(1);
+    const progressModule = modules[0] as string;
+    expect(readFileSync(progressModule, 'utf8')).toMatch(/export\s*\{[^}]*\bProgressBus\b/s);
+    await withTempProject(
+      {
+        files: {
+          'lore.yaml': 'version: 1\nname: interrupted-candidate\nsources: [docs]\n',
+          'docs/policy.md': '# Policy\n\nOriginal A.\n',
+        },
+      },
+      async (project) => {
+        const { first, second } = await history(project.root);
+        const before = recorded(project.root);
+        const lore = join(project.root, '.lore');
+        const directories = readdirSync(join(lore, 'builds'));
+        writeFileSync(project.path('docs/policy.md'), '# Policy\n\nInterrupted candidate C.\n');
+        const marker = project.path('boundary.json');
+        const preload = project.path('boundary-preload.mjs');
+        const eventType = boundary === 'state-record' ? 'stage-finished' : 'stage-started';
+        const stage = boundary === 'state-record' ? 'sealing' : boundary;
+        writeFileSync(
+          preload,
+          `import { realpathSync, writeFileSync } from 'node:fs';
+if (process.ppid === ${process.pid} && process.argv[1] && realpathSync(process.argv[1]) === ${JSON.stringify(binary)}) {
+  const { ProgressBus } = await import(${JSON.stringify(pathToFileURL(progressModule).href)});
+  if (typeof ProgressBus !== 'function') throw new Error('The actual ProgressBus export is required.');
+  const emit = ProgressBus.prototype.emit;
+  ProgressBus.prototype.emit = function(event) {
+    emit.call(this, event);
+    if (event.type === ${JSON.stringify(eventType)} && event.stage === ${JSON.stringify(stage)}) {
+      writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ pid: process.pid, ppid: process.ppid, entry: realpathSync(process.argv[1]), event }));
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
+    }
+  };
+}
+`,
+        );
+        const argv = [
+          '--import',
+          pathToFileURL(preload).href,
+          binary,
+          '--cwd',
+          project.root,
+          '--json',
+          'build',
+        ];
+        const child = spawn(process.execPath, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '';
+        let stderr = '';
+        let launchError: Error | undefined;
+        let terminal: { code: number | null; signal: NodeJS.Signals | null } | undefined;
+        child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+          stdout += chunk;
+        });
+        child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+          stderr += chunk;
+        });
+        child.once('error', (error) => {
+          launchError = error;
+        });
+        const closed = new Promise<void>((resolve) => {
+          child.once('close', (code, signal) => {
+            terminal = { code, signal };
+            resolve();
+          });
+        });
+        const waitForClose = async () => {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              closed,
+              new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(
+                  () => reject(new Error('The interrupted build did not close.')),
+                  10_000,
+                );
+              }),
+            ]);
+          } finally {
+            clearTimeout(timer);
+          }
+        };
+        try {
+          const deadline = Date.now() + 30_000;
+          while (!existsSync(marker)) {
+            if (launchError !== undefined) throw launchError;
+            if (terminal !== undefined)
+              throw new Error(
+                `Build exited before ${boundary}: ${JSON.stringify({ terminal, stdout, stderr })}`,
+              );
+            if (Date.now() >= deadline)
+              throw new Error(`Build did not reach ${boundary}: ${stderr}`);
+            await delay(20);
+          }
+          const observed = JSON.parse(readFileSync(marker, 'utf8'));
+          expect(observed).toMatchObject({
+            pid: child.pid,
+            ppid: process.pid,
+            entry: binary,
+            event: { type: eventType, stage },
+          });
+          expect(terminal).toBeUndefined();
+          const staging = readdirSync(join(lore, 'tmp'));
+          const added = readdirSync(join(lore, 'builds')).filter((id) => !directories.includes(id));
+          if (boundary === 'state-record') {
+            expect(staging).toEqual([]);
+            expect(added).toHaveLength(1);
+            const manifest = buildManifestSchema.parse(
+              JSON.parse(
+                readFileSync(join(lore, 'builds', added[0] as string, 'manifest.json'), 'utf8'),
+              ),
+            );
+            expect(manifest.buildId).toBe(added[0]);
+            expect(existsSync(join(lore, 'builds', manifest.buildId, 'context.sqlite'))).toBe(true);
+          } else {
+            expect(added).toEqual([]);
+            expect(staging).toHaveLength(boundary === 'parsing' ? 0 : 1);
+            if (boundary !== 'parsing') {
+              const candidate = join(lore, 'tmp', staging[0] as string);
+              expect(staging[0]).toMatch(/^candidate-/);
+              expect(existsSync(join(candidate, 'context.sqlite'))).toBe(boundary !== 'indexing');
+              expect(existsSync(join(candidate, 'manifest.json'))).toBe(boundary === 'sealing');
+            }
+          }
+          expect(existsSync(join(lore, 'lock'))).toBe(true);
+          expect(child.kill('SIGKILL')).toBe(true);
+          await waitForClose();
+          expect(terminal).toBeDefined();
+          expect(recorded(project.root)).toEqual(before);
+          expect(readActiveBuild(lore)).toEqual(before.active);
+          expect(stdout.trim()).toBe('');
+          const restarted = await promisify(execFile)(
+            process.execPath,
+            [binary, '--cwd', project.root, '--json', 'build', '--no-activate'],
+            { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL' },
+          );
+          const restart = JSON.parse(restarted.stdout);
+          expect(restart).toMatchObject({
+            activated: false,
+            buildId: expect.stringMatching(/^lore_[a-f0-9]{64}$/),
+          });
+          if (boundary === 'state-record') expect(restart.buildId).toBe(added[0]);
+          expect(recorded(project.root).active).toEqual(before.active);
+          expect(recorded(project.root).builds).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({ buildId: restart.buildId, state: 'verified' }),
+            ]),
+          );
+          expect(readdirSync(join(lore, 'tmp'))).toEqual([]);
+          expect(existsSync(join(lore, 'lock'))).toBe(false);
+          console.info(
+            'CORE08 boundary interruption receipt',
+            JSON.stringify({
+              boundary,
+              argv,
+              observed,
+              terminal,
+              staging,
+              added,
+              stdout,
+              stderr,
+              restart,
+              restartStderr: restarted.stderr,
+            }),
+          );
+          await sourceFreeRecovery(project.root, first.buildId, second.buildId);
+        } finally {
+          if (terminal === undefined) child.kill('SIGKILL');
+          await waitForClose();
+        }
       },
     );
   },
