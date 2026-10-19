@@ -19,6 +19,16 @@ import { ROOT } from './support/evidence.js';
  */
 const ALLOWED: readonly { readonly file: string; readonly line: string; readonly why: string }[] = [
   {
+    file: 'packages/parsers/test/linux_resident_reader.test.ts',
+    line: "it.runIf(process.platform === 'linux')(",
+    why: 'Native procfs identity, RSS and blocked-parent cleanup require Linux; the reader protocol, error and generation regressions run on every OS (#801)',
+  },
+  {
+    file: 'tools/security/test/privacy-defaults.test.ts',
+    line: "it.runIf(process.platform === 'linux')(",
+    why: 'Only Linux constructs the procfs sampler worker, so its real readonly, admission and network probes run there; the original format and denial privacy tests remain enabled on every OS (#801)',
+  },
+  {
     file: 'packages/parsers/test/resident_memory.test.ts',
     line: "it.runIf(process.platform === 'darwin')(",
     why: 'This completed-ps-output regression exercises the actual macOS reader. Shared pipe bounds and failure controls run on every OS, as do all four mandatory hostile CLI workloads (#677)',
