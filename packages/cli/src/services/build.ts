@@ -50,6 +50,7 @@ import {
   type Canonical,
   count,
   deriveBuildId,
+  diskFullError,
   hashCanonical,
   hashRoot,
   LORE_DIRECTORY,
@@ -682,12 +683,29 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       }
 
       const counts = countsOf(parsed);
-      state.recordBuild({
-        buildId,
-        state: 'verified',
-        createdAt: startedAt.toISOString(),
-        counts,
-      });
+      try {
+        state.recordBuild({
+          buildId,
+          state: 'verified',
+          createdAt: startedAt.toISOString(),
+          counts,
+        });
+      } catch (cause) {
+        const failure = diskFullError(cause) ?? LoreError.from(cause);
+        throw new LoreError(
+          failure.code,
+          `Failed while recording build ${buildId} after sealing.`,
+          {
+            path: `${LORE_DIRECTORY}/state.sqlite`,
+            subject: buildId,
+            remediation:
+              failure.remediation ??
+              'Check free space and local-state permissions, then run lorepack build again. The active build has not changed.',
+            details: { ...failure.details, stage: 'state-record' },
+            cause,
+          },
+        );
+      }
       writeLockfile(config.projectRoot, nextLock);
 
       let activated = false;
