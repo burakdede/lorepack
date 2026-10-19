@@ -35,6 +35,10 @@ Step 3 is the one that looks redundant and is not. Steps 1 and 2 cannot be made 
 there is always a window, and a file that lands in it would otherwise stay invisible until
 something unrelated touched it.
 
+The dev server binds before this reconciliation, so its diagnostics route can report watcher
+startup. The connection block waits for reconciliation before saying it is watching. An
+interrupt during startup still drains the watcher and server without advertising readiness.
+
 **Underneath all of it there is a periodic sweep** (architecture 12.3), which prescreens on
 paths, sizes and modification times every couple of seconds and settles only when that
 signature moved. It is not belt and braces. Windows delivered no usable event for an
