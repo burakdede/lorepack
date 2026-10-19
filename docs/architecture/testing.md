@@ -167,3 +167,8 @@ execution fails the report before percentages are computed. The original nine-bu
 aggregate and 100-mutant requirement are separate from a focused capture fixture or
 the three default-suite bundle files. They remain unqualified until a frozen-source
 campaign records their actual results.
+Run `pnpm coverage:capture --out coverage/nine-<fresh-name> --suite all` on the same
+clean candidate for the nine-bundle aggregate. Bare `--out` remains a default-suite
+diagnostic whose partial threshold failure is retained. The all-suite command runs
+the original three test collections sequentially and checks each measured collection
+against its ordinary suite before combining evidence.

@@ -103,6 +103,12 @@ functions/branches 95%. The default-suite campaign alone does not establish the 
 nine-bundle and 100-mutant release criteria. The complete campaign remains a separate
 qualification on one frozen candidate and is not included in `pnpm verify`.
 
+`pnpm coverage:capture --out coverage/nine-<fresh-name> --suite all` runs the default,
+acceptance and security suites in that order. It retains each suite's ordinary and measured
+file lists, preparation and child receipts, and three source-bound bundles. Only a clean
+candidate with all nine distinct suite and origin bundles reaches the single unchanged
+threshold report. This command does not supply the separate 100-mutant evidence.
+
 ## `commit-hygiene.yml`
 
 Runs on pull requests only. Rejects AI attribution trailers and footers, and an em dash in
