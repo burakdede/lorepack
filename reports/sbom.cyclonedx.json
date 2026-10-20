@@ -134,10 +134,10 @@
     {
       "type": "library",
       "name": "@modelcontextprotocol/client",
-      "version": "2.2.0",
+      "version": "2.3.1",
       "licenses": [
         {
-          "expression": "MIT"
+          "expression": "Apache-2.0"
         }
       ],
       "properties": [
