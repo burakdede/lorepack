@@ -263,11 +263,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.104.4"
+          "value": "5.104.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-17T17:55:14.077Z"
+          "value": "2026-10-19T16:57:50.440Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -719,11 +719,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "5.0.0"
+          "value": "6.0.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2025-11-25T23:28:06.854Z"
+          "value": "2026-10-19T20:52:41.519Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -830,7 +830,7 @@
     {
       "type": "library",
       "name": "hono",
-      "version": "4.13.7",
+      "version": "4.13.13",
       "licenses": [
         {
           "expression": "MIT"
@@ -863,11 +863,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "6.2.12"
+          "value": "6.2.13"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-05T09:17:12.608Z"
+          "value": "2026-10-20T06:21:48.616Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1079,11 +1079,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "8.4.0"
+          "value": "8.5.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-15T15:23:42.214Z"
+          "value": "2026-10-19T13:49:03.724Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1343,11 +1343,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.151.1"
+          "value": "4.151.3"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-16T09:55:24.246Z"
+          "value": "2026-10-20T12:05:18.897Z"
         },
         {
           "name": "lorepack:provenanceStatus",

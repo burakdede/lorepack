@@ -32,7 +32,7 @@
     "@lorepack/core": "workspace:*",
     "@lorepack/mcp": "workspace:*",
     "@lorepack/runtime": "workspace:*",
-    "hono": "4.13.7",
+    "hono": "4.13.13",
     "jose": "6.2.7"
   },
   "repository": {
