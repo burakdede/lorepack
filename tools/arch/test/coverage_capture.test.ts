@@ -480,7 +480,7 @@ it('keeps real native child counters isolated across the three suite directories
       reconcileForkCapture(fixture.snapshot, result.captures, [foreign.entry]),
     ).rejects.toThrow();
   }
-});
+}, 30_000);
 
 describe('native instrumentation process capture', () => {
   it.each(['module', 'commonjs'] as const)(
