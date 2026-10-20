@@ -12,9 +12,22 @@ import { withObserverDiagnostic } from './support/observer_diagnostic.js';
 const execute = promisify(execFile);
 const BIN = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
 
+function setWindowsObserverDiagnostics(enabled: boolean): () => void {
+  if (!enabled) return () => {};
+  const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+  process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+  return () => {
+    if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+    else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+  };
+}
+
 it.each(['json', 'markdown', 'http', 'mcp'])(
   'bounds complete %s output including omissions and framing, issue424',
   async (format) => {
+    const restoreDiagnostics = setWindowsObserverDiagnostics(
+      process.platform === 'win32' && format === 'markdown',
+    );
     await withTempProject(
       {
         files: {
@@ -111,7 +124,7 @@ it.each(['json', 'markdown', 'http', 'mcp'])(
         ).toBeLessThanOrEqual(4000);
         expect(Buffer.byteLength(payload, 'utf8')).toBeLessThanOrEqual(4 * 1024 * 1024);
       },
-    );
+    ).finally(restoreDiagnostics);
   },
   120_000,
 );
