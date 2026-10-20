@@ -43,6 +43,12 @@ export interface Evidence {
 
 export const runFiles = (item: Evidence): readonly string[] => item.runFrom ?? [item.path];
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export function testNamePattern(names: readonly string[]): string {
+  return `(?:^|\\s)(?:${names.map(escapeRegExp).join('|')})$`;
+}
+
 const normalize = (path: string): string => path.replaceAll('\\', '/');
 
 /**
@@ -52,7 +58,11 @@ const normalize = (path: string): string => path.replaceAll('\\', '/');
  * same project configuration `pnpm test` uses and none of this suite's own state. `root`
  * selects a Vitest root other than the repository's, for suites outside the default run.
  */
-export function runVitest(files: readonly string[], root?: string): readonly Outcome[] {
+export function runVitest(
+  files: readonly string[],
+  root?: string,
+  testNameFilter?: string,
+): readonly Outcome[] {
   const out = mkdtempSync(join(tmpdir(), 'lore-security-report-'));
   const report = join(out, 'report.json');
   try {
@@ -63,6 +73,7 @@ export function runVitest(files: readonly string[], root?: string): readonly Out
     );
     const args = [VITEST, 'run', '--reporter=json', `--outputFile=${report}`];
     if (root !== undefined) args.push('--root', root);
+    if (testNameFilter !== undefined) args.push('--testNamePattern', testNameFilter);
     const result = spawnSync(process.execPath, [...args, ...files], {
       cwd: ROOT,
       env,
