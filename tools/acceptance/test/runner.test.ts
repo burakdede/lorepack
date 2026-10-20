@@ -141,6 +141,34 @@ describe('the runner', () => {
     expect(report.failures).toEqual([]);
   });
 
+  it('checks stream minimum size in UTF-8 bytes', async () => {
+    const report = await runScenario(
+      scenario([
+        {
+          action: 'run',
+          args: ['echo', 'café'],
+          expect: { stdout: { minBytes: 6 } },
+        },
+      ]),
+      { binary: STUB },
+    );
+    expect(report.failures).toEqual([]);
+  });
+
+  it('reports when a result stays below its required byte length', async () => {
+    const report = await runScenario(
+      scenario([
+        {
+          action: 'run',
+          args: ['echo', 'café'],
+          expect: { stdout: { minBytes: 7 } },
+        },
+      ]),
+      { binary: STUB },
+    );
+    expect(report.failures[0]).toContain('stdout is 6 bytes, expected at least 7');
+  });
+
   it('fails when a pattern does not repeat often enough', async () => {
     const report = await runScenario(
       scenario([

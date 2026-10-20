@@ -52,9 +52,9 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
     mode: 'auto',
     regression: 154,
     fixture: {
-      // Above one pipe buffer by a wide margin: this result is around half a megabyte,
-      // where the truncation cut it at exactly 65536 bytes.
-      generated: { documents: 2501, sectionsPerDocument: 1 },
+      // The historical pipe truncated at 65536 bytes. Keep setup well below the scale
+      // suite's 2501-document build and assert this result still crosses two buffers.
+      generated: { documents: 1024, sectionsPerDocument: 1 },
       setup: ['init', 'build-large'],
     },
     steps: [
@@ -67,8 +67,9 @@ export const OUTPUT_SCENARIOS: readonly Scenario[] = [
         expect: {
           exitCode: 0,
           stdoutIsJson: true,
+          stdout: { minBytes: 131072 },
           json: [
-            { path: 'artifacts[2500].displayPath', exists: true },
+            { path: 'artifacts[1023].displayPath', exists: true },
             { path: 'artifacts[0].displayPath', exists: true },
           ],
         },

@@ -666,6 +666,11 @@ function text(
 ): string[] {
   if (expect === undefined) return [];
   const problems: string[] = [];
+  if (expect.minBytes !== undefined && Buffer.byteLength(actual, 'utf8') < expect.minBytes) {
+    problems.push(
+      `${stream} is ${Buffer.byteLength(actual, 'utf8')} bytes, expected at least ${expect.minBytes}`,
+    );
+  }
   if (expect.empty === true && actual.trim() !== '') {
     problems.push(`${stream} should be empty but was:\n${actual}`);
   }

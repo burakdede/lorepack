@@ -179,6 +179,7 @@ export function describeExpect(expect: Expect | undefined): string {
     ['stderr', expect.stderr],
   ] as const) {
     if (text === undefined) continue;
+    if (text.minBytes !== undefined) parts.push(`${stream} is at least ${text.minBytes} bytes`);
     if (text.empty === true) parts.push(`${stream} is empty`);
     if (text.contains !== undefined && text.contains.length > 0) {
       parts.push(`${stream} mentions ${text.contains.map(quote).join(', ')}`);

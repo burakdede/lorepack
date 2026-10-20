@@ -313,6 +313,8 @@ export interface Expect {
 }
 
 export interface TextExpect {
+  /** UTF-8 byte count, used when a stream must cross an operating-system buffer boundary. */
+  readonly minBytes?: number;
   readonly contains?: readonly string[];
   readonly excludes?: readonly string[];
   /** Regular expression sources, tested against the whole stream. */
