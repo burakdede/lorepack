@@ -33,7 +33,7 @@
     "commander": "15.0.0",
     "cross-spawn": "7.0.6",
     "csv-parse": "7.0.2",
-    "hono": "4.13.7",
+    "hono": "4.13.13",
     "jose": "6.2.7",
     "jsonc-parser": "3.3.1",
     "mammoth": "1.12.0",
