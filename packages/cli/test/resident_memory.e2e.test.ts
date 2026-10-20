@@ -27,7 +27,7 @@ for (const entry of CASES) {
   it(`bounds ${entry.path} through the shipped CLI and preserves retained builds, issue677`, async () => {
     const observerDiagnostic =
       process.platform === 'win32' &&
-      ['document.docx', 'flate.pdf', 'cmap.pdf'].includes(entry.path)
+      (entry.path === 'document.docx' || entry.path.endsWith('.pdf'))
         ? { LOREPACK_OBSERVER_DIAGNOSTIC: '1' }
         : {};
     const bytes = await entry.fixture();
