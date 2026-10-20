@@ -99,6 +99,7 @@
     "tools/security/test/security-coverage.test.ts",
     "tools/security/test/support/evidence.ts",
     "tools/security/test/test-skips.test.ts",
+    "tools/phase-gate/test/workflow.test.ts",
     "tools/test-support/src/runtime-contract.ts",
     "tools/test-support/test/harness.test.ts",
     "tools/test-support/test/hostile-fixtures.test.ts"
