@@ -381,6 +381,7 @@ export async function callRemoteMcpTool<T>(
       ...authHeaders(token),
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       'Mcp-Method': 'tools/call',
       'Mcp-Name': name,
     },

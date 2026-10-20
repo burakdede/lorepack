@@ -117,6 +117,7 @@ describe('one server, both surfaces', () => {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
         'Mcp-Method': 'tools/list',
       },
       body: JSON.stringify({

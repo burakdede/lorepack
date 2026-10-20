@@ -117,6 +117,7 @@ describe('the Worker table query rate limit', () => {
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json, text/event-stream',
+            'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
             'Mcp-Method': 'tools/call',
             'Mcp-Name': 'lore_query_table',
           },

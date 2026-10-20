@@ -82,7 +82,7 @@ async function call(method: string): Promise<Record<string, unknown>> {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
-        // Required on a modern POST, and its absence is a -32020, not a 404.
+        'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
         'Mcp-Method': method,
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: { _meta: envelope } }),
@@ -114,6 +114,7 @@ describe('the revision the server negotiates', () => {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': '2020-01-01',
           'Mcp-Method': 'tools/list',
         },
         body: JSON.stringify({
