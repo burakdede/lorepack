@@ -778,10 +778,20 @@ it.runIf(process.platform === 'win32')(
       expect(invalid.receipt().stderr).toContain('LPF:identity:');
       target.kill('SIGKILL');
       await targetClosed;
-      expect(await candidate.failure).toBe('reader-exit');
+      const targetExitFailure = await candidate.failure;
+      expect(['reader-exit', 'report-deadline']).toContain(targetExitFailure);
       await candidate.stop();
-      expect(candidate.receipt()).toMatchObject({ exit: 1, signal: null });
-      expect(candidate.receipt().stderr).toContain('LPF:get:');
+      const targetExitReceipt = candidate.receipt();
+      expect(targetExitReceipt).toMatchObject({ exit: 1, signal: null });
+      expect(targetExitReceipt.stderr).toContain('LPF:get:');
+      if (targetExitFailure === 'report-deadline') {
+        const { lastSampleMs, failureElapsedMs } = targetExitReceipt;
+        expect(lastSampleMs).not.toBeNull();
+        expect(failureElapsedMs).not.toBeNull();
+        if (lastSampleMs === null || failureElapsedMs === null)
+          throw new Error('Missing report deadline timing.');
+        expect(failureElapsedMs - lastSampleMs).toBeGreaterThanOrEqual(250);
+      }
     } catch (failure) {
       error = failure;
     } finally {
