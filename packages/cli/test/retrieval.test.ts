@@ -4,6 +4,7 @@ import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
+import { withObserverDiagnostic } from './support/observer_diagnostic.js';
 
 /**
  * Retrieval fixtures, architecture 20.7: a query, the sources that must come back, the
@@ -63,7 +64,9 @@ const paths = (result: SearchResult): string[] =>
 
 describe('fixture: "rollback"', () => {
   it('puts the document named for the query first', async () => {
-    const result = await search('rollback');
+    const result = await withObserverDiagnostic(process.platform === 'win32', () =>
+      search('rollback'),
+    );
     expect(paths(result)[0]).toBe('guides/rollback.md');
   });
 
