@@ -232,7 +232,6 @@ describe('changeset policy', () => {
         'clone',
         '--config',
         `fetch.prune=${String(prune)}`,
-        '--no-local',
         '--branch',
         'feature',
         ...(depth === 0 ? [] : [`--depth=${depth}`]),
