@@ -81,12 +81,19 @@ describe('a declaration changes what is returned', () => {
   });
 
   it('ranks a higher declared authority above a lower one', async () => {
-    await built(async (lore) => {
-      const search = JSON.parse((await lore(['--json', 'search', 'rollback'])).stdout) as {
-        hits: Hit[];
-      };
-      expect(search.hits[0]?.locator.relativePath).toBe('docs/runbook-v2.md');
-    });
+    const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+    if (process.platform === 'win32') process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
+    try {
+      await built(async (lore) => {
+        const search = JSON.parse((await lore(['--json', 'search', 'rollback'])).stdout) as {
+          hits: Hit[];
+        };
+        expect(search.hits[0]?.locator.relativePath).toBe('docs/runbook-v2.md');
+      });
+    } finally {
+      if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
+      else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
+    }
   });
 
   it('labels a draft everywhere it appears, in the human output and the JSON', async () => {
