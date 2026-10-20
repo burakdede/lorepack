@@ -644,7 +644,7 @@ it('fails and joins an actual auxiliary reader that stops reporting', async () =
 });
 
 it.runIf(process.platform === 'win32')(
-  'compares auxiliary cscript WMI RSS with the normal Windows reader on native blocked growth',
+  'compares auxiliary cscript WMI RSS with independent Windows snapshots on native blocked growth',
   async () => {
     const systemRoot = Object.entries(process.env).find(
       ([key]) => key.toLowerCase() === 'systemroot',
@@ -673,13 +673,11 @@ it.runIf(process.platform === 'win32')(
     const targetClosed = new Promise<void>((resolve) => target.once('close', () => resolve()));
     processes.push({ child: target, closed: targetClosed });
     const readers: ReturnType<typeof comparisonReader>[] = [];
-    let baseline: ReturnType<typeof comparisonReader> | undefined;
     let candidate: ReturnType<typeof comparisonReader> | undefined;
     let invalid: ReturnType<typeof comparisonReader> | undefined;
     let error: unknown;
     let finalReceipt = '';
     let growthSamples: Array<{ elapsedMs: number; wallMs: number; bytes: number }> = [];
-    let baselineCommandSha256: string | undefined;
     let initialReference: { birth: string; bytes: number } | undefined;
     let initialCandidate: number | undefined;
     let reference: { birth: string; bytes: number } | undefined;
@@ -701,16 +699,6 @@ it.runIf(process.platform === 'win32')(
       if (pid === undefined) throw new Error('Target has no PID.');
       const before = await independentWindowsSnapshot(pid, powershell);
       initialReference = before;
-      const command = `$ErrorActionPreference='Stop'; $p=[System.Diagnostics.Process]::GetProcessById(${pid}); while($true) { $p.Refresh(); [Console]::Out.WriteLine($p.WorkingSet64); [Threading.Thread]::Sleep(100) }`;
-      baselineCommandSha256 = sha256Hex(Buffer.from(command));
-      baseline = comparisonReader(powershell, [
-        '-NoLogo',
-        '-NoProfile',
-        '-NonInteractive',
-        '-Command',
-        command,
-      ]);
-      readers.push(baseline);
       candidate = comparisonReader(cscript, [
         '//B',
         '//Nologo',
@@ -726,12 +714,6 @@ it.runIf(process.platform === 'win32')(
           if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
       });
       await candidate.ready;
-      await Promise.race([
-        baseline.ready.catch(() => undefined),
-        candidate.failure.then((reason) => {
-          throw new Error(reason);
-        }),
-      ]);
       const initial = candidate.samples.at(-1)?.bytes;
       initialCandidate = initial;
       if (initial === undefined) throw new Error('Missing candidate baseline.');
@@ -800,8 +782,7 @@ it.runIf(process.platform === 'win32')(
       await targetClosed;
       finalReceipt = JSON.stringify({
         auxiliaryOnly: true,
-        warmup: 'independent Framework snapshot precedes fresh readers',
-        baseline: baseline?.receipt() ?? null,
+        warmup: 'independent Framework snapshot precedes fresh WMI reader',
         candidate: candidate?.receipt() ?? null,
         invalidIdentity: invalid?.receipt() ?? null,
         initialReference,
@@ -809,7 +790,6 @@ it.runIf(process.platform === 'win32')(
         reference,
         growth,
         growthSamples,
-        baselineCommandSha256,
         fixtureSha256: sha256Hex(readFileSync(fixture)),
         target: { pid: target.pid, exit: target.exitCode, signal: target.signalCode },
       });
