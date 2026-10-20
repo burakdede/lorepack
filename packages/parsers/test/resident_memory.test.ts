@@ -769,7 +769,7 @@ it.runIf(process.platform === 'win32')(
         '//E:JScript',
         fixture,
         String(pid),
-        (BigInt(before.birth) + 1n).toString(),
+        (BigInt(before.birth) + 10n).toString(),
       ]);
       readers.push(invalid);
       expect(await invalid.failure).toBe('reader-exit');
