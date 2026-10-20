@@ -25,6 +25,10 @@ const CASES = [
 
 for (const entry of CASES) {
   it(`bounds ${entry.path} through the shipped CLI and preserves retained builds, issue677`, async () => {
+    const observerDiagnostic =
+      process.platform === 'win32' && entry.path === 'flate.pdf'
+        ? { LOREPACK_OBSERVER_DIAGNOSTIC: '1' }
+        : {};
     const bytes = await entry.fixture();
     const memoryInput =
       entry.path === 'rows.csv'
@@ -42,6 +46,7 @@ for (const entry of CASES) {
               timeout: 45_000,
               env: {
                 ...process.env,
+                ...observerDiagnostic,
                 LORE_PARSE_TIMEOUT_MS: '30000',
                 LORE_PARSE_MEMORY_MB: String(entry.heap),
                 LORE_PARSE_RSS_MB: '1024',
@@ -60,6 +65,7 @@ for (const entry of CASES) {
 
         const measured = await measureCliMemory([BINARY, '--cwd', temp.root, '--json', 'build'], {
           ...process.env,
+          ...observerDiagnostic,
           LORE_PARSE_TIMEOUT_MS: '30000',
           LORE_PARSE_MEMORY_MB: String(entry.heap),
           LORE_PARSE_RSS_MB: '1024',

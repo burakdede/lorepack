@@ -125,10 +125,36 @@ describe('redaction', () => {
     expect(redact('API-KEY=abcdefghijklmnop', [])).toBe(`API-KEY=${REDACTED}`);
   });
 
+  it('preserves embedded diagnostic JSON after redacting a public key token', () => {
+    const trace =
+      'Observer trace: {"identity":{"process":"System.Diagnostics.Process, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089"},"events":[{"kind":"receipt"}]}';
+    const expected =
+      'Observer trace: {"identity":{"process":"System.Diagnostics.Process, Version=4.0.0.0, Culture=neutral, PublicKeyToken=[redacted]"},"events":[{"kind":"receipt"}]}';
+    expect(redact(trace, [])).toBe(expected);
+    expect(
+      renderForCli(
+        new LoreError('LORE_E_PARSE_FAILED', 'Observer failed.', { cause: new Error(trace) }),
+        {
+          secrets: [],
+        },
+      ),
+    ).toContain(expected);
+
+    expect(
+      redact('Trace: {"message":"TOKEN=secret and \\"quoted\\" text","next":"preserved"}', []),
+    ).toBe('Trace: {"message":"TOKEN=[redacted]","next":"preserved"}');
+  });
+
   it('redacts every secret-named pair, including one inside another value and with odd spacing', () => {
     expect(redact('a=MY_TOKEN=abcdefgh', [])).toBe(`a=MY_TOKEN=${REDACTED}`);
     expect(redact('db_password : "two words"', [])).toBe(`db_password=${REDACTED}`);
     expect(redact("x.client_secret='quoted'", [])).toBe(`x.client_secret=${REDACTED}`);
+    expect(redact("don't expose TOKEN=abcdefgh, then continue", [])).toBe(
+      `don't expose TOKEN=${REDACTED} then continue`,
+    );
+    expect(redact("quoted 'TOKEN=abcdefgh and more' remains", [])).toBe(
+      `quoted 'TOKEN=${REDACTED}' remains`,
+    );
     expect(redact('keep=this and AUTH_TOKEN=gone', [])).toBe(
       `keep=this and AUTH_TOKEN=${REDACTED}`,
     );

@@ -7,6 +7,7 @@ import { withTempProject } from '@lorepack/test-support';
 import { expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 import { startServing } from '../src/services/serving.js';
+import { withObserverDiagnostic } from './support/observer_diagnostic.js';
 
 const execute = promisify(execFile);
 const BIN = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
@@ -27,7 +28,9 @@ it.each(['json', 'markdown', 'http', 'mcp'])(
         },
       },
       async (project) => {
-        await runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() });
+        await withObserverDiagnostic(process.platform === 'win32' && format === 'json', () =>
+          runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() }),
+        );
         let payload: string;
         if (format === 'json' || format === 'markdown') {
           const result = await execute(
