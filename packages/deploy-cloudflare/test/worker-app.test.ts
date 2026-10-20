@@ -288,6 +288,7 @@ function mcpRequest(method: string): Request {
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       'Mcp-Method': method,
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: { _meta: envelope } }),
@@ -300,6 +301,7 @@ function toolCall(name: string, args: Record<string, unknown>): Request {
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       'Mcp-Method': 'tools/call',
       'Mcp-Name': name,
     },
@@ -318,6 +320,7 @@ function resourceRead(uri: string): Request {
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
       'Mcp-Method': 'resources/read',
       'Mcp-Name': uri,
     },
@@ -418,6 +421,7 @@ describe('the Worker-facing runtime assembly, issue 86', () => {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
           'Mcp-Method': 'tools/list',
         },
         body: JSON.stringify({

@@ -161,6 +161,7 @@ async function rpc(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',
+        'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
         'Mcp-Method': method,
         'Mcp-Name': name,
       },
