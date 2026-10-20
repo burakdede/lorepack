@@ -139,6 +139,10 @@ describe('redaction', () => {
         },
       ),
     ).toContain(expected);
+
+    expect(
+      redact('Trace: {"message":"TOKEN=secret and \\"quoted\\" text","next":"preserved"}', []),
+    ).toBe('Trace: {"message":"TOKEN=[redacted]","next":"preserved"}');
   });
 
   it('redacts every secret-named pair, including one inside another value and with odd spacing', () => {
