@@ -377,6 +377,15 @@ jobs:
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'cli-project.exit.txt') $code
           exit $code
+      - name: Run the packed install smoke with observer diagnostics
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          & pnpm check:packed-cli 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'packed-cli.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'packed-cli.exit.txt') $code
+          exit $code
       - name: Run only the existing large-result pipe acceptance case
         if: ${{ inputs.qualification == 'windows-observer' }}
         shell: pwsh
