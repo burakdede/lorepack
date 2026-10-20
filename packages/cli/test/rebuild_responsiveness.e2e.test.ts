@@ -147,6 +147,9 @@ syncBuiltinESMExports();
           () => existsSync(began),
           () => output,
         );
+        const duringWarm = await read('/v1/build');
+        expect(duringWarm.status, output).toBe(200);
+        expect(buildDescriptionSchema.parse(JSON.parse(duringWarm.text)).buildId).toBe(first);
         await new Promise((resolve) => setTimeout(resolve, 250));
         const during = await read('/v1/build');
         expect(during.status, output).toBe(200);
