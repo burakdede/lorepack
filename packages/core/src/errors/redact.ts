@@ -49,8 +49,37 @@ const WORD_START = /\b(?=[A-Za-z0-9_])/g;
 function redactPairs(text: string): string {
   let output = '';
   let copied = 0;
+  let scanned = 0;
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+  const scanQuotes = (end: number): void => {
+    for (; scanned < end; scanned += 1) {
+      const character = text[scanned];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === '\\' && quote !== undefined) {
+        escaped = true;
+        continue;
+      }
+      if (quote !== undefined) {
+        if (character === quote) quote = undefined;
+      } else if (
+        character === '"' ||
+        (character === "'" &&
+          !(
+            /[A-Za-z0-9]/.test(text[scanned - 1] ?? '') &&
+            /[A-Za-z0-9]/.test(text[scanned + 1] ?? '')
+          ))
+      ) {
+        quote = character;
+      }
+    }
+  };
   WORD_START.lastIndex = 0;
   for (let start = WORD_START.exec(text); start !== null; start = WORD_START.exec(text)) {
+    scanQuotes(start.index);
     PAIR_NAME.lastIndex = start.index;
     const pair = PAIR_NAME.exec(text);
     if (pair === null) {
@@ -60,6 +89,7 @@ function redactPairs(text: string): string {
     }
     const name = pair[1] as string;
     PAIR_VALUE.lastIndex = PAIR_NAME.lastIndex;
+    const valueStart = PAIR_NAME.lastIndex;
     const value = SECRET_NAME.test(name) ? PAIR_VALUE.exec(text) : null;
     if (value === null) {
       // Not a secret: the value is ordinary text and is scanned like the rest, so a secret
@@ -68,8 +98,31 @@ function redactPairs(text: string): string {
       continue;
     }
     output += `${text.slice(copied, start.index)}${name}=${REDACTED}`;
-    copied = PAIR_VALUE.lastIndex;
-    WORD_START.lastIndex = copied;
+    if (quote === undefined) {
+      copied = PAIR_VALUE.lastIndex;
+      scanned = copied;
+    } else {
+      let valueEnd = valueStart;
+      let valueEscaped = false;
+      while (valueEnd < text.length) {
+        const character = text[valueEnd];
+        if (valueEscaped) valueEscaped = false;
+        else if (character === '\\') valueEscaped = true;
+        else if (character === quote) break;
+        valueEnd += 1;
+      }
+      copied = valueEnd;
+      if (valueEnd < text.length) {
+        scanned = valueEnd + 1;
+        quote = undefined;
+        escaped = false;
+        WORD_START.lastIndex = scanned;
+      } else {
+        scanned = valueEnd;
+        WORD_START.lastIndex = valueEnd;
+      }
+    }
+    if (quote === undefined) WORD_START.lastIndex = copied;
   }
   return output + text.slice(copied);
 }
