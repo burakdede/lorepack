@@ -196,11 +196,11 @@ Wrangler supports Node >=22 and uses MIT OR Apache-2.0 licensing. As before, the
 Wrangler release declares a prerelease Miniflare dependency. Contributor native tools
 remain isolated from the published CLI, and install scripts remain disabled.
 
-The contract tool's `@modelcontextprotocol/client` pin is 2.2.0, matching the
-existing published CLI/connect packages. This MIT-licensed client supports Node >=20
-and declares no install scripts. The migration removes the older test-only client
-without changing the published dependency declarations. Existing protocol and
-transport contract tests verify compatibility with the server.
+The `@modelcontextprotocol/client` pin is 2.3.1 across the CLI, connection verifier
+and contract tests. This Apache-2.0-licensed client supports Node >=20 and declares no
+install scripts. Keep one exact version across these consumers so production provenance
+can be verified consistently. Existing protocol and transport contract tests verify
+compatibility with the server.
 
 The version-scoped `nanoid` override advances affected 3.x resolutions to 3.3.18
 without changing other majors. This patch satisfies the existing PostCSS range,

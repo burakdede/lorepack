@@ -19,9 +19,9 @@ CLI exit code on failure.
 The expectation is read after the server's existing `--ensure-current` startup. The same
 canonical content can have the same build ID in different directories. This verifies build
 content and provenance, rather than physical path identity. Client trust remains a separate
-step. Automated server regressions ran on macOS on 2026-10-16 with Node 24.21.0 and
-`@modelcontextprotocol/client` 2.2.0;
-this change does not update the external-client verification versions and dates recorded here.
+step. Automated stdio compatibility tests ran on macOS on 2026-10-20 with Node 24.21.0 and
+`@modelcontextprotocol/client` 2.3.1. This records the patched SDK version used by the tests;
+the generic-client manual verification above remains dated 2026-08-03.
 
 ## Minimal stdio configuration
 
