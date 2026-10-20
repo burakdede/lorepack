@@ -71,12 +71,22 @@ it.each(['stdout', 'stderr'] as const)('bounds actual %s output at 256 bytes', a
 
 it('rejects a real nonzero reader exit even with numeric output', async () => {
   const { result } = reportProcess("process.stdout.write('312\\n'); process.exitCode = 17");
-  await expect(result).rejects.toThrow('macOS resident-memory reader exited (17).');
+  await expect(result).rejects.toThrow(
+    'macOS resident-memory reader exited (17); stdout "312\\n"; stderr "".',
+  );
 });
 
 it('still terminates a genuinely hung reader at the original timeout', async () => {
   const { result } = reportProcess('setInterval(() => {}, 1000)', 250);
   await expect(result).rejects.toThrow('macOS resident-memory reader exited (');
+});
+
+it('retains a complete RSS line when the reader is killed before close', async () => {
+  const { result } = reportProcess(
+    "process.stdout.write('312\\n'); setInterval(() => {}, 1000)",
+    250,
+  );
+  await expect(result).rejects.toThrow('stdout "312\\n"');
 });
 
 it('counts real UTF-8 output in bytes rather than characters', async () => {

@@ -59,7 +59,7 @@ export function readMacResidentMemory(reader: ChildProcessWithoutNullStreams): P
       if (code !== 0 || signal !== null) {
         fail(
           new Error(
-            `macOS resident-memory reader exited (${code ?? signal}). ${JSON.stringify(output.stderr)}`,
+            `macOS resident-memory reader exited (${code ?? signal}); stdout ${JSON.stringify(output.stdout)}; stderr ${JSON.stringify(output.stderr)}.`,
           ),
         );
         return;
