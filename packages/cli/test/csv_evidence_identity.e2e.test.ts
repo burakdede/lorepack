@@ -52,6 +52,10 @@ it('changes the CSV parser identity when sealed table evidence changes, issue430
       JSON.parse(
         execFileSync(process.execPath, [BINARY, '--cwd', project.root, '--json', ...args], {
           encoding: 'utf8',
+          env: {
+            ...process.env,
+            ...(process.platform === 'win32' ? { LOREPACK_OBSERVER_DIAGNOSTIC: '1' } : {}),
+          },
         }),
       );
     const imported = run('import', ARCHIVE);
