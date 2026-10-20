@@ -196,11 +196,16 @@ Wrangler supports Node >=22 and uses MIT OR Apache-2.0 licensing. As before, the
 Wrangler release declares a prerelease Miniflare dependency. Contributor native tools
 remain isolated from the published CLI, and install scripts remain disabled.
 
-The `@modelcontextprotocol/client` pin is 2.3.1 across the CLI, connection verifier
-and contract tests. This Apache-2.0-licensed client supports Node >=20 and declares no
-install scripts. Keep one exact version across these consumers so production provenance
-can be verified consistently. Existing protocol and transport contract tests verify
-compatibility with the server.
+The `@modelcontextprotocol/client` and `@modelcontextprotocol/server` pins are 2.3.1
+across their workspace consumers. This Apache-2.0-licensed SDK supports Node >=20 and
+declares no install scripts. Keep one exact version across consumers so production
+provenance can be verified consistently. The server release fixes two high-severity
+HTTP handling advisories, and the client release blocks cross-origin redirect forwarding.
+Existing protocol and transport contract tests verify compatibility.
+
+Vitest 4.1.11 accepts Vite 8, but its dependency graph resolved vulnerable Vite 8.2.0.
+The workspace override pins only Vite 8 versions below the patched 8.2.4 release. It
+leaves Studio's independently pinned Vite 7.3.7 unchanged.
 
 The version-scoped `nanoid` override advances affected 3.x resolutions to 3.3.18
 without changing other majors. This patch satisfies the existing PostCSS range,

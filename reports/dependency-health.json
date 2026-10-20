@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyDate": "2026-10-20",
-  "observedAt": "2026-10-20T20:36:28.560Z",
+  "observedAt": "2026-10-20T23:09:07.427Z",
   "staleAfterDays": 548,
   "audit": {
     "command": "pnpm audit --prod --audit-level moderate --json",
@@ -256,7 +256,7 @@
     {
       "name": "@modelcontextprotocol/server",
       "specifiers": [
-        "2.0.0"
+        "2.3.1"
       ],
       "dependencyTypes": [
         "dependencies",
@@ -268,14 +268,14 @@
         "tools/contract/package.json:devDependencies"
       ],
       "latestVersion": "2.3.1",
-      "pinnedPublishedAt": "2026-07-27T23:55:22.239Z",
+      "pinnedPublishedAt": "2026-10-05T11:52:39.322Z",
       "latestReleaseAt": "2026-10-05T11:52:39.322Z",
       "daysSinceLastRelease": 15,
-      "license": "MIT",
+      "license": "Apache-2.0",
       "provenance": {
         "status": "present",
         "predicateType": "https://slsa.dev/provenance/v1",
-        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@modelcontextprotocol%2fserver@2.0.0"
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@modelcontextprotocol%2fserver@2.3.1"
       },
       "health": {
         "status": "current"
@@ -670,7 +670,7 @@
       "latestVersion": "3.3.1",
       "pinnedPublishedAt": "2026-04-07T22:11:34.726Z",
       "latestReleaseAt": "2026-04-07T22:11:34.726Z",
-      "daysSinceLastRelease": 195,
+      "daysSinceLastRelease": 196,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -790,7 +790,7 @@
       "latestVersion": "6.0.0",
       "pinnedPublishedAt": "2025-11-25T23:28:06.854Z",
       "latestReleaseAt": "2026-10-19T20:52:41.519Z",
-      "daysSinceLastRelease": 0,
+      "daysSinceLastRelease": 1,
       "license": "MIT",
       "provenance": {
         "status": "present",
@@ -994,7 +994,7 @@
       "latestVersion": "3.3.1",
       "pinnedPublishedAt": "2024-06-24T21:12:45.445Z",
       "latestReleaseAt": "2024-06-24T21:12:45.445Z",
-      "daysSinceLastRelease": 847,
+      "daysSinceLastRelease": 848,
       "license": "MIT",
       "provenance": {
         "status": "missing",
@@ -1021,7 +1021,7 @@
       "latestVersion": "1.13.0",
       "pinnedPublishedAt": "2026-03-12T21:40:09.129Z",
       "latestReleaseAt": "2026-09-26T22:11:25.198Z",
-      "daysSinceLastRelease": 23,
+      "daysSinceLastRelease": 24,
       "license": "BSD-2-Clause",
       "provenance": {
         "status": "missing",

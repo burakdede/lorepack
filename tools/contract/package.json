@@ -15,6 +15,6 @@
     "@lorepack/runtime": "workspace:*",
     "@lorepack/sdk": "workspace:*",
     "@modelcontextprotocol/client": "2.3.1",
-    "@modelcontextprotocol/server": "2.0.0"
+    "@modelcontextprotocol/server": "2.3.1"
   }
 }
