@@ -354,6 +354,7 @@ jobs:
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'build.exit.txt') $code
           exit $code
+<<<<<<< HEAD
       - name: Run the failing CLI observer cases with bounded traces
         timeout-minutes: 5
         shell: pwsh
@@ -376,6 +377,17 @@ jobs:
           & pnpm exec vitest run --project cli --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'cli-project.raw.log')
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'cli-project.exit.txt') $code
+          exit $code
+      - name: Run the D1 query-budget regression with observer diagnostics
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $test = 'discovers a cited table within the original context query maximum'
+          $report = Join-Path $evidence 'd1-query-budget.json'
+          & pnpm exec vitest run --project deploy-cloudflare packages/deploy-cloudflare/test/query-budget.test.ts -t $test --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'd1-query-budget.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'd1-query-budget.exit.txt') $code
           exit $code
       - name: Run the packed install smoke with observer diagnostics
         shell: pwsh
