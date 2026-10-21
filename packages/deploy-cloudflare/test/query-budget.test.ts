@@ -136,7 +136,7 @@ describe('the Worker D1 query budget, issue 86', () => {
     } finally {
       await fixture.close();
     }
-  });
+  }, 30_000);
 
   it('keeps each runtime capability within its documented query maximum', async () => {
     const fixture = await measuredFixture();

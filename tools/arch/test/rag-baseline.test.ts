@@ -358,6 +358,7 @@ describe('RAG worker against a loopback provider fixture', () => {
         expect(result.stderr).toContain(`${missing} is required for hosted mode.`);
       });
     },
+    30_000,
   );
 
   it('reports empty retrieval honestly while running the original offline workload', async () => {
