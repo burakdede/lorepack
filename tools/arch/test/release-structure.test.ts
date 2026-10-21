@@ -45,6 +45,11 @@ interface Job {
 interface Workflow {
   env?: Record<string, string>;
   permissions?: Record<string, string>;
+  concurrency?: {
+    group: string;
+    queue?: string;
+    'cancel-in-progress': boolean;
+  };
   jobs: Record<string, Job>;
 }
 
@@ -98,6 +103,16 @@ describe('the checked-in release workflow', () => {
     expect(step?.name).toBe('Run the packed install smoke with observer diagnostics');
     expect(step?.run).toContain("'packed-cli.raw.log'");
     expect(step?.run).toContain("'packed-cli.exit.txt'");
+  });
+
+  it('queues CI and benchmark runs together without replacing pending checks', () => {
+    const policy = {
+      group: 'lorepack-hosted-checks',
+      queue: 'max',
+      'cancel-in-progress': false,
+    };
+    expect(parse(workflow('ci.yml')).concurrency).toEqual(policy);
+    expect(parse(workflow('benchmarks.yml')).concurrency).toEqual(policy);
   });
 });
 
