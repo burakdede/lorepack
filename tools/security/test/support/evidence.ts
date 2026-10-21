@@ -51,6 +51,16 @@ export function observerDiagnosticLines(stderr: string): readonly string[] {
     .map((line) => line.slice(0, 4096));
 }
 
+export function vitestBatches(files: readonly string[]): readonly (readonly string[])[] {
+  const parserLimitFile = 'packages/cli/test/parse-limits.test.ts';
+  const concurrent = files.filter((file) => file !== parserLimitFile);
+  const batches = [
+    ...(concurrent.length === 0 ? [] : [concurrent]),
+    ...(files.includes(parserLimitFile) ? [[parserLimitFile]] : []),
+  ];
+  return batches;
+}
+
 const normalize = (path: string): string => path.replaceAll('\\', '/');
 
 /**
@@ -61,6 +71,10 @@ const normalize = (path: string): string => path.replaceAll('\\', '/');
  * selects a Vitest root other than the repository's, for suites outside the default run.
  */
 export function runVitest(files: readonly string[], root?: string): readonly Outcome[] {
+  return vitestBatches(files).flatMap((batch) => runVitestBatch(batch, root));
+}
+
+function runVitestBatch(files: readonly string[], root?: string): readonly Outcome[] {
   const out = mkdtempSync(join(tmpdir(), 'lore-security-report-'));
   const report = join(out, 'report.json');
   try {

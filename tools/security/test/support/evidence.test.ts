@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { observerDiagnosticLines } from './evidence.js';
+import { observerDiagnosticLines, vitestBatches } from './evidence.js';
 
 describe('observer diagnostic lines', () => {
   it('keeps only bounded observer failure records', () => {
@@ -13,6 +13,27 @@ describe('observer diagnostic lines', () => {
       record.slice(0, 4096),
       record.slice(0, 4096),
       record.slice(0, 4096),
+    ]);
+  });
+});
+
+describe('security evidence scheduling', () => {
+  it('runs parser-limit workloads in their own Vitest process', () => {
+    expect(
+      vitestBatches([
+        'packages/core/test/errors.test.ts',
+        'packages/cli/test/parse-limits.test.ts',
+        'packages/runtime/test/http.test.ts',
+      ]),
+    ).toEqual([
+      ['packages/core/test/errors.test.ts', 'packages/runtime/test/http.test.ts'],
+      ['packages/cli/test/parse-limits.test.ts'],
+    ]);
+  });
+
+  it('keeps the normal evidence files in one batch', () => {
+    expect(vitestBatches(['packages/core/test/errors.test.ts'])).toEqual([
+      ['packages/core/test/errors.test.ts'],
     ]);
   });
 });
