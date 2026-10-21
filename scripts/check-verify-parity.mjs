@@ -50,6 +50,17 @@ const OUTSIDE_VERIFY = new Map([
   ],
 ]);
 
+const SINGLE_RUN = new Map([
+  [
+    'check:supply-chain',
+    {
+      job: 'supply-chain',
+      runsOn: 'ubuntu-latest',
+      reason: 'registry-backed audit repeats the same lockfile evidence on every OS',
+    },
+  ],
+]);
+
 const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const commands = packageJson.scripts.verify.split('&&').map((command) => command.trim());
 const commandPattern = /^pnpm (?:run )?([a-z][a-z0-9:_-]*)$/;
@@ -58,13 +69,17 @@ const verify = new Set(commands.flatMap((command) => command.match(commandPatter
 const workflow = parse(readFileSync(WORKFLOW, 'utf8'));
 const ci = new Set();
 const unsafe = new Set();
-for (const job of Object.values(workflow.jobs ?? {})) {
+const occurrences = new Map();
+for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
   for (const step of job.steps ?? []) {
     if (typeof step.run !== 'string') continue;
     const run = step.run.trim();
     const mentions = [...run.matchAll(/(?:^|\n)\s*pnpm (?:run )?([a-z][a-z0-9:_-]*)/g)];
     for (const [, script] of mentions) {
       ci.add(script);
+      const entries = occurrences.get(script) ?? [];
+      entries.push({ jobName, job, step, run });
+      occurrences.set(script, entries);
       if (!verify.has(script)) continue;
       if (
         run.match(commandPattern)?.[1] !== script ||
@@ -78,6 +93,26 @@ for (const job of Object.values(workflow.jobs ?? {})) {
   }
 }
 
+const misplacedSingleRun = [];
+for (const [script, expected] of SINGLE_RUN) {
+  const entries = occurrences.get(script) ?? [];
+  const entry = entries[0];
+  if (
+    entries.length !== 1 ||
+    entry?.jobName !== expected.job ||
+    entry?.job?.['runs-on'] !== expected.runsOn ||
+    entry?.job?.strategy?.matrix !== undefined ||
+    entry?.job?.if !== undefined ||
+    entry?.job?.['continue-on-error'] !== undefined ||
+    entry?.step?.if !== undefined ||
+    entry?.step?.['continue-on-error'] !== undefined ||
+    entry?.run.trim() !== `pnpm ${script}`
+  )
+    misplacedSingleRun.push(
+      `${script} must run exactly once, unconditionally, in ${expected.job} on ${expected.runsOn} (${expected.reason})`,
+    );
+}
+
 const missingFromCi = [...verify].filter((script) => !ci.has(script)).sort();
 const missingFromVerify = [...ci]
   .filter((script) => !verify.has(script) && !OUTSIDE_VERIFY.has(script))
@@ -87,13 +122,15 @@ if (
   missingFromCi.length > 0 ||
   missingFromVerify.length > 0 ||
   unsafe.size > 0 ||
-  malformed.length > 0
+  malformed.length > 0 ||
+  misplacedSingleRun.length > 0
 ) {
   console.error('check:verify-parity: `pnpm verify` and CI have drifted');
   for (const command of malformed)
     console.error(`  verify must use exact pnpm commands joined by &&: ${command}`);
   for (const script of unsafe)
     console.error(`  ${script} must run as an exact unconditional, non-optional CI command`);
+  for (const problem of misplacedSingleRun) console.error(`  ${problem}`);
   for (const script of missingFromCi) {
     console.error(`  ${script} is in \`verify\` and is never run by ci.yml`);
   }

@@ -55,10 +55,11 @@ contract; malformed replies still fail instead of being filtered or partially pa
 toolchain fix for [GHSA-82fw-gwwq-j7x9](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9).
 They do not claim that an ordinary local test run exposes the development WebSocket.
 
-The shared verifier also runs `pnpm check:supply-chain`: the production audit must be
-clean at Moderate and above, and the full contributor dependency audit must pass at High
-and above. Both run against the registry; an audit request failure fails verification.
-The dated dependency-health report and CycloneDX SBOM must match the resolved dependencies.
+The Linux-only `supply-chain` job runs `pnpm check:supply-chain` once per CI workflow because
+its registry audits inspect the same lockfile on every OS. A registry request failure still
+fails the workflow, and release automation requires this check. Local `pnpm verify` keeps the
+full audit. The dated dependency-health report and CycloneDX SBOM must match the resolved
+dependencies.
 
 The `privacy sandbox (ubuntu-latest)` job builds the project and runs
 `tools/security/test/privacy-defaults.test.ts` inside a fresh network and mount namespace that

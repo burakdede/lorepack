@@ -105,9 +105,6 @@ jobs:
       - name: Package manifests follow the Apache-2.0 policy
         run: pnpm check:license-policy
 
-      - name: Supply-chain policy, audit, licenses, SBOM and provenance
-        run: pnpm check:supply-chain
-
       - name: Release automation policy
         run: pnpm check:release-policy
 
@@ -154,6 +151,24 @@ jobs:
             **/vitest-report.json
           if-no-files-found: ignore
           retention-days: 7
+
+  supply-chain:
+    name: supply-chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Supply-chain policy, audit, licenses, SBOM and provenance
+        run: pnpm check:supply-chain
 
   acceptance:
     # A separate job, not a step in `verify`, for two reasons: it is minutes rather than
