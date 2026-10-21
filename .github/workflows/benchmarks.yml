@@ -366,6 +366,7 @@ jobs:
           Set-Content (Join-Path $evidence 'cli-observer-cases.exit.txt') $code
           exit $code
       - name: Run the serial CLI project with bounded observer traces
+        timeout-minutes: 50
         shell: pwsh
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
