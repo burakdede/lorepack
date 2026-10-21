@@ -28,8 +28,10 @@ it.each(['json', 'markdown', 'http', 'mcp'])(
         },
       },
       async (project) => {
-        await withObserverDiagnostic(process.platform === 'win32' && format === 'json', () =>
-          runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() }),
+        await withObserverDiagnostic(
+          process.platform === 'win32' && (format === 'json' || format === 'mcp'),
+          () =>
+            runBuild({ config: loadConfig({ cwd: project.root }), progress: new ProgressBus() }),
         );
         let payload: string;
         if (format === 'json' || format === 'markdown') {
