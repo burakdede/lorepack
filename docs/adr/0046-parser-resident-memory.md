@@ -4,8 +4,9 @@
 
 Accepted on 2026-10-17 for issue #677. Production enforcement, full local and
 packed verification, and the original three-platform CLI workloads passed at
-`0d946812829fd87e9972068fe9efb5f1c2bf8e74`. The measured limits below remain
-part of this decision.
+`0d946812829fd87e9972068fe9efb5f1c2bf8e74`. The Windows startup grace was
+superseded by [ADR 0048](0048-windows-observer-startup-grace.md). Other measured
+limits below remain part of this decision.
 
 ## Context
 

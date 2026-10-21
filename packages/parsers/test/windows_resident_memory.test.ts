@@ -121,7 +121,27 @@ it('retains a bounded diagnostic when an alive Windows reader stops reporting', 
   }
 }, 10000);
 
-it('records a fail-closed startup trace at the original Windows deadline', async () => {
+it('accepts the first RSS sample after delayed PowerShell startup', async () => {
+  vi.useFakeTimers();
+  const { parser, reader, stdout } = windowsObserver({ SystemRoot: 'C:\\Windows' });
+  const monitor = monitorResidentMemory(parser, 1024);
+  const ready = monitor.ready;
+  try {
+    reader.emit('spawn');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(monitor.state.error).toBeNull();
+    expect(parser.kill).not.toHaveBeenCalled();
+
+    stdout.write('4096\n');
+    await expect(ready).resolves.toBeUndefined();
+    expect(monitor.state.bytes).toBe(4096);
+  } finally {
+    monitor.stop();
+    reader.emit('close', 0, null);
+  }
+});
+
+it('records a fail-closed startup trace at the Windows startup deadline', async () => {
   vi.useFakeTimers();
   const { parser, reader, stderr } = windowsObserver({
     SystemRoot: 'C:\\Windows',
@@ -164,7 +184,7 @@ it('records a fail-closed startup trace at the original Windows deadline', async
     }
     reader.emit('spawn');
     stderr.write('LPS:entry:0\nLPS:refresh:1\n');
-    vi.advanceTimersByTime(4999);
+    vi.advanceTimersByTime(14_999);
     expect(monitor.state.error).toBeNull();
     expect(parser.kill).not.toHaveBeenCalled();
     expect(reader.kill).not.toHaveBeenCalled();

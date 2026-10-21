@@ -2,4 +2,4 @@
 "@lorepack/cli": patch
 ---
 
-Retry Wrangler D1 file imports after the documented atomic-import failure code 7009.
+Retry atomic D1 imports after code 7009 and allow delayed Windows RSS observer startup.

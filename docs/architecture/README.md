@@ -95,4 +95,5 @@ Ubuntu, Windows and macOS with Node 24.21.0. See [`testing.md`](testing.md) and
 | TOML splice writer for Codex config | [`adr-toml-merge.md`](adr-toml-merge.md) |
 | XLSX parser choice | [`adr-xlsx-parser.md`](adr-xlsx-parser.md) |
 | Linux resident reader isolation | [`0047-linux-resident-reader-isolation.md`](../adr/0047-linux-resident-reader-isolation.md) |
+| Windows observer startup grace | [`0048-windows-observer-startup-grace.md`](../adr/0048-windows-observer-startup-grace.md) |
 | Stateless Cloudflare Worker projection | [`adr-cloudflare-worker-stateless.md`](adr-cloudflare-worker-stateless.md) |

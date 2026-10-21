@@ -23,6 +23,7 @@ export interface ResidentMemoryMonitor {
 
 const INTERVAL_MS = 100;
 const READER_TIMEOUT_MS = 250;
+const WINDOWS_STARTUP_TIMEOUT_MS = 15_000;
 
 export function parseMacResidentMemory(report: string): number {
   const value = report.trim();
@@ -97,6 +98,7 @@ export async function readLinuxResidentMemory(
 export function createStartupWatchdog(
   expired: () => void,
   observe?: (phase: 'arm' | 'fire' | 'check') => void,
+  timeoutMs = WINDOWS_STARTUP_TIMEOUT_MS,
 ) {
   let stopped = false;
   let pending: ReturnType<typeof setImmediate> | undefined;
@@ -108,14 +110,14 @@ export function createStartupWatchdog(
       pending = setImmediate(() => {
         observe?.('check');
         if (stopped) return;
-        const remaining = 5000 - (performance.now() - startedAt);
+        const remaining = timeoutMs - (performance.now() - startedAt);
         if (remaining > 0) arm(Math.ceil(remaining));
         else expired();
       });
     }, delayMs);
   };
   observe?.('arm');
-  arm(5000);
+  arm(timeoutMs);
   return {
     stop() {
       stopped = true;

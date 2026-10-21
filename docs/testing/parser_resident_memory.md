@@ -19,6 +19,11 @@ platform-conditional. The Windows observer-startup unit probe is required on
 Windows and explicitly inapplicable on Linux/macOS. Original isolation,
 cancellation, identity and privacy probes remain unchanged.
 
+The Windows reader has a bounded 15000 ms startup grace. Isolation sends no
+source bytes to the parser until the first valid RSS sample arrives. This
+accommodates delayed PowerShell startup without changing the parser memory
+envelope or the 250 ms reporting deadline.
+
 The actual macOS `ps` parent-stall regression runs only on macOS, where that reader
 is used. All shared real-process output, failure and timeout controls run on every OS;
 the original four CLI memory workloads remain mandatory on every OS.
@@ -133,8 +138,8 @@ remain pending while a parent stall lets the timer declare failure first.
 The separate silent-observer control still fails after the original deadline.
 
 Startup now services the pending I/O turn before classifying a missing first
-report, and the first valid sample cancels that decision. The five-second startup
-and 250 ms reporting deadlines are unchanged. A genuine startup failure records
+report, and the first valid sample cancels that decision. The Windows startup grace is now 15000 ms; the 250 ms reporting
+deadline is unchanged. A genuine startup failure records
 elapsed time, reader PID/exit/signal, buffered length and bounded observer stderr.
 This reproduction does not prove every native startup failure has that cause;
 the original Windows benchmark and all native resource checks must pass afresh.
@@ -169,8 +174,8 @@ on that earlier source; Windows's eight trials are still missing. None of those
 receipts qualifies this newly integrated candidate.
 
 Preserve all four actual-CLI fixture workloads and their two attempts, original
-1,024 MiB threshold, 1,536 MiB sampled envelope, 100 ms cadence, five-second
-startup and 250 ms reporting deadlines, 256-byte reader bound, permissions,
+1,024 MiB threshold, 1,536 MiB sampled envelope, 100 ms cadence, 15000 ms Windows
+startup grace and 250 ms reporting deadline, 256-byte reader bound, permissions,
 preloads, scheduling and assertions. Native publication waits for the shared
 Windows release-policy setup correction in issue #762 and its real main
 integration. Current local, installed-package and native results remain pending.
