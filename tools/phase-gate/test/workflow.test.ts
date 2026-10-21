@@ -19,4 +19,10 @@ describe('phase gate workflow', () => {
       /if: \$\{\{ matrix\.phase == 4 && steps\.browser-cache\.outputs\.cache-hit != 'true' \}\}/,
     );
   });
+
+  it('runs only closed phases on main pushes and keeps manual closure checks available', () => {
+    expect(WORKFLOW).toContain("github.event_name == 'push' && fromJSON('[0, 1, 2, 3, 4, 5, 6]')");
+    expect(WORKFLOW).toContain('github.event.inputs.phase');
+    expect(WORKFLOW).toContain("fromJSON('[0, 1, 2, 3, 4, 5, 6, 7]')");
+  });
 });

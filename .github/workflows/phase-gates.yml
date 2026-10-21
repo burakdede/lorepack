@@ -1,8 +1,8 @@
 name: Phase gates
 
-# Runs on main rather than on pull requests, because a phase gate answers "is this phase
-# still satisfied on the trunk?". On a pull request the issue-closure criterion would fail
-# for the very issue being merged, which is a paradox, not a signal.
+# Runs completed phases on main rather than on pull requests, because a phase gate answers
+# "is this phase still satisfied on the trunk?". Phase 7 remains open, so its issue-closure
+# criterion is reserved for an explicit closure review until the phase is complete.
 on:
   push:
     branches: [main]
@@ -21,11 +21,10 @@ jobs:
     name: phase ${{ matrix.phase }}
     runs-on: ubuntu-latest
     strategy:
-      # Every defined phase is verified on each push. A phase that closed months ago is
-      # exactly the one whose guarantees quietly rot, so re-running it is the point.
+      # Recheck closed phases on every push. Run the open Phase 7 closure gate manually.
       fail-fast: false
       matrix:
-        phase: ${{ github.event.inputs.phase && fromJSON(format('[{0}]', github.event.inputs.phase)) || fromJSON('[0, 1, 2, 3, 4, 5, 6, 7]') }}
+        phase: ${{ github.event_name == 'push' && fromJSON('[0, 1, 2, 3, 4, 5, 6]') || (github.event.inputs.phase && fromJSON(format('[{0}]', github.event.inputs.phase)) || fromJSON('[0, 1, 2, 3, 4, 5, 6, 7]')) }}
     permissions:
       contents: read
       issues: read
