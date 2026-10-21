@@ -25,6 +25,7 @@ interface Job {
   steps: Step[];
   if?: boolean | string;
   'continue-on-error'?: boolean | string;
+  env?: Record<string, string>;
 }
 interface Workflow {
   jobs: Record<string, Job>;
@@ -62,6 +63,20 @@ beforeEach(() => {
 });
 
 afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+it('runs the failed Windows observer cases in the diagnostic workflow', () => {
+  const workflow = parse(readFileSync(join(REPO_ROOT, '.github/workflows/benchmarks.yml'), 'utf8'));
+  const diagnostic = workflow.jobs['windows-observer'];
+  expect(diagnostic.if).toContain("qualification == 'windows-observer'");
+  expect(diagnostic.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
+  expect(diagnostic.steps.some((step) => step.run?.includes('cli-observer-cases.raw.log'))).toBe(
+    true,
+  );
+  const step = diagnostic.steps.find((entry) => entry.name?.includes('failing CLI observer cases'));
+  expect(step?.run).toContain('packages/cli/test/background_build.test.ts');
+  expect(step?.run).toContain('packages/cli/test/resident_memory.e2e.test.ts');
+  expect(step?.run).toContain('cli-observer-cases.exit.txt');
+});
 
 function mutate(name: string, change: (workflow: Workflow) => void): void {
   const path = join(root, '.github/workflows', name);
