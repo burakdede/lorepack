@@ -1,9 +1,7 @@
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
@@ -13,50 +11,44 @@ import { withTempProject } from '../../test-support/src/index.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 
-describe('the offline RAG baseline command', () => {
-  it('reports retrieval and prompt estimates without inventing model results', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'lorepack-offline-rag-report-'));
-    try {
-      const output = join(directory, 'report.json');
-      const stdout = execFileSync(
-        process.execPath,
-        [join(ROOT, 'scripts/bench-rag.mjs'), '--out', output],
-        {
-          cwd: ROOT,
-          encoding: 'utf8',
-          env: {
-            ...process.env,
-            RAG_BENCH_MODE: 'offline',
-            LORE_BENCH_PACKS: '1',
-            LORE_BENCH_SCALE: 'small',
-            LORE_BENCH_PROFILE: 'mixed',
-          },
+describe('the offline RAG baseline worker', () => {
+  it('reports offline retrieval and prompt estimates without inventing model results', async () => {
+    await withTempProject({}, async (project) => {
+      const database = project.path('context.sqlite');
+      workerDatabase(database);
+      const result = await invokeWorker(database, {}, 'offline', {
+        commitSha: 'a'.repeat(40),
+        corpus: {
+          manifestPath: 'benchmarks/corpus/manifest.json',
+          manifestSha256: 'b'.repeat(64),
+          scale: 'small',
+          profile: 'mixed',
+          artifacts: 1,
+          bytes: 1,
+          chunks: 1,
+          tables: 0,
         },
-      );
-      const report = JSON.parse(readFileSync(output, 'utf8'));
-      expect(JSON.parse(stdout)).toEqual(report);
+        workload: {
+          path: 'benchmarks/corpus/queries.json',
+          sha256: 'c'.repeat(64),
+          queryCount: WORKLOAD.searchQueries.length,
+          contextTaskCount: WORKLOAD.contextTasks.length,
+          tableQueryCount: 1,
+        },
+      });
+      expect(result.code, result.stderr).toBe(0);
+      expect(result.signal).toBeNull();
+      const report = JSON.parse(result.stdout);
       expect(validateBenchmarkReport(report)).toEqual([]);
       expect(report.configuration).toMatchObject({
         mode: 'offline',
         provider: 'none',
         model: 'none',
       });
-      expect(report.corpus.chunks).toBeGreaterThan(0);
-      const manifest = readFileSync(join(ROOT, 'benchmarks/corpus/manifest.json'));
-      const workload = readFileSync(join(ROOT, 'benchmarks/corpus/queries.json'));
-      expect(report.corpus.manifestSha256).toBe(
-        createHash('sha256').update(manifest).digest('hex'),
-      );
-      expect(report.workload.sha256).toBe(createHash('sha256').update(workload).digest('hex'));
-      const queries = (
-        JSON.parse(workload.toString()) as { qualityQueries: Array<{ kind: string }> }
-      ).qualityQueries;
       expect(report.quality.search.cases).toBe(
-        queries.filter(({ kind }) => kind === 'search').length,
+        WORKLOAD.qualityQueries.filter(({ kind }) => kind === 'search').length,
       );
-      expect(report.quality.context.cases).toBe(
-        queries.filter(({ kind }) => kind === 'context').length,
-      );
+      expect(report.quality.context.cases).toBe(CONTEXT_CASES.length);
       expect(report.tokenAccounting).toMatchObject({
         status: 'estimated',
         tokenizer: 'rag-estimator-v1',
@@ -82,10 +74,8 @@ describe('the offline RAG baseline command', () => {
       expect(report.measurements.phases.map((phase: { name: string }) => phase.name)).not.toContain(
         'model-generation',
       );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }, 30_000);
+    });
+  });
 
   it('refuses a missing build path before reading any database', () => {
     const result = spawnSync(
@@ -170,7 +160,12 @@ function workerDatabase(path: string, empty = false): void {
   }
 }
 
-function invokeWorker(path: string, overrides: Record<string, string>, mode = 'hosted') {
+function invokeWorker(
+  path: string,
+  overrides: Record<string, string>,
+  mode = 'hosted',
+  metadata: Record<string, unknown> = {},
+) {
   const env = { ...process.env };
   for (const name of Object.keys(env)) if (name.startsWith('RAG_BENCH_')) delete env[name];
   Object.assign(env, overrides);
@@ -180,7 +175,7 @@ function invokeWorker(path: string, overrides: Record<string, string>, mode = 'h
     stdout: string;
     stderr: string;
   }>((resolveResult, reject) => {
-    const child = spawn(process.execPath, [WORKER, path, JSON.stringify({ mode })], {
+    const child = spawn(process.execPath, [WORKER, path, JSON.stringify({ ...metadata, mode })], {
       cwd: ROOT,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],

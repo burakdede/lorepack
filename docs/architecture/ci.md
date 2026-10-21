@@ -69,7 +69,13 @@ workload. Raw JSON and a rendered summary are uploaded for 30 and 90 days respec
 
 The summary keeps platform rows separate. It rejects missing protocol fields, mismatched commit or
 corpus identity, unsupported artifacts and failed rollback evidence. It never averages unlike
-machines. Downloaded artifacts can be checked and rendered locally with:
+machines.
+
+The architecture suite tests offline RAG worker accounting against a small SQLite fixture. The
+benchmark matrix owns the end-to-end `bench-rag.mjs` corpus build and validates its report on all
+three operating systems, so the architecture suite does not repeat that parser build.
+
+Downloaded artifacts can be checked and rendered locally with:
 
 ```sh
 pnpm check:benchmark-artifacts <downloaded-directory> --summary summary.md
