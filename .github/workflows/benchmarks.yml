@@ -24,7 +24,7 @@ on:
         required: false
         default: benchmark
         type: choice
-        options: [benchmark, coverage, windows-observer]
+        options: [benchmark, coverage, windows-observer, windows-arch-observer]
 
 permissions:
   contents: read
@@ -382,6 +382,99 @@ jobs:
         with:
           name: windows-observer-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/lorepack-windows-observer/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-arch-observer:
+    name: Windows architecture observer diagnostic
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification == 'windows-arch-observer' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      LOREPACK_OBSERVER_DIAGNOSTIC: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.18.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Record the exact diagnostic source and runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-arch-observer'
+          New-Item -ItemType Directory -Path $evidence | Out-Null
+          $head = (& git rev-parse HEAD).Trim()
+          $tree = (& git rev-parse 'HEAD^{tree}').Trim()
+          $status = (& git status --porcelain | Out-String).Trim()
+          $node = (& node --version).Trim()
+          $pnpm = (& pnpm --version).Trim()
+          @{
+            head = $head; tree = $tree; status = $status
+            node = $node; pnpm = $pnpm; cwd = $PWD.Path
+            workflowRef = $env:GITHUB_WORKFLOW_REF; workflowSha = $env:GITHUB_WORKFLOW_SHA
+            requestedRef = $env:GITHUB_REF; eventSha = $env:GITHUB_SHA
+            run = $env:GITHUB_RUN_ID; attempt = $env:GITHUB_RUN_ATTEMPT
+            platform = $env:RUNNER_OS; observerDiagnostic = $env:LOREPACK_OBSERVER_DIAGNOSTIC
+          } | ConvertTo-Json | Set-Content (Join-Path $evidence 'identity.json')
+          if ($status -or $head -ne $env:GITHUB_SHA -or $node -ne 'v24.21.0' -or $pnpm -ne '11.18.0') {
+            throw 'Diagnostic source or pinned runtime differs'
+          }
+      - name: Install the frozen dependencies
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-arch-observer'
+          & pnpm install --frozen-lockfile 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'install.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'install.exit.txt') $code
+          exit $code
+      - name: Build the architecture test inputs
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-arch-observer'
+          & pnpm build 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'build.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'build.exit.txt') $code
+          exit $code
+      - name: Run the complete architecture suite with observer diagnostics
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-arch-observer'
+          $report = Join-Path $evidence 'arch.json'
+          & pnpm exec vitest run --project arch --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'arch.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'arch.exit.txt') $code
+          exit $code
+      - name: Retain the final source state and artifact hashes
+        if: always()
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-arch-observer'
+          if (Test-Path $evidence) {
+            & git rev-parse HEAD | Set-Content (Join-Path $evidence 'head.after.txt')
+            & git status --porcelain | Set-Content (Join-Path $evidence 'status.after.txt')
+            $hashes = @(Get-ChildItem -Path $evidence -File |
+              Where-Object Name -ne 'hashes.json' | Get-FileHash -Algorithm SHA256 |
+              Select-Object Path, Hash)
+            $hashes | ConvertTo-Json | Set-Content (Join-Path $evidence 'hashes.json')
+          }
+      - name: Upload the Windows architecture observer evidence even after failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-arch-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lorepack-windows-arch-observer/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30

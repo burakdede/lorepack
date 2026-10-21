@@ -31,6 +31,7 @@ interface Step {
   with?: Record<string, unknown>;
 }
 interface Job {
+  if?: string;
   env?: Record<string, string>;
   needs?: string | string[];
   environment?: string;
@@ -44,6 +45,11 @@ interface Job {
 }
 interface Workflow {
   env?: Record<string, string>;
+  on?: {
+    workflow_dispatch?: {
+      inputs?: Record<string, { options?: string[] }>;
+    };
+  };
   permissions?: Record<string, string>;
   jobs: Record<string, Job>;
 }
@@ -193,5 +199,20 @@ describe('the benchmark observer diagnostic', () => {
       `node scripts/bench-usefulness.mjs --out "benchmark-artifacts/usefulness-${runnerOs}.json"`,
       `node scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${runnerOs}.json"`,
     ]);
+  });
+
+  it('preserves the complete Windows architecture suite in traced mode', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const job = benchmark.jobs['windows-arch-observer'];
+    const diagnosticChoice = benchmark.on?.workflow_dispatch?.inputs?.qualification?.options;
+    expect(diagnosticChoice).toContain('windows-arch-observer');
+    expect(job?.if).toContain("inputs.qualification == 'windows-arch-observer'");
+    expect(job?.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
+    expect(
+      job?.steps?.some((step) => step.run?.includes('pnpm exec vitest run --project arch')),
+    ).toBe(true);
+    expect(job?.steps?.some((step) => step.uses?.startsWith('actions/upload-artifact@'))).toBe(
+      true,
+    );
   });
 });
