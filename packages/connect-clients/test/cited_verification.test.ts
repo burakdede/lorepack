@@ -119,7 +119,7 @@ it('rejects a wrong-project verified snippet without changing the configuration'
     () => expected(intended),
   );
   expect(snippet.verification?.ok, snippet.verification?.detail).toBe(false);
-  expect(snippet.verification?.step).toBe('build');
+  expect(snippet.verification?.step, snippet.verification?.detail).toBe('build');
 }, 120_000);
 
 it('obtains the independent expectation after ensure-current creates the intended build', async () => {
