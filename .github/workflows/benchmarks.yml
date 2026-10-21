@@ -353,6 +353,36 @@ jobs:
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'build.exit.txt') $code
           exit $code
+      - name: Run the full-suite Studio rollback case alone
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'studio-rollback.json'
+          & pnpm exec vitest run --project cli packages/cli/test/studio_rollback_race.test.ts -t 'rechecks the target after the lock holder selects unchanged' --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'studio-rollback.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'studio-rollback.exit.txt') $code
+          exit $code
+      - name: Run the full-suite retrieval filter case alone
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'retrieval-filter.json'
+          & pnpm exec vitest run --project cli packages/cli/test/retrieval.test.ts -t 'narrows by path glob, by extension, and returns nothing rather than guessing' --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'retrieval-filter.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'retrieval-filter.exit.txt') $code
+          exit $code
+      - name: Measure the XLSX shared-string budget case alone
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'xlsx-shared-strings.json'
+          & pnpm exec vitest run --project parsers packages/parsers/test/xlsx.test.ts -t 'warns when shared-string items exceed the retained table budget' --testTimeout=30000 --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'xlsx-shared-strings.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'xlsx-shared-strings.exit.txt') $code
+          exit $code
       - name: Run only the existing large-result pipe acceptance case
         shell: pwsh
         run: |
@@ -362,6 +392,16 @@ jobs:
           & pnpm exec vitest run --root tools/acceptance -t output/a-large-result-survives-a-pipe --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'acceptance.raw.log')
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'acceptance.exit.txt') $code
+          exit $code
+      - name: Run the complete serial CLI project with observer tracing
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'cli-project.json'
+          & pnpm exec vitest run --project cli --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'cli-project.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'cli-project.exit.txt') $code
           exit $code
       - name: Retain the final source state and artifact hashes
         if: always()

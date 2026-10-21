@@ -194,4 +194,17 @@ describe('the benchmark observer diagnostic', () => {
       `node scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${runnerOs}.json"`,
     ]);
   });
+
+  it('captures the full-suite Windows failures and measures the XLSX case alone', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const steps = benchmark.jobs['windows-observer']?.steps ?? [];
+    const commands = steps.map((entry) => entry.run ?? '').join('\n');
+
+    expect(commands).toContain('test/studio_rollback_race.test.ts');
+    expect(commands).toContain('test/retrieval.test.ts');
+    expect(commands).toContain('test/xlsx.test.ts');
+    expect(commands).toContain('--testTimeout=30000');
+    expect(commands).toContain('--reporter=json');
+    expect(commands).toContain('--project cli --reporter=default');
+  });
 });

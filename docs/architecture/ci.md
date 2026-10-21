@@ -255,7 +255,8 @@ coverage evidence only, separate from native CI, mutation and release gates.
 ## Manual Windows observer diagnostic
 
 Dispatch `qualification=windows-observer` on the reviewed diagnostic branch to
-run only the existing `output/a-large-result-survives-a-pipe` acceptance case:
+run the reported Windows failures in isolation, then the complete serial CLI
+project with observer tracing:
 
 ```bash
 gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
@@ -263,8 +264,13 @@ gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
 ```
 
 This job uses Windows, Node24.21.0, pnpm11.18.0, frozen dependencies and the real
-built CLI. It enables `LOREPACK_OBSERVER_DIAGNOSTIC=1` and uses the original
-acceptance config, fixture, assertions, workers and deadlines. The
+built CLI. It runs the unchanged Studio rollback and retrieval filter cases,
+the oversized shared-string parser case with a 30-second diagnostic budget,
+the large-result pipe acceptance case, then all CLI project tests. It enables
+`LOREPACK_OBSERVER_DIAGNOSTIC=1` for those runs and keeps their assertions,
+fixtures and workers. Only the oversized shared-string case has an overridden
+timeout because it exceeds Vitest's 5-second default on Windows; the assertions
+and input size stay unchanged. The
 `windows-observer-<run>-<attempt>` artifact retains the actual HEAD/tree and tool
 identity, combined install/build/test output, real exits, any JSON report produced
 before failure, final source state and artifact hashes. Upload runs after failure;
