@@ -345,18 +345,18 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build the exact candidate
         run: pnpm build
-      - name: Run the parse-limit case with bounded observer diagnostics
+      - name: Run the security coverage case with bounded observer diagnostics
         shell: bash
         run: |
           set -uo pipefail
           evidence="$RUNNER_TEMP/lorepack-macos-observer"
           set +e
-          pnpm exec vitest run --project cli packages/cli/test/parse-limits.test.ts \
-            -t 'leaves out brackets.md with parse-timeout' \
+          pnpm exec vitest run --root tools/security test/security-coverage.test.ts \
+            -t 'a build leaves out a file over a parse limit and still activates' \
             --reporter=default --reporter=json \
-            "--outputFile=$evidence/parse-limits.json" 2>&1 | tee "$evidence/parse-limits.raw.log"
+            "--outputFile=$evidence/security-coverage.json" 2>&1 | tee "$evidence/security-coverage.raw.log"
           result=${PIPESTATUS[0]}
-          printf '%s\n' "$result" > "$evidence/parse-limits.exit.txt"
+          printf '%s\n' "$result" > "$evidence/security-coverage.exit.txt"
           exit "$result"
       - name: Hash retained diagnostic evidence
         if: always()

@@ -43,6 +43,14 @@ export interface Evidence {
 
 export const runFiles = (item: Evidence): readonly string[] => item.runFrom ?? [item.path];
 
+export function observerDiagnosticLines(stderr: string): readonly string[] {
+  return stderr
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('LOREPACK_OBSERVER_DIAGNOSTIC_FAILURE '))
+    .slice(0, 4)
+    .map((line) => line.slice(0, 4096));
+}
+
 const normalize = (path: string): string => path.replaceAll('\\', '/');
 
 /**
@@ -87,12 +95,19 @@ export function runVitest(files: readonly string[], root?: string): readonly Out
         }[];
       }[];
     };
+    const observerDiagnostics =
+      process.env.LOREPACK_OBSERVER_DIAGNOSTIC === '1'
+        ? observerDiagnosticLines(result.stderr ?? '')
+        : [];
     return parsed.testResults.flatMap((file) =>
       file.assertionResults.map((test) => ({
         file: normalize(relative(ROOT, file.name)),
         fullName: test.fullName,
         status: test.status,
-        failureMessages: test.failureMessages ?? [],
+        failureMessages: [
+          ...(test.failureMessages ?? []),
+          ...(test.status === 'failed' ? observerDiagnostics : []),
+        ],
       })),
     );
   } finally {

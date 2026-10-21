@@ -230,9 +230,9 @@ describe('the benchmark observer diagnostic', () => {
     expect(benchmark.jobs['windows-observer']?.if).toContain(
       "inputs.qualification == 'windows-observer'",
     );
-    expect(commands).toContain('packages/cli/test/parse-limits.test.ts');
-    expect(commands).toContain('leaves out brackets.md with parse-timeout');
-    expect(commands).toContain('parse-limits.raw.log');
+    expect(commands).toContain('tools/security test/security-coverage.test.ts');
+    expect(commands).toContain('a build leaves out a file over a parse limit');
+    expect(commands).toContain('security-coverage.raw.log');
     expect(steps.some((step) => step.uses === 'actions/upload-artifact@v7')).toBe(true);
   });
 });
