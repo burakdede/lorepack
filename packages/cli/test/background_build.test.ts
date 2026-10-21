@@ -6,6 +6,7 @@ import { withTempProject } from '@lorepack/test-support';
 import { expect, it } from 'vitest';
 import { runBackgroundBuild } from '../src/services/background_build.js';
 import { runBuild } from '../src/services/build.js';
+import { withObserverDiagnostic } from './support/observer_diagnostic.js';
 
 const files = {
   'lore.yaml': 'version: 1\nname: background\nsources: [docs]\n',
@@ -150,7 +151,9 @@ it('propagates a failed progress sink after cancelling and releasing the worker 
     progress.subscribe((event) => {
       if (event.type === 'stage-started' && event.stage === 'parsing') throw fault;
     });
-    const failure = await runBackgroundBuild({ config, progress }).catch((error: unknown) => error);
+    const failure = await withObserverDiagnostic(process.platform === 'win32', () =>
+      runBackgroundBuild({ config, progress }),
+    ).catch((error: unknown) => error);
     expect(failure).toBe(fault);
     expect(active(project.root)).toBe(first.buildId);
     expect(readdirSync(project.path('.lore/builds'))).toEqual([first.buildId]);

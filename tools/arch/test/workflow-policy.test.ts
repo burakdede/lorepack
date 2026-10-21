@@ -68,7 +68,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   const workflow = parse(readFileSync(join(REPO_ROOT, '.github/workflows/benchmarks.yml'), 'utf8'));
-  const diagnostic = workflow.jobs['windows-observer'];
+  const diagnostic = job(workflow, 'windows-observer');
   expect(diagnostic.if).toContain("qualification == 'windows-observer'");
   expect(diagnostic.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
   expect(diagnostic['timeout-minutes']).toBe(60);
