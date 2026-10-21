@@ -33,6 +33,7 @@ interface Step {
 interface Job {
   name?: string;
   'runs-on'?: string;
+  if?: string;
   env?: Record<string, string>;
   needs?: string | string[];
   environment?: string;
@@ -221,6 +222,14 @@ describe('the benchmark observer diagnostic', () => {
       'runs-on': 'macos-latest',
       env: { LOREPACK_OBSERVER_DIAGNOSTIC: '1' },
     });
+    expect(job?.if).toContain("inputs.qualification == 'macos-observer'");
+    expect(benchmark.jobs.benchmark?.if).toContain(
+      "(inputs.qualification || 'benchmark') == 'benchmark'",
+    );
+    expect(benchmark.jobs.coverage?.if).toContain("inputs.qualification == 'coverage'");
+    expect(benchmark.jobs['windows-observer']?.if).toContain(
+      "inputs.qualification == 'windows-observer'",
+    );
     expect(commands).toContain('packages/cli/test/parse-limits.test.ts');
     expect(commands).toContain('leaves out brackets.md with parse-timeout');
     expect(commands).toContain('parse-limits.raw.log');
