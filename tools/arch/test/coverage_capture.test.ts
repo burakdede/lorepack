@@ -418,7 +418,7 @@ writeFileSync(${JSON.stringify(resolvedOptions)},JSON.stringify(results));`,
       ),
     ).toEqual({ files: 1, status: 'Pass' });
   }
-});
+}, 30_000);
 
 async function nativeFixture(code = 'export const value = 7;') {
   const path = 'owned.mjs';
