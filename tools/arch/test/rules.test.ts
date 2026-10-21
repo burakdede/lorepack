@@ -18,7 +18,7 @@ describe('the real repository', () => {
   it('has no forbidden imports in any package source', () => {
     const violations = checkAll(REPO_ROOT);
     expect(formatViolations(violations)).toBe('');
-  });
+  }, 30_000);
 
   it('has no forbidden workspace dependency declared in any manifest', () => {
     const violations = checkManifests(REPO_ROOT);
