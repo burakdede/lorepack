@@ -297,11 +297,6 @@ identity, focused test output and report, exit status and evidence hashes. The m
 changes no normal CI workload or observer deadline. A passing replay does not
 explain a prior failure.
 
-The security coverage harness runs `parse-limits.test.ts` in a separate Vitest
-process from the other evidence files. Its real parser workloads use a 250 ms
-resident-memory reader deadline, so unrelated evidence tests must not compete for
-the same process scheduling window.
-
 The manual `benchmark` default retains the benchmark matrix, summary and optional
 hosted run. Manual coverage, Windows diagnostics and macOS diagnostics have separate concurrency
 keys and request no hosted environment or secrets. Normal push, pull-request and
