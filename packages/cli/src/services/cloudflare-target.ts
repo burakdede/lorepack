@@ -19,6 +19,7 @@ import {
   type CloudflareTargetAdapter,
   createWranglerAdapter,
   isRetryableWranglerRemoteD1Failure,
+  isRetryableWranglerRemoteD1FileImportFailure,
   isWranglerRemoteMutation,
   readCloudflareTargetReceipt,
   UNKNOWN_ENDPOINT_REMEDIATION,
@@ -618,12 +619,20 @@ async function execWrangler(
       return { stdout };
     } catch (cause) {
       const failure = wranglerExecFailure(cause);
-      if (isWranglerRemoteMutation(args)) throw remoteMutationCompletionUnknown(failure);
+      const retrySafeFileImport =
+        isWranglerRemoteD1FileImport(args) &&
+        isRetryableWranglerRemoteD1FileImportFailure(failure.message);
+      if (isWranglerRemoteMutation(args) && !retrySafeFileImport) {
+        throw remoteMutationCompletionUnknown(failure);
+      }
       lastFailure = failure;
       if (allowMissingObject && isWranglerMissingObjectFailure(failure.message)) {
         return { stdout: '', missingObject: true };
       }
-      if (attempt >= attempts || !isRetryableWranglerRemoteWranglerFailure(args, failure.message)) {
+      if (
+        attempt >= attempts ||
+        (!retrySafeFileImport && !isRetryableWranglerRemoteWranglerFailure(args, failure.message))
+      ) {
         throw failure;
       }
       await sleep(250 * attempt);
@@ -667,6 +676,15 @@ function tempPath(prefix: string, filename = 'object.bin'): string {
 
 function isWranglerRemoteR2ObjectCommand(args: readonly string[]): boolean {
   return args[0] === 'r2' && args[1] === 'object' && args.includes('--remote');
+}
+
+function isWranglerRemoteD1FileImport(args: readonly string[]): boolean {
+  return (
+    args[0] === 'd1' &&
+    args[1] === 'execute' &&
+    args.includes('--remote') &&
+    args.includes('--file')
+  );
 }
 
 function isRetryableWranglerRemoteWranglerFailure(args: readonly string[], text: string): boolean {

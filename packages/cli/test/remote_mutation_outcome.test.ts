@@ -5,7 +5,15 @@ import { expect, it } from 'vitest';
 import { createWranglerAdapter } from '../src/commands/target.js';
 import { createWranglerDeployAdapter } from '../src/services/cloudflare-target.js';
 
-it.each(['d1-write', 'd1-returning', 'd1-invalid-json', 'r2-put', 'r2-delete', 'd1-read'] as const)(
+it.each([
+  'd1-write',
+  'd1-returning',
+  'd1-returning-7009',
+  'd1-invalid-json',
+  'r2-put',
+  'r2-delete',
+  'd1-read',
+] as const)(
   'bounds replay of %s through the real Wrangler adapter, issue439',
   async (operation) => {
     await withTempProject({}, async (project) => {
@@ -25,13 +33,14 @@ it.each(['d1-write', 'd1-returning', 'd1-invalid-json', 'r2-put', 'r2-delete', '
         join(directory, 'bin', 'wrangler.js'),
         `const { appendFileSync } = require('node:fs');
 appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + String.fromCharCode(10));
-${operation === 'd1-invalid-json' ? "console.log('not JSON');" : "console.error('fetch failed'); process.exit(1);"}
+${operation === 'd1-invalid-json' ? "console.log('not JSON');" : `console.error('${operation === 'd1-returning-7009' ? 'Upstream service unavailable [code: 7009]' : 'fetch failed'}'); process.exit(1);`}
 `,
       );
       const adapter = createWranglerDeployAdapter(project.root);
       const action =
         operation === 'd1-write' ||
         operation === 'd1-returning' ||
+        operation === 'd1-returning-7009' ||
         operation === 'd1-invalid-json' ||
         operation === 'd1-read'
           ? adapter
@@ -39,7 +48,9 @@ ${operation === 'd1-invalid-json' ? "console.log('not JSON');" : "console.error(
               .prepare(
                 operation === 'd1-read'
                   ? 'SELECT ? AS answer'
-                  : operation === 'd1-returning' || operation === 'd1-invalid-json'
+                  : operation === 'd1-returning' ||
+                      operation === 'd1-returning-7009' ||
+                      operation === 'd1-invalid-json'
                     ? 'DELETE FROM demo WHERE id = ? RETURNING id'
                     : 'DELETE FROM demo WHERE id = ?',
               )
@@ -64,6 +75,52 @@ ${operation === 'd1-invalid-json' ? "console.log('not JSON');" : "console.error(
       expect
         .soft(readFileSync(calls, 'utf8').trim().split(String.fromCharCode(10)))
         .toHaveLength(operation === 'd1-read' ? 3 : 1);
+    });
+  },
+);
+
+it.each(['deploy', 'target'] as const)(
+  'retries a failed D1 file import through the %s adapter after Wrangler confirms imports are atomic',
+  async (surface) => {
+    await withTempProject({}, async (project) => {
+      const directory = join(project.root, 'node_modules', 'wrangler');
+      mkdirSync(join(directory, 'bin'), { recursive: true });
+      writeFileSync(
+        join(directory, 'package.json'),
+        JSON.stringify({
+          name: 'wrangler',
+          version: '4.149.0',
+          main: './bin/wrangler.js',
+          bin: './bin/wrangler.js',
+        }),
+      );
+      const calls = join(project.root, 'calls.jsonl');
+      writeFileSync(
+        join(directory, 'bin', 'wrangler.js'),
+        `const { appendFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + String.fromCharCode(10));
+if (require('node:fs').readFileSync(${JSON.stringify(calls)}, 'utf8').trim().split(String.fromCharCode(10)).length === 1) {
+  console.error('Upstream service unavailable [code: 7009]');
+  process.exit(1);
+}
+console.log(JSON.stringify([{ success: true, results: [] }]));
+`,
+      );
+
+      const adapter =
+        surface === 'deploy'
+          ? createWranglerDeployAdapter(project.root)
+          : createWranglerAdapter(project.root);
+      const database = adapter.openCatalogDatabase('catalog');
+      await database.prepare('BEGIN IMMEDIATE').run();
+      await database.prepare('CREATE TABLE retry_probe (id INTEGER PRIMARY KEY)').run();
+      await database.prepare('COMMIT').run();
+
+      const invocations = readFileSync(calls, 'utf8').trim().split('\n');
+      expect(invocations).toHaveLength(2);
+      expect(JSON.parse(invocations[0] ?? '')).toContain('--file');
+      expect(JSON.parse(invocations[1] ?? '')).toContain('--file');
     });
   },
 );

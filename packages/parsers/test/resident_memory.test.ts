@@ -102,20 +102,20 @@ it('keeps a reporting watchdog armed until actual 250 ms silence', () => {
   }
 });
 
-it('keeps a startup watchdog armed until actual 5000 ms silence', () => {
+it('keeps a startup watchdog armed until actual 15000 ms silence', () => {
   const clock = manualWatchdogClock();
   const expired: number[] = [];
   const watchdog = createStartupWatchdog(() => expired.push(performance.now()));
   try {
-    clock.at(4999.95);
+    clock.at(14999.95);
     clock.fireTimer();
     clock.fireCheck();
     expect(expired).toEqual([]);
     expect(clock.pendingTimers()).toBe(1);
-    clock.at(5000);
+    clock.at(15000);
     clock.fireTimer();
     clock.fireCheck();
-    expect(expired).toEqual([5000]);
+    expect(expired).toEqual([15000]);
   } finally {
     watchdog.stop();
     clock.restore();
@@ -148,12 +148,16 @@ it('cancels a pending remainder on a new report and after stop', () => {
   }
 });
 
-it('services a pending first observer report at the original startup deadline', async () => {
+it('services a pending first observer report before a short startup deadline', async () => {
   const startedAt = Date.now();
   let expired = false;
-  const startup = createStartupWatchdog(() => {
-    expired = true;
-  });
+  const startup = createStartupWatchdog(
+    () => {
+      expired = true;
+    },
+    undefined,
+    5000,
+  );
   const child = spawn(
     process.execPath,
     ['-e', "process.stdout.write(String(Date.now()) + '\\n'); setInterval(() => {}, 1000)"],
@@ -178,11 +182,15 @@ it('services a pending first observer report at the original startup deadline', 
   }
 }, 15_000);
 
-it('rejects an observer with no first report at the original startup deadline', async () => {
+it('rejects an observer with no first report at a short startup deadline', async () => {
   let expired = false;
-  const startup = createStartupWatchdog(() => {
-    expired = true;
-  });
+  const startup = createStartupWatchdog(
+    () => {
+      expired = true;
+    },
+    undefined,
+    5000,
+  );
   try {
     await delay(100);
     expect(expired).toBe(false);

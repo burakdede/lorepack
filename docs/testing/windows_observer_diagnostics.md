@@ -36,7 +36,7 @@ no final snapshot. The trace contains no source text, paths, arguments or raw
 reader stderr.
 
 The diagnostic preserves numeric RSS stdout, 100 ms sampling, the 250 ms
-reporting deadline, 5000 ms startup deadline, output caps and fail-closed parser
+reporting deadline, the startup grace, output caps and fail-closed parser
 termination. It does not retry, wait for closure or extend a parser lifetime.
 
 A separate D247 Ubuntu verification failure exposed an early timer callback:
@@ -84,11 +84,22 @@ performance qualification. Final performance evidence requires an unchanged
 workload without observer instrumentation. No successful replay by itself
 explains either historical failure.
 
-The mocked startup control checks silence through the original 5000 ms deadline,
-then typed failure and parser/reader termination, bounded late markers and final
+The mocked startup control checks silence through the 15000 ms deadline, then
+typed failure and parser/reader termination, bounded late markers and final
 closure. It does not execute PowerShell or establish a native failure mechanism.
 The existing real PowerShell stall case awaits readiness before stalling and
 therefore checks reporting after startup, not startup queue delivery.
+
+## Bounded startup grace, 2026-10-21
+
+PR #835 produced three Windows startup failures in separate verify,
+clean-install and benchmark jobs. Their traces showed the PowerShell child was
+spawned but had emitted no entry marker, process identity or RSS sample by
+5000 ms. The exact runner scheduling or PowerShell initialization cause remains
+unknown. The startup grace is now 15000 ms. The parser receives no source bytes
+until the first valid sample, so this does not enlarge its unobserved work or RSS
+envelope. The 100 ms sampling cadence, 250 ms reporting deadline, output caps
+and fail-closed behavior are unchanged.
 
 ## POSIX reader failures
 

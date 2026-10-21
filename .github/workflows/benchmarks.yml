@@ -297,6 +297,7 @@ jobs:
     name: Windows observer diagnostic case
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification == 'windows-observer' }}
     runs-on: windows-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     env:
@@ -352,6 +353,28 @@ jobs:
           & pnpm build 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'build.raw.log')
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'build.exit.txt') $code
+          exit $code
+      - name: Run the failing CLI observer cases with bounded traces
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'cli-observer-cases.json'
+          & pnpm exec vitest run --project cli packages/cli/test/background_build.test.ts packages/cli/test/resident_memory.e2e.test.ts --testNamePattern='propagates a failed progress sink after cancelling and releasing the worker build|bounds document\.docx through the shipped CLI and preserves retained builds, issue677' --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'cli-observer-cases.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'cli-observer-cases.exit.txt') $code
+          exit $code
+      - name: Run the serial CLI project with bounded observer traces
+        timeout-minutes: 50
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'cli-project.json'
+          & pnpm exec vitest run --project cli --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'cli-project.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'cli-project.exit.txt') $code
           exit $code
       - name: Run only the existing large-result pipe acceptance case
         shell: pwsh
