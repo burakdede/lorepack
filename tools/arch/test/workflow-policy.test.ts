@@ -84,6 +84,7 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   expect(suite?.run).toContain('vitest run --project cli');
   expect(suite?.run).toContain('cli-project.raw.log');
   expect(suite?.run).toContain('cli-project.exit.txt');
+  expect(suite?.['timeout-minutes']).toBe(50);
   const upload = diagnostic.steps.find((entry) =>
     entry.name?.includes('Upload the Windows observer evidence'),
   );
