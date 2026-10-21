@@ -604,16 +604,19 @@ describe('phase 7 definition', () => {
     expect(audit?.kind === 'audit' && audit.marker).toBe('Phase 8 audit');
   });
 
-  it('runs every registered phase from the main phase-gates workflow', () => {
+  it('runs completed phases on pushes and keeps all phases available for dispatch', () => {
     const workflow = readFileSync(`${REPO_ROOT}.github/workflows/phase-gates.yml`, 'utf8');
-    const match = workflow.match(/fromJSON\('\[([\d,\s]+)\]'\)/);
-    expect(match?.[1]).toBeDefined();
-    const workflowPhases = match?.[1]
-      ?.split(',')
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isFinite(value));
+    const workflowMatrices = [...workflow.matchAll(/fromJSON\('\[([\d,\s]+)\]'\)/g)].map((match) =>
+      match[1]
+        .split(',')
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isFinite(value)),
+    );
 
-    expect(workflowPhases).toEqual(PHASES.map((phase) => phase.phase));
+    expect(workflow).toContain("github.event_name == 'push'");
+    expect(workflow).toContain('github.event.inputs.phase');
+    expect(workflowMatrices).toContainEqual(PHASES.slice(0, -1).map((phase) => phase.phase));
+    expect(workflowMatrices).toContainEqual(PHASES.map((phase) => phase.phase));
   });
 
   it('prepares the browser before running phase checks that can execute Studio e2e', () => {
