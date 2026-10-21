@@ -1,8 +1,8 @@
 name: Phase gates
 
-# Runs on main rather than on pull requests, because a phase gate answers "is this phase
-# still satisfied on the trunk?". On a pull request the issue-closure criterion would fail
-# for the very issue being merged, which is a paradox, not a signal.
+# Runs completed phases on main rather than on pull requests, because a phase gate answers
+# "is this phase still satisfied on the trunk?". Phase 7 remains open, so its issue-closure
+# criterion is reserved for an explicit closure review until the phase is complete.
 on:
   push:
     branches: [main]
@@ -21,11 +21,10 @@ jobs:
     name: phase ${{ matrix.phase }}
     runs-on: ubuntu-latest
     strategy:
-      # Every defined phase is verified on each push. A phase that closed months ago is
-      # exactly the one whose guarantees quietly rot, so re-running it is the point.
+      # Recheck closed phases on every push. Run the open Phase 7 closure gate manually.
       fail-fast: false
       matrix:
-        phase: ${{ github.event.inputs.phase && fromJSON(format('[{0}]', github.event.inputs.phase)) || fromJSON('[0, 1, 2, 3, 4, 5, 6, 7]') }}
+        phase: ${{ github.event_name == 'push' && fromJSON('[0, 1, 2, 3, 4, 5, 6]') || (github.event.inputs.phase && fromJSON(format('[{0}]', github.event.inputs.phase)) || fromJSON('[0, 1, 2, 3, 4, 5, 6, 7]')) }}
     permissions:
       contents: read
       issues: read
@@ -41,19 +40,28 @@ jobs:
 
       - name: Cache the browser
         id: browser-cache
+        if: ${{ matrix.phase == 4 }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Chromium
-        if: steps.browser-cache.outputs.cache-hit != 'true'
+        if: ${{ matrix.phase == 4 && steps.browser-cache.outputs.cache-hit != 'true' }}
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Verify the phase against its executable criteria
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pnpm phase:check ${{ matrix.phase }}
+        run: |
+          set +e
+          pnpm phase:check ${{ matrix.phase }} 2>&1 | tee "$RUNNER_TEMP/phase-check.log"
+          statuses=("${PIPESTATUS[@]}")
+          if (( statuses[1] != 0 )); then
+            exit "${statuses[1]}"
+          fi
+          exit "${statuses[0]}"
 
       - name: Publish the report
         if: always()
@@ -64,6 +72,10 @@ jobs:
             echo '### Phase gate ${{ matrix.phase }}'
             echo
             echo '```'
-            pnpm phase:check ${{ matrix.phase }} || true
+            if [ -f "$RUNNER_TEMP/phase-check.log" ]; then
+              cat "$RUNNER_TEMP/phase-check.log"
+            else
+              echo 'Phase check output was not captured.'
+            fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

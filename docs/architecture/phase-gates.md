@@ -75,11 +75,14 @@ outcomes distinct:
 
 ## Where it runs
 
-`.github/workflows/phase-gates.yml` runs on pushes to `main`, not on pull requests. A gate
-answers a question about the trunk. On a pull request the issue-closure criterion would
-fail for the very issue being merged, which is a paradox rather than a signal.
+`.github/workflows/phase-gates.yml` runs completed phases on pushes to `main`, not on pull
+requests. A gate answers a question about the trunk. On a pull request the issue-closure
+criterion would fail for the very issue being merged, which is a paradox rather than a
+signal. Phase 7 remains open, so its `issues-ready` closure criterion runs through manual
+dispatch until Phase 7 is complete. Add it to the push matrix when that closure is verified.
 
-It can also be run manually with `workflow_dispatch` against any phase.
+It can also be run manually with `workflow_dispatch` against any phase or all phases. A
+manual Phase 7 run is expected to fail `issues-ready` while implementation blockers remain.
 
 ## Adding a phase
 
