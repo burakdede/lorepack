@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 import { openStateStore } from '../src/services/builds.js';
 import { createRevalidator } from '../src/services/revalidate.js';
+import { withObserverDiagnostic } from './support/observer_diagnostic.js';
 
 /**
  * Freshness for a process that stays up.
@@ -20,23 +21,25 @@ const CORPUS = { 'lore.yaml': CONFIG, 'a.md': '# A\n\nFirst.\n', 'b.md': '# B\n\
 
 describe('within the interval', () => {
   it('answers from cache without scanning sources', async () => {
-    await withTempProject({ files: CORPUS }, async (project) => {
-      const config = loadConfig({ cwd: project.root });
-      await runBuild({ config, progress: new ProgressBus() });
+    await withObserverDiagnostic(process.platform === 'win32', () =>
+      withTempProject({ files: CORPUS }, async (project) => {
+        const config = loadConfig({ cwd: project.root });
+        await runBuild({ config, progress: new ProgressBus() });
 
-      let clock = 1000;
-      const revalidator = createRevalidator({ config, intervalMs: 5000, now: () => clock });
+        let clock = 1000;
+        const revalidator = createRevalidator({ config, intervalMs: 5000, now: () => clock });
 
-      expect(await revalidator.freshness()).toBe('clean');
-      expect(revalidator.deepChecks).toBe(1);
+        expect(await revalidator.freshness()).toBe('clean');
+        expect(revalidator.deepChecks).toBe(1);
 
-      clock += 100;
-      for (let index = 0; index < 20; index += 1) await revalidator.freshness();
+        clock += 100;
+        for (let index = 0; index < 20; index += 1) await revalidator.freshness();
 
-      // Not one extra check of any kind: this is the whole point of the interval.
-      expect(revalidator.deepChecks).toBe(1);
-      expect(revalidator.prescreens).toBe(1);
-    });
+        // Not one extra check of any kind: this is the whole point of the interval.
+        expect(revalidator.deepChecks).toBe(1);
+        expect(revalidator.prescreens).toBe(1);
+      }),
+    );
   });
 });
 

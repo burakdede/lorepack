@@ -70,6 +70,7 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   const workflow = parse(readFileSync(join(REPO_ROOT, '.github/workflows/benchmarks.yml'), 'utf8'));
   const diagnostic = job(workflow, 'windows-observer');
   expect(diagnostic.if).toContain("qualification == 'windows-observer'");
+  expect(diagnostic.if).toContain("qualification == 'windows-observer-case'");
   expect(diagnostic.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
   expect(diagnostic['timeout-minutes']).toBe(60);
   expect(diagnostic.steps.some((step) => step.run?.includes('cli-observer-cases.raw.log'))).toBe(
@@ -77,14 +78,21 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   );
   const step = diagnostic.steps.find((entry) => entry.name?.includes('failing CLI observer cases'));
   expect(step?.run).toContain('packages/cli/test/background_build.test.ts');
+  expect(step?.run).toContain('packages/cli/test/revalidate.test.ts');
   expect(step?.run).toContain('packages/cli/test/resident_memory.e2e.test.ts');
+  expect(step?.run).toContain('answers from cache without scanning sources');
   expect(step?.run).toContain('cli-observer-cases.exit.txt');
   expect(step?.['timeout-minutes']).toBe(5);
   const suite = diagnostic.steps.find((entry) => entry.name?.includes('serial CLI project'));
+  expect(suite?.if).toContain("inputs.qualification == 'windows-observer'");
   expect(suite?.run).toContain('vitest run --project cli');
   expect(suite?.run).toContain('cli-project.raw.log');
   expect(suite?.run).toContain('cli-project.exit.txt');
   expect(suite?.['timeout-minutes']).toBe(50);
+  const acceptance = diagnostic.steps.find((entry) =>
+    entry.name?.includes('existing large-result pipe acceptance case'),
+  );
+  expect(acceptance?.if).toContain("inputs.qualification == 'windows-observer'");
   const upload = diagnostic.steps.find((entry) =>
     entry.name?.includes('Upload the Windows observer evidence'),
   );
