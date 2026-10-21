@@ -76,6 +76,10 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   expect(step?.run).toContain('packages/cli/test/background_build.test.ts');
   expect(step?.run).toContain('packages/cli/test/resident_memory.e2e.test.ts');
   expect(step?.run).toContain('cli-observer-cases.exit.txt');
+  const suite = diagnostic.steps.find((entry) => entry.name?.includes('serial CLI project'));
+  expect(suite?.run).toContain('vitest run --project cli');
+  expect(suite?.run).toContain('cli-project.raw.log');
+  expect(suite?.run).toContain('cli-project.exit.txt');
 });
 
 function mutate(name: string, change: (workflow: Workflow) => void): void {

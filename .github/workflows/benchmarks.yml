@@ -363,6 +363,16 @@ jobs:
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'cli-observer-cases.exit.txt') $code
           exit $code
+      - name: Run the serial CLI project with bounded observer traces
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $evidence = Join-Path $env:RUNNER_TEMP 'lorepack-windows-observer'
+          $report = Join-Path $evidence 'cli-project.json'
+          & pnpm exec vitest run --project cli --reporter=default --reporter=json "--outputFile=$report" 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'cli-project.raw.log')
+          $code = $LASTEXITCODE
+          Set-Content (Join-Path $evidence 'cli-project.exit.txt') $code
+          exit $code
       - name: Run only the existing large-result pipe acceptance case
         shell: pwsh
         run: |
