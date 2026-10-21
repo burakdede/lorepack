@@ -195,13 +195,15 @@ export function monitorResidentMemory(
   let reporting: ReturnType<typeof createReportingWatchdog> | undefined;
   let startup: ReturnType<typeof createStartupWatchdog> | undefined;
   const diagnostic =
-    process.platform === 'win32' && process.env.LOREPACK_OBSERVER_DIAGNOSTIC === '1';
+    (process.platform === 'win32' || process.platform === 'darwin') &&
+    process.env.LOREPACK_OBSERVER_DIAGNOSTIC === '1';
   const diagnosticStartedAt = performance.now();
   const events: Array<Record<string, string | number>> = [];
   const identity: Record<string, string> = {};
   let diagnosticCause: Error | undefined;
   let diagnosticBaseMessage = '';
   let readerCloseObserved = false;
+  let diagnosticFailureEmitted = false;
   const traceSnapshot = () => JSON.stringify({ readerCloseObserved, identity, events });
   const refreshTrace = (): void => {
     if (diagnosticCause === undefined) return;
@@ -243,6 +245,28 @@ export function monitorResidentMemory(
       diagnosticBaseMessage = cause.message;
       diagnosticCause = cause;
       refreshTrace();
+    }
+    if (diagnostic && process.platform === 'darwin' && !diagnosticFailureEmitted) {
+      diagnosticFailureEmitted = true;
+      const causes: Array<{ name: string; message: string; code?: string | number }> = [];
+      let current: unknown = cause;
+      while (current instanceof Error && causes.length < 4) {
+        const code =
+          'code' in current &&
+          (typeof current.code === 'string' || typeof current.code === 'number')
+            ? current.code
+            : undefined;
+        causes.push({
+          name: current.name.slice(0, 64),
+          message: current.message.slice(0, 512),
+          ...(code === undefined ? {} : { code }),
+        });
+        current = current.cause;
+      }
+      const line = `LOREPACK_OBSERVER_DIAGNOSTIC_FAILURE ${JSON.stringify({ causes, trace: traceSnapshot() })}`;
+      process.stderr.write(
+        `${Buffer.byteLength(line) <= 4096 ? line : 'LOREPACK_OBSERVER_DIAGNOSTIC_FAILURE {"truncated":true}'}\n`,
+      );
     }
     const error = new LoreError(
       'LORE_E_PARSE_FAILED',

@@ -173,6 +173,30 @@ it.each([false, true])(
   },
 );
 
+it('emits a bounded macOS reader cause only when diagnostics are enabled', async () => {
+  const parser = parserOn('darwin');
+  const reader = macReader();
+  const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+  vi.stubEnv('LOREPACK_OBSERVER_DIAGNOSTIC', '1');
+  const monitor = monitorResidentMemory(parser, 1024);
+  monitors.push(monitor);
+  const ready = monitor.ready.catch((error: unknown) => error);
+  nowMs = 370;
+  Object.defineProperty(reader, 'signalCode', { value: 'SIGKILL' });
+  reader.emit('close', null, 'SIGKILL');
+
+  expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
+  const diagnostic = write.mock.calls
+    .map(([value]) => String(value))
+    .find((value) => value.startsWith('LOREPACK_OBSERVER_DIAGNOSTIC_FAILURE '));
+  const details = JSON.parse(
+    (diagnostic ?? '').slice('LOREPACK_OBSERVER_DIAGNOSTIC_FAILURE '.length),
+  ) as { causes: readonly { message: string }[] };
+  expect(diagnostic).toContain('macOS resident-memory reader exited (SIGKILL).');
+  expect(details.causes[0]?.message).toContain('"signalCode":"SIGKILL"');
+  expect(Buffer.byteLength(diagnostic ?? '')).toBeLessThan(4096);
+});
+
 it('suppresses a late macOS reader rejection after intentional monitor stop', async () => {
   const parser = parserOn('darwin');
   const reader = macReader();

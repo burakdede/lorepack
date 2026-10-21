@@ -276,8 +276,27 @@ identity, combined install/build/test output, real exits, any JSON report produc
 before failure, final source state and artifact hashes. Upload runs after failure;
 missing or interrupted evidence does not prove the case passed or cleanup ended.
 
+## Manual macOS observer diagnostic
+
+Dispatch `qualification=macos-observer` on the reviewed diagnostic branch to run
+the exact parse-limit regression that exposed the macOS reader failure:
+
+```bash
+gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
+  -f qualification=macos-observer -f hosted=false -f profile=medium
+```
+
+This job uses macOS, Node24.21.0, pnpm11.18.0, frozen dependencies and the built
+CLI. It runs only the `brackets.md` parse-timeout case with
+`LOREPACK_OBSERVER_DIAGNOSTIC=1`. On observer failure, the bounded diagnostic line
+retains nested reader messages and codes plus the POSIX sample phase, elapsed time,
+reader exit, signal and timeout state. The `macos-observer-<run>-<attempt>` artifact
+retains the exact source and runtime identity, focused test output and report, exit
+status and evidence hashes. The mode changes no normal CI workload or observer
+deadline. A passing replay does not explain a prior failure.
+
 The manual `benchmark` default retains the benchmark matrix, summary and optional
-hosted run. Manual coverage and Windows diagnostics have separate concurrency
+hosted run. Manual coverage, Windows diagnostics and macOS diagnostics have separate concurrency
 keys and request no hosted environment or secrets. Normal push, pull-request and
 scheduled workloads keep their existing behavior. Dispatching a diagnostic branch
 does not require opening a pull request; merging the change still requires one.

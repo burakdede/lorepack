@@ -24,13 +24,13 @@ on:
         required: false
         default: benchmark
         type: choice
-        options: [benchmark, coverage, windows-observer]
+        options: [benchmark, coverage, windows-observer, macos-observer]
 
 permissions:
   contents: read
 
 concurrency:
-  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.qualification == 'coverage' && 'coverage' || inputs.qualification == 'windows-observer' && 'windows-observer' || inputs.profile || 'small' }}
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.qualification == 'coverage' && 'coverage' || inputs.qualification == 'windows-observer' && 'windows-observer' || inputs.qualification == 'macos-observer' && 'macos-observer' || inputs.profile || 'small' }}
   cancel-in-progress: true
 
 env:
@@ -289,6 +289,90 @@ jobs:
           path: |
             ${{ runner.temp }}/lorepack-nine/
             ${{ runner.temp }}/lorepack-nine-hash-check.log
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  macos-observer:
+    name: macOS observer diagnostic case
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.qualification == 'macos-observer' }}
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    env:
+      LOREPACK_OBSERVER_DIAGNOSTIC: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.18.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Prepare bounded observer evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/lorepack-macos-observer"
+          mkdir -p "$evidence"
+          node --input-type=module - <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const identity = {
+            head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            tree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8' }).trim(),
+            status: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(),
+            node: process.version,
+            pnpm: execFileSync('pnpm', ['--version'], { encoding: 'utf8' }).trim(),
+            platform: process.platform,
+            workflowRef: process.env.GITHUB_WORKFLOW_REF,
+            workflowSha: process.env.GITHUB_WORKFLOW_SHA,
+            eventSha: process.env.GITHUB_SHA,
+            run: process.env.GITHUB_RUN_ID,
+            attempt: process.env.GITHUB_RUN_ATTEMPT,
+            observerDiagnostic: process.env.LOREPACK_OBSERVER_DIAGNOSTIC,
+          };
+          writeFileSync(`${process.env.RUNNER_TEMP}/lorepack-macos-observer/identity.json`, `${JSON.stringify(identity, null, 2)}\n`);
+          if (identity.status || identity.head !== identity.eventSha || identity.node !== 'v24.21.0' || identity.pnpm !== '11.18.0') {
+            throw new Error('Diagnostic source or pinned runtime differs.');
+          }
+          NODE
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the exact candidate
+        run: pnpm build
+      - name: Run the parse-limit case with bounded observer diagnostics
+        shell: bash
+        run: |
+          set -uo pipefail
+          evidence="$RUNNER_TEMP/lorepack-macos-observer"
+          set +e
+          pnpm exec vitest run --project cli packages/cli/test/parse-limits.test.ts \
+            -t 'leaves out brackets.md with parse-timeout' \
+            --reporter=default --reporter=json \
+            "--outputFile=$evidence/parse-limits.json" 2>&1 | tee "$evidence/parse-limits.raw.log"
+          result=${PIPESTATUS[0]}
+          printf '%s\n' "$result" > "$evidence/parse-limits.exit.txt"
+          exit "$result"
+      - name: Hash retained diagnostic evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/lorepack-macos-observer"
+          if [ -d "$evidence" ]; then
+            (cd "$evidence" && shasum -a 256 ./* > hashes.sha256)
+          fi
+      - name: Upload macOS observer evidence after failure or success
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-observer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lorepack-macos-observer/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30

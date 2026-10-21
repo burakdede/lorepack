@@ -31,6 +31,8 @@ interface Step {
   with?: Record<string, unknown>;
 }
 interface Job {
+  name?: string;
+  'runs-on'?: string;
   env?: Record<string, string>;
   needs?: string | string[];
   environment?: string;
@@ -206,5 +208,22 @@ describe('the benchmark observer diagnostic', () => {
     expect(commands).toContain('--testTimeout=30000');
     expect(commands).toContain('--reporter=json');
     expect(commands).toContain('--project cli --reporter=default');
+  });
+
+  it('retains bounded macOS reader diagnostics for the parse-limit regression', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const job = benchmark.jobs['macos-observer'];
+    const steps = job?.steps ?? [];
+    const commands = steps.map((entry) => entry.run ?? '').join('\n');
+
+    expect(job).toMatchObject({
+      name: 'macOS observer diagnostic case',
+      'runs-on': 'macos-latest',
+      env: { LOREPACK_OBSERVER_DIAGNOSTIC: '1' },
+    });
+    expect(commands).toContain('packages/cli/test/parse-limits.test.ts');
+    expect(commands).toContain('leaves out brackets.md with parse-timeout');
+    expect(commands).toContain('parse-limits.raw.log');
+    expect(steps.some((step) => step.uses === 'actions/upload-artifact@v7')).toBe(true);
   });
 });
