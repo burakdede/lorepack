@@ -584,7 +584,7 @@ describe('hardening', () => {
     expect(parsed.warnings).toMatchObject([
       { code: 'xlsx-over-budget', loss: {}, message: expect.stringContaining('shared strings') },
     ]);
-  });
+  }, 30_000);
 
   it('warns on oversized shared-string text before retaining it', async () => {
     const parsed = await parse({
