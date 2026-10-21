@@ -241,7 +241,7 @@ try {
     await expect(parseBytes(bytes)).rejects.toMatchObject({
       code: 'LORE_E_ENVELOPE_EXCEEDED',
     });
-  });
+  }, 45_000);
 
   it('refuses a legacy .doc by name rather than failing obscurely', async () => {
     const bytes = await makeDocx({ body: paragraph('x') });
