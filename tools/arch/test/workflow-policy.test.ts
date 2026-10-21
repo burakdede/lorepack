@@ -19,11 +19,13 @@ interface Step {
   run?: string;
   if?: boolean | string;
   env?: Record<string, string>;
+  'timeout-minutes'?: number;
   'continue-on-error'?: boolean | string;
 }
 interface Job {
   steps: Step[];
   if?: boolean | string;
+  'timeout-minutes'?: number;
   'continue-on-error'?: boolean | string;
   env?: Record<string, string>;
 }
@@ -69,6 +71,7 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   const diagnostic = workflow.jobs['windows-observer'];
   expect(diagnostic.if).toContain("qualification == 'windows-observer'");
   expect(diagnostic.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
+  expect(diagnostic['timeout-minutes']).toBe(60);
   expect(diagnostic.steps.some((step) => step.run?.includes('cli-observer-cases.raw.log'))).toBe(
     true,
   );
@@ -76,10 +79,15 @@ it('runs the failed Windows observer cases in the diagnostic workflow', () => {
   expect(step?.run).toContain('packages/cli/test/background_build.test.ts');
   expect(step?.run).toContain('packages/cli/test/resident_memory.e2e.test.ts');
   expect(step?.run).toContain('cli-observer-cases.exit.txt');
+  expect(step?.['timeout-minutes']).toBe(5);
   const suite = diagnostic.steps.find((entry) => entry.name?.includes('serial CLI project'));
   expect(suite?.run).toContain('vitest run --project cli');
   expect(suite?.run).toContain('cli-project.raw.log');
   expect(suite?.run).toContain('cli-project.exit.txt');
+  const upload = diagnostic.steps.find((entry) =>
+    entry.name?.includes('Upload the Windows observer evidence'),
+  );
+  expect(upload?.if).toBe('always()');
 });
 
 function mutate(name: string, change: (workflow: Workflow) => void): void {
