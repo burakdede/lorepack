@@ -194,4 +194,15 @@ describe('the benchmark observer diagnostic', () => {
       `node scripts/research-safe-pruning.mjs --out "benchmark-artifacts/pruning-${runnerOs}.json"`,
     ]);
   });
+
+  it('captures the Windows cited verification failure in the manual diagnostic', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const steps = benchmark.jobs['windows-observer']?.steps ?? [];
+    const commands = steps.map((entry) => entry.run ?? '').join('\n');
+
+    expect(commands).toContain('test/cited_verification.test.ts');
+    expect(commands).toContain('wrong-project verified snippet');
+    expect(commands).toContain('--reporter=json');
+    expect(commands).toContain('cited-verification.raw.log');
+  });
 });

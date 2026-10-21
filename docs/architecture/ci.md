@@ -255,7 +255,8 @@ coverage evidence only, separate from native CI, mutation and release gates.
 ## Manual Windows observer diagnostic
 
 Dispatch `qualification=windows-observer` on the reviewed diagnostic branch to
-run only the existing `output/a-large-result-survives-a-pipe` acceptance case:
+run the wrong-project cited-verification case and the existing
+`output/a-large-result-survives-a-pipe` acceptance case:
 
 ```bash
 gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
@@ -263,8 +264,9 @@ gh workflow run benchmarks.yml --ref <reviewed-diagnostic-branch> \
 ```
 
 This job uses Windows, Node24.21.0, pnpm11.18.0, frozen dependencies and the real
-built CLI. It enables `LOREPACK_OBSERVER_DIAGNOSTIC=1` and uses the original
-acceptance config, fixture, assertions, workers and deadlines. The
+built CLI. It retains the cited-verification failure detail and raw output, then
+uses the original acceptance config, fixture, assertions, workers and deadlines.
+The
 `windows-observer-<run>-<attempt>` artifact retains the actual HEAD/tree and tool
 identity, combined install/build/test output, real exits, any JSON report produced
 before failure, final source state and artifact hashes. Upload runs after failure;
