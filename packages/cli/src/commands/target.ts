@@ -1297,6 +1297,10 @@ export function isRetryableWranglerRemoteD1Failure(text: string): boolean {
   return text.includes('fetch failed') || /\bcode\b[^\d]*7500\b/.test(text);
 }
 
+export function isRetryableWranglerRemoteD1FileImportFailure(text: string): boolean {
+  return /\bcode\b[^\d]*7009\b/.test(text);
+}
+
 function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'rollback' | null {
   const normalized = query.trim().toLowerCase();
   if (!WRANGLER_D1_TRANSACTION_CONTROL.has(normalized)) return null;
@@ -1336,9 +1340,17 @@ async function execWrangler(
       return { stdout };
     } catch (cause) {
       const failure = wranglerExecFailure(cause);
-      if (isWranglerRemoteMutation(args)) throw remoteMutationCompletionUnknown(failure);
+      const retrySafeFileImport =
+        isWranglerRemoteD1FileImport(args) &&
+        isRetryableWranglerRemoteD1FileImportFailure(failure.message);
+      if (isWranglerRemoteMutation(args) && !retrySafeFileImport) {
+        throw remoteMutationCompletionUnknown(failure);
+      }
       lastFailure = failure;
-      if (attempt >= attempts || !isRetryableWranglerRemoteD1Failure(failure.message)) {
+      if (
+        attempt >= attempts ||
+        (!retrySafeFileImport && !isRetryableWranglerRemoteD1Failure(failure.message))
+      ) {
         throw failure;
       }
       await sleep(250 * attempt);
@@ -1416,6 +1428,10 @@ function readD1Results<T>(raw: unknown): readonly T[] {
 
 function isWranglerRemoteD1Execute(args: readonly string[]): boolean {
   return args[0] === 'd1' && args[1] === 'execute' && args.includes('--remote');
+}
+
+function isWranglerRemoteD1FileImport(args: readonly string[]): boolean {
+  return isWranglerRemoteD1Execute(args) && args.includes('--file');
 }
 
 export function parseWranglerJson(stdout: string): unknown {

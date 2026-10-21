@@ -246,9 +246,13 @@ evidence behind keeping the write path serial while D1 remains single-threaded.
 The CLI's Wrangler-backed D1 adapter executes bulk projection writes from temporary `.sql`
 files. Statements with SQL `RETURNING` use `--command`: Wrangler's remote file import returns
 import statistics rather than statement rows. Pending batched writes are flushed before such
-a statement, so ownership acquisition observes the migrated catalog. Both paths preserve
-mutation ownership after a failed command or unreadable response and never replay that write.
-It also does **not**
+a statement, so ownership acquisition observes the migrated catalog. `--command` writes and R2
+mutations preserve ownership after a failed command or unreadable response and are never replayed.
+For `--file` imports only, Wrangler 4.149.0 documents that an incomplete import restores the
+database to its original state. Lorepack retries that import at most twice after the exact D1
+upstream-unavailable error code 7009. Other file-import failures remain fail-closed. This narrow
+retry relies on the pinned Wrangler import contract and must be revisited if the Wrangler version
+changes. It also does **not**
 forward explicit transaction control statements such as `BEGIN IMMEDIATE`, `COMMIT`, or
 `ROLLBACK` to remote D1. Cloudflare D1 already wraps each remote statement in its own
 transaction, so sending those statements through Wrangler fails before projection can begin.
