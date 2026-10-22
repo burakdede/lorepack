@@ -31,7 +31,7 @@ const WORKFLOW = join(ROOT, '.github', 'workflows', 'ci.yml');
 const OUTSIDE_VERIFY = new Map([
   ['install', 'pnpm itself, not a check'],
   ['exec', 'pnpm itself, not a check'],
-  ['build', 'a step other checks depend on, and `verify` reaches it through `test`'],
+  ['build', 'a step other checks depend on, and `verify` reaches it through `test:ci`'],
   [
     'acceptance',
     'its own job, because it is minutes rather than seconds and the question on failure is which scenario',

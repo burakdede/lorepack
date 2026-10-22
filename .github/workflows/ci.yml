@@ -67,10 +67,10 @@ jobs:
       - name: Architecture rules
         run: pnpm test:arch
 
-      - run: pnpm test
+      - run: pnpm test:ci
 
       - name: Consolidated security suite
-        run: pnpm test:security
+        run: pnpm test:security:built
 
       - run: pnpm check:no-native
 

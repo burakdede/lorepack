@@ -137,7 +137,9 @@ function gate(workflow: Workflow): Step {
 }
 
 function security(workflow: Workflow): Step {
-  const step = workflow.jobs.verify?.steps.find((entry) => entry.run === 'pnpm test:security');
+  const step = workflow.jobs.verify?.steps.find(
+    (entry) => entry.run === 'pnpm test:security:built',
+  );
   if (step === undefined) throw new Error('security gate fixture missing');
   return step;
 }
@@ -227,6 +229,23 @@ describe('structural release policy, issue618', () => {
 });
 
 describe('structural verify parity, issue618', () => {
+  it('keeps standalone security setup while CI reuses the tested build', () => {
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(packageJson.scripts['test:security']).toBe(
+      'pnpm build && vitest run --root tools/security',
+    );
+    expect(packageJson.scripts['test:security:built']).toBe('vitest run --root tools/security');
+    expect(packageJson.scripts['test:security']).toBe(
+      `pnpm build && ${packageJson.scripts['test:security:built']}`,
+    );
+    expect(packageJson.scripts['test:ci']).toBe("pnpm build && vitest run --project '!arch'");
+    expect(
+      security(parse(readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8'))).run,
+    ).toBe('pnpm test:security:built');
+  });
+
   it.each(['typecheck:audit', 'coverage:inventory'])('rejects an omitted %s CI step', (command) => {
     mutate('ci.yml', (workflow) => {
       const steps = job(workflow, 'verify').steps;
@@ -241,7 +260,7 @@ describe('structural verify parity, issue618', () => {
 
   it('accepts an unconditional block scalar containing the exact command', () => {
     mutate('ci.yml', (workflow) => {
-      security(workflow).run = 'pnpm test:security\n';
+      security(workflow).run = 'pnpm test:security:built\n';
     });
     const result = run('check-verify-parity.mjs');
     expect(result.status, result.stderr).toBe(0);

@@ -41,8 +41,14 @@ Steps, in order:
 2. `pnpm install --frozen-lockfile`
 3. `pnpm lint`, `pnpm format:check`, `pnpm typecheck`
 4. `pnpm test:arch`, the dependency-direction rules
-5. `pnpm test`
-6. `pnpm check:no-native`, `pnpm check:no-em-dash`
+5. `pnpm test:ci`, which builds once and runs the remaining Vitest projects
+6. `pnpm test:security:built`, the same security suite against that build
+7. `pnpm check:no-native`, `pnpm check:no-em-dash`
+
+The standalone `pnpm test` and `pnpm test:security` commands remain self-contained. The CI
+sequence uses `test:ci` to exclude the architecture project already run in step 4, then uses
+`test:security:built` to avoid rebuilding unchanged outputs. The workflow parity check keeps
+these commands aligned with `pnpm verify`.
 
 Test results and coverage upload as artifacts on every run, including failures.
 
