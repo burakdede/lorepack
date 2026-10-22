@@ -42,7 +42,7 @@ const OUTSIDE_VERIFY = new Map([
   ['bench:quality', 'quality baseline is enforced by its own benchmark command'],
   [
     'check:packed-cli',
-    'its own job: it installs the packed CLI with npm and runs npm audit against the registry, so it needs the network and a clean directory',
+    'its own job: it installs the packed CLI into a clean directory and exercises the actual npm package',
   ],
   [
     'check:changeset-policy',
