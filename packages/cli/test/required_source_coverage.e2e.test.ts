@@ -134,7 +134,6 @@ it.each(['permissive', 'strict'] as const)(
         files: {
           'lore.yaml': base,
           '.loreignore': 'required.md\n',
-          'docs/notes.md': '# Retained\n',
           'docs/required.md': '# Excluded\n',
         },
       },
