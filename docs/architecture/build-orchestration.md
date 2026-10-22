@@ -26,6 +26,18 @@ lock -> plan -> parse -> index -> validate -> seal -> record -> activate
 6. **Seal.** A single atomic rename moves the candidate into `.lore/builds/<build id>`.
 7. **Record and activate.** Activation is a pointer change in one transaction. With
    `--no-activate` it is skipped, leaving a verified build for CI to inspect or pack.
+
+If recording fails after sealing, the diagnostic identifies the build and
+`.lore/state.sqlite` at the `state-record` boundary, retaining the storage cause and
+disk-full classification. The sealed directory remains unrecorded and cannot be
+activated; the previous active build stays readable. Correct the reported storage
+problem and run `lorepack build` again to record the already sealed build.
+
+Index-write failures identify the indexing stage, build and candidate database rather
+than blaming an individual source for an aggregate write. Errors thrown during validation
+name that stage while retaining the affected object subject, checksum details and storage
+cause. Both preserve existing typed codes and remediation.
+
 Source identity changes detected during planning or parsing abort the candidate
 with `LORE_E_STALE_SOURCES`. A partial fingerprint cannot replace the active build.
 [Source-read boundaries](discovery.md#source-reads-after-discovery) explain the

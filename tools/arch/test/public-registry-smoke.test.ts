@@ -1,14 +1,19 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { globalSmokeEnvironment } from '../../../scripts/check-global-smoke.mjs';
+import {
+  globalSmokeEnvironment,
+  parseGlobalSmokeArgs,
+} from '../../../scripts/check-global-smoke.mjs';
 import {
   assertCommandSucceeded,
   assertExportResult,
   assertSearchResult,
   parseReleaseVersion,
   readInstalledCli,
+  runSmokeCommand,
 } from '../../../scripts/public-registry-smoke.mjs';
 
 describe('public registry smoke assertions', () => {
@@ -123,6 +128,88 @@ describe('installed CLI entry', () => {
       }
     } finally {
       rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('retained global lifecycle evidence', () => {
+  it('retains the real failed child output before assertion and project removal', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lorepack-smoke-record-'));
+    const project = join(root, 'project');
+    const evidence = join(root, 'command.json');
+    mkdirSync(project);
+    try {
+      const result = runSmokeCommand(
+        process.execPath,
+        [
+          '-e',
+          "process.stdout.write('actual output'); process.stderr.write('actual failure'); process.exitCode = 7;",
+        ],
+        project,
+        evidence,
+      );
+      expect(() => assertCommandSucceeded(result, ['fixture'])).toThrow('exited 7');
+      rmSync(project, { recursive: true });
+      expect(JSON.parse(readFileSync(evidence, 'utf8'))).toMatchObject({
+        status: 7,
+        stdout: 'actual output',
+        stderr: 'actual failure',
+        cwd: project,
+        signal: null,
+        error: null,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('retains the first actual smoke failure and cleanup receipt', () => {
+    const root = mkdtempSync(join(tmpdir(), 'lorepack-smoke-failure-'));
+    const entry = join(root, 'failed-entry.cjs');
+    const out = join(root, 'evidence');
+    try {
+      writeFileSync(
+        entry,
+        "process.stdout.write('fixture stdout'); process.stderr.write('fixture stderr'); process.exitCode = 9;",
+      );
+      const result = spawnSync(
+        process.execPath,
+        [resolve('scripts/public-registry-smoke.mjs'), '0.1.0', '--out', out],
+        {
+          env: { ...process.env, LOREPACK_SMOKE_CLI: entry },
+          encoding: 'utf8',
+        },
+      );
+      expect(result.status).toBe(1);
+      const receipt = JSON.parse(readFileSync(join(out, 'lifecycle.json'), 'utf8'));
+      expect(receipt).toMatchObject({ passed: false, cleaned: true, commands: ['01-init.json'] });
+      expect(receipt.error).toContain('exited 9');
+      expect(JSON.parse(readFileSync(join(out, '01-init.json'), 'utf8'))).toMatchObject({
+        status: 9,
+        stdout: 'fixture stdout',
+        stderr: 'fixture stderr',
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a preselected tar only outside evidence and rejects ambiguous flags', () => {
+    const out = resolve('/tmp/smoke-evidence');
+    const tarball = resolve('/tmp/retained.tgz');
+    expect(parseGlobalSmokeArgs(['--out', out, '--tarball', tarball])).toEqual({
+      outDir: out,
+      tarball,
+    });
+    expect(parseGlobalSmokeArgs(['--out', out])).toEqual({ outDir: out, tarball: undefined });
+    for (const args of [
+      [],
+      ['--out'],
+      ['--other', out],
+      ['--out', out, '--out', out],
+      ['--out', out, '--tarball', join(out, 'retained.tgz')],
+    ]) {
+      expect(() => parseGlobalSmokeArgs(args)).toThrow();
     }
   });
 });

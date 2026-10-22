@@ -208,6 +208,13 @@ jobs:
       - run: pnpm build
 
       - name: Pack, install with npm, build a PDF, query a table, audit
+        id: packed_check
+        run: pnpm check:packed-cli
+
+      - name: Capture Windows observer evidence after the packed check fails
+        if: ${{ failure() && runner.os == 'Windows' && steps.packed_check.outcome == 'failure' }}
+        env:
+          LOREPACK_OBSERVER_DIAGNOSTIC: '1'
         run: pnpm check:packed-cli
 
   privacy-sandbox:

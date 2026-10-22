@@ -101,6 +101,69 @@ until the first valid sample, so this does not enlarge its unobserved work or RS
 envelope. The 100 ms sampling cadence, 250 ms reporting deadline, output caps
 and fail-closed behavior are unchanged.
 
+### Installed-package startup failure
+
+Main `0d8d07db` failed the Windows packed-install build before its first RSS
+sample: 5009 ms, reader1888, no observed exit or signal and zero buffered stdout.
+The reviewed 4992-member archive and 145-package installed closure had passed;
+the original 73-artifact build stopped at Parsing 0/73. Raw job 118066763121 is
+retained at `release_gates/main_0d8d07db_cohort/failed-job-118066763121.raw.log`
+under the sibling release evidence directory, SHA256
+`0fad38b505f9eb97b6aab301f9b1e471f5329b57a83f31ac83e493dd3da9ae43`.
+
+The normal packed-install check keeps diagnostics off. Only if that original
+step fails on Windows does the same job run one separate instrumented checker
+with the existing flag. The original failure still fails the job, even if the
+diagnostic run passes. The original command, fixture, resource limits, deadlines,
+retries and skips remain unchanged. No extra diagnostic job or dispatch is used.
+
+This second execution is evidence only. The flag evaluates
+`[System.Diagnostics.Process].Assembly.FullName` before the first sample, loading
+the type earlier than normal mode, and adds phase writes and owner-loop metrics.
+The second execution also follows an already attempted build and install.
+These differences can change startup timing. A pass neither qualifies the
+original failed check nor establishes the historical cause. Read the bounded
+startup, runtime-identity and sample markers in the job log; missing markers
+remain inconclusive. The existing 16-event ring, 1024-character pending buffer
+and 4096-byte final trace were preserved in that run. Its historical controls
+were 100/250/5000 ms. The current startup grace is 15000 ms; the other controls
+remain unchanged.
+
+## Normal Windows owner failure context
+
+Normal Windows observation also retains one event-loop utilization baseline at
+startup and replaces a reporting baseline after each accepted numeric RSS sample.
+The existing watchdog callbacks retain their timer-fire time. Only an actual
+startup or reporting failure appends a bounded `Owner context` object to its
+original cause. It records the unchanged expected deadline, actual elapsed time,
+signed deadline difference, observed owner-window and timer-fire/check offsets,
+and event-loop active/idle milliseconds and utilization. Numbers are rounded to
+three decimal places; unavailable nonfinite or oversized metrics are `null`.
+
+This adds small owner-side observation overhead on Windows, including one ELU
+snapshot per accepted report. It adds no timer, reader instruction, flag, ring or
+successful-run output. The ordinary PowerShell command and arguments are
+unchanged: no early Process assembly reflection, phase writes or altered payload.
+Readiness still requires an actual RSS sample;100/250/5000ms controls, output caps,
+exit guards and resource limits remain unchanged.
+
+[Node24.21 timers](https://nodejs.org/download/release/v24.21.0/docs/api/timers.html#scheduling-timers)
+do not guarantee exact callback timing. The offsets describe when the owner ran
+its existing callbacks, not when the reader finished a native operation.
+[ELU](https://nodejs.org/download/release/v24.21.0/docs/api/perf_hooks.html#performanceeventlooputilizationutilization1-utilization2)
+measures event-provider active/idle time, not CPU utilization. Synchronous
+blocking can produce high ELU without high CPU use. Neither high activity nor
+idle time proves an exclusive cause, or distinguishes reader descheduling,
+PowerShell initialization, native memory lookup, sleep or pipe delivery delays.
+
+Main0d8's normal Windows CSV failure occurred in the repeated build after its
+measured build and independent observer had finished: eight reports,362ms silence.
+Its separate packed failure had no first sample by5009ms. The owner context is
+preparation for the next required native qualification, not a causal correction
+or a reproduction of either historical failure. Controlled wiring tests preserve
+these attribution limits. The separate phase-flag replay remains instrumented,
+nonqualifying evidence and cannot explain a normal failure merely by passing.
+
 ## POSIX reader failures
 
 Issue #801 also retains two distinct acceptance failures from PR #800 head
@@ -154,7 +217,8 @@ places; they are not clamped into a different observation.
 
 The 16-event ring, 1024-character pending buffer and 4096-byte final line remain.
 Markers never count as RSS reports. Diagnostics add no timer or readiness rule;
-without the flag, no event-loop utilization call is made. The exact large-pipe
+without the flag, no reader-phase instrumentation is added. Normal owner-loop
+failure context is described below. The exact large-pipe
 scenario enables the flag only on Windows and restores its original environment.
 Its source documents, build command, output assertions and deadlines stay intact.
 
@@ -175,3 +239,35 @@ cases with two existing native-Windows skips; architecture checks passed 305
 cases. Strict Node-only test typing, project types, lint, format, build and release
 policy checks passed. The controlled failure tests verify context retention and
 fail-closed behavior; they do not explain either historical native POSIX failure.
+
+## Auxiliary cscript/WMI selection control
+
+The Windows-only native comparison in `resident_memory.test.ts` evaluates an
+unshipped WSH JScript fixture. It does not replace the production PowerShell
+reader or change parser permissions, Node support, deadlines or original tests.
+One auxiliary Node child commits 128 MiB while its JavaScript thread stays busy.
+The candidate repeatedly fetches the exact WMI process instance and verifies
+PID/creation identity; resident growth and a stable final reading are checked
+against independent Framework OS snapshots. FILETIME remains a string to avoid
+64-bit integer loss. Wrong identity must fail before RSS output; target exit must fail rather than
+continue with cached-success reports.
+
+The ordinary flag-off PowerShell command observes the same child separately.
+Its failure is recorded as a baseline failure and its reader is closed; it does
+not prevent collecting the candidate's own guarded result. All original
+PowerShell/parser cases remain mandatory. Candidate startup/reporting failures,
+stale growth or bad identity fail the new control and clean up its owned helpers
+and target. The existing 5000 ms/250 ms watchdogs and 100 ms cadence remain.
+
+One bounded `LOREPACK_WMI_CONTROL` receipt records first/sample-window times,
+maximum accepted-report gap, native growth samples, independent reference,
+fixture/command hashes and actual exits, including on failure. The Framework
+identity snapshot precedes both fresh reader processes, so this is not a
+machine-cold or unperturbed performance measurement. Hosted administrator
+execution does not establish standard-user or enterprise-policy compatibility.
+A pass does not explain any historical failure or select a production adapter.
+
+The real Node-producer controls exercise controller guard/cleanup only. Local
+Node syntax checking of the JScript fixture does not execute WMI or establish
+Windows Script Host syntax compatibility. Native proof must come from the next
+required Windows qualification, without an extra dispatch or unchanged rerun.

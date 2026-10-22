@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { packCli, runTool } from './pack-cli.mjs';
 
@@ -36,7 +36,34 @@ export function globalSmokeEnvironment(prefix, temporary, environment = process.
   };
 }
 
-export function checkGlobalSmoke(outDir) {
+export function parseGlobalSmokeArgs(args) {
+  const values = {};
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index];
+    if (
+      !['--out', '--tarball'].includes(flag) ||
+      values[flag] !== undefined ||
+      !args[index + 1] ||
+      args[index + 1].startsWith('--')
+    ) {
+      throw new Error('usage: check-global-smoke.mjs --out <directory> [--tarball <tgz>]');
+    }
+    values[flag] = resolve(args[index + 1]);
+  }
+  if (values['--out'] === undefined) throw new Error('--out is required');
+  if (values['--tarball'] !== undefined) {
+    const inside = relative(values['--out'], values['--tarball']);
+    if (
+      inside === '' ||
+      (!inside.startsWith(`..${sep}`) && inside !== '..' && !isAbsolute(inside))
+    ) {
+      throw new Error('supplied tarball must be outside the evidence directory');
+    }
+  }
+  return { outDir: values['--out'], tarball: values['--tarball'] };
+}
+
+export function checkGlobalSmoke(outDir, { tarball: suppliedTarball } = {}) {
   mkdirSync(outDir, { recursive: true });
   const work = mkdtempSync(join(tmpdir(), 'lorepack-global-smoke-'));
   const prefix = join(work, 'global prefix & (literal) ^ %LOREPACK_LITERAL%');
@@ -60,9 +87,10 @@ export function checkGlobalSmoke(outDir) {
   };
   let code = 1;
   try {
-    const tarball = packCli({ outDir });
+    const tarball = suppliedTarball ?? packCli({ outDir });
     proof.tarball = tarball;
     proof.tarballSha256 = digest(readFileSync(tarball));
+    proof.tarballMode = suppliedTarball === undefined ? 'packed' : 'supplied';
     proof.stage = 'installing global tarball';
     runTool(
       'npm',
@@ -86,10 +114,15 @@ export function checkGlobalSmoke(outDir) {
     if (installed.version !== proof.expectedVersion)
       throw new Error('Installed tarball version differs.');
     if (installed.gitHead !== proof.source) throw new Error('Installed tarball source differs.');
-    proof.stage = 'running unchanged public smoke';
+    proof.stage = 'running retained public lifecycle smoke';
     const result = spawnSync(
       process.execPath,
-      [join(ROOT, 'scripts/public-registry-smoke.mjs'), installed.version],
+      [
+        join(ROOT, 'scripts/public-registry-smoke.mjs'),
+        installed.version,
+        '--out',
+        join(outDir, 'lifecycle'),
+      ],
       {
         cwd: temporary,
         env,
@@ -101,6 +134,8 @@ export function checkGlobalSmoke(outDir) {
     writeFileSync(join(outDir, 'smoke.stderr'), result.stderr ?? '');
     process.stdout.write(result.stdout ?? '');
     process.stderr.write(result.stderr ?? '');
+    proof.tarballUnchanged = digest(readFileSync(tarball)) === proof.tarballSha256;
+    if (!proof.tarballUnchanged) throw new Error('Tarball changed during global smoke.');
     proof.signal = result.signal;
     proof.launchError = result.error?.message ?? null;
     code = result.status ?? 1;
@@ -118,15 +153,11 @@ export function checkGlobalSmoke(outDir) {
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? '')).href) {
-  if (process.argv[2] !== '--out' || !process.argv[3] || process.argv.length !== 4) {
-    console.error('usage: check-global-smoke.mjs --out <directory>');
+  try {
+    const { outDir, tarball } = parseGlobalSmokeArgs(process.argv.slice(2));
+    process.exitCode = checkGlobalSmoke(outDir, { tarball });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
-  } else {
-    try {
-      process.exitCode = checkGlobalSmoke(resolve(process.argv[3]));
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
   }
 }

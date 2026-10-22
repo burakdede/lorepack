@@ -130,6 +130,10 @@ The checker never derives its expected paths from the candidate tarball. The pac
 CLI-owned source maps, build information and unbundled JavaScript from the shipped stage;
 the eight runtime bundle entries, their chunks, migrations and public declaration closure stay.
 
+The CLI bundler fixes esbuild's working directory to the repository root. Root and
+package build commands must emit identical bytes for the same compiled inputs and output
+path; otherwise generated module paths alone rename chunks and invalidate the reviewed list.
+
 ## Provenance
 
 The public `@lorepack/cli` package sets:

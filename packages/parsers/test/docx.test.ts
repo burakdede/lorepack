@@ -39,10 +39,27 @@ const kinds = (parsed: ParsedArtifact): string[] => parsed.nodes.map((node) => n
 const texts = (parsed: ParsedArtifact): string =>
   parsed.nodes.map((node) => node.text ?? node.title ?? '').join(' | ');
 
+type DocxFixturePhase =
+  | 'allocation-start'
+  | 'allocation-done'
+  | 'zip-begin'
+  | 'part-add-start'
+  | 'part-add-returned'
+  | 'zip-end-returned'
+  | 'zip-first-output'
+  | 'zip-assembly-start'
+  | 'zip-assembled'
+  | 'parser-assertion-start'
+  | 'parser-assertion-passed';
+
+type DocxFixtureObserver = (phase: DocxFixturePhase, part?: number, bytes?: number) => void;
+
 async function packageWithExtraParts(
   parts: readonly { name: string; content: string | Uint8Array }[],
   body = paragraph('original'),
+  observe?: DocxFixtureObserver,
 ): Promise<Uint8Array> {
+  observe?.('zip-begin');
   const zip = new yazl.ZipFile();
   const document = (body: string): string =>
     `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}</w:body></w:document>`;
@@ -64,19 +81,36 @@ async function packageWithExtraParts(
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="file:///tmp/missing-lorepack-image.png" TargetMode="External"/></Relationships>',
     },
   ];
+  let partIndex = 0;
   for (const part of [...defaults, ...parts]) {
     const content =
       typeof part.content === 'string'
         ? Buffer.from(part.content)
         : Buffer.from(part.content.buffer, part.content.byteOffset, part.content.byteLength);
+    observe?.('part-add-start', partIndex, content.byteLength);
     zip.addBuffer(content, part.name);
+    observe?.('part-add-returned', partIndex, content.byteLength);
+    partIndex += 1;
   }
   zip.end();
+  observe?.('zip-end-returned');
   return await new Promise<Uint8Array>((resolve, reject) => {
     const chunks: Buffer[] = [];
-    zip.outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let outputStarted = false;
+    zip.outputStream.on('data', (chunk: Buffer) => {
+      if (!outputStarted) {
+        observe?.('zip-first-output');
+        outputStarted = true;
+      }
+      chunks.push(chunk);
+    });
     zip.outputStream.on('error', reject);
-    zip.outputStream.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks))));
+    zip.outputStream.on('end', () => {
+      observe?.('zip-assembly-start');
+      const bytes = new Uint8Array(Buffer.concat(chunks));
+      observe?.('zip-assembled', undefined, bytes.byteLength);
+      resolve(bytes);
+    });
   });
 }
 
@@ -230,17 +264,48 @@ try {
     });
   });
 
-  it('rejects package bytes spread across individually allowed parts', async () => {
+  it('rejects package bytes spread across individually allowed parts', async ({ onTestFailed }) => {
+    const started = performance.now();
+    const events: { phase: DocxFixturePhase; elapsedMs: number; part?: number; bytes?: number }[] =
+      [];
+    const observe: DocxFixtureObserver = (phase, part, bytes) => {
+      if (events.length < 32) {
+        events.push({
+          phase,
+          elapsedMs: performance.now() - started,
+          ...(part === undefined ? {} : { part }),
+          ...(bytes === undefined ? {} : { bytes }),
+        });
+      }
+    };
+    onTestFailed(() => {
+      console.error(
+        'DOCX aggregate-byte phase snapshot',
+        JSON.stringify({
+          node: process.version,
+          platform: process.platform,
+          pid: process.pid,
+          elapsedMs: performance.now() - started,
+          events,
+        }),
+      );
+    });
+    observe('allocation-start');
     const content = Buffer.alloc(55 * 1024 * 1024, 65);
+    observe('allocation-done', undefined, content.byteLength);
     const bytes = await packageWithExtraParts(
       Array.from({ length: 3 }, (_, index) => ({
         name: `word/extra-${String(index)}.bin`,
         content,
       })),
+      undefined,
+      observe,
     );
+    observe('parser-assertion-start', undefined, bytes.byteLength);
     await expect(parseBytes(bytes)).rejects.toMatchObject({
       code: 'LORE_E_ENVELOPE_EXCEEDED',
     });
+    observe('parser-assertion-passed');
   }, 45_000);
 
   it('refuses a legacy .doc by name rather than failing obscurely', async () => {

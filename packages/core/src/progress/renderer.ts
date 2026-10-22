@@ -13,7 +13,7 @@ export interface RendererOptions {
    * needing the width is why the renderer has to be told it.
    */
   readonly columns?: number | undefined;
-  /** Architecture section 5.5 requires at least one visible update per second. */
+  /** Throttles producer events; callers explicitly refresh quiet asynchronous stages. */
   readonly minUpdateIntervalMs?: number;
   readonly now?: () => number;
 }
@@ -89,6 +89,7 @@ export class ProgressRenderer {
       case 'stage-started':
         // Labels, details and diagnostics can name a source file, so each is made inert on
         // the way in; the renderer's own `\r`, line clear and colour are added afterwards.
+        this.#stages.delete(event.stage);
         this.#stages.set(event.stage, {
           label: sanitizeForTerminal(event.label),
           completed: 0,
@@ -124,6 +125,20 @@ export class ProgressRenderer {
         this.#options.write(`${event.level}: ${sanitizeForTerminal(event.message)}\n`);
         break;
     }
+  }
+
+  /** Repeats known work and current elapsed time during a quiet asynchronous wait. */
+  refresh(): void {
+    for (const [stage, state] of [...this.#stages].reverse()) {
+      if (state.finished) continue;
+      this.#render(stage, this.#options.now(), true);
+      break;
+    }
+  }
+
+  dispose(): void {
+    this.#finishLine();
+    this.#stages.clear();
   }
 
   #render(

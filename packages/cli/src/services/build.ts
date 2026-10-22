@@ -1,5 +1,5 @@
 import { closeSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   buildMigrationsDirectory,
   checkStoredLocatorRanges,
@@ -50,6 +50,7 @@ import {
   type Canonical,
   count,
   deriveBuildId,
+  diskFullError,
   hashCanonical,
   hashRoot,
   LORE_DIRECTORY,
@@ -335,6 +336,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             reusedArtifacts += 1;
             parsed.push(withRules(cached, rulesById));
             handled += 1;
+            progress.progress('parsing', handled, { unit: 'documents' });
             continue;
           }
 
@@ -402,6 +404,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
             // on this file, and a person watching deserves to know why it paused.
             progress.diagnostic('warn', `${discovered.displayPath}: ${outcome.message}`);
             handled += 1;
+            progress.progress('parsing', handled, { unit: 'documents' });
             continue;
           }
           const result: ParsedArtifact = outcome.result;
@@ -430,7 +433,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           parsed.push(withRules(entry, rulesById));
 
           handled += 1;
-          if (handled % 10 === 0) progress.progress('parsing', handled, { unit: 'documents' });
+          progress.progress('parsing', handled, { unit: 'documents' });
         }
       } finally {
         await host.closeAndWait();
@@ -546,12 +549,25 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           // A fixed timestamp, not the wall clock: a sealed build must carry no
           // operational time. Otherwise two builds of identical content differ in bytes,
           // and `.lorepack` stops being reproducible.
-          runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => SEALED_AT);
-          const counts = writeCatalog({
-            db,
-            artifacts: parsed,
-            warnings,
-          });
+          let counts: ReturnType<typeof writeCatalog>;
+          try {
+            runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => SEALED_AT);
+            counts = writeCatalog({
+              db,
+              artifacts: parsed,
+              warnings,
+            });
+          } catch (cause) {
+            const failure = diskFullError(cause) ?? LoreError.from(cause);
+            throw new LoreError(failure.code, `Failed while indexing build ${buildId}.`, {
+              path:
+                failure.path ?? `${LORE_DIRECTORY}/tmp/${basename(candidate.path)}/context.sqlite`,
+              subject: failure.subject ?? buildId,
+              ...(failure.remediation === undefined ? {} : { remediation: failure.remediation }),
+              details: { ...failure.details, stage: 'indexing' },
+              cause,
+            });
+          }
           progress.finish('indexing', counts.chunks);
 
           const manifest: BuildManifest = {
@@ -589,18 +605,30 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           };
 
           progress.start('validating', 'Validating');
-          const report = await validateCandidate({
-            db,
-            objects,
-            artifacts: parsed,
-            manifest: manifest as unknown as Record<string, unknown>,
-            secrets: secretsFromEnv(),
-            integrityCheck,
-            search: (database, query, limit) => searchCatalog(database, query, limit),
-            countRows,
-            tableMappingCheck: checkTableMappings,
-            locatorRangeCheck: checkStoredLocatorRanges,
-          });
+          let report: Awaited<ReturnType<typeof validateCandidate>>;
+          try {
+            report = await validateCandidate({
+              db,
+              objects,
+              artifacts: parsed,
+              manifest: manifest as unknown as Record<string, unknown>,
+              secrets: secretsFromEnv(),
+              integrityCheck,
+              search: (database, query, limit) => searchCatalog(database, query, limit),
+              countRows,
+              tableMappingCheck: checkTableMappings,
+              locatorRangeCheck: checkStoredLocatorRanges,
+            });
+          } catch (cause) {
+            const failure = diskFullError(cause) ?? LoreError.from(cause);
+            throw new LoreError(failure.code, `Failed while validating build ${buildId}.`, {
+              ...(failure.path === undefined ? {} : { path: failure.path }),
+              subject: failure.subject ?? buildId,
+              ...(failure.remediation === undefined ? {} : { remediation: failure.remediation }),
+              details: { ...failure.details, stage: 'validating' },
+              cause,
+            });
+          }
           progress.finish('validating', report.checksRun.length, report.ok ? 'done' : 'failed');
 
           if (!report.ok) {
@@ -682,12 +710,29 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
       }
 
       const counts = countsOf(parsed);
-      state.recordBuild({
-        buildId,
-        state: 'verified',
-        createdAt: startedAt.toISOString(),
-        counts,
-      });
+      try {
+        state.recordBuild({
+          buildId,
+          state: 'verified',
+          createdAt: startedAt.toISOString(),
+          counts,
+        });
+      } catch (cause) {
+        const failure = diskFullError(cause) ?? LoreError.from(cause);
+        throw new LoreError(
+          failure.code,
+          `Failed while recording build ${buildId} after sealing.`,
+          {
+            path: `${LORE_DIRECTORY}/state.sqlite`,
+            subject: buildId,
+            remediation:
+              failure.remediation ??
+              'Check free space and local-state permissions, then run lorepack build again. The active build has not changed.',
+            details: { ...failure.details, stage: 'state-record' },
+            cause,
+          },
+        );
+      }
       writeLockfile(config.projectRoot, nextLock);
 
       let activated = false;

@@ -151,12 +151,17 @@ export function buildProgram(
         streams.errorIsTty ?? streams.isTty,
       );
       const context = createContext(globalOptions, streams, options.signal);
-      hooks.onContext(context);
-      const result = await definition.handler(
-        positional,
-        { ...flags, _command: commandInstance },
-        context,
-      );
+      let result: CommandResult | undefined;
+      try {
+        hooks.onContext(context);
+        result = await definition.handler(
+          positional,
+          { ...flags, _command: commandInstance },
+          context,
+        );
+      } finally {
+        context.dispose();
+      }
       hooks.onResult(result, context);
     });
   }

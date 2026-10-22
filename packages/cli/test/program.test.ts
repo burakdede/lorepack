@@ -1,14 +1,175 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { EXIT_CODES } from '@lorepack/core';
+import { setTimeout as delay } from 'node:timers/promises';
+import { EXIT_CODES, LoreError } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { validateCommandMetadata } from '../src/framework/metadata.js';
 import { runCli } from '../src/framework/program.js';
 import { fixtureCommands, run } from './helpers.js';
 
 const commands = fixtureCommands;
+
+it('refreshes a quiet async stage without fabricating completed work', async () => {
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let output = '';
+  let progress = '';
+  stdout.on('data', (chunk: Buffer) => {
+    output += chunk.toString();
+  });
+  stderr.on('data', (chunk: Buffer) => {
+    progress += chunk.toString();
+  });
+  let release: () => void = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pending = runCli(['node', 'lorepack', '--json', 'quiet'], {
+    commands: [
+      {
+        name: 'quiet',
+        description: 'Wait without producer events',
+        handler: async (_args, _flags, context) => {
+          context.progress.start('parsing', 'Parsing', 2);
+          await waiting;
+          context.progress.finish('parsing', 2);
+          return { json: { ok: true } };
+        },
+      },
+    ],
+    streams: { stdout, stderr, isTty: false },
+    exitProcess: false,
+  });
+  try {
+    await delay(1_200);
+    const lines = progress.trim().split('\n');
+    expect(lines.filter((line) => /^Parsing +0\/2 +/.test(line))).toHaveLength(2);
+    expect(lines.at(-1)).toMatch(/^Parsing +0\/2 +1\.\d+s$/);
+    expect(output).toBe('');
+  } finally {
+    release();
+    expect(await pending).toBe(0);
+  }
+  expect(JSON.parse(output)).toEqual({ ok: true });
+});
+
+it('closes an unfinished TTY progress row before writing the command result', async () => {
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const code = await runCli(['node', 'lorepack', 'unfinished'], {
+    commands: [
+      {
+        name: 'unfinished',
+        description: 'Return with an unfinished stage',
+        handler: (_args, _flags, context) => {
+          context.progress.start('parsing', 'Parsing', 2);
+          return { human: 'Summary' };
+        },
+      },
+    ],
+    streams: { stdout, stderr, isTty: true },
+    env: { NO_COLOR: '1' },
+    exitProcess: false,
+  });
+  expect(code).toBe(0);
+  const text = stdout.read()?.toString();
+  expect(text).toContain('\nSummary\n');
+  expect(text).not.toContain('done');
+});
+
+it.each(['success', 'error', 'cancel'] as const)(
+  'disposes quiet refresh on %s and keeps repeated invocations isolated',
+  async (outcome) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+    try {
+      const timers = vi.getTimerCount();
+      for (let invocation = 0; invocation < 2; invocation += 1) {
+        const stdout = new PassThrough();
+        const stderr = new PassThrough();
+        let output = '';
+        let progress = '';
+        stdout.on('data', (chunk: Buffer) => {
+          output += chunk.toString();
+        });
+        stderr.on('data', (chunk: Buffer) => {
+          progress += chunk.toString();
+        });
+        const controller = new AbortController();
+        let settle: ((error?: LoreError) => void) | undefined;
+        let update: (() => void) | undefined;
+        let late: (() => void) | undefined;
+        const pending = runCli(['node', 'lorepack', '--json', 'quiet'], {
+          commands: [
+            {
+              name: 'quiet',
+              description: 'Controlled quiet work',
+              handler: async (_args, _flags, context) => {
+                context.progress.start('parsing', 'Parsing', 2);
+                update = () => context.progress.progress('parsing', 1);
+                late = () => context.progress.start('indexing', 'Late');
+                const abort = () =>
+                  settle?.(new LoreError('LORE_E_CANCELLED', 'Stopped controlled work.'));
+                context.signal?.addEventListener('abort', abort, { once: true });
+                try {
+                  await new Promise<void>((resolve, reject) => {
+                    settle = (error) => (error === undefined ? resolve() : reject(error));
+                  });
+                  context.progress.finish('parsing', 2);
+                  return { json: { ok: true } };
+                } finally {
+                  context.signal?.removeEventListener('abort', abort);
+                }
+              },
+            },
+          ],
+          streams: { stdout, stderr, isTty: false },
+          exitProcess: false,
+          signal: controller.signal,
+        });
+        try {
+          await vi.advanceTimersByTimeAsync(900);
+          expect(update).toBeTypeOf('function');
+          update?.();
+          await vi.advanceTimersByTimeAsync(1100);
+          expect(progress).toMatch(/Parsing +1\/2 +1\.0s/);
+          expect(progress).toMatch(/Parsing +1\/2 +2\.0s/);
+          expect(output).toBe('');
+          if (outcome === 'cancel') controller.abort();
+          else
+            settle?.(
+              outcome === 'error'
+                ? new LoreError('LORE_E_PARSE_FAILED', 'Controlled failure.')
+                : undefined,
+            );
+          const code = await pending;
+          if (outcome === 'success') {
+            expect(code).toBe(0);
+            expect(JSON.parse(output)).toEqual({ ok: true });
+          } else {
+            expect(code).not.toBe(0);
+            expect(JSON.parse(output)).toMatchObject({
+              error: { code: outcome === 'cancel' ? 'LORE_E_CANCELLED' : 'LORE_E_PARSE_FAILED' },
+            });
+          }
+          expect(vi.getTimerCount()).toBe(timers);
+          const stopped = { output, progress };
+          late?.();
+          await vi.advanceTimersByTimeAsync(2000);
+          expect({ output, progress }).toEqual(stopped);
+        } finally {
+          settle?.();
+          await pending;
+        }
+      }
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  },
+);
 
 describe('help and version', () => {
   it('prints help and exits 0 with no arguments', async () => {

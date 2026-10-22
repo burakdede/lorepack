@@ -278,25 +278,65 @@ export function monitorResidentMemory(
       if (alive()) parser.kill('SIGKILL');
     }
   };
-  let ownerArmedAt = 0;
-  let ownerBaseline: EventLoopUtilization | undefined;
+  type OwnerWindow = {
+    startedAt: number;
+    baseline: EventLoopUtilization;
+    firedAt: number | null;
+  };
+  let startupOwner: OwnerWindow | undefined;
+  let reportingOwner: OwnerWindow | undefined;
+  const beginOwnerWindow = (): OwnerWindow => ({
+    startedAt: performance.now(),
+    baseline: nodePerformance.eventLoopUtilization(),
+    firedAt: null,
+  });
   const rounded = (value: number): number => Math.round(value * 1000) / 1000;
+  const ownerContext = (
+    window: 'startup' | 'reporting',
+    observation: OwnerWindow | undefined,
+    expectedMs: number,
+    elapsedMs: number,
+  ): string => {
+    if (observation === undefined) return '';
+    const now = performance.now();
+    const owner = nodePerformance.eventLoopUtilization(observation.baseline);
+    const bounded = (value: number | null): number | null =>
+      value !== null && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER
+        ? rounded(value)
+        : null;
+    return ` Owner context: ${JSON.stringify({
+      window,
+      expectedMs,
+      elapsedMs: bounded(elapsedMs),
+      deadlineDeltaMs: bounded(elapsedMs - expectedMs),
+      ownerElapsedMs: bounded(now - observation.startedAt),
+      timerFireElapsedMs: bounded(
+        observation.firedAt === null ? null : observation.firedAt - observation.startedAt,
+      ),
+      timerToCheckMs: bounded(observation.firedAt === null ? null : now - observation.firedAt),
+      ownerActiveMs: bounded(owner.active),
+      ownerIdleMs: bounded(owner.idle),
+      ownerUtilization: bounded(owner.utilization),
+    })}`;
+  };
   reporting = createReportingWatchdog(
     ({ reports, silenceMs }) =>
       fail(
         new Error(
-          `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.`,
+          `The process memory observer stopped reporting: ${reports} reports; ${Math.round(silenceMs)} ms since the last; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); last RSS ${state.bytes ?? 'unknown'} bytes.${ownerContext('reporting', reportingOwner, READER_TIMEOUT_MS, silenceMs)}`,
         ),
       ),
-    diagnostic
+    process.platform === 'win32'
       ? (phase, reports) => {
           if (phase === 'arm') {
-            ownerArmedAt = performance.now();
-            ownerBaseline = nodePerformance.eventLoopUtilization();
+            reportingOwner = beginOwnerWindow();
             record({ kind: phase, reports });
           } else {
-            const elapsedMs = performance.now() - ownerArmedAt;
-            const owner = nodePerformance.eventLoopUtilization(ownerBaseline);
+            if (phase === 'fire' && reportingOwner !== undefined)
+              reportingOwner.firedAt = performance.now();
+            if (!diagnostic || reportingOwner === undefined) return;
+            const elapsedMs = performance.now() - reportingOwner.startedAt;
+            const owner = nodePerformance.eventLoopUtilization(reportingOwner.baseline);
             record({
               kind: phase,
               reports,
@@ -374,13 +414,20 @@ export function monitorResidentMemory(
     let diagnosticPending = '';
     let reports = 0;
     startup = createStartupWatchdog(
-      () =>
+      () => {
+        const elapsedMs = performance.now() - startedAt;
         fail(
           new Error(
-            `The process memory observer did not become ready: ${Math.round(performance.now() - startedAt)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}`,
+            `The process memory observer did not become ready: ${Math.round(elapsedMs)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}${ownerContext('startup', startupOwner, WINDOWS_STARTUP_TIMEOUT_MS, elapsedMs)}`,
           ),
-        ),
-      diagnostic ? (phase) => record({ kind: `startup-${phase}` }) : undefined,
+        );
+      },
+      (phase) => {
+        if (phase === 'arm') startupOwner = beginOwnerWindow();
+        else if (phase === 'fire' && startupOwner !== undefined)
+          startupOwner.firedAt = performance.now();
+        record({ kind: `startup-${phase}` });
+      },
     );
     reader = spawn(
       win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),

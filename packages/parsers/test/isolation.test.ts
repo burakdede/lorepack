@@ -1,3 +1,6 @@
+import type { ChildProcess } from 'node:child_process';
+import { subscribe, unsubscribe } from 'node:diagnostics_channel';
+import type { Worker } from 'node:worker_threads';
 import type { ArtifactParser, ParseInput } from '@lorepack/core';
 import { LoreError, sha256Hex } from '@lorepack/core';
 // The built package rather than `../src`: the host forks `parse-child.js` from beside its own
@@ -35,7 +38,7 @@ import {
   row,
   singleCharacterCsv,
 } from '@lorepack/test-support';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The parse isolation from #594, against the parsers themselves.
@@ -58,13 +61,100 @@ const SETTLE_MS = 10_000;
 const SUITE = { timeout: 90_000 };
 
 const hosts: ParserHost[] = [];
+const observations: { verify(): Promise<void>; dispose(): Promise<void> }[] = [];
+
+function observeResources() {
+  const children: { process: ChildProcess; closed: boolean }[] = [];
+  const workers: { worker: Worker; exited: boolean }[] = [];
+  const childStarted = (message: unknown) => {
+    const process = (message as { process: ChildProcess }).process;
+    const observed = { process, closed: false };
+    children.push(observed);
+    process.once('close', () => {
+      observed.closed = true;
+    });
+  };
+  const workerStarted = (message: unknown) => {
+    const worker = (message as { worker: Worker }).worker;
+    const observed = { worker, exited: false };
+    workers.push(observed);
+    worker.once('exit', () => {
+      observed.exited = true;
+    });
+  };
+  subscribe('child_process', childStarted);
+  subscribe('worker_threads', workerStarted);
+  const assertClosed = async () => {
+    await vi.waitFor(
+      () => {
+        expect(children.every((child) => child.closed)).toBe(true);
+        expect(workers.every((worker) => worker.exited)).toBe(true);
+      },
+      { timeout: SETTLE_MS },
+    );
+  };
+  const observation = {
+    async verify() {
+      expect(
+        children.some((child) =>
+          child.process.spawnargs.some((arg) => /[/\\]parse-child\.js$/.test(arg)),
+        ),
+      ).toBe(true);
+      if (process.platform === 'linux') expect(workers.length).toBeGreaterThan(0);
+      await assertClosed();
+      console.info(
+        'CORE41 parser resource receipt',
+        JSON.stringify({
+          children: children.map(({ process: child, closed }) => ({
+            pid: child.pid,
+            argv: child.spawnargs,
+            closed,
+            exitCode: child.exitCode,
+            signal: child.signalCode,
+          })),
+          workers: workers.map(({ worker, exited }) => ({ threadId: worker.threadId, exited })),
+        }),
+      );
+    },
+    async dispose() {
+      unsubscribe('child_process', childStarted);
+      unsubscribe('worker_threads', workerStarted);
+      for (const child of children) if (!child.closed) child.process.kill('SIGKILL');
+      const failures: unknown[] = [];
+      for (const worker of workers)
+        if (!worker.exited)
+          void worker.worker.terminate().catch((error: unknown) => failures.push(error));
+      await assertClosed();
+      expect(failures).toEqual([]);
+    },
+  };
+  observations.push(observation);
+  return observation;
+}
+
 function host(limits?: ParseLimits): ParserHost {
   const created = new ParserHost(limits);
   hosts.push(created);
   return created;
 }
-afterEach(() => {
-  for (const created of hosts.splice(0)) created.close();
+afterEach(async () => {
+  const observed = observations.splice(0);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.all(hosts.splice(0).map((created) => created.closeAndWait())),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('ParserHost did not join owned resources.')),
+          SETTLE_MS,
+        );
+      }),
+    ]);
+    for (const observation of observed) await observation.verify();
+  } finally {
+    clearTimeout(timer);
+    for (const observation of observed) await observation.dispose();
+  }
 });
 
 function inputFor(relativePath: string, mediaType: string, bytes: Uint8Array): ParseInput {
@@ -183,6 +273,7 @@ describe('a parse that exceeds its limits, issue 594', SUITE, () => {
 
   for (const [name, input] of timeouts) {
     it(`stops ${name} at the deadline and names it a timeout`, async () => {
+      observeResources();
       const parsed = input();
       const parser = parserFor(parsed);
       expect(parser).not.toBeNull();
@@ -216,6 +307,7 @@ describe('a parse that exceeds its limits, issue 594', SUITE, () => {
 
   for (const [name, input] of memory) {
     it(`stops ${name} at the memory ceiling, and this process survives`, async () => {
+      observeResources();
       const parsed = await input();
       const parser = parserFor(parsed) as ArtifactParser;
       const limits: ParseLimits = { timeoutMs: 60_000, memoryMb: 128 };
