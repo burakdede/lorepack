@@ -135,6 +135,7 @@ const buildDatabasePath = join(
   lorepack.built.buildId,
   'context.sqlite',
 );
+const buildDatabaseSha256 = sha256(buildDatabasePath);
 const baselineProcess = spawnSync(
   process.execPath,
   [
@@ -157,6 +158,9 @@ const baselineProcess = spawnSync(
 );
 if (baselineProcess.status !== 0) {
   throw new Error(`SQLite FTS5 baseline failed: ${baselineProcess.stderr}`);
+}
+if (sha256(buildDatabasePath) !== buildDatabaseSha256) {
+  throw new Error('SQLite FTS5 baseline modified the immutable Lorepack build database');
 }
 const baseline = JSON.parse(baselineProcess.stdout.trim());
 validateReport(baseline, 'SQLite FTS5 baseline');
