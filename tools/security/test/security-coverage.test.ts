@@ -8,6 +8,7 @@ import {
   ROOT,
   runFiles,
   runVitest,
+  testNamePattern,
 } from './support/evidence.js';
 
 function read(relativePath: string): string {
@@ -692,6 +693,8 @@ const EVIDENCE: readonly Evidence[] = [
   },
 ];
 
+const SECURITY_TEST_PATTERN = testNamePattern([...new Set(EVIDENCE.flatMap((item) => item.tests))]);
+
 /**
  * Each class is held only if the tests that hold it ran and passed in this run.
  *
@@ -707,10 +710,11 @@ describe('consolidated security suite coverage, issues 98 and 615', () => {
     const own = files.filter((file) => file.startsWith(SECURITY_ROOT));
     const rest = files.filter((file) => !file.startsWith(SECURITY_ROOT));
     outcomes = [
-      ...runVitest(rest),
+      ...runVitest(rest, undefined, SECURITY_TEST_PATTERN),
       ...runVitest(
         own.map((file) => file.slice(SECURITY_ROOT.length)),
         SECURITY_ROOT,
+        SECURITY_TEST_PATTERN,
       ),
     ];
   }, 900_000);
