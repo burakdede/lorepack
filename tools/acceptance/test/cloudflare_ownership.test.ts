@@ -11,6 +11,11 @@ const remote = vi.hoisted(() => ({
   deletions: [] as string[],
   failUpload: false,
   failDatabase: null as string | null,
+  failD1Delete7500: null as {
+    name: string;
+    remaining: number;
+    applyBeforeFailure: boolean;
+  } | null,
   invalidListing: null as 'worker' | 'd1' | null,
 }));
 
@@ -38,6 +43,15 @@ vi.mock('node:child_process', async (importOriginal) => {
       if (command[0] === 'd1' && command[1] === 'delete') {
         const name = command[2] ?? '';
         if (remote.failDatabase === name) return fail('D1 delete failed');
+        const failure = remote.failD1Delete7500;
+        if (failure?.name === name && failure.remaining > 0) {
+          failure.remaining -= 1;
+          if (failure.applyBeforeFailure) {
+            remote.databases.delete(name);
+            failure.applyBeforeFailure = false;
+          }
+          return fail('internal error; reference = test [code: 7500]');
+        }
         remote.deletions.push(`d1:${name}`);
         if (!remote.databases.delete(name)) {
           return fail("Couldn't find a D1 DB with name or binding");
@@ -138,6 +152,7 @@ describe('durable Cloudflare acceptance ownership, issue 622', () => {
     remote.deletions.length = 0;
     remote.failUpload = false;
     remote.failDatabase = null;
+    remote.failD1Delete7500 = null;
     remote.invalidListing = null;
     for (const [name, value] of Object.entries(ENV)) vi.stubEnv(name, value);
     vi.stubEnv('LORE_CF_ARTIFACT_DIR', '');
@@ -311,11 +326,54 @@ describe('durable Cloudflare acceptance ownership, issue 622', () => {
     expect(remote.databases.size).toBe(0);
   });
 
+  it.each([false, true])(
+    'retries an owned D1 deletion after code 7500 when applied=%s',
+    async (applyBeforeFailure) => {
+      const old = record('a', '100', '1');
+      seed(old);
+      const name = cloudflareOwnershipNames(old).catalogDatabaseName;
+      remote.failD1Delete7500 = { name, remaining: 1, applyBeforeFailure };
+
+      await cleanupOwnedCloudflareResources(SCOPE, ENV);
+
+      expect(
+        remote.commands.filter(
+          (command) => command[0] === 'd1' && command[1] === 'delete' && command[2] === name,
+        ),
+      ).toHaveLength(2);
+      expect(remote.databases.has(name)).toBe(false);
+      expect(remote.buckets.get(LEDGER)?.size).toBe(0);
+    },
+  );
+
+  it('retains the ownership journal after three D1 code 7500 failures', async () => {
+    const old = record('a', '100', '1');
+    seed(old);
+    const name = cloudflareOwnershipNames(old).catalogDatabaseName;
+    remote.failD1Delete7500 = { name, remaining: 3, applyBeforeFailure: false };
+
+    await expect(cleanupOwnedCloudflareResources(SCOPE, ENV)).rejects.toThrow('[code: 7500]');
+
+    expect(
+      remote.commands.filter(
+        (command) => command[0] === 'd1' && command[1] === 'delete' && command[2] === name,
+      ),
+    ).toHaveLength(3);
+    expect(remote.databases.has(name)).toBe(true);
+    expect(remote.buckets.get(LEDGER)?.has(cloudflareOwnershipKey(old))).toBe(true);
+  });
+
   it('retains the journal when any owned resource deletion fails', async () => {
     const old = record('a', '100', '1');
     seed(old);
     remote.failDatabase = cloudflareOwnershipNames(old).tablesDatabaseName;
     await expect(cleanupOwnedCloudflareResources(SCOPE, ENV)).rejects.toThrow('D1 delete failed');
+    expect(
+      remote.commands.filter(
+        (command) =>
+          command[0] === 'd1' && command[1] === 'delete' && command[2] === remote.failDatabase,
+      ),
+    ).toHaveLength(1);
     expect(remote.buckets.get(LEDGER)?.has(cloudflareOwnershipKey(old))).toBe(true);
     expect(remote.databases.has(remote.failDatabase)).toBe(true);
     remote.failDatabase = null;

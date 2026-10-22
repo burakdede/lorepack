@@ -44,6 +44,8 @@ const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const COMPATIBILITY_DATE = '2026-08-08';
 const WORKER_DEPLOY_ATTEMPTS = 3;
 const WORKER_PROPAGATION_DELAY_MS = 2_000;
+const D1_DELETE_ATTEMPTS = 3;
+const D1_DELETE_RETRY_DELAY_MS = 500;
 let artifactSequence = 0;
 
 export interface CloudflareSmokeProject {
@@ -292,10 +294,7 @@ export async function teardownCloudflareSmokeTarget(
   }
 
   try {
-    await runWrangler(
-      ['d1', 'delete', target.catalogDatabaseName, '--skip-confirmation'],
-      target.wranglerEnv,
-    );
+    await deleteCloudflareD1Database(target.catalogDatabaseName, target.wranglerEnv);
   } catch (error) {
     if (!isMissingCloudflareD1Error(error)) {
       failures.push(`delete D1 ${target.catalogDatabaseName}: ${messageOf(error)}`);
@@ -303,10 +302,7 @@ export async function teardownCloudflareSmokeTarget(
   }
 
   try {
-    await runWrangler(
-      ['d1', 'delete', target.tablesDatabaseName, '--skip-confirmation'],
-      target.wranglerEnv,
-    );
+    await deleteCloudflareD1Database(target.tablesDatabaseName, target.wranglerEnv);
   } catch (error) {
     if (!isMissingCloudflareD1Error(error)) {
       failures.push(`delete D1 ${target.tablesDatabaseName}: ${messageOf(error)}`);
@@ -1022,11 +1018,7 @@ export async function cleanupOwnedCloudflareResources(
       if (!isMissingCloudflareBucketError(error)) throw error;
     }
     for (const name of [names.catalogDatabaseName, names.tablesDatabaseName]) {
-      try {
-        await runWrangler(['d1', 'delete', name, '--skip-confirmation'], env);
-      } catch (error) {
-        if (!isMissingCloudflareD1Error(error)) throw error;
-      }
+      await deleteCloudflareD1Database(name, env);
     }
     await runWrangler(remoteR2ObjectDeleteArgs(bucket, cloudflareOwnershipKey(record)), env);
   }
@@ -1244,6 +1236,29 @@ export function isNonEmptyCloudflareBucketError(error: unknown): boolean {
 
 export function isMissingCloudflareD1Error(error: unknown): boolean {
   return messageOf(error).includes("Couldn't find a D1 DB with name or binding");
+}
+
+async function deleteCloudflareD1Database(
+  name: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await runWrangler(['d1', 'delete', name, '--skip-confirmation'], env);
+      return;
+    } catch (error) {
+      if (isMissingCloudflareD1Error(error)) return;
+      if (!isTransientCloudflareD1DeleteError(error) || attempt >= D1_DELETE_ATTEMPTS) {
+        throw error;
+      }
+      await sleep(D1_DELETE_RETRY_DELAY_MS * attempt);
+    }
+  }
+}
+
+function isTransientCloudflareD1DeleteError(error: unknown): boolean {
+  const message = messageOf(error).toLowerCase();
+  return message.includes('internal error; reference') && message.includes('[code: 7500]');
 }
 
 function sanitizeName(value: string): string {
