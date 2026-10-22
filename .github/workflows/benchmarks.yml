@@ -354,7 +354,6 @@ jobs:
           $code = $LASTEXITCODE
           Set-Content (Join-Path $evidence 'build.exit.txt') $code
           exit $code
-<<<<<<< HEAD
       - name: Run the failing CLI observer cases with bounded traces
         timeout-minutes: 5
         shell: pwsh
