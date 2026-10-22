@@ -143,7 +143,8 @@ the object store can be pruned independently and reusing a parse whose body is g
 produce a build that cannot answer a source read.
 
 A corrupt, truncated or unwritable cache is treated as a miss. A cache must never fail a
-build that is otherwise complete.
+build that is otherwise complete. Entries use atomic replacement without filesystem flushes:
+losing a cache entry after a crash only means the next build parses that source again.
 
 Build-result reuse counts advance only when the cached parse and its normalized body
 are both eligible. A lookup hit with a missing body triggers a real parse and counts as

@@ -70,10 +70,11 @@ effort. What we actually depend on, atomic same-volume rename, holds on both.
 ## Object store
 
 Content-addressed with two levels of fan-out (`objects/sha256/ab/cd/<rest>`), so no
-directory grows unmanageable. An object is written with `writeFileAtomic`, and every fan-out
-directory created for it is then synced into its parent: the build record that references the
-object commits with `synchronous = FULL`, so after a power loss the record must not survive a
-directory entry that did not (#572).
+directory grows unmanageable. An object is written atomically with asynchronous file and
+directory syncs, and every fan-out directory created for it is then synced into its parent.
+The awaited flushes keep the parser observer responsive while preserving the durability
+boundary: the build record that references the object commits with `synchronous = FULL`, so
+after a power loss the record must not survive a directory entry that did not (#572).
 
 Reads verify the digest. A mismatch raises `LORE_E_OBJECT_CORRUPT` naming the hash rather
 than returning wrong bytes, and `quarantine` removes the object so the next build

@@ -426,7 +426,7 @@ export async function runBuild(options: BuildOptions): Promise<BuildResult> {
           // a re-read that takes seconds. Rows are exactly reproducible from bytes the build
           // has already read, so the cheap thing to keep is nothing. Nothing is ever written,
           // so nothing can ever be read back missing its tables.
-          if (entry.tables === undefined) cache.put(key, entry);
+          if (entry.tables === undefined) await cache.put(key, entry);
           parsed.push(withRules(entry, rulesById));
 
           handled += 1;
