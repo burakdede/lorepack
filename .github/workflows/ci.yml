@@ -10,8 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: lorepack-hosted-checks
+  queue: max
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: '24.21.0'

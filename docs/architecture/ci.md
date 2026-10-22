@@ -11,6 +11,13 @@ Runs on every pull request and every push to `main`, across a three-way OS matri
 a Windows-only failure is visible even when Linux is green, which is the whole reason the
 matrix exists.
 
+CI and benchmark workflow runs share the `lorepack-hosted-checks` concurrency group. The
+group runs one workflow at a time and queues up to 100 pending runs without replacing older
+pending checks. The matrix jobs inside the active workflow still run in parallel. GitHub
+cancels new runs if this bounded queue is full, and external runner outages can still fail a
+job after it starts. See [ADR 0050](../adr/0050-bounded-pr-check-queue.md) and GitHub's
+[workflow concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+
 The verification job checks out complete Git history (`fetch-depth: 0`). Its changeset
 gate fetches the base and PR head together without a depth limit or pruning, then checks
 the explicit PR head. A shallow graph can hide the common ancestor and miss an earlier
@@ -148,8 +155,11 @@ gh api -X PUT repos/burakdede/lorepack/branches/main/protection \
 
 ## Timing
 
-The budget is under 10 minutes per job. There is no remote build cache, per architecture
-section 8.1: add one only when measured timings demand it.
+There is no enforced under-10-minute job budget. Recent hosted runs show the full verification
+job taking roughly 20 to 49 minutes across platforms, with the Windows test suite as the
+largest contributor. Per-file evidence and measured optimization work are tracked in
+[#825](https://github.com/burakdede/lorepack/issues/825). There is no remote build cache,
+per architecture section 8.1: add one only when measured timings demand it.
 
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,

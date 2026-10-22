@@ -30,8 +30,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: benchmark-${{ github.workflow }}-${{ github.ref }}-${{ inputs.qualification == 'coverage' && 'coverage' || inputs.qualification == 'windows-observer' && 'windows-observer' || inputs.profile || 'small' }}
-  cancel-in-progress: true
+  group: lorepack-hosted-checks
+  queue: max
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: '24.21.0'
