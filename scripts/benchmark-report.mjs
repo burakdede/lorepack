@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 
 export const BENCHMARK_PROTOCOL_VERSION = 1;
 
@@ -369,6 +370,93 @@ export function validateBenchmarkReport(report) {
     });
   }
 
+  return problems;
+}
+
+export function validateBenchmarkComparison(report) {
+  if (report === null || typeof report !== 'object' || Array.isArray(report)) {
+    return ['comparison report must be an object'];
+  }
+
+  const problems = [];
+  if (report.protocol?.name !== 'lorepack-benchmark-comparison') {
+    problems.push('protocol.name must be lorepack-benchmark-comparison');
+  }
+  if (report.protocol?.version !== BENCHMARK_PROTOCOL_VERSION) {
+    problems.push(`protocol.version must be ${BENCHMARK_PROTOCOL_VERSION}`);
+  }
+  if (report.provisional !== true) problems.push('provisional must be true');
+  if (report.reportedNotEnforced !== true) problems.push('reportedNotEnforced must be true');
+  if (typeof report.commitSha !== 'string' || !COMMIT.test(report.commitSha)) {
+    problems.push('commitSha must be a lowercase Git commit id');
+  }
+  if (report.corpusManifest !== 'benchmarks/corpus/manifest.json') {
+    problems.push('corpusManifest must identify the shared corpus manifest');
+  }
+  if (report.queryWorkload !== 'benchmarks/corpus/queries.json') {
+    problems.push('queryWorkload must identify the shared query workload');
+  }
+  if (!Number.isInteger(report.corpus?.packs) || report.corpus.packs < 1) {
+    problems.push('corpus.packs must be a positive integer');
+  }
+  const expectedSamples = { build: 3, index: 3, warmSearch: 30, contextBundle: 20 };
+  for (const [name, count] of Object.entries(expectedSamples)) {
+    if (report.samples?.[name] !== count) problems.push(`samples.${name} must be ${count}`);
+  }
+
+  const lorepack = report.protocolReports?.lorepack;
+  const sqlite = report.protocolReports?.sqliteFts5;
+  if (lorepack === undefined || sqlite === undefined) {
+    problems.push('protocolReports must contain lorepack and sqliteFts5 reports');
+  } else {
+    problems.push(...validateBenchmarkReport(lorepack).map((problem) => `lorepack.${problem}`));
+    problems.push(...validateBenchmarkReport(sqlite).map((problem) => `sqliteFts5.${problem}`));
+    if (lorepack.corpus && sqlite.corpus && !isDeepStrictEqual(lorepack.corpus, sqlite.corpus)) {
+      problems.push('protocolReports must use the same corpus');
+    }
+    if (
+      lorepack.workload &&
+      sqlite.workload &&
+      !isDeepStrictEqual(lorepack.workload, sqlite.workload)
+    ) {
+      problems.push('protocolReports must use the same workload');
+    }
+    if (lorepack.commitSha !== report.commitSha || sqlite.commitSha !== report.commitSha) {
+      problems.push('protocolReports must use the comparison commit');
+    }
+    if (
+      lorepack.quality?.provenance?.available !== true ||
+      lorepack.quality.provenance.coverage !== 1
+    ) {
+      problems.push('lorepack must report complete source provenance');
+    }
+    if (
+      !Array.isArray(lorepack.claims) ||
+      !lorepack.claims.some(
+        (claim) =>
+          typeof claim === 'object' &&
+          claim !== null &&
+          claim.id === 'lorepack-semantic-quality' &&
+          claim.status === 'not-measured',
+      )
+    ) {
+      problems.push('lorepack must not claim semantic quality was measured');
+    }
+  }
+
+  const directBaseline = report.baselines?.sqliteFts5;
+  if (directBaseline?.contextBundleMs !== null) {
+    problems.push('baselines.sqliteFts5.contextBundleMs must be null');
+  }
+  if (
+    typeof directBaseline?.contextUnsupportedReason !== 'string' ||
+    !/bounded context/i.test(directBaseline.contextUnsupportedReason)
+  ) {
+    problems.push('baselines.sqliteFts5 must explain its bounded-context limitation');
+  }
+  if (!(report.baselines?.lorepack?.contextBundleMs?.p95 > 0)) {
+    problems.push('baselines.lorepack.contextBundleMs.p95 must be positive');
+  }
   return problems;
 }
 

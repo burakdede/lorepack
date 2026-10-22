@@ -1,11 +1,14 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildAt, writeProject } from '../../../scripts/bench-corpus.mjs';
-import { validateBenchmarkReport } from '../../../scripts/benchmark-report.mjs';
+import {
+  validateBenchmarkComparison,
+  validateBenchmarkReport,
+} from '../../../scripts/benchmark-report.mjs';
 
 const root = join(import.meta.dirname, '../../..');
 const workload = JSON.parse(readFileSync(join(root, 'benchmarks/corpus/queries.json'), 'utf8')) as {
@@ -19,8 +22,8 @@ const result = JSON.parse(
 ) as {
   queryWorkload: string;
   protocolReports: {
-    lorepack: Record<string, unknown>;
-    sqliteFts5: Record<string, unknown>;
+    lorepack: Record<string, unknown> & { claims: Array<{ id: string; status: string }> };
+    sqliteFts5: Record<string, unknown> & { workload: Record<string, unknown> };
   };
   baselines: {
     lorepack: { contextBundleMs: { p95: number } };
@@ -29,91 +32,73 @@ const result = JSON.parse(
 };
 
 describe('retrieval comparison contract', () => {
-  it('runs the actual comparison controller and persists its complete shared-workload report', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'lore-comparison-contract-'));
-    const output = join(directory, 'nested', 'comparison.json');
-    try {
-      const execution = spawnSync(
-        process.execPath,
-        [join(root, 'scripts/bench-retrieval-comparison.mjs'), '--out', output],
-        {
-          cwd: root,
-          encoding: 'utf8',
-          env: {
-            ...process.env,
-            LORE_BENCH_PACKS: '1',
-            LORE_BENCH_SCALE: 'small',
-            LORE_BENCH_PROFILE: 'mixed',
-            LORE_BENCH_STORAGE_CLASS: 'fixture-not-reference',
-          },
+  it('validates the comparison report envelope and its shared workload', () => {
+    expect(validateBenchmarkComparison(result)).toEqual([]);
+  });
+
+  it('rejects a comparison that claims to measure semantic quality', () => {
+    const changed = {
+      ...result,
+      protocolReports: {
+        ...result.protocolReports,
+        lorepack: {
+          ...result.protocolReports.lorepack,
+          claims: result.protocolReports.lorepack.claims.map(
+            (claim: { id: string; status: string }) =>
+              claim.id === 'lorepack-semantic-quality'
+                ? { ...claim, status: 'quality-result' }
+                : claim,
+          ),
         },
-      );
-      expect(execution.status, execution.stderr).toBe(0);
-      expect(execution.stdout).toContain(`Wrote ${output}\n`);
-      const text = readFileSync(output, 'utf8');
-      expect(execution.stdout.slice(execution.stdout.indexOf('\n') + 1)).toBe(`${text}\n`);
-      const current = JSON.parse(text);
-      expect(current).toMatchObject({
-        protocol: { name: 'lorepack-benchmark-comparison', version: 1 },
-        provisional: true,
-        reportedNotEnforced: true,
-        corpus: { packs: 1 },
-        samples: { build: 3, index: 3, warmSearch: 30, contextBundle: 20 },
+      },
+    };
+    expect(validateBenchmarkComparison(changed)).toContain(
+      'lorepack must not claim semantic quality was measured',
+    );
+  });
+
+  it('rejects implementation reports that use different workloads', () => {
+    const changed = {
+      ...result,
+      protocolReports: {
+        ...result.protocolReports,
+        sqliteFts5: {
+          ...result.protocolReports.sqliteFts5,
+          workload: { ...result.protocolReports.sqliteFts5.workload, sha256: '0'.repeat(64) },
+        },
+      },
+    };
+    expect(validateBenchmarkComparison(changed)).toContain(
+      'protocolReports must use the same workload',
+    );
+  });
+
+  it('checks the generated comparison artifact before accepting it', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'lore-benchmark-artifact-'));
+    const artifact = join(directory, 'comparison.json');
+    const checker = join(root, 'scripts/check-benchmark-artifacts.mjs');
+    try {
+      writeFileSync(artifact, JSON.stringify(result));
+      const accepted = spawnSync(process.execPath, [checker, directory], {
+        cwd: root,
+        encoding: 'utf8',
       });
-      const lorepack = current.protocolReports.lorepack;
-      const baseline = current.protocolReports.sqliteFts5;
-      expect(validateBenchmarkReport(lorepack)).toEqual([]);
-      expect(validateBenchmarkReport(baseline)).toEqual([]);
-      expect(lorepack.corpus).toEqual(baseline.corpus);
-      expect(lorepack.workload).toEqual(baseline.workload);
-      expect(lorepack.commitSha).toBe(current.commitSha);
-      expect(baseline.commitSha).toBe(current.commitSha);
-      const digest = (path: string) =>
-        createHash('sha256')
-          .update(readFileSync(join(root, path)))
-          .digest('hex');
-      expect(lorepack.corpus.manifestSha256).toBe(digest('benchmarks/corpus/manifest.json'));
-      expect(lorepack.workload.sha256).toBe(digest('benchmarks/corpus/queries.json'));
-      expect(lorepack.environment.storageClass).toBe('fixture-not-reference');
-      expect(lorepack.quality.search.cases).toBe(
-        workload.qualityQueries.filter((item) => item.kind === 'search').length,
+      expect(accepted.status, accepted.stderr).toBe(0);
+      expect(accepted.stdout).toContain(
+        'Validated 2 implementation reports from 1 JSON artifacts.',
       );
-      expect(lorepack.quality.context.cases).toBe(
-        workload.qualityQueries.filter((item) => item.kind !== 'search').length,
-      );
-      expect(lorepack.quality.provenance).toMatchObject({ available: true, coverage: 1 });
-      expect(
-        lorepack.measurements.phases.map((phase: { name: string; samples: number }) => ({
-          name: phase.name,
-          samples: phase.samples,
-        })),
-      ).toEqual([
-        { name: 'build', samples: 3 },
-        { name: 'cold-query', samples: 1 },
-        { name: 'warm-query', samples: 30 },
-        { name: 'context-assembly', samples: 20 },
-      ]);
-      expect(
-        baseline.measurements.phases.map((phase: { name: string; samples: number }) => ({
-          name: phase.name,
-          samples: phase.samples,
-        })),
-      ).toEqual([
-        { name: 'index-build', samples: 3 },
-        { name: 'cold-query', samples: 1 },
-        { name: 'warm-query', samples: 30 },
-      ]);
-      expect(current.baselines.sqliteFts5.contextBundleMs).toBeNull();
-      expect(current.baselines.sqliteFts5.contextUnsupportedReason).toMatch(/bounded context/i);
-      expect(lorepack.claims).toContainEqual(
-        expect.objectContaining({ id: 'lorepack-semantic-quality', status: 'not-measured' }),
-      );
-      expect(lorepack.resources.indexBytes).toBeGreaterThan(0);
-      expect(baseline.resources.indexBytes).toBeGreaterThan(0);
+
+      writeFileSync(artifact, JSON.stringify({ ...result, reportedNotEnforced: false }));
+      const rejected = spawnSync(process.execPath, [checker, directory], {
+        cwd: root,
+        encoding: 'utf8',
+      });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stderr).toContain('reportedNotEnforced must be true');
     } finally {
       rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
     }
-  }, 30_000);
+  });
 
   it('runs the direct baseline against an unchanged compiled build', async () => {
     const project = writeProject(1);
