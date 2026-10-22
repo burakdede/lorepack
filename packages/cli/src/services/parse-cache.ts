@@ -2,7 +2,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Chunk } from '@lorepack/compiler';
 import type { Artifact, LoreNode, ParsedTable, ParserWarning } from '@lorepack/core';
-import { mkdirOwnerOnly, writeFileAtomic } from '@lorepack/core';
+import { type AsyncWriteOptions, writeFileAtomicAsync } from '@lorepack/core';
 
 /**
  * The parse cache behind incremental builds.
@@ -41,6 +41,10 @@ export interface CachedParse {
   readonly warnings?: readonly ParserWarning[];
 }
 
+export interface ParseCacheDependencies {
+  readonly writeFileAtomic?: typeof writeFileAtomicAsync;
+}
+
 interface CacheEnvelope extends CachedParse {
   readonly version: number;
 }
@@ -50,11 +54,13 @@ const CACHE_FORMAT_VERSION = 3;
 
 export class ParseCache {
   readonly #directory: string;
+  readonly #writeFileAtomic: NonNullable<ParseCacheDependencies['writeFileAtomic']>;
   #hits = 0;
   #misses = 0;
 
-  constructor(directory: string) {
+  constructor(directory: string, dependencies: ParseCacheDependencies = {}) {
     this.#directory = directory;
+    this.#writeFileAtomic = dependencies.writeFileAtomic ?? writeFileAtomicAsync;
   }
 
   get hits(): number {
@@ -92,11 +98,13 @@ export class ParseCache {
     }
   }
 
-  put(key: string, value: CachedParse): void {
+  async put(key: string, value: CachedParse): Promise<void> {
     const envelope: CacheEnvelope = { version: CACHE_FORMAT_VERSION, ...value };
     try {
-      mkdirOwnerOnly(join(this.#directory, key.slice(0, 2)));
-      writeFileAtomic(this.#pathFor(key), JSON.stringify(envelope), { ownerOnly: true });
+      await this.#writeFileAtomic(this.#pathFor(key), JSON.stringify(envelope), {
+        ownerOnly: true,
+        durability: 'atomic-only',
+      } satisfies AsyncWriteOptions);
     } catch {
       // A cache that cannot be written (read-only volume, full disk) must not fail a build
       // that is otherwise complete.

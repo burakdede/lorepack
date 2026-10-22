@@ -1,19 +1,21 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  fsyncDirectory,
+  fsyncDirectoryAsync,
   hashBytes,
   hashFile,
   LoreError,
-  mkdirOwnerOnly,
+  mkdirOwnerOnlyAsync,
   type ObjectStore,
   objectKey,
-  writeFileAtomic,
+  writeFileAtomicAsync,
 } from '@lorepack/core';
 
 export interface FileObjectStoreDependencies {
   /** Injectable so a test can observe which directories were made durable. */
-  readonly fsyncDirectory?: (path: string) => void;
+  readonly fsyncDirectory?: (path: string) => void | Promise<void>;
+  /** Injectable so a test can hold a durable write open without blocking the event loop. */
+  readonly writeFileAtomic?: typeof writeFileAtomicAsync;
 }
 
 /**
@@ -23,11 +25,13 @@ export interface FileObjectStoreDependencies {
  */
 export class FileObjectStore implements ObjectStore {
   readonly #root: string;
-  readonly #fsyncDirectory: (path: string) => void;
+  readonly #fsyncDirectory: (path: string) => void | Promise<void>;
+  readonly #writeFileAtomic: NonNullable<FileObjectStoreDependencies['writeFileAtomic']>;
 
   constructor(root: string, dependencies: FileObjectStoreDependencies = {}) {
     this.#root = root;
-    this.#fsyncDirectory = dependencies.fsyncDirectory ?? fsyncDirectory;
+    this.#fsyncDirectory = dependencies.fsyncDirectory ?? fsyncDirectoryAsync;
+    this.#writeFileAtomic = dependencies.writeFileAtomic ?? writeFileAtomicAsync;
   }
 
   #pathFor(hash: string): string {
@@ -53,15 +57,15 @@ export class FileObjectStore implements ObjectStore {
       return hash;
     }
     const directory = dirname(path);
-    const firstCreated = mkdirOwnerOnly(directory);
-    writeFileAtomic(path, data, { ownerOnly: true });
-    // `writeFileAtomic` makes the file's entry durable in its directory, but a directory
+    const firstCreated = await mkdirOwnerOnlyAsync(directory);
+    await this.#writeFileAtomic(path, data, { ownerOnly: true });
+    // The atomic writer makes the file's entry durable in its directory, but a directory
     // created here is itself only an entry in its parent. Without syncing each new one, a
     // power loss after the build record commits could lose the path to an object the
     // active build references (#572).
     if (firstCreated !== undefined) {
       for (let created = directory; ; created = dirname(created)) {
-        this.#fsyncDirectory(dirname(created));
+        await this.#fsyncDirectory(dirname(created));
         if (created === firstCreated || dirname(created) === created) break;
       }
     }

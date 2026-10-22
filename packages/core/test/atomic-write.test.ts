@@ -1,8 +1,8 @@
-import { chmodSync, readFileSync, statSync } from 'node:fs';
+import { chmodSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { withTempProject } from '@lorepack/test-support';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writeFileAtomic } from '../src/fs/atomic.js';
+import { writeFileAtomic, writeFileAtomicAsync } from '../src/fs/atomic.js';
 
 /**
  * Owner-only writes for `.lore` (#569), and ordinary ones for project files such as
@@ -61,6 +61,20 @@ describe.skipIf(posixOnly)('writeFileAtomic modes', () => {
       expect(mode(privateFile)).toBe(0o600);
       expect(mode(project.root)).toBe(0o700);
       expect(mode(project.path('.lore'))).toBe(0o700);
+    });
+  });
+});
+
+describe('writeFileAtomicAsync', () => {
+  it('replaces a file atomically and keeps owner-only files private', async () => {
+    await withTempProject({}, async (project) => {
+      const path = project.path('.lore/cache/parse/ab/entry.json');
+      await writeFileAtomicAsync(path, 'first', { ownerOnly: true });
+      await writeFileAtomicAsync(path, 'replacement', { ownerOnly: true });
+
+      expect(readFileSync(path, 'utf8')).toBe('replacement');
+      expect(readdirSync(project.path('.lore/cache/parse/ab'))).toEqual(['entry.json']);
+      if (!posixOnly) expect(mode(path)).toBe(0o600);
     });
   });
 });

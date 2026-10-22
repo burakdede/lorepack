@@ -771,10 +771,10 @@ Proves: Section 4.7: `lorepack <command> --json | jq` is true at every size, not
 
 Locks down the defect in #154.
 
-Starting point: a generated corpus of 2501 documents with 1 sections each, already set up with `lorepack init` and `lorepack build --allow-large-project`.
+Starting point: a generated corpus of 1024 documents with 1 sections each, already set up with `lorepack init` and `lorepack build --allow-large-project`.
 
 1. Run `lorepack inspect sources` with `--json`.
-   Expect: it succeeds, stdout parses as JSON on its own, `artifacts[2500].displayPath` is present, `artifacts[0].displayPath` is present.
+   Expect: it succeeds, stdout parses as JSON on its own, stdout is at least 131072 bytes, `artifacts[1023].displayPath` is present, `artifacts[0].displayPath` is present.
 
 ### `output/errors-are-typed-and-machine-readable`
 

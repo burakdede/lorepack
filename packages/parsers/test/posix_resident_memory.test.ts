@@ -153,7 +153,7 @@ it.each([false, true])(
     expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
     const { error, value } = context(monitor);
     expect((error.cause as Error).message).toBe(
-      'macOS resident-memory reader exited (SIGKILL). ""',
+      'macOS resident-memory reader exited (SIGKILL); stdout ""; stderr "".',
     );
     expect(value).toEqual({
       platform: 'darwin',

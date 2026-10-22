@@ -29,21 +29,21 @@ const ENTRY: CachedParse = {
 
 describe('parse cache', () => {
   it('round-trips an entry', async () => {
-    await withTempProject({}, (project) => {
+    await withTempProject({}, async (project) => {
       const cache = new ParseCache(project.path('cache'));
-      cache.put(KEY, ENTRY);
+      await cache.put(KEY, ENTRY);
       expect(cache.get(KEY)).toEqual(ENTRY);
       expect(cache.hits).toBe(1);
     });
   });
 
   it('retains parser warnings through a fresh on-disk cache reader', async () => {
-    await withTempProject({}, (project) => {
+    await withTempProject({}, async (project) => {
       const directory = project.path('cache');
       const warnings = [
         { code: 'docx-unmapped-style', message: 'Unmapped Callout style', line: 7 },
       ];
-      new ParseCache(directory).put(KEY, { ...ENTRY, warnings });
+      await new ParseCache(directory).put(KEY, { ...ENTRY, warnings });
       const reader = new ParseCache(directory);
       expect(reader.get(KEY)).toEqual({ ...ENTRY, warnings });
       expect(reader.hits).toBe(1);
@@ -60,10 +60,10 @@ describe('parse cache', () => {
   });
 
   it('treats a corrupt entry as a miss, because a cache must never fail a build', async () => {
-    await withTempProject({}, (project) => {
+    await withTempProject({}, async (project) => {
       const directory = project.path('cache');
       const cache = new ParseCache(directory);
-      cache.put(KEY, ENTRY);
+      await cache.put(KEY, ENTRY);
 
       writeFileSync(join(directory, KEY.slice(0, 2), `${KEY}.json`), '{ truncated', 'utf8');
       expect(cache.get(KEY)).toBeNull();
@@ -84,9 +84,9 @@ describe('parse cache', () => {
   });
 
   it('shards by key prefix rather than filling one directory', async () => {
-    await withTempProject({}, (project) => {
+    await withTempProject({}, async (project) => {
       const cache = new ParseCache(project.path('cache'));
-      cache.put(KEY, ENTRY);
+      await cache.put(KEY, ENTRY);
       expect(existsSync(project.path(`cache/aa/${KEY}.json`))).toBe(true);
     });
   });
@@ -98,10 +98,38 @@ describe('parse cache', () => {
     // The cache is pointed at a regular file, so creating a directory beneath it fails on
     // every platform. An absolute path under a nonexistent root does not: on Windows it
     // resolves against the current drive and the write succeeds.
-    await withTempProject({ files: { blocker: 'not a directory' } }, (project) => {
+    await withTempProject({ files: { blocker: 'not a directory' } }, async (project) => {
       const cache = new ParseCache(project.path('blocker'));
-      expect(() => cache.put(KEY, ENTRY)).not.toThrow();
+      await expect(cache.put(KEY, ENTRY)).resolves.toBeUndefined();
       expect(cache.get(KEY)).toBeNull();
+    });
+  });
+
+  it('keeps the caller responsive while a cache write is pending', async () => {
+    await withTempProject({}, async (project) => {
+      let writerStarted = false;
+      let releaseStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        releaseStarted = resolve;
+      });
+      const cache = new ParseCache(project.path('cache'), {
+        writeFileAtomic: async () => {
+          writerStarted = true;
+          releaseStarted?.();
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        },
+      });
+
+      const pending = cache.put(KEY, ENTRY);
+      const writeStarted = await Promise.race([
+        started.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000)),
+      ]);
+      expect(writeStarted).toBe(true);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      expect(writerStarted).toBe(true);
+      await pending;
     });
   });
 });

@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { LoreError } from '@lorepack/core';
+import { LoreError, writeFileAtomicAsync } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { verifyArchive, writeArchive } from '../src/archive.js';
@@ -354,6 +354,43 @@ describe('object fan-out directories', () => {
       synced.length = 0;
       await store.put(new TextEncoder().encode('hello'));
       expect(synced).toEqual([]);
+    });
+  });
+
+  it('keeps the caller responsive while an object write waits for durability', async () => {
+    await withTempProject({}, async (project) => {
+      let writerStarted = false;
+      let heartbeatRan = false;
+      let releaseStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        releaseStarted = resolve;
+      });
+      const store = new FileObjectStore(project.path('.lore/objects'), {
+        fsyncDirectory: async () => {},
+        writeFileAtomic: async (path, data, options) => {
+          writerStarted = true;
+          releaseStarted?.();
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          await writeFileAtomicAsync(path, data, options);
+        },
+      });
+
+      const pending = store.put(new TextEncoder().encode('context'));
+      const writeStarted = await Promise.race([
+        started.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000)),
+      ]);
+      expect(writeStarted).toBe(true);
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          heartbeatRan = true;
+          resolve();
+        }, 0);
+      });
+
+      expect(writerStarted).toBe(true);
+      expect(heartbeatRan).toBe(true);
+      expect(await store.get(await pending)).toEqual(new TextEncoder().encode('context'));
     });
   });
 });

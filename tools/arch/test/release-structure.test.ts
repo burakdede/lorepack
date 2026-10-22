@@ -83,6 +83,22 @@ describe('the checked-in release workflow', () => {
       'cancel-in-progress': false,
     });
   });
+
+  it('runs the installed package smoke in the manual Windows observer qualification', () => {
+    const benchmark = parse(workflow('benchmarks.yml'));
+    const job = benchmark.jobs['windows-observer'];
+    const d1 = job?.steps?.find((entry) =>
+      entry.run?.includes('packages/deploy-cloudflare/test/query-budget.test.ts'),
+    );
+    const step = job?.steps?.find((entry) => entry.run?.includes('pnpm check:packed-cli'));
+    expect(job?.env?.LOREPACK_OBSERVER_DIAGNOSTIC).toBe('1');
+    expect(d1?.name).toBe('Run the D1 query-budget regression with observer diagnostics');
+    expect(d1?.run).toContain("'d1-query-budget.raw.log'");
+    expect(d1?.run).toContain("'d1-query-budget.exit.txt'");
+    expect(step?.name).toBe('Run the packed install smoke with observer diagnostics');
+    expect(step?.run).toContain("'packed-cli.raw.log'");
+    expect(step?.run).toContain("'packed-cli.exit.txt'");
+  });
 });
 
 describe('the rules catch', () => {

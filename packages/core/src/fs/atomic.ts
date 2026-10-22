@@ -7,6 +7,13 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import {
+  type FileHandle,
+  mkdir as mkdirAsync,
+  open as openAsync,
+  rename as renameAsync,
+  rm as rmAsync,
+} from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { diskFullError } from '../errors/disk-full.js';
 import { LoreError } from '../errors/lore-error.js';
@@ -41,6 +48,28 @@ export function fsyncDirectory(directory: string): void {
   }
 }
 
+/** Sync a directory without occupying the JavaScript thread while storage flushes it. */
+export async function fsyncDirectoryAsync(directory: string): Promise<void> {
+  if (process.platform === 'win32') return;
+  let handle: FileHandle;
+  try {
+    handle = await openAsync(directory, 'r');
+  } catch {
+    return;
+  }
+  try {
+    await handle.sync();
+  } catch {
+    // Some filesystems refuse directory sync. File and rename durability still apply.
+  } finally {
+    try {
+      await handle.close();
+    } catch {
+      // Directory sync is best effort on filesystems that do not support it.
+    }
+  }
+}
+
 /**
  * Modes for everything under `.lore`, which holds a normalized copy of every source (#569).
  *
@@ -58,9 +87,19 @@ export interface WriteOptions {
   readonly ownerOnly?: boolean;
 }
 
+export interface AsyncWriteOptions extends WriteOptions {
+  /** Keep atomic replacement but skip flushes for reconstructible data such as caches. */
+  readonly durability?: 'durable' | 'atomic-only';
+}
+
 /** Creates `directory` and any missing parents owner-only, returning the first one created. */
 export function mkdirOwnerOnly(directory: string): string | undefined {
   return mkdirSync(directory, { recursive: true, mode: OWNER_ONLY_DIRECTORY_MODE });
+}
+
+/** Creates a private directory tree without blocking the JavaScript thread. */
+export function mkdirOwnerOnlyAsync(directory: string): Promise<string | undefined> {
+  return mkdirAsync(directory, { recursive: true, mode: OWNER_ONLY_DIRECTORY_MODE });
 }
 
 let counter = 0;
@@ -97,6 +136,42 @@ export function writeFileAtomic(
     fsyncDirectory(directory);
   } catch (cause) {
     rmSync(temporary, { force: true });
+    const full = diskFullError(cause);
+    if (full !== null) throw full;
+    throw new LoreError('LORE_E_INTERNAL', `Could not write ${path}.`, {
+      remediation: 'Check the directory exists and has free space.',
+      cause,
+    });
+  }
+}
+
+/** Atomically replace a file while yielding during filesystem operations. */
+export async function writeFileAtomicAsync(
+  path: string,
+  data: string | Uint8Array,
+  options: AsyncWriteOptions = {},
+): Promise<void> {
+  const directory = dirname(path);
+  if (options.ownerOnly === true)
+    await mkdirAsync(directory, { recursive: true, mode: OWNER_ONLY_DIRECTORY_MODE });
+  else await mkdirAsync(directory, { recursive: true });
+  const temporary = join(directory, `.tmp-${process.pid}-${randomSuffix()}`);
+  try {
+    const handle = await openAsync(
+      temporary,
+      'wx',
+      options.ownerOnly === true ? OWNER_ONLY_FILE_MODE : undefined,
+    );
+    try {
+      await handle.writeFile(data);
+      if (options.durability !== 'atomic-only') await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await renameAsync(temporary, path);
+    if (options.durability !== 'atomic-only') await fsyncDirectoryAsync(directory);
+  } catch (cause) {
+    await rmAsync(temporary, { force: true });
     const full = diskFullError(cause);
     if (full !== null) throw full;
     throw new LoreError('LORE_E_INTERNAL', `Could not write ${path}.`, {
