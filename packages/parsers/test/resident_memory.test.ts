@@ -618,7 +618,7 @@ it('checks the auxiliary reader controller with actual numeric Node output', asy
   expect(reader.child.signalCode).toBe('SIGKILL');
 });
 
-it('fails and joins an actual silent auxiliary reader at the original startup guard', async () => {
+it('fails and joins an actual silent auxiliary reader at the startup guard', async () => {
   const reader = comparisonReader(process.execPath, ['-e', 'setInterval(() => {},1000)']);
   try {
     await expect(reader.ready).rejects.toThrow('startup-deadline');
@@ -627,7 +627,7 @@ it('fails and joins an actual silent auxiliary reader at the original startup gu
     await reader.stop();
   }
   expect(reader.child.signalCode).toBe('SIGKILL');
-}, 10000);
+}, 30_000);
 
 it('fails and joins an actual auxiliary reader that stops reporting', async () => {
   const reader = comparisonReader(process.execPath, [

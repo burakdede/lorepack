@@ -418,7 +418,7 @@ export function monitorResidentMemory(
         const elapsedMs = performance.now() - startedAt;
         fail(
           new Error(
-            `The process memory observer did not become ready: ${Math.round(elapsedMs)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}${ownerContext('startup', startupOwner, 5000, elapsedMs)}`,
+            `The process memory observer did not become ready: ${Math.round(elapsedMs)} ms; reader ${reader?.pid ?? 'unknown'} (exit ${reader?.exitCode ?? 'none'}, signal ${reader?.signalCode ?? 'none'}); buffered ${pending.length} characters. ${stderr}${ownerContext('startup', startupOwner, WINDOWS_STARTUP_TIMEOUT_MS, elapsedMs)}`,
           ),
         );
       },

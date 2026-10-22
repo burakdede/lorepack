@@ -17,6 +17,53 @@ afterEach(() => {
   vi.mocked(spawn).mockReset();
 });
 
+function manualWatchdogClock() {
+  let nowMs = 0;
+  const timeouts: Array<{ callback: () => void; handle: NodeJS.Timeout }> = [];
+  const immediates: Array<{ callback: () => void; handle: NodeJS.Immediate }> = [];
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+  const timeout = vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback) => {
+    const handle = {} as NodeJS.Timeout;
+    timeouts.push({ callback: callback as () => void, handle });
+    return handle;
+  });
+  const immediate = vi.spyOn(globalThis, 'setImmediate').mockImplementation((callback) => {
+    const handle = {} as NodeJS.Immediate;
+    immediates.push({ callback: callback as () => void, handle });
+    return handle;
+  });
+  const clearTimeout = vi.spyOn(globalThis, 'clearTimeout').mockImplementation((handle) => {
+    const index = timeouts.findIndex((entry) => entry.handle === handle);
+    if (index !== -1) timeouts.splice(index, 1);
+  });
+  const clearImmediate = vi.spyOn(globalThis, 'clearImmediate').mockImplementation((handle) => {
+    const index = immediates.findIndex((entry) => entry.handle === handle);
+    if (index !== -1) immediates.splice(index, 1);
+  });
+  return {
+    at(ms: number) {
+      nowMs = ms;
+    },
+    fireTimer() {
+      const callback = timeouts.shift()?.callback;
+      expect(callback).toBeDefined();
+      callback?.();
+    },
+    fireCheck() {
+      const callback = immediates.shift()?.callback;
+      expect(callback).toBeDefined();
+      callback?.();
+    },
+    restore() {
+      clearImmediate.mockRestore();
+      clearTimeout.mockRestore();
+      immediate.mockRestore();
+      timeout.mockRestore();
+      clock.mockRestore();
+    },
+  };
+}
+
 function windowsObserver(environment: NodeJS.ProcessEnv) {
   const parser = new ChildProcess();
   Object.defineProperty(parser, 'pid', { value: process.pid });
@@ -261,46 +308,43 @@ it('keeps reader instrumentation out of an observer without the opt-in', async (
 });
 
 it('retains owner startup context without changing the normal reader command', async () => {
-  vi.useFakeTimers();
-  let now = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const clock = manualWatchdogClock();
   const baseline = { active: 10, idle: 20, utilization: 1 / 3 };
   const utilization = vi.spyOn(nodePerformance, 'eventLoopUtilization');
-  utilization.mockReturnValueOnce(baseline).mockReturnValue({
-    active: 4999.123456,
-    idle: 9.876544,
-    utilization: 4999.123456 / 5009,
-  });
+  utilization
+    .mockReturnValueOnce(baseline)
+    .mockReturnValue({ active: 14999.123456, idle: 9.876544, utilization: 14999.123456 / 15009 });
   const { parser, reader } = windowsObserver({ SystemRoot: 'C:\\Windows' });
   const output = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   const monitor = monitorResidentMemory(parser, 1024);
   const ready = monitor.ready.catch((error: unknown) => error);
   try {
-    now = 4999.95;
-    vi.advanceTimersByTime(5000);
-    vi.runOnlyPendingTimers();
+    clock.at(14999.95);
+    clock.fireTimer();
+    clock.fireCheck();
     expect(monitor.state.error).toBeNull();
-    now = 5000;
-    vi.advanceTimersByTime(1);
-    now = 5009;
-    vi.runOnlyPendingTimers();
+    clock.at(15000);
+    clock.fireTimer();
+    clock.at(15009);
+    clock.fireCheck();
+    expect(monitor.state.error).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
     expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
     const cause = monitor.state.error?.cause;
     expect(cause).toBeInstanceOf(Error);
     const message = (cause as Error).message;
-    expect(message).toMatch(/^The process memory observer did not become ready: 5009 ms;/);
+    expect(message).toMatch(/^The process memory observer did not become ready: 15009 ms;/);
     const context = JSON.parse(message.split('Owner context: ')[1] ?? '');
     expect(context).toEqual({
       window: 'startup',
-      expectedMs: 5000,
-      elapsedMs: 5009,
+      expectedMs: 15000,
+      elapsedMs: 15009,
       deadlineDeltaMs: 9,
-      ownerElapsedMs: 5009,
-      timerFireElapsedMs: 5000,
+      ownerElapsedMs: 15009,
+      timerFireElapsedMs: 15000,
       timerToCheckMs: 9,
-      ownerActiveMs: 4999.123,
+      ownerActiveMs: 14999.123,
       ownerIdleMs: 9.877,
-      ownerUtilization: 0.998,
+      ownerUtilization: 0.999,
     });
     expect(utilization).toHaveBeenLastCalledWith(baseline);
     expect(Buffer.byteLength(JSON.stringify(context))).toBeLessThanOrEqual(1024);
@@ -309,6 +353,7 @@ it('retains owner startup context without changing the normal reader command', a
     expect(output).not.toHaveBeenCalled();
   } finally {
     monitor.stop();
+    clock.restore();
   }
 });
 
@@ -368,9 +413,7 @@ it('uses the latest accepted report for bounded normal owner failure context', a
 });
 
 it('bounds unavailable owner metrics without weakening a normal reader failure', async () => {
-  vi.useFakeTimers();
-  let now = 0;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
+  const clock = manualWatchdogClock();
   vi.spyOn(nodePerformance, 'eventLoopUtilization')
     .mockReturnValueOnce({ active: 0, idle: 0, utilization: 0 })
     .mockReturnValue({
@@ -382,17 +425,18 @@ it('bounds unavailable owner metrics without weakening a normal reader failure',
   const monitor = monitorResidentMemory(parser, 1024);
   const ready = monitor.ready.catch((error: unknown) => error);
   try {
-    now = 5000;
-    vi.advanceTimersByTime(5000);
-    vi.runOnlyPendingTimers();
+    clock.at(15000);
+    clock.fireTimer();
+    clock.fireCheck();
+    expect(monitor.state.error).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
     expect(await ready).toMatchObject({ code: 'LORE_E_PARSE_FAILED' });
     const cause = monitor.state.error?.cause;
     expect(cause).toBeInstanceOf(Error);
     const message = (cause as Error).message;
     const context = JSON.parse(message.split('Owner context: ')[1] ?? '');
     expect(context).toMatchObject({
-      expectedMs: 5000,
-      elapsedMs: 5000,
+      expectedMs: 15000,
+      elapsedMs: 15000,
       ownerActiveMs: null,
       ownerIdleMs: null,
       ownerUtilization: null,
@@ -410,6 +454,7 @@ it('bounds unavailable owner metrics without weakening a normal reader failure',
     expect(reader.kill).toHaveBeenCalledWith('SIGKILL');
   } finally {
     monitor.stop();
+    clock.restore();
   }
 });
 
