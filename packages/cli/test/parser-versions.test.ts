@@ -143,16 +143,9 @@ describe('parser versions in build identity', () => {
    * contributing parsers later fails here and sends the reader to the reasoning.
    */
   it('depends on a parser that contributed nothing to this project', async () => {
-    const original = process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
-    if (process.platform === 'win32') process.env.LOREPACK_OBSERVER_DIAGNOSTIC = '1';
-    try {
-      const ids = await idsAcrossBump('xlsx', { 'a.md': '# A\n\nText.' });
+    const ids = await idsAcrossBump('xlsx', {});
 
-      expect(ids.after).not.toBe(ids.before);
-    } finally {
-      if (original === undefined) delete process.env.LOREPACK_OBSERVER_DIAGNOSTIC;
-      else process.env.LOREPACK_OBSERVER_DIAGNOSTIC = original;
-    }
+    expect(ids.after).not.toBe(ids.before);
   });
 
   /** The control: with nothing mutated, two builds of one tree at two paths agree. */
