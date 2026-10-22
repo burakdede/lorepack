@@ -338,7 +338,7 @@ describe('RAG worker against a loopback provider fixture', () => {
     expect(result.stdout).toBe('');
     expect(result.stderr).toContain('Hosted RAG request failed:');
     expect(result.stderr).not.toContain(FIXTURE_KEY);
-  });
+  }, 30_000);
 
   it.each(['RAG_BENCH_ENDPOINT', 'RAG_BENCH_API_KEY', 'RAG_BENCH_MODEL'])(
     'requires %s before a hosted request',

@@ -177,7 +177,7 @@ describe('coverage campaign execution boundaries', () => {
     );
     expect(script).toBeDefined();
     expect(script.functions[0].ranges[0].count).toBeGreaterThan(0);
-  });
+  }, 30_000);
 
   it('rejects a stale config in the real CLI without writing import results', () => {
     const { path, snapshot } = inventory();

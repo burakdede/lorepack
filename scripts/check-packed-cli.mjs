@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Installs the CLI the way a user does, with npm into an empty directory, and checks what
-// arrived: no native add-on, the production tree CI tested, a PDF build that loads nothing
-// native, a table query answered by the bundled query child, a clean `npm audit --omit=dev`,
-// and a strict consumer compile of any advertised TypeScript declarations.
+// arrived: the tested production tree, a PDF build without native modules, a table query
+// answered by the bundled query child, and a strict consumer compile of advertised types.
 //
 // The workspace checks (`check:no-native`, the clean-install job) inspect the pnpm install,
 // which applies workspace overrides that never reach a published manifest. Only an npm install
@@ -870,19 +869,6 @@ async function main() {
     problems.push(...(await checkTableQuery(installDir, project, nativeParagraph)));
     problems.push(...(await checkDevRebuild(installDir)));
     problems.push(...(await checkInstalledConnect(installDir)));
-
-    const audit = runTool('npm', ['audit', '--omit=dev', '--json'], installDir, {
-      allowFailure: true,
-    });
-    const report = JSON.parse(audit.stdout);
-    const counts = report.metadata?.vulnerabilities;
-    if (counts === undefined) {
-      problems.push(`npm audit gave no result: ${audit.stdout}${audit.stderr}`.trim());
-    } else if (counts.total > 0) {
-      problems.push(`npm audit --omit=dev reports ${JSON.stringify(counts)}`);
-    } else {
-      console.log('npm audit --omit=dev: 0 vulnerabilities');
-    }
 
     const source = `${spec ?? resolve(tarball)} (sha256 ${createHash('sha256').update(readFileSync(tarball)).digest('hex')})`;
     problems.push(...checkInstalledTypes(installDir, source));

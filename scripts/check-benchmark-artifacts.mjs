@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { validateBenchmarkReport } from './benchmark-report.mjs';
+import { validateBenchmarkComparison, validateBenchmarkReport } from './benchmark-report.mjs';
 
 const directory = process.argv[2];
 if (directory === undefined) {
@@ -36,6 +36,10 @@ function collectReports(files) {
       continue;
     }
     if (report.protocol?.name === 'lorepack-benchmark-comparison') {
+      const problems = validateBenchmarkComparison(report);
+      if (problems.length > 0) {
+        fail(`${relative(directory, path)}:\n${problems.join('\n')}`);
+      }
       for (const [name, nested] of Object.entries(report.protocolReports ?? {})) {
         checkProtocol(nested, `${relative(directory, path)}.${name}`);
         reports.push({ path: `${path}.${name}`, report: nested });

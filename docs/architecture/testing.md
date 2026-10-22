@@ -160,6 +160,11 @@ backlog issue #101 in Phase 7; a shared CI runner is not that machine, so failin
 its timings would produce noise rather than signal. Every recorded result carries
 `provisional: true` and the machine that produced it.
 
+The pull-request benchmark matrix runs the comparison controller, verifies that its direct
+baseline leaves the immutable build database unchanged, and validates its report on each
+operating system. The unit suite validates the comparison envelope against the committed
+report, avoiding a second benchmark run in each full test job.
+
 Shared Claude Code configuration is `.mcp.json` at the project root, so it has
 no intermediate directory to replace with a link. The connector safety contract
 checks that layout explicitly. File-link and permission evidence runs for every
