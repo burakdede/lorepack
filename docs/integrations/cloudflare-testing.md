@@ -44,6 +44,11 @@ The GitHub Actions job uses the `cloudflare-acceptance` concurrency group with `
 and a 35-minute timeout. This serializes access to the shared Worker. Manual runs using the
 same account and prefix must also avoid overlapping a credentialed CI run.
 
+R2 ownership-ledger reads retry HTTP 429 up to four attempts. A valid `Retry-After` value is
+honored up to 30 seconds; otherwise waits grow from 500 ms to 2 seconds. Other HTTP errors and
+an exhausted 429 remain failures. This behavior was verified with deterministic response stubs
+on 2026-10-23 using Wrangler 4.149.0; it does not claim a live Cloudflare acceptance pass.
+
 Provide both `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`, or neither for a manual run. For example,
 `LORE_CF_TEST_PREFIX=lorepack-ci`, run `12345`, attempt `2` uses the persistent ledger bucket
 `lorepack-ci-acceptance-ledger`; its per-project names remain independently random.

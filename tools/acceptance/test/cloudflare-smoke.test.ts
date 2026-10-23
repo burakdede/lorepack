@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { EXIT_CODES, verifyContextReceipt } from '@lorepack/core';
 import type { BuildId, ContextBundle, SearchResult } from '@lorepack/core/worker';
 import { MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   activeCloudflareWorkerName,
   addCloudflareCleanupProbe,
@@ -14,6 +14,7 @@ import {
   buildProject,
   callRemoteMcpTool,
   cloudflareR2BucketListUrl,
+  cloudflareR2Json,
   cloudflareWorkerDeleteUrl,
   cloudflareWorkerListUrl,
   createCloudflareSmokeProject,
@@ -267,6 +268,97 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     expect(cloudflareR2BucketListUrl('de1984edb8b3db5f67105c1bc99d1dca')).toBe(
       'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/r2/buckets',
     );
+  });
+
+  it('retries rate-limited R2 reads and honors Retry-After', async () => {
+    const waits: number[] = [];
+    const responses = [
+      new Response(JSON.stringify({ success: false, errors: [{ message: 'slow down' }] }), {
+        status: 429,
+        headers: { 'Retry-After': '2' },
+      }),
+      new Response(JSON.stringify({ success: true, result: { name: 'ledger' } }), {
+        status: 200,
+      }),
+    ];
+    const fetchMock = vi.fn(async () => responses.shift() as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(
+        cloudflareR2Json(
+          new URL('https://api.cloudflare.com/client/v4/accounts/test/r2/buckets/ledger'),
+          'GET',
+          { CLOUDFLARE_API_TOKEN: 'token' },
+          async (ms) => {
+            waits.push(ms);
+          },
+        ),
+      ).resolves.toEqual({ success: true, result: { name: 'ledger' } });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(waits).toEqual([2_000]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps exhausted R2 rate limits as errors with the provider details', async () => {
+    const waits: number[] = [];
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ success: false, errors: [{ message: 'slow down', code: 971 }] }),
+          {
+            status: 429,
+          },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(
+        cloudflareR2Json(
+          new URL('https://api.cloudflare.com/client/v4/accounts/test/r2/buckets/ledger'),
+          'GET',
+          { CLOUDFLARE_API_TOKEN: 'token' },
+          async (ms) => {
+            waits.push(ms);
+          },
+        ),
+      ).rejects.toThrow('Cloudflare R2 GET failed (429): slow down [code: 971]');
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(waits).toEqual([500, 1_000, 2_000]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not retry other R2 API errors', async () => {
+    const waits: number[] = [];
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ success: false, errors: [{ message: 'unauthorized', code: 10000 }] }),
+          {
+            status: 401,
+          },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(
+        cloudflareR2Json(
+          new URL('https://api.cloudflare.com/client/v4/accounts/test/r2/buckets/ledger'),
+          'GET',
+          { CLOUDFLARE_API_TOKEN: 'token' },
+          async (ms) => {
+            waits.push(ms);
+          },
+        ),
+      ).rejects.toThrow('Cloudflare R2 GET failed (401): unauthorized [code: 10000]');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(waits).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('persists the deployed singleton endpoint in the target receipt', () => {

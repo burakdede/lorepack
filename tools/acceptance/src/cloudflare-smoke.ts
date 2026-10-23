@@ -46,6 +46,9 @@ const WORKER_DEPLOY_ATTEMPTS = 3;
 const WORKER_PROPAGATION_DELAY_MS = 2_000;
 const D1_DELETE_ATTEMPTS = 3;
 const D1_DELETE_RETRY_DELAY_MS = 500;
+const R2_GET_ATTEMPTS = 4;
+const R2_GET_RETRY_DELAY_MS = 500;
+const R2_GET_MAX_RETRY_AFTER_MS = 30_000;
 let artifactSequence = 0;
 
 export interface CloudflareSmokeProject {
@@ -1437,51 +1440,68 @@ async function emptyCloudflareBucket(
   for (const key of keys) await runWrangler(remoteR2ObjectDeleteArgs(bucketName, key), env);
 }
 
-async function cloudflareR2Json(
+export async function cloudflareR2Json(
   url: URL,
   method: 'GET',
   env: Readonly<Record<string, string>>,
+  wait: (ms: number) => Promise<void> = sleep,
 ): Promise<unknown> {
   const token = env.CLOUDFLARE_API_TOKEN;
   if (typeof token !== 'string' || token.trim() === '') {
     throw new Error('CLOUDFLARE_API_TOKEN is required for acceptance bucket cleanup.');
   }
-  const response = await fetch(url, {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const body = await response.text();
-  let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    throw new Error(
-      `Cloudflare R2 ${method} returned an invalid JSON response (${response.status}).`,
-    );
+  for (let attempt = 1; ; attempt += 1) {
+    const response = await fetch(url, {
+      method,
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (response.status === 429 && attempt < R2_GET_ATTEMPTS) {
+      await wait(r2RetryDelay(response.headers.get('retry-after'), attempt));
+      continue;
+    }
+    const body = await response.text();
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      throw new Error(
+        `Cloudflare R2 ${method} returned an invalid JSON response (${response.status}).`,
+      );
+    }
+    if (
+      response.ok &&
+      typeof payload === 'object' &&
+      payload !== null &&
+      (payload as { success?: unknown }).success === true
+    ) {
+      return payload;
+    }
+    const errors =
+      typeof payload === 'object' && payload !== null
+        ? (payload as { errors?: unknown }).errors
+        : undefined;
+    const details = Array.isArray(errors)
+      ? errors
+          .map((error: { message?: unknown; code?: unknown }) =>
+            error !== null && typeof error.message === 'string'
+              ? `${error.message} [code: ${String(error.code)}]`
+              : 'Unspecified API error',
+          )
+          .join('; ')
+      : 'Missing API error details';
+    throw new Error(`Cloudflare R2 ${method} failed (${response.status}): ${details}`);
   }
-  if (
-    response.ok &&
-    typeof payload === 'object' &&
-    payload !== null &&
-    (payload as { success?: unknown }).success === true
-  ) {
-    return payload;
-  }
-  const errors =
-    typeof payload === 'object' && payload !== null
-      ? (payload as { errors?: unknown }).errors
-      : undefined;
-  const details = Array.isArray(errors)
-    ? errors
-        .map((error: { message?: unknown; code?: unknown }) =>
-          error !== null && typeof error.message === 'string'
-            ? `${error.message} [code: ${String(error.code)}]`
-            : 'Unspecified API error',
-        )
-        .join('; ')
-    : 'Missing API error details';
-  throw new Error(`Cloudflare R2 ${method} failed (${response.status}): ${details}`);
+}
+
+function r2RetryDelay(retryAfter: string | null, attempt: number): number {
+  const fallback = R2_GET_RETRY_DELAY_MS * 2 ** (attempt - 1);
+  if (retryAfter === null) return fallback;
+  const seconds = /^\d+$/.test(retryAfter) ? Number(retryAfter) : Number.NaN;
+  const retryAt = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - Date.now();
+  return Number.isFinite(retryAt)
+    ? Math.min(R2_GET_MAX_RETRY_AFTER_MS, Math.max(0, retryAt))
+    : fallback;
 }
 
 async function deleteCloudflareWorker(target: CloudflareSmokeTarget): Promise<void> {
