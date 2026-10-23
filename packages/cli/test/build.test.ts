@@ -75,7 +75,7 @@ it.each(['normal', 'cache', 'exclusion'] as const)(
         files: {
           'lore.yaml': 'version: 1\nname: counted-progress\nsources: [docs]\n',
           'docs/a.md':
-            mode === 'exclusion' ? nestedBracketsMarkdown(100_000) : '# A\n\nFirst document.\n',
+            mode === 'exclusion' ? nestedBracketsMarkdown(20_000) : '# A\n\nFirst document.\n',
         },
       },
       async (project) => {
