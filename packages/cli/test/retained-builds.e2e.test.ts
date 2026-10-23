@@ -1,5 +1,5 @@
 import { type ChildProcess, execFile, spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -7,11 +7,34 @@ import { LocalStateStore, stateMigrationsDirectory } from '@lorepack/backend-loc
 import { loadProjectConfig, type RuntimeIdentity } from '@lorepack/core';
 import { LEGACY_HANDSHAKE_VERSIONS, MCP_PROTOCOL_VERSION } from '@lorepack/mcp';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startServing } from '../src/services/serving.js';
 
 const execute = promisify(execFile);
 const BIN = join(import.meta.dirname, '..', 'dist', 'public-entry.js');
+let seedRoot = '';
+let firstBuildId: string;
+
+beforeAll(async () => {
+  // Every scenario needs the same first retained build. Build it once, then copy the real
+  // store into each isolated project while each scenario still builds its changed version.
+  seedRoot = mkdtempSync(join(tmpdir(), 'lore-retained-seed-'));
+  writeFileSync(
+    join(seedRoot, 'lore.yaml'),
+    'version: 1\nname: retained\nsources:\n  - docs\n',
+    'utf8',
+  );
+  mkdirSync(join(seedRoot, 'docs'));
+  writeFileSync(
+    join(seedRoot, 'docs/a.md'),
+    '# Recovery\n\nOriginal recovery procedure: restore the checkpoint.\n',
+  );
+  firstBuildId = JSON.parse((await cli(seedRoot, ['build'])).stdout).buildId as string;
+});
+
+afterAll(() => {
+  rmSync(seedRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 
 async function cli(root: string, args: string[]) {
   return execute(process.execPath, [BIN, '--cwd', root, '--json', ...args], {
@@ -30,7 +53,8 @@ async function retainedProject(
       },
     },
     async (temp) => {
-      const first = JSON.parse((await cli(temp.root, ['build'])).stdout).buildId as string;
+      cpSync(join(seedRoot, '.lore'), temp.path('.lore'), { recursive: true });
+      const first = firstBuildId;
       writeFileSync(
         temp.path('docs/a.md'),
         '# Recovery\n\nReplacement recovery procedure: restart the worker.\n',
