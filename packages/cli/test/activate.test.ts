@@ -707,15 +707,15 @@ describe('lorepack rollback', () => {
     // needed most, which is when the sources that produced the old build are gone.
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { second } = await threeBuilds(root);
+      const buildsPath = join(root, '.lore', 'builds');
+      const buildsBeforeRollback = readdirSync(buildsPath).sort();
       rmSync(join(root, 'a.md'));
 
-      const started = performance.now();
       const result = await lore(['rollback']);
-      const elapsed = performance.now() - started;
 
       expect(result.code).toBe(0);
       expect(active(root)).toBe(second);
-      expect(elapsed).toBeLessThan(1000);
+      expect(readdirSync(buildsPath).sort()).toEqual(buildsBeforeRollback);
     });
   });
 
