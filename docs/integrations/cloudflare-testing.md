@@ -92,8 +92,13 @@ attempts of the same run qualify; current, future and manual records remain unto
 For each stale intent, cleanup removes its planned Worker, lists every page of bucket objects,
 deletes the exact keys through Wrangler, deletes the empty bucket, then removes both the
 catalog and tables databases. Missing resources from a partial provisioning attempt are
-accepted. An API failure, malformed page or repeated cursor stops cleanup. The ledger entry
-is deleted only after all resource deletions succeed, so a failed cleanup can be retried.
+accepted. D1 deletion retries Cloudflare internal error code 7500 at most twice after the
+first attempt. The pinned Wrangler command resolves the owned database name to its UUID and
+sends HTTP DELETE; [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#name-idempotent-methods)
+defines DELETE as idempotent, so retrying the same owned deletion has the same intended
+effect. A missing database on retry counts as already deleted. Other D1 errors, malformed
+pages and repeated cursors stop cleanup. The ledger entry is deleted only after all resource
+deletions succeed, so a failed cleanup can be retried.
 Normal teardown also verifies the stored intent against the actual target before deleting
 its resources and retiring its record. Each credentialed scenario adds an operational
 cleanup probe outside the build's known object keys immediately before teardown. Real
