@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildDescriptionSchema, searchResultSchema } from '@lorepack/core';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type ChildOutput, observeChild } from './support/child_diagnostics.js';
 import { observeHttp } from './support/http_diagnostics.js';
 
@@ -33,6 +33,7 @@ const DOCUMENT =
 
 let project: string;
 const running: ChildProcess[] = [];
+const longLived: ChildProcess[] = [];
 let cancellationDiagnostics: (() => void) | undefined;
 let churnDiagnostics: (() => void) | undefined;
 let churnHttpDiagnostics: ReturnType<typeof observeHttp> | undefined;
@@ -66,15 +67,18 @@ interface Started {
 }
 
 /** Runs `lorepack dev` until it has printed its connection block, or fails loudly. */
-async function dev(extra: readonly string[] = []): Promise<Started> {
+async function dev(
+  extra: readonly string[] = [],
+  root = project,
+  trackForTestCleanup = true,
+): Promise<Started> {
   nextPort += 1;
   const port = nextPort;
-  const child = spawn(
-    process.execPath,
-    [BINARY, 'dev', project, '--port', String(port), ...extra],
-    { stdio: ['pipe', 'pipe', 'pipe'] },
-  );
-  running.push(child);
+  const child = spawn(process.execPath, [BINARY, 'dev', root, '--port', String(port), ...extra], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  if (trackForTestCleanup) running.push(child);
+  else longLived.push(child);
 
   let stdout = '';
   let stderr = '';
@@ -143,15 +147,57 @@ afterEach(async ({ task }) => {
   }
 });
 
+let firstRunProject = '';
+let firstRunStarted: Started | undefined;
+
+function firstRun(): Started {
+  if (firstRunStarted === undefined) throw new Error('The first-run server was not started.');
+  return firstRunStarted;
+}
+
+async function waitForChildExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null) return;
+  await new Promise<void>((resolve) => {
+    const give = setTimeout(resolve, 10_000);
+    child.once('exit', () => {
+      clearTimeout(give);
+      resolve();
+    });
+  });
+}
+
+async function stopChildren(children: ChildProcess[]): Promise<void> {
+  const active = children.splice(0).filter((child) => child.exitCode === null);
+  for (const child of active) child.kill('SIGTERM');
+  await Promise.all(active.map(waitForChildExit));
+}
+
 describe('one command on an unconfigured folder', () => {
-  it('creates the configuration, builds, activates and serves', async () => {
-    const started = await dev();
+  beforeAll(async () => {
+    // These checks observe one unchanged first-run session, so startup only needs to happen once.
+    firstRunProject = mkdtempSync(join(tmpdir(), 'lore-dev-first-run-'));
+    mkdirSync(join(firstRunProject, 'docs'));
+    writeFileSync(join(firstRunProject, 'docs', 'runbook.md'), DOCUMENT, 'utf8');
+    firstRunStarted = await dev([], firstRunProject, false);
+  }, 120_000);
+
+  afterAll(async () => {
+    await stopChildren(longLived);
+    try {
+      rmSync(firstRunProject, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      // Windows can hold the build database open briefly after the server exits.
+    }
+  });
+
+  it('creates the configuration, builds, activates and serves', () => {
+    const started = firstRun();
 
     // Said what it wrote, and wrote exactly that.
     expect(started.stdout).toContain('Created:');
     for (const file of ['lore.yaml', '.loreignore', '.gitignore']) {
       expect(started.stdout, `${file} should be reported`).toContain(file);
-      expect(existsSync(join(project, file)), `${file} should exist`).toBe(true);
+      expect(existsSync(join(firstRunProject, file)), `${file} should exist`).toBe(true);
     }
 
     expect(started.stdout).toMatch(/Build\s+lore_[0-9a-f]{12}/);
@@ -159,7 +205,7 @@ describe('one command on an unconfigured folder', () => {
   }, 120_000);
 
   it('serves REST and MCP on the port it printed', async () => {
-    const started = await dev();
+    const started = firstRun();
     const base = `http://127.0.0.1:${started.port}`;
 
     expect(started.stdout).toContain(`HTTP            ${base}/v1`);
@@ -168,14 +214,11 @@ describe('one command on an unconfigured folder', () => {
     expect((await fetch(`${base}/health`)).status).toBe(200);
     const described = (await (await fetch(`${base}/v1/build`)).json()) as { buildId: string };
     expect(described.buildId).toMatch(/^lore_[0-9a-f]{64}$/);
-
-    // The build it serves is the build it said it made.
     expect(started.stdout).toContain(described.buildId.slice(0, 17));
   }, 120_000);
 
-  it('quotes the stdio command, so a path with a space stays one argument', async () => {
-    const started = await dev();
-    expect(started.stdout).toMatch(/MCP stdio {7}lorepack mcp --project "[^"]+"/);
+  it('quotes the stdio command, so a path with a space stays one argument', () => {
+    expect(firstRun().stdout).toMatch(/MCP stdio {7}lorepack mcp --project "[^"]+"/);
   }, 120_000);
 
   /**
@@ -186,18 +229,15 @@ describe('one command on an unconfigured folder', () => {
    * what happened, and it happened again for `codex` with #80 and `vscode` with #81. Every
    * line here is true because an adapter exists behind it.
    */
-  it('offers exactly what it has: Studio, and the clients with an adapter', async () => {
-    const started = await dev();
-
-    expect(started.stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
-    expect(started.stdout).toContain('lorepack connect claude-code');
-    expect(started.stdout).toContain('lorepack connect codex');
-    expect(started.stdout).toContain('lorepack connect vscode');
+  it('offers exactly what it has: Studio, and the clients with an adapter', () => {
+    expect(firstRun().stdout).toMatch(/Studio {10}http:\/\/127\.0\.0\.1:\d+/);
+    expect(firstRun().stdout).toContain('lorepack connect claude-code');
+    expect(firstRun().stdout).toContain('lorepack connect codex');
+    expect(firstRun().stdout).toContain('lorepack connect vscode');
   }, 120_000);
 
   it('returns typed errors for numeric API versions through the actual dev binary', async () => {
-    const started = await dev();
-    const base = `http://127.0.0.1:${started.port}`;
+    const base = `http://127.0.0.1:${firstRun().port}`;
     for (const path of ['/v2', '/v2/build', '/v0/search', '/v01/build', '/v999/other']) {
       const response = await fetch(`${base}${path}`);
       expect(response.status, path).toBe(404);
@@ -211,16 +251,13 @@ describe('one command on an unconfigured folder', () => {
   }, 120_000);
 
   it('serves Studio at the root without shadowing the API', async () => {
-    const started = await dev();
-    const base = `http://127.0.0.1:${started.port}`;
+    const base = `http://127.0.0.1:${firstRun().port}`;
 
     // The app itself, and a hash route, which is any path that is not a file.
     expect((await fetch(base)).status).toBe(200);
     expect((await fetch(`${base}/sources`)).status).toBe(200);
 
-    // The failure that mattered while wiring this: a single-page fallback that answers every
-    // unmatched path will happily answer `/v1/nope` with the app shell and a 200, which
-    // silently replaces the typed error contract with an HTML document.
+    // A single-page fallback must not answer an unmatched API path with the app shell.
     const missing = await fetch(`${base}/v1/nope`);
     expect(missing.status).toBe(404);
     expect(((await missing.json()) as { error: { code: string } }).error.code).toBe(

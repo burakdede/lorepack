@@ -1,11 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLocalRuntimeBackend } from '@lorepack/backend-local';
 import { type LoreRuntime, loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { type ContractFixture, runRuntimeContract, withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
 /**
@@ -39,6 +39,26 @@ const TABLE_CSV = [
   'A-3,,true',
   '',
 ].join('\n');
+
+let seedRoot = '';
+
+beforeAll(async () => {
+  // Contract cases exercise runtime behavior, so build this corpus once and clone its real
+  // store into each isolated fixture instead of recompiling the same sources per assertion.
+  seedRoot = mkdtempSync(join(tmpdir(), 'lore-contract-seed-'));
+  writeFileSync(join(seedRoot, 'lore.yaml'), CONFIG, 'utf8');
+  writeFileSync(join(seedRoot, 'rollback.md'), CORPUS['guides/rollback.md'], 'utf8');
+  writeFileSync(join(seedRoot, 'deployment.md'), CORPUS['guides/deployment.md'], 'utf8');
+  writeFileSync(join(seedRoot, 'pricing.csv'), TABLE_CSV, 'utf8');
+  await runBuild({
+    config: loadConfig({ cwd: seedRoot }),
+    progress: new ProgressBus(),
+  });
+});
+
+afterAll(() => {
+  discard(seedRoot);
+});
 
 /**
  * Removes a temp project, and never fails a test for failing to.
@@ -78,10 +98,9 @@ runRuntimeContract({
     writeFileSync(join(root, 'rollback.md'), CORPUS['guides/rollback.md'], 'utf8');
     writeFileSync(join(root, 'deployment.md'), CORPUS['guides/deployment.md'], 'utf8');
     writeFileSync(join(root, 'pricing.csv'), TABLE_CSV, 'utf8');
+    cpSync(join(seedRoot, '.lore'), join(root, '.lore'), { recursive: true });
     currentRoot = root;
 
-    const config = loadConfig({ cwd: root });
-    await runBuild({ config, progress: new ProgressBus() });
     const backend = createLocalRuntimeBackend({ projectRoot: root });
 
     return {
