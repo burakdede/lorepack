@@ -23,11 +23,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.5.15"
+          "value": "2.6.2"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-09-30T15:23:18.673Z"
+          "value": "2026-10-21T11:08:43.721Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -143,11 +143,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.3.1"
+          "value": "2.4.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-05T11:50:23.381Z"
+          "value": "2026-10-23T18:21:05.614Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -191,11 +191,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.1.1"
+          "value": "2.1.2"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-02T17:44:08.976Z"
+          "value": "2026-10-23T18:19:50.364Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -215,11 +215,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "2.3.1"
+          "value": "2.4.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-05T11:52:39.322Z"
+          "value": "2026-10-23T18:20:13.773Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1295,11 +1295,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "8.3.4"
+          "value": "8.3.5"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-08T12:07:04.441Z"
+          "value": "2026-10-21T06:38:54.907Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1343,11 +1343,11 @@
       "properties": [
         {
           "name": "lorepack:latestVersion",
-          "value": "4.151.3"
+          "value": "4.152.0"
         },
         {
           "name": "lorepack:latestReleaseAt",
-          "value": "2026-10-20T12:05:18.897Z"
+          "value": "2026-10-22T14:43:55.410Z"
         },
         {
           "name": "lorepack:provenanceStatus",
@@ -1430,7 +1430,7 @@
     {
       "type": "library",
       "name": "zod",
-      "version": "4.4.3",
+      "version": "4.6.7",
       "licenses": [
         {
           "expression": "MIT"
