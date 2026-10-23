@@ -194,13 +194,9 @@
             "type": "string"
           },
           "from": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "path": {
@@ -209,13 +205,9 @@
             "type": "string"
           },
           "to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           }
         },
@@ -242,19 +234,11 @@
                   "type": "string"
                 },
                 "from": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "null"
                   ]
                 },
                 "locator": {
@@ -310,19 +294,11 @@
                   "type": "integer"
                 },
                 "to": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "boolean"
-                    },
-                    {
-                      "type": "null"
-                    }
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean",
+                    "null"
                   ]
                 }
               },
