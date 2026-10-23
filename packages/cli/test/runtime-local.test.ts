@@ -86,6 +86,21 @@ describe('optional build metadata', () => {
         const scope = await backend.open(handle);
         expect(scope.createdAt).toBeUndefined();
         expect(await scope.catalog.countChunks()).toBeGreaterThan(0);
+
+        listBuilds.mockImplementationOnce(() => {
+          throw busy;
+        });
+        const result = await createRuntime(backend).search({
+          query: 'deployment',
+          limit: 10,
+          includeArchived: false,
+          debug: false,
+        });
+        expect(result.buildId).toBe(handle.buildId);
+        expect(result.hits.length).toBeGreaterThan(0);
+        expect(result.hits.some((hit) => hit.locator.relativePath === 'guides/deployment.md')).toBe(
+          true,
+        );
       } finally {
         handle.release();
         backend.close();
