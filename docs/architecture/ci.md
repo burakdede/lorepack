@@ -170,6 +170,15 @@ security suite. The measured file timings and the current fixture optimization a
 recorded in [#825](https://github.com/burakdede/lorepack/issues/825). There is no remote build
 cache, per architecture section 8.1: add one only when measured timings demand it.
 
+The first optimized Windows matrix on [PR #850](https://github.com/burakdede/lorepack/pull/850)
+still failed after 1,614 seconds in `pnpm test:ci`. It exposed two separate issues: an exclusion
+progress test fed a known quadratic Markdown fixture 100,000 nested brackets, and source churn
+occasionally made an optional state-database `createdAt` lookup return SQLite busy while the
+immutable build itself remained readable. The exclusion test now uses 20,000 brackets; separate
+parser security tests retain the 100,000-bracket adversarial case. The local runtime omits only
+`createdAt` when that optional lookup gets SQLite busy, and propagates other state errors. These
+changes target verification cost and the observed request failure without removing coverage.
+
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,
 while optional local runs retain explicit skips and truthful summary artifacts. See the
