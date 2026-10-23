@@ -32,6 +32,8 @@ overrides:
   'mammoth>argparse': '2.0.1'
   'nanoid@>=3.0.0 <3.3.18': '3.3.18'
   'vite@>=8.2.0 <8.2.4': '8.2.4'
+  # MCP 2.3.1 pins vulnerable Zod 4.4.3 transitively; 4.6.7 fixes GHSA-mrhx-c7xc-m3w5.
+  zod: 4.6.7
 
 patchedDependencies:
   '@vitest/coverage-istanbul@4.1.11': patches/@vitest__coverage-istanbul@4.1.11.patch
