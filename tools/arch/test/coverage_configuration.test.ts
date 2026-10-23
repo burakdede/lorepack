@@ -528,4 +528,4 @@ it('keeps native collector preparations identical in Node and Studio environment
     ),
   );
   expect(prepared.sha256).toBe(inventory.included[0]?.sha256);
-});
+}, 20_000);

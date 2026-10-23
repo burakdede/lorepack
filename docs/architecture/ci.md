@@ -61,6 +61,12 @@ contract; malformed replies still fail instead of being filtered or partially pa
 toolchain fix for [GHSA-82fw-gwwq-j7x9](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9).
 They do not claim that an ordinary local test run exposes the development WebSocket.
 
+Two coverage architecture cases create a real Vite server or launch several captured CLI
+subprocesses. Their scoped 20-second budgets cover runner contention without relaxing their
+assertions. Both exceeded Vitest's default 5-second limit in the macOS architecture step on
+[PR #850](https://github.com/burakdede/lorepack/actions/runs/40021048840); the pair passes
+locally in 2.85 seconds.
+
 The Linux-only `supply-chain` job runs `pnpm check:supply-chain` once per CI workflow because
 its registry audits inspect the same lockfile on every OS. A registry request failure still
 fails the workflow, and release automation requires this check. Local `pnpm verify` keeps the

@@ -2639,7 +2639,7 @@ test('captures unregistered eval and temporary drivers automatically',()=>{
       ]);
       expect(automaticCapture.status).toBe('Pass');
       expect(automaticCapture.processes).toBe(10);
-    });
+    }, 20_000);
   });
 
   describe('owned compiled eval and script execution', () => {
