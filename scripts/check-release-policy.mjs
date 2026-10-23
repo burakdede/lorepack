@@ -29,6 +29,7 @@ const REQUIRED = [
   'verify (ubuntu-latest)',
   'verify (windows-latest)',
   'verify (macos-latest)',
+  'supply-chain',
   'acceptance (ubuntu-latest)',
   'acceptance (windows-latest)',
   'acceptance (macos-latest)',

@@ -24,6 +24,8 @@ interface Step {
 }
 interface Job {
   steps: Step[];
+  'runs-on'?: string;
+  strategy?: { matrix?: unknown };
   if?: boolean | string;
   'timeout-minutes'?: number;
   'continue-on-error'?: boolean | string;
@@ -135,7 +137,9 @@ function gate(workflow: Workflow): Step {
 }
 
 function security(workflow: Workflow): Step {
-  const step = workflow.jobs.verify?.steps.find((entry) => entry.run === 'pnpm test:security');
+  const step = workflow.jobs.verify?.steps.find(
+    (entry) => entry.run === 'pnpm test:security:built',
+  );
   if (step === undefined) throw new Error('security gate fixture missing');
   return step;
 }
@@ -197,6 +201,15 @@ describe('structural release policy, issue618', () => {
     },
   );
 
+  it('requires the single-run supply-chain gate for release', () => {
+    mutate('release.yml', (workflow) => {
+      gate(workflow).run = script(gate(workflow)).replace('"supply-chain"', '# "supply-chain"');
+    });
+    const result = run('check-release-policy.mjs');
+    expect(result.status, result.stdout).toBe(1);
+    expect(result.stderr).toContain('does not require supply-chain');
+  });
+
   it.each(['secret-env', 'npmrc', 'token-config'])(
     'rejects %s publication credentials',
     (variant) => {
@@ -216,6 +229,23 @@ describe('structural release policy, issue618', () => {
 });
 
 describe('structural verify parity, issue618', () => {
+  it('keeps standalone security setup while CI reuses the tested build', () => {
+    const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(packageJson.scripts['test:security']).toBe(
+      'pnpm build && vitest run --root tools/security',
+    );
+    expect(packageJson.scripts['test:security:built']).toBe('vitest run --root tools/security');
+    expect(packageJson.scripts['test:security']).toBe(
+      `pnpm build && ${packageJson.scripts['test:security:built']}`,
+    );
+    expect(packageJson.scripts['test:ci']).toBe("pnpm build && vitest run --project '!arch'");
+    expect(
+      security(parse(readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8'))).run,
+    ).toBe('pnpm test:security:built');
+  });
+
   it.each(['typecheck:audit', 'coverage:inventory'])('rejects an omitted %s CI step', (command) => {
     mutate('ci.yml', (workflow) => {
       const steps = job(workflow, 'verify').steps;
@@ -230,11 +260,32 @@ describe('structural verify parity, issue618', () => {
 
   it('accepts an unconditional block scalar containing the exact command', () => {
     mutate('ci.yml', (workflow) => {
-      security(workflow).run = 'pnpm test:security\n';
+      security(workflow).run = 'pnpm test:security:built\n';
     });
     const result = run('check-verify-parity.mjs');
     expect(result.status, result.stderr).toBe(0);
   });
+
+  it.each(['duplicate', 'matrix', 'conditional', 'wrong-runner'])(
+    'rejects supply-chain audit running more than once or outside its boundary: %s',
+    (variant) => {
+      mutate('ci.yml', (workflow) => {
+        const audit = job(workflow, 'supply-chain');
+        if (variant === 'duplicate')
+          job(workflow, 'verify').steps.push({ run: 'pnpm check:supply-chain' });
+        if (variant === 'matrix') audit.strategy = { matrix: { os: ['ubuntu-latest'] } };
+        if (variant === 'conditional') {
+          const lastStep = audit.steps.at(-1);
+          if (lastStep === undefined) throw new Error('supply-chain step missing');
+          lastStep.if = false;
+        }
+        if (variant === 'wrong-runner') audit['runs-on'] = 'windows-latest';
+      });
+      const result = run('check-verify-parity.mjs');
+      expect(result.status, result.stdout).toBe(1);
+      expect(result.stderr).toContain('check:supply-chain must run exactly once');
+    },
+  );
 
   it.each([
     'or-true',
