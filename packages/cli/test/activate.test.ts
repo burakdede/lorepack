@@ -1,12 +1,15 @@
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import {
@@ -16,7 +19,7 @@ import {
 } from '@lorepack/backend-local';
 import { type BuildId, type DeploymentTarget, loadConfig, ProgressBus } from '@lorepack/core';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { PROJECTION_MIGRATIONS } from '../../deploy-cloudflare/src/projection-migrations.js';
 import {
   ACTIVE_BUILD,
@@ -52,17 +55,119 @@ function build(root: string) {
   return runBuild({ config: loadConfig({ cwd: root }), progress: new ProgressBus() });
 }
 
-/** Three builds, oldest first. Each edit produces a distinct content-derived id. */
+/** Copies one real build history. Each caller gets an isolated project state. */
 async function threeBuilds(
   root: string,
 ): Promise<{ first: string; second: string; third: string }> {
-  const first = await build(root);
-  writeFileSync(join(root, 'a.md'), '# A\n\nSecond text.', 'utf8');
-  const second = await build(root);
+  const fixture = await historyFixtures();
+  cpSync(fixture.snapshots.three, join(root, '.lore'), { recursive: true });
   writeFileSync(join(root, 'a.md'), '# A\n\nThird text.', 'utf8');
-  const third = await build(root);
-  return { first: first.buildId, second: second.buildId, third: third.buildId };
+  const [first, second, third] = fixture.ids.three;
+  if (first === undefined || second === undefined || third === undefined) {
+    throw new Error('The three-build fixture is incomplete.');
+  }
+  return { first, second, third };
 }
+
+interface BuildHistoryFixtures {
+  readonly root: string;
+  readonly snapshots: {
+    readonly three: string;
+    readonly two: string;
+    readonly eight: string;
+    readonly eightWithKeep: string;
+  };
+  readonly ids: {
+    readonly three: readonly string[];
+    readonly two: readonly string[];
+    readonly eight: readonly string[];
+    readonly eightWithKeep: readonly string[];
+  };
+}
+
+let historyFixturePromise: Promise<BuildHistoryFixtures> | undefined;
+
+async function historyFixtures(): Promise<BuildHistoryFixtures> {
+  historyFixturePromise ??= createHistoryFixtures();
+  return historyFixturePromise;
+}
+
+async function createHistoryFixtures(): Promise<BuildHistoryFixtures> {
+  const root = mkdtempSync(join(tmpdir(), 'lorepack-activate-history-'));
+  const makeProject = (name: string, files: Record<string, string>) => {
+    const projectRoot = join(root, name);
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(join(projectRoot, 'lore.yaml'), CONFIG, 'utf8');
+    for (const [path, contents] of Object.entries(files)) {
+      writeFileSync(join(projectRoot, path), contents, 'utf8');
+    }
+    return projectRoot;
+  };
+  const snapshot = (name: string, projectRoot: string) => {
+    const path = join(root, `snapshot-${name}`);
+    cpSync(join(projectRoot, '.lore'), path, { recursive: true });
+    return path;
+  };
+
+  try {
+    const threeRoot = makeProject('three', { 'a.md': '# A\n\nText.' });
+    const threeIds = [(await build(threeRoot)).buildId];
+    writeFileSync(join(threeRoot, 'a.md'), '# A\n\nSecond text.', 'utf8');
+    threeIds.push((await build(threeRoot)).buildId);
+    writeFileSync(join(threeRoot, 'a.md'), '# A\n\nThird text.', 'utf8');
+    threeIds.push((await build(threeRoot)).buildId);
+    const three = snapshot('three', threeRoot);
+
+    const makeMany = async (name: string, withKeep: boolean) => {
+      const files = {
+        'a.md': '# A\n\nText.',
+        ...(withKeep ? { 'keep.md': '# Keep\n\nStable.' } : {}),
+      };
+      const projectRoot = makeProject(name, files);
+      const ids: string[] = [];
+      let two = '';
+      for (let index = 0; index < 8; index += 1) {
+        writeFileSync(join(projectRoot, 'a.md'), `# A\n\nRevision ${index}.`, 'utf8');
+        ids.push((await build(projectRoot)).buildId);
+        if (index === 1) two = snapshot(`${name}-two`, projectRoot);
+      }
+      return { ids, two, eight: snapshot(`${name}-eight`, projectRoot) };
+    };
+    const many = await makeMany('many', false);
+    const manyWithKeep = await makeMany('many-with-keep', true);
+
+    return {
+      root,
+      snapshots: {
+        three,
+        two: many.two,
+        eight: many.eight,
+        eightWithKeep: manyWithKeep.eight,
+      },
+      ids: {
+        three: threeIds,
+        two: many.ids.slice(0, 2),
+        eight: many.ids,
+        eightWithKeep: manyWithKeep.ids,
+      },
+    };
+  } catch (error) {
+    rmSync(root, { recursive: true, force: true });
+    historyFixturePromise = undefined;
+    throw error;
+  }
+}
+
+afterAll(async () => {
+  if (historyFixturePromise === undefined) return;
+  const fixture = await historyFixturePromise.catch(() => undefined);
+  if (fixture === undefined) return;
+  try {
+    rmSync(fixture.root, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // Windows may briefly keep a handle open after a build.
+  }
+});
 
 function active(root: string): string | null {
   return readActiveBuild(join(root, '.lore'))?.buildId ?? null;
@@ -474,6 +579,16 @@ function seedRemoteCleanupFixture(
 }
 
 describe('lorepack builds', () => {
+  it('reuses a real build history from another project path', async () => {
+    await project({ 'a.md': '# A\n\nText.' }, async (root) => {
+      const { third } = await threeBuilds(root);
+      const rebuilt = await build(root);
+
+      expect(rebuilt.buildId).toBe(third);
+      expect(active(root)).toBe(third);
+    });
+  });
+
   it('lists history newest first with an active marker and counts', async () => {
     await project({ 'a.md': '# A\n\nText.' }, async (root, lore) => {
       const { third } = await threeBuilds(root);
@@ -881,11 +996,19 @@ describe('lorepack rollback', () => {
 
 describe('lorepack prune', () => {
   async function manyBuilds(root: string, count: number) {
-    const ids: string[] = [];
-    for (let index = 0; index < count; index += 1) {
-      writeFileSync(join(root, 'a.md'), `# A\n\nRevision ${index}.`, 'utf8');
-      ids.push((await build(root)).buildId);
+    const fixture = await historyFixtures();
+    const withKeep = existsSync(join(root, 'keep.md'));
+    const ids = withKeep ? fixture.ids.eightWithKeep : fixture.ids.eight;
+    const snapshot = withKeep ? fixture.snapshots.eightWithKeep : fixture.snapshots.eight;
+    if (count === 2) {
+      if (withKeep) throw new Error('The two-build fixture does not include `keep.md`.');
+      cpSync(fixture.snapshots.two, join(root, '.lore'), { recursive: true });
+      writeFileSync(join(root, 'a.md'), '# A\n\nRevision 1.', 'utf8');
+      return fixture.ids.two;
     }
+    if (count !== 8) throw new Error(`No shared build fixture exists for ${count} builds.`);
+    cpSync(snapshot, join(root, '.lore'), { recursive: true });
+    writeFileSync(join(root, 'a.md'), `# A\n\nRevision ${count - 1}.`, 'utf8');
     return ids;
   }
 

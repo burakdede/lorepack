@@ -162,11 +162,13 @@ gh api -X PUT repos/burakdede/lorepack/branches/main/protection \
 
 ## Timing
 
-There is no enforced under-10-minute job budget. Recent hosted runs show the full verification
-job taking roughly 20 to 49 minutes across platforms, with the Windows test suite as the
-largest contributor. Per-file evidence and measured optimization work are tracked in
-[#825](https://github.com/burakdede/lorepack/issues/825). There is no remote build cache,
-per architecture section 8.1: add one only when measured timings demand it.
+There is no enforced under-10-minute job budget. The successful Windows verification on
+[PR #848](https://github.com/burakdede/lorepack/actions/runs/39938925402) spent 1,675 seconds
+in `pnpm test:ci` (253 files, 4,056 passed, 59 skipped) and 157 seconds in the separate
+security suite. The measured file timings and the current fixture optimization are tracked in
+[#849](https://github.com/burakdede/lorepack/issues/849). Earlier baseline investigation is
+recorded in [#825](https://github.com/burakdede/lorepack/issues/825). There is no remote build
+cache, per architecture section 8.1: add one only when measured timings demand it.
 
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,
