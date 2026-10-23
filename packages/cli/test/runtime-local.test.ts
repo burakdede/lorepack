@@ -1,10 +1,14 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createLocalRuntimeBackend, LocalActiveBuildProvider } from '@lorepack/backend-local';
+import {
+  createLocalRuntimeBackend,
+  LocalActiveBuildProvider,
+  LocalStateStore,
+} from '@lorepack/backend-local';
 import { loadConfig, ProgressBus } from '@lorepack/core';
 import { createRuntime } from '@lorepack/runtime';
 import { withTempProject } from '@lorepack/test-support';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runBuild } from '../src/services/build.js';
 
 /**
@@ -58,6 +62,54 @@ describe('released local runtime handles', () => {
         });
       } finally {
         backend.close();
+      }
+    });
+  });
+});
+
+describe('optional build metadata', () => {
+  it('serves the immutable build when the state database is busy', async () => {
+    await withRuntime(async (_runtime, root) => {
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      const handle = await backend.provider.acquire();
+      const busy = {
+        message: 'database is locked',
+        code: 'ERR_SQLITE_ERROR',
+        errcode: 5,
+      };
+      const listBuilds = vi
+        .spyOn(LocalStateStore.prototype, 'listBuilds')
+        .mockImplementationOnce(() => {
+          throw busy;
+        });
+      try {
+        const scope = await backend.open(handle);
+        expect(scope.createdAt).toBeUndefined();
+        expect(await scope.catalog.countChunks()).toBeGreaterThan(0);
+      } finally {
+        handle.release();
+        backend.close();
+        listBuilds.mockRestore();
+      }
+    });
+  });
+
+  it('propagates non-busy state database errors', async () => {
+    await withRuntime(async (_runtime, root) => {
+      const backend = createLocalRuntimeBackend({ projectRoot: root });
+      const handle = await backend.provider.acquire();
+      const failure = new Error('state database is malformed');
+      const listBuilds = vi
+        .spyOn(LocalStateStore.prototype, 'listBuilds')
+        .mockImplementationOnce(() => {
+          throw failure;
+        });
+      try {
+        await expect(backend.open(handle)).rejects.toBe(failure);
+      } finally {
+        handle.release();
+        backend.close();
+        listBuilds.mockRestore();
       }
     });
   });

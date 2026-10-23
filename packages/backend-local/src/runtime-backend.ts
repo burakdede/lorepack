@@ -425,9 +425,7 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
         buildId: handle.buildId,
         // Operational state, held beside the build rather than inside it, because a sealed
         // build carries no wall-clock time.
-        ...(createdAt(state, handle.buildId) === null
-          ? {}
-          : { createdAt: createdAt(state, handle.buildId) as string }),
+        ...optionalCreatedAt(state, handle.buildId),
         catalog: new LocalCatalogStore(db, join(loreDirectory, 'builds', handle.buildId)),
         tables: new LocalTableStore(
           db,
@@ -448,9 +446,27 @@ export function createLocalRuntimeBackend(options: LocalRuntimeOptions): LocalRu
 }
 
 /** When the state store recorded this build, if it still knows. */
-function createdAt(state: LocalStateStore, buildId: string): string | null {
-  const summary = state.listBuilds().find((build) => build.buildId === buildId);
-  return summary?.createdAt ?? null;
+function optionalCreatedAt(
+  state: LocalStateStore,
+  buildId: string,
+): { readonly createdAt?: string } {
+  try {
+    const summary = state.listBuilds().find((build) => build.buildId === buildId);
+    return summary?.createdAt === undefined ? {} : { createdAt: summary.createdAt };
+  } catch (cause) {
+    if (isSqliteBusy(cause)) return {};
+    throw cause;
+  }
+}
+
+function isSqliteBusy(cause: unknown): boolean {
+  if (typeof cause !== 'object' || cause === null) return false;
+  const error = cause as { code?: unknown; errcode?: unknown };
+  return (
+    error.code === 'ERR_SQLITE_ERROR' &&
+    typeof error.errcode === 'number' &&
+    (error.errcode & 0xff) === 5
+  );
 }
 
 /** One sentence about the build, one about the fix, and nothing about this machine. */
