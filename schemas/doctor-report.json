@@ -31,16 +31,10 @@
           },
           "values": {
             "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                }
+              "type": [
+                "string",
+                "number",
+                "boolean"
               ]
             },
             "propertyNames": {
@@ -85,13 +79,9 @@
       "type": "object"
     },
     "project": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
+      "type": [
+        "string",
+        "null"
       ]
     },
     "status": {

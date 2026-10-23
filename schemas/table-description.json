@@ -44,29 +44,17 @@
                 "type": "boolean"
               },
               "max": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  }
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
                 ]
               },
               "min": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  }
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
                 ]
               },
               "nullCount": {
