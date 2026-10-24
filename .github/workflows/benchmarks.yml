@@ -5,7 +5,7 @@ on:
     paths:
       - 'packages/**'
       - 'scripts/bench-*.mjs'
-      - 'scripts/benchmark-*.mjs'
+      - 'scripts/*benchmark*.mjs'
       - 'scripts/generate-corpus-fixtures.mjs'
       - 'scripts/research-safe-pruning.mjs'
       - 'benchmarks/**'

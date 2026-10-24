@@ -104,11 +104,11 @@ still runs `pnpm bench:quality` on every pull request. Pushes to `main` and the 
 continue to produce cross-platform trend evidence, including after benchmark workflow changes.
 
 To request a comparison for another pull request, dispatch **Benchmark evidence** from the Actions
-tab with `qualification=benchmark`, the desired `profile`, and `hosted=false`. The equivalent
-command is:
+tab with `qualification=benchmark`, the desired `profile`, and `hosted=false`. Set `--ref` to the
+reviewed pull request branch, not `main`. For example:
 
 ```sh
-gh workflow run benchmarks.yml --repo burakdede/lorepack --ref main \
+gh workflow run benchmarks.yml --repo burakdede/lorepack --ref 123-benchmark-change \
   --field profile=small --field hosted=false --field qualification=benchmark
 ```
 
