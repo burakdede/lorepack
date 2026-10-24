@@ -196,6 +196,42 @@ parser security tests retain the 100,000-bracket adversarial case. The local run
 `createdAt` when that optional lookup gets SQLite busy, and propagates other state errors. These
 changes target verification cost and the observed request failure without removing coverage.
 
+### Windows suite variance, 2026-10-24
+
+Windows run [`40056164980`](https://github.com/burakdede/lorepack/actions/runs/40056164980)
+spent 3,454 seconds in `pnpm test:ci` and hit four Vitest timeouts. A run on the same tree,
+with only README changes, passed in [`40062693167`](https://github.com/burakdede/lorepack/actions/runs/40062693167)
+in 1,539 seconds. The prior base-tree run [`40056103191`](https://github.com/burakdede/lorepack/actions/runs/40056103191)
+also passed in 1,496 seconds. Across the same 25 backend-local test files, the failed run took 1,428 seconds in
+aggregate with a 14.047 second median; the successful comparison took 328 seconds with a 5.265
+second median. The slowdowns span files, which supports a run-wide throughput outlier rather
+than one isolated test hang. It does not identify which host resource caused that outlier.
+
+The timeout cases were `activation_history.test.ts` (199 seconds, versus 14 and 16 seconds in
+the successful runs), `state_open_barrier.test.ts` (133 seconds, versus 20 seconds in both),
+`tables.test.ts` (307 seconds, versus 20 and 21 seconds), and `cli/test/dev.e2e.test.ts`
+(438 seconds, versus 257 and 272 seconds). The failure ran in West US 3; the successful runs
+ran in Mexico Central and North Central US. All used the same `windows-2025-vs2026` image
+version `20261021.278.1` and runner `2.338.0`. The exact CPU or disk conditions are not retained,
+so host-level cause remains unproven. CI and comparative benchmarks share one concurrency group,
+so another workflow in that group did not overlap the failed run. Matrix jobs use separate
+hosted runners. GitHub does not expose unrelated host activity or per-runner CPU and disk
+telemetry, so worker contention cannot be measured directly.
+
+PR #866 replaces repeated disk-backed setup in `tables.test.ts` with one migration load and
+real in-memory SQLite databases. Its original file-persistence tests and assertions remain. The
+focused test setup measured 153 ms before and 26 ms after; the full backend-local suite passed
+335 tests in 15.17 seconds. Its Windows matrix passed `pnpm test:ci` in 1,498 seconds on head
+`d370f8b`. This measured reduction addresses avoidable table-test I/O, but does not explain the
+run-wide outlier. A later Windows run on Cloudflare artifact changes, head `398bb810`, passed
+in 1,872 seconds (31m12s). The longer successful run is consistent with variable throughput,
+but does not identify the cause. The updated source passed the exact-head required matrix on
+`aa1d3f91` (run `40118234261`): Windows `pnpm test:ci` completed in 1,619 seconds with 253
+files and 4,064 tests passing, plus 2 skipped files and 59 skipped tests. The separate Windows
+security suite passed 96 tests with 8 credentialed skips in 157 seconds. These results verify
+the changed source and retain the coverage; GitHub still provides no host telemetry to identify
+the physical resource behind the earlier throughput collapse.
+
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,
 while optional local runs retain explicit skips and truthful summary artifacts. See the
