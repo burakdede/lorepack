@@ -96,6 +96,22 @@ The independent evidence report combines the same-workload rows, usefulness metr
 and clean-checkout review checklist:
 [`docs/compatibility/benchmark-evidence.md`](../docs/compatibility/benchmark-evidence.md).
 
+## CI benchmark triggers
+
+Pull requests run the comparative three-platform benchmark matrix only when they change package
+code, benchmark scripts or data, dependency/build configuration, or this workflow. The required
+`verify` job still runs `pnpm bench:quality` on every pull request. Pushes to `main` and the daily
+schedule continue to produce cross-platform trend evidence.
+
+To request a comparison for another pull request, dispatch **Benchmark evidence** from the Actions
+tab with `qualification=benchmark`, the desired `profile`, and `hosted=false`. The equivalent
+command is:
+
+```sh
+gh workflow run benchmarks.yml --repo burakdede/lorepack --ref main \
+  --field profile=small --field hosted=false --field qualification=benchmark
+```
+
 Research prototypes are kept separate from product claims. The current safe-pruning experiment and
 its exactness and negative-speed result are documented in
 [`docs/compatibility/research-retrieval.md`](../docs/compatibility/research-retrieval.md).
