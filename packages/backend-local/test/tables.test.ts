@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ParsedColumn, ParsedTable } from '@lorepack/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -17,6 +14,8 @@ import {
 import { loadMigrations, runMigrations } from '../src/migrations.js';
 import { buildMigrationsDirectory } from '../src/migrations-path.js';
 
+const MIGRATIONS = loadMigrations(buildMigrationsDirectory());
+
 /**
  * Typed tables in a real SQLite database.
  *
@@ -26,13 +25,11 @@ import { buildMigrationsDirectory } from '../src/migrations-path.js';
  * that a person would never make and an attacker would.
  */
 
-let directory: string;
 let db: DatabaseSync;
 
 beforeEach(() => {
-  directory = mkdtempSync(join(tmpdir(), 'lore-tables-'));
-  db = new DatabaseSync(join(directory, 'build.sqlite'));
-  runMigrations(db, loadMigrations(buildMigrationsDirectory()), () => '2026-01-01T00:00:00.000Z');
+  db = new DatabaseSync(':memory:');
+  runMigrations(db, MIGRATIONS, () => '2026-01-01T00:00:00.000Z');
   // Tables reference artifacts, so one has to exist for the foreign key to hold.
   db.exec(
     `INSERT INTO artifacts VALUES ('a1','s','data.csv','data.csv','text/csv',10,'h','csv','0.1.0',
@@ -42,7 +39,6 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close();
-  rmSync(directory, { recursive: true, force: true });
 });
 
 function column(name: string, overrides: Partial<ParsedColumn> = {}): ParsedColumn {
