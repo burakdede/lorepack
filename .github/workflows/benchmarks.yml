@@ -18,7 +18,6 @@ on:
       - '.npmrc'
       - 'patches/**'
       - 'tsconfig*.json'
-      - '.github/workflows/benchmarks.yml'
       - '!benchmarks/**/*.md'
       - '!benchmarks/README.md'
   push:

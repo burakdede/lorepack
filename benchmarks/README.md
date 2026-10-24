@@ -99,9 +99,9 @@ and clean-checkout review checklist:
 ## CI benchmark triggers
 
 Pull requests run the comparative three-platform benchmark matrix only when they change package
-code, benchmark scripts or data, dependency/build configuration, or this workflow. The required
-`verify` job still runs `pnpm bench:quality` on every pull request. Pushes to `main` and the daily
-schedule continue to produce cross-platform trend evidence.
+code, benchmark scripts or data, or dependency/build configuration. The required `verify` job
+still runs `pnpm bench:quality` on every pull request. Pushes to `main` and the daily schedule
+continue to produce cross-platform trend evidence, including after benchmark workflow changes.
 
 To request a comparison for another pull request, dispatch **Benchmark evidence** from the Actions
 tab with `qualification=benchmark`, the desired `profile`, and `hosted=false`. The equivalent
