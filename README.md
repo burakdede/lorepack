@@ -22,6 +22,20 @@ The build is the source of truth. Search and task context read that build and ca
 locators. Model-facing tools are read-only; developers control builds, activation and deployment
 through the CLI or Studio. Lorepack does not decide which document is true.
 
+## Performance on measured workloads
+
+On the v0.1 Linux x64 reference machine (Ryzen 9 3900X, Node.js 24.18.1), warm lexical
+search p95 was **21.45 ms** and task-context assembly p95 was **199.96 ms** over 50,000 chunks.
+The measured gates are 250 ms and 1,500 ms. These are reference measurements, not latency
+guarantees across machines. See the [performance report and artifacts](docs/compatibility/performance-v0.1.md)
+for the workload, machine and limits.
+
+A separate provisional, reported-only experiment on an Apple M1 Pro (8,520 chunks) measured
+warm-search p95 at **12.78 ms** for Lorepack's full runtime and **0.29 ms** for direct SQLite
+FTS5. The SQLite index starts from already parsed chunks and returns ranked rows; it does not
+measure build, provenance, context assembly, typed tables, activation or rollback. See the
+[comparison method and results](docs/compatibility/retrieval-comparison-2026-10-04.md).
+
 [Core concepts](docs/concepts.md) · [Worked examples](examples/README.md)
 
 ## Quick start
@@ -57,7 +71,7 @@ checks the intended build and a cited source read; the client's own trust prompt
 
 ![Lorepack CLI: build context, search with citations, compare versions and roll back](docs/images/demo.gif)
 
-[Static, reduced-motion demo](docs/images/demo.svg)
+*Build, search with citations, compare versions, roll back and serve. [Static, reduced-motion demo](docs/images/demo.svg).*
 
 ### Build and review an update
 
@@ -109,11 +123,17 @@ Run `lorepack dev ./my-docs` to open the local inspector.
 
 ![Lorepack Studio: active build, source freshness, next steps and agent endpoints](docs/images/studio-overview.png)
 
+*Studio overview: active build, freshness, agent endpoints and warnings. More workflows are in the [Studio tour](docs/studio-tour.md).*
+
 - **Overview and Sources:** see the active build, freshness, indexed files, exclusions and warnings.
 - **Playground:** assemble task context and inspect selections, omissions and equivalent CLI, HTTP and MCP requests.
 - **Tables:** inspect schemas and sample rows, then run bounded read-only queries.
 - **Versions:** compare builds, activate, roll back and package a retained version.
 - **Diagnostics:** check the environment, watcher and detected AI clients.
+
+![Studio Playground: review selected sources, citations, omissions and context budget](docs/images/studio-playground.gif)
+
+*Review task context before copying it to an agent. [Static screenshot](docs/images/studio-playground.png) · [Full Studio tour](docs/studio-tour.md).*
 
 Studio exposes the same build lifecycle as the CLI. Use the tour for route-by-route
 screenshots and detailed workflows.
