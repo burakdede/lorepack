@@ -9,6 +9,7 @@ it.each([
   'd1-write',
   'd1-returning',
   'd1-returning-7009',
+  'd1-upload-access-denied',
   'd1-invalid-json',
   'r2-put',
   'r2-delete',
@@ -33,7 +34,7 @@ it.each([
         join(directory, 'bin', 'wrangler.js'),
         `const { appendFileSync } = require('node:fs');
 appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + String.fromCharCode(10));
-${operation === 'd1-invalid-json' ? "console.log('not JSON');" : `console.error('${operation === 'd1-returning-7009' ? 'Upstream service unavailable [code: 7009]' : 'fetch failed'}'); process.exit(1);`}
+${operation === 'd1-invalid-json' ? "console.log('not JSON');" : `console.error(${JSON.stringify(operation === 'd1-returning-7009' ? 'Upstream service unavailable [code: 7009]' : operation === 'd1-upload-access-denied' ? 'File could not be uploaded. Please retry.\nGot response: <?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>Denied</Message></Error>' : 'fetch failed')}); process.exit(1);`}
 `,
       );
       const adapter = createWranglerDeployAdapter(project.root);
@@ -121,6 +122,96 @@ console.log(JSON.stringify([{ success: true, results: [] }]));
       expect(invocations).toHaveLength(2);
       expect(JSON.parse(invocations[0] ?? '')).toContain('--file');
       expect(JSON.parse(invocations[1] ?? '')).toContain('--file');
+    });
+  },
+);
+
+it.each(['deploy', 'target'] as const)(
+  'retries a rejected D1 SQL upload through the %s adapter',
+  async (surface) => {
+    await withTempProject({}, async (project) => {
+      const directory = join(project.root, 'node_modules', 'wrangler');
+      mkdirSync(join(directory, 'bin'), { recursive: true });
+      writeFileSync(
+        join(directory, 'package.json'),
+        JSON.stringify({
+          name: 'wrangler',
+          version: '4.149.0',
+          main: './bin/wrangler.js',
+          bin: './bin/wrangler.js',
+        }),
+      );
+      const calls = join(project.root, 'calls.jsonl');
+      writeFileSync(
+        join(directory, 'bin', 'wrangler.js'),
+        `const { appendFileSync, readFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + String.fromCharCode(10));
+if (readFileSync(${JSON.stringify(calls)}, 'utf8').trim().split(String.fromCharCode(10)).length === 1) {
+  console.error('File could not be uploaded. Please retry.\\nGot response: <?xml version="1.0"?><Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>');
+  process.exit(1);
+}
+console.log(JSON.stringify([{ success: true, results: [] }]));
+`,
+      );
+
+      const adapter =
+        surface === 'deploy'
+          ? createWranglerDeployAdapter(project.root)
+          : createWranglerAdapter(project.root);
+      await adapter
+        .openCatalogDatabase('catalog')
+        .prepare('CREATE TABLE retry_probe (id INTEGER PRIMARY KEY)')
+        .run();
+
+      const invocations = readFileSync(calls, 'utf8').trim().split('\n');
+      expect(invocations).toHaveLength(2);
+      expect(JSON.parse(invocations[0] ?? '')).toContain('--file');
+      expect(JSON.parse(invocations[1] ?? '')).toContain('--file');
+    });
+  },
+);
+
+it.each(['deploy', 'target'] as const)(
+  'stops after the bounded retries for a rejected D1 SQL upload through the %s adapter',
+  async (surface) => {
+    await withTempProject({}, async (project) => {
+      const directory = join(project.root, 'node_modules', 'wrangler');
+      mkdirSync(join(directory, 'bin'), { recursive: true });
+      writeFileSync(
+        join(directory, 'package.json'),
+        JSON.stringify({
+          name: 'wrangler',
+          version: '4.149.0',
+          main: './bin/wrangler.js',
+          bin: './bin/wrangler.js',
+        }),
+      );
+      const calls = join(project.root, 'calls.jsonl');
+      writeFileSync(
+        join(directory, 'bin', 'wrangler.js'),
+        `const { appendFileSync } = require('node:fs');
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + String.fromCharCode(10));
+console.error('File could not be uploaded. Please retry.\\nGot response: <?xml version="1.0"?><Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>');
+process.exit(1);
+`,
+      );
+
+      const adapter =
+        surface === 'deploy'
+          ? createWranglerDeployAdapter(project.root)
+          : createWranglerAdapter(project.root);
+      const failure = await adapter
+        .openCatalogDatabase('catalog')
+        .prepare('CREATE TABLE retry_probe (id INTEGER PRIMARY KEY)')
+        .run()
+        .catch((error: unknown) => error);
+
+      expect(failure).toMatchObject({
+        message: expect.stringContaining('File could not be uploaded'),
+      });
+      expect(failure).not.toHaveProperty('details.reason', 'remote-mutation-completion-unknown');
+      expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(3);
     });
   },
 );

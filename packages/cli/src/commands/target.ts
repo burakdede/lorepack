@@ -1297,8 +1297,14 @@ export function isRetryableWranglerRemoteD1Failure(text: string): boolean {
   return text.includes('fetch failed') || /\bcode\b[^\d]*7500\b/.test(text);
 }
 
+/** Wrangler rejects this upload before D1 ingestion, so this failure can be retried safely. */
 export function isRetryableWranglerRemoteD1FileImportFailure(text: string): boolean {
-  return /\bcode\b[^\d]*7009\b/.test(text);
+  return (
+    /\bcode\b[^\d]*7009\b/.test(text) ||
+    /File could not be uploaded\. Please retry\.\s*Got response:\s*<\?xml\b[\s\S]*?<Error>\s*<Code>InternalError<\/Code>/.test(
+      text,
+    )
+  );
 }
 
 function wranglerD1TransactionControl(query: string): 'begin' | 'commit' | 'rollback' | null {
