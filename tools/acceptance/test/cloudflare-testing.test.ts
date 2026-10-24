@@ -7,6 +7,7 @@ import {
   cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
+  redactCloudflareSecrets,
   requiredCloudflareTestingEnv,
   resourcePrefixFor,
   writeCloudflareArtifactSummary,
@@ -100,6 +101,21 @@ describe('the Cloudflare testing environment contract, issue 93', () => {
     expect(cloudflareArtifactDirectory({ LORE_CF_ARTIFACT_DIR: '/tmp/cloudflare-artifacts' })).toBe(
       '/tmp/cloudflare-artifacts',
     );
+  });
+
+  it('redacts credentials from captured Wrangler diagnostics', () => {
+    const diagnostic =
+      'token=private-test-token account=private-test-account runtime=lore_rt_secret-value';
+    const redacted = redactCloudflareSecrets(diagnostic, {
+      CLOUDFLARE_API_TOKEN: 'private-test-token',
+      CLOUDFLARE_ACCOUNT_ID: 'private-test-account',
+      LORE_REMOTE_BEARER_TOKEN: 'lore_rt_secret-value',
+    });
+
+    expect(redacted).toBe('token=<redacted> account=<redacted> runtime=<redacted>');
+    expect(redacted).not.toContain('private-test-token');
+    expect(redacted).not.toContain('private-test-account');
+    expect(redacted).not.toContain('secret-value');
   });
 
   it('writes a summary artifact when the Cloudflare artifact directory is configured', () => {

@@ -223,6 +223,8 @@ CI artifacts are written under `LORE_CF_ARTIFACT_DIR` when it is set. Each proje
 - deployment receipts and the local/remote build IDs observed
 - command logs for setup, deploy, resume and rollback
 - remote summaries and the credential gate's skip/pass/failure summary
+- Wrangler debug logs for failed deployments only, with credential sanitization enabled,
+  so provider failures can be diagnosed without rerunning the credentialed suite
 
 These artifacts record what the run actually observed. A new passing run does not establish
 that an older failed run's resources were removed.
