@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXIT_CODES, verifyContextReceipt } from '@lorepack/core';
@@ -32,6 +40,7 @@ import {
   remoteR2ObjectDeleteArgs,
   resumeCloudflareTarget,
   rollbackCloudflareTarget,
+  sanitizeCloudflareCommandResult,
   smokeProjectName,
   staleCloudflareD1DatabaseNames,
   staleCloudflareR2BucketNames,
@@ -39,6 +48,7 @@ import {
   teardownCloudflareSmokeTarget,
   waitForRemoteBuild,
   writeCloudflareSingletonWorkerReceipt,
+  writeCommandArtifact,
 } from '../src/cloudflare-smoke.js';
 import {
   assertRequiredCloudflareTestingEnv,
@@ -262,6 +272,56 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
     expect(cloudflareWorkerListUrl('de1984edb8b3db5f67105c1bc99d1dca')).toBe(
       'https://api.cloudflare.com/client/v4/accounts/de1984edb8b3db5f67105c1bc99d1dca/workers/scripts',
     );
+  });
+
+  it('omits account-wide D1 inventory from artifacts without changing command output', () => {
+    const result = {
+      code: 0,
+      stdout: JSON.stringify([
+        { name: 'lorepack-ci-catalog', uuid: 'project-db-id' },
+        { name: 'unrelated-production-db', uuid: 'unrelated-db-id' },
+      ]),
+      stderr: '',
+    };
+
+    const root = mkdtempSync(join(tmpdir(), 'lorepack-cloudflare-artifact-'));
+    try {
+      writeCommandArtifact(root, 1, 'wrangler', ['d1', 'list', '--json'], result, {});
+      const artifactPath = join(root, readdirSync(root)[0] ?? 'missing.json');
+      const artifact = readFileSync(artifactPath, 'utf8');
+
+      expect(artifact).toContain('[account-wide D1 listing omitted from CI artifact]');
+      expect(artifact).not.toContain('lorepack-ci-catalog');
+      expect(artifact).not.toContain('unrelated-production-db');
+      expect(artifact).not.toContain('project-db-id');
+      expect(artifact).not.toContain('unrelated-db-id');
+      expect(result.stdout).toContain('lorepack-ci-catalog');
+      expect(result.stdout).toContain('unrelated-production-db');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('redacts Cloudflare credentials from captured command output', () => {
+    expect(
+      sanitizeCloudflareCommandResult(
+        'wrangler',
+        ['r2', 'bucket', 'create', 'lorepack-ci-objects'],
+        {
+          code: 1,
+          stdout: 'account: account-secret',
+          stderr: 'token: api-secret',
+        },
+        {
+          CLOUDFLARE_ACCOUNT_ID: 'account-secret',
+          CLOUDFLARE_API_TOKEN: 'api-secret',
+        },
+      ),
+    ).toEqual({
+      code: 1,
+      stdout: 'account: <redacted>',
+      stderr: 'token: <redacted>',
+    });
   });
 
   it('builds the direct Cloudflare R2 bucket list URL from the account id', () => {
