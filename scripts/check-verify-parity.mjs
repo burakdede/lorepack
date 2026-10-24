@@ -40,6 +40,7 @@ const OUTSIDE_VERIFY = new Map([
   ['bench', 'reported, never enforced, so it cannot gate anything'],
   ['bench:retrieval', 'reported, never enforced'],
   ['bench:quality', 'quality baseline is enforced by its own benchmark command'],
+  ['docs:check', 'one-runner validation for documentation-only pull requests'],
   [
     'check:packed-cli',
     'its own job: it installs the packed CLI into a clean directory and exercises the actual npm package',
@@ -61,12 +62,60 @@ const SINGLE_RUN = new Map([
   ],
 ]);
 
+const EXPRESSION_START = '$' + '{{';
+const FULL_SCOPE_IF = `${EXPRESSION_START} needs.change-scope.result == 'success' && needs.change-scope.outputs.docs_only != 'true' }}`;
+const DOCS_ONLY_IF = `${EXPRESSION_START} needs.change-scope.result == 'success' && needs.change-scope.outputs.docs_only == 'true' }}`;
+const FULL_SCOPE_JOBS = new Set([
+  'verify',
+  'supply-chain',
+  'acceptance',
+  'packed-install',
+  'privacy-sandbox',
+  'cloudflare-acceptance',
+  'studio-e2e',
+  'clean-install',
+  'benchmarks',
+]);
+
+function hasFullScopeGuard(jobName, job) {
+  return (
+    FULL_SCOPE_JOBS.has(jobName) &&
+    job.if === FULL_SCOPE_IF &&
+    (Array.isArray(job.needs) ? job.needs : [job.needs]).includes('change-scope')
+  );
+}
+
+function needsChangeScope(job) {
+  return (Array.isArray(job.needs) ? job.needs : [job.needs]).includes('change-scope');
+}
+
 const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const commands = packageJson.scripts.verify.split('&&').map((command) => command.trim());
 const commandPattern = /^pnpm (?:run )?([a-z][a-z0-9:_-]*)$/;
 const malformed = commands.filter((command) => !commandPattern.test(command));
 const verify = new Set(commands.flatMap((command) => command.match(commandPattern)?.[1] ?? []));
 const workflow = parse(readFileSync(WORKFLOW, 'utf8'));
+const invalidScopeJobs = [...FULL_SCOPE_JOBS].filter((jobName) => {
+  const job = workflow.jobs?.[jobName];
+  return !job || job.if !== FULL_SCOPE_IF || !needsChangeScope(job);
+});
+const docsJob = workflow.jobs?.['verify-docs'];
+if (
+  !docsJob ||
+  docsJob.if !== DOCS_ONLY_IF ||
+  !needsChangeScope(docsJob) ||
+  !docsJob.steps?.some((step) => step.run?.trim() === 'pnpm docs:check')
+)
+  invalidScopeJobs.push('verify-docs');
+const classifierJob = workflow.jobs?.['change-scope'];
+if (
+  !classifierJob ||
+  classifierJob.if !== undefined ||
+  classifierJob.needs !== undefined ||
+  !classifierJob.steps?.some((step) => step.run?.includes('ci-change-scope.test.mjs')) ||
+  !classifierJob.steps?.some((step) => step.run?.includes('scripts/ci-change-scope.mjs'))
+)
+  invalidScopeJobs.push('change-scope');
 const ci = new Set();
 const unsafe = new Set();
 const occurrences = new Map();
@@ -84,7 +133,7 @@ for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
       if (
         run.match(commandPattern)?.[1] !== script ||
         step.if !== undefined ||
-        job.if !== undefined ||
+        (job.if !== undefined && !hasFullScopeGuard(jobName, job)) ||
         step['continue-on-error'] !== undefined ||
         job['continue-on-error'] !== undefined
       )
@@ -102,7 +151,7 @@ for (const [script, expected] of SINGLE_RUN) {
     entry?.jobName !== expected.job ||
     entry?.job?.['runs-on'] !== expected.runsOn ||
     entry?.job?.strategy?.matrix !== undefined ||
-    entry?.job?.if !== undefined ||
+    (entry?.job?.if !== undefined && !hasFullScopeGuard(entry.jobName, entry.job)) ||
     entry?.job?.['continue-on-error'] !== undefined ||
     entry?.step?.if !== undefined ||
     entry?.step?.['continue-on-error'] !== undefined ||
@@ -123,7 +172,8 @@ if (
   missingFromVerify.length > 0 ||
   unsafe.size > 0 ||
   malformed.length > 0 ||
-  misplacedSingleRun.length > 0
+  misplacedSingleRun.length > 0 ||
+  invalidScopeJobs.length > 0
 ) {
   console.error('check:verify-parity: `pnpm verify` and CI have drifted');
   for (const command of malformed)
@@ -131,6 +181,8 @@ if (
   for (const script of unsafe)
     console.error(`  ${script} must run as an exact unconditional, non-optional CI command`);
   for (const problem of misplacedSingleRun) console.error(`  ${problem}`);
+  for (const jobName of invalidScopeJobs)
+    console.error(`  ${jobName} has an invalid or missing change-scope guard`);
   for (const script of missingFromCi) {
     console.error(`  ${script} is in \`verify\` and is never run by ci.yml`);
   }
