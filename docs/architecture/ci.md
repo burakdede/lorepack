@@ -6,10 +6,21 @@ their results before publishing.
 
 ## `ci.yml`
 
-Runs on every pull request and every push to `main`, across a three-way OS matrix
-(`ubuntu-latest`, `windows-latest`, `macos-latest`) on Node 24.21.0. `fail-fast` is off so
-a Windows-only failure is visible even when Linux is green, which is the whole reason the
-matrix exists.
+Runs on every pull request across a three-way OS matrix (`ubuntu-latest`, `windows-latest`,
+`macos-latest`) on Node 24.21.0. `fail-fast` is off so a Windows-only failure is visible even
+when Linux is green, which is the whole reason the matrix exists. `workflow_dispatch` remains
+available for investigating a main-only condition.
+
+It does not rerun the full matrix on a routine push to `main`. Branch protection requires
+strict PR checks for all three operating systems and linear history, so a merge preserves the
+tree that passed the PR matrix. PR #860 and its resulting main commit both had tree
+`5b8918dd713b6ffc58f7b407fa176ed427d4644f`; the PR matrix passed in run `40062693167`, then
+the redundant main run `40064935979` repeated the full verification matrix. Keep the manual
+dispatch for cases that need direct evidence from the main branch.
+
+The separate benchmark workflow keeps its main-push medium profile; pull requests use the
+small profile. Phase gates also continue to run on `main` because they verify completed phases
+on the trunk. Those checks provide distinct evidence and retain their existing triggers.
 
 CI and benchmark workflow runs share the `lorepack-hosted-checks` concurrency group. The
 group runs one workflow at a time and queues up to 100 pending runs without replacing older

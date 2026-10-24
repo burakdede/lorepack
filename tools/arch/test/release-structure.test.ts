@@ -43,6 +43,7 @@ interface Job {
   steps?: Step[];
 }
 interface Workflow {
+  on?: Record<string, unknown>;
   env?: Record<string, string>;
   permissions?: Record<string, string>;
   concurrency?: {
@@ -64,6 +65,11 @@ function mutated(change: (release: Workflow) => void): string {
 }
 
 describe('the checked-in release workflow', () => {
+  it('runs the full CI matrix on pull requests and by manual dispatch', () => {
+    const ci = parse(workflow('ci.yml'));
+    expect(Object.keys(ci.on ?? {}).sort()).toEqual(['pull_request', 'workflow_dispatch']);
+  });
+
   it('has no structural problems', () => {
     expect(releaseStructureProblems(workflow('release.yml'))).toEqual([]);
   });
