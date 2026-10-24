@@ -36,6 +36,22 @@ export function cloudflareArtifactDirectory(
   return resolve(base, trimmed);
 }
 
+export function redactCloudflareSecrets(
+  text: string,
+  env: Readonly<Record<string, string | undefined>>,
+): string {
+  const secrets = [
+    env.CLOUDFLARE_API_TOKEN,
+    env.CLOUDFLARE_ACCOUNT_ID,
+    env.LORE_REMOTE_BEARER_TOKEN,
+  ]
+    .filter((value): value is string => value !== undefined && value.trim() !== '')
+    .sort((left, right) => right.length - left.length);
+  return secrets
+    .reduce((redacted, secret) => redacted.replaceAll(secret, '<redacted>'), text)
+    .replaceAll(/lore_rt_[A-Za-z0-9_-]+/g, 'lore_rt_<redacted>');
+}
+
 export function writeCloudflareArtifactSummary(
   env: Readonly<Record<string, string | undefined>>,
   summary: CloudflareArtifactSummary,

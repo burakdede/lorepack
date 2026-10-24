@@ -30,6 +30,7 @@ import {
   cloudflareArtifactDirectory,
   missingCloudflareTestingEnv,
   readCloudflareTestingEnv,
+  redactCloudflareSecrets,
 } from './cloudflare-testing.js';
 import { writeMixedCorpus } from './mixed-corpus.js';
 
@@ -1088,15 +1089,38 @@ async function runWrangler(
   env: Readonly<Record<string, string>>,
   cwd = REPO_ROOT,
 ): Promise<CommandOutput> {
+  const artifactsRoot = cloudflareArtifactDirectory(process.env);
+  const captureDebugLog = args[0] === 'deploy' && artifactsRoot !== null;
+  const debugDirectory = captureDebugLog ? join(artifactsRoot, 'wrangler-debug') : null;
+  const debugLogPath =
+    debugDirectory === null
+      ? null
+      : join(debugDirectory, `deploy-${Date.now()}-${randomBytes(8).toString('hex')}.log`);
+  if (debugDirectory !== null) mkdirSync(debugDirectory, { recursive: true });
+
   const result = await execCommand([WRANGLER_BIN, ...args], {
     cwd,
     timeout: 600_000,
     maxBuffer: 64 * 1024 * 1024,
-    env,
+    env:
+      debugLogPath === null
+        ? env
+        : {
+            ...env,
+            WRANGLER_LOG: 'debug',
+            WRANGLER_LOG_PATH: debugLogPath,
+            WRANGLER_LOG_SANITIZE: 'true',
+          },
   });
-  const artifactsRoot = cloudflareArtifactDirectory(process.env);
+  let debugLog: string | undefined;
+  if (debugLogPath !== null && existsSync(debugLogPath)) {
+    if (result.code !== 0) {
+      debugLog = redactCloudflareSecrets(readFileSync(debugLogPath, 'utf8'), env);
+    }
+    unlinkSync(debugLogPath);
+  }
   if (artifactsRoot !== null) {
-    writeCommandArtifact(artifactsRoot, Date.now(), 'wrangler', args, result);
+    writeCommandArtifact(artifactsRoot, Date.now(), 'wrangler', args, result, debugLog);
   }
   if (result.code !== 0) {
     throw new Error(
@@ -1313,6 +1337,7 @@ function writeCommandArtifact(
   tool: 'lorepack' | 'wrangler',
   args: readonly string[],
   result: CommandOutput,
+  debugLog?: string,
 ): void {
   mkdirSync(root, { recursive: true });
   artifactSequence += 1;
@@ -1328,6 +1353,7 @@ function writeCommandArtifact(
         code: result.code,
         stdout: redactTokens(result.stdout),
         stderr: redactTokens(result.stderr),
+        ...(debugLog === undefined ? {} : { debugLog }),
       },
       null,
       2,
