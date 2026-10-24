@@ -43,8 +43,8 @@ const WRANGLER_BIN = join(WORKER_ROOT, 'node_modules', 'wrangler', 'bin', 'wrang
 // Wrangler dependency is intentionally not part of the public CLI bundle.
 const CLI_BINARY = join(REPO_ROOT, 'packages', 'cli', 'dist', 'entry.js');
 const COMPATIBILITY_DATE = '2026-08-08';
-const WORKER_DEPLOY_ATTEMPTS = 3;
-const WORKER_PROPAGATION_DELAY_MS = 2_000;
+const WORKER_PROPAGATION_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000] as const;
+const WORKER_DEPLOY_ATTEMPTS = WORKER_PROPAGATION_RETRY_DELAYS_MS.length + 1;
 const D1_DELETE_ATTEMPTS = 3;
 const D1_DELETE_RETRY_DELAY_MS = 500;
 const R2_GET_ATTEMPTS = 4;
@@ -797,10 +797,11 @@ async function deployAcceptanceWorker(
       );
       return parseWranglerDeploymentInfo(deployed.stdout, target.workerName);
     } catch (error) {
-      if (!isCloudflareWorkerPropagationError(error) || attempt === WORKER_DEPLOY_ATTEMPTS) {
+      const retryDelay = cloudflareWorkerPropagationRetryDelayMs(attempt);
+      if (!isCloudflareWorkerPropagationError(error) || retryDelay === null) {
         throw error;
       }
-      await delay(WORKER_PROPAGATION_DELAY_MS * attempt);
+      await delay(retryDelay);
     }
   }
 
@@ -817,6 +818,11 @@ export function isCloudflareWorkerPropagationError(error: unknown): boolean {
     message.includes('This Worker does not exist on your account.') &&
     message.includes('[code: 10007]')
   );
+}
+
+export function cloudflareWorkerPropagationRetryDelayMs(attempt: number): number | null {
+  if (!Number.isInteger(attempt) || attempt < 1) return null;
+  return WORKER_PROPAGATION_RETRY_DELAYS_MS[attempt - 1] ?? null;
 }
 
 function delay(milliseconds: number): Promise<void> {

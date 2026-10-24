@@ -44,6 +44,10 @@ The GitHub Actions job uses the `cloudflare-acceptance` concurrency group with `
 and a 35-minute timeout. This serializes access to the shared Worker. Manual runs using the
 same account and prefix must also avoid overlapping a credentialed CI run.
 
+Wrangler can return Worker-not-found code 10007 after a successful script upload. The harness
+retries only that post-upload response, with five bounded backoff delays totaling 60 seconds.
+Other deployment errors fail immediately.
+
 R2 ownership-ledger reads retry HTTP 429 up to four attempts. A valid `Retry-After` value is
 honored up to 30 seconds; otherwise waits grow from 500 ms to 2 seconds. Other HTTP errors and
 an exhausted 429 remain failures. This behavior was verified with deterministic response stubs

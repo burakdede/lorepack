@@ -25,6 +25,7 @@ import {
   cloudflareR2Json,
   cloudflareWorkerDeleteUrl,
   cloudflareWorkerListUrl,
+  cloudflareWorkerPropagationRetryDelayMs,
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
@@ -255,6 +256,18 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
       uploaded.replace('/accounts/acc/workers/workers/', '/unrelated/workers/workers/'),
     ])
       expect(isCloudflareWorkerPropagationError(new Error(rejected))).toBe(false);
+  });
+
+  it('uses bounded backoff only for post-upload Worker propagation failures', () => {
+    expect([1, 2, 3, 4, 5].map(cloudflareWorkerPropagationRetryDelayMs)).toEqual([
+      2_000, 4_000, 8_000, 16_000, 30_000,
+    ]);
+    expect([0, -1, 1.5, 6].map(cloudflareWorkerPropagationRetryDelayMs)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 
   it('builds the direct Cloudflare Worker delete URL from account and worker names', () => {
