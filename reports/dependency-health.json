@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "policyDate": "2026-10-23",
-  "observedAt": "2026-10-23T22:18:11.902Z",
+  "policyDate": "2026-10-24",
+  "observedAt": "2026-10-24T00:39:12.771Z",
   "staleAfterDays": 548,
   "audit": {
     "command": "pnpm audit --prod --audit-level moderate --json",
@@ -346,7 +346,7 @@
       "latestVersion": "7.0.1",
       "pinnedPublishedAt": "2025-10-01T20:04:22.720Z",
       "latestReleaseAt": "2026-08-09T23:44:33.598Z",
-      "daysSinceLastRelease": 74,
+      "daysSinceLastRelease": 75,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -418,7 +418,7 @@
       "latestVersion": "6.0.6",
       "pinnedPublishedAt": "2023-11-20T23:55:06.550Z",
       "latestReleaseAt": "2023-11-20T23:55:06.550Z",
-      "daysSinceLastRelease": 1067,
+      "daysSinceLastRelease": 1068,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
@@ -518,7 +518,7 @@
       "latestVersion": "4.0.3",
       "pinnedPublishedAt": "2025-07-28T21:34:58.153Z",
       "latestReleaseAt": "2026-04-03T00:13:45.392Z",
-      "daysSinceLastRelease": 203,
+      "daysSinceLastRelease": 204,
       "license": "MIT",
       "provenance": {
         "status": "not-required",
