@@ -2,6 +2,24 @@ name: Benchmark evidence
 
 on:
   pull_request:
+    paths:
+      - 'packages/**'
+      - 'scripts/bench-*.mjs'
+      - 'scripts/*benchmark*.mjs'
+      - 'scripts/generate-corpus-fixtures.mjs'
+      - 'scripts/research-safe-pruning.mjs'
+      - 'benchmarks/**'
+      - 'examples/**'
+      - 'fixtures/**'
+      - 'Lorepack_Local_First_MVP_Architecture_Final.docx'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'patches/**'
+      - 'tsconfig*.json'
+      - '!benchmarks/**/*.md'
+      - '!benchmarks/README.md'
   push:
     branches: [main]
   schedule:
