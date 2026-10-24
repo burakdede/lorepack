@@ -56,7 +56,13 @@ Provide both `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`, or neither for a manual r
 When `LORE_CF_ARTIFACT_DIR` is set, the credentialed smoke writes machine-readable command
 logs, deployment receipts, and a remote summary into that directory so CI can upload them as
 artifacts even when the run later fails during verification or teardown. The ownership intent
-is also copied to `ownership-record.json` before CLI provisioning begins.
+is also copied to `ownership-record.json` before CLI provisioning begins. Account-wide D1 list
+output is omitted from command artifacts because it includes databases outside the acceptance
+project. The test process still receives the full response to select its own database IDs;
+account IDs and configured tokens are redacted from stored command output. Worker-script
+enumeration uses the API directly and stays in memory. R2 object queries are scoped to the
+owned bucket and are not written to command artifacts, so neither adds an account-wide
+inventory to the artifact path.
 
 Both suite boundaries write their summary JSON files into `LORE_CF_ARTIFACT_DIR` before
 checking required mode. Missing credentials retain `credentialed: false` and the missing

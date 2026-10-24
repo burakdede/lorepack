@@ -127,15 +127,23 @@ export function createCloudflareSmokeProject(name: string): CloudflareSmokeProje
     projectName,
     lore: async (args, env = {}) => {
       const command = [CLI_BINARY, '--cwd', root, ...args];
+      const commandEnv = { ...process.env, NO_COLOR: '1', ...env };
       const result = await execCommand(command, {
         cwd: REPO_ROOT,
         timeout: 600_000,
         maxBuffer: 64 * 1024 * 1024,
-        env: { ...process.env, NO_COLOR: '1', ...env },
+        env: commandEnv,
       });
       if (artifactDirectory !== null) {
         commandSequence += 1;
-        writeCommandArtifact(artifactDirectory, commandSequence, 'lorepack', args, result);
+        writeCommandArtifact(
+          artifactDirectory,
+          commandSequence,
+          'lorepack',
+          args,
+          result,
+          commandEnv,
+        );
       }
       return result;
     },
@@ -1120,7 +1128,7 @@ async function runWrangler(
     unlinkSync(debugLogPath);
   }
   if (artifactsRoot !== null) {
-    writeCommandArtifact(artifactsRoot, Date.now(), 'wrangler', args, result, debugLog);
+    writeCommandArtifact(artifactsRoot, Date.now(), 'wrangler', args, result, env, debugLog);
   }
   if (result.code !== 0) {
     throw new Error(
@@ -1331,28 +1339,29 @@ async function execCommand(
   }
 }
 
-function writeCommandArtifact(
+export function writeCommandArtifact(
   root: string,
   sequence: number,
   tool: 'lorepack' | 'wrangler',
   args: readonly string[],
   result: CommandOutput,
+  env: Readonly<Record<string, string | undefined>> = process.env,
   debugLog?: string,
 ): void {
   mkdirSync(root, { recursive: true });
   artifactSequence += 1;
   const digest = createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0, 16);
-  const command = sanitizeName(args.join('-') || tool).slice(0, 72);
+  const safeArgs = args.map((arg) => redactCloudflareSecrets(arg, env));
+  const command = sanitizeName(safeArgs.join('-') || tool).slice(0, 72);
   const label = `${String(sequence).padStart(4, '0')}-${tool}-${command}-${digest}-${artifactSequence}`;
+  const artifactResult = sanitizeCloudflareCommandResult(tool, args, result, env);
   writeFileSync(
     join(root, `${label}.json`),
     `${JSON.stringify(
       {
         tool,
-        args,
-        code: result.code,
-        stdout: redactTokens(result.stdout),
-        stderr: redactTokens(result.stderr),
+        args: safeArgs,
+        ...artifactResult,
         ...(debugLog === undefined ? {} : { debugLog }),
       },
       null,
@@ -1362,8 +1371,20 @@ function writeCommandArtifact(
   );
 }
 
-function redactTokens(text: string): string {
-  return text.replaceAll(/lore_rt_[A-Za-z0-9_-]+/g, 'lore_rt_<redacted>');
+export function sanitizeCloudflareCommandResult(
+  tool: 'lorepack' | 'wrangler',
+  args: readonly string[],
+  result: CommandOutput,
+  env: Readonly<Record<string, string | undefined>>,
+): Pick<CommandOutput, 'code' | 'stdout' | 'stderr'> {
+  const isAccountWideD1List = tool === 'wrangler' && args[0] === 'd1' && args[1] === 'list';
+  return {
+    code: result.code,
+    stdout: isAccountWideD1List
+      ? '[account-wide D1 listing omitted from CI artifact]'
+      : redactCloudflareSecrets(result.stdout, env),
+    stderr: redactCloudflareSecrets(result.stderr, env),
+  };
 }
 
 function sleep(ms: number): Promise<void> {
