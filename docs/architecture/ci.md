@@ -240,6 +240,25 @@ security suite passed 96 tests with 8 credentialed skips in 157 seconds. These r
 the changed source and retain the coverage; GitHub still provides no host telemetry to identify
 the physical resource behind the earlier throughput collapse.
 
+### Reuse immutable Cloudflare contract inputs, 2026-10-25
+
+Windows run [`40204291128`](https://github.com/burakdede/lorepack/actions/runs/40204291128),
+head `8a53e4f1`, spent 1,874.16 seconds in `pnpm test:ci` (4,068 passed, 59 skipped). The
+deploy-Cloudflare `runtime-contract.test.ts` file took 175.662 seconds. Two earlier Windows
+runs with the same fixture helper measured 87.483 and 76.262 seconds, so the 175-second sample
+was also affected by runner variance.
+
+PR [#886](https://github.com/burakdede/lorepack/pull/886) reused the identical immutable active
+and candidate build inputs across contract cases. Every case still creates its own D1 projection,
+R2 bucket, target and temporary state. The PR added one check that verifies the shared source
+paths and isolated mutable state; it removed no cases, assertions, skips, timeouts or retries.
+The exact-head Windows run [`40208797314`](https://github.com/burakdede/lorepack/actions/runs/40208797314),
+head `89e78dd8`, passed 4,069 tests with 59 skips in 1,573.32 seconds. The contract file took
+8.248 seconds, a 95 percent reduction from the preceding 175.662-second sample. Total
+`pnpm test:ci` time decreased by 300.84 seconds in this pair. This is one before-and-after pair,
+not a stable suite-wide runtime guarantee. The change removes repeated fixture I/O; it does not
+explain the separate run-wide Windows throughput outliers.
+
 The credentialed Cloudflare acceptance harness shares one Worker across runs.
 Its job sets `LORE_CF_REQUIRED=1`: missing credentials fail before remote operations,
 while optional local runs retain explicit skips and truthful summary artifacts. See the
