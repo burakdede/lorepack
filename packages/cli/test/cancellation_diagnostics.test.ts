@@ -1,8 +1,30 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
-import { expect, it } from 'vitest';
-import { observeChild } from './support/child_diagnostics.js';
+import { expect, it, vi } from 'vitest';
+import { observeChild, scheduleDeadlineDiagnostics } from './support/child_diagnostics.js';
+
+it('captures a long-running test before its deadline and clears the timer on completion', () => {
+  vi.useFakeTimers();
+  try {
+    const capture = vi.fn();
+    const clear = scheduleDeadlineDiagnostics(capture, 180_000);
+
+    vi.advanceTimersByTime(174_999);
+    expect(capture).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(capture).toHaveBeenCalledOnce();
+
+    clear();
+    const completed = vi.fn();
+    const clearCompleted = scheduleDeadlineDiagnostics(completed, 180_000);
+    clearCompleted();
+    vi.advanceTimersByTime(180_000);
+    expect(completed).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
 
 it('keeps an unread stderr producer blocked until failure diagnostics are requested', async () => {
   const child = spawn(

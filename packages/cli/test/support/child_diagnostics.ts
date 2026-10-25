@@ -11,6 +11,15 @@ function buffered(stream: Readable | null): string {
   return (chunk?.toString() ?? '').slice(-16000);
 }
 
+export function scheduleDeadlineDiagnostics(
+  callback: () => void,
+  deadlineMs: number,
+  leadMs = 5_000,
+): () => void {
+  const timer = setTimeout(callback, Math.max(0, deadlineMs - leadMs));
+  return () => clearTimeout(timer);
+}
+
 export function observeChild(label: string, child: ChildProcess, readOutput?: () => ChildOutput) {
   return {
     label,

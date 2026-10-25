@@ -4,15 +4,17 @@ Issue #764 retains the native failure from PR #763, Windows job 116822268628.
 The real CLI test exceeded its existing 180000ms deadline. The failed log did
 not identify the stage, so it does not prove a lock leak or process-tree defect.
 
-The test records stage elapsed times and prints diagnostics only on failure:
+The test records stage elapsed times and prints diagnostics only when it fails
+or is still running five seconds before its existing deadline:
 original and current active build IDs (read-only state query), child PIDs/exit signals,
 stream buffering/flow state, the final 16000 characters of available child output,
 and the lock owner record (or read error).
-Capture runs at the start of the existing cleanup hook before children are
-killed or the fixture is deleted. Vitest onTestFailed runs after cleanup and
-cannot inspect that original state. All output comes from the disposable
-test fixture. The initial dev startup
-retains its existing connection-block failure message and output capture.
+Failure capture runs at the start of the existing cleanup hook before children
+are killed or the fixture is deleted. A deadline timer emits the same snapshot
+before Vitest can interrupt a test that is still pending at its deadline. The
+timer is cleared during normal cleanup. All output comes from the disposable
+test fixture. The initial dev startup retains its existing connection-block
+failure message and output capture.
 
 The recorder uses existing caller-owned output buffers. It adds no stream readers
 while the scenario runs. Previously unconsumed pipes are read only when failure
@@ -47,6 +49,9 @@ removed; the original tests and assertions remain intact.
 
 Native failure-stage evidence and root-cause correction remain outstanding.
 #578 separately owns Windows MCP .cmd descendant cleanup.
+
+The deadline snapshot is tested with fake timers: it runs before the unchanged
+180000ms cutoff and can be cancelled when the real-process test completes.
 
 On 2026-10-17, macOS arm64 / Node 24.21.0: the passive recorder passed two
 real-process controls, all 25 current dev cases, strict Node-only test types,
