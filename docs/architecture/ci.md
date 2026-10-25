@@ -252,8 +252,11 @@ After Wrangler deploys it, the harness writes that Worker's actual endpoint into
 the target receipt alongside its name. Deploy and resume confirm activation
 against the same Worker that serves the acceptance requests. Bounded deployment
 retries recognize the legacy subdomain propagation response and the newer Worker
-endpoint response10007 only after a matching successful upload. Pre-upload missing
-Workers, unrelated endpoints and authentication errors remain failures.
+endpoint response 10007 only after a matching successful upload. A matching Wrangler
+null-tag error retries only when that post-upload response was seen earlier in the same
+deployment. Pre-upload missing Workers, unrelated endpoints and authentication errors
+remain failures. See the
+[Cloudflare test retry policy](../integrations/cloudflare-testing.md#worker-deployment).
 
 The privacy namespace invokes the already installed Vitest entry point with
 Node directly. Running pnpm under sudo would change its environment and trigger

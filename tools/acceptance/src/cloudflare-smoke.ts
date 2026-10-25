@@ -788,6 +788,8 @@ async function deployAcceptanceWorker(
     'utf8',
   );
 
+  // Retry Wrangler's null-tag crash only after a post-upload 10007 confirms propagation.
+  let workerPropagationObserved = false;
   for (let attempt = 1; attempt <= WORKER_DEPLOY_ATTEMPTS; attempt += 1) {
     try {
       const deployed = await runWrangler(
@@ -798,9 +800,11 @@ async function deployAcceptanceWorker(
       return parseWranglerDeploymentInfo(deployed.stdout, target.workerName);
     } catch (error) {
       const retryDelay = cloudflareWorkerPropagationRetryDelayMs(attempt);
-      if (!isCloudflareWorkerPropagationError(error) || retryDelay === null) {
+      const retryable = isCloudflareWorkerDeployRetryableError(error, workerPropagationObserved);
+      if (!retryable || retryDelay === null) {
         throw error;
       }
+      workerPropagationObserved ||= isCloudflareWorkerPostUploadPropagationError(error);
       await delay(retryDelay);
     }
   }
@@ -810,13 +814,37 @@ async function deployAcceptanceWorker(
 
 export function isCloudflareWorkerPropagationError(error: unknown): boolean {
   const message = messageOf(error);
-  const worker = message.match(/\/accounts\/[^/\s)]+\/workers\/workers\/([^/\s)]+)\)/);
-  const postUpload = worker !== null && message.includes(`Uploaded ${worker[1]} (`);
   const legacySubdomain = message.includes('/workers/scripts/') && message.includes('/subdomain');
   return (
-    (legacySubdomain || postUpload) &&
+    isCloudflareWorkerPostUploadPropagationError(error) ||
+    (legacySubdomain &&
+      message.includes('This Worker does not exist on your account.') &&
+      message.includes('[code: 10007]'))
+  );
+}
+
+export function isCloudflareWorkerPostUploadPropagationError(error: unknown): boolean {
+  const message = messageOf(error);
+  const worker = message.match(/\/accounts\/[^/\s)]+\/workers\/workers\/([^/\s)]+)\)/);
+  return (
+    worker !== null &&
+    message.includes(`Uploaded ${worker[1]} (`) &&
     message.includes('This Worker does not exist on your account.') &&
     message.includes('[code: 10007]')
+  );
+}
+
+export function isCloudflareNullTagError(error: unknown): boolean {
+  return messageOf(error).includes("Cannot read properties of null (reading 'tag')");
+}
+
+export function isCloudflareWorkerDeployRetryableError(
+  error: unknown,
+  workerPropagationObserved: boolean,
+): boolean {
+  return (
+    isCloudflareWorkerPropagationError(error) ||
+    (workerPropagationObserved && isCloudflareNullTagError(error))
   );
 }
 

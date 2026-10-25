@@ -29,6 +29,9 @@ import {
   createCloudflareSmokeProject,
   deployCloudflareTarget,
   deployCloudflareTargetExpectFailureAfterProject,
+  isCloudflareNullTagError,
+  isCloudflareWorkerDeployRetryableError,
+  isCloudflareWorkerPostUploadPropagationError,
   isCloudflareWorkerPropagationError,
   isMissingCloudflareBucketError,
   isMissingCloudflareD1Error,
@@ -268,6 +271,35 @@ describe('the credentialed Cloudflare smoke, issue 93', () => {
       null,
       null,
     ]);
+  });
+
+  it('retries Wrangler null-tag failures only after Worker propagation was observed', () => {
+    const propagation = new Error(
+      'A request to the Cloudflare API (/accounts/acc/workers/workers/runtime) failed.\nThis Worker does not exist on your account. [code: 10007]\nUploaded runtime (1.76 sec)',
+    );
+    const nullTag = new Error(
+      "wrangler deploy exited 1\nTypeError: Cannot read properties of null (reading 'tag')",
+    );
+    const unrelated = new Error("Cannot read properties of undefined (reading 'tag')");
+
+    expect(isCloudflareNullTagError(nullTag)).toBe(true);
+    expect(isCloudflareNullTagError(unrelated)).toBe(false);
+    expect(isCloudflareWorkerDeployRetryableError(propagation, false)).toBe(true);
+    expect(isCloudflareWorkerDeployRetryableError(nullTag, false)).toBe(false);
+    const postUploadObserved = isCloudflareWorkerPostUploadPropagationError(propagation);
+    expect(isCloudflareWorkerDeployRetryableError(nullTag, postUploadObserved)).toBe(true);
+    const legacySubdomain = new Error(
+      'A request to the Cloudflare API (/accounts/acc/workers/scripts/name/subdomain) failed.\nThis Worker does not exist on your account. [code: 10007]',
+    );
+    expect(isCloudflareWorkerPropagationError(legacySubdomain)).toBe(true);
+    const legacySubdomainIsPostUpload =
+      isCloudflareWorkerPostUploadPropagationError(legacySubdomain);
+    expect(legacySubdomainIsPostUpload).toBe(false);
+    expect(isCloudflareWorkerDeployRetryableError(nullTag, legacySubdomainIsPostUpload)).toBe(
+      false,
+    );
+    expect(isCloudflareWorkerDeployRetryableError(unrelated, true)).toBe(false);
+    expect(isCloudflareWorkerDeployRetryableError(new Error('Unauthorized'), true)).toBe(false);
   });
 
   it('builds the direct Cloudflare Worker delete URL from account and worker names', () => {
