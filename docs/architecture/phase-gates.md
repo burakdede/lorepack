@@ -24,6 +24,10 @@ tried to import it.
 A gate turns each promise into an assertion that fails the build that breaks it, rather
 than a discovery made three phases later.
 
+Phase 0 checks that `pnpm verify` and CI run the same checks through the lightweight
+`check:verify-parity` script. CI already runs the full verification suite, so the phase gate
+does not run that suite a second time.
+
 ## Criterion kinds
 
 Deliberately few. Adding a kind should be rare and considered.

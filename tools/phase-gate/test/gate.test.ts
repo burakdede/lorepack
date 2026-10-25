@@ -448,6 +448,14 @@ describe('phase 0 definition', () => {
     }
   });
 
+  it('checks aggregate verification parity without running the full suite again', () => {
+    expect(PHASE_0.criteria.find((criterion) => criterion.id === 'command-set')).toMatchObject({
+      kind: 'command',
+      command: 'pnpm',
+      args: ['check:verify-parity'],
+    });
+  });
+
   it('gives every criterion a unique id and a promise written as a guarantee', () => {
     const ids = PHASE_0.criteria.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
