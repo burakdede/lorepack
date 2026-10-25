@@ -15,7 +15,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { buildDescriptionSchema, searchResultSchema } from '@lorepack/core';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { type ChildOutput, observeChild } from './support/child_diagnostics.js';
+import {
+  type ChildOutput,
+  observeChild,
+  scheduleDeadlineDiagnostics,
+} from './support/child_diagnostics.js';
 import { observeHttp } from './support/http_diagnostics.js';
 
 /**
@@ -35,6 +39,7 @@ let project: string;
 const running: ChildProcess[] = [];
 const longLived: ChildProcess[] = [];
 let cancellationDiagnostics: (() => void) | undefined;
+let clearCancellationDeadlineDiagnostics: (() => void) | undefined;
 let churnDiagnostics: (() => void) | undefined;
 let churnHttpDiagnostics: ReturnType<typeof observeHttp> | undefined;
 
@@ -122,6 +127,8 @@ afterEach(async ({ task }) => {
     cancellationDiagnostics?.();
     churnDiagnostics?.();
   }
+  clearCancellationDeadlineDiagnostics?.();
+  clearCancellationDeadlineDiagnostics = undefined;
   cancellationDiagnostics = undefined;
   churnDiagnostics = undefined;
   churnHttpDiagnostics?.stop();
@@ -1082,6 +1089,7 @@ describe('cancelling a real build process', () => {
   it('leaves the active build intact and releases the build lock', async () => {
     const began = Date.now();
     let originalBuildId: string | null = null;
+    let diagnosticsReported = false;
     const stages: { stage: string; elapsedMs: number }[] = [];
     const checkpoint = (stage: string) => stages.push({ stage, elapsedMs: Date.now() - began });
     const children: ReturnType<typeof observeChild>[] = [];
@@ -1089,6 +1097,8 @@ describe('cancelling a real build process', () => {
       children.push(observeChild(label, child, output));
     };
     cancellationDiagnostics = () => {
+      if (diagnosticsReported) return;
+      diagnosticsReported = true;
       const ownerPath = join(project, '.lore', 'lock', 'owner.json');
       let lockOwner: string | null = null;
       try {
@@ -1135,6 +1145,10 @@ describe('cancelling a real build process', () => {
         }),
       );
     };
+    clearCancellationDeadlineDiagnostics = scheduleDeadlineDiagnostics(
+      () => cancellationDiagnostics?.(),
+      180_000,
+    );
     checkpoint('starting dev');
     const started = await dev();
     observe('dev', started.child, started.output);
