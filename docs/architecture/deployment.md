@@ -248,6 +248,9 @@ files. Statements with SQL `RETURNING` use `--command`: Wrangler's remote file i
 import statistics rather than statement rows. Pending batched writes are flushed before such
 a statement, so ownership acquisition observes the migrated catalog. `--command` writes and R2
 mutations preserve ownership after a failed command or unreadable response and are never replayed.
+The read-only `wrangler d1 list --json` inventory query retries the narrowly classified transient
+D1 fetch failure up to three attempts, with 250 ms and 500 ms waits. Other inventory failures
+remain immediate errors.
 For `--file` imports only, Wrangler 4.149.0 documents that an incomplete import restores the
 database to its original state. Lorepack retries that import at most twice after the exact D1
 upstream-unavailable error code 7009. Other file-import failures remain fail-closed. This narrow

@@ -565,6 +565,10 @@ function isWranglerRemoteD1Execute(args: readonly string[]): boolean {
   return args[0] === 'd1' && args[1] === 'execute' && args.includes('--remote');
 }
 
+function isWranglerD1List(args: readonly string[]): boolean {
+  return args[0] === 'd1' && args[1] === 'list';
+}
+
 function wranglerExecFailure(cause: unknown): Error {
   const failure = cause as {
     readonly message?: string;
@@ -603,7 +607,9 @@ async function execWrangler(
   allowMissingObject = false,
 ): Promise<WranglerExecResult> {
   const attempts =
-    isWranglerRemoteD1Execute(args) || isWranglerRemoteR2ObjectCommand(args)
+    isWranglerRemoteD1Execute(args) ||
+    isWranglerD1List(args) ||
+    isWranglerRemoteR2ObjectCommand(args)
       ? WRANGLER_REMOTE_D1_RETRY_LIMIT
       : 1;
   let lastFailure: Error | null = null;
@@ -688,7 +694,7 @@ function isWranglerRemoteD1FileImport(args: readonly string[]): boolean {
 }
 
 function isRetryableWranglerRemoteWranglerFailure(args: readonly string[], text: string): boolean {
-  if (isWranglerRemoteD1Execute(args)) {
+  if (isWranglerRemoteD1Execute(args) || isWranglerD1List(args)) {
     return isRetryableWranglerRemoteD1Failure(text);
   }
   if (isWranglerRemoteR2ObjectCommand(args)) {
