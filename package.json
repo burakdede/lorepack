@@ -57,6 +57,7 @@
     "bench:envelope": "pnpm build && node scripts/bench-envelope.mjs",
     "bench:cloudflare-projection": "pnpm build && node scripts/bench-cloudflare-projection.mjs",
     "check:command-set": "node scripts/check-command-set.mjs",
+    "docs:check": "pnpm build && pnpm format:check && pnpm check:no-em-dash && pnpm check:public-branding && pnpm check:no-conflict-claims && pnpm check:counted-nouns && pnpm check:command-set && pnpm check:sources-tracked && pnpm check:docs-images && pnpm check:docs-links && pnpm check:templates && pnpm check:license-policy && pnpm check:release-policy && pnpm check:performance-report && pnpm check:verify-parity && pnpm acceptance:docs:check && pnpm cli:docs:check && node scripts/demo-readme.mjs --check",
     "build:studio": "pnpm --filter @lorepack/studio build",
     "bundle:cli": "node scripts/bundle-cli.mjs",
     "check:studio-bundle": "node scripts/check-studio-bundle.mjs",
