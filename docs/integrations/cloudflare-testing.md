@@ -39,6 +39,8 @@ per-project Worker name are unused. It writes an ownership intent to the account
 and project name. It contains no API token, runtime token or source content. The ledger bucket
 persists between runs; it is never included in resource cleanup.
 
+## Worker deployment
+
 Worker deployment retains the shared name `<LORE_CF_TEST_PREFIX>-acceptance-runtime`.
 The GitHub Actions job uses the `cloudflare-acceptance` concurrency group with `queue: max`
 and a 35-minute timeout. This serializes access to the shared Worker. Manual runs using the
@@ -46,7 +48,12 @@ same account and prefix must also avoid overlapping a credentialed CI run.
 
 Wrangler can return Worker-not-found code 10007 after a successful script upload. The harness
 retries only that post-upload response, with five bounded backoff delays totaling 60 seconds.
-Other deployment errors fail immediately.
+The pinned Wrangler 4.149.0 bundle dereferences
+`default_environment.script.tag` without checking for a null script. The harness retries that
+exact null-tag error only when an earlier attempt in the same deployment already returned the
+matching post-upload 10007 response. A null-tag error on its own and every unrelated deployment
+error still fail immediately. The same dereference is present in Wrangler 4.152.0, so upgrading
+to that version alone does not remove this failure path.
 
 R2 ownership-ledger reads retry HTTP 429 up to four attempts. A valid `Retry-After` value is
 honored up to 30 seconds; otherwise waits grow from 500 ms to 2 seconds. Other HTTP errors and
