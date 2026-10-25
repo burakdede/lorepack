@@ -31,7 +31,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Test the change classifier
-        run: node --test scripts/ci-change-scope.test.mjs
+        run: node --test scripts/ci-change-scope.test.mjs scripts/ci-aggregate-verification.test.mjs
 
       - name: Classify changed paths
         id: classify
@@ -515,3 +515,23 @@ jobs:
           git fetch --no-tags --no-prune origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" "${{ github.event.pull_request.head.sha }}:refs/remotes/origin/pr-${{ github.event.pull_request.number }}"
           export CHANGESET_HEAD_REF="origin/pr-${{ github.event.pull_request.number }}"
           pnpm check:changeset-policy
+
+  verification:
+    name: verification
+    runs-on: ubuntu-latest
+    needs: [change-scope, verify, verify-docs]
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Require the selected verification path
+        env:
+          CLASSIFIER_RESULT: ${{ needs.change-scope.result }}
+          DOCS_ONLY: ${{ needs.change-scope.outputs.docs_only }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          DOCS_RESULT: ${{ needs.verify-docs.result }}
+        run: node scripts/ci-aggregate-verification.mjs

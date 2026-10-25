@@ -65,6 +65,7 @@ const SINGLE_RUN = new Map([
 const EXPRESSION_START = '$' + '{{';
 const FULL_SCOPE_IF = `${EXPRESSION_START} needs.change-scope.result == 'success' && needs.change-scope.outputs.docs_only != 'true' }}`;
 const DOCS_ONLY_IF = `${EXPRESSION_START} needs.change-scope.result == 'success' && needs.change-scope.outputs.docs_only == 'true' }}`;
+const ALWAYS_IF = `${EXPRESSION_START} always() }}`;
 const FULL_SCOPE_JOBS = new Set([
   'verify',
   'supply-chain',
@@ -112,10 +113,29 @@ if (
   !classifierJob ||
   classifierJob.if !== undefined ||
   classifierJob.needs !== undefined ||
-  !classifierJob.steps?.some((step) => step.run?.includes('ci-change-scope.test.mjs')) ||
+  !classifierJob.steps?.some(
+    (step) =>
+      step.run?.includes('ci-change-scope.test.mjs') &&
+      step.run.includes('ci-aggregate-verification.test.mjs'),
+  ) ||
   !classifierJob.steps?.some((step) => step.run?.includes('scripts/ci-change-scope.mjs'))
 )
   invalidScopeJobs.push('change-scope');
+const verificationJob = workflow.jobs?.verification;
+const verificationNeeds = new Set(
+  Array.isArray(verificationJob?.needs) ? verificationJob.needs : [verificationJob?.needs],
+);
+if (
+  !verificationJob ||
+  verificationJob.if !== ALWAYS_IF ||
+  !verificationNeeds.has('change-scope') ||
+  !verificationNeeds.has('verify') ||
+  !verificationNeeds.has('verify-docs') ||
+  !verificationJob.steps?.some(
+    (step) => step.run?.trim() === 'node scripts/ci-aggregate-verification.mjs',
+  )
+)
+  invalidScopeJobs.push('verification');
 const ci = new Set();
 const unsafe = new Set();
 const occurrences = new Map();
