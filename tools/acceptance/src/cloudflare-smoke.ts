@@ -47,6 +47,8 @@ const WORKER_PROPAGATION_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000]
 const WORKER_DEPLOY_ATTEMPTS = WORKER_PROPAGATION_RETRY_DELAYS_MS.length + 1;
 const D1_DELETE_ATTEMPTS = 3;
 const D1_DELETE_RETRY_DELAY_MS = 500;
+const OWNERSHIP_UPLOAD_RETRY_DELAYS_MS = [250, 500] as const;
+const OWNERSHIP_UPLOAD_ATTEMPTS = OWNERSHIP_UPLOAD_RETRY_DELAYS_MS.length + 1;
 const R2_GET_ATTEMPTS = 4;
 const R2_GET_RETRY_DELAY_MS = 500;
 const R2_GET_MAX_RETRY_AFTER_MS = 30_000;
@@ -979,20 +981,33 @@ async function writeCloudflareOwnership(
   try {
     const file = join(directory, 'ownership.json');
     writeFileSync(file, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-    await runWrangler(
-      [
-        'r2',
-        'object',
-        'put',
-        `${cloudflareOwnershipBucketName(record)}/${cloudflareOwnershipKey(record)}`,
-        '--file',
-        file,
-        '--content-type',
-        'application/json',
-        '--remote',
-      ],
-      env,
-    );
+    const args = [
+      'r2',
+      'object',
+      'put',
+      `${cloudflareOwnershipBucketName(record)}/${cloudflareOwnershipKey(record)}`,
+      '--file',
+      file,
+      '--content-type',
+      'application/json',
+      '--remote',
+    ] as const;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await runWrangler(args, env);
+        break;
+      } catch (error) {
+        const retryDelay = OWNERSHIP_UPLOAD_RETRY_DELAYS_MS[attempt - 1];
+        if (
+          !isTransientCloudflareOwnershipUploadError(error) ||
+          attempt >= OWNERSHIP_UPLOAD_ATTEMPTS ||
+          retryDelay === undefined
+        ) {
+          throw error;
+        }
+        await delay(retryDelay);
+      }
+    }
     const artifacts = cloudflareArtifactDirectory(env);
     if (artifacts !== null) {
       const destination = join(artifacts, record.projectName);
@@ -1004,6 +1019,18 @@ async function writeCloudflareOwnership(
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+function isTransientCloudflareOwnershipUploadError(error: unknown): boolean {
+  const message = messageOf(error);
+  return (
+    message.includes('Failed to fetch /accounts/') &&
+    message.includes('/r2/buckets/') &&
+    message.includes('/objects/') &&
+    /- 500: Internal Server Error\b/.test(message) &&
+    /"code"\s*:\s*10500\b/.test(message) &&
+    message.includes('Internal authentication error: internal server error')
+  );
 }
 
 async function readCloudflareOwnership(

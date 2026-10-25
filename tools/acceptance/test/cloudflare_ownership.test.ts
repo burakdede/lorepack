@@ -9,7 +9,8 @@ const remote = vi.hoisted(() => ({
   workers: new Set<string>(),
   commands: [] as string[][],
   deletions: [] as string[],
-  failUpload: false,
+  failUpload: null as string | null,
+  transientUploadFailures: 0,
   failDatabase: null as string | null,
   failD1Delete7500: null as {
     name: string;
@@ -79,7 +80,14 @@ vi.mock('node:child_process', async (importOriginal) => {
         const bucket = remote.buckets.get(name);
         if (bucket === undefined) return fail('The specified bucket does not exist. [code: 10006]');
         if (kind === 'r2 object put') {
-          if (remote.failUpload) return fail('Ownership upload failed');
+          if (remote.failUpload !== null) return fail(remote.failUpload);
+          if (remote.transientUploadFailures > 0) {
+            remote.transientUploadFailures -= 1;
+            const [bucketName, ...keyParts] = path.split('/');
+            return fail(
+              `Failed to fetch /accounts/test-account/r2/buckets/${bucketName}/objects/${keyParts.join('/')} - 500: Internal Server Error; {"success":false,"errors":[{"code":10500,"message":"Internal authentication error: internal server error"}]}`,
+            );
+          }
           const file = command[command.indexOf('--file') + 1];
           if (file === undefined) throw new Error('Missing ownership file');
           bucket.set(key, readFileSync(file, 'utf8'));
@@ -150,7 +158,8 @@ describe('durable Cloudflare acceptance ownership, issue 622', () => {
     remote.workers.clear();
     remote.commands.length = 0;
     remote.deletions.length = 0;
-    remote.failUpload = false;
+    remote.failUpload = null;
+    remote.transientUploadFailures = 0;
     remote.failDatabase = null;
     remote.failD1Delete7500 = null;
     remote.invalidListing = null;
@@ -255,11 +264,46 @@ describe('durable Cloudflare acceptance ownership, issue 622', () => {
     }
   });
 
-  it('does not return a provisionable target if recording ownership fails', async () => {
-    remote.failUpload = true;
-    await expect(provisionCloudflareSmokeTarget(PROJECT).then(() => undefined)).rejects.toThrow(
-      'Ownership upload failed',
+  it('retries an ownership upload after Cloudflare code 10500', async () => {
+    remote.transientUploadFailures = 1;
+
+    const target = await provisionCloudflareSmokeTarget(PROJECT);
+
+    expect(
+      remote.commands.filter((command) => command.slice(0, 3).join(' ') === 'r2 object put'),
+    ).toHaveLength(2);
+    expect(remote.buckets.get(LEDGER)?.get(cloudflareOwnershipKey(target.ownership))).toBe(
+      `${JSON.stringify(target.ownership)}\n`,
     );
+    expect(remote.databases.size).toBe(0);
+  });
+
+  it('fails closed after three Cloudflare code 10500 ownership upload attempts', async () => {
+    remote.transientUploadFailures = 3;
+
+    await expect(provisionCloudflareSmokeTarget(PROJECT)).rejects.toThrow(
+      'Internal authentication error: internal server error',
+    );
+
+    expect(
+      remote.commands.filter((command) => command.slice(0, 3).join(' ') === 'r2 object put'),
+    ).toHaveLength(3);
+    expect(remote.databases.size).toBe(0);
+    expect(remote.buckets.get(LEDGER)?.size).toBe(0);
+  });
+
+  it.each([
+    'Ownership upload failed',
+    'Failed to fetch /accounts/test-account/r2/buckets/ledger/ownership.json - 403: Forbidden; {"errors":[{"code":10000,"message":"Authentication error"}]}',
+    'Failed to fetch /accounts/test-account/r2/buckets/ledger/ownership.json - 500: Internal Server Error; {"errors":[{"code":10501,"message":"Other provider failure"}]}',
+  ])('does not retry unrelated ownership upload failures: %s', async (error) => {
+    remote.failUpload = error;
+
+    await expect(provisionCloudflareSmokeTarget(PROJECT)).rejects.toThrow(error);
+
+    expect(
+      remote.commands.filter((command) => command.slice(0, 3).join(' ') === 'r2 object put'),
+    ).toHaveLength(1);
     expect(remote.databases.size).toBe(0);
     expect(remote.buckets.get(LEDGER)?.size).toBe(0);
   });
