@@ -6,14 +6,19 @@ their results before publishing.
 
 ## `ci.yml`
 
-Runs on every pull request across a three-way OS matrix (`ubuntu-latest`, `windows-latest`,
-`macos-latest`) on Node 24.21.0. `fail-fast` is off so a Windows-only failure is visible even
-when Linux is green, which is the whole reason the matrix exists. `workflow_dispatch` remains
-available for investigating a main-only condition.
+Runs on every pull request. The always-running `change-scope` job tests the classifier and
+selects the verification path. Supported product documentation paths run `verify-docs` on
+Ubuntu, including `pnpm docs:check` and the changeset policy. Source, test, fixture, example,
+workflow, configuration and unclassified paths run the full checks. The allowlist and tests
+live in `scripts/ci-change-scope.mjs` and `scripts/ci-change-scope.test.mjs`. Empty diffs take
+the full path. `workflow_dispatch` also takes the full path.
 
-It does not rerun the full matrix on a routine push to `main`. Branch protection requires
-strict PR checks for all three operating systems and linear history, so a merge preserves the
-tree that passed the PR matrix. PR #860 and its resulting main commit both had tree
+The full `verify` job runs on `ubuntu-latest`, `windows-latest` and `macos-latest` using Node
+24.21.0. `fail-fast` is off so a Windows-only failure is visible even when Linux is green.
+
+It does not rerun the full matrix on a routine push to `main`. Strict branch protection
+requires pull requests and linear history, so a merge preserves the tree that passed the
+required PR checks. PR #860 and its resulting main commit both had tree
 `5b8918dd713b6ffc58f7b407fa176ed427d4644f`; the PR matrix passed in run `40062693167`, then
 the redundant main run `40064935979` repeated the full verification matrix. Keep the manual
 dispatch for cases that need direct evidence from the main branch.
@@ -157,24 +162,27 @@ matching the word alone would fail the build for mentioning it.
 
 ## Required checks
 
-Branch protection on `main` requires a pull request and a linear history. As the workflows
-stabilise, add these as required status checks:
+Branch protection on `main` requires strict pull request checks and linear history. These
+status checks are required:
 
+- `change-scope`
 - `verify (ubuntu-latest)`
 - `verify (windows-latest)`
 - `verify (macos-latest)`
+- `verify-docs`
 - `no AI attribution`
 
-Configure with:
+`change-scope` must pass on every pull request. For supported documentation changes,
+`verify-docs` runs while the platform matrix skips. For source or unclassified changes, the
+platform matrix runs while `verify-docs` skips. GitHub treats a conditionally skipped job as
+a successful required check; the workflow itself is not path filtered, so these contexts are
+present for every pull request. See GitHub's
+[required check behavior for skipped jobs](https://docs.github.com/en/pull-requests/reference/status-checks#check-statuses-and-conclusions).
+
+Inspect the required contexts with:
 
 ```bash
-gh api -X PUT repos/burakdede/lorepack/branches/main/protection \
-  -F 'required_status_checks[strict]=true' \
-  -F 'required_status_checks[contexts][]=verify (ubuntu-latest)' \
-  -F 'required_status_checks[contexts][]=verify (windows-latest)' \
-  -F 'required_status_checks[contexts][]=verify (macos-latest)' \
-  -F 'required_pull_request_reviews[required_approving_review_count]=0' \
-  -F enforce_admins=false -F restrictions=null -F required_linear_history=true
+gh api repos/burakdede/lorepack/branches/main/protection/required_status_checks
 ```
 
 ## Timing
