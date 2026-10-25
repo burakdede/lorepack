@@ -6,6 +6,69 @@ import { createWranglerAdapter } from '../src/commands/target.js';
 import { createWranglerDeployAdapter } from '../src/services/cloudflare-target.js';
 
 it.each([
+  {
+    label: 'a transient fetch failure',
+    firstError: 'fetch failed',
+    expectedCalls: 2,
+    succeeds: true,
+  },
+  {
+    label: 'an unrelated authentication failure',
+    firstError: 'authentication failed',
+    expectedCalls: 1,
+    succeeds: false,
+  },
+  {
+    label: 'a persistent transient fetch failure',
+    firstError: 'fetch failed',
+    expectedCalls: 3,
+    succeeds: false,
+  },
+])('retries D1 inventory after $label only', async ({ firstError, expectedCalls, succeeds }) => {
+  await withTempProject({}, async (project) => {
+    const directory = join(project.root, 'node_modules', 'wrangler');
+    mkdirSync(join(directory, 'bin'), { recursive: true });
+    writeFileSync(
+      join(directory, 'package.json'),
+      JSON.stringify({
+        name: 'wrangler',
+        version: '4.149.0',
+        main: './bin/wrangler.js',
+        bin: './bin/wrangler.js',
+      }),
+    );
+    const calls = join(project.root, 'calls.jsonl');
+    writeFileSync(
+      join(directory, 'bin', 'wrangler.js'),
+      `const { appendFileSync, readFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + String.fromCharCode(10));
+const count = readFileSync(${JSON.stringify(calls)}, 'utf8').trim().split(String.fromCharCode(10)).length;
+if (count === 1 || ${JSON.stringify(!succeeds)}) {
+  console.error(${JSON.stringify(firstError)});
+  process.exit(1);
+}
+console.log(JSON.stringify([{ name: 'catalog' }, { name: 'tables' }]));
+`,
+    );
+
+    const inventory = createWranglerDeployAdapter(project.root).listDatabases();
+    if (succeeds) {
+      await expect(inventory).resolves.toEqual([{ name: 'catalog' }, { name: 'tables' }]);
+    } else {
+      await expect(inventory).rejects.toThrow(firstError);
+    }
+
+    const invocations = readFileSync(calls, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as string[]);
+    expect(invocations).toHaveLength(expectedCalls);
+    expect(invocations.every((args) => args.join(' ') === 'd1 list --json')).toBe(true);
+  });
+});
+
+it.each([
   'd1-write',
   'd1-returning',
   'd1-returning-7009',
