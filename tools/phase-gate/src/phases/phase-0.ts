@@ -89,9 +89,9 @@ export const PHASE_0: PhaseDefinition = {
     {
       id: 'command-set',
       kind: 'command',
-      promise: 'Everything runs from one documented command set.',
+      promise: 'The aggregate verification command and CI run the same complete check set.',
       command: 'pnpm',
-      args: ['run', 'verify'],
+      args: ['check:verify-parity'],
     },
 
     // Capability: public schemas.
