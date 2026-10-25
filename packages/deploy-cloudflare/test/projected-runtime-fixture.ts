@@ -126,6 +126,12 @@ interface ProjectedFixtureState {
   readonly close: () => Promise<void>;
 }
 
+export interface ProjectedWorkerRuntimeSources {
+  readonly buildDirectory: string;
+  readonly candidateDirectory: string;
+  readonly close: () => void;
+}
+
 let currentFixture: ProjectedFixtureState | null = null;
 
 export async function createProjectedWorkerRuntimeFixture(
@@ -134,6 +140,7 @@ export async function createProjectedWorkerRuntimeFixture(
     readonly chunkText?: string;
     readonly beforeTableList?: () => Promise<void>;
   } = {},
+  sources?: ProjectedWorkerRuntimeSources,
 ): Promise<{
   readonly buildDirectory: string;
   readonly candidateDirectory: string;
@@ -154,23 +161,15 @@ export async function createProjectedWorkerRuntimeFixture(
   const bucket = new FakeR2Bucket();
 
   try {
-    const activeDirectory = createBuildDirectory(root, ACTIVE_BUILD, {
-      text: options.nativeText ?? 'To roll back a release, activate the previous build.',
-      ...(options.chunkText === undefined ? {} : { chunkText: options.chunkText }),
-      tableRows: [
-        ['A-1', '19.99', 'false'],
-        ['A-2', '4.50', 'false'],
-        ['A-3', '', 'true'],
-      ],
-    });
-    const candidateDirectory = createBuildDirectory(root, CANDIDATE_BUILD, {
-      text: 'To roll back a release, activate the previous build and tell the team what changed.',
-      tableRows: [
-        ['A-1', '21.99', 'false'],
-        ['A-2', '4.50', 'false'],
-        ['A-4', '', 'true'],
-      ],
-    });
+    const buildSources =
+      sources ??
+      createProjectedWorkerRuntimeSources({
+        root,
+        ...(options.nativeText === undefined ? {} : { nativeText: options.nativeText }),
+        ...(options.chunkText === undefined ? {} : { chunkText: options.chunkText }),
+      });
+    const activeDirectory = buildSources.buildDirectory;
+    const candidateDirectory = buildSources.candidateDirectory;
 
     const target = createCloudflareDeploymentTarget({
       corpusId: CORPUS_ID,
@@ -277,6 +276,45 @@ export async function createProjectedWorkerRuntimeFixture(
       projection.raw.close();
     } catch {}
     rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+export function createProjectedWorkerRuntimeSources(
+  options: {
+    readonly root?: string;
+    readonly nativeText?: string;
+    readonly chunkText?: string;
+  } = {},
+): ProjectedWorkerRuntimeSources {
+  const root = options.root ?? mkdtempSync(join(tmpdir(), 'lore-cloudflare-sources-'));
+  try {
+    const buildDirectory = createBuildDirectory(root, ACTIVE_BUILD, {
+      text: options.nativeText ?? 'To roll back a release, activate the previous build.',
+      ...(options.chunkText === undefined ? {} : { chunkText: options.chunkText }),
+      tableRows: [
+        ['A-1', '19.99', 'false'],
+        ['A-2', '4.50', 'false'],
+        ['A-3', '', 'true'],
+      ],
+    });
+    const candidateDirectory = createBuildDirectory(root, CANDIDATE_BUILD, {
+      text: 'To roll back a release, activate the previous build and tell the team what changed.',
+      tableRows: [
+        ['A-1', '21.99', 'false'],
+        ['A-2', '4.50', 'false'],
+        ['A-4', '', 'true'],
+      ],
+    });
+    return {
+      buildDirectory,
+      candidateDirectory,
+      close: () => {
+        if (options.root === undefined) rmSync(root, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    if (options.root === undefined) rmSync(root, { recursive: true, force: true });
     throw error;
   }
 }

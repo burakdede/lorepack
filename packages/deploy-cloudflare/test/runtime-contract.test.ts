@@ -1,20 +1,52 @@
 import { escapeFtsQuery, NATIVE_UNIT_LIMITS } from '@lorepack/core';
-import { expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { type ContractFixture, runRuntimeContract } from '../../../tools/test-support/src/index.ts';
 import { D1CatalogStore } from '../src/catalog.js';
 import {
   ACTIVE_BUILD,
   activateProjectedWorkerRuntimeFixture,
   createProjectedWorkerRuntimeFixture,
+  createProjectedWorkerRuntimeSources,
   PROJECT,
+  type ProjectedWorkerRuntimeSources,
 } from './projected-runtime-fixture.js';
+
+let contractSources: ProjectedWorkerRuntimeSources;
+
+beforeAll(() => {
+  contractSources = createProjectedWorkerRuntimeSources();
+});
+
+afterAll(() => {
+  contractSources.close();
+});
 
 runRuntimeContract({
   sqlProfile: 'remote',
   name: 'Cloudflare projected SQLite and object ports',
   create: async (hooks): Promise<ContractFixture> =>
-    await createProjectedWorkerRuntimeFixture(hooks),
+    await createProjectedWorkerRuntimeFixture(hooks, contractSources),
   activateAnother: async (): Promise<string> => await activateProjectedWorkerRuntimeFixture(),
+});
+
+it('shares immutable source builds while keeping projected state isolated', async () => {
+  const first = await createProjectedWorkerRuntimeFixture({}, contractSources);
+  const second = await createProjectedWorkerRuntimeFixture({}, contractSources);
+  try {
+    expect(second.buildDirectory).toBe(first.buildDirectory);
+    expect(second.candidateDirectory).toBe(first.candidateDirectory);
+    expect(second.projection).not.toBe(first.projection);
+    expect(second.bucket).not.toBe(first.bucket);
+
+    await second.target.verify(second.candidateReceipt);
+    expect(await first.runtime.describeBuild()).toMatchObject({
+      buildId: ACTIVE_BUILD,
+      sourceState: 'clean',
+    });
+  } finally {
+    await first.close();
+    await second.close();
+  }
 });
 
 it('closes native qualifications from retained A after B activation in the real projection, issue698', async () => {
