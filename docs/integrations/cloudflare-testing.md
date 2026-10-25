@@ -60,6 +60,13 @@ honored up to 30 seconds; otherwise waits grow from 500 ms to 2 seconds. Other H
 an exhausted 429 remain failures. This behavior was verified with deterministic response stubs
 on 2026-10-23 using Wrangler 4.149.0; it does not claim a live Cloudflare acceptance pass.
 
+The ownership-record object write retries only Wrangler's R2 HTTP 500 response with error code
+10500 and message `Internal authentication error: internal server error`. It makes at most three
+attempts, waiting 250 ms and then 500 ms. Authorization failures, other provider errors and an
+exhausted retry fail before any project resource is provisioned. The regression uses the retained
+Wrangler 4.149.0 response shape and passed locally on 2026-10-25 with Node 24.21.0. A
+credentialed hosted acceptance check is still required to qualify the live path.
+
 Provide both `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`, or neither for a manual run. For example,
 `LORE_CF_TEST_PREFIX=lorepack-ci`, run `12345`, attempt `2` uses the persistent ledger bucket
 `lorepack-ci-acceptance-ledger`; its per-project names remain independently random.
